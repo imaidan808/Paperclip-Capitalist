@@ -2,28 +2,31 @@
 //   1. real peers (their published 48h niche counts),
 //   2. a deterministic ghost cohort that behaves like a herd (so solo play still teaches saturation),
 //   3. synthetic students, used for the instructor demo and as leaderboard filler.
-import { ASSETS, BUYERS, PROFILES, TOTAL_DAYS, MIL } from './config.js';
-import { fitOf, nicheKey, gini } from './market.js';
+import { ASSETS, BUYERS, ZONES, ZONE_IDS, PERK_IDS, TOTAL_DAYS, MIL } from './config.js';
+import { fitOf, nicheKey, gini, demandOf } from './market.js';
 import { hash, hash01 } from './rng.js';
 
-const RATE = { 1: 0.34, 2: 0.28, 3: 0.14 };
-const classesIn = (z) => Object.keys(ASSETS).filter((c) => ASSETS[c].dem[z - 1] > 0);
+// How busy a district's herd is: the starter districts are crowded, the far ones thin.
+const rate = (z) => Math.max(0.08, 0.34 - 0.02 * (z - 1));
+const classesIn = (z) => Object.keys(ASSETS).filter((c) => demandOf(ASSETS[c], z) > 0);
 const buyersIn = (z) => Object.keys(BUYERS).filter((b) => BUYERS[b].zone === z);
 
+/** The herd climbs the districts together: a bell that moves from district 1 towards district 16 over the run, and widens as players spread out. */
 export function zoneShare(day, z) {
-  const z1 = Math.max(0.12, 1 - day / 26);
-  const z3 = Math.min(0.35, Math.max(0, (day - 48) / 60));
-  const z2 = Math.max(0, 1 - z1 - z3);
-  return z === 1 ? z1 : z === 2 ? z2 : z3;
+  const c = 1 + 14 * Math.pow(Math.min(1, day / 90), 0.9), sigma = 1.6 + day / 40;
+  const w = (k) => Math.exp(-((k - c) ** 2) / (2 * sigma * sigma));
+  let sum = 0;
+  for (const k of ZONE_IDS) sum += w(k);
+  return w(z) / sum;
 }
 
 /** Expected cohort-wide ghost volumes for one class in one zone over a 48 virtual-hour window. */
 export function ghostCounts(seed, hour, zone, cls, n = 36) {
-  if (!n || ASSETS[cls].dem[zone - 1] <= 0) return { total: 0, byBuyer: {} };
+  if (!n || demandOf(ASSETS[cls], zone) <= 0) return { total: 0, byBuyer: {} };
   const day = hour / 24 + 1;
   const nCls = classesIn(zone).length || 1;
   const noise = 1 + 0.15 * Math.sin(hash01(seed + zone + cls + Math.floor(hour / 12)) * 6.28);
-  const total = n * zoneShare(day, zone) * RATE[zone] * 48 / nCls * noise;
+  const total = n * zoneShare(day, zone) * rate(zone) * 48 / nCls * noise;
   const bs = buyersIn(zone);
   const w = bs.map((b) => { const f = fitOf(cls, b); return f >= 0.2 ? (BUYERS[b].pop * f ** 3) ** 2 : 0; });
   const sw = w.reduce((a, b) => a + b, 0) || 1;
@@ -66,7 +69,7 @@ export class Cohort {
   /** Every niche with volumes, for the instructor heat map and the player's Niche Radar. */
   allNiches(hour) {
     const rows = [];
-    for (const z of [1, 2, 3]) for (const cls of classesIn(z)) {
+    for (const z of ZONE_IDS) for (const cls of classesIn(z)) {
       const c = this.counts(hour, z, cls);
       for (const b of buyersIn(z)) if (fitOf(cls, b) >= 0.3) rows.push({ zone: z, cls, buyer: b, n: c.byBuyer[b] || 0, total: c.total, fit: fitOf(cls, b), key: nicheKey(z, cls, b) });
     }
@@ -76,10 +79,11 @@ export class Cohort {
 
 // ---------------------------------------------------------------- synthetic students
 const STYLES = ['herd', 'creative', 'leveraged', 'cautious', 'idle'];
+// Net-worth paths for synthetic students: days at which they pass the gates of districts 5, 9, 13 and 16.
 const ANCH = {
-  bootstrapper: (sp) => [[0, 0.1], [14 * sp, 1000], [34 * sp, 25000], [62 * sp, 250000], [118, 250000 * 40]],
-  venture: (sp) => [[0, 50000], [26 * sp, 250000], [58 * sp, 900000], [118, 6e6]],
-  midtier: (sp) => [[0, 5000], [12 * sp, 25000], [40 * sp, 250000], [76 * sp, 1.2e6], [118, 5e6]],
+  fast: (sp) => [[0, 0.1], [13 * sp, 1000], [30 * sp, 25000], [52 * sp, 250000], [84 * sp, 2.5e6], [118, 8e6]],
+  steady: (sp) => [[0, 0.1], [18 * sp, 1000], [38 * sp, 25000], [66 * sp, 250000], [118, 1.5e6]],
+  slow: (sp) => [[0, 0.1], [26 * sp, 1000], [52 * sp, 25000], [96 * sp, 120000], [118, 250000]],
 };
 function curve(anchors, day) {
   if (day <= anchors[0][0]) return anchors[0][1];
@@ -97,19 +101,21 @@ export function makeSynth(count, seed = 'demo') {
   for (let i = 0; i < count; i++) {
     const r = (k) => hash01(seed + i + k);
     const pid = 'SYN-' + hash(seed + i).toString(36).slice(0, 4).toUpperCase();
-    const prof = r('p') < 0.5 ? 'bootstrapper' : r('p') < 0.78 ? 'midtier' : 'venture';
+    const path = r('p') < 0.3 ? 'fast' : r('p') < 0.75 ? 'steady' : 'slow';
+    const perks = [PERK_IDS[Math.floor(r('a') * PERK_IDS.length)], PERK_IDS[Math.floor(r('b') * PERK_IDS.length)]];
+    if (perks[1] === perks[0]) perks[1] = PERK_IDS[(PERK_IDS.indexOf(perks[0]) + 5) % PERK_IDS.length];
     const style = STYLES[Math.floor(r('s') * STYLES.length)];
     const sp = (style === 'creative' ? 0.78 : style === 'cautious' ? 1.25 : style === 'herd' ? 1.4 : 1.0) * (0.85 + r('v') * 0.35);
     const favored = [];
     for (let k = 0; k < 3; k++) {
-      const z = style === 'herd' ? 1 + (k % 2) : 1 + Math.floor(r('z' + k) * 3);
+      const z = style === 'herd' ? 1 + (k % 3) : 1 + Math.floor(r('z' + k) * 8);
       const cs = classesIn(z), cls = cs[Math.floor(r('c' + k) * cs.length)], bs = buyersIn(z).filter((b) => fitOf(cls, b) >= 0.4);
       const buyer = bs.length ? (style === 'creative' ? bs[bs.length - 1 - Math.floor(r('b' + k) * Math.min(2, bs.length))] : bs[0]) : buyersIn(z)[0];
       favored.push({ z, cls, buyer });
     }
     out.push({
-      pid, handle: pool[Math.floor(r('h') * pool.length)] + '-' + (10 + Math.floor(r('n') * 89)), profile: prof, style, sp,
-      anchors: ANCH[prof](sp), favored, idleFrom: 28 + Math.floor(r('i') * 30), synth: true,
+      pid, handle: pool[Math.floor(r('h') * pool.length)] + '-' + (10 + Math.floor(r('n') * 89)), perks, style, sp,
+      anchors: ANCH[path](sp), favored, idleFrom: 28 + Math.floor(r('i') * 30), synth: true,
     });
   }
   return out;
@@ -123,18 +129,18 @@ export function synthSnapshot(st, hour) {
   if (st.style === 'cautious') nw *= dip(day, 45, 8, 0.03);
   if (st.style === 'creative') nw *= dip(day, 75, 6, 0.05);
   if (st.style === 'idle') nw = curve(st.anchors, Math.min(day, st.idleFrom));
-  const start = PROFILES[st.profile].startCapital;
+  const start = ASSETS.paperclip.base;
   const staticDays = st.style === 'idle' && day > st.idleFrom ? day - st.idleFrom : 0;
   const niches = {};
   const volume = Math.round(2 + Math.min(day, 60) / 8 * (st.style === 'idle' ? 0.2 : 1));
   st.favored.forEach((f, k) => { niches[nicheKey(f.z, f.cls, f.buyer)] = Math.max(1, volume - k); });
   return {
-    pid: st.pid, handle: st.handle, profile: st.profile, synth: true, style: st.style, hour,
+    pid: st.pid, handle: st.handle, perks: st.perks, synth: true, style: st.style, hour,
     nw, cash: nw * 0.3, debt: st.style === 'leveraged' ? nw * 1.8 : nw * 0.2, startCap: start,
-    pipelines: nw > MIL.m1 ? Math.min(6, 1 + Math.floor(Math.log10(nw / 1000))) : 0, lastAutoHour: hour - staticDays * 24,
+    pipelines: nw > MIL.m1 ? Math.min(12, 1 + Math.floor(Math.log10(nw / 1000)) * 2) : 0, lastAutoHour: hour - staticDays * 24,
     autoEligible: nw >= MIL.m1, niches, cmAvg: st.style === 'creative' ? 2.4 : st.style === 'herd' ? 0.55 : 1.4,
     p2p: st.style === 'creative' ? 3 : st.style === 'idle' ? 0 : 1, flags: { insolvent: false, exited: false },
-    zones: nw >= MIL.m3 ? 3 : nw >= MIL.m1 ? 2 : 1,
+    zones: Math.max(1, ...ZONE_IDS.filter((z) => nw >= ZONES[z].gate)),
     shockLog: [], hoursPlayed: Math.round(day * 0.22 * 10) / 10, skills: { ops: 2, growth: 2, fintech: 2 }, inventory: [],
   };
 }

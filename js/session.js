@@ -2,8 +2,8 @@
 import { Game } from './engine.js';
 import { Cohort, makeSynth, synthSnapshot, synthFlags, median } from './cohort.js';
 import { Room } from './net.js';
-import { SEC_PER_HOUR, TOTAL_HOURS, TOTAL_DAYS, EEI_FLOOR_DEFAULT, PROFILES, MIL, FMV_BAND } from './config.js';
-import { eei as eeiCalc, gini, clamp } from './market.js';
+import { SEC_PER_HOUR, TOTAL_HOURS, TOTAL_DAYS, EEI_FLOOR_DEFAULT, MIL, FMV_BAND, ASSETS } from './config.js';
+import { eei as eeiCalc, gini, clamp, demandOf } from './market.js';
 
 const slot = new URLSearchParams(typeof location !== 'undefined' ? location.search : '').get('slot') || 'main';
 const K = (n) => `pc.${n}.${slot}`;
@@ -56,12 +56,12 @@ export class Session {
   emit(type, data) { for (const fn of this.listeners) fn(type, data); }
 
   // ---- lifecycle
-  startGame({ profile, specialty, handle, speed = 1 }) {
+  startGame({ perks = [], specialty, handle, speed = 1 }) {
     this.handle = handle || 'Founder-' + this.pid.slice(3);
     kv.set('handle', this.handle);
     if (this.mode === 'solo') { this.clock = new Clock({ speed }); this.worldSeed = 'solo-' + Math.floor(Math.random() * 1e6); }
     const startHour = Math.floor(this.clock.now());
-    this.game = new Game({ profile, specialty, handle: this.handle, pid: this.pid, startHour, worldSeed: this.worldSeed });
+    this.game = new Game({ perks, specialty, handle: this.handle, pid: this.pid, startHour, worldSeed: this.worldSeed });
     this._wire();
     this.synth = this.mode === 'solo' ? makeSynth(11, this.worldSeed) : [];
     this.save(true);
@@ -216,15 +216,17 @@ export class Session {
 
   // ---- peer-to-peer
   roster() {
-    const out = this.alivePeers(45000).filter((p) => p.role === 'student' && p.snap && p.snap.pid !== this.pid).map((p) => ({ pid: p.snap.pid, handle: p.snap.handle, profile: p.snap.profile, skills: p.snap.skills, inventory: p.snap.inventory || [], nw: p.snap.nw }));
+    const out = this.alivePeers(45000).filter((p) => p.role === 'student' && p.snap && p.snap.pid !== this.pid).map((p) => ({ pid: p.snap.pid, handle: p.snap.handle, perks: p.snap.perks, skills: p.snap.skills, inventory: p.snap.inventory || [], nw: p.snap.nw }));
     if (this.mode === 'solo' || !out.length) out.push(this.npcView());
     return out;
   }
   npcView() {
     const g = this.game, h = g ? g.s.hour : 0;
     const mk = (n, cls, cond, zone, quality) => ({ id: `${this.npc.id}-${n}`, cls, cond, quality, wear: 1, zone });
-    const inv = [mk(1, 'van', 'broken', 2, 1), mk(2, 'domain', 'ok', 2, 1), mk(3, 'electronics', 'ok', 2, 1), mk(4, 'textbooks', 'ok', 2, 1), mk(5, 'bike', 'broken', 1, 1)];
-    return { pid: this.npc.id, handle: this.npc.handle, profile: 'midtier', skills: this.npc.skills, npc: true, inventory: inv.map((a) => ({ ...a, fmv: g ? g.val(a) : 0 })), nw: 0, hour: h };
+    // the practice partner trades whatever the first few districts sell, so there is always something to swap
+    const have = Object.keys(ASSETS).filter((c) => ASSETS[c].dem && demandOf(ASSETS[c], 1) >= 4).slice(0, 5);
+    const inv = have.map((c, i) => mk(i + 1, c, i % 3 === 2 && ASSETS[c].repair ? 'broken' : 'ok', 1, 1));
+    return { pid: this.npc.id, handle: this.npc.handle, perks: ['pro', 'veteran'], skills: this.npc.skills, npc: true, inventory: inv.map((a) => ({ ...a, fmv: g ? g.val(a) : 0 })), nw: 0, hour: h };
   }
   propose(args) {
     const g = this.game, r = g.createOffer(args);
@@ -316,14 +318,11 @@ export class Session {
   leaderboard() {
     const rows = this.students().sort((a, b) => b.eei - a.eei);
     rows.forEach((r, i) => { r.rank = i + 1; });
-    const byProf = {};
-    rows.forEach((r) => { byProf[r.profile] = (byProf[r.profile] || 0) + 1; r.profRank = byProf[r.profile]; r.profN = 0; });
-    rows.forEach((r) => { r.profN = byProf[r.profile]; });
     return rows;
   }
   flagsAll() { return this.demo ? [...this.flags, ...synthFlags(this.synth, this.clock.now()).map((f) => ({ ...f, synth: true }))] : this.flags; }
 
-  /** Pre-fills the LMS gradebook: 30% economic (percentile within profile), 20% adaptability, 10% engagement. 40% reflection is the instructor's. */
+  /** Pre-fills the LMS gradebook: 30% economic (percentile among all players: everyone starts with one paperclip, so no start is compared separately), 20% adaptability, 10% engagement. 40% reflection is the instructor's. */
   gradebook() {
     const rows = this.students();
     const hour = this.clock.now();
@@ -333,9 +332,8 @@ export class Session {
       med[id] = median(ratios);
     }
     return rows.map((r) => {
-      const peers = rows.filter((x) => x.profile === r.profile);
-      const below = peers.filter((x) => x.eei < r.eei).length;
-      const econ = peers.length > 1 ? (below / (peers.length - 1)) * 100 : 50;
+      const below = rows.filter((x) => x.eei < r.eei).length;
+      const econ = rows.length > 1 ? (below / (rows.length - 1)) * 100 : 50;
       const shocks = (r.shockLog || []).filter((s) => s.nwAfter != null && s.nw > 0 && med[s.id] > 0);
       const adapt = shocks.length ? shocks.reduce((a, s) => a + clamp(50 + 50 * Math.tanh(Math.log((s.nwAfter / s.nw) / med[s.id]) * 3) + (s.pivots > 0 ? 10 : 0), 0, 100), 0) / shocks.length : null;
       const flagged = this.flagsAll().filter((f) => f.from === r.pid).length;

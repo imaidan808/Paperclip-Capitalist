@@ -1,5 +1,8 @@
 // Pure economic formulas. No state, no DOM: these are the equations students are graded on.
-import { ASSETS, BUYERS, CM, BROKEN_FACTOR, TOTAL_DAYS } from './config.js';
+import { ASSETS, BUYERS, ZONES, CM, BROKEN_FACTOR, TOTAL_DAYS } from './config.js';
+import { demandOf } from './data/schema.js';
+
+export { demandOf };
 
 export const clamp = (x, a, b) => Math.min(b, Math.max(a, x));
 export const lerp = (a, b, t) => a + (b - a) * t;
@@ -54,8 +57,8 @@ export function gini(values) {
 }
 
 /** Ops: broken-asset restoration quality and repair cost. Reproduces the Broken Fleet Van example (high Ops ~ $20, Ops 1 = $1,200 and half the value). */
-export const restoreQuality = (ops) => 0.5 + 0.5 * Math.min(1, (ops - 1) / 4);
-export const repairCostFor = (base, ops, mult = 1) => base * Math.pow(0.42, ops - 1) * mult;
+export const restoreQuality = (ops) => 0.5 + 0.5 * Math.min(1, Math.max(0, ops - 1) / 4);
+export const repairCostFor = (base, ops, mult = 1) => base * Math.pow(0.42, Math.max(0, ops - 1)) * mult;
 
 /** Fit between a buyer and an asset's tags, 0..1. */
 export function fitOf(cls, buyerId) {
@@ -79,18 +82,27 @@ export function nicheKey(zone, cls, buyer) { return zone + '|' + cls + '|' + buy
 export function assetFMV(a, zone, mods, crowd = 1) {
   const def = ASSETS[a.cls];
   if (!def) return 0;
-  const dem = def.dem[zone - 1];
+  const dem = demandOf(def, zone);
   const dm = demandMult(def, zone, mods) * crowd;
   const base = dem <= 0 ? def.base * 0.15 : def.base * priceIndex(utilityScore(def.sc, dem * dm, def.dep)) * priceMult(def, zone, mods);
-  return base * (a.quality ?? 1) * (a.wear ?? 1) * (a.cond === 'broken' ? BROKEN_FACTOR : 1);
+  return base * (a.quality ?? 1) * (a.wear ?? 1) * (a.cond === 'broken' ? BROKEN_FACTOR : 1) * (a.known ? truthMult(a) : 1);
 }
 export function utilityIn(cls, zone, mods, crowd = 1) {
-  const def = ASSETS[cls], dem = def.dem[zone - 1];
+  const def = ASSETS[cls], dem = demandOf(def, zone);
   return utilityScore(def.sc, dem * demandMult(def, zone, mods) * crowd, def.dep);
 }
 const hits = (def, e, zone) => (!e.zones || e.zones.includes(zone)) && ((e.tags && e.tags.some((t) => def.tags.includes(t))) || (e.cls && e.cls === def.id));
+/** A district's seasonal wave (rules.season): demand for the listed tags swings by +-amp on a sine of `period` days. */
+export function seasonMult(def, zone, day) {
+  const r = ZONES[zone]?.rules?.season;
+  if (!r || day == null || !def.tags.some((t) => r.tags.includes(t))) return 1;
+  return 1 + r.amp * Math.sin((2 * Math.PI * day) / r.period);
+}
+/** The hidden truth of a lot or crate: { q: condition multiplier 0.6..1.2, fake }. A fake is worth about 8% of the real thing. */
+export const FAKE_VALUE = 0.08;
+export const truthMult = (a) => (a.truth ? (a.truth.fake ? FAKE_VALUE : a.truth.q) : 1);
 export function demandMult(def, zone, mods) {
-  let m = 1;
+  let m = seasonMult(def, zone, mods?.day);
   for (const e of mods?.demand || []) if (hits(def, e, zone)) m *= e.mult;
   return m;
 }
