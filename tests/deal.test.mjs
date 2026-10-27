@@ -335,7 +335,7 @@ test('blockers: no cash, no crate, a buyer who has left, fraud confirmed', () =>
   assert.equal(D.startRun(g, { kind: 'dance' }).ok, false);
   const spec = sells(g, 1)[0], lead = g.s.leads[g.s.assets.find((a) => a.id === spec.assetId).zone].find((l) => l.id === spec.leadId);
   lead.scam = true; lead.verified = true;
-  assert.match(run(g, spec).plan.blocker, /Fraud/);
+  const fraud = D.startRun(g, spec); assert.equal(fraud.ok, false); assert.match(fraud.msg, /fraud/i, 'the engine refuses a buyer you verified as fraudulent');
 });
 
 // ------------------------------------------------------------------ hidden truth stays hidden

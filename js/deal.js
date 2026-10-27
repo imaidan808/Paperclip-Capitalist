@@ -182,13 +182,13 @@ function planSell(g, spec) {
   if (!a) return fail('Pick one of your crates first.');
   const lead = leadOf(g, spec.leadId);
   if (!lead) return fail('That buyer has left.');
-  const q = g.quotePitch(a.id, lead.id);
+  const q = g.quotePitch(a.id, lead.id, undefined, { blind: true }); // the screen may only know what the player may know
   if (!q.ok) return fail(q.msg);
   const seed = seedFor(g, spec), B = BUYERS[lead.seg], raw = rawPrice(q), fair = Math.min(raw, lead.budget), capped = raw >= lead.budget / TIGHT;
   let alt = 0; // another buyer in the room is your alternative (BATNA): the best offer that is a real competitor, not a different league
   for (const l of s.leads[lead.zone] || []) {
     if (l.id === lead.id) continue;
-    const o = g.quotePitch(a.id, l.id), p = o.ok && !o.rejected ? Math.min(rawPrice(o), l.budget) : 0;
+    const o = g.quotePitch(a.id, l.id, undefined, { blind: true }), p = o.ok && !o.rejected ? Math.min(rawPrice(o), l.budget) : 0;
     if (p >= fair * 0.8 && p <= fair * 1.3) alt = Math.max(alt, p);
   }
   const blocker = q.fit < 0.15 ? `${B.name} has almost no use for ${ASSETS[a.cls].name}. Pick a buyer who needs it.` : lead.verified && lead.scam ? 'Fraud confirmed. Skip this buyer.' : '';
