@@ -21,6 +21,7 @@ initDialog();
 function go(screen, arg) {
   try { cleanup?.(); } catch { /* old screen already gone */ }
   cleanup = null;
+  root._acts = {};
   dlg.close();
   window.scrollTo(0, 0);
   screens[screen](arg);

@@ -9,7 +9,7 @@ Runs entirely in the browser. No build step, no dependencies, no accounts, no tr
 ## Play
 ```bash
 npm start            # http://localhost:8080
-npm test             # 34 tests: formulas, engine, multiplayer (real relay), accessibility
+npm test             # 57 tests: formulas, engine, multiplayer (real relay), accessibility, the 2.5D world
 npm run calibrate    # pacing table for a heuristic player: npm run calibrate -- midtier ops 7
 ```
 Start with **Level 0** (90 seconds, ungraded), then pick a profile: Bootstrapper, Mid-Tier Commercial or Venture-Backed.

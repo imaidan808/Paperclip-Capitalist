@@ -11,7 +11,7 @@ const cmChip = (ci) => `<span class="chip ${TONE[ci.band.tone]}" title="Creativi
 const aName = (a) => `${ASSETS[a.cls].name}${a.cond === 'broken' ? ' (broken)' : ''}`;
 const gain = (x) => `<span class="${x >= 0 ? 'green' : 'red'}">${x >= 0 ? '+' : ''}${(x * 100).toFixed(0)}%</span>`;
 export const worldShell = (mode) => `<div class="wvhost" data-mode="${mode}"></div>`;
-export const selectedAsset = (g, U) => g.s.assets.find((a) => U.sel.has(a.id));
+export const selectedAsset = (g, U, zone) => { const sel = g.s.assets.filter((a) => U.sel.has(a.id)); return (zone != null && sel.find((a) => a.zone === zone)) || sel[0]; };
 
 // ---------------------------------------------------------------- header
 export function hubHTML(S, U) {
@@ -52,7 +52,7 @@ export function tradeHTML(S, U) {
     const need = z === 2 ? '$1,000 net worth (Gate 1: Revenue Proof)' : '$250,000 net worth (Gate 3: Corporate Exit)';
     return `${chips}<div class="callout warn gap"><b>${esc(Z.name)} is locked.</b> Reach ${need} to open it. You are at ${money(g.netWorth())}.</div>`;
   }
-  const sel = selectedAsset(g, U);
+  const sel = selectedAsset(g, U, z);
   const here = s.assets.filter((a) => a.zone === z);
   const leads = [...s.leads[z]].sort((a, b) => (b.need ? 1 : 0) - (a.need ? 1 : 0) || b.budget - a.budget);
   const lots = [...s.lots[z]].sort((a, b) => a.price - b.price);

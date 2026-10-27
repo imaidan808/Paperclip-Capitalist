@@ -74,20 +74,23 @@ export function initDialog() {
 
 // ---- delegated actions: <button data-act="name" data-x="..."> -> acts.name(el, event)
 export function delegate(root, acts) {
+  root._acts = acts;                       // re-mounting a screen swaps the table, it never stacks a second listener
+  if (root._delegated) return;
+  root._delegated = true;
   root.addEventListener('click', (e) => {
     const el = e.target.closest('[data-act]');
     if (!el || el.disabled || el.getAttribute('aria-disabled') === 'true') return;
-    const fn = acts[el.dataset.act];
+    const fn = root._acts?.[el.dataset.act];
     if (fn) { e.preventDefault(); fn(el, e); }
   });
   root.addEventListener('change', (e) => {
     const el = e.target.closest('[data-change]');
-    const fn = el && acts[el.dataset.change];
+    const fn = el && root._acts?.[el.dataset.change];
     if (fn) fn(el, e);
   });
   root.addEventListener('input', (e) => {
     const el = e.target.closest('[data-input]');
-    const fn = el && acts[el.dataset.input];
+    const fn = el && root._acts?.[el.dataset.input];
     if (fn) fn(el, e);
   });
 }

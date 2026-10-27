@@ -405,7 +405,8 @@ export class Game {
     const s = this.s, lot = s.lots[zone]?.find((l) => l.id === lotId);
     if (!lot) return fail('That lot is gone.');
     if (s.cash < lot.price) return fail(`Need ${money(lot.price)}; you have ${money(s.cash)}.`);
-    if (s.assets.filter((a) => a.zone === zone).length >= ZONES[zone].store) return fail('Storage is full here. Sell something or ship it out.');
+    const held = s.assets.filter((a) => a.zone === zone).length + s.freight.reduce((n, f) => n + (f.to === zone ? f.items.length : 0), 0) + s.escrow.reduce((n, e) => n + e.assets.filter((a) => a.zone === zone).length, 0);
+    if (held >= ZONES[zone].store) return fail('Storage is full here (crates in transit and in escrow count). Sell something or ship it out.');
     s.cash -= lot.price;
     s.lots[zone] = s.lots[zone].filter((l) => l.id !== lotId);
     const a = this._mk(s, lot.cls, { cond: lot.cond, zone, basis: lot.price, from: 'lot' });
@@ -956,7 +957,7 @@ export class Game {
     s.assets = s.assets.filter((a) => !mine.includes(a));
     s.cash -= offer.want.cash;
     const gave = mine.map((a) => ({ ...a }));
-    for (const a of offer.give.assets) s.assets.push({ ...a, id: 'A' + s.nid++, from: 'p2p', basis: assetFMV(a, a.zone, this.mods(), 1) });
+    for (const a of offer.give.assets) s.assets.push(this._home({ ...a, id: 'A' + s.nid++, from: 'p2p', basis: assetFMV(a, a.zone, this.mods(), 1) }));
     s.cash += offer.give.cash;
     if (offer.give.royalty) s.royalties.push({ dir: 'recv', peer: offer.from, perDay: offer.give.royalty.perDay, until: s.hour + offer.give.royalty.days * 24, offer: offer.id });
     s.p2p++; s.trades++; s.pivot++;
@@ -965,11 +966,17 @@ export class Game {
     this.led('p2p', `Swapped with ${offer.fromHandle || offer.from}`, net, { offer: offer.id, peer: offer.from, peerSkills: offer.skills, gave: gave.map((a) => a.cls), got: offer.give.assets.map((a) => a.cls), va: chk.va, vb: chk.vb, variance: chk.variance });
     return ok('Deal done.', { deliver: { assets: gave, cash: offer.want.cash }, chk });
   }
+  /** A swapped-in asset must sit in a zone this founder can enter; otherwise it is delivered to the nearest open one. */
+  _home(a) {
+    const s = this.s;
+    if (!s.zones.includes(a.zone)) { const open = [...s.zones].sort((x, y) => y - x); a.zone = open.find((z) => z <= a.zone) ?? open[open.length - 1]; this.note('info', `${ASSETS[a.cls].name} was delivered to ${ZONES[a.zone].short}, the nearest zone you can enter.`); }
+    return a;
+  }
   finalizeOffer(offerId, delivery, peerHandle = '') {
     const s = this.s, e = s.escrow.find((x) => x.offerId === offerId);
     if (!e) return fail('That offer is no longer open.');
     s.escrow = s.escrow.filter((x) => x !== e);
-    for (const a of delivery.assets || []) s.assets.push({ ...a, id: 'A' + s.nid++, from: 'p2p', basis: assetFMV(a, a.zone, this.mods(), 1) });
+    for (const a of delivery.assets || []) s.assets.push(this._home({ ...a, id: 'A' + s.nid++, from: 'p2p', basis: assetFMV(a, a.zone, this.mods(), 1) }));
     s.cash += delivery.cash || 0;
     const o = e.offer;
     if (o.give.royalty) s.royalties.push({ dir: 'pay', peer: o.to, perDay: o.give.royalty.perDay, until: s.hour + o.give.royalty.days * 24, offer: o.id });

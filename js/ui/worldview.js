@@ -8,15 +8,16 @@ import { esc, toast, announce } from './common.js';
 const STATIC_TAB = { bank: 'bank', audit: 'audit', ipo: 'clients' };
 
 export function createWorldView({ S, U, call, setTab, render }) {
-  let world = null, host = null, mode = 'world', lastZone = null, listSig = '', hudSig = '', booted = false;
+  let world = null, host = null, mode = 'world', lastZone = null, hudSig = '', booted = false;
   const g = () => S.game;
   const unlocked = (z) => g().s.zones.includes(z);
+  const pickIn = (zone) => g().s.assets.find((a) => U.sel.has(a.id) && a.zone === zone);
 
   const gate = (z) => (z === 2 ? 'Zone 2 opens at $1,000 net worth (Gate 1).' : 'Zone 3 opens at $250,000 net worth (Gate 3).');
   function describe(h) {
     const game = g(), s = game.s;
     if (h.kind === 'lead') {
-      const l = h.lead, B = BUYERS[l.seg], sel = [...U.sel].map((id) => s.assets.find((a) => a.id === id)).find((a) => a && a.zone === h.zone);
+      const l = h.lead, B = BUYERS[l.seg], sel = pickIn(h.zone);
       let q = '';
       if (sel) { const r = game.quotePitch(sel.id, l.id); q = r.ok ? (r.rejected ? ' They would reject your ' + ASSETS[sel.cls].name + '.' : ` Pitching your ${ASSETS[sel.cls].name}: ${fitLabel(r.fit)}, ${r.ci.band.label} ${r.ci.cm.toFixed(2)}x, you would get ${money(r.received)}.`) : ' ' + r.msg; }
       return `${B.name}${l.need ? ` (urgent: needs ${/^[aeiou]/.test(l.need) ? 'an' : 'a'} ${l.need})` : ''}. Pays up to ${money(l.budget)}, leaves in ${Math.max(0, l.exp - s.hour)} h.${q || ' Select a crate, then click to pitch.'}`;
@@ -47,11 +48,12 @@ export function createWorldView({ S, U, call, setTab, render }) {
     if (h.zone && h.zone > 0 && h.zone !== U.zone) { U.zone = h.zone; }
     if (h.kind === 'lead') {
       const here = s.assets.filter((a) => a.zone === h.zone);
-      if (![...U.sel].some((id) => here.some((a) => a.id === id))) {
-        if (here.length === 1) { U.sel.clear(); U.sel.add(here[0].id); }
+      let sel = pickIn(h.zone);
+      if (!sel) {
+        if (here.length === 1) { U.sel.add(here[0].id); sel = here[0]; }
         else { toast(here.length ? 'Click one of your crates first, then the buyer.' : 'You have no stock here. Buy a pallet from the auction row first.', 'warn'); return; }
       }
-      call('pitch', { lead: h.id }); return;
+      call('pitch', { lead: h.id, asset: sel.id }); return;
     }
     if (h.kind === 'lot') { const r = call('buy', { lot: h.id }); return; }
     if (h.kind === 'asset') { call('sel', { id: h.id }); return; }
@@ -64,7 +66,7 @@ export function createWorldView({ S, U, call, setTab, render }) {
       if (id === 'audit') { if (!s.mil.m2) { toast('Audits begin at $25,000 net worth.', 'warn'); return; } setTab('audit'); return; }
       if (id === 'ipo') { setTab('clients'); return; }
       if (id.startsWith('hq')) { setTab('skills'); return; }
-      if (id.startsWith('depot')) { if ([...U.sel].some((i) => s.assets.some((a) => a.id === i && a.zone === h.zone))) call('ship', {}); else toast('Click your crates to select them, then click the depot to ship.', 'info'); return; }
+      if (id.startsWith('depot')) { if (pickIn(h.zone)) call('ship', { zone: String(h.zone) }); else toast('Click your crates here to select them, then click the depot to ship.', 'info'); return; }
       if (id.startsWith('board')) { setTab('trade'); return; }
     }
   }
@@ -88,13 +90,13 @@ export function createWorldView({ S, U, call, setTab, render }) {
       <div class="wvstage"><div class="wvcv"></div>
         <div class="wvctl" role="group" aria-label="Camera"><button class="btn sm" data-wv="zin" aria-label="Zoom in">+</button><button class="btn sm" data-wv="zout" aria-label="Zoom out">&minus;</button><button class="btn sm ghost" data-wv="fit">Fit</button><button class="btn sm ghost" data-wv="me">Me</button></div>
         <div class="wvminiwrap"></div><div class="wvtip" hidden></div><div class="wvhint">Drag to look around. Ctrl and scroll to zoom.</div></div>
-      <div class="wvhud" role="region" aria-label="What you can do here"></div>
+      <div class="wvhud" role="region" aria-label="What you can do here" tabindex="-1"></div>
       <details class="wvlist"><summary>List view of this zone, for keyboard and screen reader use</summary><ul class="wvul"></ul></details></div>`;
     world.attach(host.querySelector('.wvcv'));
     host.querySelector('.wvminiwrap').append(world.mini);
     host.onclick = (e) => {
       const b = e.target.closest('[data-wv],[data-wz],[data-hs]'); if (!b) return;
-      if (b.dataset.wz) { const z = +b.dataset.wz; if (!unlocked(z)) toast(gate(z), 'warn'); U.zone = z; render(); world.focusZone(z, true); }
+      if (b.dataset.wz) { const z = +b.dataset.wz; if (!unlocked(z)) toast(gate(z), 'warn'); U.zone = z; render(); if (mode === 'world') world.focusZone(z, true); }
       else if (b.dataset.hs) { const [kind, id, zone] = b.dataset.hs.split('|'); const h = world.hotspots().find((x) => x.kind === kind && String(x.id) === id); if (h) activate(withData(h), null, null); }
       else { const a = b.dataset.wv; if (a === 'world' || a === 'map') setTab(a); else if (a === 'zin') world.zoomBy(1.25); else if (a === 'zout') world.zoomBy(0.8); else if (a === 'fit') world.fit(); else if (a === 'me') world.focusZone(U.zone, true); }
     };
@@ -127,11 +129,21 @@ export function createWorldView({ S, U, call, setTab, render }) {
 
   function list() {
     const z = U.zone, items = world.hotspots().filter((h) => !h.zone || h.zone === z);
-    const sig = z + '|' + items.map((h) => h.kind + h.id + h.label).join('~');
-    if (sig === listSig) return;
-    listSig = sig;
     const ul = host.querySelector('.wvul');
-    ul.innerHTML = items.map((h) => `<li><button class="btn sm ghost" data-hs="${esc(h.kind)}|${esc(String(h.id))}|${h.zone || ''}">${esc(h.label)}</button></li>`).join('') || '<li class="mute small">Nothing here yet.</li>';
+    if (ul.dataset.zone !== String(z)) { ul.innerHTML = ''; ul.dataset.zone = z; }
+    const want = new Map(items.map((h) => [h.kind + '|' + h.id, h]));
+    const focused = ul.contains(document.activeElement) ? document.activeElement : null;
+    let fallback = null;
+    for (const li of [...ul.children]) {
+      const k = li.dataset.k, h = want.get(k);
+      if (!h) { if (focused && li.contains(focused)) fallback = li.nextElementSibling?.querySelector('button') || li.previousElementSibling?.querySelector('button'); li.remove(); continue; }
+      const b = li.firstElementChild; if (b.textContent !== h.label) b.textContent = h.label;
+      want.delete(k);
+    }
+    for (const [k, h] of want) { const li = document.createElement('li'); li.dataset.k = k; const b = document.createElement('button'); b.className = 'btn sm ghost'; b.dataset.hs = `${h.kind}|${h.id}|${h.zone || ''}`; b.textContent = h.label; li.append(b); ul.append(li); }
+    if (focused && !focused.isConnected) (fallback || ul.closest('details').querySelector('summary')).focus({ preventScroll: true });
+    if (!ul.children.length) ul.innerHTML = '<li class="mute small">Nothing here yet.</li>';
+    else ul.querySelector('li.mute')?.remove();
   }
 
   return {
@@ -139,7 +151,7 @@ export function createWorldView({ S, U, call, setTab, render }) {
     show(el, m) {
       if (!world) { world = new World({ session: S, ui: U, activate, hover }); if (window.pc) window.pc.world = world; }
       host = el; mode = m; world.api.ui = U;
-      shell(); listSig = ''; hudSig = '';
+      shell(); hudSig = '';
       world.setMode(m); world.sync();
       if (!booted) { world.placePlayer(); booted = true; }
       m === 'map' ? world.fit(false) : world.focusZone(U.zone, false);
@@ -152,7 +164,12 @@ export function createWorldView({ S, U, call, setTab, render }) {
       world.sync();
       if (U.zone !== lastZone) { lastZone = U.zone; if (mode === 'world') world.focusZone(U.zone, true); }
       for (const b of host.querySelectorAll('[data-wz]')) { const on = +b.dataset.wz === U.zone; if (b.getAttribute('aria-pressed') !== String(on)) b.setAttribute('aria-pressed', on); b.classList.toggle('ghost', !on); b.textContent = (unlocked(+b.dataset.wz) ? '' : 'Locked: ') + ZONES[+b.dataset.wz].short; }
-      const h = hud(), el = host.querySelector('.wvhud'); if (h !== hudSig && !el.contains(document.activeElement)) { hudSig = h; el.innerHTML = h; }
+      const h = hud(), el = host.querySelector('.wvhud');
+      if (h !== hudSig) {
+        const had = el.contains(document.activeElement) ? document.activeElement.dataset.act : null;
+        hudSig = h; el.innerHTML = h;
+        if (had) { const nb = el.querySelector(`[data-act="${had}"]`) || el; nb.focus({ preventScroll: true }); if (nb === el) announce('Selection changed.'); }
+      }
       list();
     },
   };

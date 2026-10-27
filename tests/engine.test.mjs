@@ -237,3 +237,22 @@ test('smoke: every profile plays 90 days without NaN, negative storage, or runaw
     assert.ok(g.s.assets.length <= 60);
   }
 });
+
+test('review: storage counts crates in escrow and in transit, so a withdrawn offer cannot overfill a zone', () => {
+  const g = makeGame('midtier', 'ops', 5); const z = 2, cap = 18;
+  g.s.assets = []; for (let i = 0; i < cap; i++) g.s.assets.push(g._mk(g.s, 'bike', { zone: z }));
+  const off = g.createOffer({ to: 'X', giveIds: [g.s.assets[0].id], want: { assets: [{ cls: 'bike', cond: 'ok', quality: 1, wear: 1, zone: 2, id: 'q' }], cash: 0 } });
+  assert.ok(off.ok, off.msg);
+  g.s.lots[z] = [{ id: 'T1', zone: z, cls: 'bike', cond: 'ok', price: 1, exp: g.s.hour + 50 }]; g.s.cash = 1000;
+  const r = g.buyLot(z, 'T1');
+  assert.equal(r.ok, false, 'the crate in escrow still occupies its slot'); assert.match(r.msg, /escrow|transit|full/i);
+});
+
+test('review: an asset received from a peer lands in a zone the founder can enter', () => {
+  const g = makeGame('bootstrapper', 'ops', 5); g.s.cash = 5000;
+  const a = g._mk(g.s, 'textbooks', { zone: 2 }); g.s.assets.push(a);
+  const off = { id: 'Ox', from: 'P', fromHandle: 'P', give: { assets: [{ cls: 'textbooks', cond: 'ok', quality: 1, wear: 1, zone: 2, id: 'z' }], cash: 0, royalty: null }, want: { assets: [], cash: 600 }, skills: {} };
+  const r = g.acceptOffer(off); assert.ok(r.ok, r.msg);
+  const got = g.s.assets.filter((x) => x.from === 'p2p');
+  assert.ok(got.length === 1 && g.s.zones.includes(got[0].zone), 'delivered to Zone ' + got[0].zone + ' which this founder can enter');
+});

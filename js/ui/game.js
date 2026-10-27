@@ -143,7 +143,8 @@ export function mountGame(root, S, hooks) {
     alert(b) { const n = g().s.news[+b.dataset.i]; if (n?.alert) dlg.open(V.alertDialog(n.alert), { cls: 'alert', label: 'Macro alert' }); },
 
     pitch(b) {
-      const game = g(), a = V.selectedAsset(game, U);
+      const game = g(), s0 = game.s, lz = s0.zones.find((z) => s0.leads[z].some((l) => l.id === b.dataset.lead)) ?? U.zone;
+      const a = (b.dataset.asset && s0.assets.find((x) => x.id === b.dataset.asset)) || V.selectedAsset(game, U, lz);
       if (!a) { toast('Select an asset in your inventory first.', 'warn'); return; }
       const q = game.quotePitch(a.id, b.dataset.lead);
       if (!q.ok) { toast(q.msg, 'bad'); return; }
@@ -179,8 +180,10 @@ export function mountGame(root, S, hooks) {
       if (!q.ok) { toast(q.msg, 'bad'); return; }
       confirmBox('Repair ' + ASSETS[a.cls].name, `<dl class="kv"><dt>Your Ops level</dt><dd>${g().lvl('ops')}</dd><dt>Repair cost</dt><dd>${money(q.cost)}</dd><dt>Restored quality</dt><dd>${Math.round(q.quality * 100)}%</dd><dt>Value now</dt><dd>${money(q.before)}</dd><dt>Value after</dt><dd class="green">${money(q.after)}</dd></dl>${q.after - q.before < q.cost ? '<div class="callout bad small">At your Ops level this repair loses money. Trade it to someone with higher Ops.</div>' : ''}`, 'Repair', () => say(g().repair(a.id)));
     },
-    ship() {
-      const ids = [...U.sel], game = g(), items = ids.map((i) => game.s.assets.find((a) => a.id === i)).filter(Boolean);
+    ship(b) {
+      const game = g(), zf = b?.dataset?.zone ? +b.dataset.zone : null;
+      const ids = [...U.sel].filter((i) => { const a = game.s.assets.find((x) => x.id === i); return a && (zf == null || a.zone === zf); }), items = ids.map((i) => game.s.assets.find((a) => a.id === i)).filter(Boolean);
+      U.shipIds = ids;
       if (!items.length) return;
       const dests = game.s.zones.filter((z) => z !== items[0].zone);
       if (!dests.length) { toast('You have no other zone open yet.', 'warn'); return; }
@@ -190,7 +193,7 @@ export function mountGame(root, S, hooks) {
       dlg.el._shipBody = body;
     },
     shipto(b) { U.ship = +b.value; $('#shb', dlg.el).innerHTML = dlg.el._shipBody(); },
-    'ship-go'() { const r = say(g().ship([...U.sel], U.ship)); if (r.ok) U.sel.clear(); dlg.close(); render(); },
+    'ship-go'() { const r = say(g().ship(U.shipIds || [...U.sel], U.ship)); if (r.ok) U.shipIds.forEach((i) => U.sel.delete(i)); dlg.close(); render(); },
     offer() { U.side = 'exch'; toast('Pick what you want from your counterparty, then submit the proposal.', 'info'); render(); },
 
     hire() { openHire(null); },
@@ -262,19 +265,15 @@ export function mountGame(root, S, hooks) {
   delegate(root, acts);
   const call = (name, ds = {}) => acts[name]?.({ dataset: ds, value: '' });
   wv = createWorldView({ S, U, call, setTab: (tab) => acts.tab({ dataset: { t: tab } }), render });
-  if (!dlg.el._wired) {
-    dlg.el._wired = true;
-    delegate(dlg.el, new Proxy({}, { get: (_, k) => dlg.el._acts?.[k] }));
-    dlg.el.addEventListener('click', (e) => { if (e.target.closest('[data-close]')) dlg.close(); });
-  }
-  dlg.el._acts = acts;
-  dlg.el.addEventListener('keydown', () => {});
-  root.addEventListener('keydown', (e) => {
+  delegate(dlg.el, acts);
+  if (!dlg.el._closer) { dlg.el._closer = true; dlg.el.addEventListener('click', (e) => { if (e.target.closest('[data-close]')) dlg.close(); }); }
+  if (!root._kb) root.addEventListener('keydown', (e) => {
     if (e.target.getAttribute?.('role') === 'tab' && (e.key === 'ArrowRight' || e.key === 'ArrowLeft')) {
       const tabs = $$('[role=tab]', e.target.parentElement), i = tabs.indexOf(e.target), n = tabs[(i + (e.key === 'ArrowRight' ? 1 : tabs.length - 1)) % tabs.length];
       n.focus(); n.click(); e.preventDefault();
     } else if (e.target.getAttribute?.('role') === 'button' && e.target.tagName !== 'BUTTON' && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); e.target.dispatchEvent(new MouseEvent('click', { bubbles: true })); }
   });
+  root._kb = true;
 
   // ---- session events
   const off = S.on((type, data) => {
@@ -293,5 +292,5 @@ export function mountGame(root, S, hooks) {
   }, 1500);
 
   render();
-  return { render, destroy() { dead = true; off(); clearInterval(over); wv?.hide(); } };
+  return { render, destroy() { dead = true; off(); clearInterval(over); wv?.hide(); wvHost = null; } };
 }

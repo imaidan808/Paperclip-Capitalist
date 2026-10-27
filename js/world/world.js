@@ -3,7 +3,7 @@
 //   - the virtual hour sets the light, macro shocks set the weather
 //   - clicking a thing performs the real action through api.activate()
 import { ASSETS, BUYERS, PIPE, PIPE_RULES, ZONES, PROFILES, TOTAL_HOURS } from '../config.js';
-import { P, sx, sy, toGrid, box, quad, shadow, ellipse, cyl, person, tone, shade, mix, clamp, lerp, ease, roundRect, diamond, windows, facePoint, h2, strHash } from './iso.js';
+import { P, sx, sy, HW, toGrid, box, quad, shadow, ellipse, cyl, person, tone, shade, mix, clamp, lerp, ease, roundRect, diamond, windows, facePoint, h2, strHash } from './iso.js';
 import { LAND, ELEV, DIST, SPOTS, PLOTS, DOORS, LANE, SCENERY, BUILD, zAt, zoneAt, isAvenue, isStreet, isRoad, groundColor, stashPos, inLand } from './layout.js';
 import { drawProp } from './props.js';
 
@@ -23,13 +23,13 @@ export class World {
     this.cv.className = 'worldcv'; this.cv.tabIndex = 0;
     this.cv.setAttribute('role', 'application');
     this.cv.setAttribute('aria-label', 'Isometric world. Drag to look around, Ctrl and scroll to zoom, arrow keys to pan. Every object here is also in the list below the map.');
-    this.ctx = this.cv.getContext('2d');
-    this.mini = document.createElement('canvas'); this.mini.className = 'worldmini'; this.mini.setAttribute('aria-hidden', 'true'); this.mctx = this.mini.getContext('2d');
+    this.ctx = this.cv.getContext('2d', { alpha: false });
+    this.mini = document.createElement('canvas'); this.mini.width = 150; this.mini.height = 96; this.mini.className = 'worldmini'; this.mini.setAttribute('aria-hidden', 'true'); this.mctx = this.mini.getContext('2d');
     this.cam = { x: 0, y: 0, z: 0.9 }; this.camTo = null;
     this.mode = 'world';
     this.W = 800; this.H = 500; this.dpr = 1;
     this.ents = new Map(); this.parts = []; this.lights = []; this.hits = []; this.overlay = [];
-    this.hover = null; this.focusKey = null; this.t = 0; this.last = 0; this.night = 0; this.fps = 30; this.slow = 0;
+    this.hover = null; this.focusKey = null; this.t = 0; this.vt = 0; this.last = 0; this.night = 0; this.fps = 30; this.slow = 0; this.warm = 0; this.lite = false; this.tileCols = new Map(); this.tileSig = '';
     this.player = { x: 8.8, y: 46.2, path: [], zone: 1, moving: false, dir: 1 };
     this.env = { t: 0, night: 0, wind: 1, dim: 0, surge: false, crunch: false, tariff: false };
     this.running = false; this.dirty = true; this.pointers = new Map(); this.drag = null; this.rain = null; this.labelFor = {};
@@ -52,10 +52,11 @@ export class World {
   detach() { this.stop(); this.ro?.disconnect(); }
   start() { if (this.running) return; this.running = true; this.last = performance.now(); this.raf = requestAnimationFrame((t) => this.frame(t)); }
   stop() { this.running = false; cancelAnimationFrame(this.raf); }
+  targetDpr() { return Math.max(1, Math.min(2, window.devicePixelRatio || 1) * (this.slow > 3 ? 0.75 : 1)); }
   resize() {
     const r = this.host.getBoundingClientRect(); if (!r.width) return;
-    this.W = Math.max(300, Math.floor(r.width)); this.H = Math.max(260, Math.floor(r.height));
-    this.dpr = Math.min(2, window.devicePixelRatio || 1) * (this.slow > 2 ? 0.75 : 1);
+    this.W = Math.max(1, Math.floor(r.width)); this.H = Math.max(1, Math.floor(r.height));
+    this.dpr = this.targetDpr(); this.warm = 30;
     this.cv.width = Math.floor(this.W * this.dpr); this.cv.height = Math.floor(this.H * this.dpr);
     this.cv.style.width = this.W + 'px'; this.cv.style.height = this.H + 'px';
     this.dirty = true;
@@ -74,7 +75,7 @@ export class World {
     this.goTo(sx(d.cx, d.cy), sy(d.cx, d.cy, zAt(d.cy)) - 30, zoom, animate);
   }
   goTo(x, y, z, animate = true) {
-    if (!animate || this.reduced()) { this.cam = { x, y, z }; this.camTo = null; } else this.camTo = { x, y, z, t0: this.t, from: { ...this.cam }, dur: 650 };
+    if (!animate || this.reduced()) { this.cam = { x, y, z }; this.camTo = null; this.clampCam(); } else this.camTo = { x, y, z, t0: this.t, from: { ...this.cam }, dur: 650 };
     this.dirty = true;
   }
   clampCam() {
@@ -97,7 +98,7 @@ export class World {
     cv.addEventListener('pointerdown', (e) => {
       try { cv.setPointerCapture(e.pointerId); } catch { /* synthetic or already-released pointer */ }
       this.pointers.set(e.pointerId, { x: e.offsetX, y: e.offsetY });
-      this.drag = { moved: false, x: e.offsetX, y: e.offsetY, cx: this.cam.x, cy: this.cam.y, pinch: this.pointers.size > 1 ? this.pinchDist() : 0, mid: this.pointers.size > 1 ? this.pinchMid() : null, z: this.cam.z };
+      this.drag = { moved: false, x: e.offsetX, y: e.offsetY, cx: this.cam.x, cy: this.cam.y, pinch: this.pointers.size > 1 ? this.pinchDist() : 0, mid: this.pointers.size > 1 ? this.pinchMid() : null, z: this.cam.z, button: e.button };
     });
     cv.addEventListener('pointermove', (e) => {
       const p = this.pointers.get(e.pointerId);
@@ -112,17 +113,24 @@ export class World {
       this.pointerAt(e.offsetX, e.offsetY, e);
     });
     const up = (e) => {
-      const wasDrag = this.drag?.moved;
+      const d = this.drag, wasDrag = d?.moved;
       this.pointers.delete(e.pointerId);
-      if (!this.pointers.size) { cv.style.cursor = this.hover ? 'pointer' : 'grab'; if (this.drag && !wasDrag && e.type === 'pointerup') { const h = this.pick(e.offsetX, e.offsetY); if (h) this.api.activate(h, e); else this.api.activate(null, e, this.groundAt(e.offsetX, e.offsetY)); } this.drag = null; }
+      if (this.pointers.size === 1 && d) { const [p] = [...this.pointers.values()]; Object.assign(d, { x: p.x, y: p.y, cx: this.cam.x, cy: this.cam.y, pinch: 0, mid: null, moved: true }); } // one finger left: carry on panning from here, never jump
+      if (!this.pointers.size) {
+        cv.style.cursor = this.hover ? 'pointer' : 'grab';
+        if (d && !wasDrag && e.type === 'pointerup' && d.button === 0) { const h = this.pick(e.offsetX, e.offsetY); if (h) this.api.activate(h, e); else this.api.activate(null, e, this.groundAt(e.offsetX, e.offsetY)); }
+        this.drag = null;
+      }
     };
     cv.addEventListener('pointerup', up); cv.addEventListener('pointercancel', up);
     cv.addEventListener('pointerleave', () => { if (!this.drag) { this.hover = null; this.api.hover?.(null); this.dirty = true; } });
     cv.addEventListener('wheel', (e) => { if (!(e.ctrlKey || e.metaKey || e.altKey)) return; e.preventDefault(); this.zoomBy(Math.exp(-e.deltaY * 0.0022), e.offsetX, e.offsetY); }, { passive: false });
     cv.addEventListener('keydown', (e) => {
+      if (e.ctrlKey || e.metaKey || e.altKey) return; // never swallow the browser's own zoom and navigation shortcuts
+      if (e.key === '0') { e.preventDefault(); this.fit(true); return; }
       const step = 60 / this.cam.z; let h = true;
       if (e.key === 'ArrowLeft') this.cam.x -= step; else if (e.key === 'ArrowRight') this.cam.x += step; else if (e.key === 'ArrowUp') this.cam.y -= step; else if (e.key === 'ArrowDown') this.cam.y += step;
-      else if (e.key === '+' || e.key === '=') this.zoomBy(1.2); else if (e.key === '-') this.zoomBy(1 / 1.2); else if (e.key === '0') this.fit(); else h = false;
+      else if (e.key === '+' || e.key === '=') this.zoomBy(1.2); else if (e.key === '-') this.zoomBy(1 / 1.2); else h = false;
       if (h) { e.preventDefault(); this.clampCam(); this.camTo = null; this.dirty = true; }
     });
     cv.style.cursor = 'grab';
@@ -143,7 +151,7 @@ export class World {
   }
   pointerAt(px, py, ev) {
     const h = this.pick(px, py), key = h ? h.kind + ':' + h.id : null;
-    if (key !== (this.hover ? this.hover.kind + ':' + this.hover.id : null)) { this.hover = h; this.cv.style.cursor = h ? 'pointer' : 'grab'; this.dirty = true; }
+    const prev = this.hover ? this.hover.kind + ':' + this.hover.id : null; this.hover = h; if (key !== prev) { this.cv.style.cursor = h ? 'pointer' : 'grab'; this.dirty = true; }
     this.api.hover?.(h, ev);
   }
 
@@ -156,7 +164,8 @@ export class World {
     const upsert = (id, make) => { seen.add(id); let e = this.ents.get(id); if (!e) { e = make(); e.id = id; e.born = this.t; this.ents.set(id, e); } e.gone = false; return e; };
     // buyers
     for (const z of s.zones) {
-      const used = new Set([...this.ents.values()].filter((e) => e.type === 'lead' && e.zone === z && !e.leaving && s.leads[z].some((l) => l.id === e.id)).map((e) => e.slot));
+      const live = new Set(s.leads[z].map((l) => 'lead:' + l.id));
+      const used = new Set([...this.ents.values()].filter((e) => e.type === 'lead' && e.zone === z && !e.leaving && live.has(e.id)).map((e) => e.slot));
       for (const l of s.leads[z]) {
         const id = 'lead:' + l.id;
         const e = upsert(id, () => { let slot = SPOTS[z].leads.findIndex((_, i) => !used.has(i)); if (slot < 0) slot = 0; used.add(slot); const en = this.entry(z); return { type: 'lead', zone: z, slot, x: en[0] + (h2(strHash(l.id), 1) - 0.5) * 1.6, y: en[1] - h2(strHash(l.id), 2) * 1.4, seg: l.seg, look: lookOf(l.id + l.seg) }; });
@@ -167,16 +176,26 @@ export class World {
       const lotEnts = [...this.ents.values()].filter((e) => e.type === 'lot' && e.zone === z && s.lots[z].some((l) => l.id === e.lot.id));
       const taken = new Set(); for (const e of lotEnts) if (e.slot >= 1 && e.slot <= 6 && !taken.has(e.slot)) taken.add(e.slot); else e.slot = 0;
       for (const e of lotEnts) if (!e.slot) { for (let k = 1; k <= 6; k++) if (!taken.has(k)) { e.slot = k; taken.add(k); break; } }
-      // stock crates
-      const mine = s.assets.filter((a) => a.zone === z);
-      const usedA = new Set([...this.ents.values()].filter((e) => e.type === 'asset' && e.zone === z && mine.some((a) => 'asset:' + a.id === e.id)).map((e) => e.slot));
-      for (const a of mine) { const e = upsert('asset:' + a.id, () => { let slot = 0; while (usedA.has(slot)) slot++; usedA.add(slot); return { type: 'asset', zone: z, slot, drop: 36 }; }); e.asset = a; }
     }
-    // pipelines
+    // stock crates: everything the player holds, wherever it is (a crate that changed zone is a new arrival)
+    const byZone = {};
+    for (const a of s.assets) (byZone[a.zone] ||= []).push(a);
+    for (const [zs, list] of Object.entries(byZone)) {
+      const z = +zs, ids = new Set(list.map((a) => 'asset:' + a.id));
+      for (const a of list) { const old = this.ents.get('asset:' + a.id); if (old && old.zone !== z) this.ents.delete('asset:' + a.id); }
+      const usedA = new Set([...this.ents.values()].filter((e) => e.type === 'asset' && e.zone === z && !e.gone && ids.has(e.id)).map((e) => e.slot));
+      for (const a of list) { const e = upsert('asset:' + a.id, () => { let slot = 0; while (usedA.has(slot)) slot++; usedA.add(slot); return { type: 'asset', zone: z, slot, drop: 36 }; }); e.asset = a; }
+    }
+    // pipelines: a building keeps its plot for life; empty plots are the ones nobody holds (a fading building still holds its)
     for (const z of [2, 3]) {
       const ps = s.pipes.filter((p) => p.zone === z);
-      ps.forEach((p, i) => { const e = upsert('pipe:' + p.id, () => ({ type: 'pipe', zone: z, drop: 60, cycles: p.cycles })); e.pipe = p; e.plot = i; if (p.cycles > e.cycles) { e.cycles = p.cycles; this.cyclePop(e, z, i); } });
-      for (let i = ps.length; i < PIPE_RULES.max[z]; i++) { const e = upsert(`plot:${z}:${i}`, () => ({ type: 'plot', zone: z, plot: i })); e.locked = !unlocked.has(z) || g.autoLocked(); }
+      const held = new Set([...this.ents.values()].filter((e) => e.type === 'pipe' && e.zone === z).map((e) => e.plot));
+      for (const p of ps) {
+        const e = upsert('pipe:' + p.id, () => { let i = 0; while (held.has(i)) i++; held.add(i); return { type: 'pipe', zone: z, drop: 60, cycles: p.cycles, plot: i }; });
+        e.pipe = p; if (p.cycles > e.cycles) { e.cycles = p.cycles; this.cyclePop(e, z, e.plot); }
+      }
+      const taken = new Set([...this.ents.values()].filter((e) => e.type === 'pipe' && e.zone === z).map((e) => e.plot));
+      for (let i = 0; i < PIPE_RULES.max[z]; i++) if (!taken.has(i)) { const e = upsert(`plot:${z}:${i}`, () => ({ type: 'plot', zone: z, plot: i })); e.locked = !unlocked.has(z) || g.autoLocked(); }
     }
     // freight
     for (const f of s.freight) { const e = upsert('truck:' + f.id, () => ({ type: 'truck', from: f.items[0].zone ?? 1 })); e.f = f; }
@@ -185,7 +204,7 @@ export class World {
       if (seen.has(id)) continue;
       if (e.type === 'lead' && !e.leaving) { e.leaving = true; e.leaveAt = this.t; const en = this.entry(e.zone); e.tx = en[0]; e.ty = en[1]; }
       else if (e.type === 'lead') continue;
-      else if (!e.gone) { e.gone = true; e.goneAt = this.t; }
+      else if (!e.gone) { e.gone = true; e.goneAt = this.t; this.hits = this.hits.filter((h) => h.eid !== id); }
     }
     // environment
     const m = g.mods();
@@ -235,9 +254,10 @@ export class World {
     this.draw();
     this.dirty = false;
     const cost = performance.now() - t0;
-    this.slow = clamp(this.slow + (cost > 22 ? 1 : cost < 10 ? -0.25 : 0), 0, 6);
-    this.fps = this.slow > 3 ? 20 : 30;
-    if (this.slow > 4 && this.dpr > 1) { this.slow = 3.5; this.resize(); }
+    if (this.warm > 0) this.warm--; else this.slow = clamp(this.slow + (cost > 22 ? 1 : cost < 16 ? -1 : 0), 0, 6);
+    this.fps = this.slow > 4 ? 15 : this.slow > 2 ? 20 : 30;
+    this.lite = this.slow > 2;
+    if (Math.abs(this.targetDpr() - this.dpr) > 0.01) this.resize();
   }
 
   update(dt) {
@@ -249,7 +269,8 @@ export class World {
     let target = h >= 7 && h < 17 ? 0 : h >= 17 && h < 20 ? (h - 17) / 3 : h >= 4 && h < 7 ? 1 - (h - 4) / 3 : 1;
     if (calm) target = 0; else if (speed >= 16) target = 0.3;
     this.night += clamp(target - this.night, -dt * 0.35, dt * 0.35);
-    Object.assign(this.env, { t: this.t, night: this.night, wind: calm ? 0 : 1, dim: 0 });
+    this.vt = calm ? 0 : this.t;
+    Object.assign(this.env, { t: this.vt, night: this.night, wind: calm ? 0 : 1, dim: 0 });
     // entities walk
     const sp = 2.4;
     for (const [id, e] of this.ents) {
@@ -299,7 +320,7 @@ export class World {
         else this.drawCar(ctx, it.c);
       } catch (err) { ctx.restore?.(); ctx.globalAlpha = 1; this.fault(err, it.k + ':' + (it.p?.t || it.e?.type || it.c?.i)); }
     }
-    if (this.hover) this.drawHover(ctx);
+    if (this.hover) { const k = this.hover.kind + ':' + this.hover.id, fresh = this.hits.find((h) => h.kind + ':' + h.id === k); if (fresh) this.hover = fresh; this.drawHover(ctx); }
     // screen-space passes
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     for (const pass of [() => this.drawLight(ctx), () => this.drawOverlay(ctx), () => this.drawWeather(ctx), () => this.mode === 'map' && this.drawMapLabels(ctx), () => this.drawMini()]) { try { pass(); } catch (err) { ctx.restore?.(); this.fault(err, 'pass'); } }
@@ -316,7 +337,7 @@ export class World {
     ctx.strokeStyle = `rgba(190,230,255,${0.1 + 0.05 * (1 - night)})`; ctx.lineWidth = 1;
     const calm = this.reduced();
     for (let i = 0; i < 26; i++) {
-      const y = (i / 26) * H + 8, ph = calm ? 0 : this.t / 1400 + i, x0 = ((i * 137) % W);
+      const y = (i / 26) * H + 8, ph = calm ? 0 : this.vt / 1400 + i, x0 = ((i * 137) % W);
       ctx.beginPath(); for (let x = -20; x < 90; x += 6) { const px = (x0 + x * 2.2) % (W + 60) - 30, py = y + Math.sin(ph + x * 0.1) * 1.6; x === -20 ? ctx.moveTo(px, py) : ctx.lineTo(px, py); } ctx.stroke();
     }
     // island shadow on the water
@@ -329,14 +350,16 @@ export class World {
     const x0 = Math.max(LAND.x0, Math.floor(Math.min(g0[0], g1[0], g2[0], g3[0])) - 1), x1 = Math.min(LAND.x1 - 1, Math.ceil(Math.max(g0[0], g1[0], g2[0], g3[0])) + 1);
     const y0 = Math.max(LAND.y0, Math.floor(Math.min(g0[1], g1[1], g2[1], g3[1])) - 1), y1 = Math.min(LAND.y1 - 1, Math.ceil(Math.max(g0[1], g1[1], g2[1], g3[1])) + 1);
     const dimZ = (z) => (this.unlocked && !this.unlocked.has(z) ? 0.5 : 0);
+    const sig = this.unlocked ? [...this.unlocked].join() : ''; if (sig !== this.tileSig) { this.tileSig = sig; this.tileCols.clear(); }
     for (let gy = y0; gy <= y1; gy++) {
       const za = zAt(gy), zb = zAt(gy + 1), slope = (za - zb) / 8;
-      for (let gx = x0; gx <= x1; gx++) {
-        let col = groundColor(gx, gy); if (!col) continue;
-        const dz = dimZ(zoneAt(gy)); if (dz) col = mix(col, '#10151f', dz);
-        col = slope ? shade(col, 1 + slope * 0.12) : col;
+      const rx0 = Math.max(x0, Math.floor(view.x0 / HW + gy) - 1), rx1 = Math.min(x1, Math.ceil(view.x1 / HW + gy) + 1);
+      for (let gx = rx0; gx <= rx1; gx++) {
+        const ck = gy * 64 + gx; let col = this.tileCols.get(ck);
+        if (col === undefined) { col = groundColor(gx, gy) || null; if (col) { const dz = dimZ(zoneAt(gy)); if (dz) col = mix(col, '#10151f', dz); if (slope) col = shade(col, 1 + slope * 0.12); } this.tileCols.set(ck, col); }
+        if (!col) continue;
         const pts = [P(gx, gy, za), P(gx + 1, gy, za), P(gx + 1, gy + 1, zb), P(gx, gy + 1, zb)];
-        quad(ctx, pts, col, zoneAt(gy) > 1 && !isRoad(gx, gy) ? 'rgba(0,0,0,.14)' : null, 0.8);
+        quad(ctx, pts, col, !this.lite && zoneAt(gy) > 1 && !isRoad(gx, gy) ? 'rgba(0,0,0,.14)' : null, 0.8);
         if (gy === LAND.y1 - 1) this.wall(ctx, P(gx, gy + 1, zb), zb, P(gx + 1, gy + 1, zb), zb, 0);
         if (gx === LAND.x1 - 1) this.wall(ctx, P(gx + 1, gy + 1, zb), zb, P(gx + 1, gy, za), za, 1);
       }
@@ -348,7 +371,7 @@ export class World {
     }
     for (const r of [7, 24, 40]) { if (r < y0 - 1 || r > y1) continue; for (let gx = 5; gx < 31; gx += 2) { if (gx >= 16 && gx < 20) continue; const z = zAt(r), a = P(gx, r + 0.5, z), b = P(gx + 0.6, r + 0.5, z); ctx.strokeStyle = 'rgba(255,255,255,.4)'; ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke(); } for (let k = 0; k < 5; k++) { const z = zAt(r), a = P(16.9, r + 0.1 + k * 0.2, z), b = P(18.9 + 0, r + 0.1 + k * 0.2, z); ctx.strokeStyle = 'rgba(255,255,255,.5)'; ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke(); } }
     // Scrap Yard puddles and oil
-    for (let i = 0; i < 16; i++) { const gx = 5 + h2(3, i) * 26, gy = 35 + h2(4, i) * 12; if (isRoad(gx, gy) || gy < y0 || gy > y1 + 1) continue; const [x, y] = P(gx, gy, 0); ellipse(ctx, x, y, 14 + h2(5, i) * 12, 6 + h2(6, i) * 4, i % 3 ? 'rgba(20,16,12,.28)' : 'rgba(110,150,190,.35)'); }
+    if (!this.lite) for (let i = 0; i < 16; i++) { const gx = 5 + h2(3, i) * 26, gy = 35 + h2(4, i) * 12; if (isRoad(gx, gy) || gy < y0 || gy > y1 + 1) continue; const [x, y] = P(gx, gy, 0); ellipse(ctx, x, y, 14 + h2(5, i) * 12, 6 + h2(6, i) * 4, i % 3 ? 'rgba(20,16,12,.28)' : 'rgba(110,150,190,.35)'); }
   }
   wall(ctx, a, za, b, zb, side) {
     const col = this.night > 0.5 ? '#2c3040' : '#4a5060', c = side ? shade(col, 0.72) : col;
@@ -398,63 +421,65 @@ export class World {
   }
 
   drawEnt(ctx, e) {
+    const nh = this.hits.length, no = this.overlay.length;
     const alpha = e.gone ? clamp(1 - (this.t - e.goneAt) / 600, 0, 1) : 1;
     ctx.globalAlpha = alpha;
     if (e.type === 'lead') this.drawLead(ctx, e); else if (e.type === 'lot') this.drawLot(ctx, e); else if (e.type === 'asset') this.drawAsset(ctx, e);
     else if (e.type === 'pipe') this.drawPipe(ctx, e); else if (e.type === 'plot') this.drawPlot(ctx, e); else if (e.type === 'truck') this.drawTruck(ctx, e);
     ctx.globalAlpha = 1;
+    if (e.gone) { this.hits.length = nh; this.overlay.length = no; } // a fading object takes no clicks and keeps no label
   }
 
   drawLead(ctx, e) {
     const z = zAt(e.y), [x, y] = P(e.x, e.y, z), B = BUYERS[e.seg], l = e.lead, calm = this.reduced();
-    const hov = this.hover?.id === e.id && this.hover.kind === 'lead';
+    const hov = this.hover?.eid === e.id;
     if (e.leaving) ctx.globalAlpha = clamp(1 - (this.t - e.leaveAt) / 4200, 0.2, 1);
-    if (l?.need && !e.leaving) { const k = 0.5 + 0.5 * Math.sin(this.t / 300); ellipse(ctx, x, y + 1, 15 + 3 * k, 7 + 1.5 * k, `rgba(255,211,110,${0.28 + 0.2 * k})`); }
-    person(ctx, x, y, hov ? 1.15 : 1, e.look, this.t, e.moving, e.dir || 1);
+    if (l?.need && !e.leaving) { const k = 0.5 + 0.5 * Math.sin(this.vt / 300); ellipse(ctx, x, y + 1, 15 + 3 * k, 7 + 1.5 * k, `rgba(255,211,110,${0.28 + 0.2 * k})`); }
+    person(ctx, x, y, hov ? 1.15 : 1, e.look, this.vt, e.moving, e.dir || 1);
     ctx.globalAlpha = 1;
     if (!e.leaving && l) {
-      this.hits.push({ kind: 'lead', id: e.id.slice(5), zone: e.zone, label: `${B.name}${l.need ? ', urgent' : ''}`, circle: [x, y - 16, 20], lead: l });
+      this.hits.push({ eid: e.id, kind: 'lead', id: e.id.slice(5), zone: e.zone, label: `${B.name}${l.need ? ', urgent' : ''}`, circle: [x, y - 16, 20], lead: l });
       if (this.cam.z > 0.5 || hov) this.overlay.push({ wx: x, wy: y - 40, draw: (g, px, py, s) => this.leadBubble(g, px, py, s, B, l, hov) });
     }
   }
   drawLot(ctx, e) {
     const [gx, gy] = this.posOf(e), z = zAt(gy), l = e.lot, [x, y0] = P(gx, gy, z), y = y0 - e.drop;
-    const col = classColor(l.cls), hov = this.hover?.id === e.id && this.hover.kind === 'lot';
+    const col = classColor(l.cls), hov = this.hover?.eid === e.id;
     ellipse(ctx, x, y0 + 2, 17, 8, 'rgba(8,10,20,.3)');
     ctx.save(); ctx.translate(0, -z - e.drop);
     box(ctx, gx - 0.4, gy - 0.4, 0.8, 0.8, 4, tone('#8a6a45'));
     const f = box(ctx, gx - 0.34, gy - 0.34, 0.68, 0.68, 15, tone(l.cond === 'broken' ? shade(col, 0.7) : col), { z: 4, line: hov ? '#ffffff' : 'rgba(0,0,0,.25)' });
     if (l.cond === 'broken') { ctx.strokeStyle = 'rgba(0,0,0,.55)'; ctx.lineWidth = 1.4; const a = facePoint(f.left, 0.2, 0.9), b = facePoint(f.left, 0.55, 0.25), c = facePoint(f.left, 0.8, 0.6); ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.lineTo(c[0], c[1]); ctx.stroke(); }
     ctx.restore();
-    this.hits.push({ kind: 'lot', id: e.id.slice(4), zone: e.zone, label: `${ASSETS[l.cls].name}${l.cond === 'broken' ? ' (broken)' : ''} for sale`, polys: [[[x - 18, y - 26], [x + 18, y - 26], [x + 18, y + 4], [x - 18, y + 4]]], lot: l });
+    this.hits.push({ eid: e.id, kind: 'lot', id: e.id.slice(4), zone: e.zone, label: `${ASSETS[l.cls].name}${l.cond === 'broken' ? ' (broken)' : ''} for sale`, polys: [[[x - 18, y - 26], [x + 18, y - 26], [x + 18, y + 4], [x - 18, y + 4]]], lot: l });
     if (this.cam.z > 0.5) this.overlay.push({ wx: x, wy: y - 32, draw: (g, px, py, s) => this.tag(g, px, py, s, ASSETS[l.cls].icon, money(l.price), '#46e38e', hov) });
   }
   drawAsset(ctx, e) {
     const [gx, gy] = this.posOf(e), z = zAt(gy), a = e.asset, [x, y0] = P(gx, gy, z), y = y0 - e.drop;
-    const sel = this.api.ui.sel.has(a.id), col = classColor(a.cls), hov = this.hover?.id === e.id && this.hover.kind === 'asset', bob = sel && !this.reduced() ? Math.sin(this.t / 220) * 2 : 0;
+    const sel = this.api.ui.sel.has(a.id), col = classColor(a.cls), hov = this.hover?.eid === e.id, bob = sel && !this.reduced() ? Math.sin(this.vt / 220) * 2 : 0;
     ellipse(ctx, x, y0 + 2, 15, 7, 'rgba(8,10,20,.3)');
-    if (sel) { const k = 0.5 + 0.5 * Math.sin(this.t / 250); ellipse(ctx, x, y0 + 1, 22 + 2 * k, 11 + k, `rgba(255,211,110,${0.5})`, '#ffd36e', 2); }
+    if (sel) { const k = 0.5 + 0.5 * Math.sin(this.vt / 250); ellipse(ctx, x, y0 + 1, 22 + 2 * k, 11 + k, `rgba(255,211,110,${0.5})`, '#ffd36e', 2); }
     ctx.save(); ctx.translate(0, -z - e.drop - bob);
     const wear = clamp(a.wear, 0.4, 1), c = a.cond === 'broken' ? shade(col, 0.65) : mix('#6a6f7c', col, wear);
     const f = box(ctx, gx - 0.36, gy - 0.36, 0.72, 0.72, 17, tone(c), { line: hov ? '#fff' : 'rgba(0,0,0,.3)' });
-    if (a.cond === 'broken') { ctx.strokeStyle = 'rgba(0,0,0,.6)'; ctx.lineWidth = 1.4; const p1 = facePoint(f.left, 0.15, 0.85), p2 = facePoint(f.left, 0.5, 0.3), p3 = facePoint(f.left, 0.85, 0.7); ctx.beginPath(); ctx.moveTo(p1[0], p1[1]); ctx.lineTo(p2[0], p2[1]); ctx.lineTo(p3[0], p3[1]); ctx.stroke(); if (!this.reduced()) { const [sx0, sy0] = P(gx, gy, 18); for (let i = 0; i < 2; i++) { const k = ((this.t / 900) + i / 2) % 1; ctx.fillStyle = `rgba(200,200,210,${0.4 * (1 - k)})`; ctx.beginPath(); ctx.arc(sx0 + k * 6, sy0 - k * 16, 2 + k * 4, 0, 7); ctx.fill(); } } }
+    if (a.cond === 'broken') { ctx.strokeStyle = 'rgba(0,0,0,.6)'; ctx.lineWidth = 1.4; const p1 = facePoint(f.left, 0.15, 0.85), p2 = facePoint(f.left, 0.5, 0.3), p3 = facePoint(f.left, 0.85, 0.7); ctx.beginPath(); ctx.moveTo(p1[0], p1[1]); ctx.lineTo(p2[0], p2[1]); ctx.lineTo(p3[0], p3[1]); ctx.stroke(); if (!this.reduced()) { const [sx0, sy0] = P(gx, gy, 18); for (let i = 0; i < 2; i++) { const k = ((this.vt / 900) + i / 2) % 1; ctx.fillStyle = `rgba(200,200,210,${0.4 * (1 - k)})`; ctx.beginPath(); ctx.arc(sx0 + k * 6, sy0 - k * 16, 2 + k * 4, 0, 7); ctx.fill(); } } }
     ctx.restore();
-    this.hits.push({ kind: 'asset', id: a.id, zone: e.zone, label: `${ASSETS[a.cls].name}${a.cond === 'broken' ? ' (broken)' : ''}, in your stock`, polys: [[[x - 16, y - 32 - bob], [x + 16, y - 32 - bob], [x + 16, y + 4], [x - 16, y + 4]]], asset: a });
+    this.hits.push({ eid: e.id, kind: 'asset', id: a.id, zone: e.zone, label: `${ASSETS[a.cls].name}${a.cond === 'broken' ? ' (broken)' : ''}, in your stock`, polys: [[[x - 16, y - 32 - bob], [x + 16, y - 32 - bob], [x + 16, y + 4], [x - 16, y + 4]]], asset: a });
     if (this.cam.z > 0.6 || sel || hov) this.overlay.push({ wx: x, wy: y - 36 - bob, draw: (g, px, py, s) => this.icon(g, px, py, s, ASSETS[a.cls].icon, sel) });
   }
   drawPlot(ctx, e) {
-    const pl = PLOTS[e.zone][e.plot], z = ELEV[e.zone], hov = this.hover?.id === e.id && this.hover.kind === 'plot';
+    const pl = PLOTS[e.zone][e.plot], z = ELEV[e.zone], hov = this.hover?.eid === e.id;
     ctx.save(); ctx.translate(0, -z);
     diamond(ctx, pl[0], pl[1], 3, 3, e.locked ? '#2a2e38' : '#6a5a40', hov ? '#fff' : 'rgba(0,0,0,.35)', 0, hov ? 2 : 1);
     ctx.strokeStyle = e.locked ? '#7a7f88' : '#ffd36e'; ctx.lineWidth = 2; ctx.setLineDash([6, 5]); const [a, b, c, d] = [P(pl[0] + 0.2, pl[1] + 0.2), P(pl[0] + 2.8, pl[1] + 0.2), P(pl[0] + 2.8, pl[1] + 2.8), P(pl[0] + 0.2, pl[1] + 2.8)]; ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.lineTo(c[0], c[1]); ctx.lineTo(d[0], d[1]); ctx.closePath(); ctx.stroke(); ctx.setLineDash([]);
     for (const [cx, cy] of [[pl[0] + 0.3, pl[1] + 2.6], [pl[0] + 2.6, pl[1] + 2.6]]) { const [x, y] = P(cx, cy); quad(ctx, [[x - 4, y], [x + 4, y], [x, y - 14]], '#ff8a2b'); ctx.fillStyle = '#fff'; ctx.fillRect(x - 2, y - 7, 4, 2); }
     ctx.restore();
     const [x, y] = P(pl[0] + 1.5, pl[1] + 1.5, z);
-    this.hits.push({ kind: 'plot', id: `${e.zone}:${e.plot}`, zone: e.zone, label: e.locked ? 'Building plot (locked)' : 'Empty plot: hire a manager here', polys: [[P(pl[0], pl[1], z), P(pl[0] + 3, pl[1], z), P(pl[0] + 3, pl[1] + 3, z), P(pl[0], pl[1] + 3, z)]], locked: e.locked });
+    this.hits.push({ eid: e.id, kind: 'plot', id: `${e.zone}:${e.plot}`, zone: e.zone, label: e.locked ? 'Building plot (locked)' : 'Empty plot: hire a manager here', polys: [[P(pl[0], pl[1], z), P(pl[0] + 3, pl[1], z), P(pl[0] + 3, pl[1] + 3, z), P(pl[0], pl[1] + 3, z)]], locked: e.locked });
     this.overlay.push({ wx: x, wy: y - 20, draw: (g, px, py, s) => this.chip(g, px, py, e.locked ? 'Locked' : '+ Hire', e.locked ? '#a3b3c9' : '#ffd36e', s) });
   }
   drawPipe(ctx, e) {
-    const p = e.pipe, pl = PLOTS[e.zone][e.plot], z = ELEV[e.zone], K = PIPE[p.kind], hov = this.hover?.id === e.id && this.hover.kind === 'pipe';
+    const p = e.pipe, pl = PLOTS[e.zone][e.plot], z = ELEV[e.zone], K = PIPE[p.kind], hov = this.hover?.eid === e.id;
     const floors = p.level, h = 26 + floors * 13, running = p.status === 'running', off = p.status === 'paused' || p.status === 'audit';
     const col = off ? '#6a707c' : { student: '#46a06a', broker: '#c9a227', logistics: '#4a8fb0' }[p.kind];
     ctx.save(); ctx.translate(0, -z - e.drop);
@@ -465,21 +490,21 @@ export class World {
     box(ctx, pl[0] + 0.1, pl[1] + 0.1, 2.8, 2.8, 4, tone(shade(col, 0.8)), { z: h + 1 });
     const [rx, ry] = P(pl[0] + 1.5, pl[1] + 1.5, h + 5);
     ctx.fillStyle = '#e8eef6'; ctx.font = '800 11px ui-monospace, Menlo, monospace'; ctx.textAlign = 'center'; const sp = facePoint(f.left, 0.5, 0.04); ctx.fillText(K.icon, sp[0], sp[1] - 2);
-    if (running && !this.reduced()) { cyl(ctx, pl[0] + 2.2, pl[1] + 0.8, 0.22, 16, tone('#6a6f78'), h + 5); const [cx, cy] = P(pl[0] + 2.2, pl[1] + 0.8, h + 21); for (let i = 0; i < 4; i++) { const k = ((this.t / 1700) + i / 4) % 1; ctx.fillStyle = `rgba(235,240,250,${0.38 * (1 - k)})`; ctx.beginPath(); ctx.arc(cx + k * 10, cy - k * 38, 3 + k * 8, 0, 7); ctx.fill(); } }
+    if (running && !this.reduced()) { cyl(ctx, pl[0] + 2.2, pl[1] + 0.8, 0.22, 16, tone('#6a6f78'), h + 5); const [cx, cy] = P(pl[0] + 2.2, pl[1] + 0.8, h + 21); for (let i = 0; i < 4; i++) { const k = ((this.vt / 1700) + i / 4) % 1; ctx.fillStyle = `rgba(235,240,250,${0.38 * (1 - k)})`; ctx.beginPath(); ctx.arc(cx + k * 10, cy - k * 38, 3 + k * 8, 0, 7); ctx.fill(); } }
     ctx.restore();
     const [x, y] = P(pl[0] + 1.5, pl[1] + 1.5, z);
-    this.hits.push({ kind: 'pipe', id: p.id, zone: e.zone, label: `${K.name}, level ${p.level}`, polys: [f.left, f.right, f.top].map((q) => q.map(([a, b]) => [a, b - z - e.drop])), pipe: p });
+    this.hits.push({ eid: e.id, kind: 'pipe', id: p.id, zone: e.zone, label: `${K.name}, level ${p.level}`, polys: [f.left, f.right, f.top].map((q) => q.map(([a, b]) => [a, b - z - e.drop])), pipe: p });
     const frac = p.inflight ? clamp((p.prog + (this.hourF() - this.g.s.hour)) / Math.max(1, p.len), 0, 1) : 0;
     this.overlay.push({ wx: x, wy: y - h - 14 - e.drop, draw: (g, px, py, s) => this.progress(g, px, py, s, frac, p, off) });
   }
   truckPos(e) {
     const f = e.f, from = e.from, to = f.to, p = clamp((this.hourF() - (f.arrive - 6)) / 6, 0, 1);
-    const a = DOORS[from], b = DOORS[to], north = to < from, lane = north ? LANE.north : LANE.south;
+    const a = DOORS[from], b = DOORS[to], north = to > from, lane = north ? LANE.north : LANE.south;
     const pts = [a, [lane, a[1]], [lane, b[1]], b];
     const seg = [Math.abs(pts[1][0] - pts[0][0]), Math.abs(pts[2][1] - pts[1][1]), Math.abs(pts[3][0] - pts[2][0])], tot = seg[0] + seg[1] + seg[2];
     let d = p * tot, i = 0; while (i < 2 && d > seg[i]) { d -= seg[i]; i++; }
     const A = pts[i], B = pts[i + 1], k = seg[i] ? d / seg[i] : 1;
-    e.dirY = i === 1; e.north = north;
+    e.dirY = i === 1; e.north = north; e.hd = Math.sign(i === 1 ? B[1] - A[1] : B[0] - A[0]) || 1;
     return [lerp(A[0], B[0], k), lerp(A[1], B[1], k)];
   }
   drawTruck(ctx, e) {
@@ -489,12 +514,13 @@ export class World {
     const w = alongY ? 0.8 : 1.7, d = alongY ? 1.7 : 0.8;
     shadow(ctx, gx - w / 2, gy - d / 2, w, d, 16, 0.25);
     box(ctx, gx - w / 2, gy - d / 2, w, d, 16, tone('#e8eef6'), { z: 3 });
-    const cab = alongY ? [gx - 0.4, gy + (e.north ? -0.85 : 0.35), 0.8, 0.5] : [gx + (e.north ? -0.85 : 0.35), gy - 0.4, 0.5, 0.8];
+    const lead = e.hd < 0 ? -0.85 : 0.35;
+    const cab = alongY ? [gx - 0.4, gy + lead, 0.8, 0.5] : [gx + lead, gy - 0.4, 0.5, 0.8];
     box(ctx, cab[0], cab[1], cab[2], cab[3], 12, tone('#2f80ed'), { z: 3 });
     for (const [ox, oy] of [[-0.25, -0.6], [0.25, 0.6], [-0.25, 0.6], [0.25, -0.6]]) { const [wx, wy] = P(gx + (alongY ? ox : oy), gy + (alongY ? oy : ox), 0); ellipse(ctx, wx, wy - 2, 3.4, 3.4, '#10141c'); }
     ctx.restore();
-    if (!this.reduced() && !blocked) for (let i = 0; i < 2; i++) { const k = ((this.t / 500) + i / 2) % 1; ctx.fillStyle = `rgba(210,215,225,${0.3 * (1 - k)})`; ctx.beginPath(); ctx.arc(x - 8 - k * 14 * (e.north ? -1 : 1), y - 6 - k * 6, 2 + k * 3, 0, 7); ctx.fill(); }
-    this.hits.push({ kind: 'truck', id: e.f.id, zone: 0, label: `Freight run to ${ZONES[e.f.to].short}`, circle: [x, y - 12, 20] });
+    if (!this.reduced() && !blocked) for (let i = 0; i < 2; i++) { const k = ((this.vt / 500) + i / 2) % 1; ctx.fillStyle = `rgba(210,215,225,${0.3 * (1 - k)})`; ctx.beginPath(); ctx.arc(x + (alongY ? e.hd : -e.hd) * (8 + k * 14), y - 6 - k * 6, 2 + k * 3, 0, 7); ctx.fill(); }
+    this.hits.push({ eid: e.id, kind: 'truck', id: e.f.id, zone: 0, label: `Freight run to ${ZONES[e.f.to].short}`, circle: [x, y - 12, 20] });
     this.overlay.push({ wx: x, wy: y - 40, draw: (g, px, py, s) => this.chip(g, px, py, `${e.f.items.length} crate${e.f.items.length > 1 ? 's' : ''} to ${ZONES[e.f.to].short}`, '#ffd36e', s) });
   }
   cars() {
@@ -516,9 +542,9 @@ export class World {
   drawPlayer(ctx) {
     const pl = this.player, z = zAt(pl.y), [x, y] = P(pl.x, pl.y, z), prof = this.g?.s.profile;
     const look = { shirt: { bootstrapper: '#c0392b', venture: '#1d2b53', midtier: '#16a085' }[prof] || '#c0392b', hair: '#222', skin: '#f1c27d', pants: '#27324a' };
-    const k = 0.5 + 0.5 * Math.sin(this.t / 400);
+    const k = 0.5 + 0.5 * Math.sin(this.vt / 400);
     ellipse(ctx, x, y + 1, 16, 7.5, `rgba(255,211,110,${0.3 + 0.15 * k})`, '#ffd36e', 1.5);
-    person(ctx, x, y, 1.3, look, this.t, pl.moving, pl.dir);
+    person(ctx, x, y, 1.3, look, this.vt, pl.moving, pl.dir);
     this.overlay.push({ wx: x, wy: y - 48, draw: (g, px, py, s) => this.chip(g, px, py, 'You', '#ffd36e', s) });
   }
   drawHover(ctx) {
@@ -539,7 +565,7 @@ export class World {
   drawWeather(ctx) {
     const { W, H } = this;
     if (this.env.crunch) { ctx.fillStyle = 'rgba(60,66,80,.3)'; ctx.fillRect(0, 0, W, H); if (this.rain) { ctx.strokeStyle = 'rgba(190,210,235,.4)'; ctx.lineWidth = 1; ctx.beginPath(); for (const r of this.rain) { const x = r[0] * W, y = r[1] * H; ctx.moveTo(x, y); ctx.lineTo(x - 4, y + 11); } ctx.stroke(); } }
-    if (this.env.surge && !this.reduced()) { const k = this.t / 1000; for (let i = 0; i < 26; i++) { const x = (i * 97 + Math.sin(k + i) * 24) % W, y = ((k * 40 + i * 53) % (H + 20)) - 10; ctx.fillStyle = ['#ff3da8', '#7be3ff', '#ffd36e'][i % 3]; ctx.globalAlpha = 0.55; ctx.fillRect(x, y, 5, 5); } ctx.globalAlpha = 1; }
+    if (this.env.surge && !this.reduced()) { const k = this.vt / 1000; for (let i = 0; i < 26; i++) { const x = (i * 97 + Math.sin(k + i) * 24) % W, y = ((k * 40 + i * 53) % (H + 20)) - 10; ctx.fillStyle = ['#ff3da8', '#7be3ff', '#ffd36e'][i % 3]; ctx.globalAlpha = 0.55; ctx.fillRect(x, y, 5, 5); } ctx.globalAlpha = 1; }
     if (this.env.surge) { ctx.fillStyle = 'rgba(255,61,168,.07)'; ctx.fillRect(0, 0, W, H); }
     if (this.env.tariff) { ctx.fillStyle = 'rgba(255,80,60,.05)'; ctx.fillRect(0, 0, W, H); }
   }
@@ -547,10 +573,10 @@ export class World {
     const s = clamp(this.cam.z, 0.75, 1.25);
     for (const o of this.overlay) { const [x, y] = this.w2s(o.wx, o.wy); if (x < -80 || x > this.W + 80 || y < -40 || y > this.H + 40) continue; o.draw(ctx, x, y, s); }
     for (const p of this.parts) {
-      const [x, y] = this.w2s(sx(p.gx, p.gy), sy(p.gx, p.gy, p.z + (p.k === 'text' ? p.age * 26 : 0)));
+      const [x, y] = this.w2s(sx(p.gx, p.gy), sy(p.gx, p.gy, p.z + (p.k === 'text' && !this.reduced() ? p.age * 26 : 0)));
       const a = clamp(1 - p.age / p.life, 0, 1);
       if (p.k === 'text') { ctx.globalAlpha = a; ctx.font = `800 ${Math.round(15 * s)}px ui-monospace, Menlo, monospace`; ctx.textAlign = 'center'; ctx.lineWidth = 4; ctx.strokeStyle = 'rgba(8,10,20,.85)'; ctx.strokeText(p.text, x, y); ctx.fillStyle = p.color; ctx.fillText(p.text, x, y); ctx.globalAlpha = 1; }
-      else { const rise = (p.up * p.age - 80 * p.age * p.age) * this.cam.z; ctx.globalAlpha = a; ctx.fillStyle = '#ffd36e'; ctx.fillRect(x + p.vx * p.age * this.cam.z, y - rise, 5, 5); ctx.fillStyle = '#b8860b'; ctx.fillRect(x + p.vx * p.age * this.cam.z + 1, y - rise + 1, 3, 3); ctx.globalAlpha = 1; }
+      else { const rise = this.reduced() ? 0 : (p.up * p.age - 80 * p.age * p.age) * this.cam.z; ctx.globalAlpha = a; ctx.fillStyle = '#ffd36e'; ctx.fillRect(x + p.vx * p.age * this.cam.z, y - rise, 5, 5); ctx.fillStyle = '#b8860b'; ctx.fillRect(x + p.vx * p.age * this.cam.z + 1, y - rise + 1, 3, 3); ctx.globalAlpha = 1; }
     }
   }
   chip(g, x, y, text, color = '#ffd36e', s = 1) {
@@ -571,7 +597,7 @@ export class World {
   leadBubble(g, x, y, s, B, l, hov) {
     const text = money(l.budget), urgent = !!l.need;
     g.font = `800 ${Math.round(11 * s)}px ui-monospace, Menlo, monospace`; const w = g.measureText(text).width + 32 * s, h = 22 * s;
-    const bob = this.reduced() ? 0 : Math.sin(this.t / 500 + l.born) * 1.5;
+    const bob = this.reduced() ? 0 : Math.sin(this.vt / 500 + l.born) * 1.5;
     roundRect(g, x - w / 2, y - h + bob, w, h, 7 * s); g.fillStyle = 'rgba(16,20,28,.94)'; g.fill(); g.strokeStyle = urgent ? '#ffd36e' : hov ? '#ffffff' : '#5b6b85'; g.lineWidth = urgent ? 2 : 1.5; g.stroke();
     g.beginPath(); g.moveTo(x - 4 * s, y + bob); g.lineTo(x + 4 * s, y + bob); g.lineTo(x, y + 6 * s + bob); g.fill();
     g.font = `${Math.round(14 * s)}px system-ui, sans-serif`; g.textAlign = 'left'; g.textBaseline = 'middle'; g.fillStyle = '#fff'; g.fillText(B.icon, x - w / 2 + 5 * s, y - h / 2 + 1 + bob);
@@ -610,7 +636,8 @@ export class World {
     }
   }
   drawMini() {
-    const m = this.mini, c = this.mctx, W = (m.width = 150), H = (m.height = 96), b = this.bounds();
+    const m = this.mini, c = this.mctx, W = 150, H = 96, b = this.bounds();
+    if (m.offsetParent === null) return; // hidden on phones: do not paint it
     c.clearRect(0, 0, W, H); c.fillStyle = 'rgba(16,24,40,.85)'; c.fillRect(0, 0, W, H);
     const px = (x) => (x - b.x0) / (b.x1 - b.x0) * W, py = (y) => (y - b.y0) / (b.y1 - b.y0) * H;
     for (const z of [1, 2, 3]) { const d = DIST[z]; const pts = [[LAND.x0, d.gy0], [LAND.x1, d.gy0], [LAND.x1, d.gy1], [LAND.x0, d.gy1]].map(([gx, gy]) => [px(sx(gx, gy)), py(sy(gx, gy, ELEV[z]))]); c.beginPath(); pts.forEach(([x, y], i) => (i ? c.lineTo(x, y) : c.moveTo(x, y))); c.closePath(); c.fillStyle = this.unlocked?.has(z) ? ['#705f45', '#4d586c', '#3d4c70'][z - 1] : '#1e2430'; c.fill(); if (z === this.api.ui.zone) { c.strokeStyle = '#ffd36e'; c.lineWidth = 1.5; c.stroke(); } }

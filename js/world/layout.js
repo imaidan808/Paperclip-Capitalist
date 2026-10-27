@@ -63,7 +63,12 @@ export const SPOTS = {
     home: [21.6, 9.3],
   },
 };
-export const stashPos = (z, i) => { const s = SPOTS[z].stash; return [s.x + (i % s.cols) * s.dx, s.y + Math.floor(i / s.cols) * s.dy]; };
+export const stashPos = (z, i) => {
+  const s = SPOTS[z].stash;
+  if (i < s.n) return [s.x + (i % s.cols) * s.dx, s.y + Math.floor(i / s.cols) * s.dy];
+  const k = i - s.n, a = k * 2.399, r = 1.1 + 0.4 * Math.sqrt(k), [hx, hy] = SPOTS[z].home; // overflow: a small pile on open ground
+  return [hx + Math.cos(a) * r, hy + Math.sin(a) * r * 0.7];
+};
 
 /** Truck door points and the two avenue lanes (northbound = towards Corporate Valley). */
 export const DOORS = { 1: [26, 45.5], 2: [16, 28.6], 3: [16, 13.6] };
