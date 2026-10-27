@@ -5,7 +5,7 @@ import { Session, Clock, kv } from './session.js';
 import { roomCode, cleanCode } from './net.js';
 import { $, esc, delegate, applySettings, initDialog, settingsDialog, dlg, toast } from './ui/common.js';
 import { mountDraft } from './ui/draft.js';
-import { mountAcademy } from './ui/academy.js';
+import { mountAcademy, claimPendingRewards } from './ui/academy.js';
 import { mountGame } from './ui/shell.js';
 import { mountInstructor } from './ui/instructor.js';
 import { mountDebrief } from './ui/debrief.js';
@@ -60,7 +60,7 @@ function afterAcademy() {
   if (p?.resume && S.game && S.mode === 'solo') S.setPaused(false);
   if (p?.after) p.after(); else if (S.game) go('game'); else go('title');
 }
-function openAcademy(after) { pending = { ...(after ? { after } : {}), resume: freezeClock() }; go('academy'); }
+function openAcademy(after, only) { pending = { ...(after ? { after } : {}), ...(only ? { only } : {}), resume: freezeClock() }; go('academy'); }
 
 const screens = {
   title() {
@@ -110,6 +110,7 @@ const screens = {
         const room = pending?.room;
         if (room) S.joinRoom({ ...room, role: 'student', handle: handle || undefined });
         S.startGame({ perks, specialty, handle });
+        claimPendingRewards(S.game); // lessons played from the title screen wait until there is a run to pay
         pending = null;
         if (kv.get('academyDone')) enter(); else openAcademy(() => go('game'));
       },
@@ -120,13 +121,14 @@ const screens = {
   // The Academy mounts its own sandbox; done or skipped, it is not shown again by itself.
   academy() {
     let live = true;
+    const only = pending?.only; // a single lesson to replay (from the Codex), else the whole course
     const finish = () => {
       if (!live) return;
       live = false;
       kv.set('academyDone', true);
       setTimeout(afterAcademy, 0); // never from inside the mount: the router has not stored this screen's cleanup yet
     };
-    const m = mountAcademy(root, S, { onDone: finish, onSkip: finish });
+    const m = mountAcademy(root, S, { onDone: finish, onSkip: finish, only });
     cleanup = () => { live = false; if (typeof m === 'function') m(); else m?.destroy?.(); };
   },
 
@@ -134,7 +136,7 @@ const screens = {
     if (!S.game) return go('title');
     const m = mountGame(root, S, {
       onDebrief: () => go('debrief'),
-      onAcademy: () => openAcademy(() => go('game')),
+      onAcademy: (id) => openAcademy(() => go('game'), typeof id === 'string' ? id : undefined),
       onJoin: (room) => { S.reset(); pending = { room }; go('setup'); },
       onReset: () => { S.reset(); pending = null; go('title'); },
     });
