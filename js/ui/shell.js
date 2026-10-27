@@ -87,7 +87,11 @@ export function mountGame(root, S, hooks) {
     el.drawer.hidden = !U.drawer;
     el.stage.dataset.drawer = U.drawer || '';
     el.drawer.setAttribute('aria-label', drawerOf(U.drawer)?.label || 'Panel');
+    const keep = el.drawer.querySelector('.db'), top = keep && el.drawer.dataset.d === U.drawer ? keep.scrollTop : 0; // a refresh must not throw the reader back to the top
     setHTML(el.drawer, drawerHTML());
+    el.drawer.dataset.d = U.drawer || '';
+    const db = el.drawer.querySelector('.db');
+    if (db && top) db.scrollTop = top;
     wv?.update();
     paintBars();
     pumpQueue();

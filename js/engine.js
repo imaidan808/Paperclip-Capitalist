@@ -558,13 +558,22 @@ export class Game {
     const caught = lot.truth.fake && res.estimate.fakeProb >= 0.6;
     const score = clamp(res.score ?? 0.5, 0, 1);
     this.xp(8 + 22 * score);
+    this._tally('inspect', score, !!res.quick);
     this.emit('inspect', { score, fake: lot.truth.fake, caught });
     return ok('Recorded.', { caught });
+  }
+  /** Per-game play counts for the debrief and the instructor: s.meta[kind] = { n, sum } (sum of scores), plus how many deals were played by hand and how many were Quick. */
+  _tally(kind, score, quick) {
+    const m = (this.s.meta ||= {});
+    const t = (m[kind] ||= { n: 0, sum: 0 });
+    t.n++; t.sum += score;
+    if (quick) m.quick = (m.quick || 0) + 1; else m.played = (m.played || 0) + 1;
   }
   /** A skill game played for its own sake (haggle, auction, repair) pays a little XP for good play. */
   recordPlay(kind, res) {
     const score = clamp(res?.score ?? 0.5, 0, 1);
     this.xp(6 + 24 * score);
+    this._tally(kind, score, !!res?.quick);
     if (kind === 'haggle') this.emit('haggle', { role: res.role || 'sell', mult: res.mult ?? 1, score, deal: !!res.deal });
     if (kind === 'auction') this.emit('auction', { won: !!res.won, price: res.price ?? 0, surplus: res.surplus ?? 0 });
   }
@@ -924,7 +933,7 @@ export class Game {
     const s = this.s;
     if (prod === 'circle') return this.P.circle ? '' : 'You are not part of a Community Circle.';
     if (!s.mil.m1) return 'The Commercial Bank opens at Metro Hub ($1,000 net worth).';
-    if (this.netWorth() < this.P.bankMinNW) return `No bank will lend to you yet: your record asks for ${money(this.P.bankMinNW)} net worth first.`;
+    if (this.P.bankMinNW > 0 && this.netWorth() < this.P.bankMinNW) return `No bank will lend to you yet: your record asks for ${money(this.P.bankMinNW)} net worth first.`;
     if (this.mods().freeze) return 'Credit Action Override: no new loans until the freeze lifts.';
     if (LOANS[prod].zone && !s.zones.includes(LOANS[prod].zone)) return 'Needs Corporate Valley.';
     if (s.insolvent) return 'Your account is insolvent.';
@@ -1299,6 +1308,7 @@ export class Game {
       shockLog: s.shockLog.map((x) => ({ id: x.id, nw: x.nw, nwAfter: x.nwAfter, pivots: x.pivots, de: x.de })),
       hoursPlayed: Math.round((s.hour - s.startHour) / 24 * 10) / 10, auditFail: s.auditFail,
       inventory: s.assets.slice(0, 24).map((a) => this.pub(a)), mil: s.mil,
+      plays: Object.fromEntries(['inspect', 'pitch', 'haggle', 'repair', 'auction', 'quick', 'played'].filter((k) => s.meta?.[k] != null).map((k) => [k, s.meta[k]])),
     };
   }
 }
