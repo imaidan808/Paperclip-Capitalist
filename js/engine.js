@@ -924,7 +924,7 @@ export class Game {
     const s = this.s;
     if (prod === 'circle') return this.P.circle ? '' : 'You are not part of a Community Circle.';
     if (!s.mil.m1) return 'The Commercial Bank opens at Metro Hub ($1,000 net worth).';
-    if (this.netWorth() < this.P.bankMinNW) return `No bank will lend to you yet: your record asks for ${money(this.P.bankMinNW)} net worth first.`;
+    if (this.P.bankMinNW > 0 && this.netWorth() < this.P.bankMinNW) return `No bank will lend to you yet: your record asks for ${money(this.P.bankMinNW)} net worth first.`;
     if (this.mods().freeze) return 'Credit Action Override: no new loans until the freeze lifts.';
     if (LOANS[prod].zone && !s.zones.includes(LOANS[prod].zone)) return 'Needs Corporate Valley.';
     if (s.insolvent) return 'Your account is insolvent.';
