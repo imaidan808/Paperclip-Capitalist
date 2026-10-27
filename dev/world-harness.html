@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en" data-motion="auto">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>World harness (dev only)</title>
+  <style>
+    html, body { margin: 0; height: 100%; background: #0b1220; color: #e8eef6; font: 12px ui-monospace, Menlo, monospace; overflow: hidden; }
+    #stage { position: fixed; inset: 0; }
+    #bar { position: fixed; left: 8px; top: 8px; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; background: rgba(12, 18, 30, .86); border: 1px solid #3a4a66; padding: 6px 8px; border-radius: 8px; max-width: calc(100% - 200px); z-index: 5; }
+    #bar button, #bar select, #bar input { font: inherit; color: #e8eef6; background: #1c2840; border: 1px solid #4a5d80; border-radius: 5px; padding: 3px 7px; }
+    #bar button:hover { background: #2a3a5c; } #bar button[aria-pressed="true"] { background: #6a5a20; border-color: #ffd36e; }
+    #bar input[type=number] { width: 9em; } #bar label { display: inline-flex; gap: 4px; align-items: center; }
+    #info { position: fixed; left: 8px; bottom: 8px; background: rgba(12, 18, 30, .86); border: 1px solid #3a4a66; padding: 5px 8px; border-radius: 8px; z-index: 5; white-space: pre; }
+    #mini { position: fixed; right: 8px; bottom: 8px; z-index: 5; } #mini canvas { border: 1px solid #3a4a66; border-radius: 6px; width: 150px; height: 96px; display: block; }
+    #tip { position: fixed; pointer-events: none; background: rgba(12, 18, 30, .94); border: 1px solid #ffd36e; border-radius: 6px; padding: 4px 8px; max-width: 260px; z-index: 6; }
+    .anchor { position: fixed; border: 2px solid #ff3da8; border-radius: 4px; pointer-events: none; z-index: 4; }
+    canvas.worldcv { display: block; outline: none; }
+  </style>
+</head>
+<body>
+  <div id="stage"></div>
+  <div id="bar" role="toolbar" aria-label="World harness">
+    <label>District <select id="zone"></select></label>
+    <button id="focus">Focus</button><button id="quick">Quick travel</button><button id="fit">Fit</button><button id="map" aria-pressed="false">Map</button>
+    <label>Net worth $ <input id="nw" type="number" min="0" step="1" value="0"></label><button id="setnw">Set</button><button id="next">Open next</button><button id="all">Open all</button>
+    <button id="pop">Populate district</button><button id="ship">Ship crate</button>
+    <label>Hour <input id="hour" type="range" min="0" max="24" value="9" step="0.5"></label>
+    <button id="play" aria-pressed="false">Play</button>
+    <button id="rm" aria-pressed="false">Reduced motion</button><button id="anch" aria-pressed="false">Show anchors</button>
+  </div>
+  <div id="mini"></div><div id="info"></div><div id="tip" hidden></div>
+  <script type="module" src="./world-harness.js"></script>
+</body>
+</html>

@@ -1,168 +1,291 @@
-// The island: three elevated districts along one avenue, plus every slot where game objects appear.
-// Pure data and deterministic scatter: tweak the tables below to re-lay the world.
-import { h2, hash, lerp } from './iso.js';
+// The island: an irregular, hand-anchored world of sixteen districts joined by bending roads, bridges and a ferry (geography in island.js).
+// buildLayout(zones) is pure and deterministic (no Math.random): it places the districts and their pads, lays the roads and the walking graph, then makes the terrain
+// (a land mask with bays, a lake, rivers, islets; a smooth height field with a plateau under every district) and the cliffs where land meets sea.
+// Grid: one tile = 1 unit; x grows to the lower right on screen, y to the lower left; heights are screen pixels.
+import { ZONES } from '../data/index.js';
+import { h2, lerp, clamp, mix, shade, luma } from './iso.js';
+import { KITS, FILL } from './kits.js';
+import { GW, GH, BW, BD, ANCHORS, REGIONS, BLOBS, CARVES, ROADS, VIEWPOINTS } from './island.js';
 
-export const GW = 36, GH = 50;                         // grid size (tiles)
-export const LAND = { x0: 3, x1: 33, y0: 1, y1: 49 };   // land rectangle: x0 <= gx < x1, y0 <= gy < y1
-export const AVENUE = [17, 19];                         // gx range of the central avenue (two tiles)
-export const STREETS = [7, 24, 40];                     // gy rows of the cross streets
-export const ELEV = { 1: 0, 2: 12, 3: 26 };
+export { GW, GH, BW, BD, REGIONS };
+export const LAND = { x0: 0, x1: GW, y0: 0, y1: GH };
+export const SEA = 34;                 // how far below the water line a cliff falls
+export const SKIRT = 5;                // tiles over which the ground rises or falls from a district's plateau to the hills around it
 
-export const zoneAt = (gy) => (gy < 16 ? 3 : gy < 32 ? 2 : 1);
-/** Ground height in px. Flat inside districts, sloped ramps between them. */
-export function zAt(gy) {
-  if (gy <= 15) return ELEV[3];
-  if (gy < 18) return lerp(ELEV[3], ELEV[2], (gy - 15) / 3);
-  if (gy <= 31) return ELEV[2];
-  if (gy < 34) return lerp(ELEV[2], ELEV[1], (gy - 31) / 3);
-  return ELEV[1];
+// ---- the block template (local tiles, before the plan is mirrored for some districts): a core every district shares
+export const T = {
+  ave: [0, 8, BW, 2], cross: [10, 0, 2, BD],
+  walks: [[0, 7, BW, 4], [9, 0, 4, BD]],                    // sidewalk bands (the avenue and cross street are drawn on top)
+  keep: [[0, 7, BW, 4], [9, 0, 4, BD]],                     // no building may stand here
+  plots: [[0.8, 0.5], [4.4, 0.5], [0.8, 4.0], [4.4, 4.0]], PS: 3,
+  ne: [13, 0.8, 8, 4.8], nw: [0.8, 0.6, 8.2, 6.3], se: [13, 12.7, 8.2, 1.5],
+  board: [13.6, 6.0, 3, 0.5], hq: [17.8, 14.3, 3, 3], depot: [13.3, 14.6, 3.5, 2.4], door: [11, 15.8],
+  leads: [[3, 7.5], [6.2, 7.5], [14.6, 7.5], [17.8, 7.5], [3.6, 10.5], [7, 10.5], [15.6, 10.5], [19, 10.5]],
+  lots: Array.from({ length: 8 }, (_, i) => [13.9 + i * 0.98, 11.8]), home: [9.5, 10.5],
+  stash: { x: 1.1, y: 11.7, cols: 8, dx: 0.9, dy: 0.9 },
+};
+
+// ---- small maths
+const sstep = (t) => t * t * (3 - 2 * t);
+const vn = (x, y) => { const i = Math.floor(x), j = Math.floor(y), fx = sstep(x - i), fy = sstep(y - j); return lerp(lerp(h2(i, j), h2(i + 1, j), fx), lerp(h2(i, j + 1), h2(i + 1, j + 1), fx), fy); };
+export const segDist = (px, py, ax, ay, bx, by) => { const dx = bx - ax, dy = by - ay, l2 = dx * dx + dy * dy || 1, t = clamp(((px - ax) * dx + (py - ay) * dy) / l2, 0, 1); return Math.hypot(px - ax - dx * t, py - ay - dy * t); };
+export const rectDist = (x, y, r) => Math.hypot(Math.max(r[0] - x, 0, x - (r[0] + r[2])), Math.max(r[1] - y, 0, y - (r[1] + r[3])));
+const ov = (a, b, m = 0) => a.x < b.x + b.w + m && a.x + a.w > b.x - m && a.y < b.y + b.d + m && a.y + a.d > b.y - m;
+/** A polyline with cumulative lengths, for walking and driving along it. */
+export function polyInfo(pts) { const lens = [0]; for (let i = 1; i < pts.length; i++) lens.push(lens[i - 1] + Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1])); return { pts, lens, len: lens[lens.length - 1] }; }
+export function polyAt(P, s) {
+  s = clamp(s, 0, P.len); let i = 1; while (i < P.lens.length - 1 && P.lens[i] < s) i++;
+  const a = P.pts[i - 1], b = P.pts[i], l = P.lens[i] - P.lens[i - 1] || 1, k = (s - P.lens[i - 1]) / l;
+  return { x: a[0] + (b[0] - a[0]) * k, y: a[1] + (b[1] - a[1]) * k, dx: (b[0] - a[0]) / l, dy: (b[1] - a[1]) / l, s };
 }
-export const inLand = (gx, gy) => gx >= LAND.x0 && gx < LAND.x1 && gy >= LAND.y0 && gy < LAND.y1;
-export const isAvenue = (gx, gy) => gx >= AVENUE[0] && gx < AVENUE[1] && gy >= LAND.y0 && gy < LAND.y1;
-export const isStreet = (gx, gy) => STREETS.includes(Math.floor(gy)) && gx >= 4 && gx < 32;
-export const isRoad = (gx, gy) => isAvenue(gx, gy) || isStreet(gx, gy);
-export const isWalk = (gx, gy) => !isRoad(gx, gy) && zoneAt(gy) > 1 && (isRoad(gx - 1, gy) || isRoad(gx + 1, gy) || isRoad(gx, gy - 1) || isRoad(gx, gy + 1));
+/** Offset a polyline to the right of its direction of travel (a lane); corners are mitred. */
+export function offsetPoly(pts, lane) {
+  const nrm = (a, b) => { const l = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1; return [-(b[1] - a[1]) / l, (b[0] - a[0]) / l]; };
+  return pts.map((p, i) => {
+    const n1 = i > 0 ? nrm(pts[i - 1], p) : nrm(p, pts[Math.min(1, pts.length - 1)]), n2 = i < pts.length - 1 ? nrm(p, pts[i + 1]) : n1, k = 1 / Math.max(0.5, 1 + n1[0] * n2[0] + n1[1] * n2[1]);
+    return [p[0] + (n1[0] + n2[0]) * lane * k, p[1] + (n1[1] + n2[1]) * lane * k];
+  });
+}
 
-export const DIST = {
-  1: { id: 1, cx: 18, cy: 41, name: 'The Scrap Yard', gy0: 34, gy1: 48 },
-  2: { id: 2, cx: 18, cy: 24, name: 'The Metro Hub', gy0: 18, gy1: 32 },
-  3: { id: 3, cx: 18, cy: 8, name: 'Corporate Valley', gy0: 2, gy1: 16 },
-};
+const OUT = { W: [-1, 0], E: [1, 0], N: [0, -1], S: [0, 1] };
 
-// ---- buildings and landmarks (footprint rects: [gx, gy, w, d]); hot = interaction id
-export const BUILD = {
-  1: { hq: [5, 43.5, 3, 2.5], depot: [26, 44, 4, 3], board: [12, 33.8, 3, 0.5] },
-  2: { bank: [21, 19, 5, 4], audit: [28, 19, 3, 3], hq: [13, 19, 3, 3], depot: [13, 27, 3, 3], board: [27, 23.2, 3, 0.5] },
-  3: { ipo: [22, 2.6, 4, 4], hq: [28.4, 2.6, 3, 3], depot: [13, 12.6, 3, 2], board: [19.8, 5.6, 3, 0.5] },
-};
+function mkProp(D, t, x, y, w, d, h, o, solid) {
+  const p = { t, gx: x, gy: y, w, d, h, z: D.z, zone: D.id, key: x + w / 2 + y + d / 2, solid, ...o }, ext = o.ext || 0;
+  p.bb = [(x - (y + d)) * 32 - 16 - ext, (x + y) * 16 - D.z - h - 46 - ext, (x + w - y) * 32 + 16 + ext, (x + w + y + d) * 16 - D.z + 14];
+  D.props.push(p); return p;
+}
 
-// ---- pipeline plots (3x3 each)
-export const PLOTS = {
-  2: [[5, 19], [9, 19], [5, 27], [9, 27]],
-  3: [[5, 3], [9, 3], [13, 3], [5, 9], [9, 9], [13, 9]],
-};
-
-// ---- object slots: where leads, lots and stored assets stand
-export const SPOTS = {
-  1: {
-    leads: [[8.5, 40.8], [11.5, 42.8], [14.5, 41.4], [13.5, 45.6], [21.5, 42.2], [24.5, 43.4], [28, 41.6], [31, 43]],
-    lots: Array.from({ length: 6 }, (_, i) => [6.4 + i * 1.9, 35.9]),
-    stash: { x: 21.6, y: 36.4, cols: 5, dx: 1.9, dy: 1.7, n: 10 },
-    home: [8.8, 46.2],
-  },
-  2: {
-    leads: [[19.6, 24.6], [22, 24.5], [24.6, 24.6], [27.2, 24.5], [29.8, 24.6], [14.5, 25.6], [12.5, 23.4], [16, 22.8]],
-    lots: Array.from({ length: 6 }, (_, i) => [20.4 + i * 2.0, 23.6]),
-    stash: { x: 20.4, y: 26.2, cols: 6, dx: 1.75, dy: 1.3, n: 18 },
-    home: [16.5, 20.8],
-  },
-  3: {
-    leads: [[19.8, 7.5], [22, 7.5], [24.2, 7.5], [26.4, 7.5], [28.6, 7.5], [30.8, 7.5], [27, 6.3], [29.6, 6.3]],
-    lots: Array.from({ length: 6 }, (_, i) => [19.8 + i * 2.1, 10.7]),
-    stash: { x: 19.6, y: 11.9, cols: 10, dx: 1.25, dy: 1.15, n: 30 },
-    home: [21.6, 9.3],
-  },
-};
-export const stashPos = (z, i) => {
-  const s = SPOTS[z].stash;
-  if (i < s.n) return [s.x + (i % s.cols) * s.dx, s.y + Math.floor(i / s.cols) * s.dy];
-  const k = i - s.n, a = k * 2.399, r = 1.1 + 0.4 * Math.sqrt(k), [hx, hy] = SPOTS[z].home; // overflow: a small pile on open ground
-  return [hx + Math.cos(a) * r, hy + Math.sin(a) * r * 0.7];
-};
-
-/** Truck door points and the two avenue lanes (northbound = towards Corporate Valley). */
-export const DOORS = { 1: [26, 45.5], 2: [16, 28.6], 3: [16, 13.6] };
-export const LANE = { north: 17.55, south: 18.45 };
-
-const rectHas = ([x, y, w, d], px, py, m = 0) => px > x - m && px < x + w + m && py > y - m && py < y + d + m;
-
-/** Static scenery. Deterministic: same island every time. Each prop: {t, gx, gy, w, d, h, z, key, ...params}. */
-export function buildScenery() {
-  const props = [];
-  const add = (p) => { p.z = p.z ?? ELEV[zoneAt(p.gy)]; p.key = p.gx + (p.w || 0) / 2 + p.gy + (p.d || 0) / 2; props.push(p); return p; };
-  const blocked = (gx, gy, r = 0.9) => {
-    if (!inLand(gx, gy) || isRoad(gx, gy) || isRoad(gx + 0.5, gy + 0.5) || gy < 2 || gy > 47.2 || gx < 4 || gx > 31.5) return true;
-    const z = zoneAt(gy);
-    for (const k of Object.values(BUILD[z])) if (rectHas(k, gx, gy, r)) return true;
-    for (const pl of PLOTS[z] || []) if (rectHas([pl[0], pl[1], 3, 3], gx, gy, r)) return true;
-    const sp = SPOTS[z];
-    for (const [x, y] of [...sp.leads, ...sp.lots]) if (Math.hypot(x - gx, y - gy) < r + 0.7) return true;
-    const st = sp.stash; if (rectHas([st.x - 0.5, st.y - 0.5, st.cols * st.dx + 0.6, Math.ceil(st.n / st.cols) * st.dy + 0.6], gx, gy, r)) return true;
-    if (Math.hypot(sp.home[0] - gx, sp.home[1] - gy) < r + 0.8) return true;
-    return false;
+function buildDistrict(zones, id, roadSegs) {
+  const Z = zones[id], an = ANCHORS[id], ox = an.cx - BW / 2, oy = an.cy - BD / 2, flip = !!an.flip, z = an.z, pad = an.pad;
+  const g0 = Z.palette[0], acc = Z.palette[1], l = luma(g0), kit = KITS[Z.theme], ground = kit.ground ? kit.ground(g0) : mix(g0, '#ffffff', clamp((0.3 - l) * 1.5, 0.08, 0.5));
+  const cols = { ground, alt: shade(ground, 0.92), road: mix('#2c323e', ground, 0.15), walk: mix(ground, '#cfd5df', 0.42), pad: shade(ground, 0.8), accent: acc, edge: mix(ground, '#000000', 0.4) };
+  const fp = [ox - pad[0], oy - pad[1], BW + pad[0] + pad[2], BD + pad[1] + pad[3]];
+  const D = { id, name: Z.name, short: Z.short, icon: Z.icon, theme: Z.theme, tier: Z.tier, gate: Z.gate, region: REGIONS.find((r) => r.ids.includes(id))?.id, gateKind: an.gate, ox, oy, w: BW, d: BD, z, flip, cx: an.cx, cy: an.cy, fp, area: fp[2] * fp[3], pad, pal: Z.palette, cols, ground: [], decals: [], props: [], rejected: [], features: [], plots: [] };
+  D.ports = { W: [ox, an.cy], E: [ox + BW, an.cy], N: [an.cx, oy], S: [an.cx, oy + BD] };
+  const px = (x, w = 0) => ox + (flip ? BW - x - w : x), rc = (x, y, w, d) => [px(x, w), oy + y, w, d], pt = (x, y) => [px(x), oy + y];
+  D.pt = pt; D.rc = rc;
+  D.ground.push({ x: ox, y: oy, w: BW, d: BD, col: cols.ground, kind: 'block' });
+  for (const [x, y, w, d] of T.walks) D.ground.push({ x: ox + x, y: oy + y, w, d, col: cols.walk, kind: 'walk' });
+  D.ground.push({ x: ox, y: oy + T.ave[1], w: BW, d: T.ave[3], col: cols.road, kind: 'road' }, { x: ox + T.cross[0], y: oy, w: T.cross[2], d: BD, col: cols.road, kind: 'road' });
+  const n = Z.store + 6, srows = Math.ceil(n / T.stash.cols), stashR = rc(0.7, 11.2, 8.2, srows * T.stash.dy + 0.5);
+  D.stashRect = stashR; D.ground.push({ x: stashR[0], y: stashR[1], w: stashR[2], d: stashR[3], col: cols.pad, kind: 'pad' });
+  D.decals.push({ k: 'rect', x: stashR[0], y: stashR[1], w: stashR[2], d: stashR[3], fill: null, stroke: 'rgba(255,255,255,.28)', min: 0.45 });
+  const R = [], K = [];
+  for (const q of T.keep) K.push({ x: ox + q[0], y: oy + q[1], w: q[2], d: q[3] });
+  K.push({ x: stashR[0], y: stashR[1], w: stashR[2], d: stashR[3] });
+  const lotsR = rc(13.4, 11.3, 8.2, 1.0); K.push({ x: lotsR[0], y: lotsR[1], w: lotsR[2], d: lotsR[3] });
+  const spots = { leads: T.leads.map(([x, y]) => pt(x, y)), lots: T.lots.map(([x, y]) => pt(x, y)), home: pt(...T.home), stash: { n, cols: T.stash.cols, rows: srows, dx: T.stash.dx, dy: T.stash.dy, pts: [] } };
+  for (let i = 0; i < n; i++) spots.stash.pts.push(pt(T.stash.x + (i % T.stash.cols) * T.stash.dx, T.stash.y + Math.floor(i / T.stash.cols) * T.stash.dy));
+  D.spots = spots; D.door = pt(...T.door);
+  const blocked = (x, y, w, d, m = 0) => x < ox + 0.2 || y < oy + 0.2 || x + w > ox + BW - 0.2 || y + d > oy + BD - 0.2 || K.some((q) => ov({ x, y, w, d }, q)) || R.some((q) => ov({ x, y, w, d }, q, m));
+  const A = {
+    id, pal: Z.palette, cols, zone: Z, rest: null, NW: null, SE: T.se.slice(),
+    r: (i) => h2(id * 131 + 7, i + 1),
+    add(t, lx, ly, w, d, h, o = {}) {
+      const [x, y, ww, dd] = rc(lx, ly, w, d);
+      if (blocked(x, y, ww, dd)) { D.rejected.push({ t, lx, ly }); return null; }
+      R.push({ x, y, w: ww, d: dd, t }); return mkProp(D, t, x, y, ww, dd, h, o, true);
+    },
+    deco(t, lx, ly, w, d, h, o = {}) { const [x, y, ww, dd] = rc(lx, ly, w, d); return mkProp(D, t, x, y, ww, dd, h, o, false); },
+    scatter(seed, nn, area, make, margin = 0.9) {
+      if (!area) return 0;
+      let placed = 0;
+      for (let i = 0; placed < nn && i < nn * 60; i++) {
+        const lx = area[0] + h2(seed, i * 2) * area[2], ly = area[1] + h2(seed, i * 2 + 1) * area[3], o = make(placed, h2(seed + 5, i)), w = o.w, d = o.d;
+        const [x, y] = rc(lx, ly, w, d);
+        if (lx + w > area[0] + area[2] || ly + d > area[1] + area[3] || blocked(x, y, w, d, margin * 0.5)) continue;
+        if (spots.leads.concat(spots.lots, [spots.home]).some(([sx0, sy0]) => Math.hypot(sx0 - (x + w / 2), sy0 - (y + d / 2)) < margin * 0.6 + 0.4)) continue;
+        const { t, ...rest } = o; R.push({ x, y, w, d, t }); mkProp(D, t, x, y, w, d, rest.h ?? 20, rest, true); placed++;
+      }
+      return placed;
+    },
+    decal(o) {
+      if (o.k === 'ell') { const [cx, cy] = pt(o.x, o.y); D.decals.push({ ...o, x: cx, y: cy }); return; }
+      const [x, y, w, d] = rc(o.x, o.y, o.w ?? 0, o.d ?? 0); D.decals.push({ ...o, x, y, w, d });
+    },
   };
-  const SOLID = new Set(['shack', 'depot', 'bank', 'office', 'shop', 'tower', 'ipo', 'fountain', 'helipad', 'junkcar', 'scrap', 'crates', 'tires', 'barrel']);
-  const scatter = (z, seed, n, area, make, r = 0.9) => {
-    let placed = 0;
-    for (let i = 0; placed < n && i < n * 60; i++) {
-      const gx = area[0] + h2(seed, i * 2) * (area[2] - area[0]), gy = area[1] + h2(seed, i * 2 + 1) * (area[3] - area[1]);
-      const prop = { ...make(placed, h2(seed + 5, i)), gx, gy }, w = prop.w || 0.5, d = prop.d || 0.5;
-      const corners = [[gx, gy], [gx + w, gy], [gx, gy + d], [gx + w, gy + d], [gx + w / 2, gy + d / 2]];
-      if (corners.some(([x, y]) => blocked(x, y, r))) continue;
-      if (props.some((o) => SOLID.has(o.t) && gx < o.gx + (o.w || 0) + 0.3 && gx + w > o.gx - 0.3 && gy < o.gy + (o.d || 0) + 0.3 && gy + d > o.gy - 0.3)) continue;
-      add(prop); placed++;
+  let rest = T.ne.slice();
+  const rules = Z.rules || {};
+  const feat = (key, t, x, y, w, d, h, o, restX) => { const p = A.add(t, x, y, w, d, h, { hot: key, ...o }); if (p) D.features.push(key); if (restX) rest = [restX, T.ne[1], T.ne[0] + T.ne[2] - restX, T.ne[3]]; else if (restX === null) rest = null; return p; };
+  if (rules.bank) feat('bank', 'bank', 13.4, 1.0, 4.4, 3.6, 56, { label: 'Commercial Bank' }, 18.4);
+  if (rules.audits) feat('audit', 'office', 13.2, 1.1, 3.4, 3.4, 46, { label: 'Regulatory office', color: '#8b93a8', sign: 'AUDIT' }, 16.9);
+  if (rules.enterprise) feat('ipo', 'ipo', 13.4, 0.9, 4.2, 4.2, 186, { label: 'IPO and M&A tower' }, 18.3);
+  if (rules.rent) feat('rent', 'rentrow', 13.0, 1.0, 8, 3.8, 40, { label: 'Property row', acc, ext: 4 }, null);
+  if (rules.arbitrage) feat('exchange', 'exchange', 13.1, 0.9, 7.4, 4.3, 56, { label: 'Exchange hall', acc, ext: 14 }, null);
+  A.rest = rest; if (rest && rest[2] > 7.5) A.rest = [rest[0], rest[1], 7.5, rest[3]];
+  const hqs = kit.hq || {};
+  A.add(hqs.t || 'bldg', ...T.hq, 36, { hot: 'hq:' + id, label: 'Training office', col: hqs.col || cols.accent, acc, win: [3, 2], ...hqs });
+  A.add('depot', ...T.depot, 34, { hot: 'depot:' + id, label: 'Freight depot', color: kit.depot || '#5a6a80' });
+  A.add('board', ...T.board, 40, { hot: 'board:' + id, label: 'Market board', text: Z.short.toUpperCase(), acc });
+  for (let i = 0; i < Z.plots; i++) { const q = rc(T.plots[i][0], T.plots[i][1], T.PS, T.PS); R.push({ x: q[0], y: q[1], w: T.PS, d: T.PS, t: 'plot' }); D.plots.push([q[0], q[1]]); }
+  A.NW = Z.plots ? null : T.nw.slice();
+  for (const [x, y] of [[9.0, 6.9], [12.4, 6.9], [9.0, 11.0], [12.4, 11.0], [1.5, 7.2], [5.5, 7.2], [15.5, 7.2], [19.5, 7.2], [1.5, 10.7], [5.5, 10.7], [15.5, 10.7], [19.5, 10.7]]) A.deco('lamp', x, y, 0.2, 0.2, 32, { col: kit.lamp, glow: kit.glow, sm: 1 });
+  kit.place(A); kit.decals(A);
+  // ---- the pad: the district's sprawl round the core, filled with its theme's scenery (kept off every road)
+  const pads = [[fp[0], fp[1], pad[0], fp[3]], [ox + BW, fp[1], pad[2], fp[3]], [ox, fp[1], BW, pad[1]], [ox, oy + BD, BW, pad[3]]].filter((q) => q[2] > 0.5 && q[3] > 0.5);
+  D.padRects = pads;
+  const fill = FILL[Z.theme];
+  pads.forEach((q, qi) => {
+    const nn = Math.round(q[2] * q[3] * 0.045);
+    for (let i = 0, placed = 0; placed < nn && i < nn * 40; i++) {
+      const x = q[0] + h2(id * 7 + qi, i * 2) * q[2], y = q[1] + h2(id * 7 + qi, i * 2 + 1) * q[3], o = fill(placed, h2(id * 3 + qi, i)), r = { x, y, w: o.w, d: o.d };
+      if (x + o.w > q[0] + q[2] || y + o.d > q[1] + q[3] || R.some((s) => ov(r, s, 0.6)) || roadSegs.some((s) => segDist(x + o.w / 2, y + o.d / 2, s[0], s[1], s[2], s[3]) < s[4] + Math.max(o.w, o.d) * 0.7 + 0.8)) continue;
+      const { t, ...rst } = o; R.push({ ...r, t }); mkProp(D, t, x, y, o.w, o.d, rst.h ?? 20, { ...rst, pad: true }, true); placed++;
     }
+    if (kit.padDecal) for (const dc of kit.padDecal(q, qi, cols)) D.decals.push(dc);
+  });
+  D.props.sort((a, b) => a.key - b.key);
+  D.bb = [(fp[0] - (fp[1] + fp[3])) * 32 - 40, (fp[0] + fp[1]) * 16 - z - 250, (fp[0] + fp[2] - fp[1]) * 32 + 40, (fp[0] + fp[2] + fp[1] + fp[3]) * 16 - z + 40];
+  return D;
+}
+
+/** Build the whole island for a set of zones (the sixteen districts of js/data). Pure and deterministic. */
+export function buildLayout(zones = ZONES) {
+  const ids = Object.keys(zones).map(Number).sort((a, b) => a - b);
+  // ---- ports and roads first (the pads need to stay off the roads)
+  const PORT = {};
+  for (const id of ids) { const an = ANCHORS[id], ox = an.cx - BW / 2, oy = an.cy - BD / 2; PORT[id + '.W'] = [ox, an.cy]; PORT[id + '.E'] = [ox + BW, an.cy]; PORT[id + '.N'] = [an.cx, oy]; PORT[id + '.S'] = [an.cx, oy + BD]; PORT[id + '.C'] = [an.cx, an.cy]; }
+  const node = (name) => PORT[name] || VIEWPOINTS[name] || null;
+  const edges = [];
+  for (const r of ROADS) {
+    const A = node(r.a), B = node(r.b); if (!A || !B) continue;
+    const oa = OUT[r.a.split('.')[1]], ob = OUT[r.b.split('.')[1]], pts = [A.slice()];
+    if (oa) pts.push([A[0] + oa[0] * 3, A[1] + oa[1] * 3]);
+    for (const v of r.via || []) pts.push(v.slice());
+    if (ob) pts.push([B[0] + ob[0] * 3, B[1] + ob[1] * 3]);
+    pts.push(B.slice());
+    edges.push({ ...r, ...polyInfo(pts), w: r.path ? 1 : 2, n: edges.length });
+  }
+  const roadSegs = []; for (const e of edges) if (!e.ferry) for (let i = 0; i + 1 < e.pts.length; i++) roadSegs.push([e.pts[i][0], e.pts[i][1], e.pts[i + 1][0], e.pts[i + 1][1], e.w / 2]);
+  const districts = {}; for (const id of ids) districts[id] = buildDistrict(zones, id, roadSegs);
+  const ds = ids.map((id) => districts[id]);
+  // ---- the land: districts and roads give it body, blobs add peninsulas and islets, water is carved out of it, noise roughens the coast
+  const fieldAt = (x, y) => {
+    let v = -1;
+    for (const D of ds) v = Math.max(v, 1 - rectDist(x, y, D.fp) / 4.5);
+    for (const s of roadSegs) v = Math.max(v, 1 - segDist(x, y, s[0], s[1], s[2], s[3]) / (s[4] > 0.6 ? 4 : 2));
+    for (const b of BLOBS) v = Math.max(v, 1 - Math.hypot((x - b[0]) / b[2], (y - b[1]) / b[3]));
+    v += (vn(x * 0.06, y * 0.06) - 0.5) * 0.55 + (vn(x * 0.17 + 7, y * 0.17) - 0.5) * 0.22;
+    for (const D of ds) if (rectDist(x, y, D.fp) < 2.2) v = Math.max(v, 0.5);
+    for (const c of CARVES.ellipses) v = Math.min(v, (Math.hypot((x - c[0]) / c[2], (y - c[1]) / c[3]) - 1) * 0.6 + (vn(x * 0.2, y * 0.2) - 0.5) * 0.12);
+    for (const r of CARVES.rivers) { let d = 1e9; for (let i = 0; i + 1 < r.pts.length; i++) d = Math.min(d, segDist(x, y, r.pts[i][0], r.pts[i][1], r.pts[i + 1][0], r.pts[i + 1][1])); v = Math.min(v, (d / r.r - 1) * 0.6 + (vn(x * 0.2 + 3, y * 0.2) - 0.5) * 0.12); }
+    return v;
   };
-
-  // ---- Zone 1: the Scrap Yard
-  const B1 = BUILD[1];
-  add({ t: 'shack', gx: B1.hq[0], gy: B1.hq[1], w: B1.hq[2], d: B1.hq[3], h: 38, hot: 'hq:1', label: 'Training shack' });
-  add({ t: 'depot', gx: B1.depot[0], gy: B1.depot[1], w: B1.depot[2], d: B1.depot[3], h: 34, hot: 'depot:1', label: 'Freight depot', color: '#8a5a3a' });
-  add({ t: 'board', gx: B1.board[0], gy: B1.board[1], w: B1.board[2], d: B1.board[3], h: 40, hot: 'board:1', label: 'Market board', text: 'ZONE 1' });
-  add({ t: 'crane', gx: 31, gy: 36, w: 1, d: 1, h: 120, label: 'Scrap crane' });
-  scatter(1, 11, 14, [4, 34, 32, 48], (i, r) => ({ t: 'scrap', w: 1.4, d: 1.4, h: 18 + r * 18, seed: i + 3 }), 1.4);
-  scatter(1, 12, 7, [4, 34, 32, 48], (i) => ({ t: 'tires', w: 0.9, d: 0.9, h: 24, n: 3 + (i % 3) }), 1.0);
-  scatter(1, 13, 9, [4, 34, 32, 48], (i, r) => ({ t: 'barrel', w: 0.7, d: 0.7, h: 22, color: ['#b0493a', '#3d6fb0', '#4a7f55', '#c28a2b'][i % 4], fire: i === 3 }), 0.8);
-  scatter(1, 14, 8, [4, 34, 32, 48], (i, r) => ({ t: 'crates', w: 1.2, d: 1.2, h: 26, n: 1 + (i % 3) }), 1.1);
-  scatter(1, 15, 4, [4, 34, 32, 48], (i, r) => ({ t: 'junkcar', w: 2.4, d: 1.3, h: 22, color: ['#8c4a2f', '#5b6573', '#6b7a45', '#7a4b6b'][i % 4] }), 1.6);
-  scatter(1, 16, 5, [4, 34, 32, 48], () => ({ t: 'deadtree', w: 0.6, d: 0.6, h: 40 }), 1.0);
-  for (let x = 4; x < 32; x += 3) add({ t: 'fence', gx: x, gy: 47.6, w: 3, d: 0.1, h: 20 });
-  for (let y = 34; y < 47; y += 3) { add({ t: 'fence', gx: 3.6, gy: y, w: 0.1, d: 3, h: 20, dirY: true }); }
-  for (const [x, y] of [[16.2, 38], [19.8, 38], [16.2, 45], [19.8, 45]]) add({ t: 'lamp', gx: x, gy: y, w: 0.2, d: 0.2, h: 32 });
-
-  // ---- Zone 2: the Metro Hub
-  const B2 = BUILD[2];
-  add({ t: 'bank', gx: B2.bank[0], gy: B2.bank[1], w: B2.bank[2], d: B2.bank[3], h: 60, hot: 'bank', label: 'Commercial Bank' });
-  add({ t: 'office', gx: B2.audit[0], gy: B2.audit[1], w: B2.audit[2], d: B2.audit[3], h: 46, hot: 'audit', label: 'Regulatory office', color: '#8b93a8', sign: 'AUDIT' });
-  add({ t: 'office', gx: B2.hq[0], gy: B2.hq[1], w: B2.hq[2], d: B2.hq[3], h: 40, hot: 'hq:2', label: 'Training office', color: '#5a7fb0', sign: 'SKILLS' });
-  add({ t: 'depot', gx: B2.depot[0], gy: B2.depot[1], w: B2.depot[2], d: B2.depot[3], h: 34, hot: 'depot:2', label: 'Freight depot', color: '#4f7a86' });
-  add({ t: 'board', gx: B2.board[0], gy: B2.board[1], w: B2.board[2], d: B2.board[3], h: 40, hot: 'board:2', label: 'Market board', text: 'ZONE 2' });
-  const shops = ['#c4663f', '#4a8f8a', '#b59a3f', '#7a5fb0', '#c45f7a', '#5a8f4f'];
-  for (let i = 0; i < 5; i++) add({ t: 'shop', gx: 20.2 + i * 2.4, gy: 29.7, w: 2.1, d: 1.1, h: 30 + (i % 3) * 8, color: shops[i % shops.length], seed: i });
-  for (const [x, y] of [[16.2, 20], [19.8, 20], [16.2, 28], [19.8, 28], [16.2, 24], [19.8, 24]]) add({ t: 'lamp', gx: x, gy: y, w: 0.2, d: 0.2, h: 32 });
-  scatter(2, 21, 9, [4, 18, 32, 31], (i) => ({ t: 'tree', w: 0.5, d: 0.5, h: 40, s: 0.8 + (i % 3) * 0.15, seed: i }), 1.0);
-  scatter(2, 22, 4, [4, 18, 32, 31], () => ({ t: 'bench', w: 1, d: 0.4, h: 8 }), 0.9);
-
-  // ---- Zone 3: Corporate Valley
-  const B3 = BUILD[3];
-  add({ t: 'ipo', gx: B3.ipo[0], gy: B3.ipo[1], w: B3.ipo[2], d: B3.ipo[3], h: 190, hot: 'ipo', label: 'IPO and M&A tower' });
-  add({ t: 'tower', gx: B3.hq[0], gy: B3.hq[1], w: B3.hq[2], d: B3.hq[3], h: 96, hot: 'hq:3', label: 'Training campus', color: '#5a6fb0', seed: 1 });
-  add({ t: 'depot', gx: B3.depot[0], gy: B3.depot[1], w: B3.depot[2], d: B3.depot[3], h: 30, hot: 'depot:3', label: 'Freight depot', color: '#6a5fa0' });
-  add({ t: 'board', gx: B3.board[0], gy: B3.board[1], w: B3.board[2], d: B3.board[3], h: 40, hot: 'board:3', label: 'Market board', text: 'ZONE 3' });
-  add({ t: 'tower', gx: 29, gy: 8.6, w: 2.2, d: 1.6, h: 110, color: '#4a8fb0', seed: 2 });
-  add({ t: 'tower', gx: 19.4, gy: 2.6, w: 2.2, d: 2.2, h: 84, color: '#7a6fc0', seed: 3 });
-  add({ t: 'fountain', gx: 23.6, gy: 8.4, w: 2, d: 2, h: 8 });
-  add({ t: 'helipad', gx: 26.4, gy: 8.4, w: 2, d: 2, h: 2, z: ELEV[3] });
-  for (const [x, y] of [[16.2, 3], [19.6, 8.5], [16.2, 11], [19.8, 12], [16.2, 7.4], [32, 9]]) add({ t: 'lamp', gx: x, gy: y, w: 0.2, d: 0.2, h: 32 });
-  scatter(3, 31, 8, [4, 2, 32, 15], (i) => ({ t: 'tree', w: 0.5, d: 0.5, h: 40, s: 0.9 + (i % 3) * 0.12, seed: i, c: '#2f8a62' }), 1.0);
-
-  props.sort((a, b) => a.key - b.key);
-  return props;
+  const VW = GW + 1, FV = new Float32Array(VW * (GH + 1)), ZV = new Float32Array(VW * (GH + 1));
+  for (let j = 0; j <= GH; j++) for (let i = 0; i <= GW; i++) {
+    const v = fieldAt(i, j); FV[j * VW + i] = v;
+    let num = 0, den = 0; for (const D of ds) { const dd = Math.hypot(i - D.cx, j - D.cy), w = 1 / (1 + (dd / 22) ** 2) ** 2; num += w * D.z; den += w; }
+    let zz = num / den + (vn(i * 0.05 + 3, j * 0.05) - 0.5) * 14 + (vn(i * 0.13, j * 0.13 + 9) - 0.5) * 5;
+    zz *= sstep(clamp(v / 0.22, 0, 1));
+    for (const D of ds) { const d = rectDist(i, j, D.fp); if (d < SKIRT) zz = lerp(D.z, zz, sstep(d / SKIRT)); }
+    ZV[j * VW + i] = v > 0 ? Math.max(0.5, zz) : 0;
+  }
+  const land = new Uint8Array(GW * GH);
+  for (let j = 0; j < GH; j++) for (let i = 0; i < GW; i++) land[j * GW + i] = (FV[j * VW + i] + FV[j * VW + i + 1] + FV[(j + 1) * VW + i] + FV[(j + 1) * VW + i + 1]) / 4 > 0 ? 1 : 0;
+  const isLand = (tx, ty) => tx >= 0 && ty >= 0 && tx < GW && ty < GH && land[ty * GW + tx] === 1;
+  const lands = {}; for (const s of [2, 4, 8]) { const w = Math.ceil(GW / s), a = new Uint8Array(w * Math.ceil(GH / s)); for (let j = 0; j < GH; j++) for (let i = 0; i < GW; i++) if (land[j * GW + i]) a[Math.floor(j / s) * w + Math.floor(i / s)] = 1; lands[s] = { a, w }; }
+  let maxZ = 0; for (let k = 0; k < ZV.length; k++) maxZ = Math.max(maxZ, ZV[k]);
+  const core = new Uint8Array(GW * GH); for (const D of ds) for (let j = Math.floor(D.oy); j < D.oy + BD; j++) for (let i = Math.floor(D.ox); i < D.ox + BW; i++) core[j * GW + i] = 1;
+  let bx0 = 1e9, bx1 = -1e9, by0 = 1e9, by1 = -1e9;
+  for (let j = 0; j < GH; j++) for (let i = 0; i < GW; i++) if (land[j * GW + i]) { const x = (i - j) * 32, y = (i + j) * 16 - ZV[j * VW + i]; bx0 = Math.min(bx0, x - 32); bx1 = Math.max(bx1, x + 64); by0 = Math.min(by0, y); by1 = Math.max(by1, y + 32 + SEA); }
+  const bounds = { x0: bx0 - 80, x1: bx1 + 80, y0: by0 - 260, y1: by1 + 60 };
+  // ---- tile colours: terrain by height and slope, tinted towards the nearest district; steep ground goes to rock; relief shading from the upper left
+  const tcol = new Array(GW * GH), owner = new Uint8Array(GW * GH);
+  for (let j = 0; j < GH; j++) for (let i = 0; i < GW; i++) {
+    if (!land[j * GW + i]) continue;
+    const z00 = ZV[j * VW + i], z10 = ZV[j * VW + i + 1], z01 = ZV[(j + 1) * VW + i], z11 = ZV[(j + 1) * VW + i + 1], zm = (z00 + z10 + z01 + z11) / 4, slope = Math.max(z00, z10, z01, z11) - Math.min(z00, z10, z01, z11);
+    let nd = null, dd = 1e9; for (const D of ds) { const d = rectDist(i + 0.5, j + 0.5, D.fp); if (d < dd) { dd = d; nd = D; } }
+    const nz = vn(i * 0.3, j * 0.3) - 0.5;
+    let base = zm < 2.6 ? '#cdbb8e' : zm < 30 ? mix('#4b7a4e', '#5e7a4a', zm / 30) : mix('#5e7a4a', '#8a8a78', clamp((zm - 30) / 70, 0, 1));
+    if (slope > 6) base = mix(base, '#7d7568', clamp((slope - 6) / 8, 0, 0.9));
+    base = mix(base, REGIONS.find((r) => r.ids.includes(nd.id)).tint, 0.12);
+    const inside = dd === 0, w = inside ? 0.8 + nz * 0.3 : clamp(1 - dd / 15, 0, 1) * 0.65 + nz * 0.2;
+    if (w > 0.02 && zm >= 2.6) base = mix(base, nd.cols.ground, clamp(w, 0, 0.92));
+    if (inside) owner[j * GW + i] = nd.id;
+    tcol[j * GW + i] = shade(base, clamp(1 + (z00 - z11) * 0.014, 0.8, 1.2) + nz * 0.05);
+  }
+  // ---- coast cliffs: wherever land meets water with a drop of more than a beach
+  const cliffs = [];
+  for (let j = 0; j < GH; j++) for (let i = 0; i < GW; i++) {
+    if (!land[j * GW + i]) continue;
+    if (!isLand(i, j + 1)) { const a = ZV[(j + 1) * VW + i], b = ZV[(j + 1) * VW + i + 1]; if (Math.max(a, b) > 3) cliffs.push({ k: 's', x: i, y: j + 1, za: a, zb: b, bb: [(i - j - 1) * 32, (i + j + 1) * 16 - Math.max(a, b) - 2, (i - j) * 32, (i + j + 2) * 16 + SEA + 2] }); }
+    if (!isLand(i + 1, j)) { const a = ZV[j * VW + i + 1], b = ZV[(j + 1) * VW + i + 1]; if (Math.max(a, b) > 3) cliffs.push({ k: 'e', x: i + 1, y: j, za: a, zb: b, bb: [(i - j) * 32, (i + 1 + j) * 16 - Math.max(a, b) - 2, (i + 1 - j) * 32, (i + j + 2) * 16 + SEA + 2] }); }
+  }
+  // ---- heights (bilinear on the vertex grid; a bridge deck overrides the water under it)
+  const bilin = (gx, gy) => { const x = clamp(gx, 0, GW - 1e-6), y = clamp(gy, 0, GH - 1e-6), i = x | 0, j = y | 0, fx = x - i, fy = y - j; return lerp(lerp(ZV[j * VW + i], ZV[j * VW + i + 1], fx), lerp(ZV[(j + 1) * VW + i], ZV[(j + 1) * VW + i + 1], fx), fy); };
+  const bridges = []; // the stretches of a road that cross water (the ferry sails instead)
+  for (const e of edges) {
+    if (e.ferry || e.path) continue;
+    let run = null;
+    for (let s = 0; s <= e.len + 0.01; s += 0.5) { const p = polyAt(e, s), wet = !isLand(Math.floor(p.x), Math.floor(p.y)); if (wet && !run) run = { s0: Math.max(0, s - 0.5), edge: e }; if (!wet && run) { run.s1 = s; bridges.push(run); run = null; } }
+    if (run) { run.s1 = e.len; bridges.push(run); }
+  }
+  for (const b of bridges) { const a = polyAt(b.edge, Math.max(0, b.s0 - 1)), c = polyAt(b.edge, Math.min(b.edge.len, b.s1 + 1)); b.z0 = Math.max(0.6, bilin(a.x, a.y)); b.z1 = Math.max(0.6, bilin(c.x, c.y)); b.pts = []; for (let s = b.s0; s <= b.s1 + 0.01; s += 1) { const p = polyAt(b.edge, Math.min(s, b.s1)); b.pts.push([p.x, p.y]); } b.info = polyInfo(b.pts); b.gate = b.edge.gate; }
+  const deck = (b, t) => lerp(b.z0, b.z1, t) + 7 * Math.sin(clamp(t, 0, 1) * Math.PI);
+  const bridgeZ = (gx, gy) => { for (const b of bridges) { const pi = b.info; for (let i = 0; i + 1 < pi.pts.length; i++) { const a = pi.pts[i], c = pi.pts[i + 1]; if (Math.abs(gx - a[0]) > 3 || Math.abs(gy - a[1]) > 3) continue; if (segDist(gx, gy, a[0], a[1], c[0], c[1]) < 1.4) return deck(b, (pi.lens[i] + Math.hypot(gx - a[0], gy - a[1])) / (pi.len || 1)); } } return null; };
+  const zAt = (gx, gy) => { const b = bridges.length ? bridgeZ(gx, gy) : null; return b !== null ? b : bilin(gx, gy); };
+  const zoneAt = (gx, gy) => { for (const D of ds) if (gx >= D.ox && gx < D.ox + BW && gy >= D.oy && gy < D.oy + BD) return D.id; return 0; };
+  const footAt = (gx, gy) => { for (const D of ds) if (gx >= D.fp[0] && gx < D.fp[0] + D.fp[2] && gy >= D.fp[1] && gy < D.fp[1] + D.fp[3]) return D.id; return 0; };
+  // ---- the walking graph: a district's centre joins its four ports, roads join ports to ports (a port shared by two roads is a fork)
+  const adj = new Map(), nodes = new Map(), link = (a, b, len, gate, e) => { (adj.get(a) || adj.set(a, []).get(a)).push({ to: b, len, gate, e }); (adj.get(b) || adj.set(b, []).get(b)).push({ to: a, len, gate, e }); };
+  for (const id of ids) for (const P of ['W', 'E', 'N', 'S']) { nodes.set(id + '.' + P, PORT[id + '.' + P]); nodes.set(id + '.C', PORT[id + '.C']); link(id + '.C', id + '.' + P, Math.hypot(PORT[id + '.C'][0] - PORT[id + '.' + P][0], PORT[id + '.C'][1] - PORT[id + '.' + P][1]), id, null); }
+  for (const e of edges) { nodes.set(e.a, node(e.a)); nodes.set(e.b, node(e.b)); link(e.a, e.b, e.len, e.gate, e); }
+  const walk = (a, b, open) => { // shortest route over open roads; returns the steps
+    const dist = new Map([[a, 0]]), prev = new Map(), todo = new Set([a]);
+    while (todo.size) { let u = null; for (const n of todo) if (u === null || dist.get(n) < dist.get(u)) u = n; todo.delete(u); if (u === b) break; for (const k of adj.get(u) || []) { if (open && !open.has(k.gate)) continue; const nd = dist.get(u) + k.len; if (!dist.has(k.to) || nd < dist.get(k.to)) { dist.set(k.to, nd); prev.set(k.to, { from: u, k }); todo.add(k.to); } } }
+    if (!dist.has(b)) return null;
+    const out = []; for (let n = b; n !== a;) { const p = prev.get(n); out.unshift({ from: p.from, to: n, e: p.k.e }); n = p.from; } return out;
+  };
+  const assemble = (steps, start) => { const pts = [nodes.get(start).slice()]; for (const s of steps) { if (s.e) { const P = s.e.a === s.from ? s.e.pts : [...s.e.pts].reverse(); for (let i = 1; i < P.length; i++) pts.push(P[i].slice()); } else pts.push(nodes.get(s.to).slice()); } return pts; };
+  const route = (a, b, open) => { const steps = walk(a + '.C', b + '.C', open); return steps ? assemble(steps, a + '.C') : null; };
+  // ---- gates: each district's entry road is the one that opens with it; the barrier, bridge leaf or ferry stands where that road meets the near bank
+  for (const D of ds) {
+    const e = edges.find((q) => q.gate === D.id && !q.path && (q.a.startsWith(D.id + '.') || q.b.startsWith(D.id + '.'))) || null, port = e ? (e.a.startsWith(D.id + '.') ? e.a : e.b) : D.id + '.W', P0 = node(port), out = OUT[port.split('.')[1]];
+    D.entry = [P0[0] - out[0] * 0.8, P0[1] - out[1] * 0.8]; D.entryPort = port; D.inEdge = e ? e.n : null;
+    if (D.id === 1 || !e) continue;
+    const rev = !e.a.startsWith(D.id + '.');          // the edge is stored from the previous district to this one
+    const br = bridges.find((q) => q.edge === e), s = br ? (rev ? br.s0 - 1 : br.s1 + 1) : e.ferry ? (rev ? 3 : e.len - 3) : (rev ? e.len - 10 : 10);
+    const q = polyAt(e, clamp(s, 0, e.len)), dir = rev ? 1 : -1, far = polyAt(e, rev ? e.len : 0);
+    D.gateAt = { x: q.x, y: q.y, hx: q.dx * dir, hy: q.dy * dir, kind: D.gateKind, edge: e.n };
+    if (D.gateKind !== 'fog') { const p = mkProp(D, 'gate', q.x - 0.15, q.y - 0.15, 0.3, 0.3, 16, { gk: D.gateKind, hx: q.dx * dir, hy: q.dy * dir, fx: far.x, fy: far.y, label: D.name + ' (locked)', ext: 70 }, false); p.z = zAt(q.x, q.y); p.bb = [(q.x - q.y) * 32 - 90, (q.x + q.y) * 16 - p.z - 80, (q.x - q.y) * 32 + 90, (q.x + q.y) * 16 - p.z + 40]; D.props.sort((a1, b1) => a1.key - b1.key); }
+  }
+  // ---- lookouts at the ends of the footpaths
+  for (const [name, [x, y]] of Object.entries(VIEWPOINTS)) {
+    const e = edges.find((q) => q.b === name), D = districts[e?.gate]; if (!D) continue;
+    const p = mkProp(D, 'lookout', x - 0.5, y - 0.5, 1, 1, 14, { label: 'Lookout', sm: 1 }, false); p.z = zAt(x, y); p.bb = [(x - y - 1) * 32 - 20, (x + y) * 16 - p.z - 60, (x - y + 1) * 32 + 20, (x + y + 1) * 16 - p.z + 14]; D.props.sort((a1, b1) => a1.key - b1.key);
+  }
+  const props = ids.flatMap((id) => districts[id].props).sort((a, b) => a.key - b.key);
+  return {
+    districts, ids, edges, bridges, nodes, land, isLand, lands, ZV, VW, FV, tcol, owner, core, cliffs, props, maxZ, roadSegs, zAt, zoneAt, footAt, route, deck, bounds,
+    spots: Object.fromEntries(ids.map((id) => [id, districts[id].spots])),
+    plots: Object.fromEntries(ids.map((id) => [id, districts[id].plots])),
+    doors: Object.fromEntries(ids.map((id) => [id, districts[id].door])),
+    stashPos(z, i) {
+      const sp = districts[z].spots.stash;
+      if (i < sp.n) return sp.pts[i];
+      const k = i - sp.n, a = k * 2.399, r = 1.1 + 0.4 * Math.sqrt(k), [hx, hy] = districts[z].spots.home; // overflow: a small pile by the player's spot
+      return [hx + Math.cos(a) * r, hy + Math.sin(a) * r * 0.7];
+    },
+    /** Freight route between two districts' depot doors over the open roads: down the cross street, along the roads (right-hand lane), up the other one. */
+    truckRoute(a, b, open) {
+      const A = districts[a], B = districts[b], r = route(a, b, open); if (!r) return null;
+      const same = (p, q) => Math.abs(p[0] - q[0]) < 1e-6 && Math.abs(p[1] - q[1]) < 1e-6;
+      const mid = r.slice(same(r[1], PORT[a + '.S']) ? 1 : 0, r.length - (same(r[r.length - 2], PORT[b + '.S']) ? 1 : 0));
+      return [A.door.slice(), ...offsetPoly(mid, 0.5), B.door.slice()];
+    },
+    /** Waypoints for the player walking from district `from` to the home spot of district `to` (null if the roads are not open). */
+    playerRoute(from, to, open) { const r = route(from, to, open); return r ? [...offsetPoly(r, 0.9), districts[to].spots.home.slice()] : null; },
+  };
 }
 
-/** Ground decals (puddles, dashes, speckles), culled by tile at draw time. */
-export function groundColor(gx, gy) {
-  const z = zoneAt(gy), j = h2(gx, gy);
-  if (!inLand(gx, gy)) return null;
-  const rim = gx === LAND.x0 || gx === LAND.x1 - 1 || gy === LAND.y0 || gy === LAND.y1 - 1;
-  if (rim) return z === 3 ? '#7a8aa0' : z === 2 ? '#8a8472' : '#8a7a58';
-  if (isAvenue(gx, gy)) return j > 0.5 ? '#2f3644' : '#2c3340';
-  if (isStreet(gx, gy)) return '#2f3644';
-  if (z === 1) { const v = j; return v > 0.86 ? '#7a7566' : v > 0.7 ? '#6a5b43' : v > 0.35 ? '#705f45' : '#675840'; }
-  if (z === 2) { if (isWalk(gx, gy)) return '#8590a4'; return (gx + gy) % 2 ? '#4d586c' : '#485367'; }
-  if (isWalk(gx, gy)) return '#98a3bd';
-  if (h2(gx >> 2, gy >> 2) > 0.8 && gx > 19) return '#2f6b4a';
-  return (gx + gy) % 2 ? '#3d4c70' : '#384769';
+export const LAYOUT = buildLayout(ZONES);
+export const DIST = LAYOUT.districts, SPOTS = LAYOUT.spots, PLOTS = LAYOUT.plots, DOORS = LAYOUT.doors, SCENERY = LAYOUT.props, EDGES = LAYOUT.edges;
+export const stashPos = (z, i) => LAYOUT.stashPos(z, i);
+export const zAt = LAYOUT.zAt, zoneAt = LAYOUT.zoneAt, footAt = LAYOUT.footAt;
+export const inLand = (gx, gy) => LAYOUT.isLand(Math.floor(gx), Math.floor(gy));
+/** Is (gx, gy) on a road or sidewalk of a block, or on one of the roads between districts? */
+export function isRoad(gx, gy) {
+  const z = zoneAt(gx, gy);
+  if (z) { const D = DIST[z], lx = gx - D.ox, ly = gy - D.oy; return (ly >= 7 && ly < 11) || (lx >= 9 && lx < 13); }
+  return LAYOUT.roadSegs.some((s) => segDist(gx, gy, s[0], s[1], s[2], s[3]) <= s[4] + 0.2);
 }
-
-export const SCENERY = buildScenery();
