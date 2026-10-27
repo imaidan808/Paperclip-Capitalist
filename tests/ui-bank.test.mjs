@@ -196,7 +196,7 @@ test('bank: the exit shows both quotes, asks before it ends the run, and explain
   assert.match(bank.html(ctx), /clean compliance record/);
   const calls = ctx.calls.length; acts['bank-exit'](el({ k: 'ipo' })); assert.equal(ctx.calls.length, calls); assert.equal(ctx.toasts.at(-1)[1], 'bad');
   s.auditFail = 0; acts['bank-exit'](el({ k: 'sale' })); ctx._confirm();
-  assert.ok(s.exiting); assert.equal(s.exiting.kind, 'sale'); assert.match(bank.html(ctx), /Your exit is settling/);
+  assert.ok(s.exiting); assert.equal(s.exiting.kind, 'trade'); // the Bank says "sale"; the engine's own name for it is a trade sale assert.match(bank.html(ctx), /Your exit is settling/);
   void g;
 });
 
