@@ -110,16 +110,27 @@ test('restore refuses what it cannot read and leaves no half-built game behind',
   }
 });
 
-test('BUG: a save left by the v1 build (no Backgrounds) is refused instead of crashing the first tick', () => {
-  // js/session.js restore(): checks the WRAPPER version (d.v === 1, unchanged since v1) but never the state's, so a v1 run in localStorage
-  // is accepted and then throws in Game.P (`s.perks.join`) on the first tick. main.js shows "That save could not be read" only for `false`.
+test('a save left by the v1 build (no Backgrounds) is refused instead of crashing the first tick', () => {
+  // restore() used to check only the WRAPPER version (d.v === 1, unchanged since v1), so a v1 run in localStorage was accepted and then threw in Game.P (`s.perks.join`) on the first tick.
+  // main.js shows "That save could not be read" only for `false`.
   store.clear();
   const v1State = { pid: 'PC-OLD', handle: 'Old', profile: 'midtier', specialty: 'ops', seed: 5, rng: 5, startHour: 0, hour: 200, cash: 5000, skills: { ops: 1, growth: 1, fintech: 1 }, zones: [1, 2], assets: [], leads: {}, lots: {}, pool: {}, pipes: [], upg: {}, clients: [], loans: [], settle: [], freight: [], escrow: [], royalties: [], events: [], ledger: [], news: [], niche: [], shockLog: [], acc: { profit: 0 }, dp: [], cm: { sum: 0, n: 0 }, mil: {}, nid: 9 };
-  kv.set('save', { v: 1, mode: 'solo', worldSeed: 'solo', difficulty: {}, clock: { hour: 200, wall: Date.now(), speed: 1, paused: false }, room: null, state: v1State, savedAt: Date.now() });
+  const wrap = (state) => ({ v: 1, mode: 'solo', worldSeed: 'solo', difficulty: {}, clock: { hour: 200, wall: Date.now(), speed: 1, paused: false }, room: null, state, savedAt: Date.now() });
+  kv.set('save', wrap(v1State));
   const r = new Session();
-  const ok = r.restore();
-  if (ok) assert.doesNotThrow(() => r.tick(Date.now() + 2 * SEC_PER_HOUR * 1000), 'an accepted save must play');
-  else assert.equal(r.game, null);
+  assert.equal(r.restore(), false);
+  assert.equal(r.game, null); assert.equal(r.mode, 'solo');
+  // the same wall around a state that says v2 but has no Backgrounds list is refused too; v:2 with a list is the only way in
+  kv.set('save', wrap({ ...v1State, v: 2 })); assert.equal(new Session().restore(), false);
+  kv.set('save', wrap({ ...v1State, v: 2, perks: 'trades' })); assert.equal(new Session().restore(), false);
+  kv.set('save', wrap({ ...v1State, v: 1, perks: [] })); assert.equal(new Session().restore(), false, 'and a v1 state is refused even if it has the field');
+  const live = solo(); live.game.advanceTo(10); live.save(true);
+  const ok = new Session(); open.push(ok);
+  assert.equal(ok.restore(), true);
+  assert.doesNotThrow(() => ok.tick(Date.now() + 2 * SEC_PER_HOUR * 1000));
+  // refusing leaves the stored save alone: nothing is deleted behind the player's back
+  kv.set('save', wrap(v1State)); new Session().restore();
+  assert.equal(kv.get('save').state.profile, 'midtier');
 });
 
 test('tick advances the game with the clock, delivers engine messages, stays idle when paused, and autosaves when the hour moves', () => {

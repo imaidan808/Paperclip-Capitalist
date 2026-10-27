@@ -366,8 +366,8 @@ test('pool friction: the pool pays value less district friction and the fee, dra
   near(g.s.pool[2], ZONES[2].pool * 0.35, ZONES[2].pool * 0.001);
 });
 
-test('BUG: a dry liquidity pool refuses the sale (sellPool returned ok:true with an empty message)', () => {
-  // js/engine.js sellPool: `return fail(msg, q)` spreads the quote AFTER ok:false, so q.ok (true) and q.msg ('') overwrite the failure.
+test('a dry liquidity pool refuses the sale (sellPool once returned ok:true with an empty message)', () => {
+  // sellPool did `return fail(msg, q)` and fail() spread the quote AFTER ok:false, so q.ok (true) and q.msg ('') overwrote the failure.
   const g = rich(mk(), 100);
   const c = g._mk(g.s, 'bike', { zone: 2 }); g.s.assets.push(c);
   g.s.pool[2] = 0;

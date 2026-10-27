@@ -1,6 +1,6 @@
 // The v2 rules, one by one (docs/V2_DESIGN.md sections 3, 4, 4.1, 7, 7.1): districts that unlock by net worth, their bonuses and signature rules, hidden lot truth,
 // bounded deal results, the event contract, skill points, scams, determinism and pacing.
-// Tests named "BUG:" assert the correct behaviour and FAIL against the current engine; each is listed in the report for the engine owner.
+// Tests named "BUG:" assert the correct behaviour and FAIL against the current engine; each is listed in the report for the engine owner. (Those the engine has since fixed lost the prefix.)
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { Game } from '../js/engine.js';
@@ -51,11 +51,11 @@ test('XP makes levels (100 x (level - 1)^2) and every level grants exactly one s
   g.xp(50); assert.equal(g.s.points, 4, 'no level, no point');
 });
 
-test('XP multipliers: Side-Hustler +25%, Heir -20%, Seasoned Pro -15%, and they multiply', () => {
+test('XP multipliers: Side-Hustler +25%, Heir -10%, Seasoned Pro -15%, and they multiply', () => {
   const xp = (perks) => { const g = mk(perks); g.xp(100); return g.s.xp; };
-  assert.equal(xp([]), 100); assert.equal(xp(['gigger']), 125); assert.equal(xp(['heir']), 80); assert.equal(xp(['pro']), 85);
-  assert.equal(xp(['gigger', 'pro']), Math.round(100 * 1.25 * 0.85));
-  assert.equal(xp(['heir', 'pro']), Math.round(100 * 0.8 * 0.85));
+  assert.equal(xp([]), 100); assert.equal(xp(['gigger']), 125); assert.equal(xp(['heir']), 90); assert.equal(xp(['pro']), 85);
+  assert.equal(xp(['gigger', 'pro']), Math.round(100 * (1.25 * 0.85)));
+  assert.equal(xp(['heir', 'pro']), Math.round(100 * (0.9 * 0.85)));
   const slow = mk(['heir', 'pro']), fast = mk(['gigger']);
   slow.xp(900); fast.xp(900);
   assert.ok(fast.level() > slow.level(), 'the same play levels a Side-Hustler faster');
@@ -84,8 +84,8 @@ test('spendPoint: costs one point, raises one skill by one, pays 10 XP, emits "s
   assert.deepEqual(Object.keys(SKILLS), ['ops', 'growth', 'fintech']);
 });
 
-test('BUG: spendPoint refuses names that are not skills (a point on "constructor" corrupted the skills table)', () => {
-  // js/engine.js spendPoint: `s.skills[skill]` finds inherited properties, so 'constructor' / 'toString' / '__proto__' spend a point and write NaN into skills.
+test('spendPoint refuses names that are not skills (a point on "constructor" once corrupted the skills table)', () => {
+  // spendPoint looked `s.skills[skill]` up with an inherited property, so 'constructor' / 'toString' / '__proto__' spent a point and wrote NaN into skills.
   for (const name of ['constructor', 'toString', '__proto__', 'hasOwnProperty']) {
     const g = mk(); g.s.points = 3;
     const r = g.spendPoint(name);
@@ -572,8 +572,8 @@ test('repair: costMult is clamped to 0.9..1.3 and qualityMult to 0.85..1.15, and
   assert.equal(g.repair(a.id).ok, false, 'nothing left to repair');
 });
 
-test('BUG: a NaN from the Deal Room is treated as a neutral deal, not written into the player\'s cash', () => {
-  // js/engine.js: clamp(NaN, lo, hi) is NaN (Math.min/Math.max propagate it), so deal.mult / costMult / qualityMult of NaN reach the price. A Haggle on a zero fair price (0/0) makes one.
+test('a NaN from the Deal Room is a neutral deal, never written into the player\'s cash', () => {
+  // clamp(NaN, lo, hi) is NaN (Math.min/Math.max propagate it), so deal.mult / costMult / qualityMult of NaN once reached the price. A Haggle on a zero fair price (0/0) makes one.
   const problems = [];
   const g = mk(); g.s.cash = 100;
   const lot = g.s.lots[1][0];
@@ -589,36 +589,255 @@ test('BUG: a NaN from the Deal Room is treated as a neutral deal, not written in
   assert.deepEqual(problems, []);
 });
 
-// ---------------------------------------------------------------------------------------------------- buyer flow, storage
-/** New buyers that turn up in a district over `hours` when the player takes every one at once. */
-const flow = (g, zone, hours) => { let n = 0; for (let h = 0; h < hours; h++) { g.advanceTo(g.s.hour + 1); n += g.s.leads[zone].length; g.s.leads[zone] = []; } return n; };
-
-test('buyers keep arriving at a steady pace, and the Growth skill, the SEO upgrade and the Connected Background all speed them up', () => {
-  const at = (growth, upg) => { const g = mk([], 3); g.s.skills.growth = growth; if (upg) g.s.upg.seo = true; return flow(g, 1, 400); };
-  const base = at(1);
-  assert.ok(base > 100 && base < 250, 'about one buyer every two or three hours in the Scrap Yard: ' + base);
-  assert.ok(at(3) > base * 1.2, 'Growth 3'); assert.ok(at(1, true) > base * 1.2, 'SEO');
-  assert.ok(flow(mk(['connected'], 3), 1, 400) > base * 1.3, 'Connected: 40% faster');
-  assert.ok(flow(mk(['native'], 3), 1, 400) > 0);
-  const slow = mk(['roots'], 3); assert.equal(flow(slow, 1, 400), base, 'Roots changes nothing at home');
+test('deal values that are not numbers are neutral, and infinities are the nearest bound', () => {
+  const g = rich(mk(), 3000); g.s.assets = [];
+  const text = putAsset(g, 'textbooks', 5);
+  g.s.leads[5].push({ id: 'LD', zone: 5, seg: 'trainer', budget: 1e12, need: null, born: 0, exp: 999 });
+  const pitch = (mult) => g.quotePitch(text.id, 'LD', mult === undefined ? undefined : { mult });
+  const base = pitch(1);
+  for (const junk of [NaN, undefined, null, '1.3', {}, [], true]) { const q = pitch(junk); assert.equal(q.deal, 1, 'mult ' + String(junk)); assert.equal(q.price, base.price); }
+  assert.equal(pitch(Infinity).deal, 1.4); assert.equal(pitch(-Infinity).deal, 0.6);
+  assert.equal(g.quotePitch(text.id, 'LD', 'not an object').deal, 1); assert.equal(g.quotePitch(text.id, 'LD', null).deal, 1);
+  // buying
+  const lot = g.s.lots[5][0];
+  const buy = (mult) => g.buyQuote(5, lot.id, { mult }).price;
+  assert.equal(buy(NaN), lot.price); assert.equal(buy('x'), lot.price); assert.equal(buy(Infinity), buy(1.4)); assert.equal(buy(-Infinity), buy(0.6));
+  // repairing
+  const a = putAsset(g, 'bike', 5, { cond: 'broken' });
+  const base2 = g.repairQuote(a.id);
+  const cost = (costMult, qualityMult) => g.repairQuote(a.id, { costMult, qualityMult });
+  rel(cost(NaN, NaN).cost, base2.cost); rel(cost(NaN, NaN).quality, base2.quality);
+  rel(cost(Infinity, Infinity).cost / base2.cost, 1.3); rel(cost(-Infinity, -Infinity).cost / base2.cost, 0.9);
+  rel(cost(1, Infinity).quality / base2.quality, 1.15); rel(cost(1, -Infinity).quality / base2.quality, 0.85);
+  const ev = log(g);
+  g.repair(a.id, { precision: NaN }); assert.equal(ev.find((e) => e.type === 'repair').precision, 0.5, 'unknown precision is the middle');
+  const b = putAsset(g, 'bike', 5, { cond: 'broken' }); g.repair(b.id, { precision: Infinity }); assert.equal(ev.filter((e) => e.type === 'repair')[1].precision, 1);
+  assert.ok(Number.isFinite(g.s.cash) && Number.isFinite(g.netWorth()));
 });
 
-test('BUG: every level of Growth brings more buyers (the lead cadence is rounded to whole hours, so levels 2, 4, 5, 6 and 7 do nothing)', () => {
-  // js/engine.js _spawnLead: every = Math.max(1, Math.round(Z.leadEvery * ECON.leadEvery / mult)). With leadEvery 3 the cadence is 3 hours up to a x1.2 multiplier, then 2 up to x1.5, then jumps to 1.
-  // Measured over 480 hours with every buyer taken at once: Growth 1..8 = 165, 165, 245, 245, 245, 245, 245, 485. The Tech Corridor bonus (x1.15 buyers) is the same: nothing at Growth 1.
+test('ok() and fail() keep their own verdict and message even when a quote is spread into them', () => {
+  const g = rich(mk(), 100);
+  const c = putAsset(g, 'bike', 2); g.s.pool[2] = 0;
+  const r = g.sellPool([c.id]);
+  assert.equal(r.ok, false); assert.match(r.msg, /liquidity pool/);
+  assert.ok(r.total > 0 && r.zone === 2 && Array.isArray(r.per), 'the quote still rides along for the UI');
+  const away = g.sellPool([c.id, 'nope']);
+  assert.equal(typeof away.ok, 'boolean'); assert.equal(typeof away.msg, 'string');
+  for (const f of [() => g.draw('micro', 1), () => g.buyLot(1, 'nope'), () => g.ship([], 1), () => g.hirePipeline('broker', 1, {}), () => g.repay('nope'), () => g.exit('trade'), () => g.resolveAudit('A')]) {
+    const x = f(); assert.equal(x.ok, false); assert.ok(typeof x.msg === 'string' && x.msg.length > 0, 'every refusal says why');
+  }
+});
+
+// ---------------------------------------------------------------------------------------------------- ids from the UI and the network
+test('ids that come from the UI or the network are looked up as own keys: inherited names such as "constructor" never match anything', () => {
+  const g = rich(mk(), 400000); g.resolveAudit('A');
+  const before = JSON.stringify(g.s);
+  for (const bad of ['constructor', '__proto__', 'toString', 'hasOwnProperty', 'valueOf']) {
+    assert.equal(g.hirePipeline(bad, 5, { cls: 'textbooks', buyer: 'trainer' }).ok, false, 'manager ' + bad);
+    assert.equal(g.buyUpgrade(bad).ok, false, 'upgrade ' + bad);
+    assert.equal(g.acquireClient(bad).ok, false, 'client ' + bad);
+    assert.equal(g.draw(bad, 10).ok, false, 'loan ' + bad);
+    assert.equal(g.spendPoint(bad).ok, false, 'skill ' + bad);
+    assert.equal(g.validLane(5, bad, 'trainer').ok, false); assert.equal(g.validLane(5, 'textbooks', bad).ok, false);
+  }
+  assert.equal(JSON.stringify(g.s), before, 'not one of them changed the game');
+  assert.deepEqual(mk(['constructor', '__proto__', 'toString']).s.perks, [], 'Backgrounds too');
+  assert.deepEqual(mk(['toString', 'pro']).s.perks, ['pro']);
+  assert.deepEqual(Object.keys(g.s.skills), ['ops', 'growth', 'fintech']);
+});
+
+test('BUG: an instructor shock of an unknown kind is refused (injectEvent("constructor") was accepted, then every tick threw "ev.phases is not iterable")', () => {
+  // js/engine.js injectEvent: `EVENTS[kind]` / `ALGO_EVENTS[kind]` find inherited properties. Session._onMsg passes m.kind straight from the room, so any peer's message bricks every student's saved game.
+  for (const bad of ['constructor', '__proto__', 'toString', 'hasOwnProperty', 'nonsense']) {
+    const g = mk();
+    const n = g.s.events.length;
+    assert.equal(g.injectEvent(bad, 5, { id: 'x' }), false, bad);
+    assert.equal(g.s.events.length, n);
+    assert.doesNotThrow(() => g.advanceTo(10), bad);
+  }
+});
+
+test('BUG: an unknown exit kind is refused (exit("constructor") settled as a trade sale and announced kind "constructor")', () => {
+  // js/engine.js exitQuote/exit: only 'ipo' is tested; anything else is a trade sale, so the "exit" event can carry a kind outside the contract (trade | ipo).
+  const g = rich(mk(), 300000);
+  for (const bad of ['constructor', 'nonsense', undefined, 7]) { assert.equal(g.exitQuote(bad).ok, false, String(bad)); assert.equal(g.exit(bad).ok, false, String(bad)); }
+  assert.equal(g.s.exiting, null);
+  assert.equal(g.exitQuote('trade').ok, true); assert.equal(g.exitQuote('ipo').ok, true);
+});
+
+// ---------------------------------------------------------------------------------------------------- buyer flow, storage
+/** New buyers that turn up in a district over `hours` when the player takes every one at once. */
+const flow = (g, zone, hours) => { let n = 0; g.s.leads[zone] = []; for (let h = 0; h < hours; h++) { g.advanceTo(g.s.hour + 1); n += g.s.leads[zone].length; g.s.leads[zone] = []; } return n; };
+/** The rate the engine promises: buyers per hour = multiplier / (the district's leadEvery x ECON.leadEvery). */
+const expectedFlow = (zone, mult, hours) => hours * mult / (ZONES[zone].leadEvery * ECON.leadEvery);
+
+test('buyers arrive at an exact average rate, and the Growth skill, the SEO upgrade, Connected and the district bonus all speed them up', () => {
+  const at = (growth, upg) => { const g = mk([], 3); g.s.skills.growth = growth; if (upg) g.s.upg.seo = true; return flow(g, 1, 400); };
+  const base = at(1);
+  assert.ok(Math.abs(base - expectedFlow(1, 1, 400)) <= 1, `plain: ${base} vs ${expectedFlow(1, 1, 400)}`);
+  assert.ok(base > 100 && base < 250, 'about one buyer every two or three hours in the Scrap Yard: ' + base);
+  assert.ok(Math.abs(at(3) - expectedFlow(1, 1.3, 400)) <= 1, 'Growth 3 is x1.3'); assert.ok(Math.abs(at(1, true) - expectedFlow(1, 1.5, 400)) <= 1, 'SEO is x1.5');
+  const con = flow(mk(['connected'], 3), 1, 400);
+  assert.ok(Math.abs(con - expectedFlow(1, 1.3, 400)) <= 1, 'Connected: 30% faster: ' + con);
+  assert.ok(flow(mk(['native'], 3), 1, 400) > 0);
+  const slow = mk(['roots'], 3); assert.equal(flow(slow, 1, 400), base, 'Roots changes nothing at home');
+  const slowFar = rich(mk(['roots'], 3), 30000), fastFar = rich(mk([], 3), 30000);
+  assert.ok(Math.abs(flow(slowFar, 9, 400) - expectedFlow(9, 0.7, 400)) <= 1, 'but 30% fewer buyers beyond district 8');
+  assert.ok(Math.abs(flow(fastFar, 9, 400) - expectedFlow(9, 1, 400)) <= 1);
+  // the Tech Corridor bonus (+15%) counts too, from the first hour it is open
+  const bonus = rich(mk([], 3), 60000);
+  assert.equal(bonus.B.leadMult, 1.15);
+  assert.ok(Math.abs(flow(bonus, 1, 400) - expectedFlow(1, 1.15, 400)) <= 1, 'x1.15 shows in the Scrap Yard too');
+});
+
+test('every level of Growth brings more buyers (the arrival rate is exact, not rounded to whole hours)', () => {
+  // Once the cadence was Math.round(leadEvery * ECON.leadEvery / mult), so Growth levels 2, 4, 5, 6 and 7 did nothing (165, 165, 245, 245, 245, 245, 245, 485 buyers in 480 hours).
   const counts = [];
   for (let growth = 1; growth <= SKILL_MAX; growth++) { const g = mk([], 3); g.s.skills.growth = growth; counts.push(flow(g, 1, 480)); }
   for (let i = 1; i < counts.length; i++) assert.ok(counts[i] > counts[i - 1] * 1.04, `Growth ${i} -> ${i + 1}: ${counts[i - 1]} -> ${counts[i]} buyers (${counts.join(', ')})`);
+  counts.forEach((n, i) => assert.ok(Math.abs(n - expectedFlow(1, 1 + 0.15 * i, 480)) <= 1, `Growth ${i + 1}: ${n}`));
 });
 
-test('BUG: a swap cannot push a district past its storage (accepting an offer ignored the cap)', () => {
-  // js/engine.js acceptOffer/finalizeOffer push the delivered crates without the storage check that buyLot, ship and the barter path respect.
+test('buyers arrive no faster in a bad name: a failed pitch halves the Creator\'s flow, reputation moves it a little, and the flow never needs a whole number of hours', () => {
+  const lo = mk([], 3), hi = mk([], 3); lo.s.rep = 0; hi.s.rep = 100;
+  assert.ok(Math.abs(flow(lo, 1, 400) - expectedFlow(1, 0.85, 400)) <= 1); assert.ok(Math.abs(flow(hi, 1, 400) - expectedFlow(1, 1.15, 400)) <= 1);
+});
+
+test('lots appear at an exact average rate too, and a Background that refreshes them faster gets exactly that many more', () => {
+  const lots = (perks, zone = 1, hours = 600) => { const g = mk(perks, 3); let n = 0; g.s.lots[zone] = []; for (let h = 0; h < hours; h++) { g.advanceTo(g.s.hour + 1); n += g.s.lots[zone].length; g.s.lots[zone] = []; } return n; };
+  const rate = (zone, refresh = 0) => 1 / (ZONES[zone].lotEvery * ECON.lotEvery * (1 - refresh));
+  assert.ok(Math.abs(lots([]) - 600 * rate(1)) <= 1, `${lots([])} vs ${600 * rate(1)}`);
+  assert.ok(Math.abs(lots(['native']) - 600 * rate(1, 0.25)) <= 1);
+  assert.ok(lots(['native']) / lots([]) > 1.25, 'a quarter fewer hours between lots is a third more lots');
+});
+
+test('a swap cannot push a district past its storage: roomIn counts held, in-transit and escrowed crates, and accepting refuses what does not fit', () => {
   const g = mk(); const cap = g.storeCap(1);
-  g.s.assets = []; for (let i = 0; i < cap; i++) g.s.assets.push(g._mk(g.s, 'bike', { zone: 1 }));
+  assert.equal(g.roomIn(1), cap - 1, 'the starting paperclip');
+  g.s.assets = []; for (let i = 0; i < cap - 2; i++) g.s.assets.push(g._mk(g.s, 'bike', { zone: 1 }));
+  assert.equal(g.roomIn(1), 2);
+  g.s.freight.push({ id: 'F1', items: [g._mk(g.s, 'bike', { zone: 1 })], to: 1, arrive: 99, risk: 0, book: 1, from: 2 });
+  assert.equal(g.roomIn(1), 1, 'a crate on its way holds a place');
+  const mate = g._mk(g.s, 'pen', { zone: 1 }); g.s.assets.push(mate);
+  assert.equal(g.roomIn(1), 0);
   g.s.cash = 100;
-  const pen = { cls: 'pen', cond: 'ok', quality: 1, wear: 1, zone: 1, id: 'z' };
-  const r = g.acceptOffer({ id: 'Ox', from: 'P', fromHandle: 'P', give: { assets: [pen], cash: 0, royalty: null }, want: { assets: [], cash: Math.round(g.sideValue({ assets: [pen] })) }, skills: {} });
-  assert.ok(g.s.assets.filter((a) => a.zone === 1).length <= cap, `${g.s.assets.length} crates in a district that holds ${cap} (accepted: ${r.ok})`);
+  const incoming = (cls, id) => ({ cls, cond: 'ok', quality: 1, wear: 1, zone: 1, id });
+  const offer = (give, want) => ({ id: 'Ox', from: 'P', fromHandle: 'P', give: { assets: give, cash: 0, royalty: null }, want, skills: {} });
+  const pen = incoming('pen', 'z1');
+  const cash = Math.round(g.sideValue({ assets: [pen] }) * 100) / 100;
+  const full = g.acceptOffer(offer([pen], { assets: [], cash }));
+  assert.equal(full.ok, false); assert.match(full.msg, /no room/i);
+  assert.equal(g.s.cash, 100, 'nothing changed hands'); assert.equal(g.s.assets.length, cap - 2 + 1);
+  // a one-for-one swap in a full district is fine: what leaves makes the room for what arrives
+  const swap = g.acceptOffer(offer([pen], { assets: [g.pub(mate)], cash: 0 }));
+  assert.ok(swap.ok, swap.msg); assert.equal(g.roomIn(1), 0);
+  // two arriving for one leaving is not
+  const two = g.acceptOffer(offer([incoming('pen', 'z2'), incoming('pen', 'z3')], { assets: [g.pub(g.s.assets.find((a) => a.id === g.s.assets.at(-1).id))], cash: 0 }));
+  assert.equal(two.ok, false);
+  // an asset from a district the founder cannot enter lands in the nearest open one, and that is where the room is counted
+  const far = incoming('textbooks', 'z4'); far.zone = 5; g.s.cash = 1000;
+  assert.equal(g.roomIn(1), 0);
+  const off = g.acceptOffer(offer([far], { assets: [], cash: Math.round(g.sideValue({ assets: [far] }) * 100) / 100 }));
+  assert.equal(off.ok, false); assert.match(off.msg, new RegExp(ZONES[1].short));
+});
+
+test('BUG: proposing a swap for a crate you have no room for is refused (createOffer ignores the cap, so finalizeOffer overfills the proposer\'s district)', () => {
+  // js/engine.js createOffer checks nothing about the room for the crates it asks for; the other side accepts, and finalizeOffer pushes them in regardless.
+  const A = mk([], 1), B = mk([], 2); A.s.pid = 'AAA'; B.s.pid = 'BBB';
+  const cap = A.storeCap(1); A.s.assets = []; for (let i = 0; i < cap; i++) A.s.assets.push(A._mk(A.s, 'bike', { zone: 1 }));
+  A.s.cash = 100;
+  const pen = putAsset(B, 'pen', 1);
+  const offer = A.createOffer({ to: 'BBB', giveIds: [], giveCash: 3, want: { assets: [B.pub(pen)], cash: 0 } });
+  if (offer.ok) { const acc = B.acceptOffer(offer.offer); if (acc.ok) A.finalizeOffer(offer.offer.id, acc.deliver); }
+  assert.ok(A.s.assets.filter((a) => a.zone === 1).length <= cap, `${A.s.assets.length} crates in a district that holds ${cap} (offer ok: ${offer.ok})`);
+});
+
+test('offers disclose the truth: what leaves for a classmate is worth what it truly is, the hidden fields stay behind, and a fake cannot be swapped for a real crate', () => {
+  const A = mk([], 1), B = mk([], 2); A.s.pid = 'AAA'; B.s.pid = 'BBB';
+  rich(A, 3000); rich(B, 3000);
+  const genuine = putAsset(B, 'textbooks', 5); const want = B.pub(genuine);
+  const fake = putAsset(A, 'textbooks', 5, { truth: { q: 1, fake: true, defects: [] } }), flawed = putAsset(A, 'textbooks', 5, { truth: { q: 0.7, fake: false, defects: [{ id: 'd0', label: 'worn finish' }] } });
+  A.s.assets.find((a) => a.id === flawed.id).belief = { quality: 0.9, fakeProb: 0.1, confidence: 0.5 };
+  // the described value of both is the same as the real thing's, but a fake dressed as a real crate is blocked by the 40% guardrail
+  const blocked = A.createOffer({ to: 'BBB', giveIds: [fake.id], want: { assets: [want], cash: 0 } });
+  assert.equal(blocked.ok, false); assert.match(blocked.msg, /Extreme Asymmetric Premium/);
+  assert.ok(A.s.assets.some((a) => a.id === fake.id), 'and it stays with its owner');
+  // a flawed crate goes out at its true quality
+  const cash = Math.round(A.val(flawed) * 0.7 * 100) / 100;
+  const off = A.createOffer({ to: 'BBB', giveIds: [flawed.id], giveCash: 0, want: { assets: [], cash } });
+  assert.ok(off.ok, off.msg);
+  const sent = off.offer.give.assets[0];
+  assert.equal('truth' in sent, false); assert.equal('belief' in sent, false);
+  assert.equal(sent.known, true); rel(sent.quality, 0.7);
+  rel(A.sideValue(off.offer.give), A.val({ ...flawed, known: true }), 1e-9);
+  assert.ok(A.s.escrow[0].assets[0].truth, 'the escrow keeps the original with its truth');
+  const acc = B.acceptOffer(off.offer);
+  assert.ok(acc.ok, acc.msg);
+  const got = B.s.assets.find((a) => a.from === 'p2p');
+  assert.equal(got.truth, undefined); assert.equal(got.known, true);
+  near(B.val(got), A.val({ ...flawed, known: true }), 1e-9);
+  // withdrawing gives the original back, truth and all
+  const C = mk([], 3); rich(C, 3000);
+  const keep = putAsset(C, 'textbooks', 5, { truth: { q: 0.9, fake: false, defects: [] } });
+  const o2 = C.createOffer({ to: 'X', giveIds: [keep.id], want: { assets: [{ cls: 'textbooks', cond: 'ok', quality: 0.9, wear: 1, zone: 5, id: 'q' }], cash: 0 } });
+  assert.ok(o2.ok, o2.msg);
+  C.cancelOffer(o2.offer.id);
+  const back = C.s.assets.find((a) => a.id === keep.id);
+  assert.deepEqual(back.truth, { q: 0.9, fake: false, defects: [] }); assert.equal(back.known, false);
+  // a crate with no hidden truth (the starting paperclip) just keeps its quality
+  const clip = mk(); const o3 = clip.createOffer({ to: 'X', giveIds: [clip.s.assets[0].id], giveCash: 0, want: { assets: [{ cls: 'paperclip', cond: 'ok', quality: 1, wear: 1, zone: 1, id: 'q' }], cash: 0 } });
+  assert.ok(o3.ok); assert.equal(o3.offer.give.assets[0].quality, 1);
+});
+
+test('passLead and passLot: a buyer who walks away, or a lot lost at auction, leaves the district; nothing else does', () => {
+  const g = mk(); g.s.cash = 10;
+  const lead = g.s.leads[1][0], other = g.s.leads[1][1], lot = g.s.lots[1][0], otherLot = g.s.lots[1][1];
+  const n = g.s.leads[1].length, m = g.s.lots[1].length, notes = g.s.news.length;
+  const r = g.passLead(1, lead.id);
+  assert.ok(r.ok); assert.equal(g.s.leads[1].length, n - 1); assert.ok(!g.s.leads[1].some((l) => l.id === lead.id) && g.s.leads[1].some((l) => l.id === other.id));
+  assert.equal(g.s.news.length, notes, 'silent without a reason');
+  assert.equal(g.passLead(1, lead.id).ok, false, 'gone is gone'); assert.match(g.passLead(1, lead.id).msg, /left/);
+  assert.equal(g.passLead(99, 'x').ok, false); assert.equal(g.passLead(1, 'nobody').ok, false);
+  const walked = g.passLead(1, other.id, 'The buyer walked away from your price.');
+  assert.ok(walked.ok); assert.equal(g.s.news[0].text, 'The buyer walked away from your price.');
+  const l = g.passLot(1, lot.id);
+  assert.ok(l.ok); assert.equal(g.s.lots[1].length, m - 1); assert.ok(g.s.lots[1].some((x) => x.id === otherLot.id));
+  assert.equal(g.passLot(1, lot.id).ok, false); assert.equal(g.passLot(1, 'nobody').ok, false);
+  assert.equal(g.buyLot(1, lot.id).ok, false, 'a passed lot cannot be bought');
+  const lost = g.passLot(1, otherLot.id, 'Another bidder won it.');
+  assert.ok(lost.ok); assert.equal(g.s.news[0].text, 'Another bidder won it.');
+  assert.equal(g.pitch(g.s.assets[0].id, lead.id).ok, false, 'a passed buyer cannot be pitched');
+});
+
+test('blind quotes show what a player may see: no hidden truth and no undisclosed fraud; the sale itself is never blind', () => {
+  const g = rich(mk(['native'], 3), 3000); g.s.assets = [];
+  const twin = putAsset(g, 'textbooks', 5);
+  const fake = putAsset(g, 'textbooks', 5, { truth: { q: 1, fake: true, defects: [] } }), flawed = putAsset(g, 'textbooks', 5, { truth: { q: 0.7, fake: false, defects: [] } });
+  g.s.leads[5].push({ id: 'Lg', zone: 5, seg: 'trainer', budget: 1e12, need: null, born: 0, exp: 999 }, { id: 'Ls', zone: 5, seg: 'trainer', budget: 1e12, need: null, born: 0, exp: 999, scam: true });
+  const before = JSON.stringify(g.s);
+  const blind = (a, l) => g.quotePitch(a.id, l, undefined, { blind: true }), full = (a, l) => g.quotePitch(a.id, l);
+  // a fake looks like its twin to a blind quote, and to nobody else
+  assert.equal(blind(fake, 'Lg').rejected, false); assert.equal(blind(fake, 'Lg').reason, null); assert.equal(blind(fake, 'Lg').price, blind(twin, 'Lg').price);
+  assert.equal(full(fake, 'Lg').rejected, true); assert.equal(full(fake, 'Lg').reason, 'counterfeit');
+  // a flaw is invisible to a blind quote, and costs 30% to a real one
+  assert.equal(blind(flawed, 'Lg').price, blind(twin, 'Lg').price); rel(full(flawed, 'Lg').price / full(twin, 'Lg').price, 0.7, 1e-12);
+  // an unverified fraud does not announce itself
+  assert.equal(blind(twin, 'Ls').scam, false); assert.equal(full(twin, 'Ls').scam, true);
+  assert.equal(JSON.stringify(g.s), before, 'quoting changes nothing');
+  assert.equal(fake.known, false);
+  // the real thing is not blind
+  assert.equal(g.pitch(fake.id, 'Lg').outcome, 'rejected'); assert.equal(fake.known, true);
+  g.s.leads[5].push({ id: 'Lg2', zone: 5, seg: 'trainer', budget: 1e12, need: null, born: 0, exp: 999 });
+  assert.equal(g.quotePitch(fake.id, 'Lg2', undefined, { blind: true }).rejected, true, 'once the truth is out a blind quote shows it too');
+  assert.equal(g.pitch(twin.id, 'Ls').outcome, 'scam', 'and a fraud still takes the goods');
+  // a verified fraud is out of the question for both kinds of quote; a genuine buyer is fine
+  g.s.leads[5].push({ id: 'Lv', zone: 5, seg: 'trainer', budget: 500, need: null, born: 0, exp: 999, scam: true });
+  assert.equal(g.verifyLead('Lv').scam, true);
+  for (const opts of [undefined, { blind: true }]) { const q = g.quotePitch(flawed.id, 'Lv', undefined, opts); assert.equal(q.ok, false); assert.match(q.msg, /fraud/); }
+  g.s.leads[5].push({ id: 'Lg3', zone: 5, seg: 'trainer', budget: 1e12, need: null, born: 0, exp: 999 });
+  assert.equal(blind(flawed, 'Lg3').ok, true);
+  // the options argument is optional and ignored when not an object of the right kind
+  assert.equal(g.quotePitch(flawed.id, 'Lg3', undefined, {}).price, full(flawed, 'Lg3').price);
 });
 
 // ---------------------------------------------------------------------------------------------------- scams
@@ -659,15 +878,19 @@ test('verifyLead costs 1% of the buyer\'s budget (at least a cent), says what it
   assert.ok(g.s.ledger.some((e) => e.type === 'verify'));
 });
 
-test('BUG: a buyer confirmed as fraudulent cannot then be sold to at full price', () => {
-  // js/engine.js quotePitch: `scam: !!lead.scam && !lead.verified`, so verifying turns a fraudster into a paying customer (verifyLead says "Skip this buyer").
+test('a buyer confirmed as fraudulent cannot then be sold to (verifying used to turn a fraudster into a paying customer)', () => {
+  // quotePitch had `scam: !!lead.scam && !lead.verified`, and verifyLead says "Skip this buyer".
   const g = mk(['native'], 3); g.s.cash = 5;
   g.s.leads[1].push({ id: 'Lscam', zone: 1, seg: 'student', budget: 8, need: null, born: 0, exp: 999, scam: true });
   assert.equal(g.verifyLead('Lscam').scam, true);
   const a = g.s.assets[0], cash = g.s.cash;
+  const q = g.quotePitch(a.id, 'Lscam');
+  assert.equal(q.ok, false); assert.match(q.msg, /fraud/);
   const r = g.pitch(a.id, 'Lscam');
-  assert.ok(!r.ok || r.outcome === 'rejected' || r.outcome === 'scam', 'selling to a confirmed fraudster must not pay: ' + r.outcome);
-  assert.ok(g.s.cash <= cash, 'no money from a fraudster');
+  assert.equal(r.ok, false, 'selling to a confirmed fraudster is refused: ' + r.outcome);
+  assert.ok(g.s.assets.some((x) => x.id === a.id), 'the goods stay where they are');
+  assert.equal(g.s.cash, cash, 'no money from a fraudster'); assert.ok(g.s.leads[1].some((l) => l.id === 'Lscam'), 'the player decides what to do with the lead');
+  assert.equal(g.passLead(1, 'Lscam').ok, true, 'and may send them away');
 });
 
 // ---------------------------------------------------------------------------------------------------- events
@@ -791,9 +1014,8 @@ test('a saved state restores through a JSON round trip, the quests/Codex "meta" 
   assert.equal(JSON.stringify(c.s), JSON.stringify(a.s), 'ten days, save, load, ten days = twenty days');
 });
 
-test('BUG: a game restored into a fresh Cohort (as Session.restore does) plays on exactly as one that never stopped', async () => {
-  // js/cohort.js counts(): the cache keeps the numbers computed at the FIRST hour asked in each 6-hour bucket, so the crowd a trade sees depends on who asked when.
-  // A restored game starts with an empty cache and drifts away from the uninterrupted run (here: $64,819 vs $31,740 after ten more days).
+test('a game restored into a fresh Cohort (as Session.restore does) plays on exactly as one that never stopped', async () => {
+  // Cohort.counts once kept the numbers computed at the FIRST hour asked in each 6-hour bucket, so a restored game (empty cache) drifted from the uninterrupted run ($64,819 vs $31,740 after ten more days).
   const { a, c, again } = await saveAndContinue(10, true);
   again();
   assert.equal(JSON.stringify(c.s), JSON.stringify(a.s));
@@ -815,7 +1037,7 @@ test('rewinding to a daily checkpoint restores the saved state, the quest block 
   assert.equal(g.rewindTo(6 * 24), 3 * 24, 'checkpoints after the one rewound to were dropped');
 });
 
-test('BUG: after a rewind the same days replay the same way (the cohort cache remembers the first timeline)', () => {
+test('after a rewind the same days replay the same way (the cohort no longer remembers the first timeline)', () => {
   // Same root cause as the restore test above; the checkpoint is also taken inside the day-tick, so the end of that hour (peak net worth) is not in it, which is allowed to differ.
   const g = makeGame(['gigger', 'second'], 'ops', 5);
   run(g, { days: 10 });
@@ -878,6 +1100,6 @@ test('the Business-School Grad\'s garnishment applies to trading profit through 
   assert.ok(r.ok);
   const take = g.s.ledger.find((e) => e.type === 'garnish');
   assert.ok(take, 'garnish is on the ledger');
-  near(-take.amt, q.profit * 0.08, 1e-9); near(g.s.ps.garnished, q.profit * 0.08, 1e-9);
-  near(g.s.cash, q.change - q.profit * 0.08, 1e-9);
+  near(-take.amt, q.profit * 0.05, 1e-9); near(g.s.ps.garnished, q.profit * 0.05, 1e-9);
+  near(g.s.cash, q.change - q.profit * 0.05, 1e-9);
 });
