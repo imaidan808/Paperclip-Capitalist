@@ -4,10 +4,12 @@ import { fitOf, fitLabel, fmtMoney as money, fmtPct as pct } from '../market.js'
 import { $, $$, esc, setHTML, delegate, dlg, toast, announce, sfx, burst, reduced, settingsDialog, settings } from './common.js';
 import * as V from './views.js';
 import { kv } from '../session.js';
+import { createWorldView } from './worldview.js';
 
 export function mountGame(root, S, hooks) {
   const g = () => S.game;
-  const U = { tab: 'trade', zone: PROFILES[S.game.s.profile].startZone, sel: new Set(), side: 'feed', trade: { want: new Set() }, draw: {}, logF: 'all', hire: null, queue: [], confirm: null };
+  let wv = null, wvHost = null;
+  const U = { tab: 'world', zone: PROFILES[S.game.s.profile].startZone, sel: new Set(), side: 'feed', trade: { want: new Set() }, draw: {}, logF: 'all', hire: null, queue: [], confirm: null };
   root.innerHTML = `<div id="hub" class="hub"></div>
     <div class="main"><div class="col"><section class="panel" aria-label="Workspace"><div class="tabs" role="tablist" id="tabs" aria-label="Workspace tabs"></div><div id="work" role="tabpanel" tabindex="-1"></div></section></div>
     <div class="col"><section class="panel" id="inv" aria-label="Active inventory matrix"></section><section class="panel" id="auto" aria-label="Automation controller"></section><section class="panel" id="syn" aria-label="Live market syndicate"></section></div></div>`;
@@ -20,7 +22,11 @@ export function mountGame(root, S, hooks) {
     setHTML(el.hub, V.hubHTML(S, U));
     setHTML(el.tabs, V.tabsHTML(S, U));
     el.work.setAttribute('aria-labelledby', 'tab-' + U.tab);
-    setHTML(el.work, views[U.tab](S, U));
+    setHTML(el.work, U.tab === 'world' || U.tab === 'map' ? V.worldShell(U.tab) : views[U.tab](S, U));
+    if (wv) {
+      if (U.tab === 'world' || U.tab === 'map') { const host = el.work.firstElementChild; if (host && host !== wvHost) { wvHost = host; wv.show(host, U.tab); } else wv.update(); }
+      else if (wvHost) { wv.hide(); wvHost = null; }
+    }
     setHTML(el.inv, V.invHTML(S, U));
     setHTML(el.auto, V.autoHTML(S, U));
     setHTML(el.syn, V.synHTML(S, U));
@@ -86,7 +92,7 @@ export function mountGame(root, S, hooks) {
   }
   function openHire(edit) {
     const game = g(), s = game.s;
-    const zone = edit ? edit.zone : s.zones.filter((z) => ZONES[z].auto).slice(-1)[0] || 2;
+    const zone = edit ? edit.zone : ZONES[U.zone].auto && s.zones.includes(U.zone) ? U.zone : s.zones.filter((z) => ZONES[z].auto).slice(-1)[0] || 2;
     const cls = edit?.cls || Object.keys(ASSETS).find((c) => ASSETS[c].dem[zone - 1] > 0 && ASSETS[c].base > 100) || 'textbooks';
     const best = Object.keys(BUYERS).filter((b) => BUYERS[b].zone === zone && fitOf(cls, b) >= 0.3).map((b) => ({ b, cm: game.cmFor(zone, cls, b).cm })).sort((a, b) => b.cm - a.cm)[0];
     U.hire = { edit, kind: edit?.kind || 'broker', zone, cls, buyer: edit?.buyer || best?.b, channel: edit?.channel || 'dom', alloc: edit ? edit.alloc : '' };
@@ -254,6 +260,8 @@ export function mountGame(root, S, hooks) {
     reset() { confirmBox('Start over?', '<p>This deletes your current run from this browser. Your instructor still sees your last published numbers until you join again.</p>', 'Delete and restart', () => hooks.onReset(), true); },
   };
   delegate(root, acts);
+  const call = (name, ds = {}) => acts[name]?.({ dataset: ds, value: '' });
+  wv = createWorldView({ S, U, call, setTab: (tab) => acts.tab({ dataset: { t: tab } }), render });
   if (!dlg.el._wired) {
     dlg.el._wired = true;
     delegate(dlg.el, new Proxy({}, { get: (_, k) => dlg.el._acts?.[k] }));
@@ -285,5 +293,5 @@ export function mountGame(root, S, hooks) {
   }, 1500);
 
   render();
-  return { render, destroy() { dead = true; off(); clearInterval(over); } };
+  return { render, destroy() { dead = true; off(); clearInterval(over); wv?.hide(); } };
 }

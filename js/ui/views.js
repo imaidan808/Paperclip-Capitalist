@@ -3,13 +3,14 @@ import { ZONES, ASSETS, BUYERS, PROFILES, PIPE, PIPE_RULES, UPGRADES, CLIENTS, L
 import { utilityIn, fitLabel, fmtMoney as money, fmtPct as pct } from '../market.js';
 import { esc } from './common.js';
 
-export const TABS = [['trade', 'Trade'], ['map', 'Map'], ['bank', 'Bank'], ['clients', 'Clients & Exit'], ['skills', 'Skills'], ['audit', 'Audit'], ['ledger', 'Ledger']];
+export const TABS = [['world', 'World'], ['trade', 'Trade'], ['map', 'Island map'], ['bank', 'Bank'], ['clients', 'Clients & Exit'], ['skills', 'Skills'], ['audit', 'Audit'], ['ledger', 'Ledger']];
 const TONE = { bad: 'bad', warn: 'warn', ok: 'info', good: 'good' };
 const ic = (x) => `<span class="ic" aria-hidden="true">${x}</span>`;
 const dur = (h) => (h >= 48 ? (h / 24).toFixed(1) + ' days' : Math.max(0, Math.round(h)) + ' h');
 const cmChip = (ci) => `<span class="chip ${TONE[ci.band.tone]}" title="Creativity multiplier">${ci.band.label}: ${ci.cm.toFixed(2)}x</span>`;
 const aName = (a) => `${ASSETS[a.cls].name}${a.cond === 'broken' ? ' (broken)' : ''}`;
 const gain = (x) => `<span class="${x >= 0 ? 'green' : 'red'}">${x >= 0 ? '+' : ''}${(x * 100).toFixed(0)}%</span>`;
+export const worldShell = (mode) => `<div class="wvhost" data-mode="${mode}"></div>`;
 export const selectedAsset = (g, U) => g.s.assets.find((a) => U.sel.has(a.id));
 
 // ---------------------------------------------------------------- header
@@ -123,7 +124,7 @@ export function invHTML(S, U) {
   }
   const transit = s.freight.map((f) => `<div class="card small"><div class="row"><b>In transit to ${esc(ZONES[f.to].short)}</b><span class="grow"></span>${dur(f.arrive - s.hour)}</div><div class="bar" aria-hidden="true"><i data-bar="freight:${f.id}"></i></div><span class="mute">${f.items.map((a) => esc(ASSETS[a.cls].name)).join(', ')}</span></div>`).join('');
   return `<h2>Active inventory matrix <span class="tiny mute mono">${[1, 2, 3].filter((z) => s.zones.includes(z)).map((z) => 'Z' + z + ' ' + cap(z)).join(' &middot; ')}</span></h2>
-    <div class="grid g2" role="group" aria-label="Your assets">${cards || '<p class="mute">Empty. Buy a lot from the Trade tab.</p>'}</div>${transit ? '<div class="grid gap">' + transit + '</div>' : ''}${actions}`;
+    <div class="grid g2" role="group" aria-label="Your assets">${cards || '<p class="mute">Empty. Click a pallet on the auction row in the World, or use the Trade tab.</p>'}</div>${transit ? '<div class="grid gap">' + transit + '</div>' : ''}${actions}`;
 }
 
 export function laneLabel(p) { return `${esc(ASSETS[p.cls]?.name || '?')} to ${esc(BUYERS[p.buyer]?.name || '?')}`; }
