@@ -315,7 +315,7 @@ test('map mode: every district is a label and a block you can click, with its lo
 test('rectOf gives a real on-screen rectangle for every kind of thing, and null for what is not there or not on screen', async () => {
   const g = newGame(8); openTo(g, 9); g.s.cash += 1e6;
   const a = g._mk(g.s, 'paperclip', { zone: 5 }); g.s.assets.push(a);
-  const cls = Object.keys(ASSETS).find((c) => (ASSETS[c].dem?.[5] || 0) >= 4), buyer = Object.keys(BUYERS).find((b) => BUYERS[b].zone === 5);
+  const lane = g.radar(5, 1)[0], cls = lane.cls, buyer = lane.seg; // a lane the engine accepts, whatever the content looks like
   g.s.pipes.push({ id: 'P' + g.s.nid++, kind: 'broker', zone: 5, level: 2, cls, buyer, channel: 'dom', alloc: 100, prog: 3, len: 12, inflight: 1, cycles: 0, profit: 0, basis: 100, status: 'running', pausedUntil: 0, starved: false });
   g.ship([g.s.assets.find((x) => x.zone === 1).id], 2);
   const ui = { zone: 5, sel: new Set() }, { w } = await world(g, ui, [1440, 900]);
@@ -398,7 +398,7 @@ test('entities work in any district: buyers, lots, crates and managers each get 
 test('entities follow the game: a sold-out lead leaves, a spent crate disappears, a hired manager takes a plot', async () => {
   const g = newGame(8); openTo(g, 9);
   const ui = { zone: 5, sel: new Set() }, { w } = await world(g, ui);
-  const cls = Object.keys(ASSETS).find((c) => (ASSETS[c].dem?.[5] || 0) >= 4), buyer = Object.keys(BUYERS).find((b) => BUYERS[b].zone === 5);
+  const lane = g.radar(5, 1)[0], cls = lane.cls, buyer = lane.seg; // a lane the engine accepts, whatever the content looks like
   g.s.cash = 5e5; const plots0 = live(w, 'plot').filter((e) => e.zone === 5).length;
   const r = g.hirePipeline('broker', 5, { cls, buyer }); assert.ok(r.ok, r.msg); w.sync();
   assert.equal(live(w, 'plot').filter((e) => e.zone === 5).length, plots0 - 1, 'one plot became a building'); assert.equal(live(w, 'pipe').length, 1);
@@ -410,7 +410,7 @@ test('entities follow the game: a sold-out lead leaves, a spent crate disappears
 test('a released manager does not make the others jump to another plot', async () => {
   const g = newGame(8); openTo(g, 9); g.s.cash = 5e5;
   const ui = { zone: 5, sel: new Set() }, { w } = await world(g, ui);
-  const cls = Object.keys(ASSETS).find((c) => (ASSETS[c].dem?.[5] || 0) >= 4), buyer = Object.keys(BUYERS).find((b) => BUYERS[b].zone === 5);
+  const lane = g.radar(5, 1)[0], cls = lane.cls, buyer = lane.seg; // a lane the engine accepts, whatever the content looks like
   const a = g.hirePipeline('broker', 5, { cls, buyer }).pipe, b = g.hirePipeline('student', 5, { cls, buyer }).pipe; w.sync();
   const pa = w.ents.get('pipe:' + a.id).plot, pb = w.ents.get('pipe:' + b.id).plot; assert.notEqual(pa, pb);
   g.releasePipeline(a.id); w.sync();

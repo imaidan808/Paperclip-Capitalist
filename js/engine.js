@@ -304,8 +304,9 @@ export class Game {
     if (this.s.events.some((e) => e.id === id)) return false;
     if (extra.replace) this.s.events = this.s.events.filter((e) => !(e.kind === kind && !e.started));
     let inst;
-    if (EVENTS[kind]) inst = this._evInstance(kind, atHour, { id, injected: !!extra.injected || !!extra.replace });
-    else if (ALGO_EVENTS[kind]) {
+    if (!own(EVENTS, kind) && !own(ALGO_EVENTS, kind)) return false; // a kind that arrives over the network must be one we know
+    if (own(EVENTS, kind)) inst = this._evInstance(kind, atHour, { id, injected: !!extra.injected || !!extra.replace });
+    else if (own(ALGO_EVENTS, kind)) {
       const made = ALGO_EVENTS[kind].mk(extra.cls || 'sneakers');
       inst = { id, kind, name: made.name, start: atHour, phases: made.phases, level: 1, alert: { code: 'ALGO-' + kind.toUpperCase(), readout: made.name + '.', vars: [], enforcement: 'Algorithmic market event.' }, warned: false, started: false, short: 'Algorithmic' };
     } else return false;
@@ -1162,6 +1163,8 @@ export class Game {
   // ------------------------------------------------------------------ exit (M&A / IPO)
   exitQuote(kind) {
     const s = this.s;
+    if (kind === 'sale') kind = 'trade'; // the Bank drawer says "sale"
+    if (kind !== 'ipo' && kind !== 'trade') return fail('Choose a trade sale or an IPO.');
     if (!s.mil.m3) return fail('Exit options unlock at Corporate Valley ($250,000 net worth).');
     if (kind === 'ipo' && s.auditFail > 0) return fail('IPO preparation needs a clean compliance record. Choose a trade sale.');
     const avg = s.dp.length ? s.dp.reduce((a, b) => a + b, 0) / s.dp.length : 0;
@@ -1173,6 +1176,7 @@ export class Game {
     return ok('', { avg, premium, hard, brokerage, proceeds, hours: 48, daysLeft: this.daysRemaining() - 2, eeiIfNow: eeiCalc(proceeds, s.startCapital, Math.max(0, this.daysRemaining() - 2), this.env.difficulty.eeiFloor) });
   }
   exit(kind) {
+    if (kind === 'sale') kind = 'trade';
     const q = this.exitQuote(kind);
     if (!q.ok) return q;
     const s = this.s;
@@ -1231,6 +1235,10 @@ export class Game {
     if (assets.some((a) => !a)) return fail('You no longer own one of those assets.');
     giveCash = Math.max(0, +giveCash || 0);
     if (!assets.length && !giveCash && !royalty) return fail('Offer something.');
+    const askedIn = {}, goingOut = {};
+    for (const w of want.assets || []) { const z = this._home({ ...w }).zone; askedIn[z] = (askedIn[z] || 0) + 1; }
+    for (const a of assets) goingOut[a.zone] = (goingOut[a.zone] || 0) + 1;
+    for (const [z, k] of Object.entries(askedIn)) if (k - (goingOut[z] || 0) > this.roomIn(+z)) return fail(`You would have no room in ${ZONES[z].short} for what you are asking for.`);
     const offer = {
       id: 'O' + s.pid + '-' + s.nid++, from: s.pid, fromHandle: s.handle, to, at: s.hour, note,
       give: { assets: assets.map((a) => this._disclosed(a)), cash: giveCash, royalty: royalty && royalty.perDay > 0 ? { perDay: +royalty.perDay, days: Math.max(1, Math.round(royalty.days)) } : null },
