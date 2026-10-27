@@ -23,11 +23,11 @@ export function mountGame(root, S, hooks) {
   let wv = null, dead = false, progress = null;
 
   root.innerHTML = `<div class="stage" id="stage">
-      <div class="worldhost" id="worldhost"></div>
+      <div class="worldhost" id="worldhost" data-anchor="world"></div>
       <header class="hud" id="hud"></header>
       <div class="trackerhost" id="trackerhost"></div>
       <div class="tickerhost" id="tickerhost"></div>
-      <section class="drawer" id="drawer" aria-label="Panel" hidden></section>
+      <section class="drawer" id="drawer" data-anchor="drawer" aria-label="Panel" hidden></section>
       <nav class="dock" id="dock" aria-label="Game panels"></nav>
       <div class="overlay" id="overlay"></div>
     </div>`;
@@ -60,7 +60,7 @@ export function mountGame(root, S, hooks) {
     const vis = visibleIds();
     return DRAWERS.filter((d) => vis.has(d.id)).map((d, i) => {
       const b = d.badge?.(ctx);
-      return `<button class="dk" data-act="dock" data-d="${d.id}" data-fid="dk-${d.id}" aria-pressed="${U.drawer === d.id}" aria-keyshortcuts="${i + 1}"><span class="ic" aria-hidden="true">${d.icon}</span><span class="lb">${esc(d.label)}</span>${b ? `<span class="bd" aria-label="${esc(String(b))} waiting">${esc(String(b))}</span>` : ''}</button>`;
+      return `<button class="dk" data-anchor="dock-${d.id}" data-act="dock" data-d="${d.id}" data-fid="dk-${d.id}" aria-pressed="${U.drawer === d.id}" aria-keyshortcuts="${i + 1}"><span class="ic" aria-hidden="true">${d.icon}</span><span class="lb">${esc(d.label)}</span>${b ? `<span class="bd" aria-label="${esc(String(b))} waiting">${esc(String(b))}</span>` : ''}</button>`;
     }).join('');
   }
   function drawerHTML() {

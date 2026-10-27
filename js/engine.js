@@ -575,6 +575,14 @@ export class Game {
     const mult = clamp(deal?.mult ?? 1, 0.6, 1.4);
     return ok('', { lot, mult, price: Math.max(0.01, Math.round(lot.price * mult * 100) / 100) });
   }
+  /** A lot the player lost at auction goes to another bidder. */
+  passLot(zone, lotId, why = '') {
+    const s = this.s, lot = s.lots[zone]?.find((l) => l.id === lotId);
+    if (!lot) return fail('That lot is gone.');
+    s.lots[zone] = s.lots[zone].filter((l) => l.id !== lotId);
+    if (why) this.note('info', why);
+    return ok('Lot gone.');
+  }
   buyLot(zone, lotId, deal) {
     const s = this.s, q = this.buyQuote(zone, lotId, deal);
     if (!q.ok) return q;
