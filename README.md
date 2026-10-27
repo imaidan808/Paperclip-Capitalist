@@ -4,6 +4,8 @@ A gamified entrepreneurship simulation for higher education. Students turn **one
 
 Runs entirely in the browser. No build step, no dependencies, no accounts, no tracking.
 
+**The game is a living 2.5D world.** An isometric island with three elevated districts (Scrap Yard, Metro Hub, Corporate Valley) mirrors your run: buyers walk in with their offers over their heads, auction pallets and your stock are crates, every pipeline is a building that grows with its level, freight is a truck on the avenue, the virtual hour sets the light, and a credit crunch brings rain. Click things to play: a buyer to pitch, a pallet to buy, a plot to hire, the bank to borrow. The **Island map** tab pulls back to the whole economy. Everything in the world is also in a keyboard-accessible list below it.
+
 ## Play
 ```bash
 npm start            # http://localhost:8080
@@ -30,7 +32,7 @@ The relay forwards messages and keeps the latest snapshot per student in memory;
 Create a room, pick a pace, press Start. The dashboard shows wealth Gini (alert above 0.65), a niche saturation heat map, stalled founders, flagged peer trades and a pre-filled gradebook; controls pause, speed, rewind (10 days), deploy shocks, and scale friction and audit frequency. See [docs/FACULTY_KIT.md](docs/FACULTY_KIT.md) for the syllabus, week map and rubrics.
 
 ## What is and is not here
-Built and tested: the full simulation, all three profiles, Level 0, three shocks plus algorithmic events, bank and margin calls, audits, client tiers, peer exchange with the +/-40% guardrail, instructor dashboard, debrief with reflection workbook, WCAG-checked themes.
+Built and tested: the 2.5D world and island map (Canvas 2D, no libraries), the full simulation, all three profiles, Level 0, three shocks plus algorithmic events, bank and margin calls, audits, client tiers, peer exchange with the +/-40% guardrail, instructor dashboard, debrief with reflection workbook, WCAG-checked themes.
 
 **Not built** (see [docs/COMPLIANCE.md](docs/COMPLIANCE.md)): LTI 1.3 grade passback, SAML/OIDC SSO, SOC 2 / HECVAT attestations, server-side authoritative state. Those belong to a hosted service; [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) sketches the path. Where the design brief contradicted itself I made a call and recorded it in [docs/BALANCE.md](docs/BALANCE.md).
 

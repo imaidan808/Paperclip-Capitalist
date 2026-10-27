@@ -121,7 +121,7 @@ pre.ascii { background: var(--bg); border: 1px solid var(--line); padding: .6rem
 .pill-row { display: flex; gap: .4rem; flex-wrap: wrap; }
 .pills label { display: inline-flex; gap: .3rem; align-items: center; border: 1px solid var(--line); padding: .25rem .6rem; cursor: pointer; color: var(--ink); margin: 0; }
 .pills input:checked + span { color: var(--gold); font-weight: 700; }
-.scene { width: 100%; image-rendering: pixelated; border: var(--bw) solid var(--line); background: #1b2a1f; display: block; }
+.scene { width: 100%; border: var(--bw) solid var(--line); background: #1b2a1f; display: block; }
 .xp { height: .9rem; } .banner { font-family: ui-monospace, Menlo, monospace; font-weight: 800; color: var(--gold); font-size: 1.2rem; text-align: center; animation: pop .4s; }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; } }
 :root[data-motion="reduce"] *, :root[data-motion="reduce"] *::before, :root[data-motion="reduce"] *::after { animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; }

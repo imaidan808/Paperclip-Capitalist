@@ -9,6 +9,9 @@
 
 Students on different devices need the optional relay server (`server/relay.mjs`, see the README). Without it, rooms work between tabs of one browser, which is fine for a demo or a single shared lab machine.
 
+## The World and the Island map
+Students play in a 2.5D isometric world. The **World** tab shows their district; the **Island map** tab shows all three at once, with live stats and the gates to the next district. Shocks are visible, not only announced: rain for the credit crunch, neon and confetti for the demand surge, red hazard signs at the freight depots for the tariff. Every object in the world also appears in a list below it, so the game is fully playable by keyboard and with a screen reader.
+
 ## Week by week
 | Week | Virtual days | In the game | Lecture alignment | Milestone |
 |---|---|---|---|---|

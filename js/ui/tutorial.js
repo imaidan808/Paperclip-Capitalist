@@ -2,49 +2,57 @@
 // buyer personas and the arbitrage loop, then hands over an automated broker to show working-capital velocity.
 import { $, esc, setHTML, delegate, dlg, toast, announce, sfx, burst, reduced, money } from './common.js';
 import { utilityScore } from '../market.js';
+import { P, box, cyl, shadow, person, diamond, ellipse, tone, windows } from '../world/iso.js';
 
 const LEVEL_XP = 300;
 const level = (xp) => 1 + Math.floor(xp / LEVEL_XP);
 
-// ---------------------------------------------------------------- pixel scenes
-function person(g, x, y, s, c) {
-  g.fillStyle = c.hair || '#2b1b10'; g.fillRect(x + 2 * s, y, 4 * s, 2 * s);
-  g.fillStyle = c.skin || '#f1c27d'; g.fillRect(x + 2 * s, y + 2 * s, 4 * s, 3 * s);
-  g.fillStyle = c.shirt; g.fillRect(x + s, y + 5 * s, 6 * s, 5 * s);
-  g.fillStyle = c.pants || '#27324a'; g.fillRect(x + 2 * s, y + 10 * s, 4 * s, 4 * s);
-  g.fillStyle = '#000'; g.fillRect(x + 3 * s, y + 3 * s, s, s); g.fillRect(x + 5 * s, y + 3 * s, s, s);
-}
-function scene(g, kind, t) {
-  const W = 320, H = 180, bob = Math.round(Math.sin(t / 380)) * 2;
-  const sky = { yard: '#2b3d52', cafe: '#3a2a22', office: '#1f2a3d', shop: '#243528' }[kind];
-  g.fillStyle = sky; g.fillRect(0, 0, W, H);
-  g.fillStyle = kind === 'yard' ? '#3d4a2e' : '#4a3a2c'; g.fillRect(0, 120, W, 60);
-  g.fillStyle = 'rgba(255,255,255,.05)';
-  for (let x = 0; x < W; x += 16) g.fillRect(x, 120, 1, 60);
-  for (let y = 120; y < H; y += 16) g.fillRect(0, y, W, 1);
+// ---------------------------------------------------------------- isometric scenes (same primitives as the game world)
+const dirt = (x, y) => ((x * 7 + y * 13) % 5 === 0 ? '#7a7566' : (x + y) % 2 ? '#705f45' : '#675840');
+function floor(g, col) { for (let y = 0; y < 10; y++) for (let x = 0; x < 10; x++) diamond(g, x, y, 1, 1, col(x, y), 'rgba(0,0,0,.14)', 0, 0.8); }
+function npc(g, gx, gy, look, t, s = 1.25, moving = false) { const [x, y] = P(gx, gy); person(g, x, y, s, look, t, moving); }
+function isoScene(g, kind, t) {
+  const calm = reduced(), tt = calm ? 0 : t, k = 0.5 + 0.5 * Math.sin(tt / 400);
+  g.setTransform(1, 0, 0, 1, 0, 0);
+  const sky = g.createLinearGradient(0, 0, 0, 360);
+  const pal = { yard: ['#243a55', '#3b5a6e'], cafe: ['#3a2a22', '#5a4636'], office: ['#1f2a3d', '#3a4e6e'], shop: ['#20302a', '#2f4a3c'] }[kind];
+  sky.addColorStop(0, pal[0]); sky.addColorStop(1, pal[1]); g.fillStyle = sky; g.fillRect(0, 0, 640, 360);
+  const fit = { yard: [50, 0.9], cafe: [58, 0.9], office: [104, 0.8], shop: [54, 0.9] }[kind];
+  g.save(); g.translate(320, fit[0]); g.scale(fit[1], fit[1]);
+  const draws = [];
+  const add = (key, fn) => draws.push([key, fn]);
   if (kind === 'yard') {
-    g.fillStyle = '#5b5f66'; [[20, 95, 50, 30], [60, 105, 40, 20], [230, 88, 60, 38], [270, 100, 40, 26]].forEach(([x, y, w, h]) => g.fillRect(x, y, w, h));
-    g.fillStyle = '#8a5a3a'; g.fillRect(100, 108, 36, 16); g.fillStyle = '#a0a6ad'; g.fillRect(104, 100, 28, 8);
-    g.fillStyle = '#6b4a2c'; for (let x = 0; x < W; x += 20) g.fillRect(x, 80, 3, 40); g.fillRect(0, 88, W, 3);
-    person(g, 150, 98 + bob, 4, { shirt: '#c0392b', hair: '#222' });          // you, left-center
-    person(g, 214, 98 + (bob ? 0 : 2), 3, { shirt: '#2f80ed', hair: '#7a3b12' }); // student
-    person(g, 256, 100, 3, { shirt: '#f2994a', pants: '#3b3b3b', hair: '#555' });  // mechanic
+    floor(g, dirt);
+    for (let i = 0; i < 10; i++) { const a = P(i, 0), b = P(0, i); g.fillStyle = '#6b5a45'; g.fillRect(a[0] - 1.5, a[1] - 22, 3, 22); g.fillRect(b[0] - 1.5, b[1] - 22, 3, 22); }
+    add(3, () => { for (let i = 0; i < 5; i++) box(g, 1.2 + (i % 3) * 0.7, 1.3 + Math.floor(i / 3) * 0.8, 0.6, 0.6, 14 + i * 5, tone(['#7a7f88', '#8c4a2f', '#5b6573', '#a07a3a', '#6b5a4a'][i])); });
+    add(2.5, () => { shadow(g, 6, 0.8, 2.4, 1.3, 22); box(g, 6, 0.8, 2.4, 1.3, 9, tone('#8c4a2f'), { z: 4 }); box(g, 6.6, 0.95, 1.2, 1, 9, tone('#7a3f27'), { z: 13 }); });
+    add(7, () => { shadow(g, 0.4, 6.4, 2.6, 2.2, 40); const f = box(g, 0.4, 6.4, 2.6, 2.2, 40, tone('#7d6a55')); windows(g, f.left, 2, 1, '#1d2740'); });
+    add(4, () => { cyl(g, 8.4, 2.2, 0.32, 22, tone('#b0493a')); cyl(g, 9, 2.8, 0.32, 22, tone('#3d6fb0')); });
+    add(5.6 + 4.5, () => npc(g, 5.6, 4.6, { shirt: '#2f80ed', hair: '#7a3b12' }, tt, 1.3));
+    add(7.4 + 6.2, () => npc(g, 7.6, 6.2, { shirt: '#f2994a', hair: '#555', pants: '#3b3b3b' }, tt, 1.3));
+    add(3 + 5.6, () => { const [x, y] = P(3, 5.6); ellipse(g, x, y + 1, 18 + 3 * k, 8 + k, `rgba(255,211,110,${0.3 + 0.2 * k})`, '#ffd36e', 2); npc(g, 3, 5.6, { shirt: '#c0392b', hair: '#222' }, tt, 1.5); });
   } else if (kind === 'cafe') {
-    g.fillStyle = '#6b4a2c'; [[30, 108], [130, 108], [230, 108]].forEach(([x, y]) => { g.fillRect(x, y, 56, 6); g.fillRect(x + 24, y + 6, 8, 20); });
-    person(g, 44, 80 + bob, 3, { shirt: '#27ae60' });   // barista
-    person(g, 144, 80 + (bob ? 0 : 2), 3, { shirt: '#1d2b53', hair: '#111' }); // recruiter
-    person(g, 244, 80 + bob, 3, { shirt: '#9b51e0', hair: '#999' }); // freelancer
-    g.fillStyle = '#9b51e0'; g.fillRect(238, 100, 24, 8);
+    floor(g, (x, y) => ((x + y) % 2 ? '#8a6a45' : '#7a5c3b'));
+    add(1, () => { box(g, 1, 0.5, 8, 1, 20, tone('#5a4636')); for (let i = 0; i < 4; i++) box(g, 1.6 + i * 1.8, 0.7, 0.6, 0.5, 8, tone(['#c0392b', '#f2c94c', '#27ae60', '#2f80ed'][i]), { z: 20 }); });
+    for (const [gx, gy, shirt, hair] of [[2.4, 4.4, '#27ae60', '#2b1b10'], [5.4, 4.4, '#1d2b53', '#111'], [8.4, 4.4, '#9b51e0', '#999']]) {
+      add(gx + gy, () => { box(g, gx - 0.6, gy - 0.4, 1.2, 1.2, 4, tone('#6b4a2c'), { z: 8 }); cyl(g, gx, gy + 0.2, 0.12, 8, tone('#6b4a2c')); npc(g, gx, gy - 0.9, { shirt, hair }, tt, 1.25); });
+    }
+    add(8.8 + 4.5, () => box(g, 8.1, 4.2, 0.7, 0.5, 3, tone('#9b51e0'), { z: 11 }));
+    add(4.4 + 6.5, () => { const [x, y] = P(4.4, 6.6); ellipse(g, x, y + 1, 18 + 3 * k, 8 + k, `rgba(255,211,110,${0.3 + 0.2 * k})`, '#ffd36e', 2); npc(g, 4.4, 6.6, { shirt: '#c0392b', hair: '#222' }, tt, 1.5); });
   } else if (kind === 'office') {
-    g.fillStyle = '#2a3f5f'; g.fillRect(40, 70, 70, 50); g.fillRect(210, 60, 70, 60);
-    g.fillStyle = '#ffd36e'; for (let i = 0; i < 6; i++) { g.fillRect(48 + (i % 3) * 20, 78 + Math.floor(i / 3) * 20, 10, 10); g.fillRect(218 + (i % 3) * 20, 68 + Math.floor(i / 3) * 20, 10, 10); }
-    person(g, 150, 98 + bob, 4, { shirt: '#c0392b', hair: '#222' });
-    g.fillStyle = '#d9d2c0'; g.fillRect(196, 112, 40, 14); g.fillRect(200, 108, 12, 6);
+    floor(g, (x, y) => (y > 6 ? '#3a4a66' : y === 5 || y === 6 ? '#2f3644' : '#4d586c'));
+    for (const [gx, gy, w, h, c] of [[0.5, 0.5, 2.4, 70, '#5a6fb0'], [3.4, 0.4, 2.2, 110, '#4a8fb0'], [6.2, 0.6, 3, 90, '#7a6fc0']]) add(gx + gy + w, () => { shadow(g, gx, gy, w, w, h); const f = box(g, gx, gy, w, w, h, tone(c)); windows(g, f.left, 3, Math.round(h / 12), '#16264a', 0.5, 0.06); windows(g, f.right, 3, Math.round(h / 12), '#10203f', 0.5, 0.06); });
+    add(7 + 7, () => { shadow(g, 6.6, 6.8, 2.2, 1.1, 20); box(g, 6.6, 6.8, 2.2, 1.1, 10, tone('#d9d2c0'), { z: 4 }); box(g, 7.2, 6.9, 1, 0.9, 9, tone('#c9c2ae'), { z: 14 }); });
+    add(5 + 5, () => npc(g, 5.4, 5.4, { shirt: '#1d2b53', hair: '#111' }, tt, 1.3));
+    add(3 + 6.4, () => { const [x, y] = P(3, 6.4); ellipse(g, x, y + 1, 18 + 3 * k, 8 + k, `rgba(255,211,110,${0.3 + 0.2 * k})`, '#ffd36e', 2); npc(g, 3, 6.4, { shirt: '#c0392b', hair: '#222' }, tt, 1.5); });
   } else {
-    g.fillStyle = '#3b3b3b'; g.fillRect(40, 96, 240, 28);
-    for (let i = 0; i < 3; i++) { g.fillStyle = ['#5fd38d', '#ffc247', '#5cd6ff'][i]; g.fillRect(70 + i * 70, 84 + Math.round(Math.sin(t / 250 + i)) * 2, 40, 12); }
-    person(g, 20, 96 + bob, 4, { shirt: '#c0392b' });
+    floor(g, (x, y) => ((x + y) % 2 ? '#3d4a43' : '#35413b'));
+    add(2, () => { box(g, 1, 1, 8, 1.2, 10, tone('#3b3b3b')); for (let i = 0; i < 3; i++) { const h = 14 + (calm ? 8 : 8 + 8 * Math.sin(tt / 350 + i * 2)); box(g, 2 + i * 2.4, 1.3, 1.6, 0.6, h, tone(['#5fd38d', '#ffc247', '#5cd6ff'][i]), { z: 10 }); } });
+    add(5 + 5, () => npc(g, 5, 4.4, { shirt: '#c9a227', hair: '#2b1b10' }, tt, 1.3));
+    add(3 + 5.6, () => { const [x, y] = P(3, 5.6); ellipse(g, x, y + 1, 18 + 3 * k, 8 + k, `rgba(255,211,110,${0.3 + 0.2 * k})`, '#ffd36e', 2); npc(g, 3, 5.6, { shirt: '#c0392b', hair: '#222' }, tt, 1.5); });
   }
+  draws.sort((a, b) => a[0] - b[0]).forEach(([, fn]) => fn());
+  g.restore();
 }
 
 // ---------------------------------------------------------------- the lesson script
@@ -112,7 +120,7 @@ export function mountTutorial(root, { onDone, onSkip }) {
   }
 
   function render() {
-    el.innerHTML = `${header()}<div class="main gap"><section class="panel" aria-label="Scene"><canvas id="sc" class="scene" width="320" height="180" role="img" aria-label="${{ yard: 'A pixel-art scrap yard with a student and a mechanic', cafe: 'A pixel-art coffee shop with three customers', office: 'A pixel-art office district', shop: 'A pixel-art trading floor' }[sceneKind()]}"></canvas></section><section class="panel" aria-live="polite">${body()}</section></div>`;
+    el.innerHTML = `${header()}<div class="main gap"><section class="panel" aria-label="Scene"><canvas id="sc" class="scene" width="640" height="360" role="img" aria-label="${{ yard: 'A pixel-art scrap yard with a student and a mechanic', cafe: 'A pixel-art coffee shop with three customers', office: 'A pixel-art office district', shop: 'A pixel-art trading floor' }[sceneKind()]}"></canvas></section><section class="panel" aria-live="polite">${body()}</section></div>`;
     startScene();
     if (S.phase === 'run') startBroker();
   }
@@ -121,8 +129,8 @@ export function mountTutorial(root, { onDone, onSkip }) {
     cancelAnimationFrame(raf);
     const c = $('#sc', el); if (!c) return;
     const g = c.getContext('2d'), kind = sceneKind();
-    if (reduced()) { scene(g, kind, 0); return; }
-    const loop = (t) => { scene(g, kind, t); raf = requestAnimationFrame(loop); };
+    if (reduced()) { isoScene(g, kind, 0); return; }
+    const loop = (t) => { isoScene(g, kind, t); raf = requestAnimationFrame(loop); };
     raf = requestAnimationFrame(loop);
   }
 
