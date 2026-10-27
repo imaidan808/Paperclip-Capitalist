@@ -2,8 +2,7 @@
 // State lives in game.s.meta, so it saves with the run and rewinds with it.
 import { goalDelta, goalDone, matchEvent } from './match.js';
 import { QUESTS, ACHIEVEMENTS, DAILIES } from './quests.js';
-let CODEX = [];
-try { ({ CODEX } = await import('./codex.js')); } catch { /* TEMPORARY: codex.js merges from its own branch; this guard goes at the merge */ }
+import { CODEX } from './codex.js';
 import { hash01 } from '../rng.js';
 
 const byId = (list) => Object.fromEntries(list.map((x) => [x.id, x]));
