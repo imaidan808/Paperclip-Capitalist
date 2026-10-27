@@ -143,3 +143,46 @@ A campaign of ten short missions in the real UI against the real engine in a scr
 ## 11. Balance targets (tested with the bot)
 
 Time to reach each district's gate for a competent bot, by zone: 1-4 within days 1-14; 5 (Bank) by day 14-22; 9 (audits) by day 30-40; 13 (Corporate) by day 55-70; 16 by day 85+ only for strong play. No Background pair may deviate from the median milestone day by more than 35%. Skill play must matter: Deal-Room-optimal play beats Quick play by 15-30% on profit per deal; random play loses to Quick.
+
+## 4.1 District numbers and rule semantics (what the engine will do with your data)
+
+Suggested numbers (stay inside the validator's bounds; justify any big deviation in your report): `tax` = 0, .01, .02, .03 for districts 1-4, then `0.05 + (id - 5) * 0.0095`; `friction` .10 to .16 rising with id; `speed` = `1 + (id - 1) * 0.3`; `store` = `round(10 + (id - 1) * 1.7)`; `pool` = `max(5000, round(gate * 10 / 1000) * 1000)`; `leadEvery` 3 (2 in Tech Corridor, 4 in Farmland); `lotEvery` 4 (5 where auctions are common); `urgent` .45, .30, .25, .20 then .12 falling to .06; `plots` 0 for 1-4 and 4 for 5-16 (3 in the two largest if you want scarcity). `palette` = `[ground, accent]`, saturated and distinct per theme (scrap olive/brown, market warm orange, campus brick/green, pawn teal/gold, metro slate/blue, estate plum/cream, auto asphalt/red, harbor navy/orange, industrial steel/yellow, tech black/cyan, farm green/gold, creative magenta/violet, corporate glass blue, finance green/ink, realty terracotta, exchange gold/black).
+
+Rule keys, as the engine will read them:
+
+| key | value | meaning |
+|---|---|---|
+| `haggle` | true | every deal in this district offers the Haggle stage with a friendly start (patience +1) |
+| `auction` | 0..1 | fraction of lots that are auctions (Auction game) instead of fixed-price lots |
+| `fakes` | 0..1 | probability a lot is counterfeit, multiplied by the asset's own `fakeRisk` (default 1) |
+| `season` | `{ period, amp, tags }` | demand for assets with any of `tags` swings by `amp` (0..0.6) on a sine of `period` days |
+| `customs` | 0..1 | chance that freight arriving here is inspected (12h delay and a 2% fee) |
+| `gray` | true | gray-market district: Second-Chance gets its discount; audit fines are not reduced here |
+| `repair` | 0..0.6 | repairs done here cost this much less |
+| `perish`, `yield`, `bulk`, `fads` | true | informational flags the UI and Academy read (perishables spoil per the asset's `perish`; assets with `yield` pay daily; bulk lots come in multiples; digital goods lose value twice as fast) |
+| `managers`, `bank`, `audits`, `enterprise`, `rent`, `arbitrage` | true | this district is where that feature *unlocks* (set exactly once each: managers and bank in district 5, audits in 9, enterprise in 13, rent in 15, arbitrage in 16) |
+
+`bonus` keys are permanent rewards applied once the district is unlocked: `freightMult` (<1 cheaper), `capMult` (>1 pipeline caps), `leadMult` (>1 buyers faster), `spreadMult` (<1 cheaper loans), `storeBonus` (integer crates everywhere), `lotSlots` (integer extra lots per district), `feeMult`, `repairMult`, `rentMult`, `exitMult`, `creditLimitMult`. Use the "Unlock bonus" column of the district table.
+
+## 12. Meta content schemas (Codex, Academy, quests)
+
+All meta content is plain data exported from `js/meta/*.js`, validated by `tests/meta.test.mjs`. **Event matching**: a `match` object is a shallow subset test against an event payload; a value can be a literal or `{ gte|lte|gt|lt|eq|in }`.
+
+**Codex entry** (`js/meta/codex.js`, `export const CODEX = [...]`):
+`{ id, title, icon, category: 'Value'|'Markets'|'Operations'|'Finance'|'Risk'|'People'|'Strategy', zone?: 1..16, summary (<= 140 chars), body: [2-4 paragraphs, each <= 420 chars, plain language, concrete], formula?: string, example: { setup: string, steps: [string], result: string } (a worked example with real numbers from the game), mistakes: [<= 3 short strings], tryIt: string (one thing to do in the game), related: [ids], unlock: 'start' | { event, match? } }`. **Required ids** (at least these 46): the sixteen `teaches` ids from the district table plus `fair-market-value, asset-utility-score, creativity-multiplier, market-saturation, persona-fit, urgency-premium, margin, depreciation, opportunity-cost, cash-flow-velocity, compounding, interest-and-compounding, debt-to-equity, margin-call, collateral, cac-vs-ltv, sla, audit-compliance, tariffs, credit-crunch, demand-shock, diversification, hedging, anchoring, batna-zopa, adverse-selection, due-diligence, comparative-advantage, specialization, economies-of-scale, network-effects, risk-of-ruin, expected-value, eei-score, reputation, exit-valuation`. Voice: warm, specific, never condescending. Every `example` uses numbers a player can reproduce.
+
+**Academy mission** (`js/meta/academy.js`, `export const ACADEMY = [...]`, exactly 10, ids `m01`..`m10` in the order of section 9):
+`{ id, title, icon, zone: 1..16, concept: codexId, minutes, intro (<= 260 chars, a scene), setup, steps, win, why, teachBack, reward }` where
+`setup = { clock: 'paused'|'running', assets: [{ cls, cond?, quality? }], leads: [{ id, seg, budget, need? }], lots: [{ id, cls, cond, price, truth?: { quality, fake } }], cash?, zones: [ids], features: [dock ids visible: 'stock'|'market'|'crew'|'bank'|'travel'|'codex'|'quests'], skills?: { ops, growth, fintech }, perks?: [ids], cohort?: { ghosts: n }, events?: [{ kind, atHour }] }`;
+`steps = [{ id, say (coach text <= 220 chars), anchor, wait, hint }]` where `anchor` is one of `hud-cash, hud-networth, hud-day, hud-clock, player-card, tracker, ticker, dock-stock, dock-market, dock-crew, dock-bank, dock-travel, dock-codex, dock-quests, world, drawer, deal-room, deal-stage-read, deal-stage-pitch, deal-stage-close, deal-quick` or `world:lead:<id>`, `world:lot:<id>`, `world:asset:<cls>`, `world:plot:<n>`, `world:static:<id>`; and `wait` is `{ type:'event', event, match? }` or `{ type:'ui', ui:'open-drawer', id }` or `{ type:'click', anchor }`; `hint` appears after 20 seconds of no progress;
+`win = { event, match? }` (the mission is complete when this event arrives after the last step);
+`why = { title, body: [paragraphs <= 420 chars], formula?, example: { setup, steps, result } }`;
+`teachBack = { q, options: [{ text, correct: boolean, why }] }` (exactly 3 options, exactly 1 correct, a reason for every option, wrong options are tempting misconceptions);
+`reward = { xp, codex: [ids], points?: 1 }`.
+Every mission must be completable by the scripted sandbox alone (all leads, lots and assets it needs are in `setup`), must teach its codex `concept` by doing, and must be playable in 90-150 seconds.
+
+**Quest / achievement** (`js/meta/quests.js`, `export const QUESTS`, `export const ACHIEVEMENTS`, `export const DAILIES`):
+`QUESTS`: at least 32 story quests (two per district: an *arrival* quest and a *mastery* quest that exercises the district's signature rule), `{ id, title, desc, icon, zone, goal: { event, match?, count, sum? }, reward: { xp, points? }, after?: questId }`;
+`ACHIEVEMENTS`: at least 40, `{ id, title, desc, icon, rarity: 'common'|'rare'|'epic', goal: { event, match?, count, sum? }, hidden?: true }` covering skill play (haggle, inspect, repair, auction), streaks, risk survived, each Background combination theme, and every district;
+`DAILIES`: at least 10 templates `{ id, title, desc, icon, goal: { event, match?, count }, reward: { xp } }` that make sense in any district.
+`sum` names a numeric payload field to accumulate instead of counting events.
