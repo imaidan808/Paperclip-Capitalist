@@ -1,1 +1,97 @@
-/* ui-crew: owned by the author of that part of the interface */
+/* ui-crew: the Crew drawer (.cr) and its hire dialog (.crd). Tokens only (styles.css); state is never carried by colour alone. */
+.cr, .crd { display: grid; gap: .7rem; min-width: 0; }
+.cr .btn, .crd .btn { min-height: 2.75rem; }
+.cr h3, .cr h4, .crd h3 { text-transform: none; }
+
+/* sections inside the drawer */
+.cr-tabs .btn { flex: 1 1 auto; font-size: .8rem; text-transform: uppercase; }
+.cr-tabs .chip { border-color: currentColor; margin-left: .2rem; }
+.cr-sum { display: grid; grid-template-columns: repeat(auto-fit, minmax(6.2rem, 1fr)); gap: .4rem; }
+.cr-sum > div { background: var(--panel2); border: 1px solid var(--line); padding: .3rem .55rem; min-width: 0; }
+.cr-sum small { display: block; font-size: .64rem; text-transform: uppercase; letter-spacing: .08em; color: var(--mute); }
+.cr-sum b { font-size: 1.05rem; overflow-wrap: anywhere; }
+.cr-dist { display: grid; gap: .6rem; min-width: 0; }
+.cr-dh { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; margin: 0; padding-bottom: .25rem; border-bottom: 1px dashed var(--line); font-size: .92rem; letter-spacing: .03em; }
+.cr-plots { display: inline-flex; gap: 3px; margin-left: auto; }
+.cr-plots i { width: .7rem; height: .7rem; border: 1px solid var(--field); }
+.cr-plots i.on { background: var(--gold); border-color: var(--gold); }
+.cr-h3 { margin: .4rem 0 0; font-size: .78rem; text-transform: uppercase !important; letter-spacing: .06em; color: var(--mute); }
+
+/* a manager */
+.cr-card { display: grid; gap: .45rem; background: var(--panel2); border: 1px solid var(--line); border-left: 5px solid var(--field); padding: .6rem .7rem; min-width: 0; }
+.cr-card[data-st="running"] { border-left-color: var(--green); }
+.cr-card[data-st="paused"], .cr-card[data-st="audit"], .cr-card[data-st="nolane"] { border-left-color: var(--gold); border-left-style: dashed; }
+.cr-card[data-st="starved"] { border-left-color: var(--red); border-left-style: dotted; }
+.cr-card.cr-focus { border-color: var(--gold); box-shadow: inset 0 0 0 2px var(--gold); }
+.cr-top { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: .5rem; align-items: start; }
+.cr-ic { font-size: 1.6rem; line-height: 1; }
+.cr-name { margin: 0; font-size: .92rem; display: flex; flex-wrap: wrap; gap: .3rem; align-items: center; }
+.cr-lane { margin: .15rem 0 0; font-size: .85rem; overflow-wrap: anywhere; }
+.cr-bar { height: .6rem; }
+.cr-cyc { margin: 0; }
+.cr-nums { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .4rem; margin: 0; }
+.cr-nums > div { background: var(--bg); border: 1px solid var(--line); padding: .25rem .4rem; min-width: 0; }
+.cr-nums dt { font-size: .62rem; text-transform: uppercase; letter-spacing: .07em; color: var(--mute); }
+.cr-nums dd { margin: 0; font-size: .85rem; overflow-wrap: anywhere; }
+.cr-cm { display: flex; flex-wrap: wrap; gap: .4rem; align-items: center; }
+.cr-acts { display: flex; flex-wrap: wrap; gap: .4rem; }
+.cr-acts .btn { flex: 1 1 auto; }
+.cr-acts .danger-text { color: var(--red); border-color: var(--red); }
+.cr-note, .cr-why { margin: 0; border-left: 3px solid var(--field); padding-left: .5rem; }
+.cr-note { border-left-color: var(--gold); }
+.cr-why { color: var(--mute); }
+.cr-up { margin: 0; color: var(--mute); }
+.cr-card p { margin: 0; }
+
+/* the hire card: prominent, dashed like a plot waiting to be built on */
+.cr-hire { display: grid; gap: .4rem; border: 2px dashed var(--gold); background: var(--panel); padding: .7rem; min-width: 0; }
+.cr-hire-h { display: flex; gap: .6rem; align-items: center; }
+.cr-hire-h small { display: block; color: var(--mute); }
+.cr-plus { width: 2rem; height: 2rem; flex: none; display: grid; place-items: center; border: 2px solid var(--gold); color: var(--gold); font-size: 1.4rem; font-weight: 800; line-height: 1; }
+.cr-hire p { margin: 0; }
+.cr-hire.off { border-color: var(--field); }
+.cr-hire.off .cr-plus { border-color: var(--field); color: var(--mute); }
+.cr-hire-row { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; padding: .45rem .6rem; }
+.cr-hire-row .cr-why { flex-basis: 100%; }
+.cr-hire-row .cr-plus { width: 1.6rem; height: 1.6rem; font-size: 1.1rem; }
+
+/* upgrades and clients */
+.cr-grid { display: grid; gap: .6rem; }
+.cr-upg, .cr-client, .cr-active { display: grid; gap: .4rem; background: var(--panel2); border: 1px solid var(--line); padding: .6rem .7rem; min-width: 0; }
+.cr-upg.have { border-left: 5px solid var(--green); }
+.cr-upg p, .cr-client p, .cr-active p { margin: 0; }
+.cr-vs { display: grid; gap: .45rem; }
+.cr-vsrow { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "l v" "b b"; gap: .15rem .5rem; align-items: end; }
+.cr-vsl { grid-area: l; font-size: .78rem; color: var(--mute); }
+.cr-vsrow > b { grid-area: v; }
+.cr-vsb { grid-area: b; height: .85rem; background: var(--bg); border: 1px solid var(--line); }
+.cr-vsb i { display: block; height: 100%; }
+.cr-vsb i.ltv { background: var(--green); }
+.cr-vsb i.cost { background: repeating-linear-gradient(135deg, var(--red) 0 5px, var(--bg) 5px 9px); }
+.cr-sla { display: flex; flex-wrap: wrap; gap: .4rem; align-items: center; }
+
+/* the hire dialog */
+.cr-kinds { display: grid; grid-template-columns: repeat(auto-fit, minmax(10.5rem, 1fr)); gap: .5rem; }
+.cr-chans { display: grid; grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr)); gap: .5rem; }
+.cr-lanes { display: grid; gap: .4rem; }
+.cr-kind, .cr-lc { appearance: none; display: grid; gap: .2rem; width: 100%; text-align: left; font: inherit; color: var(--ink); background: var(--panel2); border: 2px solid var(--line); border-radius: 2px; padding: .55rem .65rem; cursor: pointer; min-height: 2.75rem; }
+.cr-kind:hover, .cr-lc:hover { border-color: var(--gold); }
+.cr-kind[aria-pressed="true"], .cr-lc[aria-pressed="true"] { border-color: var(--gold); box-shadow: inset 0 0 0 1px var(--gold); background: var(--warn-bg); }
+.cr-kind[aria-pressed="true"] b::after { content: " (chosen)"; font-weight: 400; color: var(--gold); }
+.cr-lc[aria-pressed="true"] .cr-rank::after { content: " \b7  Chosen"; }
+.cr-lc[aria-disabled="true"] { opacity: .5; cursor: not-allowed; }
+.cr-rank { font-size: .66rem; text-transform: uppercase; letter-spacing: .08em; color: var(--gold); font-weight: 800; }
+.cr-ln { display: block; overflow-wrap: anywhere; }
+.cr-lm { display: flex; flex-wrap: wrap; gap: .4rem; align-items: center; }
+.cr-prev { display: grid; gap: .4rem; }
+.cr-prev p { margin: 0; }
+.crd > .x { justify-self: end; }
+.cr-foot { position: sticky; bottom: -1.1rem; display: grid; gap: .4rem; background: var(--panel); border-top: 1px dashed var(--line); padding: .6rem 0 .2rem; margin-top: .4rem; }
+.cr-foot p { margin: 0; }
+.crd input[type=range] { min-height: 2.75rem; }
+.crd output { color: var(--gold); font-weight: 700; }
+
+@media (max-width: 480px) {
+  .cr-nums { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .cr-top { grid-template-columns: auto minmax(0, 1fr); } .cr-top > .chip { grid-column: 1 / -1; justify-self: start; }
+}
