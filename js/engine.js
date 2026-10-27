@@ -1003,12 +1003,17 @@ export class Game {
     let dayProfit = s.acc.profit;
     // assets that pay while you hold them (royalties, rent)
     let yieldIn = 0;
+    const byZone = {};
     for (const a of s.assets) {
       const d = ASSETS[a.cls];
       if (!d.yield) continue;
-      yieldIn += this.val(a) * d.yield * (d.tags.includes('realty') || ZONES[a.zone].rules.rent ? this.B.rentMult : 1);
+      const inc = this.val(a) * d.yield * (d.tags.includes('realty') || ZONES[a.zone].rules.rent ? this.B.rentMult : 1);
+      yieldIn += inc; byZone[a.zone] = (byZone[a.zone] || 0) + inc;
     }
-    if (yieldIn > 0) { s.cash += yieldIn; dayProfit += yieldIn; this.led('rent', 'Royalties and rent', yieldIn); }
+    if (yieldIn > 0) {
+      s.cash += yieldIn; dayProfit += yieldIn; this.led('rent', 'Royalties and rent', yieldIn);
+      for (const [z, net] of Object.entries(byZone)) this.emit('cycle', { zone: +z, net }); // royalties and rent count as a cycle of income for quests
+    }
     // the costs of the two Backgrounds you chose
     const Pm = this.P;
     if (Pm.familyTax && s.hour % Pm.familyTax.everyHours === 0 && s.cash > 0) { const t = s.cash * Pm.familyTax.rate; s.cash -= t; dayProfit -= t; this.led('family', 'Family obligations', -t); }
