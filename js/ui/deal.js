@@ -14,6 +14,7 @@ import { pos as dialPos } from '../play/repair.js';
 const num = (x, d = 0) => (Number.isFinite(x) ? x : d);
 const pc = (x) => `${Math.round(num(x) * 100)}%`;
 const at = (v, lo, hi) => `${Math.max(0, Math.min(100, ((num(v) - lo) / Math.max(1e-9, hi - lo)) * 100)).toFixed(1)}%`;
+const flip = (v, lo, hi) => ((num(v) - lo) / Math.max(1e-9, hi - lo) > 0.8 ? ' flip' : ''); // a label near the right edge hangs to the left of its line
 const ANGLE = { prestige: ['👑', 'Prestige', 'status, standing, how it looks to others'], utility: ['🔧', 'Utility', 'what it does and how well'], scarcity: ['⏳', 'Scarcity', 'rare, now or never'], price: ['🏷️', 'Price', 'a bargain, good value'], story: ['📖', 'Story', 'where it came from, why it matters'] };
 const PROBE = { look: ['👀', 'Look it over', 'Cheap. Catches obvious wear.'], serial: ['🔎', 'Check the serial', 'The best test for a counterfeit.'], power: ['⚡', 'Power it up', 'The sharpest read on condition.'], papers: ['📄', 'Read the paperwork', 'A cheap second opinion on both.'], expert: ['🧑‍🔧', 'Hire an expert', 'Dear, but needs no skill of yours.'] };
 const TELL = { far: 'far apart', reach: 'getting closer', near: 'very close' };
@@ -41,10 +42,10 @@ export function castHTML(m) {
 export function scoreHTML(m) {
   const v = m.view, p = m.plan, chips = [['Cash', money(m.cash)]];
   if (p.kind === 'sell') chips.push(['Fair price', money(p.fair)], ['Their budget', money(p.budget)]);
-  if (p.kind === 'buy') chips.push([p.auction ? 'Guide price' : 'Posted price', money(p.lot.price)]);
+  if (p.kind === 'buy') chips.push([p.auction ? 'Guide price' : m.stage === 'close' ? 'Fair price' : 'Listed price', money(p.lot.price)]);
   if (p.kind === 'repair') chips.push(['Quote', money(p.quote.cost)], ['Worth after', money(p.quote.after)]);
   if (m.stage === 'read' && v) chips.push(['Points left', `${v.left} of ${v.budget}`]);
-  if (m.stage === 'close' && v) chips.push(['Rounds left', v.roundsLeft == null ? '-' : `${v.roundsLeft} of ${v.rounds}`], ['You', v.yours == null ? '-' : money(v.yours)], ['Them', v.theirs == null ? '-' : money(v.theirs)]);
+  if (m.stage === 'close' && v) chips.push(['Rounds left', v.roundsLeft == null ? '-' : `${v.roundsLeft} of ${v.rounds}`], [p.kind === 'buy' ? 'Your offer' : 'Your ask', v.yours == null ? '-' : money(v.yours)], [p.kind === 'buy' ? 'Their ask' : 'Their offer', v.theirs == null ? '-' : money(v.theirs)]);
   if (m.stage === 'bid' && v) chips.push(['Price', v.price == null ? 'no bids' : money(v.price)], ['Next bid', money(v.nextBid)]);
   if (m.stage === 'fix' && v) chips.push(['Step', `${Math.min(v.step + 1, v.steps)} of ${v.steps}`]);
   return `<dl class="deal-score" aria-label="Scoreboard">${chips.map(([k, x]) => `<div><dt>${esc(k)}</dt><dd>${esc(x)}</dd></div>`).join('')}</dl>`;
@@ -66,7 +67,7 @@ const quickNote = (m) => (m.quickRes ? `<div class="callout ${m.quickRes.ok ? ''
 // ------------------------------------------------------------------ Read (Inspect)
 export function readHTML(m) {
   const v = m.view, p = m.plan.lot;
-  const lot = `<div class="lotcard"><span class="ic" aria-hidden="true">${p.icon}</span><div><b>${esc(p.name)}</b><div class="small mute">${p.cond === 'broken' ? 'Sold as broken' : 'Sold as working'} · ${p.mode === 'auction' ? 'guide' : 'asking'} ${money(p.price)}</div></div></div>`;
+  const lot = `<div class="lotcard"><span class="ic" aria-hidden="true">${p.icon}</span><div><b>${esc(p.name)}</b><div class="small mute">${p.cond === 'broken' ? 'Sold as broken' : 'Sold as working'} · ${p.mode === 'auction' ? 'guide' : 'listed at'} ${money(p.price)}</div></div></div>`;
   if (!v) return panel(m, 'read', 'Read the lot', 'Spend a few probes to learn what the seller will not tell you.', `${lot}${m.stageDone ? quickNote(m) : ''}`);
   const probes = v.probes.map((x) => {
     const [ic, nm, why] = PROBE[x.id];
@@ -118,10 +119,10 @@ export function closeHTML(m) {
   const v = m.view, p = m.plan, buy = p.kind === 'buy';
   if (m.auto) return panel(m, 'close', 'Close', '', `<div class="callout">${esc(m.auto)}</div>`);
   if (!v) return panel(m, 'close', 'Close', buy ? 'Agree a price with the seller.' : 'Agree a price with the buyer.', `${m.stageDone ? quickNote(m) : ''}`);
-  const lo = v.fair * 0.6, hi = v.fair * 1.4, rec = m.advice && m.advice.action;
+  const lo = v.fair * 0.55, hi = v.fair * 1.45, rec = m.advice && m.advice.action;
   const recIf = (type, k, val) => (rec && rec.type === type && (k == null || rec[k] === val) ? ' rec' : '');
   const track = `<div class="neg-track" aria-hidden="true"><i class="band" style="left:${at(v.read.lo, lo, hi)};width:calc(${at(v.read.hi, lo, hi)} - ${at(v.read.lo, lo, hi)})"></i><i class="fair" style="left:${at(v.fair, lo, hi)}"></i>
-    ${v.yours != null ? `<i class="you" style="left:${at(v.yours, lo, hi)}"><b>You</b></i>` : ''}${v.theirs != null ? `<i class="them" style="left:${at(v.theirs, lo, hi)}"><b>Them</b></i>` : ''}</div>
+    ${v.yours != null ? `<i class="you${flip(v.yours, lo, hi)}" style="left:${at(v.yours, lo, hi)}"><b>You</b></i>` : ''}${v.theirs != null ? `<i class="them${flip(v.theirs, lo, hi)}" style="left:${at(v.theirs, lo, hi)}"><b>Them</b></i>` : ''}</div>
     <div class="neg-scale" aria-hidden="true"><span>${money(lo)}</span><span>fair ${money(v.fair)}</span><span>${money(hi)}</span></div>`;
   const pips = `<span class="pips" role="img" aria-label="${v.roundsLeft} round${v.roundsLeft === 1 ? '' : 's'} left of ${v.rounds}">${Array.from({ length: v.rounds }, (_, i) => `<i class="${i < v.round ? 'spent' : ''}"></i>`).join('')}</span>`;
   const read = `<p class="small">Your read of their limit: <b>${money(Math.min(v.read.lo, v.read.hi))} to ${money(Math.max(v.read.lo, v.read.hi))}</b>. ${m.plan.alt ? `Your other option: <b>${money(m.plan.alt)}</b>.` : ''}</p>`;
@@ -144,7 +145,7 @@ export function closeHTML(m) {
   const last = v.history.length ? '' : '';
   const status = v.tell && !m.stageDone ? `<p class="small">They are <b>${TELL[v.tell]}</b>. ${v.final ? '<b>Final round.</b>' : ''}</p>` : '';
   const end = m.stageDone ? `<div class="callout ${m.res && m.res.deal ? 'good' : 'warn'}">${esc(m.res && m.res.deal ? `Agreed at ${money(m.res.price)}.` : 'No deal was struck.')}</div>` : '';
-  return panel(m, 'close', 'Close', buy ? 'Haggle with the seller. They have a minimum you cannot see; your read narrows it.' : 'Haggle with the buyer. They have a limit you cannot see; your read narrows it.',
+  return panel(m, 'close', 'Close', buy ? 'Haggle with the seller. The listed price is the fair price; sellers open higher, and they have a minimum you cannot see.' : 'Haggle with the buyer. They have a limit you cannot see; your read narrows it.',
     `<div class="negrow"><span class="small mute">Rounds</span>${pips}</div>${track}${read}${status}${flag}${m.stageDone ? '' : advice(m)}${moves}${quickNote(m)}${end}`);
 }
 
@@ -155,7 +156,7 @@ export function bidHTML(m) {
   if (!v) return panel(m, 'bid', 'Bid', 'Raise or drop out. Never bid past what you think it is worth.', m.stageDone ? quickNote(m) : '');
   const lo = v.opening, hi = Math.max(v.budget || p.price * 1.4, v.nextBid, lo + 0.01), rec = m.advice && m.advice.action;
   const riv = v.rivals.map((r) => `<li class="${r.active ? 'in' : 'out'}${r.high ? ' top' : ''}"><b>${esc(r.name)}</b> <span class="mute small">${MOOD[r.mood] || r.mood}</span> <span class="small">${r.active ? (r.high ? 'high bidder' : 'in') : `out at ${money(r.droppedAt)}`}</span></li>`).join('');
-  const ladder = `<div class="neg-track auc" aria-hidden="true">${v.price != null ? `<i class="them" style="left:${at(v.price, lo, hi)}"><b>${esc(v.high || '')}</b></i>` : ''}<i class="fair" style="left:${at(v.estimate, lo, hi)}"></i></div>
+  const ladder = `<div class="neg-track auc" aria-hidden="true">${v.price != null ? `<i class="them${flip(v.price, lo, hi)}" style="left:${at(v.price, lo, hi)}"><b>${esc(v.high || '')}</b></i>` : ''}<i class="fair" style="left:${at(v.estimate, lo, hi)}"></i></div>
     <div class="neg-scale" aria-hidden="true"><span>${money(lo)}</span><span>your estimate ${money(v.estimate)}</span><span>${money(hi)}</span></div>`;
   const ev = v.events.slice(-6).map((e) => `<li>${esc((EV[e.kind] || EV.bid)(e))}</li>`).join('');
   const act = m.stageDone ? '' : `<div class="moves"><button class="move${rec && rec.type === 'bid' ? ' rec' : ''}" data-deal="bid" data-fid="bid" ${can(v, 'bid') ? '' : 'disabled'}><span>${v.price == null ? 'Open the bidding' : 'Bid'}</span><b>${money(v.nextBid)}</b></button>
@@ -191,7 +192,7 @@ export function fixHTML(m) {
   }
   const cost = !m.stageDone && !m.blocker ? '' : '';
   const end = m.stageDone && m.res ? `<div class="callout good"><b>${pc(m.res.precision)} precise.</b> Quality x${num(m.res.qualityMult, 1).toFixed(2)}, cost x${num(m.res.costMult, 1).toFixed(2)}.</div>` : '';
-  return panel(m, 'fix', `Fix: ${v.done ? 'done' : v.name}`, 'Stop the marker inside the green zone three times, or choose Careful.', `${info}<ol class="fsteps">${steps}</ol>${m.stageDone ? '' : dial}${cost}${m.stageDone ? '' : advice(m, ' The green zone is wider with Ops and with Assist.')}${quickNote(m)}${end}`);
+  return panel(m, 'fix', `Fix: ${v.done ? 'done' : v.name}`, v.done ? 'All three steps are done.' : 'Stop the marker inside the green zone three times, or choose Careful.', `${info}<ol class="fsteps">${steps}</ol>${m.stageDone ? '' : dial}${cost}${m.stageDone ? '' : advice(m)}${quickNote(m)}${end}`);
 }
 const dialWord = (x, z) => (x < z.lo ? `Dial at ${pc(x)}: below the green zone` : x > z.hi ? `Dial at ${pc(x)}: above the green zone` : `Dial at ${pc(x)}: inside the green zone`);
 
@@ -234,12 +235,12 @@ export function sheetHTML(m) {
 /** modelOf plus the little the screen itself remembers (picked angles, the slider). */
 export function viewModel(session) {
   const m = modelOf(session.run, { reduced: session.reduced() });
-  m.pick = session.pick; m.slider = session.slider; m.res = session.run.res[m.stage] || null;
+  m.pick = session.pick; m.slider = session.slider;
   return m;
 }
 
 // ------------------------------------------------------------------ the DOM half
-const KEYMAP = { Space: ' ', Enter: 'Enter' };
+let active = null;
 export function createSession(ctx, run) {
   const S = ctx.S, doc = typeof document !== 'undefined' ? document : null;
   const ses = { ctx, run, pick: [], slider: 0.2, shown: false, raf: 0, t0: 0, paused: false, disposed: false, reduced: () => !!(ctx.reduced && ctx.reduced()), focusHead: true };
@@ -248,7 +249,7 @@ export function createSession(ctx, run) {
 
   const paint = () => {
     const html = sheetHTML(viewModel(ses));
-    if (!ses.shown) { ctx.dlg.open(html, { cls: 'deal', label: titleOf(modelOf(run)) }); ses.shown = true; bind(); }
+    if (!ses.shown) { ctx.dlg.open(html, { cls: 'deal', label: titleOf(modelOf(run)) }); ses.shown = true; if (live) el()._html = html; bind(); }
     else if (live && ctx.setHTML) ctx.setHTML(el(), html); else ctx.dlg.open(html, { cls: 'deal', label: titleOf(modelOf(run)) });
     if (live) after();
   };
@@ -344,12 +345,15 @@ export function createSession(ctx, run) {
     if (ses.disposed) return; ses.disposed = true; stopDial();
     if (live) { const d = el(); d.removeEventListener('click', onClick); d.removeEventListener('change', onChange); d.removeEventListener('input', onInput); d.removeEventListener('keydown', onKey); d.removeEventListener('close', onClose); }
     if (ses.paused && S && S.clock && S.clock.paused) S.setPaused(false);
+    if (active === ses) active = null;
     ctx.render?.();
   }
   ses.dispose = dispose;
   ses.show = () => {
+    if (active && active !== ses) active.dispose(); // one Deal Room at a time: the old one's listeners must not answer the new one's clicks
+    active = ses;
     // the world waits while you deal (unless a classroom clock is in charge)
-    if (S && S.clock && !S.clock.paused && S.canSetClock && S.canSetClock()) { S.setPaused(true); ses.paused = true; }
+    if (S && S.clock && !S.clock.paused && (S.mode ? S.mode === 'solo' : S.canSetClock && S.canSetClock())) { S.setPaused(true); ses.paused = true; } // a solo run only: never the class's clock
     paint();
     ctx.announce?.(`${titleOf(modelOf(run))}. ${run.plan.cast.name} says: ${run.plan.cast.hello}`);
   };

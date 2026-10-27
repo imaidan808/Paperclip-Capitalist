@@ -37,7 +37,7 @@ export function seedFor(g, spec) {
 export const stageSeed = (seed, key) => hash(`${seed}|${key}`) >>> 0;
 
 /** Growth buys insight (0..5): how many hints about a buyer, and how sharp a read on their limit. */
-export const insightOf = (g) => clamp(Math.floor(g.lvl('growth') * 0.65), 0, 5);
+export const insightOf = (g) => clamp(Math.floor(g.lvl('growth') * TUNE.insight), 0, 5);
 const needsOf = (seg, need) => {
   const liked = Object.entries(BUYERS[seg].like).filter(([, w]) => w >= 0.5).sort((a, b) => b[1] - a[1]).map(([t]) => t);
   return [...new Set([...(need ? [need] : []), ...liked])].slice(0, 4);
@@ -88,7 +88,7 @@ export function haggleParams(g, o) {
   const base = o.buyer ? o.buyer.patience : o.patience ?? SELLER_BASE_PATIENCE[style];
   const rule = o.zone != null && ZONES[o.zone]?.rules?.haggle ? 1 : 0; // Flea Market stalls: every deal bargains, with a friendly start
   const fair = Math.max(1e-6, fin(o.fair, 1));
-  const reserve = o.role === 'buy' ? (o.lot ? o.lot.price : fair) * (0.72 + 0.18 * u) : Math.min(o.lead ? o.lead.budget : Infinity, fair * (1.1 + 0.25 * u) * (o.warmth || 1));
+  const reserve = o.role === 'buy' ? (o.lot ? o.lot.price : fair) * (0.72 + 0.18 * u) : Math.min(o.lead ? o.lead.budget : Infinity, fair * (1.1 + 0.25 * u) * (1 + TUNE.warm * ((o.warmth || 1) - 1)));
   return { role: o.role === 'buy' ? 'buy' : 'sell', fair, reserve, style, patience: base + rule, handicap: P.haggleHandicap || 0, insight: insightOf(g),
     alt: o.alt > 0 ? o.alt : null, assist: !!o.assist || (P.haggleAssist || 0) > 0, seed: o.seed };
 }
@@ -96,7 +96,7 @@ export function haggleParams(g, o) {
 /** A buyer whose budget has less than 12% of headroom over the fair price has nothing to negotiate with: the sale goes through at the fair price. */
 const TIGHT = 1.12;
 /** Balance knobs (mutable on purpose, like config's ECON): the guide price is `guide` of what the lot looks worth, and the room bids `rival` of that. */
-export const TUNE = { guide: 0.8, rival: 0.85 };
+export const TUNE = { guide: 0.8, rival: 0.85, insight: 0.65, warm: 2 };
 const describedValue = (lot) => lot.price / TUNE.guide;
 /** Auction: rivals who see only what the lot looks like (so they cannot spot a counterfeit), a guide price that bounds the engine's 0.6-1.4 band,
  *  and YOUR estimate: noisier without Capital Sourcing, and pulled toward what you learned if you read the lot first. */
@@ -140,6 +140,7 @@ export function dealFrom(kind, res = {}) {
   return { mult: clamp(side && !side.skipped ? fin(side.mult, 1) : pm, 0.6, 1.4) };
 }
 
+const FIX_ADVICE = { text: 'Aim for the middle of the green zone: the nearer the centre, the more precise the step. Assist has widened the zone for you.' };
 /** The angle/price pair a coach would suggest from what the player is allowed to see (Assist). */
 export function pitchAdvice(view) {
   if (!view || !Array.isArray(view.angles)) return null;
@@ -329,6 +330,15 @@ export class DealRun {
     return this.finish();
   }
 
+  /** Pay the small fee to check a buyer before you ship (the Digital Native's scam magnet). The answer joins the public plan. */
+  verify() {
+    const p = this.plan;
+    if (p.kind !== 'sell') return fail('There is nobody to verify here.');
+    const r = this.g.verifyLead(p.lead.id);
+    if (r.ok) { Object.assign(p.lead, { verified: true, scam: !!r.scam }); p.canVerify = false; if (r.scam) p.blocker = 'Fraud confirmed. Skip this buyer.'; }
+    return r;
+  }
+
   // ---- the comparison: the same deal played at average skill and at expert skill, never touching the engine
   simulate(skill) {
     const { g, plan } = this, res = {};
@@ -374,17 +384,22 @@ export class DealRun {
     const { g, plan } = this, s = g.s, before = { xp: s.xp, cash: s.cash, streak: s.streak };
     const cmp = this.compare(), secret = this.secret(), res = this.res;
     let r = null, deal = this.walked ? null : dealFrom(plan.kind, res), noDeal = !deal;
-    const hand = (k) => res[k] && !res[k].quick && !res[k].skipped; // only play the player did by hand earns skill XP and events
+    // Every game the player finishes is recorded once (XP, the debrief's per-game stats and the quest events); `quick` says whether Quick played it.
+    const done = (k) => res[k] && res[k].done && !res[k].skipped, q = (k) => !!(res[k] && res[k].quick);
     if (plan.kind === 'buy') {
-      if (hand('read') && res.read.done && res.read.spent > 0) g.recordInspect(plan.zone, plan.lot.id, res.read); // reading nothing earns nothing
-      if (hand('close') && res.close.done && res.close.rounds > 0) g.recordPlay('haggle', { ...res.close, role: 'buy' });
-      if (hand('bid') && res.bid.done && res.bid.rounds > 0) g.recordPlay('auction', res.bid);
+      if (done('read') && (q('read') || res.read.spent > 0)) g.recordInspect(plan.zone, plan.lot.id, { ...res.read, quick: q('read') }); // reading nothing earns nothing
+      if (done('close') && res.close.rounds > 0) g.recordPlay('haggle', { ...res.close, role: 'buy', quick: q('close') });
+      if (done('bid') && res.bid.rounds > 0) g.recordPlay('auction', { ...res.bid, quick: q('bid') });
       if (res.bid && res.bid.won === false) g.passLot(plan.zone, plan.lot.id, `You dropped out of the auction for the ${plan.lot.name}.`);
       else if (deal) r = g.buyLot(plan.zone, plan.lot.id, deal);
     } else if (plan.kind === 'sell') {
-      if (hand('close') && res.close.done && res.close.rounds > 0) g.recordPlay('haggle', { ...res.close, role: 'sell' });
+      if (done('pitch')) g.recordPlay('pitch', { score: res.pitch.score, quick: q('pitch') });
+      if (done('close') && res.close.rounds > 0) g.recordPlay('haggle', { ...res.close, role: 'sell', quick: q('close') });
       if (deal) r = g.pitch(plan.asset.id, plan.lead.id, deal);
-    } else r = g.repair(plan.asset.id, deal);
+    } else {
+      r = g.repair(plan.asset.id, deal);
+      if (r.ok && done('fix')) g.recordPlay('repair', { score: res.fix.score, quick: q('fix') });
+    }
     this.over = true; this.deal = deal;
     const after = { xp: s.xp, cash: s.cash, streak: s.streak };
     this.summary = summarize(this, { r, deal, noDeal, before, after, cmp, secret });
@@ -421,7 +436,7 @@ function summarize(run, { r, deal, noDeal, before, after, cmp, secret }) {
 
   if (kind === 'sell') {
     const hag = res.close && !res.close.skipped ? res.close : null, pk = res.pitch;
-    if (pk && pk.pick) reasons.push({ label: 'Pitch', text: `You led with ${ANGLE_WORD[pk.pick[0]]} and ${ANGLE_WORD[pk.pick[1]]}: ${pk.fitDelta >= 0 ? '+' : ''}${pk.fitDelta.toFixed(2)} fit, so the buyer was ${pk.mult >= 1 ? 'x' + pk.mult.toFixed(2) + ' as keen' : 'x' + pk.mult.toFixed(2) + ' as keen (less than average)'}${pk.quick ? ' (played for you at average skill)' : ''}.` });
+    if (pk && pk.pick) reasons.push({ label: 'Pitch', text: `You led with ${ANGLE_WORD[pk.pick[0]]} and ${ANGLE_WORD[pk.pick[1]]}: ${pk.fitDelta >= 0 ? '+' : ''}${pk.fitDelta.toFixed(2)} fit, so the buyer was x${pk.mult.toFixed(2)} as keen${pk.quick ? ' (played for you at average skill)' : ''}.` });
     if (hag) reasons.push({ label: 'Haggle', text: hag.deal ? `Closed at x${hag.mult.toFixed(2)} of the fair price${hag.quick ? ' (played for you at average skill)' : ''}.` : 'No deal was struck.' });
     if (res.close && res.close.skipped) reasons.push({ label: 'Haggle', text: res.close.note });
     if (noDeal) {
@@ -446,7 +461,7 @@ function summarize(run, { r, deal, noDeal, before, after, cmp, secret }) {
           headline: `${plan.asset.name} sold to ${plan.buyer.name} for ${money(r.price)}.` });
         lines.push(`You received ${money(r.received)} after tax and fees${r.gotName ? `, including ${r.gotName} in trade` : ''}.`);
         if (r.capped) lines.push('The buyer paid their whole budget.');
-        lines.push(`${r.gain >= 0 ? '+' : ''}${Math.round(r.gain * 100)}% against the crate's value.`);
+        lines.push(r.gain >= 4 ? `${(1 + r.gain).toFixed(0)} times the crate's value.` : `${r.gain >= 0 ? '+' : ''}${Math.round(r.gain * 100)}% against the crate's value.`);
         if (r.outcome === 'herd') out.lesson = { concept: 'saturation-herd', text: `When many players sell the same thing to the same buyer the Creativity multiplier falls to ${r.ci.cm.toFixed(2)}x. A different buyer with a decent fit pays more.` };
       }
       out.numbers = compare(r.outcome !== 'rejected' && r.outcome !== 'scam' ? r.price : null, 'sale price', 'high');
@@ -523,7 +538,7 @@ export function modelOf(run, ui = {}) {
   const done = run.stages.filter((x) => run.res[x.key] && !run.res[x.key].skipped).map((x) => ({ key: x.key, label: STAGE_LABEL[x.key], text: stageNote(run, x.key) }));
   const m = {
     kind: plan.kind, stage: key, steps: st, done, assist: run.assist, assistLocked: (g.P.haggleAssist || 0) > 0 && (key === 'close'), reduced: !!ui.reduced,
-    cash: s.cash, zone: plan.zoneFace, cast: plan.cast, say: run.lastSay(), says: run.says.slice(-5).map((x) => x.text), blocker: plan.blocker || '',
+    cash: s.cash, res: safeRes(run.res[key]), zone: plan.zoneFace, cast: plan.cast, say: run.lastSay(), says: run.says.slice(-5).map((x) => x.text), blocker: plan.blocker || '',
     plan: publicPlan(plan), auto: stage && stage.auto ? stage.auto : '',
     first: !run.acted && run.idx === 0 && !run.over && !plan.blocker, canQuick: !run.over && !plan.blocker && !run.res[key], stageDone: !!run.res[key],
     last: run.idx === run.stages.length - 1, view: null, quickRes: null, advice: null, summary: run.summary,
@@ -531,10 +546,17 @@ export function modelOf(run, ui = {}) {
   if (!run.over) {
     m.view = run.view();
     if (run.res[key] && run.res[key].quick) m.quickRes = quickNote(run, key);
-    if (run.assist && m.view && !run.res[key]) m.advice = key === 'read' ? inspectAdvice(m.view) : key === 'pitch' ? pitchAdvice(m.view) : (m.view.advice || null);
+    if (run.assist && m.view && !run.res[key]) m.advice = key === 'read' ? inspectAdvice(m.view) : key === 'pitch' ? pitchAdvice(m.view) : key === 'fix' ? FIX_ADVICE : (m.view.advice || null);
     if (key === 'fix' && m.view) m.dial = { ...m.view.zone, step: m.view.step, seed: m.view.seed };
   }
   return m;
+}
+/** The few numbers of a finished stage the screen may print (never a game's `reveal` or `lesson`, which name the truth). */
+function safeRes(r) {
+  if (!r) return null;
+  const o = {};
+  for (const k of ['deal', 'price', 'mult', 'won', 'precision', 'qualityMult', 'costMult', 'skipped', 'quick']) if (r[k] !== undefined) o[k] = r[k];
+  return o;
 }
 function publicPlan(p) {
   const o = { kind: p.kind, fair: p.fair, zone: p.zone };
