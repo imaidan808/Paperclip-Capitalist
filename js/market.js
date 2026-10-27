@@ -33,7 +33,7 @@ export function creativityBand(cm) {
   return { id: 'pioneer', label: 'Pioneer vector', tone: 'good' };
 }
 
-/** Economic Efficiency Index. startFloor lets an instructor stop a $0.05 start from dwarfing every other profile. */
+/** Economic Efficiency Index. startFloor is the divisor floor: everyone starts with one paperclip, so it is a constant that keeps scores readable. */
 export function eei(endNetWorth, startCapital, daysRemaining, startFloor = 0) {
   const start = Math.max(startCapital, startFloor, 0.01);
   return (endNetWorth / start) * (1 + clamp(daysRemaining, 0, TOTAL_DAYS) / TOTAL_DAYS);
