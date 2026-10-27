@@ -14,7 +14,7 @@
 .ac-pip.now { border-color: var(--gold); background: var(--gold); color: var(--on-gold); font-weight: 700; }
 
 /* ---- coach marks: a ring round the real control, a card beside it. The layer lets every click through except the card's own. */
-.ac-layer { position: fixed; inset: 0; z-index: 30; pointer-events: none; }
+.ac-layer, .overlay > .ac-layer { position: fixed; inset: 0; z-index: 30; pointer-events: none; }
 .ac-ring { position: fixed; left: 0; top: 0; border: 3px solid var(--gold); border-radius: 6px; pointer-events: none; will-change: transform;
   box-shadow: 0 0 0 100vmax rgba(5, 8, 14, .5), 0 0 16px 2px var(--gold); transition: transform .25s ease, width .25s ease, height .25s ease; animation: ac-pulse 1.8s ease-in-out infinite; }
 .ac-ring.show { border-width: 5px; border-color: var(--focus); animation: ac-show .9s ease-in-out infinite; }

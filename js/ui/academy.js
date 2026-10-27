@@ -14,7 +14,7 @@ import { kv } from '../session.js';
 import { ZONES } from '../config.js';
 import { Progress, CODEX_BY_ID } from '../meta/progress.js';
 import {
-  parseAnchor, resolveAnchor, placeCard, coverOf, pointInRect, startRun, feedRun, coachFor, satisfiedNow, shortSay, hintDue,
+  parseAnchor, resolveAnchor, hitMatches, placeCard, coverOf, pointInRect, startRun, feedRun, coachFor, satisfiedNow, shortSay, hintDue,
   newTeach, pickTeach, revealTeach, teachDone, teachFirstTry, readAcademy, markMission, nextIndex, rewardPlan, applyRewards,
   readPending, addPending, claimPending, codexSeed, emptyMeta, makeSandboxSession, featuresFor, KEYS,
 } from './academy-sandbox.js';
@@ -81,7 +81,8 @@ export function teachHTML(m, state) {
   const rows = opts.map((o, i) => {
     const picked = state.picks.includes(i), good = picked && o.correct, bad = picked && !o.correct, reveal = state.revealed && i === right;
     const cls = good || reveal ? 'right' : bad ? 'wrong' : '';
-    const verdict = good ? '<b class="green">Yes.</b> ' : bad ? '<b class="red">Not quite.</b> ' : reveal ? '<b class="green">This one.</b> ' : '';
+    const says = (re) => re.test(String(o.why).trim()); // a reason that already opens with its own verdict needs no second one
+    const verdict = good ? (says(/^(yes|correct|right|exactly)\b/i) ? '' : '<b class="green">Yes.</b> ') : bad ? (says(/^(no|not|nope|wrong)\b/i) ? '' : '<b class="red">Not quite.</b> ') : reveal ? '<b class="green">This one.</b> ' : '';
     return `<li><button class="ac-opt ${cls}" data-act="ac-pick" data-i="${i}" ${picked || done ? 'aria-disabled="true"' : ''} aria-pressed="${picked}"><span class="ac-k" aria-hidden="true">${LETTERS[i] || i + 1}</span><span>${esc(o.text)}</span></button>${picked || reveal ? `<p class="ac-why ${good || reveal ? 'good' : 'bad'}">${verdict}${esc(o.why)}</p>` : ''}</li>`;
   }).join('');
   const live = last == null ? '' : opts[last].correct ? `Correct. ${opts[last].why}` : `Not quite. ${opts[last].why}`;
@@ -91,12 +92,12 @@ export function teachHTML(m, state) {
   return `<p class="ac-eyebrow mono">Teach-back</p>
     <h2 id="ac-sh" tabindex="-1">${esc(tb.q)}</h2>
     <ul class="ac-opts" aria-label="Choose the true explanation">${rows}</ul>
-    <div class="ac-fb" role="status" aria-live="polite">${esc(live)}</div>${after}
+    <div class="ac-fb sr" role="status" aria-live="polite">${esc(live)}</div>${after}
     <div class="row gap">${done ? '<button class="btn big" data-act="ac-teach-next">Continue</button>' : state.picks.length ? '<button class="btn ghost" data-act="ac-reveal">Show me the answer</button>' : ''}</div>`;
 }
 
 /** paid = { xp, points, newCodex, knownCodex, pending } from applyRewards (or the plan, when the run has not started yet). */
-export function rewardHTML(m, paid, lookup, { last, skipped, replay, index, total } = {}) {
+export function rewardHTML(m, paid, lookup, { last, skipped, replay, index, total, only } = {}) {
   const ids = [...(paid.newCodex || []), ...(paid.knownCodex || [])];
   const chips = [paid.xp ? `<li class="chip good">+${paid.xp} XP</li>` : '', paid.points ? `<li class="chip good">+${paid.points} skill point</li>` : ''].join('');
   const cards = ids.map((id) => { const e = entryOf(id, lookup), fresh = (paid.newCodex || []).includes(id); return `<li class="ac-cxcard"><span class="ac-cxi" aria-hidden="true">${esc(e.icon || '')}</span><div><b>${esc(e.title)}</b>${fresh ? ' <span class="chip info">New</span>' : ''}<p class="small mute">${esc(e.summary || '')}</p></div></li>`; }).join('');
@@ -106,7 +107,7 @@ export function rewardHTML(m, paid, lookup, { last, skipped, replay, index, tota
     ${chips ? `<ul class="ac-rw">${chips}</ul>` : ''}
     ${ids.length ? `<h3>${(paid.newCodex || []).length ? 'Added to your Codex' : 'In your Codex'}</h3><ul class="ac-cx">${cards}</ul>` : ''}
     <p class="small mute">${esc(note)}</p>
-    <div class="row gap"><button class="btn big" data-act="ac-reward-next">${last ? 'Finish the Academy' : 'Next lesson'}</button></div>`;
+    <div class="row gap"><button class="btn big" data-act="ac-reward-next">${last ? (only ? 'Done' : 'Finish the Academy') : 'Next lesson'}</button></div>`;
 }
 
 // ------------------------------------------------------------------ the driver
@@ -122,7 +123,7 @@ export function mountAcademy(root, S, { onDone, onSkip, only, missions, store = 
 
   function cleanupPlay() { const c = cur; cur = null; c?.destroy(); }
   function cleanupAll() { if (dead) return; dead = true; cleanupPlay(); resumeReal(); }
-  function finish(kind, info) { cleanupAll(); (kind === 'done' ? onDone : onSkip)?.(info); }
+  function finish(kind, info) { if (dead) return; cleanupAll(); (kind === 'done' ? onDone : onSkip)?.(info); }
   const leave = () => finish('skip');
 
   // ---------------------------------------------------------------- intro
@@ -146,21 +147,27 @@ export function mountAcademy(root, S, { onDone, onSkip, only, missions, store = 
     if (dead) return;
     cleanupPlay();
     pauseReal();
-    cur = lesson(shell.mountGame, idx);
+    try { cur = lesson(shell.mountGame, idx); } catch (err) { console.error(err); toast('The lesson could not start. You can leave the Academy and try again later.', 'bad'); intro(idx); }
   }
 
   function lesson(mountGame, idx) {
-    const m = list[idx], steps = m.steps || [];
+    const m = list[idx];
     const pend = readPending(store), meta = { ...emptyMeta(), cx: codexSeed(real()?.s.meta?.cx, pend) };
     const sb = makeSandboxSession(m.setup, { id: m.id, zone: m.zone, handle: S?.handle || 'You', meta });
     const stubs = { onDebrief() {}, onTutorial() {}, onJoin() {}, onReset() {}, onAcademy: () => toast('Finish or leave this lesson first.', 'info') };
     const mounted = mountGame(root, sb, stubs);
+    try { return wire(mounted, m, sb, idx); } catch (err) { try { mounted.destroy(); } catch { /* half built */ } throw err; }
+  }
+
+  /** The lesson on top of a mounted game screen: coach marks, the step resolver, the sheets, the heartbeat. Returns { destroy }. */
+  function wire(mounted, m, sb, idx) {
+    const steps = m.steps || [];
     const { ctx } = mounted, U = ctx.U, off = [];
     U.features = Array.isArray(m.setup?.features) ? featuresFor(m) : null;
     U.zone = sb.game.sandbox.zone;
     let run = startRun(m), stepAt = performance.now(), hintOn = false, showMe = false, confirm = false, manual = null, gone = false;
     let sheet = null, teach = newTeach(), skipped = false, winPending = false, lastKey = '', inerted = [];
-    let layer = null, ringEl = null, cardEl = null, grant = null;
+    let layer = null, ringEl = null, cardEl = null;
 
     U.tracker = () => { const c = coachFor(m, run); return { title: m.title, desc: shortSay(c.say), icon: m.icon, p: Math.min(run.i, steps.length), n: steps.length, drawer: null }; };
     sb.game.onEvent = (evt) => ctx.emit(evt);  // the sandbox feeds the steps, never quests, achievements or the Codex
@@ -204,7 +211,8 @@ export function mountAcademy(root, S, { onDone, onSkip, only, missions, store = 
       ringEl.hidden = !spot;
       ringEl.classList.toggle('show', !!spot && showMe);
       if (spot) { ringEl.style.width = spot.w + pad * 2 + 'px'; ringEl.style.height = spot.h + pad * 2 + 'px'; ringEl.style.transform = `translate(${Math.round(spot.x - pad)}px, ${Math.round(spot.y - pad)}px)`; }
-      const box = cardEl.getBoundingClientRect(), at = placeCard(spot, { w: box.width || 320, h: box.height || 150 }, view);
+      const keep = [ctx.el.drawer.hidden ? null : ctx.el.drawer, ctx.el.dock].filter(Boolean).map((e) => e.getBoundingClientRect()).filter((r) => r.width > 0 && r.height > 0).map((r) => ({ x: r.x, y: r.y, w: r.width, h: r.height }));
+      const box = cardEl.getBoundingClientRect(), at = placeCard(spot, { w: box.width || 320, h: box.height || 150 }, view, 14, 8, keep); // never over the open drawer or the dock icons
       cardEl.dataset.side = at.side;
       cardEl.style.transform = `translate(${Math.round(at.x)}px, ${Math.round(at.y)}px)`;
       cardEl.classList.toggle('lift', true);
@@ -227,17 +235,27 @@ export function mountAcademy(root, S, { onDone, onSkip, only, missions, store = 
       if (r.won) win();
     }
     off.push(ctx.on(feed));
+    // What the world has under a click: the World's own hit test, so a step that says "tap the van" hears the tap whether or not the world can place a rect.
+    const worldHit = (e) => {
+      const w = ctx.world?.()?.world, cv = w?.cv;
+      if (!w || !cv || typeof w.pick !== 'function' || !cv.contains(e.target)) return null;
+      const r = cv.getBoundingClientRect();
+      try { return w.pick(e.clientX - r.left, e.clientY - r.top); } catch { return null; }
+    };
     const onClick = (e) => {
       const w = steps[run.i]?.wait;
       if (!w || w.type !== 'click' || sheet) return;
       const want = w.anchor, a = parseAnchor(want);
       if (a?.kind === 'dom') { if (e.target.closest?.(`[data-anchor="${want}"]`)) feed({ type: 'click', anchor: want }); return; }
+      if (!a) return;
       const hs = e.target.closest?.('[data-hs]');
       if (hs) { // the keyboard route to a world thing: the list under the world
-        const [kind, id] = hs.dataset.hs.split('|'), asset = kind === 'asset' ? sb.game.s.assets.find((x) => x.id === id) : null;
-        if (want === `world:${kind}:${id}` || (asset && want === `world:asset:${asset.cls}`)) feed({ type: 'click', anchor: want });
+        const [kind, id] = hs.dataset.hs.split('|');
+        if (hitMatches(a, { kind, id, asset: kind === 'asset' ? sb.game.s.assets.find((x) => x.id === id) : null })) feed({ type: 'click', anchor: want });
         return;
       }
+      const hit = worldHit(e);
+      if (hit) { if (hitMatches(a, hit)) feed({ type: 'click', anchor: want }); return; }
       const res = resolve(want);
       if (res?.via === 'world' && pointInRect(e.clientX, e.clientY, res.rect)) feed({ type: 'click', anchor: want });
     };
@@ -308,7 +326,7 @@ export function mountAcademy(root, S, { onDone, onSkip, only, missions, store = 
       markMission(store, list, m.id, { skipped });
       const t = store.get(KEYS.teach) || {};
       store.set(KEYS.teach, { ...t, [m.id]: { tries: teach.picks.length, firstTry: teachFirstTry(teach), revealed: teach.revealed } });
-      openSheet(rewardHTML(m, paid, lookup, { last: only || idx + 1 >= list.length, skipped, replay, index: idx, total: list.length }), 'Lesson reward');
+      openSheet(rewardHTML(m, paid, lookup, { last: !!only || idx + 1 >= list.length, only: !!only, skipped, replay, index: idx, total: list.length }), 'Lesson reward');
       if (!replay && !skipped) { try { sfx.level(); burst({ power: 1.4 }); } catch { /* optional */ } }
       announce(`Lesson complete.${paid.xp ? ` Plus ${paid.xp} XP.` : ''}`);
     }

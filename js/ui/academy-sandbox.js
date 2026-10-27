@@ -45,6 +45,19 @@ export const rectsOverlap = (a, b) => a.x < b.x + b.w && a.x + a.w > b.x && a.y 
 export const coverOf = (r, view) => (r && view.w > 0 && view.h > 0 ? clamp((r.w * r.h) / (view.w * view.h), 0, 1) : 0);
 
 /**
+ * Is a thing the World hit (or a row of the keyboard list under it: { kind, id, asset? }) the thing a `world:` anchor names? A lead, lot or static place by its id; a
+ * crate by its id or by its class ("world:asset:van"); a plot by its number (the hit id is "district:index"; "world:plot:1" is taken for either the first plot or index 1).
+ */
+export function hitMatches(anchor, hit) {
+  const a = typeof anchor === 'string' ? parseAnchor(anchor) : anchor;
+  if (!a || a.kind !== 'world' || !hit || hit.kind !== a.type) return false;
+  const id = String(hit.id);
+  if (a.type === 'asset') return id === a.id || hit.asset?.cls === a.id;
+  if (a.type === 'plot') { const n = +a.id; return id === a.id || id.endsWith(':' + a.id) || (Number.isInteger(n) && id.endsWith(':' + (n - 1))); } // "plot 1" is the first plot to a reader, index 1 to a program: either is the plot meant
+  return id === a.id;
+}
+
+/**
  * Turns a step's anchor into a rect. `provider` is { dom(name) -> rect|null, world(type, id) -> rect|null } so this runs without a DOM.
  * A world anchor the world cannot place (no rectOf yet, or the thing has left) falls back to the whole world: the card still points somewhere true.
  * Returns { rect, via: 'dom'|'world'|'fallback', anchor } or null.
@@ -60,13 +73,15 @@ export function resolveAnchor(anchor, provider = {}) {
 }
 
 /**
- * Where the coach card goes: below the target, else above, else beside it, else floating above the dock; never over the target, always inside the view.
- * rect may be null (centred above the dock). Returns { x, y, side } for a card of size { w, h } in a view { w, h }.
+ * Where the coach card goes: below the target, else above, else beside it, else floating above the dock; never over the target or over anything in `avoid`
+ * (the open drawer), always inside the view. rect may be null (centred above the dock). Returns { x, y, side } for a card of size { w, h } in a view { w, h }.
  */
-export function placeCard(rect, card, view, gap = 14, margin = 8) {
+export function placeCard(rect, card, view, gap = 14, margin = 8, avoid = []) {
   const cw = Math.min(card.w, view.w - 2 * margin), ch = Math.min(card.h, view.h - 2 * margin);
   const cx = (x) => clamp(x, margin, Math.max(margin, view.w - cw - margin)), cy = (y) => clamp(y, margin, Math.max(margin, view.h - ch - margin));
-  const float = () => ({ x: cx((view.w - cw) / 2), y: cy(view.h - ch - 90), side: rect ? 'float' : 'center' });
+  const free = (p) => (!rect || !rectsOverlap(p, rect)) && !avoid.some((r) => r && rectsOverlap(p, r));
+  const floats = [[(view.w - cw) / 2, view.h - ch - 90], [margin, view.h - ch - 90], [(view.w - cw) / 2, 80]].map(([x, y]) => ({ x: cx(x), y: cy(y), w: cw, h: ch }));
+  const float = () => { const p = floats.find(free) || floats[0]; return { x: p.x, y: p.y, side: rect ? 'float' : 'center' }; };
   if (!rect) return float();
   const mid = { x: rect.x + rect.w / 2, y: rect.y + rect.h / 2 };
   const tries = [
@@ -75,7 +90,7 @@ export function placeCard(rect, card, view, gap = 14, margin = 8) {
   ];
   for (const [side, x, y] of tries) {
     const p = { x: cx(x), y: cy(y), w: cw, h: ch };
-    if (!rectsOverlap(p, rect)) return { x: p.x, y: p.y, side };
+    if (free(p)) return { x: p.x, y: p.y, side };
   }
   return float();
 }
@@ -295,7 +310,7 @@ export function buildSandboxGame(setup = {}, { zone, id = 'lesson', handle = 'Yo
   for (const l of ownList(setup.lots)) {
     if (!ASSETS[l?.cls]) { warn.push('lot class ' + l?.cls); continue; }
     const z = ZONES[l.zone] && s.lots[l.zone] ? l.zone : home, truth = lotTruthFrom(l.truth || {});
-    s.lots[z].push({ id: String(l.id ?? 'LT' + ++n), zone: z, cls: l.cls, cond: l.cond === 'broken' ? 'broken' : 'ok', price: Math.max(0.01, num(l.price, ASSETS[l.cls].base)), exp: num(l.expiresIn, LONG), mode: l.mode === 'auction' ? 'auction' : 'fixed', truth, ...(g.P.fakeDetect && truth.fake ? { warn: true } : {}) });
+    s.lots[z].push({ id: String(l.id ?? 'LT' + ++n), zone: z, cls: l.cls, cond: l.cond === 'broken' ? 'broken' : 'ok', price: Math.max(0.01, num(l.price, ASSETS[l.cls].base)), exp: num(l.expiresIn, LONG), mode: l.mode === 'auction' || l.auction === true ? 'auction' : 'fixed', truth, ...(g.P.fakeDetect && truth.fake ? { warn: true } : {}) });
   }
   // scripted events (a shock at an hour of the lesson)
   for (const ev of ownList(setup.events)) {
@@ -324,7 +339,9 @@ export function makeSandboxSession(setup = {}, opts = {}) {
   sess.worldSeed = opts.worldSeed || 'academy-' + (opts.id || 'lesson');
   sess.ghosts = clamp(Math.round(num(setup.cohort?.ghosts, 0)), 0, 400); // no herd unless the lesson brings one
   sess.algo = false;
-  sess.clock = new Clock({ hour: 0, speed: clamp(num(setup.speed, 1), 0.25, 64), paused: setup.clock !== 'running' });
+  // A lesson is minutes long, a virtual hour is 7 seconds at 1x and a manager's cycle is a day and a half: so when the player presses the clock the
+  // sandbox runs at 16x (4x for a clock that is already running), and the speed picker in the top bar still works.
+  sess.clock = new Clock({ hour: 0, speed: clamp(num(setup.speed, setup.clock === 'running' ? 4 : 16), 0.25, 64), paused: setup.clock !== 'running' });
   sess.game = buildSandboxGame(setup, { ...opts, worldSeed: sess.worldSeed });
   sess._wire();
   sess.synth = [];
