@@ -10,8 +10,10 @@ import {
 } from './market.js';
 import { step as rngStep, hash01 } from './rng.js';
 
-const ok = (msg, extra = {}) => ({ ok: true, msg, ...extra });
-const fail = (msg, extra = {}) => ({ ok: false, msg, ...extra });
+// The message and the verdict are the caller's own: a quote spread in as `extra` must never overwrite them (a failed pool sale once came back ok with no message).
+const ok = (msg, extra = {}) => ({ ...extra, ok: true, msg });
+const fail = (msg, extra = {}) => ({ ...extra, ok: false, msg });
+const own = (o, k) => typeof k === 'string' && Object.prototype.hasOwnProperty.call(o, k); // ids come from the UI and the network: never index a plain object by them unchecked
 const money = (x) => (Math.abs(x) < 100 ? '$' + x.toFixed(2) : '$' + Math.round(x).toLocaleString('en-US'));
 
 export class Game {
@@ -28,7 +30,7 @@ export class Game {
 
   // ------------------------------------------------------------------ construction
   _new({ perks = [], handle = 'Founder', pid = 'PC-' + Math.random().toString(36).slice(2, 6).toUpperCase(), seed, specialty = 'ops', startHour = 0 }) {
-    perks = [...new Set(perks)].filter((id) => PERKS[id]).slice(0, 2);
+    perks = [...new Set(perks)].filter((id) => own(PERKS, id)).slice(0, 2);
     const P = perkMods(perks);
     seed = (seed ?? Math.floor(Math.random() * 2 ** 32)) >>> 0;
     const skills = { ops: 1, growth: 1, fintech: 1 };
@@ -702,7 +704,7 @@ export class Game {
     if (s.cash < q.cost) return fail(`Freight costs ${money(q.cost)}.`);
     s.cash -= q.cost;
     s.assets = s.assets.filter((a) => !ids.includes(a.id));
-    s.freight.push({ id: 'F' + s.nid++, items: q.items, to, arrive: s.hour + q.hours, risk: q.risk, book: q.book, from: q.from });
+    s.freight.push({ id: 'F' + s.nid++, items: q.items, to, sent: s.hour, arrive: s.hour + q.hours, risk: q.risk, book: q.book, from: q.from });
     this.led('freight', `Shipped ${q.items.length} asset(s) to ${ZONES[to].short}`, -q.cost, { z: to });
     this.emit('ship', { from: q.from, to, count: q.items.length });
     return ok(`In transit for ${q.hours} virtual hours.`, q);
@@ -733,7 +735,7 @@ export class Game {
   }
   /** Spend a skill point (earned by levelling up). Cash training is gone: skill is earned by play. */
   spendPoint(skill) {
-    const s = this.s, l = s.skills[skill];
+    const s = this.s, l = own(s.skills, skill) ? s.skills[skill] : null;
     if (l == null) return fail('Unknown skill.');
     if (l >= SKILL_MAX) return fail('Already at mastery.');
     if (s.points < 1) return fail('No skill points. Every level you earn gives one.');
@@ -792,7 +794,7 @@ export class Game {
   }
   hirePipeline(kind, zone, cfg = {}) {
     const s = this.s;
-    if (!PIPE[kind]) return fail('Unknown manager.');
+    if (!own(PIPE, kind)) return fail('Unknown manager.');
     if (!ZONES[zone].auto) return fail('No managers can work in this district. Everything here is done by hand.');
     if (!s.zones.includes(zone)) return fail('You do not have access to that district.');
     if (this.autoLocked()) return fail('Gate 2: automation expansion is locked until you resolve your Regulatory Audit.');
@@ -854,7 +856,7 @@ export class Game {
     return ok(`Recovered ${money(v)} (60% of what you put in).`);
   }
   buyUpgrade(id) {
-    const s = this.s, U = UPGRADES[id];
+    const s = this.s, U = own(UPGRADES, id) ? UPGRADES[id] : null;
     if (!U || s.upg[id]) return fail('Already installed.');
     if (!s.zones.includes(U.zone)) return fail('Unlocks at Metro Hub.');
     if (s.cash < U.cost) return fail(`Costs ${money(U.cost)}.`);
@@ -902,7 +904,8 @@ export class Game {
     return { cac, ltv, ratio: ltv / cac, payback: cac / (C.perDay * (1 - this.zoneTax(C.zone))), perDay: C.perDay, days };
   }
   acquireClient(tier) {
-    const s = this.s, C = CLIENTS[tier];
+    const s = this.s, C = own(CLIENTS, tier) ? CLIENTS[tier] : null;
+    if (!C) return fail('Unknown account type.');
     if (!s.zones.includes(C.zone)) return fail('Not available in your districts yet.');
     if (C.needs && !s.mil[C.needs]) return fail(`Unlocks at Milestone ${C.needs.slice(1)}.`);
     if (s.clients.filter((c) => c.tier === tier).length >= C.max) return fail('You already hold the maximum of these accounts.');
@@ -940,7 +943,8 @@ export class Game {
     return '';
   }
   draw(prod, amount) {
-    const s = this.s, L = LOANS[prod];
+    const s = this.s, L = own(LOANS, prod) ? LOANS[prod] : null;
+    if (!L) return fail('Unknown loan product.');
     const block = this.loanBlock(prod);
     if (block) return fail(block);
     const r = this.loanRoom(prod);
