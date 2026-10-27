@@ -13,6 +13,8 @@ import { step as rngStep, hash01 } from './rng.js';
 // The message and the verdict are the caller's own: a quote spread in as `extra` must never overwrite them (a failed pool sale once came back ok with no message).
 const ok = (msg, extra = {}) => ({ ...extra, ok: true, msg });
 const fail = (msg, extra = {}) => ({ ...extra, ok: false, msg });
+// A number from outside (the Deal Room, a peer, a test) that is not a finite number becomes the neutral default instead of poisoning cash.
+const fin = (x, d) => (typeof x === 'number' && !Number.isNaN(x) ? x : d); // +-Infinity is a number: the caller's clamp turns it into the nearest bound
 const own = (o, k) => typeof k === 'string' && Object.prototype.hasOwnProperty.call(o, k); // ids come from the UI and the network: never index a plain object by them unchecked
 const money = (x) => (Math.abs(x) < 100 ? '$' + x.toFixed(2) : '$' + Math.round(x).toLocaleString('en-US'));
 
@@ -330,8 +332,8 @@ export class Game {
       const far = z > 8 ? this.P.farLeadMult : 1;
       const good = s.hour < s.ps.goodwillUntil ? 0.5 : 1; // a failed pitch costs the Creator some goodwill
       const mult = (1 + 0.15 * (this.lvl('growth') - 1)) * (s.upg.seo ? 1.5 : 1) * this.P.leadMult * this.B.leadMult * far * good * (0.85 + 0.003 * s.rep);
-      const every = Math.max(1, Math.round(Z.leadEvery * ECON.leadEvery / mult));
-      if (s.hour % every !== 0) return;
+      const rate = mult / (Z.leadEvery * ECON.leadEvery); // buyers per hour; a fraction of an arrival accumulates until it is whole
+      if (Math.floor(s.hour * rate) === Math.floor((s.hour - 1) * rate)) return;
     }
     if (s.leads[z].length >= 8) return;
     const segs = Object.keys(BUYERS).filter((id) => BUYERS[id].zone === z);
@@ -373,8 +375,8 @@ export class Game {
   _spawnLot(z, byClock = false) {
     const s = this.s, Z = ZONES[z];
     s.lots[z] = (s.lots[z] || []).filter((l) => l.exp > s.hour);
-    const every = Math.max(2, Math.round(Z.lotEvery * ECON.lotEvery * (1 - this.P.lotRefresh)));
-    if (byClock && s.hour % every !== 0) return;
+    const lotRate = 1 / (Z.lotEvery * ECON.lotEvery * (1 - this.P.lotRefresh));
+    if (byClock && Math.floor(s.hour * lotRate) === Math.floor((s.hour - 1) * lotRate)) return;
     if (s.lots[z].length >= ECON.lotSlots + this.B.lotSlots) return;
     const nw = Math.max(10, this.netWorth());
     const classes = Object.keys(ASSETS).filter((c) => {
@@ -443,7 +445,7 @@ export class Game {
     return (l.scrap || 0) >= 0.5 || (l.industrial || 0) >= 0.7 || (l.vehicle || 0) >= 0.8;
   }
   /** deal = { mult } from the Deal Room (pitch angle x haggle result). Clamped here, so no game can break the economy. */
-  quotePitch(assetId, leadId, deal) {
+  quotePitch(assetId, leadId, deal, opts = {}) {
     const s = this.s, a = s.assets.find((x) => x.id === assetId);
     if (!a) return fail('Pick an asset from your inventory.');
     let lead = null;
@@ -452,18 +454,22 @@ export class Game {
     if (a.zone !== lead.zone) return fail(`Your ${ASSETS[a.cls].name} is in ${ZONES[a.zone].short}. Freight it to ${ZONES[lead.zone].short} first.`);
     const def = ASSETS[a.cls], z = lead.zone;
     if (demandOf(def, z) <= 0) return fail(`Nobody in ${ZONES[z].short} wants ${def.name}.`);
+    if (lead.scam && lead.verified) return fail('You verified this buyer: it is a fraud. Do not ship to them.');
     if (a.cond === 'broken' && !this.acceptsBroken(lead.seg)) return fail('This buyer will not take a broken asset. Repair it first, or sell to someone who works with scrap and spares.');
     let fit = fitOf(a.cls, lead.seg);
     if (lead.need) fit = def.tags.includes(lead.need) ? 1 : fit * 0.5;
     const ci = this.cmFor(z, a.cls, lead.seg);
     const fmv = this.val(a);
     const B = BUYERS[lead.seg];
-    const counterfeit = !!a.truth?.fake; // the buyer checks what you are selling
-    const qual = a.truth && !a.truth.fake ? a.truth.q : 1;
+    // `blind` quotes are what the player may be shown: as described, with no peek at the crate's hidden truth or at a buyer's undisclosed fraud.
+    // The real sale (pitch) is never blind: the buyer checks what you are selling.
+    const seen = !opts.blind || !!a.known;
+    const counterfeit = seen && !!a.truth?.fake;
+    const qual = seen && a.truth && !a.truth.fake ? a.truth.q : 1;
     const ref = lead.need ? lead.budget : fmv * (a.known ? 1 : qual);
     const term = lead.need ? 0.55 + 0.45 * fit : fitMult(fit);
     const hustle = this.P.pitchMult;
-    const dealMult = clamp(deal?.mult ?? 1, 0.6, 1.4);
+    const dealMult = clamp(fin(deal?.mult, 1), 0.6, 1.4);
     const rejected = fit < 0.15 || counterfeit;
     let price = rejected ? 0 : ref * term * CM.pitchBase * ECON.pitchK * ci.cm * this.growthMult() * hustle * dealMult * (lead.need ? qual : 1);
     const capped = price > lead.budget;
@@ -482,7 +488,7 @@ export class Game {
     }
     const received = (goods ? goods.value : 0) + change;
     return {
-      ok: true, rejected, reason: counterfeit ? 'counterfeit' : fit < 0.15 ? 'nofit' : null, scam: !!lead.scam && !lead.verified, fit, fmv, ci, price, capped, tax, fee, net, goods, change, received,
+      ok: true, rejected, reason: counterfeit ? 'counterfeit' : fit < 0.15 ? 'nofit' : null, scam: !opts.blind && !!lead.scam && !lead.verified, fit, fmv, ci, price, capped, tax, fee, net, goods, change, received,
       lead, asset: a, zone: z, mods: this.mods(), deal: dealMult,
       gain: fmv > 0 ? received / fmv - 1 : 0, profit: received - (a.basis || 0), parts: { ref, term, base: CM.pitchBase, cm: ci.cm, growth: this.growthMult(), hustle, deal: dealMult, quality: qual },
     };
@@ -583,8 +589,16 @@ export class Game {
   buyQuote(zone, lotId, deal) {
     const lot = this.s.lots[zone]?.find((l) => l.id === lotId);
     if (!lot) return fail('That lot is gone.');
-    const mult = clamp(deal?.mult ?? 1, 0.6, 1.4);
+    const mult = clamp(fin(deal?.mult, 1), 0.6, 1.4);
     return ok('', { lot, mult, price: Math.max(0.01, Math.round(lot.price * mult * 100) / 100) });
+  }
+  /** A buyer who walked away, or whom the player walked away from, leaves the district. */
+  passLead(zone, leadId, why = '') {
+    const s = this.s, l = (s.leads[zone] || []).find((x) => x.id === leadId);
+    if (!l) return fail('That buyer has left.');
+    s.leads[zone] = s.leads[zone].filter((x) => x.id !== leadId);
+    if (why) this.note('info', why);
+    return ok('Buyer gone.');
   }
   /** A lot the player lost at auction goes to another bidder. */
   passLot(zone, lotId, why = '') {
@@ -617,8 +631,8 @@ export class Game {
     const def = ASSETS[a.cls];
     if (a.cond !== 'broken' || !def.repair) return fail('Nothing to repair.');
     const ops = this.lvl('ops');
-    const cost = repairCostFor(def.repair, ops, this.repairMultFor(a.zone)) * clamp(deal?.costMult ?? 1, 0.9, 1.3);
-    const q = clamp(restoreQuality(ops) * clamp(deal?.qualityMult ?? 1, 0.85, 1.15), 0.3, 1.15);
+    const cost = repairCostFor(def.repair, ops, this.repairMultFor(a.zone)) * clamp(fin(deal?.costMult, 1), 0.9, 1.3);
+    const q = clamp(restoreQuality(ops) * clamp(fin(deal?.qualityMult, 1), 0.85, 1.15), 0.3, 1.15);
     const after = assetFMV({ ...a, cond: 'ok', quality: q }, a.zone, this.mods(), this.crowd(a.cls, a.zone)) * this.perkValue(a.cls);
     return ok('', { cost, quality: q, before: this.val(a), after, asset: a });
   }
@@ -636,7 +650,7 @@ export class Game {
     q.asset.cond = 'ok'; q.asset.quality = q.quality; q.asset.basis += q.cost;
     this.xp(20);
     this.led('repair', `Repaired ${ASSETS[q.asset.cls].name} to ${Math.round(q.quality * 100)}% quality`, -q.cost, { z: q.asset.zone });
-    this.emit('repair', { cls: q.asset.cls, cost: q.cost, quality: q.quality, precision: clamp(deal?.precision ?? 0.5, 0, 1) });
+    this.emit('repair', { cls: q.asset.cls, cost: q.cost, quality: q.quality, precision: clamp(fin(deal?.precision, 0.5), 0, 1) });
     return ok('Repaired.', q);
   }
   /** The district where digital goods fetch most when routed (the Digital Native's remote sale). */
@@ -1236,6 +1250,11 @@ export class Game {
     this.led('p2p', `Proposed a swap to ${to}`, 0, { offer: offer.id });
     return ok('Offer sent. Your side is held in escrow until they answer.', { offer });
   }
+  /** Crates a district can still take (held, in freight and in escrow all count). */
+  roomIn(zone) {
+    const s = this.s;
+    return this.storeCap(zone) - s.assets.filter((a) => a.zone === zone).length - s.freight.reduce((n, f) => n + (f.to === zone ? f.items.length : 0), 0) - s.escrow.reduce((n, e) => n + e.assets.filter((a) => a.zone === zone).length, 0);
+  }
   acceptOffer(offer) {
     const s = this.s;
     const chk = this.checkOffer(offer);
@@ -1243,6 +1262,11 @@ export class Game {
     const mine = offer.want.assets.map((w) => s.assets.find((a) => a.id === w.id));
     if (mine.some((a) => !a)) return fail('You no longer hold the asset they asked for.');
     if (offer.want.cash > s.cash) return fail('You do not have the cash they asked for.');
+    const inbound = {};
+    for (const a of offer.give.assets) { const z = s.zones.includes(a.zone) ? a.zone : this._home({ ...a }).zone; inbound[z] = (inbound[z] || 0) + 1; }
+    const outbound = {};
+    for (const a of mine) outbound[a.zone] = (outbound[a.zone] || 0) + 1;
+    for (const [z, k] of Object.entries(inbound)) if (k - (outbound[z] || 0) > this.roomIn(+z)) return fail(`There is no room in ${ZONES[z].short} for what they are sending.`);
     s.assets = s.assets.filter((a) => !mine.includes(a));
     s.cash -= offer.want.cash;
     const gave = mine.map((a) => ({ ...a }));

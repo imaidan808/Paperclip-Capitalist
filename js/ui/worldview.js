@@ -18,7 +18,7 @@ export function createWorldView(ctx) {
     if (h.kind === 'lead') {
       const l = h.lead, B = BUYERS[l.seg], sel = pickIn(h.zone);
       let q = '';
-      if (sel) { const r = game.quotePitch(sel.id, l.id); q = r.ok ? (r.rejected ? ` They would reject your ${ASSETS[sel.cls].name}.` : ` Pitching your ${ASSETS[sel.cls].name}: ${fitLabel(r.fit)}, about ${money(r.received)}.`) : ' ' + r.msg; }
+      if (sel) { const r = game.quotePitch(sel.id, l.id, undefined, { blind: true }); q = r.ok ? (r.rejected ? ` They would reject your ${ASSETS[sel.cls].name}.` : ` Pitching your ${ASSETS[sel.cls].name}: ${fitLabel(r.fit)}, about ${money(r.received)}.`) : ' ' + r.msg; }
       return `${B.name}${l.need ? ` (urgent: needs ${/^[aeiou]/.test(l.need) ? 'an' : 'a'} ${l.need})` : ''}. Pays up to ${money(l.budget)}, leaves in ${Math.max(0, l.exp - s.hour)} h.${q || ' Click to sell them something.'}`;
     }
     if (h.kind === 'lot') return `${ASSETS[h.lot.cls].name}${h.lot.cond === 'broken' ? ' (broken)' : ''}${h.lot.mode === 'auction' ? ' (auction)' : ''}, listed at ${money(h.lot.price)}. Click to look it over and buy.`;
