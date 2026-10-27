@@ -22,7 +22,7 @@ const bad = (x, path = 's') => { if (typeof x === 'number') return Number.isFini
 const arrivals = (perks, { zone = 1, hours = 400, seed = 3, cash = 0, skills = {} } = {}) => {
   const g = mk(perks, seed); Object.assign(g.s.skills, skills);
   if (cash) rich(g, cash);
-  let n = 0;
+  let n = 0; g.s.leads[zone] = [];
   for (let h = 0; h < hours; h++) { g.advanceTo(g.s.hour + 1); n += g.s.leads[zone].length; g.s.leads[zone] = []; }
   return n;
 };
@@ -78,20 +78,20 @@ test('perkMods: multipliers multiply, adders add, the largest threshold wins, bo
   rel(perkMods(['trades', 'pro']).repairMult, 0.5); rel(perkMods(['trades', 'pro']).pitchMult, 0.92);
   rel(perkMods(['pro', 'native']).digitalMult, 0.75 * 1.2, 1e-12);                     // -25% and +20% = -10%
   rel(perkMods(['veteran', 'creator']).trendMult, 0.8 * 1.3, 1e-12);
-  rel(perkMods(['heir', 'pro']).xpMult, 0.8 * 0.85, 1e-12);
+  rel(perkMods(['heir', 'pro']).xpMult, 0.9 * 0.85, 1e-12);
   rel(perkMods(['gigger', 'pro']).xpMult, 1.25 * 0.85, 1e-12);
   rel(perkMods(['veteran', 'roots']).overheadMult, 0.75 * 0.85, 1e-12);
   rel(perkMods(['roots', 'immigrant']).freightMult, 1.3 * 0.75, 1e-12);
   rel(perkMods(['pro', 'veteran']).managerCost, 1.1);
   rel(perkMods(['immigrant', 'second']).auditMult, 1.4); rel(perkMods(['second', 'heir']).fineMult, 1.5);
-  rel(perkMods(['connected', 'connected']).leadMult, 1.4 * 1.4, 1e-12);                // the aggregator itself does not de-duplicate; Game does
+  rel(perkMods(['connected', 'connected']).leadMult, 1.3 * 1.3, 1e-12);                // the aggregator itself does not de-duplicate; Game does
   // adders
   assert.equal(perkMods(['grad', 'trades']).opsBonus, -1 + 2);
   rel(perkMods(['grad', 'heir']).spreadAdj, -0.15 + -0.25, 1e-12);
   assert.equal(perkMods(['grad', 'heir']).fintechBonus, 1);
   rel(perkMods(['veteran', 'immigrant']).freightSpeed, 0.15);
   // max
-  assert.equal(perkMods(['immigrant', 'second']).bankMinNW, 10000); assert.equal(perkMods(['immigrant', 'gigger']).bankMinNW, 5000); assert.equal(perkMods(['gigger', 'second']).bankMinNW, 10000);
+  assert.equal(perkMods(['immigrant', 'second']).bankMinNW, 8000); assert.equal(perkMods(['immigrant', 'gigger']).bankMinNW, 5000); assert.equal(perkMods(['gigger', 'second']).bankMinNW, 8000);
   assert.equal(perkMods(['pro', 'trades']).bankMinNW, 0);
   // booleans
   assert.equal(perkMods(['grad', 'pro']).radar, true); assert.equal(perkMods(['pro', 'trades']).radar, false);
@@ -99,10 +99,10 @@ test('perkMods: multipliers multiply, adders add, the largest threshold wins, bo
   assert.equal(perkMods(['heir', 'native']).noSpecialty, true);
   // objects: copied, not shared with the table
   const m = perkMods(['grad', 'immigrant']);
-  assert.deepEqual(m.garnish, { rate: 0.08, cap: 4000 }); assert.deepEqual(m.circle, { pct: 0.15 });
+  assert.deepEqual(m.garnish, { rate: 0.05, cap: 3000 }); assert.deepEqual(m.circle, { pct: 0.15 });
   m.garnish.cap = 1; m.circle.pct = 9;
-  assert.equal(PERKS.grad.mods.garnish.cap, 4000); assert.equal(PERKS.immigrant.mods.circle.pct, 0.15);
-  assert.deepEqual(perkMods(['connected']).familyTax, { rate: 0.06, everyHours: 168 });
+  assert.equal(PERKS.grad.mods.garnish.cap, 3000); assert.equal(PERKS.immigrant.mods.circle.pct, 0.15);
+  assert.deepEqual(perkMods(['connected']).familyTax, { rate: 0.08, everyHours: 168 });
 });
 
 test('a Game keeps at most two known, distinct Backgrounds and reads them through P (cached by the pair)', () => {
@@ -127,26 +127,26 @@ test('all 66 pairs construct and play five days without an error, a NaN, or a st
 });
 
 // ---------------------------------------------------------------------------------------------------- Well-Connected
-test('connected: buyers arrive about 40% faster and bring 25% bigger budgets; 6% of your cash goes to relatives every 7 days', () => {
-  const before = arrivals([]), after = arrivals(['connected']);
-  assert.ok(after / before > 1.3 && after / before < 1.6, `buyers in 400 hours: ${before} -> ${after}`);
+test('connected: buyers arrive 30% faster and bring 15% bigger budgets; 8% of your cash goes to relatives every 7 days', () => {
+  const before = arrivals([], { zone: 5, cash: 1000 }), after = arrivals(['connected'], { zone: 5, cash: 1000 });
+  assert.ok(after / before > 1.27 && after / before < 1.33, `buyers in 400 hours: ${before} -> ${after}`);
   const ratios = leadPairs(5, [], ['connected']).map(([p, c]) => c.budget / p.budget);
-  assert.ok(ratios.every((r) => r >= 1 - 1e-9 && r <= 1.251), 'never more than 25% bigger (give or take a cent)');
-  near(median(ratios), 1.25, 0.002);
-  assert.ok(ratios.reduce((a, b) => a + b, 0) / ratios.length > 1.2);
+  assert.ok(ratios.every((r) => r >= 1 - 1e-9 && r <= 1.151), 'never more than 15% bigger (give or take a cent)');
+  near(median(ratios), 1.15, 0.002);
+  assert.ok(ratios.reduce((a, b) => a + b, 0) / ratios.length > 1.1);
   // the cost
   const g = rich(mk(['connected']), 1000), plain = rich(mk([]), 1000);
   g.advanceTo(167); plain.advanceTo(167);
   assert.equal(g.s.cash, 1000, 'nothing is taken before the first week is out');
   g.advanceTo(168); plain.advanceTo(168);
-  near(g.s.cash, 1000 * 0.94, 1e-9); assert.equal(plain.s.cash, 1000);
-  assert.deepEqual(g.s.ledger.filter((e) => e.type === 'family').map((e) => [e.h, Math.round(e.amt * 100) / 100]), [[168, -60]]);
-  g.advanceTo(336); near(g.s.cash, 1000 * 0.94 * 0.94, 1e-9);
+  near(g.s.cash, 1000 * 0.92, 1e-9); assert.equal(plain.s.cash, 1000);
+  assert.deepEqual(g.s.ledger.filter((e) => e.type === 'family').map((e) => [e.h, Math.round(e.amt * 100) / 100]), [[168, -80]]);
+  g.advanceTo(336); near(g.s.cash, 1000 * 0.92 * 0.92, 1e-9);
   g.s.cash = 0; g.advanceTo(504); assert.equal(g.s.cash, 0, 'nobody taxes an empty pocket');
 });
 
 // ---------------------------------------------------------------------------------------------------- Business-School Grad
-test('grad: Niche Radar and +1 Capital Sourcing, loan spreads 15% lower; costs -1 Ops and an 8% garnishment of every profit until $4,000 is repaid', () => {
+test('grad: Niche Radar and +1 Capital Sourcing, loan spreads 15% lower; costs -1 Ops and a 5% garnishment of every profit until $3,000 is repaid', () => {
   const g = mk(['grad']), plain = mk([]);
   assert.equal(g.P.radar, true); assert.equal(plain.P.radar, false);
   assert.equal(g.lvl('fintech'), plain.lvl('fintech') + 1);
@@ -159,15 +159,15 @@ test('grad: Niche Radar and +1 Capital Sourcing, loan spreads 15% lower; costs -
   rel(repairCostFor(ASSETS.bike.repair, g.lvl('ops')) / repairCostFor(ASSETS.bike.repair, plain.lvl('ops')), 1 / 0.42, 1e-12);
   // the garnishment
   g.s.cash = 0;
-  assert.equal(g.garnish(1000), 80); assert.equal(g.s.cash, -80);
+  assert.equal(g.garnish(1000), 50); assert.equal(g.s.cash, -50);
   assert.equal(g.garnish(-500), 0, 'no garnishment on a loss'); assert.equal(g.garnish(0), 0);
-  let total = 80, safety = 0;
-  while (g.s.ps.garnished < 4000 && safety++ < 1000) total += g.garnish(5000);
-  near(g.s.ps.garnished, 4000, 1e-9); near(total, 4000, 1e-9);
-  assert.equal(g.garnish(5000), 0, 'paid off: garnishment stops at $4,000');
-  const rows = g.s.ledger.filter((e) => e.type === 'garnish'); near(rows.reduce((a, e) => a - e.amt, 0), 4000, 1e-9);
+  let total = 50, safety = 0;
+  while (g.s.ps.garnished < 3000 && safety++ < 1000) total += g.garnish(5000);
+  near(g.s.ps.garnished, 3000, 1e-9); near(total, 3000, 1e-9);
+  assert.equal(g.garnish(5000), 0, 'paid off: garnishment stops at $3,000');
+  const rows = g.s.ledger.filter((e) => e.type === 'garnish'); near(rows.reduce((a, e) => a - e.amt, 0), 3000, 1e-9);
   // the last instalment is cut to what is left
-  const h = mk(['grad']); h.s.ps.garnished = 3990; near(h.garnish(1000), 10, 1e-9);
+  const h = mk(['grad']); h.s.ps.garnished = 2990; near(h.garnish(1000), 10, 1e-9);
   assert.equal(plain.garnish(1000), 0, 'other Backgrounds have no student loans');
 });
 
@@ -195,7 +195,7 @@ test('trades: +2 Ops, repairs cost half, broken goods are 20% cheaper to source;
 });
 
 // ---------------------------------------------------------------------------------------------------- Immigrant Hustler
-test('immigrant: a zero-interest Community Circle loan, intl lanes +15 points, freight 25% cheaper; costs: no bank until $5,000 and audits 1.4x as often', () => {
+test('immigrant: a zero-interest Community Circle loan, intl lanes +10 points, freight 25% cheaper; costs: no bank until $5,000 and audits 1.4x as often', () => {
   // the Circle: up to 15% of net worth, no fee, no interest, no bank needed
   const g = mk(['immigrant']); g.s.cash = 100; const nw = g.netWorth();
   assert.equal(g.loanBlock('circle'), ''); assert.match(mk([]).loanBlock('circle'), /not part of a Community Circle/);
@@ -212,7 +212,7 @@ test('immigrant: a zero-interest Community Circle loan, intl lanes +15 points, f
   const a = rich(mk(['immigrant']), 6000), b = rich(mk([]), 6000);
   const lane = laneOf(a, 5);
   const pipe = (x) => x.hirePipeline('broker', 5, { ...lane, channel: 'intl' }).pipe;
-  rel(a.forecast(pipe(a)).margin / b.forecast(pipe(b)).margin, (1.3 + 0.15) / 1.3, 1e-12);
+  rel(a.forecast(pipe(a)).margin / b.forecast(pipe(b)).margin, (1.3 + 0.10) / 1.3, 1e-12);
   const dom = (x) => x.forecast({ ...x.s.pipes[0], channel: 'dom' }).margin;
   rel(dom(a), dom(b), 1e-12);
   const ship = (x) => { const k = put(x, 'bike', 5); return x.freightQuote([k.id], 6).cost; };
@@ -257,7 +257,7 @@ test('veteran: overhead -25%, shocks hit 40% softer, freight 15% faster; costs t
 });
 
 // ---------------------------------------------------------------------------------------------------- Legacy Heir
-test('heir: the family clears 60% of the debt once; costs: no skill edge, 20% slower learning', () => {
+test('heir: the family clears 60% of the debt once; costs: no skill edge, 10% slower learning', () => {
   const setup = (perks) => { const g = rich(mk(perks), 3000); g.s.loans.push({ id: 'DX', prod: 'micro', principal: 1_000_000, accr: 0, last: 0, next: 99999, drawn: 0 }); return g; };
   const g = setup(['heir']); const seen = [];
   g.onEvent = (e) => seen.push(e);
@@ -277,7 +277,7 @@ test('heir: the family clears 60% of the debt once; costs: no skill edge, 20% sl
   const h = mk(['heir'], 1, { specialty: 'ops' });
   assert.deepEqual(h.s.skills, { ops: 1, growth: 1, fintech: 1 }); assert.equal(h.s.specialty, null);
   assert.equal(mk([], 1, { specialty: 'ops' }).s.skills.ops, 3);
-  h.xp(100); assert.equal(h.s.xp, 80);
+  h.xp(100); assert.equal(h.s.xp, 90);
 });
 
 test('heir: loan spreads 25% lower; the first audit fine is waived, the second is not', () => {
@@ -382,7 +382,7 @@ test('roots: loyal buyers return with 20% bigger budgets, overhead -15%; costs: 
   rel(overhead(r5) / overhead(p5), 0.85, 1e-12);
   // the small pond: fewer buyers beyond district 8, the same in the home districts
   const a9 = arrivals(['roots'], { zone: 9, cash: 30000 }), b9 = arrivals([], { zone: 9, cash: 30000 });
-  assert.ok(a9 / b9 > 0.65 && a9 / b9 < 0.85, `district 9 buyers in 400 hours: ${b9} -> ${a9}`);
+  assert.ok(a9 / b9 > 0.67 && a9 / b9 < 0.73, `district 9 buyers in 400 hours: ${b9} -> ${a9} (30% fewer)`);
   assert.equal(arrivals(['roots'], { zone: 5, cash: 3000 }), arrivals([], { zone: 5, cash: 3000 }), 'district 5 is home');
   const ship = (x) => { const k = put(x, 'bike', 5); return x.freightQuote([k.id], 6).cost; };
   rel(ship(r5) / ship(p5), 1.3, 1e-12);
@@ -396,10 +396,11 @@ test('native: digital goods +20%, digital buyers in any district, lots refresh f
   // digital buyers from elsewhere turn up in a district that has none of its own
   const foreign = (perks) => { let f = 0, t = 0; for (let seed = 1; seed <= 40; seed++) { const g = mk(perks, seed); g._openZone(5); for (let i = 0; i < 30; i++) { g.s.leads[5] = []; g._spawnLead(5); t++; if (BUYERS[g.s.leads[5][0].seg].zone !== 5) f++; } } return f / t; };
   assert.equal(foreign([]), 0); assert.ok(foreign(['native']) > 0.15, 'about a quarter: ' + foreign(['native']));
-  // lots refresh 25% faster (district 1: every 6 hours becomes every 5)
-  const lots = (perks) => { const g = mk(perks, 3); let k = 0; for (let h = 0; h < 600; h++) { g.advanceTo(g.s.hour + 1); k += g.s.lots[1].length; g.s.lots[1] = []; } return k; };
+  // lots refresh 25% faster: a third more of them, at an exact rate
+  const lots = (perks) => { const g = mk(perks, 3); let k = 0; g.s.lots[1] = []; for (let h = 0; h < 600; h++) { g.advanceTo(g.s.hour + 1); k += g.s.lots[1].length; g.s.lots[1] = []; } return k; };
   const lp = lots([]), ln = lots(['native']);
-  assert.ok(ln / lp > 1.15 && ln / lp < 1.3, `lots in 600 hours: ${lp} -> ${ln}`);
+  assert.ok(ln / lp > 1.28 && ln / lp < 1.38, `lots in 600 hours: ${lp} -> ${ln}`);
+  near(ln, 600 / (ZONES[1].lotEvery * ECON.lotEvery * 0.75), 1);
   // the subscription: 1.5% of your cash on day 30
   const s = rich(mk(['native']), 1000), q = rich(mk([]), 1000);
   s.advanceTo(719); q.advanceTo(719); assert.equal(s.s.cash, 1000);
@@ -412,7 +413,7 @@ test('native: digital goods +20%, digital buyers in any district, lots refresh f
 });
 
 // ---------------------------------------------------------------------------------------------------- Second-Chance Hustler
-test('second: counterfeits come flagged, 12% cheaper lots in gray-market districts; costs: no bank until $10,000 and audit fines 1.5x', () => {
+test('second: counterfeits come flagged, 12% cheaper lots in gray-market districts; costs: no bank until $8,000 and audit fines 1.5x', () => {
   let flagged = 0, fakes = 0, honestWarned = 0;
   for (const [lotP, lotS] of lotPairs(4, [], ['second'], 300)) {
     assert.equal(lotP.truth.fake, lotS.truth.fake, 'the same world');
@@ -429,8 +430,8 @@ test('second: counterfeits come flagged, 12% cheaper lots in gray-market distric
   assert.equal(ZONES[4].rules.gray, true); assert.equal(ZONES[16].rules.gray, true); assert.equal(ZONES[3].rules.gray, undefined);
   assert.equal(mk(['second']).P.probeBonus, 1); assert.equal(mk([]).P.probeBonus, 0);
   // the Bank
-  const g = rich(mk(['second']), 1000); g.s.cash = 9990;
-  assert.match(g.loanBlock('micro'), /\$10,000/); g.s.cash = 10000; assert.equal(g.loanBlock('micro'), '');
+  const g = rich(mk(['second']), 1000); g.s.cash = 7990;
+  assert.match(g.loanBlock('micro'), /\$8,000/); g.s.cash = 8000; assert.equal(g.loanBlock('micro'), '');
   // audit fines
   const f = (perks) => { const x = rich(mk(perks), 30000); x.advanceTo(74); return 30000 - x.s.cash; };
   assert.equal(f([]), AUDIT.fine); assert.equal(f(['second']), AUDIT.fine * 1.5);

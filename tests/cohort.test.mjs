@@ -114,15 +114,25 @@ test('Cohort: zero ghosts leaves only real classmates; counts are cached per six
   assert.notEqual(y, x, 'a later bucket is recomputed');
 });
 
-test('BUG: the crowd a niche sees depends only on the world and the 6-hour bucket, not on who asked first', () => {
-  // js/cohort.js counts(): the bucket's cache is filled by the first query's own hour, so counts(245) is 10.90 after counts(240) but 11.08 asked cold. That makes the economy depend on UI
-  // calls, and makes a restored game (empty cache) drift from the one that never stopped. Compute at the bucket start (or key the cache by hour) and the problem goes away.
+test('the crowd a niche sees depends only on the world and the 6-hour bucket, not on who asked first', () => {
+  // counts() used to fill each bucket's cache with the first query's own hour, so counts(245) was 10.90 after counts(240) but 11.08 asked cold. That made the economy depend on UI
+  // calls, and made a restored game (empty cache) drift from the one that never stopped. It is now computed at the bucket's start.
   const a = new Cohort({ seed: 'k', ghosts: 36 }), b = new Cohort({ seed: 'k', ghosts: 36 });
   a.counts(240, 5, 'textbooks');
   assert.deepEqual(a.counts(245, 5, 'textbooks'), b.counts(245, 5, 'textbooks'), 'same question, same answer');
   const c = new Cohort({ seed: 'k', ghosts: 36 }), d = new Cohort({ seed: 'k', ghosts: 36 });
   c.counts(241, 5, 'textbooks'); d.counts(244, 5, 'textbooks');
   assert.deepEqual(c.counts(242, 5, 'textbooks'), d.counts(242, 5, 'textbooks'));
+  // the numbers are the ghosts' at the bucket's first hour, for every hour of the bucket, and the next bucket moves on
+  const e = new Cohort({ seed: 'k', ghosts: 36 });
+  const want = ghostCounts('k', 240, 5, 'textbooks', 36);
+  for (const h of [240, 241, 243, 245]) { const f = new Cohort({ seed: 'k', ghosts: 36 }); const got = f.counts(h, 5, 'textbooks'); near(got.total, want.total, 1e-12); near(got.byBuyer.trainer, want.byBuyer.trainer, 1e-12); }
+  assert.notEqual(e.counts(246, 5, 'textbooks').total, want.total, 'the next bucket is a new crowd');
+  // and the order of questions across classes, zones and buckets never matters
+  const order = [[300, 1, 'pen'], [10, 5, 'textbooks'], [301, 2, 'radio'], [12, 5, 'textbooks'], [299, 1, 'pen']];
+  const fwd = new Cohort({ seed: 'k', ghosts: 36 }), rev = new Cohort({ seed: 'k', ghosts: 36 });
+  const one = order.map(([h, z, cl]) => JSON.stringify(fwd.counts(h, z, cl))), two = [...order].reverse().map(([h, z, cl]) => JSON.stringify(rev.counts(h, z, cl))).reverse();
+  assert.deepEqual(one, two);
 });
 
 test('Cohort.allNiches lists every niche the radar and the instructor heat map can use', () => {
