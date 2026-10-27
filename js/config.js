@@ -9,12 +9,15 @@ export const MIL = { m1: 1000, m2: 25000, m3: 250000 };
 export const MIL_ZONE = { m1: 5, m2: 9, m3: 13 };
 export const CM = { min: 0.4, max: 3.14, ref: 1.68, beta: 0.4, pitchBase: 0.6 };
 export const FEES = { base: 0.025, crunch: 0.12, digitalRouting: 0.12, exitBrokerage: 0.12 };
+// Economy tuning knobs (docs/BALANCE.md). Mutable on purpose: tests/tune.mjs sweeps them against the pacing targets of docs/V2_DESIGN.md section 11.
+export const ECON = { lotDiscHi: 0.95, lotDiscLo: 0.78, lotSlots: 4, lotEvery: 1.5, leadEvery: 1, cycleBase: 80, pitchK: 0.9, margin: 0.45 }; // provisional: the 66-pair balance pass retunes these
 export const FMV_BAND = 0.4; // peer-to-peer guardrail: +/-40%
 export const EEI_FLOOR_DEFAULT = 1000; // = Milestone 1. See docs/BALANCE.md: a $0.05 start would otherwise score ~1,000,000x the others
 export const BASE_RATE = 0.025; // monthly index; +600 bps in the credit crunch
 export const DEBT = { maxDE: 3.0, callDE: 4.5, fireSale: 0.35 };
 
 // Sixteen districts, the asset classes and the buyers live in js/data (docs/V2_DESIGN.md); they are re-exported here so the rest of the code keeps one import.
+import { ASSETS } from './data/index.js';
 export { ZONES, ASSETS, BUYERS, ZONE_IDS, ZONE_COUNT } from './data/index.js';
 export { PERKS, PERK_IDS, perkMods } from './data/perks.js';
 

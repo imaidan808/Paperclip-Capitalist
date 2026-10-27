@@ -1,7 +1,7 @@
 // The simulation engine. Pure JS, no DOM. One step = one virtual hour; 24 hours = 1 virtual day; 90 days = a run.
 // Every student-facing action is a method that returns {ok, msg, ...}. Everything the UI shows is read from `game.s`.
 import {
-  TOTAL_DAYS, TOTAL_HOURS, MIL, MIL_ZONE, CM, FEES, FMV_BAND, EEI_FLOOR_DEFAULT, BASE_RATE, DEBT, ZONES, ZONE_IDS, SKILLS, SKILL_MAX,
+  TOTAL_DAYS, TOTAL_HOURS, ECON, MIL, MIL_ZONE, CM, FEES, FMV_BAND, EEI_FLOOR_DEFAULT, BASE_RATE, DEBT, ZONES, ZONE_IDS, SKILLS, SKILL_MAX,
   PERKS, perkMods, ASSETS, BUYERS, PIPE, PIPE_RULES, pipeScale, pipeMargin, pipeOverhead, UPGRADES, CLIENTS, LOANS, AUDIT_THEMES, AUDIT, EVENTS, ALGO_EVENTS, WARN_LEAD, FRESH,
 } from './config.js';
 import {
@@ -328,7 +328,7 @@ export class Game {
       const far = z > 8 ? this.P.farLeadMult : 1;
       const good = s.hour < s.ps.goodwillUntil ? 0.5 : 1; // a failed pitch costs the Creator some goodwill
       const mult = (1 + 0.15 * (this.lvl('growth') - 1)) * (s.upg.seo ? 1.5 : 1) * this.P.leadMult * this.B.leadMult * far * good * (0.85 + 0.003 * s.rep);
-      const every = Math.max(1, Math.round(Z.leadEvery / mult));
+      const every = Math.max(1, Math.round(Z.leadEvery * ECON.leadEvery / mult));
       if (s.hour % every !== 0) return;
     }
     if (s.leads[z].length >= 8) return;
@@ -371,9 +371,9 @@ export class Game {
   _spawnLot(z, byClock = false) {
     const s = this.s, Z = ZONES[z];
     s.lots[z] = (s.lots[z] || []).filter((l) => l.exp > s.hour);
-    const every = Math.max(2, Math.round(Z.lotEvery * (1 - this.P.lotRefresh)));
+    const every = Math.max(2, Math.round(Z.lotEvery * ECON.lotEvery * (1 - this.P.lotRefresh)));
     if (byClock && s.hour % every !== 0) return;
-    if (s.lots[z].length >= 6 + this.B.lotSlots) return;
+    if (s.lots[z].length >= ECON.lotSlots + this.B.lotSlots) return;
     const nw = Math.max(10, this.netWorth());
     const classes = Object.keys(ASSETS).filter((c) => {
       const d = ASSETS[c];
@@ -387,7 +387,7 @@ export class Game {
     const asset = { cls, cond, quality: 1, wear: 1 };
     const asIs = assetFMV(asset, z, this.mods(), this.crowd(cls, z));
     const ops = this.lvl('ops');
-    let disc = cond === 'ok' ? Math.max(0.78, 0.95 - 0.025 * (ops - 1)) : Math.max(0.8, 1 - 0.03 * (ops - 1));
+    let disc = cond === 'ok' ? Math.max(ECON.lotDiscLo, ECON.lotDiscHi - 0.025 * (ops - 1)) : Math.max(0.8, 1 - 0.03 * (ops - 1));
     if (cond === 'broken') disc *= 1 - this.P.brokenDiscount;
     if (asIs < Z.scale * 0.6) disc *= 1 - (this.P.lotDiscount || 0); // small lots (the Side-Hustler)
     if (Z.rules.gray) disc *= 1 - (this.P.lotDiscountGray || 0); // gray markets (the Second-Chance Hustler)
@@ -463,7 +463,7 @@ export class Game {
     const hustle = this.P.pitchMult;
     const dealMult = clamp(deal?.mult ?? 1, 0.6, 1.4);
     const rejected = fit < 0.15 || counterfeit;
-    let price = rejected ? 0 : ref * term * CM.pitchBase * ci.cm * this.growthMult() * hustle * dealMult * (lead.need ? qual : 1);
+    let price = rejected ? 0 : ref * term * CM.pitchBase * ECON.pitchK * ci.cm * this.growthMult() * hustle * dealMult * (lead.need ? qual : 1);
     const capped = price > lead.budget;
     price = Math.min(price, lead.budget);
     const tax = this.zoneTax(z), fee = this.instFee('pitch');
@@ -740,7 +740,7 @@ export class Game {
   pipeUpCost(p) { return PIPE[p.kind].hire * pipeScale(ZONES[p.zone]) * Math.pow(PIPE_RULES.levelGrowth, p.level) * 1.5 * this.P.managerCost; }
   cycleLen(p) {
     const s = this.s, K = PIPE[p.kind], def = ASSETS[p.cls || 'pen'], m = this.mods();
-    let len = PIPE_RULES.cycleBase / ZONES[p.zone].speed * K.cycle / (1 + 0.15 * (this.lvl('growth') - 1));
+    let len = ECON.cycleBase / ZONES[p.zone].speed * K.cycle / (1 + 0.15 * (this.lvl('growth') - 1));
     if (s.upg.jit) len *= 0.8;
     len /= p.cls ? speedMult(def, p.zone, m) : 1;
     if (p.channel === 'intl') len += m.intlSlow;
@@ -755,7 +755,7 @@ export class Game {
     const def = p.cls ? ASSETS[p.cls] : null;
     const lane = def ? Math.sqrt(demandMult(def, z, m)) * priceMult(def, z, m) : 1;
     const learn = p.kind === 'student' ? Math.min(0.03, (p.cycles || 0) / 10 * 0.005) : 0;
-    const margin = (K.margin + learn) * pipeMargin(ZONES[z]) * (p.channel === 'intl' ? 1.3 + this.P.intlBonus : 1) * (s.upg.seo ? 1.08 : 1);
+    const margin = (K.margin + learn) * ECON.margin * pipeMargin(ZONES[z]) * (p.channel === 'intl' ? 1.3 + this.P.intlBonus : 1) * (s.upg.seo ? 1.08 : 1);
     const gross = alloc * margin * rel * lane;
     const fee = (alloc + gross) * this.instFee('pipe');
     const tax = Math.max(0, gross) * this.zoneTax(z);
