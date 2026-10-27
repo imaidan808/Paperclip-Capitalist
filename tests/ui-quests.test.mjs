@@ -7,7 +7,7 @@ import { run } from './bot.mjs';
 import quests from '../js/ui/drawers/quests.js';
 import { Progress } from '../js/meta/progress.js';
 import { QUESTS, ACHIEVEMENTS } from '../js/meta/quests.js';
-import { SKILLS, SKILL_MAX, ZONES } from '../js/config.js';
+import { SKILLS, SKILL_MAX, ZONES, xpForLevel } from '../js/config.js';
 
 const STALE = /Zone 2|Island|Bootstrapper|profile/i;
 const text = (h) => h.replace(/<[^>]+>/g, ' ').replace(/&amp;/g, '&').replace(/&#39;/g, "'").replace(/&quot;/g, '"').replace(/\s+/g, ' ');
@@ -48,7 +48,7 @@ for (const days of STATES) for (const perks of PAIRS) {
 test('the hero: level ring, XP to the next level, streak meaning and reputation meter come from the engine', () => {
   const ctx = mk({ days: 10 }), g = ctx.g(), s = g.s;
   s.streak = 3; s.bestStreak = 7; s.rep = 72;
-  const h = quests.html(ctx), t = text(h), lv = g.level(), lo = (lv - 1) ** 2 * 100, hi = lv ** 2 * 100;
+  const h = quests.html(ctx), t = text(h), lv = g.level(), lo = xpForLevel(lv), hi = xpForLevel(lv + 1);
   assert.match(t, new RegExp(`${s.xp - lo} / ${hi - lo} XP`));
   assert.match(t, new RegExp(`${hi - s.xp} to level ${lv + 1}`));
   assert.match(h, new RegExp(`aria-label="Level ${lv}, \\d+ percent of the way to level ${lv + 1}"`));

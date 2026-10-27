@@ -4,6 +4,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { Game } from '../js/engine.js';
+import { LEVEL_XP, xpForLevel } from '../js/config.js';
 import { seasonMult, truthMult, FAKE_VALUE, assetFMV, demandOf, clamp } from '../js/market.js';
 import {
   ASSETS, BUYERS, ZONES, ZONE_IDS, MIL, MIL_ZONE, ECON, SKILL_MAX, SKILLS, PERKS, PIPE, UPGRADES, LOANS, CLIENTS, AUDIT, FEES, FRESH, TOTAL_DAYS,
@@ -40,12 +41,12 @@ const DIGITAL10 = find('a digital good in district 10', (a) => a.tags.includes('
 const PLAIN10 = find('a non-digital good in district 10', (a) => !a.tags.includes('digital') && demandOf(a, 10) >= 3 && demandOf(a, 9) >= 3);
 
 // ---------------------------------------------------------------------------------------------------- levels, XP and skill points
-test('XP makes levels (100 x (level - 1)^2) and every level grants exactly one skill point, even when one award crosses several', () => {
+test('XP makes levels (LEVEL_XP x (level - 1)^2) and every level grants exactly one skill point, even when one award crosses several', () => {
   const g = mk(); const ev = log(g);
   assert.equal(g.level(), 1); assert.equal(g.s.points, 0);
-  g.xp(99); assert.equal(g.level(), 1); assert.equal(g.s.points, 0);
+  g.xp(LEVEL_XP - 1); assert.equal(g.level(), 1); assert.equal(g.s.points, 0);
   g.xp(1); assert.equal(g.level(), 2); assert.equal(g.s.points, 1);
-  g.xp(2300); // 2,400 in all: level 5 (1,600 <= xp < 2,500)
+  g.xp(xpForLevel(5) - LEVEL_XP); // level 5 starts at xpForLevel(5)
   assert.equal(g.level(), 5); assert.equal(g.s.points, 4); assert.equal(g.s.lvlPaid, 5);
   assert.deepEqual(ev.filter((e) => e.type === 'level').map((e) => e.level), [2, 3, 4, 5]);
   g.xp(50); assert.equal(g.s.points, 4, 'no level, no point');
@@ -57,7 +58,7 @@ test('XP multipliers: Side-Hustler +25%, Heir -10%, Seasoned Pro -15%, and they 
   assert.equal(xp(['gigger', 'pro']), Math.round(100 * (1.25 * 0.85)));
   assert.equal(xp(['heir', 'pro']), Math.round(100 * (0.9 * 0.85)));
   const slow = mk(['heir', 'pro']), fast = mk(['gigger']);
-  slow.xp(900); fast.xp(900);
+  slow.xp(3000); fast.xp(3000);
   assert.ok(fast.level() > slow.level(), 'the same play levels a Side-Hustler faster');
 });
 

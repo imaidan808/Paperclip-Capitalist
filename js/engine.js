@@ -1,7 +1,7 @@
 // The simulation engine. Pure JS, no DOM. One step = one virtual hour; 24 hours = 1 virtual day; 90 days = a run.
 // Every student-facing action is a method that returns {ok, msg, ...}. Everything the UI shows is read from `game.s`.
 import {
-  TOTAL_DAYS, TOTAL_HOURS, ECON, MIL, MIL_ZONE, CM, FEES, FMV_BAND, EEI_FLOOR_DEFAULT, BASE_RATE, DEBT, ZONES, ZONE_IDS, SKILLS, SKILL_MAX,
+  TOTAL_DAYS, TOTAL_HOURS, ECON, LEVEL_XP, MIL, MIL_ZONE, CM, FEES, FMV_BAND, EEI_FLOOR_DEFAULT, BASE_RATE, DEBT, ZONES, ZONE_IDS, SKILLS, SKILL_MAX,
   PERKS, perkMods, ASSETS, BUYERS, PIPE, PIPE_RULES, pipeScale, pipeMargin, pipeOverhead, UPGRADES, CLIENTS, LOANS, AUDIT_THEMES, AUDIT, EVENTS, ALGO_EVENTS, WARN_LEAD, FRESH,
 } from './config.js';
 import {
@@ -119,7 +119,7 @@ export class Game {
     if (L.length > 3200) { const i = L.findIndex((e) => e.type === 'pipe'); L.splice(i < 0 ? 0 : i, 1); }
   }
   xp(n) { this.s.xp += Math.round(n * this.P.xpMult); this._levelCheck(); }
-  level() { return Math.floor(Math.sqrt(this.s.xp / 100)) + 1; }
+  level() { return Math.floor(Math.sqrt(this.s.xp / LEVEL_XP)) + 1; }
   /** Each new level grants one skill point (spendPoint). */
   _levelCheck() {
     const s = this.s;
@@ -533,7 +533,7 @@ export class Game {
     s.streak = win ? s.streak + 1 : 0;
     s.bestStreak = Math.max(s.bestStreak, s.streak);
     if (win) { s.rep = clamp(s.rep + 1, 0, 100); s.loyal[q.lead.seg] = (s.loyal[q.lead.seg] || 0) + 1; } else if (this.P.flopRep) { s.rep = clamp(s.rep - this.P.flopRep / 2, 0, 100); s.ps.goodwillUntil = s.hour + 48; }
-    const xp = win ? 40 + 60 * clamp(Math.log10(1 + q.gain), 0, 3) + s.streak * 5 : 5;
+    const xp = win ? 40 + 60 * clamp(Math.log10(1 + q.gain), 0, 3) + Math.min(s.streak, 10) * 5 : 5; // a long streak keeps its glory, not an endless XP spigot
     this.xp(xp);
     this.led('pitch', `${ASSETS[a.cls].name} to ${BUYERS[q.lead.seg].name}${got ? ' for ' + got : ''}`, q.received - q.fmv, { z, cm: q.ci.cm, S: q.ci.S, vN: q.ci.vN, vT: q.ci.vT, cls: a.cls, seg: q.lead.seg, fmv: q.fmv, recv: q.received });
     const outcome = q.ci.band.id === 'pioneer' ? 'pioneer' : q.ci.band.id === 'herd' ? 'herd' : win ? 'win' : 'flat';

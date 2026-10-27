@@ -4,7 +4,7 @@ body:has(.stage) { background-image: none; overflow: hidden; }
 .stage { position: relative; height: 100vh; height: 100dvh; width: 100%; overflow: hidden; background: #0b1a2c; --hud-h: 4.4rem; --dock-h: 4.6rem; }
 .worldhost { position: absolute; inset: 0; }
 .wvcv { position: absolute; inset: 0; } .worldcv { display: block; touch-action: none; outline-offset: -4px; }
-.wvctl { position: absolute; left: .7rem; top: 50%; transform: translateY(-50%); display: grid; gap: .35rem; z-index: 3; }
+.wvctl { position: absolute; left: .7rem; right: auto; top: 50%; transform: translateY(-50%); display: grid; gap: .35rem; z-index: 3; width: max-content; }
 .wvtip { position: absolute; max-width: 260px; background: var(--panel); border: var(--bw) solid var(--gold); padding: .4rem .55rem; font-size: .8rem; line-height: 1.3; pointer-events: none; z-index: 6; }
 .wvlist { position: absolute; left: .7rem; bottom: calc(var(--dock-h) + .4rem); max-width: min(22rem, 70vw); z-index: 3; background: rgba(13,17,23,.88); border: 1px solid var(--line); padding: .1rem .5rem; }
 .wvlist > summary { cursor: pointer; font-size: .72rem; color: var(--mute); padding: .3rem 0; } .wvlist[open] { max-height: 40vh; overflow: auto; }

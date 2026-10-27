@@ -3,7 +3,7 @@
 // with no progress tracker (tests) the sections that need it are left out. State kept on the shared UI object U:
 //   U.quests  { ach: 'all' | 'earned' | 'todo', achAll: boolean, doneOpen: boolean }   the badge filter, the long list and the folded "done" list
 // Every control is a real button with a stable data-fid, so the shell can give back focus after it redraws the drawer.
-import { SKILLS, SKILL_MAX, PERKS, ZONES } from '../../config.js';
+import { SKILLS, SKILL_MAX, PERKS, ZONES, xpForLevel } from '../../config.js';
 import { esc } from '../common.js';
 import { fmtMoney as money, restoreQuality } from '../../market.js';
 import { QUEST_BY_ID } from '../../meta/progress.js';
@@ -12,7 +12,7 @@ import { goToDistrict, keepScroll } from './travel.js';
 const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
 const pctN = (x) => Math.round(x * 100);
 const plural = (n, one, many = one + 's') => `${n} ${n === 1 ? one : many}`;
-const lvlBase = (l) => (l - 1) ** 2 * 100; // the engine's level curve: level = floor(sqrt(xp / 100)) + 1
+const lvlBase = xpForLevel; // the engine's level curve (config.js)
 const MONEY_SUMS = new Set(['amount', 'net', 'price', 'surplus', 'total', 'gain', 'cost']);
 const fmtN = (x) => (Number.isInteger(x) ? String(x) : x.toFixed(x < 10 ? 1 : 0));
 const fmtX = (x) => (x >= 10 ? String(Math.round(x)) : String(Math.round(x * 10) / 10));
