@@ -1203,6 +1203,14 @@ export class Game {
     if (def.tags.includes('digital')) return working * Math.min(1.4, 0.7 + 0.1 * skills.growth);
     return assetFMV(pubAsset, z, mods, 1);
   }
+  /** An asset leaves for a classmate as it truly is: what it is really worth is folded into its quality and the hidden truth stays behind, so a swap neither leaks the truth nor launders a counterfeit into a genuine crate. */
+  _disclosed(a) {
+    const c = { ...a };
+    if (a.truth) c.quality = (a.quality ?? 1) * truthMult(a);
+    delete c.truth; delete c.belief;
+    c.known = true;
+    return c;
+  }
   createOffer({ to, giveIds = [], giveCash = 0, want = { assets: [], cash: 0 }, royalty = null, note = '' }) {
     const s = this.s;
     const assets = giveIds.map((id) => s.assets.find((a) => a.id === id));
@@ -1211,7 +1219,7 @@ export class Game {
     if (!assets.length && !giveCash && !royalty) return fail('Offer something.');
     const offer = {
       id: 'O' + s.pid + '-' + s.nid++, from: s.pid, fromHandle: s.handle, to, at: s.hour, note,
-      give: { assets: assets.map((a) => ({ ...a })), cash: giveCash, royalty: royalty && royalty.perDay > 0 ? { perDay: +royalty.perDay, days: Math.max(1, Math.round(royalty.days)) } : null },
+      give: { assets: assets.map((a) => this._disclosed(a)), cash: giveCash, royalty: royalty && royalty.perDay > 0 ? { perDay: +royalty.perDay, days: Math.max(1, Math.round(royalty.days)) } : null },
       want: { assets: want.assets || [], cash: Math.max(0, +want.cash || 0) },
       skills: { ...s.skills },
     };
