@@ -177,7 +177,7 @@ function buyersHTML(ctx, z) {
       ${fraudLine}${fitRow}${sat}${verify}${sell}</li>`;
   };
   const empty = here.length === 0 && leads.length ? `<p class="callout small">You hold nothing to sell in ${e(ZONES[z].short)}. ${s.assets.length ? 'Ship stock in from another district, or ' : ''}${s.assets.length ? 'buy' : 'Buy'} a lot here, then come back.</p>` : '';
-  return `${scamNote}${empty}${use}<ul class="mkt-list">${leads.map(card).join('') || '<li class="mute">No buyers right now. New ones arrive every few hours.</li>'}</ul>`;
+  return `${scamNote}${empty}${use}<ul class="mkt-list">${leads.map(card).join('') || '<li class="k-empty"><span class="k-empty-ic" aria-hidden="true">🕰️</span><p>No buyers right now. New ones arrive every few hours.</p></li>'}</ul>`;
 }
 
 // ---- lots
@@ -225,7 +225,7 @@ function lotsHTML(ctx, z) {
   };
   return `<p class="small mkt-qual"><span aria-hidden="true">🔎</span> ${e(qualityLine(Z))}</p>
     <p class="tiny mute">Storage here: ${held} of ${cap}${full ? ' <span class="badge red">Full</span>' : ''}. Cash: <span class="mono">${m(s.cash)}</span>.</p>
-    <ul class="mkt-list">${lots.map(card).join('') || '<li class="mute">No lots right now. Sellers bring new ones every few hours.</li>'}</ul>`;
+    <ul class="mkt-list">${lots.map(card).join('') || '<li class="k-empty"><span class="k-empty-ic" aria-hidden="true">🧺</span><p>No lots right now. Sellers bring new ones every few hours.</p></li>'}</ul>`;
 }
 
 // ---- radar

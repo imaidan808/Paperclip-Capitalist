@@ -39,7 +39,7 @@
 .bk-facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(7rem, 1fr)); gap: .35rem; margin: 0; }
 .bk-why { border-left: 3px solid var(--gold); padding-left: .5rem; }
 .bk-out { background: var(--bg); border: 1px solid var(--line); padding: .35rem .5rem; }
-.bk-prod input[type=range] { min-height: 2.75rem; }
+.bk-prod input[type=range] { min-height: 2.75rem; margin: 0; }
 .bk-prod label { color: var(--ink); font-size: .85rem; }
 .bk-prod output { color: var(--gold); font-weight: 700; }
 .bk-prod .row .btn { flex: 1 1 auto; }

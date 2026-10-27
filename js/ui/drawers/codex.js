@@ -87,7 +87,7 @@ export function resultsHTML(ctx) {
   const pool = all.filter((e) => !cat || e.def.category === cat);
   const shown = q ? pool.filter((e) => e.unlocked && matchesQuery(e.def, q)) : pool;
   const groups = groupByCategory(shown);
-  if (!shown.length) return `<p class="mute cx-none" role="status">${q ? `Nothing unlocked matches &ldquo;${esc(q)}&rdquo;.` : 'Nothing here yet.'}${q ? ' Locked pages are not searched.' : ''}</p>`;
+  if (!shown.length) return `<p class="mute cx-none k-empty-line" role="status">${q ? `Nothing unlocked matches &ldquo;${esc(q)}&rdquo;.` : 'Nothing here yet.'}${q ? ' Locked pages are not searched.' : ''}</p>`;
   return groups.map((g) => {
     const open = g.items.filter((e) => e.unlocked).length;
     return `<section class="sect cx-group"><h3><span>${esc(g.category)}</span><span class="mono">${open} / ${g.items.length}</span></h3><ul class="cx-list">${g.items.map((e) => cardHTML(ctx, e)).join('')}</ul></section>`;

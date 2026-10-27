@@ -176,7 +176,7 @@ function achievementsHTML(ctx) {
   return `<section class="sect" data-qsect="badges"><h3 tabindex="-1"><span>Achievements</span><span>${earned} of ${all.length} earned</span></h3>
     <p class="qs-rars">${rar('common')} ${rar('rare')} ${rar('epic')}</p>
     <div class="dtabs qs-filter" role="group" aria-label="Show badges">${chip('all', 'All')}${chip('earned', 'Earned')}${chip('todo', 'To earn')}</div>
-    ${shown.length ? `<ul class="qs-achs">${shown.map(tile).join('')}</ul>` : '<p class="small mute">Nothing here yet. Badges you earn will hang in this case.</p>'}${more}</section>`;
+    ${shown.length ? `<ul class="qs-achs">${shown.map(tile).join('')}</ul>` : '<p class="small mute k-empty-line">Nothing here yet. Badges you earn will hang in this case.</p>'}${more}</section>`;
 }
 
 // ------------------------------------------------------------------ the drawer

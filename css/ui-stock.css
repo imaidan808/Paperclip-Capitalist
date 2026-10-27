@@ -1,3 +1,4 @@
+@import url("ui-kit.css");
 /* ui-stock: the Stock drawer. Crates grouped by district. Text colours come from the tokens in styles.css; a district only lends its accent as --za. */
 .stk-strip { display: grid; gap: .4rem; padding: .6rem .75rem; background: var(--panel2); border: 1px solid var(--line); }
 .stk-strip-top { gap: .5rem; flex-wrap: nowrap; }
