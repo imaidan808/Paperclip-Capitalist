@@ -8,7 +8,9 @@
     "start": "node server/static.mjs",
     "test": "node --test tests/*.test.mjs",
     "calibrate": "node tests/calibrate.mjs",
-    "relay": "node server/relay.mjs"
+    "relay": "node server/relay.mjs",
+    "balance": "node tests/balance.mjs",
+    "tune": "node tests/tune.mjs"
   },
   "license": "MIT"
 }
