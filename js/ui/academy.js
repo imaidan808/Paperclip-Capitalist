@@ -379,6 +379,8 @@ export function mountAcademy(root, S, { onDone, onSkip, only, missions, store = 
   }
 
   // ---------------------------------------------------------------- start
+  // Rewards from lessons played before a run existed are handed to the run the moment there is one to give them to.
+  if (S?.game) { try { if (claimPending(store, S.game, (g) => new Progress(g))) S.save?.(true); } catch (err) { console.error(err); } }
   if (!list.length) { setTimeout(() => finish('done', { completed: 0, finished: false, empty: true }), 0); return cleanupAll; }
   let first = 0;
   if (only) { first = list.findIndex((m) => m.id === only); if (first < 0) { setTimeout(() => finish('done', { completed: 0 }), 0); return cleanupAll; } } else { const n = nextIndex(list, readAcademy(store)); first = n < 0 ? 0 : n; }

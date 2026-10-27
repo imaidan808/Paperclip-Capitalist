@@ -372,7 +372,15 @@ test('mountAcademy: no lessons ends at once; an unknown lesson id ends at once; 
   fresh();
 });
 
-test('pending rewards are exposed for main.js', () => {
+test('pending rewards are exposed for main.js, and the Academy hands them to a run that exists when it opens', async () => {
+  fresh();
+  const g = new Game({ perks: ['pro', 'veteran'], handle: 'R', pid: 'REAL', seed: 5 }), saved = [];
+  A.addPending(store, A.rewardPlan(LESSONS[0]), { id: 't01', tries: 1 });
+  assert.equal(A.readPending(store).xp, 120);
+  D.mountAcademy({ innerHTML: '', addEventListener() {}, querySelector: () => null }, { game: g, save: (f) => saved.push(f) }, { missions: [], store, onDone() {} });
+  assert.ok(g.s.xp > 0 && g.s.xp <= 120, 'the run got the XP: ' + g.s.xp); assert.equal(g.s.points, 1 + (g.level() - 1)); assert.deepEqual(saved, [true], 'and was saved');
+  assert.equal(g.s.meta.mission.t01.tries, 1); assert.deepEqual(A.readPending(store), { xp: 0, points: 0, codex: [], missions: [] }, 'handed over once');
+  await new Promise((r) => setTimeout(r, 5));
   fresh();
   assert.equal(typeof D.pendingRewards, 'function'); assert.equal(typeof D.claimPendingRewards, 'function');
   assert.deepEqual(D.pendingRewards(store), { xp: 0, points: 0, codex: [], missions: [] });
