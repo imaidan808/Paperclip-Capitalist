@@ -115,3 +115,6 @@
 .in-chips { display: flex; flex-wrap: wrap; gap: .35rem; margin: .4rem 0 0; padding: 0; list-style: none; }
 .in-chips li { display: inline-flex; gap: .3rem; align-items: center; border: 1px solid var(--line); border-radius: 99px; padding: .08rem .55rem; font-size: .76rem; background: var(--panel2); }
 @media (max-width: 640px) { .in-dist { height: 7rem; gap: 2px; } .in-dist .z { font-size: .58rem; } }
+
+/* print: the headline tiles go back to paper (the global print rule already makes the text black) */
+@media print { .sc-stat, .sc-hero, .sc-build .card { background: transparent; box-shadow: none; } }

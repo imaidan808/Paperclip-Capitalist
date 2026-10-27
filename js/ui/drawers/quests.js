@@ -204,7 +204,12 @@ function acts(ctx) {
     'quests-jump'(el) {
       const sec = ctx.$?.(`[data-qsect="${el.dataset.to}"]`, ctx.el?.drawer);
       if (!sec) return;
-      sec.scrollIntoView?.({ behavior: ctx.reduced?.() ? 'auto' : 'smooth', block: 'start' });
+      const behavior = ctx.reduced?.() ? 'auto' : 'smooth', db = sec.closest?.('.db');
+      if (db && typeof db.scrollTo === 'function' && typeof sec.getBoundingClientRect === 'function') {
+        // scroll the drawer's own list, and nothing else: scrollIntoView would also move the whole stage (overflow hidden) and slide the HUD off the screen
+        const clear = parseFloat(getComputedStyle(sec).scrollMarginTop) || 0;
+        db.scrollTo({ top: Math.max(0, sec.getBoundingClientRect().top - db.getBoundingClientRect().top + db.scrollTop - clear), behavior });
+      } else sec.scrollIntoView?.({ behavior, block: 'start' });
       sec.querySelector('h3')?.focus?.({ preventScroll: true });
     },
   };

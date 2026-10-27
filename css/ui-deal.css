@@ -69,16 +69,16 @@ dialog.deal::backdrop { background: rgba(3, 6, 12, .78); }
 .pips { display: inline-flex; gap: .3rem; } .pips i { width: .85rem; height: .85rem; border: 2px solid var(--gold); background: var(--gold); border-radius: 50%; } .pips i.spent { background: transparent; border-color: var(--line); }
 
 /* ---- Read: a case file. Probes are tools with a price, evidence is a log, the belief is two gauges. */
-.probes { display: grid; grid-template-columns: repeat(auto-fill, minmax(9.8rem, 1fr)); gap: .5rem; }
-.probe { position: relative; display: grid; grid-template-columns: auto 1fr auto; gap: .1rem .5rem; align-items: center; text-align: left; font: inherit; color: var(--ink); background: var(--panel); border: var(--bw) solid var(--field); padding: .45rem .55rem; cursor: pointer; border-radius: 2px; min-height: 3.6rem; transition: transform .12s ease-out, border-color .12s, box-shadow .12s; }
+.probes { display: grid; grid-template-columns: repeat(auto-fit, minmax(8.2rem, 1fr)); gap: .5rem; }
+.probe { position: relative; display: grid; grid-template-columns: auto minmax(0, 1fr); grid-template-areas: "pic pco" "pnm pnm" "pwh pwh"; gap: .25rem .4rem; align-items: center; text-align: left; font: inherit; color: var(--ink); background: var(--panel); border: var(--bw) solid var(--field); padding: .5rem .55rem .55rem; cursor: pointer; border-radius: 2px; min-height: 6.2rem; transition: transform .12s ease-out, border-color .12s, box-shadow .12s; }
 .probe:hover:not(:disabled) { border-color: var(--gold); transform: translateY(-2px); box-shadow: 0 4px 0 rgba(0, 0, 0, .35); }
 .probe:active:not(:disabled) { transform: translateY(0); box-shadow: none; }
 .probe:disabled { cursor: not-allowed; opacity: .55; }
 .probe.used { opacity: 1; border-color: var(--green); background: var(--good-bg); cursor: default; }
 .probe.used::after { content: "\2713"; position: absolute; top: -.5rem; right: -.4rem; display: grid; place-items: center; width: 1.2rem; height: 1.2rem; border-radius: 50%; background: var(--green); color: var(--on-gold); font-size: .75rem; font-weight: 900; }
 .probe.rec, .angle.rec, .move.rec { box-shadow: 0 0 0 2px var(--violet); }
-.probe .pic { display: grid; place-items: center; width: 2rem; height: 2rem; font-size: 1.3rem; grid-row: span 2; background: var(--panel2); border-radius: 50%; }
-.probe .pnm { font-weight: 700; font-size: .84rem; } .probe .pco { font-family: ui-monospace, Menlo, monospace; font-size: .74rem; color: var(--gold); white-space: nowrap; } .probe .pwh { grid-column: 2 / -1; font-size: .72rem; color: var(--mute); }
+.probe .pic { grid-area: pic; display: grid; place-items: center; width: 2rem; height: 2rem; font-size: 1.3rem; background: var(--panel2); border-radius: 50%; }
+.probe .pnm { grid-area: pnm; font-weight: 700; font-size: .86rem; line-height: 1.25; overflow-wrap: anywhere; } .probe .pco { grid-area: pco; justify-self: end; font-family: ui-monospace, Menlo, monospace; font-size: .74rem; color: var(--gold); white-space: nowrap; } .probe .pwh { grid-area: pwh; font-size: .72rem; line-height: 1.3; color: var(--mute); overflow-wrap: anywhere; }
 .evidence { list-style: none; margin: 0; padding: 0; display: grid; gap: .3rem; font-size: .86rem; counter-reset: ev; }
 .evidence li { counter-increment: ev; display: grid; grid-template-columns: 1.7rem minmax(0, 1fr); gap: .5rem; align-items: start; padding: .35rem .6rem; background: var(--panel); border: 1px solid var(--line); border-left: 3px solid var(--cyan); }
 .evidence li::before { content: counter(ev, decimal-leading-zero); font: 700 .74rem ui-monospace, Menlo, monospace; color: var(--cyan); padding-top: .12rem; }
@@ -183,7 +183,7 @@ dialog.deal::backdrop { background: rgba(3, 6, 12, .78); }
 .rver.win { border-color: var(--green); color: var(--green); } .rver.lose { border-color: var(--gold); color: var(--gold); }
 .rver.win::before { content: "\25b2"; } .rver.lose::before { content: "\25bc"; } .rver.even::before { content: "\25a0"; }
 @keyframes stamp { from { opacity: 0; transform: scale(1.6) rotate(-6deg); } to { opacity: 1; transform: none; } }
-.vs { display: grid; grid-template-columns: 4.6rem 8rem minmax(0, 1fr); align-items: center; gap: .6rem; }
+.vs { display: grid; grid-template-columns: 4.6rem 10rem minmax(0, 1fr); align-items: center; gap: .6rem; }
 .vs dt { color: var(--mute); font-size: .84rem; } .vs dd { margin: 0; min-width: 0; font-family: ui-monospace, Menlo, monospace; font-weight: 700; font-size: 1.05rem; overflow-wrap: anywhere; }
 .vbar { display: block; height: .9rem; background: var(--bg); border: 1px solid var(--line); overflow: hidden; } .vbar i { display: block; height: 100%; background: var(--field); transform-origin: 0 50%; animation: grow .7s cubic-bezier(.2, .8, .2, 1) both; }
 @keyframes grow { from { transform: scaleX(0); } to { transform: scaleX(1); } }
@@ -215,13 +215,14 @@ dialog.deal::backdrop { background: rgba(3, 6, 12, .78); }
   .deal-score div { flex: 1 1 28%; padding: .25rem .5rem; } .deal-score dd { font-size: .92rem; } .deal-score .hot dd { font-size: 1rem; }
   .deal-foot { margin: 0 -.8rem 0; bottom: 0; padding: .5rem .8rem calc(.5rem + env(safe-area-inset-bottom, 0px)); gap: .4rem; justify-content: stretch; }
   .deal-foot .btn { flex: 1 1 auto; font-size: .78rem; padding: .35rem .6rem; min-height: 2.6rem; }
+  .deal-foot [data-deal="quick-stage"] { flex: 3 1 0; } .deal-foot [data-deal="quick-all"] { flex: 1 1 0; }
   .angles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .angle .awh { min-height: 0; }
   .probes { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .auc-moves { gap: .5rem; } .paddle { width: 7rem; min-height: 8.6rem; } .paddle::before { width: 6.2rem; height: 6.2rem; margin-left: -3.1rem; } .paddle::after { top: 5.6rem; }
   .paddle span { margin-top: 1.2rem; }
 }
-@media (max-width: 520px) { .vs { grid-template-columns: 3.7rem 6.4rem minmax(0, 1fr); gap: .4rem; } .vs.best dd::after { content: "\00a0\2713"; } .fsteps { grid-template-columns: 1fr; } .deal-top h2 { flex-basis: 100%; } }
+@media (max-width: 520px) { .vs { grid-template-columns: 3.7rem 6.4rem minmax(0, 1fr); gap: .4rem; } .vs.best dd::after { content: "\00a0\2713"; } .fs { padding: .3rem .4rem; font-size: .74rem; } .fs span { font-size: .68rem; } .deal-top h2 { flex-basis: 100%; } }
 
 /* ---- reduced motion: the global rules cut every duration, and these take the delayed reveals off by name so nothing waits hidden */
 @media (prefers-reduced-motion: reduce) {

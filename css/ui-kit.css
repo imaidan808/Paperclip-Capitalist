@@ -27,6 +27,10 @@
   box-shadow: inset 0 1px 0 color-mix(in srgb, var(--ink) 9%, transparent);
 }
 
+/* ---- icons share one rhythm: a small framed tile, goods a little larger than the rest */
+:is(.db, dialog) :is(.stk-ic, .mkt-ic, .cr-ic, .bk-ic, .tv-ic, .qs-ic, .cx-card .cx-ic) { display: grid; place-items: center; flex: none; width: 2.4rem; height: 2.4rem; padding: 0; font-size: 1.35rem; line-height: 1; text-align: center; background: var(--bg); border: 1px solid var(--line); border-radius: 6px; }
+:is(.db, dialog) :is(.stk-ic, .mkt-ic) { width: 2.8rem; height: 2.8rem; font-size: 1.7rem; }
+
 /* ---- an interactive surface answers the pointer with a small lift; a disabled one does not */
 :is(.db, dialog) :is(button.cx-card, .tv-dest, .cr-kind, .cr-lc, .mkt-z, .asset, .pick) { transition: transform .12s ease-out, border-color .12s, box-shadow .12s; }
 :is(.db, dialog) :is(button.cx-card, .tv-dest, .cr-kind, .cr-lc):hover:not(:disabled):not([aria-disabled="true"]) { transform: translateY(-1px); box-shadow: 0 3px 0 rgba(0, 0, 0, .35); }
