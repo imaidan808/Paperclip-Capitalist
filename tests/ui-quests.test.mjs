@@ -153,6 +153,7 @@ test('completed quests fold and unfold; a quest in a district you have not opene
 test('quests-go takes the player to the quest\'s district and closes the drawer', () => {
   const ctx = mk({ days: 25 }), pr = ctx.progress, a = quests.acts(ctx);
   ctx.U.drawer = 'quests';
+  pr.m.q = {};   // the bot may have finished quests during its 25 days; this test sets the whole chain itself
   for (const q of QUESTS.slice(0, 5)) pr.m.q[q.id] = { p: q.goal.count, done: true };   // the chain now waits at Campus Quad (district 3)
   ctx.U.zone = 9;
   const h = quests.html(ctx);

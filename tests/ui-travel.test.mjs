@@ -191,7 +191,7 @@ test('shipping runs through the engine: cash is paid, crates leave, a freight ca
   assert.ok(ids.every((id) => !s.assets.some((x) => x.id === id)), 'the crates left');
   assert.deepEqual(ctx.U.shipIds, []); assert.equal(ctx.U.sel.size, 0);
   assert.equal(ctx.toasts.at(-1)[1], 'good');
-  assert.match(ctx.toasts.at(-1)[0], /Shipped 2 crates to .+ arrive in about \d+ h/, 'the player is told, though the engine sends no message of its own');
+  assert.match(ctx.toasts.at(-1)[0], /Shipped 2 crates to .+ arrive in about \d+ h|In transit for \d+ virtual hours/, 'the player is told, by the engine or by the drawer');
   const h = travel.html(ctx), f = s.freight.at(-1);
   assert.match(h, /data-tab="freight"[^>]*aria-pressed="true"/, 'the player lands on the freight tab');
   assert.ok(h.includes(`<i data-bar="freight:${f.id}"></i>`), 'a live bar for the new shipment');
