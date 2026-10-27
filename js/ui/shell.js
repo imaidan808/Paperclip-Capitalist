@@ -6,6 +6,10 @@
 //   acts(ctx)  -> { actName(el, event) } delegated click/change/input handlers; prefix every name with the drawer id ("stock-sell")
 // ctx: S (session), g() (the Game), U (UI state), progress (quests/Codex), render(), toast(msg, level), say(result), queue(html, opts), confirmBox(...),
 //      openDrawer(id), closeDrawer(), deal(spec) (the Deal Room), on(fn) (game-event bus), dlg, plus the helpers re-exported by common.js.
+//
+// Layout is css/shell.css; the layers and anchors are written up in docs/UI_LAYERS.md. This file's part of it: it measures the HUD, the dock and the ticker and publishes
+// their heights as --hud-h, --dock-h and --tick-h on <html> (so everything anchored to them follows when they wrap), lets a phone's bottom sheet be dragged shut, and keeps the
+// render path cheap (attributes written only when they change, bars listed once per render and painted only when they move, no work for a hidden tab).
 import { ZONES, TOTAL_HOURS, CLIENTS } from '../config.js';
 import { $, $$, esc, setHTML, delegate, dlg, toast, announce, sfx, burst, reduced, settingsDialog } from './common.js';
 import { kv } from '../session.js';
@@ -80,38 +84,90 @@ export function mountGame(root, S, hooks) {
   function render() {
     if (dead || !g()) return;
     if (U.drawer && !visibleIds().has(U.drawer)) U.drawer = null;
-    setHTML(el.hud, hudHTML(ctx));
-    setHTML(el.tracker, trackerHTML(ctx));
-    setHTML(el.ticker, tickerHTML(ctx));
-    setHTML(el.dock, dockHTML());
-    el.drawer.hidden = !U.drawer;
-    el.stage.dataset.drawer = U.drawer || '';
-    el.drawer.setAttribute('aria-label', drawerOf(U.drawer)?.label || 'Panel');
-    const keep = el.drawer.querySelector('.db'), top = keep && el.drawer.dataset.d === U.drawer ? keep.scrollTop : 0; // a refresh must not throw the reader back to the top
-    setHTML(el.drawer, drawerHTML());
-    el.drawer.dataset.d = U.drawer || '';
-    const db = el.drawer.querySelector('.db');
-    if (db && top) db.scrollTop = top;
+    const changed = [setHTML(el.hud, hudHTML(ctx)), setHTML(el.tracker, trackerHTML(ctx)), setHTML(el.ticker, tickerHTML(ctx)), setHTML(el.dock, dockHTML())].some(Boolean);
+    let redrawn = changed; // did any part of the page get new markup (and so new bar elements)?
+    // Attributes are written only when they change: a tick that changes nothing must cost the page nothing (no style recalculation, no mutation records).
+    const open = !!U.drawer, key = U.drawer || '', label = drawerOf(U.drawer)?.label || 'Panel';
+    if (el.drawer.hidden === open) el.drawer.hidden = !open;
+    if (el.stage.dataset.drawer !== key) el.stage.dataset.drawer = key;
+    if (el.drawer.getAttribute('aria-label') !== label) el.drawer.setAttribute('aria-label', label);
+    const html = drawerHTML();
+    if (el.drawer._html !== html) { // scrollTop is a layout read: take it only when the markup is really about to be replaced, and keep a refresh from throwing the reader back to the top
+      const was = el.drawer.dataset.d === U.drawer ? el.drawer.querySelector('.db') : null, top = was ? was.scrollTop : 0;
+      if (setHTML(el.drawer, html)) { redrawn = true; if (top) { const db = el.drawer.querySelector('.db'); if (db) db.scrollTop = top; } }
+    }
+    if (el.drawer.dataset.d !== key) el.drawer.dataset.d = key;
     wv?.update();
-    paintBars();
+    if (redrawn) collectBars();
+    paintBars(redrawn);
     pumpQueue();
   }
 
-  // ---- live bars: the engine steps whole hours, bars interpolate between steps
-  function paintBars() {
-    const game = g(); if (!game) return;
+  // ---- anchors: the stylesheet places the tracker, ticker, drawer, list and toasts against the HUD above and the dock below (css/shell.css, "How it is anchored").
+  // These can change height (the HUD wraps to two rows, the dock compacts, the news is one line or two, the text size changes), so their real size is measured
+  // and written on <html> as --hud-h, --dock-h (the dock's top, measured from the bottom) and --tick-h.
+  const docEl = root.ownerDocument.documentElement;
+  function measure() {
+    if (!el.stage.clientHeight) return; // not laid out (a hidden mount): leave the stylesheet's fallbacks
+    const next = { 'hud-h': Math.round(el.hud.offsetHeight), 'dock-h': Math.round(el.stage.clientHeight - el.dock.offsetTop), 'tick-h': Math.round(el.ticker.offsetHeight) };
+    for (const k in next) if (next[k] !== anchors[k]) { anchors[k] = next[k]; docEl.style.setProperty('--' + k, next[k] + 'px'); }
+  }
+  const anchors = {};
+  const sizer = typeof ResizeObserver === 'function' ? new ResizeObserver(measure) : null;
+  sizer?.observe(el.hud); sizer?.observe(el.dock); sizer?.observe(el.ticker);
+
+  // A phone's bottom sheet closes the way a native one does: drag its header down. Only the header takes the gesture (touch-action: none there); the close button and Escape stay.
+  const SHEET = '(max-width: 820px) and (min-height: 521px)';
+  let pull = null;
+  el.drawer.addEventListener('pointerdown', (e) => {
+    if (e.button || pull || !e.target.closest('.dh') || e.target.closest('button') || !matchMedia(SHEET).matches) return;
+    pull = { id: e.pointerId, y: e.clientY, dy: 0 };
+    try { el.drawer.setPointerCapture(e.pointerId); } catch { /* a synthetic pointer */ }
+    el.drawer.classList.add('dragging');
+  });
+  el.drawer.addEventListener('pointermove', (e) => {
+    if (!pull || e.pointerId !== pull.id) return;
+    pull.dy = Math.max(0, e.clientY - pull.y);
+    el.drawer.style.transform = `translateY(${pull.dy}px)`;
+  });
+  const letGo = (e) => {
+    if (!pull || e.pointerId !== pull.id) return;
+    const far = e.type === 'pointerup' && pull.dy > Math.min(120, el.drawer.offsetHeight * 0.3);
+    pull = null; el.drawer.classList.remove('dragging');
+    if (!far) { el.drawer.style.transform = ''; return; }
+    el.drawer.style.transform = 'translateY(100%)'; // slide the rest of the way, then close
+    setTimeout(() => { el.drawer.style.transform = ''; closeDrawer(); }, reduced() ? 0 : 160);
+  };
+  el.drawer.addEventListener('pointerup', letGo); el.drawer.addEventListener('pointercancel', letGo);
+
+  // ---- live bars: the engine steps whole hours, bars interpolate between steps.
+  // The bars are listed once per render (never searched for on every pass), each width is worked out from the game state first and written only when it moved by a
+  // visible amount (a quarter of a percent is under a pixel on a 400px bar), and the loop sleeps while the tab is hidden or the clock is stopped.
+  let bars = [], barT = 0, barPass = 0, lastHf = -1;
+  function collectBars() { bars = $$('[data-bar]', root).map((b) => { const [k, id] = b.dataset.bar.split(':'); return { b, k, id, w: -1 }; }); }
+  function paintBars(force) {
+    const game = g(); if (!game || !bars.length) return;
     const s = game.s, live = S.clock.now(), frac = S.clock.paused || s.over ? 0 : Math.max(0, Math.min(1, live - s.hour)), hf = s.hour + frac;
-    for (const b of $$('[data-bar]', root)) {
-      const [k, id] = b.dataset.bar.split(':'); let f = 0;
+    if (!force && hf === lastHf) return; // nothing advanced since the last pass
+    lastHf = hf;
+    const next = bars.map(({ k, id }) => {
+      let f = 0;
       if (k === 'day') f = hf / TOTAL_HOURS;
       else if (k === 'lead') { for (const z of s.zones) { const l = (s.leads[z] || []).find((x) => x.id === id); if (l) f = 1 - (hf - l.born) / (l.exp - l.born); } }
       else if (k === 'pipe') { const p = s.pipes.find((x) => x.id === id); f = p && p.inflight ? (p.prog + (hf - s.hour)) / Math.max(1, p.len) : 0; }
       else if (k === 'freight') { const fr = s.freight.find((x) => x.id === id); f = fr ? 1 - (fr.arrive - hf) / Math.max(1, fr.arrive - (fr.sent ?? fr.arrive - 6)) : 1; }
       else if (k === 'client') { const c = s.clients.find((x) => x.id === id); f = c ? (hf - (c.until - CLIENTS[c.tier].days * 24)) / (CLIENTS[c.tier].days * 24) : 0; }
-      b.style.width = Math.max(0, Math.min(1, f)) * 100 + '%';
-    }
+      return Math.round(Math.max(0, Math.min(1, f)) * 400) / 4; // quarter-percent steps: under a pixel on a 400px bar
+    });
+    for (let i = 0; i < bars.length; i++) if (bars[i].w !== next[i] && bars[i].b.isConnected) { bars[i].w = next[i]; bars[i].b.style.width = next[i] + '%'; }
   }
-  const barLoop = () => { if (dead) return; paintBars(); if (reduced()) setTimeout(barLoop, 600); else requestAnimationFrame(() => setTimeout(barLoop, 80)); };
+  function barLoop() {
+    barT = 0; if (dead) return;
+    if (!document.hidden) { if (++barPass % 10 === 0) collectBars(); paintBars(); }
+    barT = setTimeout(barLoop, reduced() ? 600 : S.clock.paused ? 250 : 100); // slow while nothing moves, still quick to catch a resume
+  }
+  const wake = () => { if (document.hidden || dead) return; collectBars(); paintBars(true); }; // back from another tab: catch up at once
+  document.addEventListener('visibilitychange', wake);
   barLoop();
 
   // ---- dialogs and feedback
@@ -229,7 +285,12 @@ export function mountGame(root, S, hooks) {
     if (s?.over && !U.overShown) { U.overShown = true; queue(`<h2 tabindex="-1" autofocus>The simulation is complete</h2><p>Your final Economic Efficiency Index is <b class="gold">${S.game.eei().toFixed(2)}</b>. Open the debrief to review your decisions and prepare your reflection.</p><div class="row"><button class="btn big" data-act="debrief" autofocus>Open debrief</button><button class="btn ghost" data-close>Keep looking around</button></div>`, { label: 'Complete', sound: 'level' }); }
   }, 1500);
 
-  function destroy() { dead = true; off(); clearInterval(over); document.removeEventListener('keydown', keydown); wv?.destroy(); if (g()) g().onEvent = null; }
+  function destroy() {
+    dead = true; off(); clearInterval(over); clearTimeout(barT); sizer?.disconnect();
+    document.removeEventListener('keydown', keydown); document.removeEventListener('visibilitychange', wake);
+    for (const k in anchors) docEl.style.removeProperty('--' + k); // the next screen falls back to the stylesheet's values
+    wv?.destroy(); if (g()) g().onEvent = null;
+  }
   render();
   return { render, destroy, ctx };
 }
