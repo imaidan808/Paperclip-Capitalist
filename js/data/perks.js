@@ -3,13 +3,13 @@
 export const PERKS = {
   connected: {
     id: 'connected', name: 'Well-Connected', icon: '🤝', basis: 'Social capital: "my dad knows a guy".',
-    strength: 'Buyers arrive 40% faster and bring 25% bigger budgets.', cost: 'Family obligations: 6% of your cash goes to relatives every 7 days.',
-    mods: { leadMult: 1.4, leadBudget: 1.25, familyTax: { rate: 0.06, everyHours: 168 } },
+    strength: 'Buyers arrive 30% faster and bring 15% bigger budgets.', cost: 'Family obligations: 8% of your cash goes to relatives every 7 days.',
+    mods: { leadMult: 1.3, leadBudget: 1.15, familyTax: { rate: 0.08, everyHours: 168 } },
   },
   grad: {
     id: 'grad', name: 'Business-School Grad', icon: '🎓', basis: 'Credentials and theory.',
-    strength: 'Free Niche Radar with exact saturation, +1 Capital Sourcing, loan spreads 15% lower.', cost: 'Student loans: 8% of every profit is garnished until $4,000 is repaid; -1 Ops (theory over practice).',
-    mods: { radar: true, fintechBonus: 1, spreadAdj: -0.15, opsBonus: -1, garnish: { rate: 0.08, cap: 4000 } },
+    strength: 'Free Niche Radar with exact saturation, +1 Capital Sourcing, loan spreads 15% lower.', cost: 'Student loans: 5% of every profit is garnished until $3,000 is repaid; -1 Ops (theory over practice).',
+    mods: { radar: true, fintechBonus: 1, spreadAdj: -0.15, opsBonus: -1, garnish: { rate: 0.05, cap: 3000 } },
   },
   trades: {
     id: 'trades', name: 'Licensed Tradesperson', icon: '🔧', basis: 'Skilled labour.',
@@ -18,8 +18,8 @@ export const PERKS = {
   },
   immigrant: {
     id: 'immigrant', name: 'Immigrant Hustler', icon: '🧳', basis: 'Diaspora networks and informal credit.',
-    strength: 'International lanes +15 points of margin, freight 25% cheaper, a zero-interest Community Circle loan (up to 15% of net worth).', cost: 'Credit-invisible: no bank until net worth $5,000; paperwork means audits come 1.4x as often.',
-    mods: { intlBonus: 0.15, freightMult: 0.75, circle: { pct: 0.15 }, bankMinNW: 5000, auditMult: 1.4 },
+    strength: 'International lanes +10 points of margin, freight 25% cheaper, a zero-interest Community Circle loan (up to 15% of net worth).', cost: 'Credit-invisible: no bank until net worth $5,000; paperwork means audits come 1.4x as often.',
+    mods: { intlBonus: 0.10, freightMult: 0.75, circle: { pct: 0.15 }, bankMinNW: 5000, auditMult: 1.4 },
   },
   veteran: {
     id: 'veteran', name: 'Veteran', icon: '🎖️', basis: 'Discipline and logistics.',
@@ -28,8 +28,8 @@ export const PERKS = {
   },
   heir: {
     id: 'heir', name: 'Legacy Heir', icon: '🏛️', basis: 'Inherited safety nets.',
-    strength: 'Once per run the family clears 60% of your debt when you are margin-called, loan spreads 25% lower, the first audit fine is waived.', cost: 'Born on third base: no skill edge (all skills start at 1, no specialty) and you learn 20% slower.',
-    mods: { bailout: { uses: 1, fraction: 0.6 }, spreadAdj: -0.25, fineWaive: 1, noSpecialty: true, xpMult: 0.8 },
+    strength: 'Once per run the family clears 60% of your debt when you are margin-called, loan spreads 25% lower, the first audit fine is waived.', cost: 'Born on third base: no skill edge (all skills start at 1, no specialty) and you learn 10% slower.',
+    mods: { bailout: { uses: 1, fraction: 0.6 }, spreadAdj: -0.25, fineWaive: 1, noSpecialty: true, xpMult: 0.9 },
   },
   creator: {
     id: 'creator', name: 'Creator', icon: '📱', basis: 'Audience and virality.',
@@ -53,8 +53,8 @@ export const PERKS = {
   },
   second: {
     id: 'second', name: 'Second-Chance Hustler', icon: '🗝️', basis: 'Street smarts, but a record.',
-    strength: 'Spots counterfeits (a free warning), +1 inspection probe, 12% cheaper lots in gray-market districts.', cost: 'A record follows you: no bank until net worth $10,000; audit fines are 1.5x.',
-    mods: { fakeDetect: true, probeBonus: 1, lotDiscountGray: 0.12, bankMinNW: 10000, fineMult: 1.5 },
+    strength: 'Spots counterfeits (a free warning), +1 inspection probe, 12% cheaper lots in gray-market districts.', cost: 'A record follows you: no bank until net worth $8,000; audit fines are 1.5x.',
+    mods: { fakeDetect: true, probeBonus: 1, lotDiscountGray: 0.12, bankMinNW: 8000, fineMult: 1.5 },
   },
   pro: {
     id: 'pro', name: 'Seasoned Pro', icon: '🧭', basis: 'Decades of experience and a mentor.',

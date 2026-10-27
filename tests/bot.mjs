@@ -40,10 +40,12 @@ export function decide(g) {
     let pick = null;
     for (const z of s.zones) for (const lot of s.lots[z]) {
       if (lot.price > s.cash * 0.8 || lot.price < 0.01) continue;
+      if (lot.warn) continue; // the Second-Chance Hustler's free counterfeit warning
+      const risky = (ZONES[z].rules.fakes || 0) * (ASSETS[lot.cls].fakeRisk ?? 1) > 0.05 && !g.P.fakeDetect;
       const full = g.val({ cls: lot.cls, cond: 'ok', quality: lot.cond === 'broken' ? restoreQuality(g.lvl('ops')) : 1, wear: 1, zone: z });
       const fix = lot.cond === 'broken' ? g.repairQuoteFor(lot.cls, z).cost : 0;
       const ratio = full / (lot.price + fix);
-      if ((ratio > 1.06 || lot.price < 1) && (!pick || ratio > pick.ratio)) pick = { z, lot, ratio };
+      if ((ratio > (risky ? 1.3 : 1.06) || lot.price < 1) && (!pick || ratio > pick.ratio)) pick = { z, lot, ratio };
     }
     if (pick) g.buyLot(pick.z, pick.lot.id);
   }
