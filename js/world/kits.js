@@ -1,4 +1,7 @@
 // Theme kits: what each of the sixteen districts is made of. Pure data and placement rules, no drawing.
+// What it holds: per theme the headquarters look, the colours of its lamps and trees, where its buildings and scenery go (place), its ground treatment (decals),
+// and the sprawl that fills its pad (FILL). Options that only say how a prop is DRAWN (mat: 'brick' | 'glass' | 'metal' | 'plaster' | 'stone' | 'boards', see shading.js)
+// may be added to any prop; they never change a footprint. What it never does: draw, use Math.random, or move a prop once placed.
 // A kit's place(A) puts the theme's buildings and scenery into a district block through the generator's API (layout.js);
 // decals(A) lays the ground treatment (lawns, cobbles, bays, circuits...). Everything is deterministic: same island every time.
 //   A.add(type, lx, ly, w, d, h, opts)   a solid prop (refused, returns null, if it would overlap anything or stand on a road)
@@ -51,13 +54,13 @@ kit('market', {
 });
 
 kit('campus', {
-  hq: { col: '#a8442f', roof: 'gable', clock: true, sign: 'SKILLS' }, depot: '#8a4a3a', lamp: '#ffe9a8', tree: '#3f8f4a',
+  hq: { col: '#a8442f', roof: 'gable', clock: true, sign: 'SKILLS', mat: 'brick' }, depot: '#8a4a3a', lamp: '#ffe9a8', tree: '#3f8f4a',
   place(A) {
     const R = A.rest;
-    if (R) { A.add('bldg', R[0], R[1] + 0.2, Math.min(R[2], 7), 3.6, 44, { col: '#a8442f', trim: '#e9d9b8', roof: 'gable', roofCol: '#3a4a5c', win: [6, 3], sign: 'LIBRARY', clock: true }); }
+    if (R) { A.add('bldg', R[0], R[1] + 0.2, Math.min(R[2], 7), 3.6, 44, { col: '#a8442f', trim: '#e9d9b8', roof: 'gable', roofCol: '#3a4a5c', win: [6, 3], sign: 'LIBRARY', clock: true, mat: 'brick' }); }
     if (A.NW) {
       A.add('fountain', 2.6, 2.6, 2, 2, 8);
-      A.add('bldg', 5.8, 0.8, 2.9, 2.2, 28, { col: '#b9564a', trim: '#e9d9b8', roof: 'gable', roofCol: '#3a4a5c', win: [3, 2], sign: 'LAB' });
+      A.add('bldg', 5.8, 0.8, 2.9, 2.2, 28, { col: '#b9564a', trim: '#e9d9b8', roof: 'gable', roofCol: '#3a4a5c', win: [3, 2], sign: 'LAB', mat: 'brick' });
       A.scatter(31, 7, A.NW, (i) => ({ t: 'tree', w: 0.5, d: 0.5, h: 40, s: 0.85 + (i % 3) * 0.12, seed: i, c: '#3f8f4a', sm: 1 }), 0.9);
       A.scatter(32, 4, A.NW, () => ({ t: 'bench', w: 1, d: 0.4, h: 8, sm: 1 }), 0.8);
     }
@@ -89,7 +92,7 @@ kit('pawn', {
 });
 
 kit('metro', {
-  hq: { col: '#4a6a90', roof: 'flat', win: [3, 4], sign: 'SKILLS' }, depot: '#3f5a74', lamp: '#bfe0ff', tree: '#3f7a62',
+  hq: { col: '#4a6a90', roof: 'flat', win: [3, 4], sign: 'SKILLS', mat: 'glass' }, depot: '#3f5a74', lamp: '#bfe0ff', tree: '#3f7a62',
   place(A) {
     const R = A.rest;
     if (R && R[2] >= 2.4) A.add('tower', R[0] + 0.1, R[1] + 0.8, Math.min(R[2] - 0.2, 2.3), 2.3, 96, { color: '#4a8fb0', seed: 2 });
@@ -124,13 +127,13 @@ kit('estate', {
 });
 
 kit('auto', {
-  hq: { col: '#6a7080', roof: 'flat', win: [3, 1], doors: 2, sign: 'SKILLS' }, depot: '#444a55', lamp: '#fff1c0', tree: '#4a6a4a',
+  hq: { col: '#6a7080', roof: 'flat', win: [3, 1], doors: 2, sign: 'SKILLS', mat: 'metal' }, depot: '#444a55', lamp: '#fff1c0', tree: '#4a6a4a',
   place(A) {
     const R = A.rest, red = A.pal[1];
-    if (R) { A.add('bldg', R[0], R[1] + 0.4, Math.min(R[2], 6.6), 3.2, 28, { col: '#d8dce4', trim: red, roof: 'flat', win: [6, 1], glass: 1, sign: 'AUTO', band: red }); A.add('autos', R[0] + 0.2, R[1] + 3.8, Math.min(R[2] - 0.4, 6), 0.9, 12, { n: 4, seed: 3 }); }
+    if (R) { A.add('bldg', R[0], R[1] + 0.4, Math.min(R[2], 6.6), 3.2, 28, { col: '#d8dce4', trim: red, roof: 'flat', win: [6, 1], glass: 1, sign: 'AUTO', band: red, mat: 'metal' }); A.add('autos', R[0] + 0.2, R[1] + 3.8, Math.min(R[2] - 0.4, 6), 0.9, 12, { n: 4, seed: 3 }); }
     A.add('polesign', 20.2, 1.0, 0.4, 0.4, 70, { col: red, text: 'AUTO' });
     A.add('autos', 13.3, 12.8, 6.8, 1.0, 12, { n: 5, seed: 1 });
-    if (A.NW) { A.add('bldg', 0.9, 0.8, 5.4, 3.0, 24, { col: '#aeb4c0', trim: red, win: [5, 1], doors: 3, sign: 'REPAIR', band: red }); A.scatter(71, 4, A.NW, (i) => ({ t: 'tires', w: 0.9, d: 0.9, h: 24, n: 3 + (i % 3), sm: 1 }), 0.9); A.add('autos', 0.9, 4.6, 6.4, 1.0, 12, { n: 5, seed: 5 }); }
+    if (A.NW) { A.add('bldg', 0.9, 0.8, 5.4, 3.0, 24, { col: '#aeb4c0', trim: red, win: [5, 1], doors: 3, sign: 'REPAIR', band: red, mat: 'metal' }); A.scatter(71, 4, A.NW, (i) => ({ t: 'tires', w: 0.9, d: 0.9, h: 24, n: 3 + (i % 3), sm: 1 }), 0.9); A.add('autos', 0.9, 4.6, 6.4, 1.0, 12, { n: 5, seed: 5 }); }
   },
   decals(A) {
     const w = 'rgba(255,255,255,.6)';
@@ -141,7 +144,7 @@ kit('auto', {
 });
 
 kit('harbor', {
-  hq: { col: '#2f4a72', roof: 'saw', win: [3, 1], sign: 'SKILLS' }, depot: '#3a5a86', lamp: '#ffe0b0', tree: '#4a6a6a',
+  hq: { col: '#2f4a72', roof: 'saw', win: [3, 1], sign: 'SKILLS', mat: 'metal' }, depot: '#3a5a86', lamp: '#ffe0b0', tree: '#4a6a6a',
   place(A) {
     const o = A.pal[1];
     A.add('gantry', 13.3, 4.7, 7.0, 0.9, 66, { col: o, ext: 40, label: 'Harbor crane' });
@@ -160,7 +163,7 @@ kit('harbor', {
 });
 
 kit('industrial', {
-  hq: { col: '#6a7480', roof: 'saw', win: [3, 1], sign: 'SKILLS' }, depot: '#5a6470', lamp: '#fff1b0', tree: '#58704a',
+  hq: { col: '#6a7480', roof: 'saw', win: [3, 1], sign: 'SKILLS', mat: 'metal' }, depot: '#5a6470', lamp: '#fff1b0', tree: '#58704a',
   place(A) {
     const R = A.rest, y = A.pal[1];
     if (R) A.add('factory', R[0], R[1] + 0.3, Math.min(R[2], 6), 4.0, 34, { col: '#8a929c', acc: y, stacks: 2, seed: 1 });
@@ -177,7 +180,7 @@ kit('industrial', {
 });
 
 kit('tech', {
-  hq: { col: '#1c2a38', roof: 'flat', win: [3, 2], neon: '#35e0ff', sign: 'SKILLS' }, depot: '#16202c', lamp: '#35e0ff', tree: '#1f6a6a', glow: 1,
+  hq: { col: '#1c2a38', roof: 'flat', win: [3, 2], neon: '#35e0ff', sign: 'SKILLS', mat: 'metal' }, depot: '#16202c', lamp: '#35e0ff', tree: '#1f6a6a', glow: 1,
   place(A) {
     const R = A.rest, c = A.pal[1];
     if (R) { const n = Math.max(1, Math.floor(R[2] / 2.6)); for (let i = 0; i < n; i++) A.add('rack', R[0] + 0.1 + i * 2.6, R[1] + 0.4, 2.3, 3.2, 34 + (i % 2) * 8, { col: '#1b2634', acc: c, seed: i }); }
@@ -194,7 +197,7 @@ kit('tech', {
 });
 
 kit('farm', {
-  hq: { col: '#b0493a', roof: 'gable', roofCol: '#6a2a24', win: [2, 1], sign: 'SKILLS' }, depot: '#8a3a30', lamp: '#ffe0a0', tree: '#3f8a3a',
+  hq: { col: '#b0493a', roof: 'gable', roofCol: '#6a2a24', win: [2, 1], sign: 'SKILLS', mat: 'boards' }, depot: '#8a3a30', lamp: '#ffe0a0', tree: '#3f8a3a',
   place(A) {
     const R = A.rest;
     if (R) { A.add('barn', R[0], R[1] + 0.3, Math.min(R[2], 5.4), 3.8, 36, { col: '#b0493a', trim: '#f2ead8' }); if (R[2] > 6) A.add('silo', R[0] + 5.8, R[1] + 0.5, 1.4, 1.4, 70, { col: '#c9ccd0' }); }
@@ -260,14 +263,14 @@ kit('finance', {
 });
 
 kit('realty', {
-  hq: { col: '#d89a7a', roof: 'gable', roofCol: '#7a3a28', win: [3, 2], sign: 'SKILLS' }, depot: '#a8604a', lamp: '#ffe9c0', tree: '#4a8a4a',
+  hq: { col: '#d89a7a', roof: 'gable', roofCol: '#7a3a28', win: [3, 2], sign: 'SKILLS', mat: 'brick' }, depot: '#a8604a', lamp: '#ffe9c0', tree: '#4a8a4a',
   place(A) {
     const R = A.rest;
     A.add('forsale', 14.4, 12.9, 1.6, 0.4, 24, { col: A.pal[1] });
     A.scatter(111, 5, A.SE, (i) => ({ t: i % 2 ? 'tree' : 'planter', w: 0.6, d: 0.6, h: 34, s: 0.8, c: '#4a8a4a', sm: 1 }), 0.8);
     for (const x of [2, 6, 14, 18]) A.deco('tree', x, 6.3, 0.4, 0.4, 34, { s: 0.7, c: '#4a8a4a' });
-    if (A.NW) { for (let i = 0; i < 3; i++) A.add('bldg', 0.9 + i * 2.7, 0.8, 2.4, 3.2, 30 + (i % 2) * 8, { col: ['#d89a7a', '#c4785a', '#e0b090'][i], trim: '#f6e6d4', roof: 'gable', roofCol: '#7a3a28', win: [2, 3], balc: 1, door: 1 }); }
-    if (R) A.add('bldg', R[0], R[1] + 0.3, Math.min(R[2], 6), 3.6, 40, { col: '#d89a7a', trim: '#f6e6d4', roof: 'gable', roofCol: '#7a3a28', win: [5, 3], balc: 1 });
+    if (A.NW) { for (let i = 0; i < 3; i++) A.add('bldg', 0.9 + i * 2.7, 0.8, 2.4, 3.2, 30 + (i % 2) * 8, { col: ['#d89a7a', '#c4785a', '#e0b090'][i], trim: '#f6e6d4', roof: 'gable', roofCol: '#7a3a28', win: [2, 3], balc: 1, door: 1, mat: 'brick' }); }
+    if (R) A.add('bldg', R[0], R[1] + 0.3, Math.min(R[2], 6), 3.6, 40, { col: '#d89a7a', trim: '#f6e6d4', roof: 'gable', roofCol: '#7a3a28', win: [5, 3], balc: 1, mat: 'brick' });
   },
   decals(A) {
     const lawn = mix('#4a8a4a', A.cols.ground, 0.45);
@@ -308,7 +311,7 @@ export const FILL = {
   creative: (i) => (i % 2 ? { t: 'spot', w: 0.6, d: 0.6, h: 40, col: '#9b6dff' } : { t: 'billboard', w: 3.4, d: 0.3, h: 40, col: '#ff4fa3', text: 'LIVE', ext: 12, anim: 1 }),
   corporate: (i, r) => (i % 2 ? { t: 'planter', w: 0.8, d: 0.8, h: 10, sm: 1 } : { t: 'tower', w: 2.4, d: 2.4, h: 70 + r * 40, color: '#4a8fb0', seed: i }),
   finance: (i) => (i % 2 ? { t: 'planter', w: 0.6, d: 0.6, h: 26, sm: 1 } : { t: 'topiary', w: 0.5, d: 0.5, h: 30, sm: 1 }),
-  realty: (i, r) => (i % 2 ? { t: 'tree', w: 0.5, d: 0.5, h: 34, s: 0.8, c: '#4a8a4a', seed: i, sm: 1 } : { t: 'bldg', w: 2.4, d: 2.6, h: 26 + r * 8, col: ['#d89a7a', '#c4785a', '#e0b090'][i % 3], trim: '#f6e6d4', roof: 'gable', roofCol: '#7a3a28', win: [2, 2], balc: 1, door: 1 }),
+  realty: (i, r) => (i % 2 ? { t: 'tree', w: 0.5, d: 0.5, h: 34, s: 0.8, c: '#4a8a4a', seed: i, sm: 1 } : { t: 'bldg', w: 2.4, d: 2.6, h: 26 + r * 8, col: ['#d89a7a', '#c4785a', '#e0b090'][i % 3], trim: '#f6e6d4', roof: 'gable', roofCol: '#7a3a28', win: [2, 2], balc: 1, door: 1, mat: 'brick' }),
   exchange: () => ({ t: 'planter', w: 0.7, d: 0.7, h: 12, sm: 1 }),
 };
 const crops = (c1, c2) => (q) => [{ k: 'stripes', x: q[0], y: q[1], w: q[2], d: q[3], n: Math.max(2, Math.round(q[3] / 0.7)), axis: 'x', c1, c2, min: 0.3 }];
