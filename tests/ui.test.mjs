@@ -21,6 +21,6 @@ test('the main entry resets the action table before every screen', async () => {
   const fs = await import('node:fs');
   const main = fs.readFileSync(new URL('../js/main.js', import.meta.url), 'utf8');
   assert.match(main, /root\._acts = \{\};/);
-  const game = fs.readFileSync(new URL('../js/ui/game.js', import.meta.url), 'utf8');
-  assert.ok(!/addEventListener\('keydown'/.test(game.replace(/if \(!root\._kb\) root\.addEventListener\('keydown'/, '')), 'the tab-arrow key handler is bound once');
+  const shell = fs.readFileSync(new URL('../js/ui/shell.js', import.meta.url), 'utf8');
+  assert.match(shell, /document\.addEventListener\('keydown', keydown\)/); assert.match(shell, /document\.removeEventListener\('keydown', keydown\)/, 'the shell binds its key handler once and removes it on destroy');
 });

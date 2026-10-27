@@ -22,12 +22,13 @@ export function decide(g) {
   for (const z of s.zones) {
     for (const lead of s.leads[z]) for (const a of s.assets) {
       if (a.zone !== z) continue;
-      const q = g.quotePitch(a.id, lead.id);
-      if (!q.ok || q.rejected || q.scam) continue;
+      const q = g.quotePitch(a.id, lead.id, undefined, { blind: true }); // what a player may see: no peeking at hidden truth
+      if (!q.ok || q.rejected) continue;
       const score = q.received / Math.max(1e-6, q.fmv);
       if (score > 1.08 && (!best || score > best.score)) best = { a, lead, score };
     }
   }
+  if (best && g.P.scamRate && !best.lead.verified && g.verifyLead(best.lead.id).scam) best = null; // a Digital Native checks a buyer before shipping to them
   if (best) g.pitch(best.a.id, best.lead.id);
   // 2. repair broken stock
   for (const a of s.assets.filter((x) => x.cond === 'broken')) {

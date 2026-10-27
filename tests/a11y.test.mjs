@@ -41,3 +41,24 @@ test('index.html has language, viewport, skip link, live regions and a main land
   const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
   for (const needle of ['<html lang="en"', 'name="viewport"', 'class="skip"', 'aria-live="polite"', 'role="alert"', '<main id="app"']) assert.ok(html.includes(needle), needle);
 });
+
+// ---- the Background draft, debrief and instructor screens (css/ui-draft.css)
+const draftCss = readFileSync(new URL('../css/ui-draft.css', import.meta.url), 'utf8');
+for (const [name, T] of [['standard', base], ['high contrast', high]]) {
+  test(`draft cards keep text contrast on every surface they use (${name})`, () => {
+    // unselected card: panel2; selected card and filled tray slot: warn-bg; full-hand dashed card and empty slot: bg2; tray: panel; the tick box: bg
+    for (const bg of ['panel2', 'warn-bg', 'bg2', 'panel']) for (const fg of ['ink', 'mute', 'green', 'red', 'gold']) assert.ok(ratio(T[fg], T[bg]) >= 4.5, `${fg} on ${bg}: ${ratio(T[fg], T[bg]).toFixed(2)}`);
+    assert.ok(ratio(T['on-gold'], T.gold) >= 4.5, 'the tick on the gold box');
+    for (const bg of ['panel2', 'warn-bg', 'bg2']) assert.ok(ratio(T.field, T[bg]) >= 3, `tick box border on ${bg}`);
+    assert.ok(ratio(T.gold, T.bg) >= 3 && ratio(T.gold, T.panel) >= 3, 'selected card border');
+  });
+}
+test('the draft stylesheet uses only tokens that exist, in both themes', () => {
+  const used = new Set([...draftCss.matchAll(/var\(--([\w-]+)/g)].map((m) => m[1]));
+  for (const t of used) { assert.ok(t in base, `--${t} is not a token of the base theme`); assert.ok(t in high, `--${t} is not a token of the high-contrast theme`); }
+  assert.ok(used.size >= 10);
+});
+test('the draft keeps a visible focus ring and 24px targets (WCAG 2.4.7, 2.5.8)', () => {
+  assert.match(draftCss, /\.dr-card:has\(\.dr-in:focus-visible\)\s*\{[^}]*outline: 3px solid var\(--focus\)/);
+  assert.match(draftCss, /\.dr-card > \.dr-in\s*\{[^}]*width: 100%[^}]*height: 100%/, 'the whole card is the target');
+});

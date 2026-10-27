@@ -1,1 +1,62 @@
-/* ui-academy: owned by the author of that part of the interface */
+/* ui-academy: the Academy's intro card, its coach marks (spotlight ring and card) and the sheets after a lesson (why it worked, teach-back, reward). Tokens come from styles.css. */
+
+/* ---- intro */
+.ac-intro { max-width: 46rem; margin: 3vh auto; display: grid; gap: .6rem; }
+.ac-eyebrow { margin: 0; font-size: .72rem; text-transform: uppercase; letter-spacing: .1em; color: var(--gold); }
+.ac-intro h1 { margin: 0; font-size: clamp(1.5rem, 4vw, 2.2rem); color: var(--gold); text-shadow: 3px 3px 0 #000; overflow-wrap: anywhere; }
+.ac-intro h1:focus, .ac-sheet h2:focus { outline: none; }
+.ac-scene { font-size: 1.05rem; border-left: 4px solid var(--cyan); padding: .45rem .9rem; background: var(--info-bg); margin: .3rem 0; }
+.ac-facts { list-style: none; padding: 0; margin: 0; display: flex; gap: .4rem; flex-wrap: wrap; }
+.ac-pips { list-style: none; display: flex; gap: .35rem; padding: 0; margin: .5rem 0; flex-wrap: wrap; }
+.ac-pip { width: 2.1rem; height: 2.1rem; display: grid; place-items: center; border: var(--bw) solid var(--line); font-family: ui-monospace, Menlo, monospace; font-size: .8rem; color: var(--mute); border-radius: 2px; }
+.ac-pip.done { border-color: var(--green); color: var(--green); background: var(--good-bg); }
+.ac-pip.skipped { border-color: var(--gold); color: var(--gold); }
+.ac-pip.now { border-color: var(--gold); background: var(--gold); color: var(--on-gold); font-weight: 700; }
+
+/* ---- coach marks: a ring round the real control, a card beside it. The layer lets every click through except the card's own. */
+.ac-layer, .overlay > .ac-layer { position: fixed; inset: 0; z-index: 30; pointer-events: none; }
+.ac-ring { position: fixed; left: 0; top: 0; border: 3px solid var(--gold); border-radius: 6px; pointer-events: none; will-change: transform;
+  box-shadow: 0 0 0 100vmax rgba(5, 8, 14, .5), 0 0 16px 2px var(--gold); transition: transform .25s ease, width .25s ease, height .25s ease; animation: ac-pulse 1.8s ease-in-out infinite; }
+.ac-ring.show { border-width: 5px; border-color: var(--focus); animation: ac-show .9s ease-in-out infinite; }
+@keyframes ac-pulse { 0%, 100% { box-shadow: 0 0 0 100vmax rgba(5, 8, 14, .5), 0 0 0 0 rgba(255, 194, 71, .7); } 50% { box-shadow: 0 0 0 100vmax rgba(5, 8, 14, .5), 0 0 0 12px rgba(255, 194, 71, 0); } }
+@keyframes ac-show { 0%, 100% { box-shadow: 0 0 0 100vmax rgba(5, 8, 14, .62), 0 0 0 0 rgba(255, 242, 122, .9); } 50% { box-shadow: 0 0 0 100vmax rgba(5, 8, 14, .62), 0 0 0 18px rgba(255, 242, 122, 0); } }
+.ac-coach { position: fixed; left: 0; top: 0; width: min(21rem, calc(100vw - 1rem)); max-height: 60vh; overflow: auto; background: var(--panel); border: var(--bw) solid var(--gold); box-shadow: var(--shadow); padding: .65rem .85rem .75rem; pointer-events: auto; transition: transform .25s ease; }
+.ac-coach:focus { outline: none; }
+.ac-coach .ac-say { margin: .25rem 0 .55rem; font-size: .95rem; }
+.ac-coach .ac-hint, .ac-coach .ac-look { margin: .25rem 0 .55rem; font-size: .84rem; padding: .35rem .55rem; background: var(--warn-bg); border-left: 4px solid var(--gold); }
+.ac-btns { display: flex; flex-wrap: wrap; gap: .4rem; }
+
+/* ---- the sheets after a win */
+.ac-sheet { position: fixed; inset: 0; z-index: 40; background: rgba(5, 8, 14, .8); display: grid; justify-items: center; align-items: start; overflow: auto; padding: 4vh .8rem; }
+.ac-sheet-in { width: min(44rem, 100%); background: var(--panel); border: var(--bw) solid var(--gold); box-shadow: 8px 8px 0 rgba(0, 0, 0, .6); padding: 1.1rem 1.3rem 1.3rem; display: grid; gap: .5rem; min-width: 0; }
+.ac-sheet-in h2 { margin: 0; overflow-wrap: anywhere; } .ac-sheet-in h3 { margin: .6rem 0 .2rem; } .ac-sheet-in p { margin: .25rem 0; overflow-wrap: anywhere; }
+.ac-formula { background: var(--bg); border: 1px solid var(--line); border-left: 4px solid var(--cyan); padding: .6rem .8rem; white-space: pre-wrap; overflow-x: auto; color: var(--cyan); margin: .4rem 0; font-size: .92rem; }
+.ac-ex { background: var(--panel2); border: 1px solid var(--line); padding: .6rem .9rem; margin: .4rem 0; }
+.ac-ex h3 { margin-top: 0; font-size: .78rem; text-transform: uppercase; letter-spacing: .08em; color: var(--mute); } .ac-ex ol { margin: .3rem 0; padding-left: 1.3rem; } .ac-ex li { margin: .2rem 0; }
+.ac-result { margin-top: .5rem; padding-top: .4rem; border-top: 1px dashed var(--line); }
+
+/* teach-back: three large options, a reason under every one you pick */
+.ac-opts { list-style: none; padding: 0; margin: .4rem 0; display: grid; gap: .6rem; }
+.ac-opt { width: 100%; text-align: left; display: grid; grid-template-columns: 2.1rem 1fr; gap: .7rem; align-items: center; min-height: 3.4rem; padding: .7rem .9rem; background: var(--panel2); color: var(--ink); border: var(--bw) solid var(--field); font: inherit; font-size: 1rem; cursor: pointer; border-radius: 2px; }
+.ac-opt:hover:not([aria-disabled="true"]) { border-color: var(--gold); }
+.ac-opt[aria-disabled="true"] { cursor: default; }
+.ac-opt.wrong { border-color: var(--red); background: var(--bad-bg); } .ac-opt.right { border-color: var(--green); background: var(--good-bg); }
+.ac-k { display: grid; place-items: center; width: 2rem; height: 2rem; border: var(--bw) solid currentColor; font-family: ui-monospace, Menlo, monospace; font-weight: 700; border-radius: 2px; }
+.ac-why { margin: .3rem 0 0 .2rem; padding: .35rem .7rem; border-left: 4px solid var(--line); font-size: .9rem; }
+.ac-why.good { border-color: var(--green); } .ac-why.bad { border-color: var(--red); }
+.ac-fb { min-height: 1px; }
+
+/* reward */
+.ac-rw { list-style: none; padding: 0; margin: .3rem 0; display: flex; gap: .5rem; flex-wrap: wrap; font-size: 1.05rem; }
+.ac-cx { list-style: none; padding: 0; margin: .3rem 0; display: grid; gap: .5rem; }
+.ac-cxcard { display: grid; grid-template-columns: 2.4rem 1fr; gap: .6rem; align-items: start; padding: .5rem .7rem; background: var(--panel2); border: 1px solid var(--line); }
+.ac-cxi { font-size: 1.6rem; text-align: center; line-height: 1.2; } .ac-cxcard p { margin: .1rem 0 0; }
+
+@media (max-width: 760px) {
+  .ac-coach { width: calc(100vw - 1rem); max-height: 46vh; }
+  .ac-sheet { padding: 1vh .4rem; } .ac-sheet-in { padding: .8rem .85rem 1rem; }
+}
+@media (prefers-reduced-motion: reduce) { .ac-ring, .ac-ring.show { animation: none; } .ac-ring, .ac-coach { transition: none; } }
+:root[data-motion="reduce"] .ac-ring, :root[data-motion="reduce"] .ac-ring.show { animation: none; }
+:root[data-motion="reduce"] .ac-ring, :root[data-motion="reduce"] .ac-coach { transition: none; }
+:root[data-contrast="high"] .ac-ring { box-shadow: 0 0 0 100vmax rgba(0, 0, 0, .7); }

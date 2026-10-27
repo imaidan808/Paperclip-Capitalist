@@ -1,10 +1,10 @@
 // The overlay on top of the world: player card, the three numbers that matter, the clock, the mission tracker and the news ticker.
 // Pure builders: (ctx) -> HTML. Interaction is data-act attributes handled in shell.js.
-import { PERKS, TOTAL_DAYS } from '../config.js';
+import { PERKS, TOTAL_DAYS, xpForLevel } from '../config.js';
 import { fmtMoney as money } from '../market.js';
 import { esc } from './common.js';
 
-const lvlBase = (l) => (l - 1) ** 2 * 100; // the engine's level curve: level = floor(sqrt(xp / 100)) + 1
+const lvlBase = xpForLevel; // the engine's level curve (config.js)
 
 export function playerCard(ctx) {
   const g = ctx.g(), s = g.s, lv = g.level(), lo = lvlBase(lv), hi = lvlBase(lv + 1), p = Math.max(0, Math.min(1, (s.xp - lo) / (hi - lo)));

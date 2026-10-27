@@ -76,7 +76,7 @@ export class Session {
   }
   restore() {
     const d = kv.get('save');
-    if (!d || d.v !== 1 || !d.state) return false;
+    if (!d || d.v !== 1 || !d.state || d.state.v !== 2 || !Array.isArray(d.state.perks)) return false; // a save from the three-profile game cannot be opened: it has no Backgrounds
     this.mode = d.mode === 'instructor' ? 'solo' : d.mode;
     this.worldSeed = d.worldSeed || 'solo';
     this.difficulty = { ...this.difficulty, ...(d.difficulty || {}) };

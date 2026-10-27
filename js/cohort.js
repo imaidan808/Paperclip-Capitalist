@@ -55,7 +55,7 @@ export class Cohort {
     if (bucket !== this.cacheHour) { this.cache.clear(); this.cacheHour = bucket; }
     const k = zone + cls;
     if (this.cache.has(k)) return this.cache.get(k);
-    const g = ghostCounts(this.seed, hour, zone, cls, this.ghosts);
+    const g = ghostCounts(this.seed, bucket * 6, zone, cls, this.ghosts); // the bucket's own start, so a restored or rewound game sees what an uninterrupted one saw
     const out = { total: g.total, byBuyer: { ...g.byBuyer } };
     for (const p of this.peers.values()) {
       for (const [key, n] of Object.entries(p.niches || {})) {

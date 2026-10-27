@@ -21,6 +21,9 @@ import { ASSETS } from './data/index.js';
 export { ZONES, ASSETS, BUYERS, ZONE_IDS, ZONE_COUNT } from './data/index.js';
 export { PERKS, PERK_IDS, perkMods } from './data/perks.js';
 
+// Levels: level = floor(sqrt(xp / LEVEL_XP)) + 1, so level L starts at xpForLevel(L). Each level earns one skill point.
+export const LEVEL_XP = 150;
+export const xpForLevel = (l) => (l - 1) ** 2 * LEVEL_XP;
 export const SKILLS = {
   ops: { id: 'ops', name: 'Operational Engineering', short: 'Ops', blurb: 'Cheaper repairs, better restorations, lower sourcing prices and pipeline friction.' },
   growth: { id: 'growth', name: 'Customer Acquisition Velocity', short: 'Growth', blurb: 'More buyer leads, faster pipeline cycles, cheaper client acquisition, higher pitch prices.' },

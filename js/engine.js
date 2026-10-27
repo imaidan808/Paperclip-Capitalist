@@ -1,7 +1,7 @@
 // The simulation engine. Pure JS, no DOM. One step = one virtual hour; 24 hours = 1 virtual day; 90 days = a run.
 // Every student-facing action is a method that returns {ok, msg, ...}. Everything the UI shows is read from `game.s`.
 import {
-  TOTAL_DAYS, TOTAL_HOURS, ECON, MIL, MIL_ZONE, CM, FEES, FMV_BAND, EEI_FLOOR_DEFAULT, BASE_RATE, DEBT, ZONES, ZONE_IDS, SKILLS, SKILL_MAX,
+  TOTAL_DAYS, TOTAL_HOURS, ECON, LEVEL_XP, MIL, MIL_ZONE, CM, FEES, FMV_BAND, EEI_FLOOR_DEFAULT, BASE_RATE, DEBT, ZONES, ZONE_IDS, SKILLS, SKILL_MAX,
   PERKS, perkMods, ASSETS, BUYERS, PIPE, PIPE_RULES, pipeScale, pipeMargin, pipeOverhead, UPGRADES, CLIENTS, LOANS, AUDIT_THEMES, AUDIT, EVENTS, ALGO_EVENTS, WARN_LEAD, FRESH,
 } from './config.js';
 import {
@@ -10,8 +10,12 @@ import {
 } from './market.js';
 import { step as rngStep, hash01 } from './rng.js';
 
-const ok = (msg, extra = {}) => ({ ok: true, msg, ...extra });
-const fail = (msg, extra = {}) => ({ ok: false, msg, ...extra });
+// The message and the verdict are the caller's own: a quote spread in as `extra` must never overwrite them (a failed pool sale once came back ok with no message).
+const ok = (msg, extra = {}) => ({ ...extra, ok: true, msg });
+const fail = (msg, extra = {}) => ({ ...extra, ok: false, msg });
+// A number from outside (the Deal Room, a peer, a test) that is not a finite number becomes the neutral default instead of poisoning cash.
+const fin = (x, d) => (typeof x === 'number' && !Number.isNaN(x) ? x : d); // +-Infinity is a number: the caller's clamp turns it into the nearest bound
+const own = (o, k) => typeof k === 'string' && Object.prototype.hasOwnProperty.call(o, k); // ids come from the UI and the network: never index a plain object by them unchecked
 const money = (x) => (Math.abs(x) < 100 ? '$' + x.toFixed(2) : '$' + Math.round(x).toLocaleString('en-US'));
 
 export class Game {
@@ -28,7 +32,7 @@ export class Game {
 
   // ------------------------------------------------------------------ construction
   _new({ perks = [], handle = 'Founder', pid = 'PC-' + Math.random().toString(36).slice(2, 6).toUpperCase(), seed, specialty = 'ops', startHour = 0 }) {
-    perks = [...new Set(perks)].filter((id) => PERKS[id]).slice(0, 2);
+    perks = [...new Set(perks)].filter((id) => own(PERKS, id)).slice(0, 2);
     const P = perkMods(perks);
     seed = (seed ?? Math.floor(Math.random() * 2 ** 32)) >>> 0;
     const skills = { ops: 1, growth: 1, fintech: 1 };
@@ -115,7 +119,7 @@ export class Game {
     if (L.length > 3200) { const i = L.findIndex((e) => e.type === 'pipe'); L.splice(i < 0 ? 0 : i, 1); }
   }
   xp(n) { this.s.xp += Math.round(n * this.P.xpMult); this._levelCheck(); }
-  level() { return Math.floor(Math.sqrt(this.s.xp / 100)) + 1; }
+  level() { return Math.floor(Math.sqrt(this.s.xp / LEVEL_XP)) + 1; }
   /** Each new level grants one skill point (spendPoint). */
   _levelCheck() {
     const s = this.s;
@@ -300,8 +304,9 @@ export class Game {
     if (this.s.events.some((e) => e.id === id)) return false;
     if (extra.replace) this.s.events = this.s.events.filter((e) => !(e.kind === kind && !e.started));
     let inst;
-    if (EVENTS[kind]) inst = this._evInstance(kind, atHour, { id, injected: !!extra.injected || !!extra.replace });
-    else if (ALGO_EVENTS[kind]) {
+    if (!own(EVENTS, kind) && !own(ALGO_EVENTS, kind)) return false; // a kind that arrives over the network must be one we know
+    if (own(EVENTS, kind)) inst = this._evInstance(kind, atHour, { id, injected: !!extra.injected || !!extra.replace });
+    else if (own(ALGO_EVENTS, kind)) {
       const made = ALGO_EVENTS[kind].mk(extra.cls || 'sneakers');
       inst = { id, kind, name: made.name, start: atHour, phases: made.phases, level: 1, alert: { code: 'ALGO-' + kind.toUpperCase(), readout: made.name + '.', vars: [], enforcement: 'Algorithmic market event.' }, warned: false, started: false, short: 'Algorithmic' };
     } else return false;
@@ -328,8 +333,8 @@ export class Game {
       const far = z > 8 ? this.P.farLeadMult : 1;
       const good = s.hour < s.ps.goodwillUntil ? 0.5 : 1; // a failed pitch costs the Creator some goodwill
       const mult = (1 + 0.15 * (this.lvl('growth') - 1)) * (s.upg.seo ? 1.5 : 1) * this.P.leadMult * this.B.leadMult * far * good * (0.85 + 0.003 * s.rep);
-      const every = Math.max(1, Math.round(Z.leadEvery * ECON.leadEvery / mult));
-      if (s.hour % every !== 0) return;
+      const rate = mult / (Z.leadEvery * ECON.leadEvery); // buyers per hour; a fraction of an arrival accumulates until it is whole
+      if (Math.floor(s.hour * rate) === Math.floor((s.hour - 1) * rate)) return;
     }
     if (s.leads[z].length >= 8) return;
     const segs = Object.keys(BUYERS).filter((id) => BUYERS[id].zone === z);
@@ -371,8 +376,8 @@ export class Game {
   _spawnLot(z, byClock = false) {
     const s = this.s, Z = ZONES[z];
     s.lots[z] = (s.lots[z] || []).filter((l) => l.exp > s.hour);
-    const every = Math.max(2, Math.round(Z.lotEvery * ECON.lotEvery * (1 - this.P.lotRefresh)));
-    if (byClock && s.hour % every !== 0) return;
+    const lotRate = 1 / (Z.lotEvery * ECON.lotEvery * (1 - this.P.lotRefresh));
+    if (byClock && Math.floor(s.hour * lotRate) === Math.floor((s.hour - 1) * lotRate)) return;
     if (s.lots[z].length >= ECON.lotSlots + this.B.lotSlots) return;
     const nw = Math.max(10, this.netWorth());
     const classes = Object.keys(ASSETS).filter((c) => {
@@ -441,7 +446,7 @@ export class Game {
     return (l.scrap || 0) >= 0.5 || (l.industrial || 0) >= 0.7 || (l.vehicle || 0) >= 0.8;
   }
   /** deal = { mult } from the Deal Room (pitch angle x haggle result). Clamped here, so no game can break the economy. */
-  quotePitch(assetId, leadId, deal) {
+  quotePitch(assetId, leadId, deal, opts = {}) {
     const s = this.s, a = s.assets.find((x) => x.id === assetId);
     if (!a) return fail('Pick an asset from your inventory.');
     let lead = null;
@@ -450,18 +455,22 @@ export class Game {
     if (a.zone !== lead.zone) return fail(`Your ${ASSETS[a.cls].name} is in ${ZONES[a.zone].short}. Freight it to ${ZONES[lead.zone].short} first.`);
     const def = ASSETS[a.cls], z = lead.zone;
     if (demandOf(def, z) <= 0) return fail(`Nobody in ${ZONES[z].short} wants ${def.name}.`);
+    if (lead.scam && lead.verified) return fail('You verified this buyer: it is a fraud. Do not ship to them.');
     if (a.cond === 'broken' && !this.acceptsBroken(lead.seg)) return fail('This buyer will not take a broken asset. Repair it first, or sell to someone who works with scrap and spares.');
     let fit = fitOf(a.cls, lead.seg);
     if (lead.need) fit = def.tags.includes(lead.need) ? 1 : fit * 0.5;
     const ci = this.cmFor(z, a.cls, lead.seg);
     const fmv = this.val(a);
     const B = BUYERS[lead.seg];
-    const counterfeit = !!a.truth?.fake; // the buyer checks what you are selling
-    const qual = a.truth && !a.truth.fake ? a.truth.q : 1;
+    // `blind` quotes are what the player may be shown: as described, with no peek at the crate's hidden truth or at a buyer's undisclosed fraud.
+    // The real sale (pitch) is never blind: the buyer checks what you are selling.
+    const seen = !opts.blind || !!a.known;
+    const counterfeit = seen && !!a.truth?.fake;
+    const qual = seen && a.truth && !a.truth.fake ? a.truth.q : 1;
     const ref = lead.need ? lead.budget : fmv * (a.known ? 1 : qual);
     const term = lead.need ? 0.55 + 0.45 * fit : fitMult(fit);
     const hustle = this.P.pitchMult;
-    const dealMult = clamp(deal?.mult ?? 1, 0.6, 1.4);
+    const dealMult = clamp(fin(deal?.mult, 1), 0.6, 1.4);
     const rejected = fit < 0.15 || counterfeit;
     let price = rejected ? 0 : ref * term * CM.pitchBase * ECON.pitchK * ci.cm * this.growthMult() * hustle * dealMult * (lead.need ? qual : 1);
     const capped = price > lead.budget;
@@ -480,7 +489,7 @@ export class Game {
     }
     const received = (goods ? goods.value : 0) + change;
     return {
-      ok: true, rejected, reason: counterfeit ? 'counterfeit' : fit < 0.15 ? 'nofit' : null, scam: !!lead.scam && !lead.verified, fit, fmv, ci, price, capped, tax, fee, net, goods, change, received,
+      ok: true, rejected, reason: counterfeit ? 'counterfeit' : fit < 0.15 ? 'nofit' : null, scam: !opts.blind && !!lead.scam && !lead.verified, fit, fmv, ci, price, capped, tax, fee, net, goods, change, received,
       lead, asset: a, zone: z, mods: this.mods(), deal: dealMult,
       gain: fmv > 0 ? received / fmv - 1 : 0, profit: received - (a.basis || 0), parts: { ref, term, base: CM.pitchBase, cm: ci.cm, growth: this.growthMult(), hustle, deal: dealMult, quality: qual },
     };
@@ -524,7 +533,7 @@ export class Game {
     s.streak = win ? s.streak + 1 : 0;
     s.bestStreak = Math.max(s.bestStreak, s.streak);
     if (win) { s.rep = clamp(s.rep + 1, 0, 100); s.loyal[q.lead.seg] = (s.loyal[q.lead.seg] || 0) + 1; } else if (this.P.flopRep) { s.rep = clamp(s.rep - this.P.flopRep / 2, 0, 100); s.ps.goodwillUntil = s.hour + 48; }
-    const xp = win ? 40 + 60 * clamp(Math.log10(1 + q.gain), 0, 3) + s.streak * 5 : 5;
+    const xp = win ? 40 + 60 * clamp(Math.log10(1 + q.gain), 0, 3) + Math.min(s.streak, 10) * 5 : 5; // a long streak keeps its glory, not an endless XP spigot
     this.xp(xp);
     this.led('pitch', `${ASSETS[a.cls].name} to ${BUYERS[q.lead.seg].name}${got ? ' for ' + got : ''}`, q.received - q.fmv, { z, cm: q.ci.cm, S: q.ci.S, vN: q.ci.vN, vT: q.ci.vT, cls: a.cls, seg: q.lead.seg, fmv: q.fmv, recv: q.received });
     const outcome = q.ci.band.id === 'pioneer' ? 'pioneer' : q.ci.band.id === 'herd' ? 'herd' : win ? 'win' : 'flat';
@@ -558,13 +567,22 @@ export class Game {
     const caught = lot.truth.fake && res.estimate.fakeProb >= 0.6;
     const score = clamp(res.score ?? 0.5, 0, 1);
     this.xp(8 + 22 * score);
+    this._tally('inspect', score, !!res.quick);
     this.emit('inspect', { score, fake: lot.truth.fake, caught });
     return ok('Recorded.', { caught });
+  }
+  /** Per-game play counts for the debrief and the instructor: s.meta[kind] = { n, sum } (sum of scores), plus how many deals were played by hand and how many were Quick. */
+  _tally(kind, score, quick) {
+    const m = (this.s.meta ||= {});
+    const t = (m[kind] ||= { n: 0, sum: 0 });
+    t.n++; t.sum += score;
+    if (quick) m.quick = (m.quick || 0) + 1; else m.played = (m.played || 0) + 1;
   }
   /** A skill game played for its own sake (haggle, auction, repair) pays a little XP for good play. */
   recordPlay(kind, res) {
     const score = clamp(res?.score ?? 0.5, 0, 1);
     this.xp(6 + 24 * score);
+    this._tally(kind, score, !!res?.quick);
     if (kind === 'haggle') this.emit('haggle', { role: res.role || 'sell', mult: res.mult ?? 1, score, deal: !!res.deal });
     if (kind === 'auction') this.emit('auction', { won: !!res.won, price: res.price ?? 0, surplus: res.surplus ?? 0 });
   }
@@ -572,8 +590,16 @@ export class Game {
   buyQuote(zone, lotId, deal) {
     const lot = this.s.lots[zone]?.find((l) => l.id === lotId);
     if (!lot) return fail('That lot is gone.');
-    const mult = clamp(deal?.mult ?? 1, 0.6, 1.4);
+    const mult = clamp(fin(deal?.mult, 1), 0.6, 1.4);
     return ok('', { lot, mult, price: Math.max(0.01, Math.round(lot.price * mult * 100) / 100) });
+  }
+  /** A buyer who walked away, or whom the player walked away from, leaves the district. */
+  passLead(zone, leadId, why = '') {
+    const s = this.s, l = (s.leads[zone] || []).find((x) => x.id === leadId);
+    if (!l) return fail('That buyer has left.');
+    s.leads[zone] = s.leads[zone].filter((x) => x.id !== leadId);
+    if (why) this.note('info', why);
+    return ok('Buyer gone.');
   }
   /** A lot the player lost at auction goes to another bidder. */
   passLot(zone, lotId, why = '') {
@@ -606,8 +632,8 @@ export class Game {
     const def = ASSETS[a.cls];
     if (a.cond !== 'broken' || !def.repair) return fail('Nothing to repair.');
     const ops = this.lvl('ops');
-    const cost = repairCostFor(def.repair, ops, this.repairMultFor(a.zone)) * clamp(deal?.costMult ?? 1, 0.9, 1.3);
-    const q = clamp(restoreQuality(ops) * clamp(deal?.qualityMult ?? 1, 0.85, 1.15), 0.3, 1.15);
+    const cost = repairCostFor(def.repair, ops, this.repairMultFor(a.zone)) * clamp(fin(deal?.costMult, 1), 0.9, 1.3);
+    const q = clamp(restoreQuality(ops) * clamp(fin(deal?.qualityMult, 1), 0.85, 1.15), 0.3, 1.15);
     const after = assetFMV({ ...a, cond: 'ok', quality: q }, a.zone, this.mods(), this.crowd(a.cls, a.zone)) * this.perkValue(a.cls);
     return ok('', { cost, quality: q, before: this.val(a), after, asset: a });
   }
@@ -625,7 +651,7 @@ export class Game {
     q.asset.cond = 'ok'; q.asset.quality = q.quality; q.asset.basis += q.cost;
     this.xp(20);
     this.led('repair', `Repaired ${ASSETS[q.asset.cls].name} to ${Math.round(q.quality * 100)}% quality`, -q.cost, { z: q.asset.zone });
-    this.emit('repair', { cls: q.asset.cls, cost: q.cost, quality: q.quality, precision: clamp(deal?.precision ?? 0.5, 0, 1) });
+    this.emit('repair', { cls: q.asset.cls, cost: q.cost, quality: q.quality, precision: clamp(fin(deal?.precision, 0.5), 0, 1) });
     return ok('Repaired.', q);
   }
   /** The district where digital goods fetch most when routed (the Digital Native's remote sale). */
@@ -693,7 +719,7 @@ export class Game {
     if (s.cash < q.cost) return fail(`Freight costs ${money(q.cost)}.`);
     s.cash -= q.cost;
     s.assets = s.assets.filter((a) => !ids.includes(a.id));
-    s.freight.push({ id: 'F' + s.nid++, items: q.items, to, arrive: s.hour + q.hours, risk: q.risk, book: q.book, from: q.from });
+    s.freight.push({ id: 'F' + s.nid++, items: q.items, to, sent: s.hour, arrive: s.hour + q.hours, risk: q.risk, book: q.book, from: q.from });
     this.led('freight', `Shipped ${q.items.length} asset(s) to ${ZONES[to].short}`, -q.cost, { z: to });
     this.emit('ship', { from: q.from, to, count: q.items.length });
     return ok(`In transit for ${q.hours} virtual hours.`, q);
@@ -724,7 +750,7 @@ export class Game {
   }
   /** Spend a skill point (earned by levelling up). Cash training is gone: skill is earned by play. */
   spendPoint(skill) {
-    const s = this.s, l = s.skills[skill];
+    const s = this.s, l = own(s.skills, skill) ? s.skills[skill] : null;
     if (l == null) return fail('Unknown skill.');
     if (l >= SKILL_MAX) return fail('Already at mastery.');
     if (s.points < 1) return fail('No skill points. Every level you earn gives one.');
@@ -783,7 +809,7 @@ export class Game {
   }
   hirePipeline(kind, zone, cfg = {}) {
     const s = this.s;
-    if (!PIPE[kind]) return fail('Unknown manager.');
+    if (!own(PIPE, kind)) return fail('Unknown manager.');
     if (!ZONES[zone].auto) return fail('No managers can work in this district. Everything here is done by hand.');
     if (!s.zones.includes(zone)) return fail('You do not have access to that district.');
     if (this.autoLocked()) return fail('Gate 2: automation expansion is locked until you resolve your Regulatory Audit.');
@@ -845,7 +871,7 @@ export class Game {
     return ok(`Recovered ${money(v)} (60% of what you put in).`);
   }
   buyUpgrade(id) {
-    const s = this.s, U = UPGRADES[id];
+    const s = this.s, U = own(UPGRADES, id) ? UPGRADES[id] : null;
     if (!U || s.upg[id]) return fail('Already installed.');
     if (!s.zones.includes(U.zone)) return fail('Unlocks at Metro Hub.');
     if (s.cash < U.cost) return fail(`Costs ${money(U.cost)}.`);
@@ -893,7 +919,8 @@ export class Game {
     return { cac, ltv, ratio: ltv / cac, payback: cac / (C.perDay * (1 - this.zoneTax(C.zone))), perDay: C.perDay, days };
   }
   acquireClient(tier) {
-    const s = this.s, C = CLIENTS[tier];
+    const s = this.s, C = own(CLIENTS, tier) ? CLIENTS[tier] : null;
+    if (!C) return fail('Unknown account type.');
     if (!s.zones.includes(C.zone)) return fail('Not available in your districts yet.');
     if (C.needs && !s.mil[C.needs]) return fail(`Unlocks at Milestone ${C.needs.slice(1)}.`);
     if (s.clients.filter((c) => c.tier === tier).length >= C.max) return fail('You already hold the maximum of these accounts.');
@@ -924,14 +951,15 @@ export class Game {
     const s = this.s;
     if (prod === 'circle') return this.P.circle ? '' : 'You are not part of a Community Circle.';
     if (!s.mil.m1) return 'The Commercial Bank opens at Metro Hub ($1,000 net worth).';
-    if (this.netWorth() < this.P.bankMinNW) return `No bank will lend to you yet: your record asks for ${money(this.P.bankMinNW)} net worth first.`;
+    if (this.P.bankMinNW > 0 && this.netWorth() < this.P.bankMinNW) return `No bank will lend to you yet: your record asks for ${money(this.P.bankMinNW)} net worth first.`;
     if (this.mods().freeze) return 'Credit Action Override: no new loans until the freeze lifts.';
     if (LOANS[prod].zone && !s.zones.includes(LOANS[prod].zone)) return 'Needs Corporate Valley.';
     if (s.insolvent) return 'Your account is insolvent.';
     return '';
   }
   draw(prod, amount) {
-    const s = this.s, L = LOANS[prod];
+    const s = this.s, L = own(LOANS, prod) ? LOANS[prod] : null;
+    if (!L) return fail('Unknown loan product.');
     const block = this.loanBlock(prod);
     if (block) return fail(block);
     const r = this.loanRoom(prod);
@@ -1135,6 +1163,8 @@ export class Game {
   // ------------------------------------------------------------------ exit (M&A / IPO)
   exitQuote(kind) {
     const s = this.s;
+    if (kind === 'sale') kind = 'trade'; // the Bank drawer says "sale"
+    if (kind !== 'ipo' && kind !== 'trade') return fail('Choose a trade sale or an IPO.');
     if (!s.mil.m3) return fail('Exit options unlock at Corporate Valley ($250,000 net worth).');
     if (kind === 'ipo' && s.auditFail > 0) return fail('IPO preparation needs a clean compliance record. Choose a trade sale.');
     const avg = s.dp.length ? s.dp.reduce((a, b) => a + b, 0) / s.dp.length : 0;
@@ -1146,6 +1176,7 @@ export class Game {
     return ok('', { avg, premium, hard, brokerage, proceeds, hours: 48, daysLeft: this.daysRemaining() - 2, eeiIfNow: eeiCalc(proceeds, s.startCapital, Math.max(0, this.daysRemaining() - 2), this.env.difficulty.eeiFloor) });
   }
   exit(kind) {
+    if (kind === 'sale') kind = 'trade';
     const q = this.exitQuote(kind);
     if (!q.ok) return q;
     const s = this.s;
@@ -1190,15 +1221,27 @@ export class Game {
     if (def.tags.includes('digital')) return working * Math.min(1.4, 0.7 + 0.1 * skills.growth);
     return assetFMV(pubAsset, z, mods, 1);
   }
+  /** An asset leaves for a classmate as it truly is: what it is really worth is folded into its quality and the hidden truth stays behind, so a swap neither leaks the truth nor launders a counterfeit into a genuine crate. */
+  _disclosed(a) {
+    const c = { ...a };
+    if (a.truth) c.quality = (a.quality ?? 1) * truthMult(a);
+    delete c.truth; delete c.belief;
+    c.known = true;
+    return c;
+  }
   createOffer({ to, giveIds = [], giveCash = 0, want = { assets: [], cash: 0 }, royalty = null, note = '' }) {
     const s = this.s;
     const assets = giveIds.map((id) => s.assets.find((a) => a.id === id));
     if (assets.some((a) => !a)) return fail('You no longer own one of those assets.');
     giveCash = Math.max(0, +giveCash || 0);
     if (!assets.length && !giveCash && !royalty) return fail('Offer something.');
+    const askedIn = {}, goingOut = {};
+    for (const w of want.assets || []) { const z = this._home({ ...w }).zone; askedIn[z] = (askedIn[z] || 0) + 1; }
+    for (const a of assets) goingOut[a.zone] = (goingOut[a.zone] || 0) + 1;
+    for (const [z, k] of Object.entries(askedIn)) if (k - (goingOut[z] || 0) > this.roomIn(+z)) return fail(`You would have no room in ${ZONES[z].short} for what you are asking for.`);
     const offer = {
       id: 'O' + s.pid + '-' + s.nid++, from: s.pid, fromHandle: s.handle, to, at: s.hour, note,
-      give: { assets: assets.map((a) => ({ ...a })), cash: giveCash, royalty: royalty && royalty.perDay > 0 ? { perDay: +royalty.perDay, days: Math.max(1, Math.round(royalty.days)) } : null },
+      give: { assets: assets.map((a) => this._disclosed(a)), cash: giveCash, royalty: royalty && royalty.perDay > 0 ? { perDay: +royalty.perDay, days: Math.max(1, Math.round(royalty.days)) } : null },
       want: { assets: want.assets || [], cash: Math.max(0, +want.cash || 0) },
       skills: { ...s.skills },
     };
@@ -1215,6 +1258,11 @@ export class Game {
     this.led('p2p', `Proposed a swap to ${to}`, 0, { offer: offer.id });
     return ok('Offer sent. Your side is held in escrow until they answer.', { offer });
   }
+  /** Crates a district can still take (held, in freight and in escrow all count). */
+  roomIn(zone) {
+    const s = this.s;
+    return this.storeCap(zone) - s.assets.filter((a) => a.zone === zone).length - s.freight.reduce((n, f) => n + (f.to === zone ? f.items.length : 0), 0) - s.escrow.reduce((n, e) => n + e.assets.filter((a) => a.zone === zone).length, 0);
+  }
   acceptOffer(offer) {
     const s = this.s;
     const chk = this.checkOffer(offer);
@@ -1222,6 +1270,11 @@ export class Game {
     const mine = offer.want.assets.map((w) => s.assets.find((a) => a.id === w.id));
     if (mine.some((a) => !a)) return fail('You no longer hold the asset they asked for.');
     if (offer.want.cash > s.cash) return fail('You do not have the cash they asked for.');
+    const inbound = {};
+    for (const a of offer.give.assets) { const z = s.zones.includes(a.zone) ? a.zone : this._home({ ...a }).zone; inbound[z] = (inbound[z] || 0) + 1; }
+    const outbound = {};
+    for (const a of mine) outbound[a.zone] = (outbound[a.zone] || 0) + 1;
+    for (const [z, k] of Object.entries(inbound)) if (k - (outbound[z] || 0) > this.roomIn(+z)) return fail(`There is no room in ${ZONES[z].short} for what they are sending.`);
     s.assets = s.assets.filter((a) => !mine.includes(a));
     s.cash -= offer.want.cash;
     const gave = mine.map((a) => ({ ...a }));
@@ -1299,6 +1352,7 @@ export class Game {
       shockLog: s.shockLog.map((x) => ({ id: x.id, nw: x.nw, nwAfter: x.nwAfter, pivots: x.pivots, de: x.de })),
       hoursPlayed: Math.round((s.hour - s.startHour) / 24 * 10) / 10, auditFail: s.auditFail,
       inventory: s.assets.slice(0, 24).map((a) => this.pub(a)), mil: s.mil,
+      plays: Object.fromEntries(['inspect', 'pitch', 'haggle', 'repair', 'auction', 'quick', 'played'].filter((k) => s.meta?.[k] != null).map((k) => [k, s.meta[k]])),
     };
   }
 }

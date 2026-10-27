@@ -18,7 +18,7 @@ export function createWorldView(ctx) {
     if (h.kind === 'lead') {
       const l = h.lead, B = BUYERS[l.seg], sel = pickIn(h.zone);
       let q = '';
-      if (sel) { const r = game.quotePitch(sel.id, l.id); q = r.ok ? (r.rejected ? ` They would reject your ${ASSETS[sel.cls].name}.` : ` Pitching your ${ASSETS[sel.cls].name}: ${fitLabel(r.fit)}, about ${money(r.received)}.`) : ' ' + r.msg; }
+      if (sel) { const r = game.quotePitch(sel.id, l.id, undefined, { blind: true }); q = r.ok ? (r.rejected ? ` They would reject your ${ASSETS[sel.cls].name}.` : ` Pitching your ${ASSETS[sel.cls].name}: ${fitLabel(r.fit)}, about ${money(r.received)}.`) : ' ' + r.msg; }
       return `${B.name}${l.need ? ` (urgent: needs ${/^[aeiou]/.test(l.need) ? 'an' : 'a'} ${l.need})` : ''}. Pays up to ${money(l.budget)}, leaves in ${Math.max(0, l.exp - s.hour)} h.${q || ' Click to sell them something.'}`;
     }
     if (h.kind === 'lot') return `${ASSETS[h.lot.cls].name}${h.lot.cond === 'broken' ? ' (broken)' : ''}${h.lot.mode === 'auction' ? ' (auction)' : ''}, listed at ${money(h.lot.price)}. Click to look it over and buy.`;
@@ -41,7 +41,7 @@ export function createWorldView(ctx) {
   function activate(h, ev, ground) {
     const game = g(), s = game.s;
     if (!h) { if (ground && unlocked(U.zone)) world.walkPlayerTo(ground.gx, ground.gy); return; }
-    if (h.kind === 'zone') { if (!unlocked(h.id)) { toast(gate(h.id), 'warn'); return; } U.zone = h.id; ctx.render(); return; }
+    if (h.kind === 'zone') { if (!unlocked(h.id)) { toast(gate(h.id), 'warn'); return; } U.zone = h.id; if (h.quick) world.quickTravel?.(h.id); ctx.render(); return; }
     if (h.zone && h.zone > 0 && !unlocked(h.zone)) { toast(`${ZONES[h.zone].name} is locked. ${gate(h.zone)}`, 'warn'); return; }
     if (h.zone && h.zone > 0 && h.zone !== U.zone) U.zone = h.zone;
     if (h.kind === 'lead') {
@@ -61,6 +61,8 @@ export function createWorldView(ctx) {
     if (h.kind === 'static') {
       const id = h.id;
       if (id === 'bank' || id === 'audit' || id === 'ipo') { if (id === 'bank' && !s.mil.m1) { toast('The Commercial Bank opens in Metro Hub.', 'warn'); return; } if (id === 'audit' && !s.mil.m2) { toast('Audits begin in Industrial Park.', 'warn'); return; } ctx.openDrawer(id === 'ipo' ? 'crew' : 'bank'); return; }
+      if (id === 'rent') { ctx.openDrawer('stock'); return; }
+      if (id === 'exchange') { ctx.openDrawer('travel'); return; }
       if (id.startsWith('hq')) { ctx.openDrawer('quests'); return; }
       if (id.startsWith('depot')) { ctx.openDrawer('travel'); return; }
       if (id.startsWith('board')) { ctx.openDrawer('market'); return; }
@@ -106,7 +108,7 @@ export function createWorldView(ctx) {
         <div class="wvctl" role="group" aria-label="Camera"><button class="ibtn" data-wv="zin" aria-label="Zoom in">+</button><button class="ibtn" data-wv="zout" aria-label="Zoom out">−</button><button class="ibtn" data-wv="fit" aria-label="Show the whole island">◎</button><button class="ibtn" data-wv="me" aria-label="Back to my district">⌂</button></div>
         <div class="wvtip" hidden></div>
         <details class="wvlist"><summary>List of everything in this district (for keyboard and screen readers)</summary><ul class="wvul"></ul></details>`;
-      world = new World({ session: S, ui: U, activate, hover });
+      world = new World({ session: S, ui: U, activate, hover, reveal: () => {} });
       if (window.pc) window.pc.world = world;
       world.attach(el.querySelector('.wvcv'));
       world.setMode?.('world');

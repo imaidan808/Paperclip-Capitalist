@@ -12,6 +12,11 @@ export const hex = (r, g, b) => '#' + [r, g, b].map((v) => Math.max(0, Math.min(
 export const shade = (h, f) => { const [r, g, b] = rgb(h); return hex(r * f, g * f, b * f); };
 export const mix = (a, b, t) => { const x = rgb(a), y = rgb(b); return hex(x[0] + (y[0] - x[0]) * t, x[1] + (y[1] - x[1]) * t, x[2] + (y[2] - x[2]) * t); };
 export const tone = (h) => ({ t: h, l: shade(h, 0.8), r: shade(h, 0.6) });
+export const gray = (h) => { const [r, g, b] = rgb(h), y = 0.3 * r + 0.59 * g + 0.11 * b; return hex(y, y, y); };
+/** Fogged colour: desaturated and darkened by k (0 = untouched, 1 = a locked district). */
+export const fogged = (h, k) => (k > 0.01 ? mix(mix(h, gray(h), Math.min(1, k * 1.5)), '#121826', k * 0.5) : h);
+/** Is a hex colour dark? (decides whether a district reads as night-like ground). */
+export const luma = (h) => { const [r, g, b] = rgb(h); return (0.3 * r + 0.59 * g + 0.11 * b) / 255; };
 export const lerp = (a, b, t) => a + (b - a) * t;
 export const clamp = (x, a, b) => Math.min(b, Math.max(a, x));
 export const ease = (t) => (t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2);
@@ -43,12 +48,12 @@ export function box(ctx, gx, gy, w, d, h, c, o = {}) {
 
 const fp = (f, u, v) => { const b = [f[0][0] + (f[1][0] - f[0][0]) * u, f[0][1] + (f[1][1] - f[0][1]) * u], t = [f[3][0] + (f[2][0] - f[3][0]) * u, f[3][1] + (f[2][1] - f[3][1]) * u]; return [b[0] + (t[0] - b[0]) * v, b[1] + (t[1] - b[1]) * v]; };
 /** Grid of windows on a face (bottom-left, bottom-right, top-right, top-left). */
-export function windows(ctx, f, cols, rows, fill, lit = 0, pad = 0.12) {
+export function windows(ctx, f, cols, rows, fill, lit = 0, pad = 0.12, litCol = '#ffd98a', phase = 0) {
   const cw = (1 - pad * 2) / cols, rh = (1 - pad * 2) / rows;
   for (let i = 0; i < cols; i++) for (let j = 0; j < rows; j++) {
     const u0 = pad + i * cw + cw * 0.18, u1 = pad + (i + 1) * cw - cw * 0.18, v0 = pad + j * rh + rh * 0.2, v1 = pad + (j + 1) * rh - rh * 0.2;
-    const on = lit > 0 && ((i * 7 + j * 13 + cols) % 5) / 5 < lit;
-    quad(ctx, [fp(f, u0, v0), fp(f, u1, v0), fp(f, u1, v1), fp(f, u0, v1)], on ? '#ffd98a' : fill);
+    const on = lit > 0 && ((i * 7 + j * 13 + cols + phase) % 5) / 5 < lit;
+    quad(ctx, [fp(f, u0, v0), fp(f, u1, v0), fp(f, u1, v1), fp(f, u0, v1)], on ? litCol : fill);
   }
 }
 export const facePoint = fp;
