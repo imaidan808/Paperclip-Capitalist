@@ -10,7 +10,7 @@ export const MIL_ZONE = { m1: 5, m2: 9, m3: 13 };
 export const CM = { min: 0.4, max: 3.14, ref: 1.68, beta: 0.4, pitchBase: 0.6 };
 export const FEES = { base: 0.025, crunch: 0.12, digitalRouting: 0.12, exitBrokerage: 0.12 };
 // Economy tuning knobs (docs/BALANCE.md). Mutable on purpose: tests/tune.mjs sweeps them against the pacing targets of docs/V2_DESIGN.md section 11.
-export const ECON = { lotDiscHi: 0.95, lotDiscLo: 0.78, lotSlots: 4, lotEvery: 1.5, leadEvery: 1, cycleBase: 80, pitchK: 0.9, margin: 0.45 }; // provisional: the 66-pair balance pass retunes these
+export const ECON = { lotDiscHi: 0.97, lotDiscLo: 0.84, lotSlots: 4, lotEvery: 1.5, leadEvery: 1, cycleBase: 80, pitchK: 1, margin: 0.4 }; // provisional: the 66-pair balance pass retunes these
 export const FMV_BAND = 0.4; // peer-to-peer guardrail: +/-40%
 export const EEI_FLOOR_DEFAULT = 1000; // = Milestone 1. See docs/BALANCE.md: a $0.05 start would otherwise score ~1,000,000x the others
 export const BASE_RATE = 0.025; // monthly index; +600 bps in the credit crunch
