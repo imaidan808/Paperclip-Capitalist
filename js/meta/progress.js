@@ -14,7 +14,12 @@ export class Progress {
     this.g = game; this.hooks = hooks;
     for (const c of CODEX) if (c.unlock === 'start') this.m.cx[c.id] ??= 0;
   }
-  get m() { return (this.g.s.meta ||= { q: {}, a: {}, d: { day: 0, list: [] }, cx: {}, mission: {} }); }
+  /** The engine also keeps skill-game stats in s.meta (inspect, pitch, haggle, repair, auction, quick, played), so every key is ensured one by one. */
+  get m() {
+    const m = (this.g.s.meta ||= {});
+    m.q ||= {}; m.a ||= {}; m.d ||= { day: 0, list: [] }; m.cx ||= {}; m.mission ||= {};
+    return m;
+  }
 
   isDone(id) { return !!this.m.q[id]?.done; }
   active(q) { return !this.isDone(q.id) && (!q.after || this.isDone(q.after)); }
