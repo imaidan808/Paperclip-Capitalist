@@ -10,3 +10,11 @@ export const BACKGROUND_IDS = ['connected', 'grad', 'trades', 'immigrant', 'vete
 export const DOCK_IDS = ['stock', 'market', 'crew', 'bank', 'travel', 'codex', 'quests'];
 export const EVENT_TYPES = ['pitch', 'buy', 'sell-pool', 'repair', 'ship', 'hire', 'upgrade', 'pipe-level', 'cycle', 'draw', 'repay', 'client', 'audit', 'zone', 'milestone', 'shock', 'p2p', 'skill',
   'level', 'inspect', 'haggle', 'auction', 'streak', 'day', 'margin-call', 'insolvent', 'exit', 'perk'];
+/** Payload field names per event type (docs/V2_DESIGN.md 7.1). Every event also carries `type` and `day`. Goals, matches and sums in meta content may use only these. */
+export const EVENT_PAYLOAD = {
+  pitch: ['zone', 'cls', 'seg', 'outcome', 'gain', 'cm', 'S', 'fit', 'price', 'mult'], buy: ['zone', 'cls', 'price', 'fake', 'cond'], 'sell-pool': ['zone', 'total', 'count'],
+  repair: ['cls', 'cost', 'quality', 'precision'], ship: ['from', 'to', 'count'], hire: ['kind', 'zone'], upgrade: ['id'], 'pipe-level': ['id', 'level'], cycle: ['zone', 'net'],
+  draw: ['prod', 'amount'], repay: ['amount'], client: ['tier'], audit: ['choice', 'ok'], zone: ['id'], milestone: ['n'], shock: ['kind'], p2p: ['peer', 'variance'],
+  skill: ['skill', 'level'], level: ['level'], inspect: ['score', 'fake', 'caught'], haggle: ['role', 'mult', 'score', 'deal'], auction: ['won', 'price', 'surplus'], streak: ['n'],
+  day: ['day'], 'margin-call': [], insolvent: [], exit: ['kind'], perk: ['id', 'effect'],
+};
