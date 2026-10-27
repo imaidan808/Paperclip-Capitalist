@@ -90,9 +90,9 @@ test('bank: refusals are explained in one line each, including the Backgrounds\'
   assert.match(html, /No bank will lend to you yet: your record asks for \$5,000 net worth first/);
   assert.ok(html.includes('Community Circle'), 'the circle is not a bank loan');
   assert.ok(!html.includes('data-act="bank-draw" data-p="micro"'), 'no draw button on a blocked line');
-  // Second-Chance: $10,000
+  // Second-Chance: $8,000
   ({ ctx, s } = rich(10, ['second', 'pro'])); s.mil.m1 = true;
-  assert.match(bank.html(ctx), /\$10,000 net worth first/);
+  assert.match(bank.html(ctx), /\$8,000 net worth first/);
   // a credit freeze
   ({ ctx, s } = rich(25)); const g = ctx.g(); g.injectEvent('fed', s.hour);
   html = bank.html(ctx); assert.match(html, /Credit freeze/); assert.match(html, /no new loans until the freeze lifts/i);

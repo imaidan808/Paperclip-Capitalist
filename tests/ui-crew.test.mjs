@@ -109,8 +109,10 @@ test('crew: a manager in a crowded niche is pointed at a quieter lane', () => {
 // ------------------------------------------------------------------ hiring
 test('crew: the hire dialog opens on the best lane and a manager can be hired', () => {
   const { ctx, g, s, acts, sfx } = rich(25);
-  const before = s.pipes.length, cash = s.cash, zone = 9;
-  assert.equal(s.pipes.filter((p) => p.zone === zone).length, 0);
+  const before = s.pipes.length, cash = s.cash;
+  // the economy is retuned from time to time: hire in the highest open district that still has a free plot, whatever the bot did
+  const zone = [...s.zones].filter((z) => ZONES[z].auto && s.pipes.filter((p) => p.zone === z).length < ZONES[z].plots).sort((a, b) => b - a)[0];
+  assert.ok(zone, 'some open district has a free plot');
   acts['crew-hire'](el({ d: String(zone) }));
   const html = lastDlg(ctx); assert.ok(html, 'a dialog opened');
   assert.deepEqual(checkHTML(html, 'hire dialog'), []); assert.ok(!STALE.test(html)); assert.ok(!/\bzones?\b/i.test(visible(html)));
