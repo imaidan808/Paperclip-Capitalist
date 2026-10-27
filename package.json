@@ -1,0 +1,14 @@
+{
+  "name": "paperclip-capitalist",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Gamified entrepreneurship simulation for higher education",
+  "scripts": {
+    "start": "node server/static.mjs",
+    "test": "node --test tests/*.test.mjs",
+    "calibrate": "node tests/calibrate.mjs",
+    "relay": "node server/relay.mjs"
+  },
+  "license": "MIT"
+}

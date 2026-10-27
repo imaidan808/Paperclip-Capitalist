@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en" data-contrast="normal" data-motion="auto" data-size="m">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Paperclip Capitalist</title>
+  <meta name="description" content="A gamified entrepreneurship simulation: turn one paperclip into an automated business over a virtual 90-day cycle. Built for university courses.">
+  <meta name="theme-color" content="#0d1117">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%230d1117'/%3E%3Cpath d='M11 22V9a4 4 0 0 1 8 0v12a2.5 2.5 0 0 1-5 0V11' fill='none' stroke='%23ffc247' stroke-width='2.4' stroke-linecap='square'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <a class="skip" href="#app">Skip to the game</a>
+  <div id="live" class="sr" role="status" aria-live="polite" aria-atomic="true"></div>
+  <div id="alert-live" class="sr" role="alert" aria-live="assertive"></div>
+  <main id="app" tabindex="-1"></main>
+  <div id="toasts" aria-hidden="true"></div>
+  <dialog id="dlg" aria-modal="true"></dialog>
+  <canvas id="fx" aria-hidden="true"></canvas>
+  <noscript><p style="padding:2rem;color:#fff">Paperclip Capitalist needs JavaScript. It runs entirely in your browser and stores nothing on any server.</p></noscript>
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
