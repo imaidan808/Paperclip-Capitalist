@@ -147,3 +147,26 @@ export function validateData(d, { partial = false } = {}) {
   }
   return P;
 }
+
+// ---------------------------------------------------------------------------------------------------------------------
+// Tier ownership (docs/V2_DESIGN.md section 13). Four authors write four tiers in parallel; these tables keep them from
+// colliding and guarantee the merged set is complete.
+export const TEACHES = ['utility-fit', 'negotiation', 'saturation-herd', 'information-asymmetry', 'working-capital', 'winners-curse', 'repair-roi', 'supply-chain',
+  'scale-compliance', 'obsolescence', 'inventory-risk', 'recurring-revenue', 'enterprise-sales', 'leverage-risk', 'asset-cash-flow', 'arbitrage-at-scale'];
+/** v1 asset ids each tier must define (and may rebalance), and v1 buyer ids likewise. */
+export const TIER_ASSETS = { 1: ['paperclip', 'pen', 'radio', 'bike', 'scrap'], 2: ['sneakers', 'textbooks', 'gadgets', 'electronics', 'domain', 'van'], 3: ['saas', 'fleet'], 4: ['franchise', 'datacenter'] };
+export const TIER_BUYERS = { 1: ['student', 'barista', 'mechanic', 'collector', 'scrapper', 'cyclist', 'bookstore'], 2: ['trainer', 'boutique', 'smelog', 'etailer', 'recruiter', 'freelancer'], 3: ['entIT', 'vcstart'], 4: ['holdco', 'franchisor'] };
+/** Tags a tier must use on at least one of its assets AND have liked by at least one of its buyers. Together they cover all 32. */
+export const TIER_TAGS = {
+  1: ['tool', 'office', 'prestige', 'paper', 'retro', 'scrap', 'collectible', 'home', 'outdoor'],
+  2: ['electronics', 'trend', 'fashion', 'vehicle', 'consumer', 'training', 'marine', 'bulk'],
+  3: ['industrial', 'digital', 'energy', 'food', 'farm', 'medical', 'media', 'ip'],
+  4: ['b2b', 'franchise', 'infra', 'realty', 'finance', 'luxury', 'gem'],
+};
+/** Numeric unlock bonuses, exactly (district -> bonus object). Districts not listed have `bonus: {}`. */
+export const BONUS_EXPECT = { 6: { lotSlots: 1 }, 7: { repairMult: 0.9 }, 8: { freightMult: 0.7 }, 9: { capMult: 1.25 }, 10: { leadMult: 1.15 }, 11: { storeBonus: 4 }, 13: { creditLimitMult: 1.5 },
+  14: { spreadMult: 0.8 }, 15: { rentMult: 1.25 }, 16: { exitMult: 1.1 } };
+/** Rule keys each district's `rules` must contain (the signature rule). Feature-unlock keys (managers...arbitrage) appear in exactly the listed district. */
+export const RULE_NEED = { 1: [], 2: ['haggle'], 3: ['season'], 4: ['fakes', 'auction'], 5: ['managers', 'bank'], 6: ['auction'], 7: ['repair'], 8: ['customs'], 9: ['audits', 'bulk'], 10: ['fads'],
+  11: ['perish', 'season'], 12: ['yield'], 13: ['enterprise'], 14: [], 15: ['rent'], 16: ['arbitrage'] };
+export const UNLOCK_RULES = { managers: 5, bank: 5, audits: 9, enterprise: 13, rent: 15, arbitrage: 16 };
