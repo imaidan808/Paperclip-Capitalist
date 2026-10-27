@@ -1,1 +1,44 @@
-/* ui-codex: owned by the author of that part of the interface */
+/* ui-codex: the Codex drawer. Concept cards, silhouettes for locked pages, a full page for one concept and the Academy tab. Tokens come from styles.css. */
+.cx-tabs { margin-bottom: .5rem; }
+.cx-bar2 input { width: 100%; }
+.cx-cats { margin: .5rem 0 .2rem; }
+.cx-count { margin: .3rem 0 .6rem; }
+.cx-group .cx-list { list-style: none; padding: 0; margin: 0; display: grid; gap: .4rem; }
+.cx-group h3 span:last-child { color: var(--mute); }
+.cx-none { margin: .6rem 0; }
+
+/* cards */
+.cx-card { width: 100%; display: grid; grid-template-columns: 2.4rem minmax(0, 1fr); gap: .6rem; align-items: start; text-align: left; padding: .5rem .65rem; background: var(--panel2); border: 1px solid var(--line); color: var(--ink); font: inherit; border-radius: 2px; min-height: 3rem; }
+button.cx-card { cursor: pointer; } button.cx-card:hover { border-color: var(--gold); }
+.cx-card.locked { border-style: dashed; background: transparent; color: var(--mute); }
+.cx-ic { font-size: 1.5rem; line-height: 1.25; text-align: center; }
+.cx-ic.big { font-size: 2.5rem; }
+.cx-ic.sil { filter: brightness(0) invert(.55); }
+.cx-tx { min-width: 0; overflow-wrap: anywhere; }
+.cx-tx b { font-size: .95rem; } .cx-tx small { display: block; color: var(--mute); font-size: .78rem; line-height: 1.35; margin-top: .1rem; }
+.cx-tx .cx-hint { color: var(--gold); }
+.cx-bar { display: block; height: .85rem; width: 58%; background: var(--line); border-radius: 1px; margin: .15rem 0 .3rem; }
+.cx-new { vertical-align: middle; font-size: .68rem; }
+
+/* one concept, in full */
+.cx-page { display: grid; gap: .35rem; }
+.cx-page p { margin: .3rem 0; overflow-wrap: anywhere; }
+.cx-head { display: flex; align-items: center; gap: .8rem; margin: .5rem 0 .2rem; }
+.cx-head h3 { margin: 0; font-size: 1.25rem; text-transform: none; overflow-wrap: anywhere; } #cx-t:focus { outline: none; }
+.cx-meta { margin: .3rem 0 0; display: flex; gap: .3rem; flex-wrap: wrap; }
+.cx-sum { font-size: 1.02rem; border-left: 4px solid var(--cyan); padding-left: .7rem; }
+.cx-formula { background: var(--bg); border: 1px solid var(--line); border-left: 4px solid var(--cyan); padding: .55rem .75rem; white-space: pre-wrap; overflow-x: auto; color: var(--cyan); margin: .4rem 0; font-size: .88rem; }
+.cx-sec h4 { margin: .9rem 0 .3rem; text-transform: uppercase; letter-spacing: .06em; font-size: .76rem; color: var(--mute); }
+.cx-sec ul, .cx-sec ol { margin: .25rem 0; padding-left: 1.3rem; } .cx-sec li { margin: .2rem 0; overflow-wrap: anywhere; }
+.cx-ex { background: var(--panel2); border: 1px solid var(--line); padding: .5rem .85rem .7rem; margin-top: .6rem; } .cx-ex h4 { margin-top: .2rem; }
+.cx-result { margin-top: .5rem; padding-top: .4rem; border-top: 1px dashed var(--line); }
+.cx-try { margin-top: .8rem; } .cx-try h4 { margin-top: 0; color: var(--cyan); } .cx-try p { margin: .1rem 0; }
+.cx-rel { display: flex; flex-wrap: wrap; gap: .4rem; }
+.cx-link { text-transform: none; letter-spacing: 0; font-weight: 600; }
+.cx-lockchip { color: var(--mute); white-space: normal; }
+
+/* the Academy tab */
+.cx-ac p { margin: .3rem 0 .6rem; }
+.cx-lessons { list-style: none; padding: 0; margin: .7rem 0 0; display: grid; gap: .5rem; }
+.cx-lesson { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; }
+.cx-lesson > div { min-width: 0; flex: 1 1 10rem; overflow-wrap: anywhere; } .cx-lesson small { display: block; font-size: .76rem; }
