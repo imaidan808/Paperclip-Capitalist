@@ -19,11 +19,13 @@ class LocalTransport {
 }
 
 class RelayTransport {
-  constructor(url, code, pid, role, key) {
+  constructor(url, code, pid, role, key, owner) {
     this.kind = 'relay';
     this.state = 'connecting';
     // `key` is the secret that stays in this browser beside the pid: the relay binds the pid to it the first time it sees the pid in a room and refuses anyone else who connects as that pid (server/relay.mjs)
-    this.url = url + (url.includes('?') ? '&' : '?') + 'room=' + encodeURIComponent(code) + '&pid=' + encodeURIComponent(pid) + '&key=' + encodeURIComponent(key || '') + '&role=' + (role === 'instructor' ? 'instructor' : 'student');
+    this.url = url + (url.includes('?') ? '&' : '?') + 'room=' + encodeURIComponent(code) + '&pid=' + encodeURIComponent(pid) + '&key=' + encodeURIComponent(key || '') + '&role=' + (role === 'instructor' ? 'instructor' : 'student')
+      // an instructor's room-owner token (server/relay.mjs): what lets the same instructor take the seat back from another device. Never sent for a student.
+      + (role === 'instructor' && owner ? '&owner=' + encodeURIComponent(owner) : '');
     this.queue = [];
     this.tries = 0;
     this.closed = false;
@@ -51,11 +53,11 @@ class RelayTransport {
 }
 
 export class Room {
-  /** @param {{code:string, pid:string, key?:string, handle:string, role:'student'|'instructor', relay?:string}} o */
+  /** @param {{code:string, pid:string, key?:string, owner?:string, handle:string, role:'student'|'instructor', relay?:string}} o */
   constructor(o) {
     Object.assign(this, o);
     this.handlers = new Set();
-    this.transport = o.relay ? new RelayTransport(o.relay, o.code, o.pid, o.role, o.key) : new LocalTransport(o.code);
+    this.transport = o.relay ? new RelayTransport(o.relay, o.code, o.pid, o.role, o.key, o.owner) : new LocalTransport(o.code);
     this.transport.onmsg = (m) => { if (m && typeof m === 'object' && m.from !== this.pid) for (const h of this.handlers) { try { h(m); } catch { /* one handler's fault is not the others' */ } } };
     this.transport.onstate = (s) => this.onstate?.(s);
   }

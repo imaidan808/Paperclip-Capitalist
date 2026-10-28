@@ -11,7 +11,7 @@ import { existsSync, readFileSync } from 'node:fs';
 const store = new Map();
 globalThis.localStorage = { getItem: (k) => (store.has(k) ? store.get(k) : null), setItem: (k, v) => { store.set(k, String(v)); }, removeItem: (k) => { store.delete(k); } };
 
-const { Session, Clock, kv, CLOCK_WAIT_MS } = await import('../js/session.js');
+const { Session, Clock, kv, CLOCK_WAIT_MS, LOCK_MS } = await import('../js/session.js');
 const C = await import('../js/cohort.js');
 const { Game } = await import('../js/engine.js');
 const { TOTAL_HOURS, SEC_PER_HOUR, ZONE_IDS } = await import('../js/config.js');
@@ -260,7 +260,8 @@ test('#15 an invitation is rebuilt on arrival: a royalty on the wrong side, inve
   s._onMsg(offerMsg(legit({ id: 'OFREE-1', give: { assets: [], cash: 1e9, royalty: null }, want: { assets: [], cash: 0, royalty: { perDay: 1e8, days: 10 } } })));
   assert.equal(s.incoming.length, 0);
   assert.equal(s.acceptIncoming('OFREE-1').ok, false); assert.equal(g.s.cash, 0);
-  // invented crates are rebuilt from a whitelist, with bounded numbers and no hidden truth
+  // invented crates are rebuilt from a whitelist, with bounded numbers and no hidden truth (the sender has published the crate: an offer for a crate nobody holds is not delivered at all, tests/remaining-engine.test.mjs)
+  s._onMsg(snapMsg('ACC', { nw: 5, inventory: [{ id: 'A1', cls: 'paperclip', cond: 'ok', zone: 1, quality: 1 }] }));
   s._onMsg(offerMsg(legit({ id: 'OFAKE-1', give: { assets: [{ id: 'A1', cls: 'paperclip', quality: 1e6, wear: 99, zone: 1, cond: 'ok', truth: { q: 9, fake: false }, secret: 'x', fmv: 1e9 }], cash: 0, royalty: null }, want: { assets: [], cash: 0 } })));
   const a = s.incoming[0].offer.give.assets[0];
   assert.deepEqual(Object.keys(a).sort(), ['cls', 'cond', 'id', 'known', 'quality', 'wear', 'zone']);
@@ -438,7 +439,7 @@ test('#18 #47 a classmate\'s odd snapshot cannot break the gradebook, take a ran
 
 test('#72 a founder wiped out by a shock gets an adaptability of zero, not NaN, and does not skew the others', () => {
   const log = (nwAfter, pivots = 0) => [{ id: 'fed@1056', nw: 1000, nwAfter, pivots }];
-  const t = instructorWith([['KEEP', { nw: 1000, shockLog: log(1000, 1), eei: 1 }], ['MID', { nw: 800, shockLog: log(800), eei: 1 }], ['WIPED', { nw: -399.95, shockLog: log(-399.95), eei: 1 }]]);
+  const t = instructorWith([['KEEP', { nw: 1000, shockLog: log(1000, 1), eei: 1 }], ['MID', { nw: 800, shockLog: log(800), eei: 1 }], ['WIPED', { nw: -399.95, shockLog: log(-399.95), eei: 1 }]], 24 * 55); // (day 55: the Day 45 shock's five days are over for the founders being graded)
   const by = Object.fromEntries(t.gradebook().map((r) => [r.pid, r]));
   for (const r of Object.values(by)) assert.ok(finiteRow(r), r.pid);
   assert.equal(by.WIPED.adapt, 0);
@@ -528,7 +529,7 @@ const holdings = (...ss) => ({ vans: ss.reduce((n, s) => n + s.game.s.assets.fil
 
 test('#33 an accepted swap is confirmed by the proposer before the acceptor gives anything, and then completes for both', async () => {
   const { a, b } = await trio();
-  const van = a.game._mk(a.game.s, 'van', { zone: 1, basis: 100 }); a.game.s.assets.push(van);
+  const van = a.game._mk(a.game.s, 'van', { zone: 1, basis: 100, quality: 0.2 }); a.game.s.assets.push(van); // (a damaged one: on day 0 a founder cannot hold a crate worth more than the best run is worth then)
   const price = Math.round(a.game.val(van));
   b.game.s.cash = 2000;
   const r = a.propose({ to: 'GRACE', giveIds: [van.id], want: { assets: [], cash: price } });
@@ -550,7 +551,7 @@ test('#33 an accepted swap is confirmed by the proposer before the acceptor give
 
 test('#33 #46 a stale invitation, after the offer is gone or the class has been rewound, duplicates nothing and costs the acceptor nothing', async () => {
   const { teacher, a, b } = await trio();
-  const van = a.game._mk(a.game.s, 'van', { zone: 1, basis: 100 }); a.game.s.assets.push(van);
+  const van = a.game._mk(a.game.s, 'van', { zone: 1, basis: 100, quality: 0.2 }); a.game.s.assets.push(van);
   const price = Math.round(a.game.val(van));
   b.game.s.cash = 2000;
   const r = a.propose({ to: 'GRACE', giveIds: [van.id], want: { assets: [], cash: price } });
@@ -620,8 +621,8 @@ test('#21 #33 nobody but the classmate an offer was made to can take it, deliver
   // the hold also ends by itself
   const w = a.propose({ to: 'GRACE', giveIds: [], giveCash: 10, want: { assets: [], cash: 10 } });
   a._onMsg(J({ t: 'accept', from: 'GRACE', role: 'student', to: 'ADA', offerId: w.offer.id }));
-  a.game.s.escrow.find((x) => x.offerId === w.offer.id).lockedAt -= 120000;
-  assert.equal(a.withdraw(w.offer.id).ok, true, 'after a minute the proposer may withdraw');
+  a.game.s.escrow.find((x) => x.offerId === w.offer.id).lockedAt -= LOCK_MS + 1000;
+  assert.equal(a.withdraw(w.offer.id).ok, true, 'once the acceptor has stopped trying (LOCK_MS) the proposer may withdraw');
 });
 
 test('#21 a forged or malformed accept, decline, withdraw or reject cannot touch anyone else\'s swap', () => {
@@ -662,10 +663,11 @@ test('#33 the royalty a swap carries is agreed once: what arrives is capped by t
   assert.ok(b.acceptIncoming(b.incoming[0].offer.id).ok);
   await until(() => a.game.s.escrow.length === 0);
   const stream = b.game.s.royalties.find((x) => x.dir === 'recv');
-  assert.ok(stream && stream.cap === 30, 'the receiver knows the most it can be paid');
+  // the most it can be paid: what was promised (30) and no more than the fair-value check counted it for (a tenth of the net worth the room had heard of, on day 0: 10) with the band's headroom
+  assert.ok(stream && Math.abs(stream.cap - 14) < 1e-9, 'the receiver knows the most it can be paid: ' + (stream && stream.cap));
   const cash = b.game.s.cash;
-  for (let i = 0; i < 6; i++) b._onMsg({ t: 'royalty', from: 'ADA', role: 'student', to: 'GRACE', amount: 10, offer: stream.offer });
-  assert.equal(b.game.s.cash - cash, 30);
+  for (let i = 0; i < 6; i++) { b.clock.hour += 24; b._onMsg({ t: 'royalty', from: 'ADA', role: 'student', to: 'GRACE', amount: 10, offer: stream.offer }); } // (a day's rate for each day: the stream is paced by the class's clock)
+  assert.ok(Math.abs(b.game.s.cash - cash - 14) < 1e-9, 'and that is all that arrives: ' + (b.game.s.cash - cash));
 });
 
 /** Rewind. */

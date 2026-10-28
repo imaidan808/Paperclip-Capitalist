@@ -27,6 +27,7 @@ const ROYALTY_MSGS = 12; // messages (each a day's rate) one stream may send in 
 const UNTRADEABLE = 'This crate cannot be traded at that price.'; // the whole of what a refusal made on a crate's hidden truth may say
 const XP_CALL = 1e6, POINTS_CALL = 1000, XP_MAX = LEVEL_XP * 99 * 99; // what one grant may add (a corrupt or hostile amount), and the most XP a run can hold (level 100): the level loop below is bounded by it
 const ROYALTY_NW = 0.1; // a promised royalty is worth at most this share of what its promiser is worth
+const SKILL_XP_DAY = 300; // the most experience one kind of skill game pays in a virtual day: more reads than that are practice, not progress (a Quick Read of every fresh lot in every district used to double a whole run's XP)
 
 export class Game {
   constructor(opts = {}) {
@@ -306,7 +307,11 @@ export class Game {
   royaltyOwed() {
     const s = this.s;
     let v = 0;
-    for (const r of s.royalties) if (r.dir === 'pay') v += (r.arrears || 0) + r.perDay * Math.max(0, Math.floor(Math.min(r.until, TOTAL_HOURS) / 24) - Math.floor(s.hour / 24));
+    for (const r of s.royalties) {
+      if (r.dir !== 'pay') continue;
+      const owed = (r.arrears || 0) + r.perDay * Math.max(0, Math.floor(Math.min(r.until, TOTAL_HOURS) / 24) - Math.floor(s.hour / 24));
+      v += r.cap == null ? owed : Math.min(owed, Math.max(0, r.cap - (r.paid || 0))); // (a stream pays no more than it was counted for, see finalizeOffer)
+    }
     return v;
   }
   netWorth() {
@@ -735,15 +740,32 @@ export class Game {
     paid[k] = 1;
     return true;
   }
+  /** Experience for a skill game, at most SKILL_XP_DAY of one kind in a virtual day. The play is still tallied and still tells the quests; only the experience it pays is capped, so reading
+   *  every lot in every district is practice and not a faster way up. Returns what was paid (before the Background's multiplier). */
+  _skillXp(kind, amount) {
+    const day = this.day, m = (this.s.skillXp ||= { day, paid: {} });
+    if (m.day !== day || !m.paid || typeof m.paid !== 'object') { m.day = day; m.paid = {}; }
+    const paid = m.paid[kind] || 0, pay = Math.max(0, Math.min(fin(+amount, 0), SKILL_XP_DAY - paid));
+    m.paid[kind] = paid + pay;
+    if (pay > 0) this.xp(pay);
+    return pay;
+  }
   /** The Deal Room's Read stage reports what the player learned; the lot (and the crate it becomes) remembers the belief. */
   recordInspect(zone, lotId, res) {
     const lot = this.s.lots[zone]?.find((l) => l.id === lotId);
     if (!lot || !res?.estimate) return fail('That lot is gone.');
     lot.belief = { quality: clamp(fin(res.estimate.quality, 1), 0.6, 1.2), fakeProb: clamp(fin(res.estimate.fakeProb, 0.2), 0, 1), confidence: clamp(fin(res.confidence, 0), 0, 1) };
     const caught = lot.truth.fake && res.estimate.fakeProb >= 0.6;
-    if (!this._firstPlay('inspect', res.key ?? lotId)) return ok('Recorded.', { caught, repeat: true });
+    // A Read in which no probe was bought learned nothing: it pays nothing and does not use up the lot's one payment (a real read of the same lot later still pays).
+    if (res.spent !== undefined && !(fin(+res.spent, 0) > 0)) return ok('Recorded.', { caught, repeat: true });
+    if (!this._firstPlay('inspect', res.key ?? lotId)) {
+      // A later visit that newly catches a counterfeit is still a counterfeit caught (the quests and achievements that count them), once per lot, with no experience and no score (it is not another inspection to grade).
+      if (caught && !lot.caughtReported) { lot.caughtReported = true; this.emit('inspect', { fake: true, caught: true, repeat: true }); }
+      return ok('Recorded.', { caught, repeat: true });
+    }
+    if (caught) lot.caughtReported = true;
     const score = clamp(fin(res.score, 0.5), 0, 1); // a number from outside is a number or the neutral default: a string once made the XP, and the debrief's tally, NaN
-    this.xp(8 + 22 * score);
+    this._skillXp('inspect', 8 + 22 * score);
     this._tally('inspect', score, !!res.quick);
     this.emit('inspect', { score, fake: lot.truth.fake, caught });
     return ok('Recorded.', { caught });
@@ -762,7 +784,7 @@ export class Game {
     res = res && typeof res === 'object' ? res : {};
     if (!this._firstPlay(kind, res.key)) return;
     const score = clamp(fin(res.score, 0.5), 0, 1);
-    this.xp(6 + 24 * score);
+    this._skillXp(kind, 6 + 24 * score);
     this._tally(kind, score, !!res.quick);
     if (kind === 'haggle') this.emit('haggle', { role: res.role === 'buy' ? 'buy' : 'sell', mult: fin(res.mult, 1), score, deal: !!res.deal });
     if (kind === 'auction') this.emit('auction', { won: !!res.won, price: fin(res.price, 0), surplus: fin(res.surplus, 0) });
@@ -1246,6 +1268,7 @@ export class Game {
   _dayTick() {
     const s = this.s, day = this.day;
     for (const a of s.assets) this._age(a);
+    for (const e of s.escrow) for (const a of e.assets) this._age(a); // a crate parked in an open swap spoils like one on a shelf or a truck: an offer to a classmate who never answers (up to 72 hours) must not be a freezer
     let dayProfit = s.acc.profit;
     // assets that pay while you hold them (royalties, rent)
     let yieldIn = 0;
@@ -1308,11 +1331,12 @@ export class Game {
     // from the next cash, a message of at most a day's rate at a time (the receiver takes no more than that at once). A stream whose receiver's run is over (the room says so) is ended: nothing could be received.
     for (const r of s.royalties) {
       if (r.dir !== 'pay') continue;
-      if (s.hour <= r.until) r.arrears = (r.arrears || 0) + r.perDay;
+      const left = r.cap == null ? Infinity : Math.max(0, r.cap - (r.paid || 0)); // what the stream may still pay in all
+      if (s.hour <= r.until) r.arrears = Math.min((r.arrears || 0) + r.perDay, left);
       if (this.env.peerClosed?.(r.peer)) { if (r.arrears > 0) this.note('info', `A royalty stream you owed ended: the founder it was owed to has finished their run or is selling their business.`); r.arrears = 0; r.until = -1; continue; }
       let pay = Math.min(r.arrears || 0, Math.max(0, s.cash), r.perDay * ROYALTY_MSGS); // a dozen messages a day at most: a long arrears is paid down over several days, not in one burst the relay's rate limit would drop (and the money with it)
       if (pay < 0.005) continue;
-      s.cash -= pay; r.arrears -= pay;
+      s.cash -= pay; r.arrears -= pay; r.paid = (r.paid || 0) + pay;
       this.led('p2p', 'Royalty paid', -pay, { offer: r.offer, peer: r.peer });
       while (pay >= 0.005) { const part = Math.min(pay, r.perDay); this.out.push({ t: 'royalty', to: r.peer, amount: part, offer: r.offer }); pay -= part; }
     }
@@ -1440,13 +1464,14 @@ export class Game {
     return { id: a.id, cls: a.cls, cond: a.cond, quality: d.quality, wear: a.wear, zone: a.zone, fmv: this.val(a), basis: a.basis, ...(a.known ? { known: true } : {}) };
   }
   /** A swap refused on what a crate is REALLY worth tells its owner (with no number) that something they hold is not what it looks like. That is an appraisal, and Read is what appraisals cost: the refusal charges
-   *  SWAPS.appraisal of the described value it was refused at (what the founder has, at least a cent), is a ledger row and is counted (`s.meta.appraisals`), so it cannot be asked for nothing, crate after crate,
-   *  to find the counterfeits in a lot. */
+   *  SWAPS.appraisal of the described value it was refused at (at least a cent), is a ledger row and is counted (`s.meta.appraisals`), so it cannot be asked for nothing, crate after crate,
+   *  to find the counterfeits in a lot. The fee is owed whatever the founder holds: it used to be cut to the cash in hand, and cash parked in an escrow (an offer of cash for the same cash, taken back after) made it
+   *  nothing. A founder with less than the fee goes into overdraft for it, as for any other bill. */
   _appraisal(value) {
-    const s = this.s, fee = Math.min(Math.max(0, s.cash), Math.max(0.01, Math.round(fin(value, 0) * SWAPS.appraisal * 100) / 100));
+    const s = this.s, v = isNum(value) ? value : 0, fee = Math.max(0.01, Math.round(v * SWAPS.appraisal * 100) / 100);
     const m = (s.meta ||= {});
     m.appraisals = (m.appraisals || 0) + 1;
-    if (fee > 0) { s.cash -= fee; this.led('verify', 'Appraisal: a swap was refused on what a crate is worth', -fee, { fee }); }
+    s.cash -= fee; this.led('verify', 'Appraisal: a swap was refused on what a crate is worth', -fee, { fee });
   }
   /** Fair value of one side of an offer. `landing`: the crates are valued where THIS founder would hold them (one from a district they cannot enter lands in the nearest open one and is worth what it is worth there).
    *  `nw`: the net worth of whoever promises the royalty. */
@@ -1693,7 +1718,12 @@ export class Game {
     s.cash -= o.want.cash;
     const got = o.give.assets.map((a) => this._arrive({ id: 'A' + s.nid++, cls: a.cls, cond: a.cond, quality: a.quality, wear: a.wear, zone: a.zone, basis: 0, from: 'p2p', got: s.hour, known: true }));
     s.cash += o.give.cash;
-    if (o.give.royalty) s.royalties.push({ dir: 'recv', peer: o.from, perDay: o.give.royalty.perDay, days: o.give.royalty.days, since: s.hour, until: s.hour + o.give.royalty.days * 24, got: 0, offer: o.id });
+    if (o.give.royalty) {
+      // The most this stream can ever pay is what it promised, and no more than the fair-value check counted it for (with the band's headroom): a promise made by someone worth $1,000 was priced at $100, and a payer
+      // whose messages say "a million a day" must not turn it into a million (the check priced the promise at what its maker is worth, never at the number written on it).
+      const rv = this._royaltyValue(o.give.royalty, isNum(o.nw) ? o.nw : 0), cap = Math.min(o.give.royalty.perDay * o.give.royalty.days, rv * (1 + FMV_BAND));
+      s.royalties.push({ dir: 'recv', peer: o.from, perDay: o.give.royalty.perDay, days: o.give.royalty.days, since: s.hour, until: s.hour + o.give.royalty.days * 24, got: 0, offer: o.id, cap });
+    }
     this._swapDone(o.from, chk.va, chk.variance, npc);
     this.led('p2p', `Swapped with ${o.fromHandle || o.from}`, chk.va - chk.vb, { offer: o.id, peer: o.from, peerSkills: o.skills, gave: mine.map((a) => a.cls), got: got.map((a) => a.cls), va: chk.va, vb: chk.vb, variance: chk.variance, ...(npc ? { npc: true } : {}) });
     return ok('Deal done.', { deliver: { assets: sending, cash: o.want.cash }, chk });
@@ -1735,7 +1765,12 @@ export class Game {
     s.escrow = s.escrow.filter((x) => x !== e);
     const got = d.assets.map((a) => this._arrive({ id: 'A' + s.nid++, cls: a.cls, cond: a.cond, quality: a.quality, wear: a.wear, zone: a.zone, basis: 0, from: 'p2p', got: s.hour, known: true }));
     s.cash += d.cash;
-    if (o.give.royalty) s.royalties.push({ dir: 'pay', peer: o.to, perDay: o.give.royalty.perDay, days: o.give.royalty.days, since: s.hour, until: s.hour + o.give.royalty.days * 24, offer: o.id, arrears: 0 });
+    if (o.give.royalty) {
+      // The payer pays what the receiver will take: the promise, and no more than it was counted for when the swap was priced (the receiver's stream is capped the same way, acceptOffer). A promise larger than that
+      // is a promise to burn money: the receiver refuses what is over it, and the payer's cash would be gone.
+      const rv = this._royaltyValue(o.give.royalty, o.nw), cap = Math.min(o.give.royalty.perDay * o.give.royalty.days, rv * (1 + FMV_BAND));
+      s.royalties.push({ dir: 'pay', peer: o.to, perDay: o.give.royalty.perDay, days: o.give.royalty.days, since: s.hour, until: s.hour + o.give.royalty.days * 24, offer: o.id, arrears: 0, cap, paid: 0 });
+    }
     this._swapDone(o.to, this.sideValue({ assets: got, cash: d.cash }), o.check?.variance ?? 0, npc);
     const handle = typeof peerHandle === 'string' ? peerHandle.slice(0, 60) : '';
     this.led('p2p', `Swap completed with ${handle || o.to}`, this.sideValue({ assets: got, cash: d.cash }) - this.sideValue(o.give, { nw: o.nw }), { offer: o.id, peer: o.to, gave: e.assets.map((a) => a.cls), got: got.map((a) => a.cls), ...(o.check ? { va: o.check.va, vb: o.check.vb, variance: o.check.variance } : {}), ...(npc ? { npc: true } : {}) });
@@ -1756,15 +1791,19 @@ export class Game {
     for (const e of [...s.escrow]) if (s.hour - e.at > 72 && !(e.lockedBy && !e.lockLapsed)) { this.cancelOffer(e.offerId); this.out.push({ t: 'withdraw', offer: e.offerId, to: e.offer.to }); this.note('info', 'An unanswered offer expired and your escrow was returned.'); }
   }
   /** A royalty payment from a classmate. It is taken only for a stream this founder was promised (dir 'recv', that offer, and `from` when the caller knows who sent it), at most one day's amount at a time,
-   *  never past what the stream promised in all; everything else is ignored. The end date is not the limit, the total is: a payer short of cash pays its arrears late, and the last day's payment lands a little
-   *  after the stream's last day anyway (the clocks of a room differ). */
-  receiveRoyalty(amount, offer, from) {
+   *  never past what the stream promised in all or was counted for (`cap`), and never faster than the days go by: a stream is owed a day's rate for each day it has run (and the day in progress, and one in hand for
+   *  a clock that runs a little behind), so a payer cannot send the whole of it at once. Everything else is ignored. The end date is not the limit, the total is: a payer short of cash pays its arrears late, and the
+   *  last day's payment lands a little after the stream's last day anyway (the clocks of a room differ). `hour`: the hour to pace by when the caller knows the class's (this game can be behind it in a tab that was
+   *  asleep: a message the payer sent on time must not be refused for that, with the payer's money gone). */
+  receiveRoyalty(amount, offer, from, hour) {
     const s = this.s, r = s.royalties.find((x) => x.dir === 'recv' && x.offer === offer);
     if (!r || (from != null && from !== r.peer)) return fail('No such royalty stream.');
     if (!isNum(amount) || amount <= 0) return fail('Nothing to receive.');
     const total = r.cap ?? r.perDay * (r.days ?? Math.ceil((r.until - s.hour) / 24) + 1);
-    const take = Math.min(amount, r.perDay, total - (r.got || 0));
-    if (!(take >= 0.005)) return fail('That royalty stream has ended: it is paid up.');
+    const now = isNum(hour) ? Math.max(s.hour, hour) : s.hour;
+    const due = isNum(r.since) ? r.perDay * (Math.floor(Math.max(0, now - r.since) / 24) + 2) : Infinity; // (a stream with no start, from a save of long ago, is not paced)
+    const take = Math.min(amount, r.perDay, total - (r.got || 0), due - (r.got || 0));
+    if (!(take >= 0.005)) return fail(due - (r.got || 0) < 0.005 && total - (r.got || 0) >= 0.005 ? 'That royalty is not due yet.' : 'That royalty stream has ended: it is paid up.');
     r.got = (r.got || 0) + take; s.cash += take;
     this.led('p2p', 'Royalty received', take, { offer });
     return ok(`Received ${money(take)}.`, { amount: take });
@@ -1794,8 +1833,11 @@ export class Game {
     for (const [h, z, c, b] of this.s.niche) if (h > from && b !== 'npc-pool') { const k = nicheKey(z, c, b); out[k] = (out[k] || 0) + 1; }
     return out;
   }
-  publicSnapshot() {
-    const s = this.s, nw = this.closedNetWorth();
+  /** What a classmate may see of this run. `include`: ids of crates about to be offered in a swap, listed first so that they are in the published stock (it shows 24 crates, and a founder can hold far more): the
+   *  classmate who gets the offer checks it against the stock this founder published (Session._onOffer). */
+  publicSnapshot(include = []) {
+    const s = this.s, nw = this.closedNetWorth(), first = new Set(Array.isArray(include) ? include.filter((x) => typeof x === 'string') : []);
+    const stock = first.size ? [...s.assets.filter((a) => first.has(a.id)), ...s.assets.filter((a) => !first.has(a.id))] : s.assets;
     return {
       pid: s.pid, handle: s.handle, perks: [...s.perks], specialty: s.specialty, skills: { ...s.skills }, level: this.level(), hour: s.hour,
       nw, cash: s.cash, debt: this.debt(), startCap: s.startCapital, eei: this.eei(), zones: Math.max(...s.zones),
@@ -1803,7 +1845,7 @@ export class Game {
       cmAvg: s.cm.n ? s.cm.sum / s.cm.n : 0, p2p: s.p2p, trades: s.trades, flags: { insolvent: s.insolvent, exited: !!s.exit, over: s.over, exiting: !!s.exiting },
       shockLog: s.shockLog.map((x) => ({ id: x.id, nw: x.nw, nwAfter: x.nwAfter, pivots: x.pivots, de: x.de })),
       hoursPlayed: Math.round((s.hour - s.startHour) / 24 * 10) / 10, auditFail: s.auditFail,
-      inventory: s.assets.slice(0, 24).map((a) => this.pub(a)), mil: s.mil,
+      inventory: stock.slice(0, 24).map((a) => this.pub(a)), mil: s.mil,
       plays: Object.fromEntries(['inspect', 'pitch', 'haggle', 'repair', 'auction', 'quick', 'played'].filter((k) => s.meta?.[k] != null).map((k) => [k, s.meta[k]])),
     };
   }

@@ -280,7 +280,7 @@ export function createSession(ctx, run) {
   };
 
   const say = (r) => { if (r && r.ok && r.say) ctx.announce?.(r.say); };
-  const go = (action) => { const r = run.act(action); say(r); if (r.ok) after1(); paint(); return r; };
+  const go = (action) => { const r = run.act(action); say(r); if (r.ok) after1(); if (r.gone) { result(); return r; } /* what the table was about has left: the result card says so, and closes it */ paint(); return r; };
   const after1 = () => { if (run.stageDone()) ctx.announce?.(`${STAGE_LABEL[run.key] || 'Stage'} complete.`); };
   const result = () => {
     const s = run.finish(), good = s.tone === 'good', bad = s.tone === 'bad';
@@ -315,7 +315,7 @@ export function createSession(ctx, run) {
     walk() { if (run.key === 'close' && run.view() && run.view().round > 0) go({ type: 'walk' }); else { run.walkAway(); result(); } },
     bid() { go({ type: 'bid' }); },
     drop() { go({ type: 'drop' }); },
-    stop() { const r = stopAt(); say(r); after1(); paint(); },
+    stop() { const r = stopAt(); if (r.gone) { result(); return; } say(r); after1(); paint(); },
     careful() { stopDial(); go({ type: 'careful' }); },
   };
   const changes = {
@@ -327,7 +327,7 @@ export function createSession(ctx, run) {
   ses.acts = acts; ses.changes = changes; ses.inputs = inputs;
 
   // ---- listeners on the shared dialog: one set per session, removed when it closes
-  const onClick = (e) => { const b = e.target.closest?.('[data-deal]'); if (b && !b.disabled && el().classList.contains('deal')) { e.preventDefault(); acts[b.dataset.deal]?.(b, e); } };
+  const onClick = (e) => { const b = e.target.closest?.('[data-deal]'); if (b && !b.disabled && el().classList.contains('deal')) { e.preventDefault(); if (!run.over && run.gone?.()) { result(); return; } acts[b.dataset.deal]?.(b, e); } };
   const onChange = (e) => { const b = e.target.closest?.('[data-change-deal]'); if (b) changes[b.dataset.changeDeal]?.(b, e); };
   const onInput = (e) => { const b = e.target.closest?.('[data-deal-input]'); if (b) inputs[b.dataset.dealInput]?.(b, e); };
   const onKey = (e) => {
