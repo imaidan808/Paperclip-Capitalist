@@ -105,7 +105,7 @@ test('the light layers are made one a frame at a dusk, and every frame still sta
   assert.deepEqual(frame(0, 0), { made: 1, stamps: 1 }, 'a daylit frame makes the day\'s layer and stamps it');
   const seq = [frame(0.3, 1), frame(0.3, 1), frame(0.3, 1), frame(0.3, 1)];
   for (const f of seq) { assert.ok(f.made <= 1, 'never two full-size layers in one frame'); assert.ok(f.stamps >= 1, 'and never a frame with no air'); }
-  assert.deepEqual(seq[3], { made: 0, stamps: 2 }, 'by the fourth frame the night, the mix and the shafts are all there: the crossfade and the shafts, two stamps');
+  assert.deepEqual(seq[3], { made: 0, stamps: 1 }, 'by the fourth frame the night, the shafts and the mix are all there: the crossfade with the shafts baked into it, one stamp (a stamp in the additive composite is three times the cost of a plain one on a CPU-drawn canvas)');
   assert.equal(frame(0.3, 1).made, 0, 'and nothing is made again while the light holds');
   lit.release(); assert.deepEqual(Object.values(lit.big), [null, null, null, null], 'release lets go of every layer'); assert.equal(lit.size, '');
   const free = new Lighting(); assert.equal(free.perFrame, Infinity, 'a Lighting used alone makes what it needs at once, as it always did');
@@ -221,14 +221,28 @@ test('Deal Room: the sticky Continue row leaves room for the focus ring at the f
   assert.match(phone, /\.deal-result > \.row:last-child \{ padding-bottom: calc\(\.5rem \+ env\(safe-area-inset-bottom, 0px\)\); \}/, 'on a phone the row clears the home indicator, as the foot does');
 });
 test('the shared dialog is never a Tab stop of its own: tabindex -1 from the first start, still focused by script, and the cursor goes back to the opener on close', async () => {
-  const on = {}; let focused = null; const opener = { focus: () => { focused = 'opener'; } };
-  const d = { open: false, tabIndex: 0, scrollTop: 5, className: '', innerHTML: '', setAttribute() {}, addEventListener: (k, f) => { on[k] = f; }, showModal() { this.open = true; }, close() { this.open = false; on.close?.(); }, querySelector: () => null, focus: () => { focused = 'dialog'; } };
-  globalThis.document = { querySelector: (q) => (q === '#dlg' ? d : null), activeElement: opener, documentElement: { dataset: {} } };
+  const on = {}; let focused = null; const opener = { isConnected: true, focus: () => { focused = 'opener'; } }, app = { focus: () => { focused = 'app'; } }, title = { focus: () => { focused = 'drawer title'; } };
+  let drawerOpen = false;
+  const d = { open: false, tabIndex: 0, scrollTop: 5, className: '', innerHTML: '', setAttribute() {}, addEventListener: (k, f) => { on[k] = f; }, showModal() { this.open = true; }, close() { this.open = false; on.close?.(); }, querySelector: () => null, contains: () => false, focus: () => { focused = 'dialog'; } };
+  const doc = { body: {}, documentElement: { dataset: {} }, activeElement: opener, getElementById: (id) => (id === 'app' ? app : null), querySelector: (q) => (q === '#dlg' ? d : q.startsWith('#drawer:not([hidden]) #dh-title') && drawerOpen ? title : null) };
+  globalThis.document = doc;
   const { initDialog, dlg } = await import('../js/ui/common.js');
   initDialog(); assert.equal(d.tabIndex, -1, 'a scrolling dialog would otherwise get a Tab stop of its own in Chrome, whose ring lies off the screen when the dialog fills it');
   dlg.open('<p>plain</p>', { label: 'x' }); assert.equal(d.open, true); assert.equal(d.tabIndex, -1, 'opening leaves it so'); assert.equal(focused, 'dialog', 'with nothing to focus, the dialog itself takes the cursor: tabindex -1 still allows that');
   d.close(); assert.equal(focused, 'opener', 'and closing hands the cursor back to what opened it');
+  // a class that sets `display` (the Deal Room's) would keep a closed dialog on the page: the class goes when the dialog closes, and stays when it was opened again at once
+  dlg.open('<p>deal</p>', { cls: 'deal', label: 'x' }); assert.equal(d.className, 'deal'); d.close(); assert.equal(d.className, '', 'a closed dialog has no class');
+  dlg.open('<p>deal</p>', { cls: 'deal', label: 'x' }); d.open = true; on.close(); assert.equal(d.className, 'deal', 'a close heard for a dialog that has been opened again leaves its class');
+  d.open = false;
+  // the opener gone (a bought lot redrew the drawer it stood in): the cursor does not stay on a control of the closed sheet, it goes to the open drawer's title, else to the game
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const gone = { isConnected: false, focus: () => { focused = 'gone'; } };
+  doc.activeElement = gone; drawerOpen = true; dlg.open('<p>x</p>', { label: 'x' }); d.close(); await sleep(5); assert.equal(focused, 'drawer title', 'the drawer that is open takes it');
+  doc.activeElement = gone; drawerOpen = false; dlg.open('<p>x</p>', { label: 'x' }); d.close(); await sleep(5); assert.equal(focused, 'app', 'else the game itself');
   const css = read('css/ui-deal.css'); assert.match(css, /dialog\.deal:focus-visible \{ outline-offset: -4px; \}/, 'should script ever give the Deal Room the cursor, its ring is drawn inside the sheet');
+  assert.match(read('css/styles.css'), /dialog:not\(\[open\]\) \{ display: none; \}/, 'and whatever class a dialog carries, a closed one is not drawn');
+  assert.doesNotMatch(css.match(/dialog\.deal \{[^\n]*\n/)[0], /deal-in [^;]*\bboth\b/, 'the sheet\'s entrance does not hold its last frame: a transform that stays makes the sheet the containing block of the coach card');
+  assert.match(css, /deal-in [^;]*\bbackwards\b/);
   delete globalThis.document;
 });
 test('toasts: when there is no room beside a side drawer the stack is the newest one, and every toast is still announced', () => {

@@ -24,7 +24,7 @@ import { kv } from '../session.js';
 import { ZONES } from '../config.js';
 import { Progress, CODEX_BY_ID } from '../meta/progress.js';
 import {
-  parseAnchor, resolveAnchor, hitMatches, placeCard, coverOf, pointInRect, startRun, feedRun, coachFor, satisfiedNow, shortSay, hintDue,
+  parseAnchor, resolveAnchor, hitMatches, placeCard, coverScore, rectsOverlap, coverOf, pointInRect, startRun, feedRun, coachFor, satisfiedNow, shortSay, hintDue,
   newTeach, pickTeach, revealTeach, teachDone, teachFirstTry, readAcademy, markMission, nextIndex, rewardPlan, applyRewards,
   readPending, addPending, claimPending, codexSeed, emptyMeta, makeSandboxSession, featuresFor, KEYS,
   newLookout, hireSnapshot, hireCoach,
@@ -219,18 +219,51 @@ export function mountAcademy(root, S, { onDone, onSkip, only, missions, store = 
     function ensureLayer() {
       if (layer && layer.isConnected) return;
       layer = document.createElement('div');
-      layer.className = 'ac-layer'; layer.dataset.academy = '';
+      layer.className = 'ac-layer'; layer.dataset.academy = ''; layer.dataset.keep = ''; // keep: the Deal Room repaints its sheet with innerHTML, and setHTML (common.js) leaves a child marked so where it is
       layer.innerHTML = '<div class="ac-ring" aria-hidden="true" hidden></div><section class="ac-coach" role="dialog" aria-modal="false" aria-labelledby="ac-say" tabindex="-1"><div class="ac-coach-in"></div></section>';
       ringEl = layer.firstChild; cardEl = layer.lastChild; bodyEl = cardEl.firstChild;
       ctx.el.overlay.appendChild(layer);
       lastKey = '';
     }
-    function hostFor(res) { const el = res?.anchor?.kind === 'dom' ? domEls(res.anchor.name)[0] : null; return el && dlg.el.open && dlg.el.contains(el) ? dlg.el : ctx.el.overlay; }
+    // A modal dialog (the top layer) hides the overlay the card normally lives in, so while one is open that carries the lesson the card goes into it: the Deal Room for any
+    // step (the step's own thing, a buyer or a lot in the world, is behind the sheet), or a dialog that holds the step's anchor (the hire dialog). A card for a thing the sheet
+    // does not show points at nothing (no ring) and stands where it covers the least.
+    const dealOpen = () => dlg.el.open && dlg.el.classList.contains('deal');
+    const inDialog = (res) => { const el = res?.anchor?.kind === 'dom' ? domEls(res.anchor.name)[0] : null; return !!el && dlg.el.open && dlg.el.contains(el); };
+    const hostFor = (res) => (dealOpen() || inDialog(res) ? dlg.el : ctx.el.overlay);
+    // What the card must not hide, as { x, y, w, h, wt } (coverScore): the control the keyboard is on above all (a card over it hides the cursor itself), the drawer and the dock, the
+    // controls of the game screen (the tracker, the camera and list buttons, the HUD, the news), and, inside a dialog, its own controls and its head.
+    const CONTROLS = 'button, input, select, textarea, summary, a[href], [role="button"]';
+    function keepRects(host, view) {
+      const out = [], add = (e, wt, pad = 0, focus = false) => {
+        if (!e || e === cardEl || cardEl?.contains(e)) return;
+        const r = e.getBoundingClientRect();
+        if (r.width > 0 && r.height > 0) out.push({ x: r.x - pad, y: r.y - pad, w: r.width + pad * 2, h: r.height + pad * 2, wt, focus });
+      };
+      if (host === dlg.el) {
+        for (const e of host.querySelectorAll(CONTROLS)) add(e, 1);
+        add(host.querySelector('.deal-top'), 1);
+      } else {
+        if (!ctx.el.drawer.hidden) add(ctx.el.drawer, 3);
+        add(ctx.el.dock, 3);
+        for (const part of [ctx.el.tracker, ctx.el.ticker, ctx.el.hud, ctx.el.world.querySelector('.wvctl'), ctx.el.world.querySelector('.wvlist')]) {
+          if (part) for (const e of part.querySelectorAll(CONTROLS)) add(e, 2);
+        }
+      }
+      const f = document.activeElement;
+      if (f && f !== document.body && f !== document.documentElement && f.tagName !== 'CANVAS' && !cardEl?.contains(f)) { // the world's canvas is the whole window: it is never "covered"
+        const r = f.getBoundingClientRect();
+        if (r.width * r.height < view.w * view.h * 0.4) add(f, 1000, 7, true); // 7px: the ring is 3px wide and drawn 2px out. Weighed past everything else together: a card that hides the cursor is wrong wherever else it lands
+      }
+      return out;
+    }
 
-    function paintCoach(force) {
+    let placed = null; // where the card stands: { x, y, key } (a crowded dialog keeps a place that is still about as good, see the end of paintCoach)
+    function paintCoach(force, snap) {
       if (dead || gone || sheet || winPending || run.won) return;
       ensureLayer();
-      const c = coachNow(), res = c.stranded ? null : resolve(c.anchor), host = hostFor(res);
+      const c = coachNow(), found = c.stranded ? null : resolve(c.anchor), host = hostFor(found);
+      const res = host === dlg.el && !inDialog(found) ? null : found; // the step's own thing is not in the sheet that has the card: nothing to ring
       if (layer.parentNode !== host) host.appendChild(layer);
       const key = [c.id, c.stranded || c.inDialog ? c.say : '', hintOn, showMe, confirm, !!manual].join('|');
       if (force || key !== lastKey) {
@@ -247,10 +280,26 @@ export function mountAcademy(root, S, { onDone, onSkip, only, missions, store = 
       ringEl.hidden = !spot;
       ringEl.classList.toggle('show', !!spot && showMe);
       if (spot) { ringEl.style.width = spot.w + pad * 2 + 'px'; ringEl.style.height = spot.h + pad * 2 + 'px'; ringEl.style.transform = `translate(${Math.round(spot.x - pad)}px, ${Math.round(spot.y - pad)}px)`; }
-      const keep = [ctx.el.drawer.hidden ? null : ctx.el.drawer, ctx.el.dock].filter(Boolean).map((e) => e.getBoundingClientRect()).filter((r) => r.width > 0 && r.height > 0).map((r) => ({ x: r.x, y: r.y, w: r.width, h: r.height }));
-      const box = cardEl.getBoundingClientRect(), at = placeCard(spot, { w: box.width || 320, h: box.height || 150 }, view, 14, 8, keep); // never over the open drawer or the dock icons
+      const keep = keepRects(host, view), cursor = keep.find((r) => r.focus);
+      const over = (p, s) => !!cursor && rectsOverlap({ x: p.x, y: p.y, w: s.w, h: s.h }, cursor);
+      const sizeOf = () => { const b = cardEl.getBoundingClientRect(); return { w: b.width || 320, h: b.height || 150 }; };
+      if (cursor && over(cardEl.getBoundingClientRect(), sizeOf())) snap = true; // the card is over the cursor now: it leaves at once, whatever moved the cursor or the card
+      const wasSmall = cardEl.classList.contains('compact'); cardEl.classList.remove('compact'); // the card is placed at its full size first
+      let size = sizeOf(), at = placeCard(spot, size, view, 14, 8, keep); // never over the target, the control the keyboard is on, the drawer or the dock, the game's buttons or an open dialog's
+      if (over(at, size)) { // no place is clear of the cursor (a phone on its side, a dialog of wide cards): the card shrinks to its head and its buttons, which fit where the whole card cannot
+        cardEl.classList.add('compact'); const small = sizeOf(), at2 = placeCard(spot, small, view, 14, 8, keep);
+        if (!over(at2, small)) { at = at2; size = small; } else cardEl.classList.remove('compact');
+      }
+      if (cardEl.classList.contains('compact') !== wasSmall) snap = true;
+      const here = `${c.id}|${host === dlg.el ? 'dlg' : 'page'}|${Math.round(size.w)}x${Math.round(size.h)}`;
+      if (placed && placed.key === here && !snap) { // a crowded place (nothing is clear) does not follow every scroll of the sheet: the old place stays while it covers about what a new one would
+        const mine = { x: placed.x, y: placed.y, w: size.w, h: size.h }, now = coverScore({ x: at.x, y: at.y, w: size.w, h: size.h }, spot, keep), was = coverScore(mine, spot, keep);
+        if (now > 0 && was <= now * 1.25 + 400) at = { ...at, x: placed.x, y: placed.y };
+      }
+      placed = { x: at.x, y: at.y, key: here };
       cardEl.dataset.side = at.side;
       if (spot && cardEl.style.setProperty) { cardEl.style.setProperty('--ac-ax', `${Math.round(spot.x + spot.w / 2 - at.x)}px`); cardEl.style.setProperty('--ac-ay', `${Math.round(spot.y + spot.h / 2 - at.y)}px`); } // where the caret on the card's edge points
+      if (snap) { cardEl.style.transition = 'none'; requestAnimationFrame(() => requestAnimationFrame(() => { if (cardEl) cardEl.style.transition = ''; })); } // out of the cursor's way at once, not in .25s
       cardEl.style.transform = `translate(${Math.round(at.x)}px, ${Math.round(at.y)}px)`;
       cardEl.classList.toggle('lift', true);
     }
@@ -319,6 +368,9 @@ export function mountAcademy(root, S, { onDone, onSkip, only, missions, store = 
     document.addEventListener('keydown', onKey);
     const onResize = () => paintCoach();
     window.addEventListener('resize', onResize);
+    // The keyboard landing under the card moves the card (keepRects counts the focused control for most): looked at once, not at the next beat.
+    const onFocus = (e) => { if (!cardEl || cardEl.contains(e.target) || e.target.tagName === 'CANVAS') return; paintCoach(false, true); };
+    document.addEventListener('focusin', onFocus);
     let raf = 0;
     const mo = new MutationObserver(() => { if (!raf) raf = requestAnimationFrame(() => { raf = 0; paintCoach(); }); });
     for (const e of [ctx.el.hud, ctx.el.tracker, ctx.el.ticker, ctx.el.dock, ctx.el.drawer, ctx.el.world]) mo.observe(e, { childList: true, subtree: true, attributes: true, attributeFilter: ['hidden', 'class'] });
@@ -425,7 +477,7 @@ export function mountAcademy(root, S, { onDone, onSkip, only, missions, store = 
     return {
       destroy() {
         gone = true; clearInterval(beat); for (const f of off) f();
-        document.removeEventListener('click', onClick, true); document.removeEventListener('keydown', onKey); window.removeEventListener('resize', onResize);
+        document.removeEventListener('click', onClick, true); document.removeEventListener('keydown', onKey); window.removeEventListener('resize', onResize); document.removeEventListener('focusin', onFocus);
         mo.disconnect(); if (raf) cancelAnimationFrame(raf);
         for (const k of inerted) k.inert = false;
         layer?.remove(); sheet?.remove();

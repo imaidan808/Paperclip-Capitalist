@@ -331,10 +331,10 @@ test('the air is stamped one-to-one from bitmaps of the canvas\'s own size, made
   const made = log.surfaces; frame(light()); frame(light()); assert.equal(log.surfaces, made, 'later frames make no bitmap');
   s = frame(light({ night: 1 })); assert.equal(s.length, 1, 'a night is one stamp too'); assert.equal(s[0].img.width, 1600);
   const dusk = (n) => light({ night: n, dusk: 1 });
-  s = frame(dusk(0.3)); assert.equal(s.length, 2, 'dusk: the crossfade of day and night, and the shafts: two stamps, not three');
+  s = frame(dusk(0.3)); assert.equal(s.length, 1, 'dusk: the crossfade of day and night with the shafts baked into it: one stamp, not three (the additive stamp of the shafts was 3.5 ms of a CPU-drawn frame)');
   const mix = s[0].img, into = (o) => o.g.imgs.length; const remade = into(mix); frame(dusk(0.3)); frame(dusk(0.3)); assert.equal(into(mix), remade, 'the same step is not made again');
   frame(dusk(0.302)); assert.equal(into(mix), remade, 'a hair of change stays in the same step (a twenty-fourth)');
-  frame(dusk(0.45)); assert.equal(into(mix), remade + 2, 'a new step is the two airs drawn into it again, once');
+  frame(dusk(0.45)); assert.equal(into(mix), remade + 3, 'a new step is the two airs and the shafts drawn into it again, once');
   frame(light({ lite: true, dusk: 1, night: 0.3 })); assert.equal(main.imgs.length, 1, 'the quiet tier: one stamp, no shafts');
   s = frame(light({ dusk: 1, reduced: () => true })); assert.equal(s.length, 1, 'reduced motion leaves out the shafts');
   const nightLayer = lit.big.night; assert.ok(nightLayer, 'the night\'s layer was made when it was wanted');

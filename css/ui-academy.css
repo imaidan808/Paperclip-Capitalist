@@ -31,6 +31,8 @@
 .ac-coach { position: fixed; left: 0; top: 0; width: min(21.5rem, calc(100vw - 1rem)); background: var(--panel); background: linear-gradient(180deg, var(--ac-top), var(--panel) 3.4rem); border: var(--bw) solid var(--gold); border-radius: 4px; box-shadow: 0 0 0 1px var(--bg), 6px 6px 0 rgba(0, 0, 0, .55), 0 14px 34px rgba(0, 0, 0, .5); pointer-events: auto; transition: transform .25s ease; --ac-top: color-mix(in srgb, var(--gold) 10%, var(--panel)); }
 .ac-coach-in { max-height: 60vh; overflow: auto; padding: .7rem .9rem .8rem; border-radius: 2px; }
 .ac-coach:focus { outline: none; }
+/* When nothing is clear of the control the keyboard is on, the card is its head and its buttons (the words are still its name and the live region has read them): a phone on its side has no room for more */
+.ac-coach.compact :is(.ac-say, .ac-hint, .ac-look, .ac-lost) { display: none; } .ac-coach.compact .ac-coach-in { padding: .5rem .7rem .55rem; }
 /* the caret is a turned square that carries the card's own colour at the edge it sits on (the lit top for "below", the plain panel elsewhere), so it joins the frame without a seam */
 .ac-coach::before { content: ""; position: absolute; display: none; width: 12px; height: 12px; background: var(--panel); border: var(--bw) solid var(--gold); transform: rotate(45deg); }
 .ac-coach[data-side="below"]::before { display: block; top: -8px; left: clamp(1.1rem, var(--ac-ax, 50%), calc(100% - 1.5rem)); margin-left: -6px; border-right: 0; border-bottom: 0; background: var(--ac-top); }

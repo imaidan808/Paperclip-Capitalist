@@ -6,7 +6,7 @@
    Section map: frame, stepper, scene (cast, bubble), stage panel, Read, Pitch, Close, Bid, Fix, scoreboard and foot (one dock), result, big screens, tablets, small screens, reduced motion. */
 
 /* ---- frame */
-dialog.deal { width: min(68rem, 96vw); padding: .9rem 1.1rem 1rem; scroll-padding: .5rem .5rem 8rem; /* a control scrolled into view rests inside the edge, ring and all; the foot is the dock's height */ animation: deal-in .24s cubic-bezier(.2, .9, .3, 1) both; }
+dialog.deal { width: min(68rem, 96vw); padding: .9rem 1.1rem 1rem; scroll-padding: .5rem .5rem 8rem; /* a control scrolled into view rests inside the edge, ring and all; the foot is the dock's height */ animation: deal-in .24s cubic-bezier(.2, .9, .3, 1) backwards; /* backwards, never both: a fill that holds the last frame leaves `transform: none` computed on the dialog, which makes it the containing block of every fixed box inside it (the Academy's coach layer), and that layer is then placed and clipped by the sheet instead of the window */ }
 dialog.deal::backdrop { background: rgba(3, 6, 12, .78); }
 dialog.deal:focus-visible { outline-offset: -4px; } /* the sheet fills a phone's screen: a ring drawn outside it is off the screen, so it is drawn inside */
 @keyframes deal-in { from { opacity: 0; transform: translateY(14px) scale(.985); } to { opacity: 1; transform: none; } }
@@ -227,7 +227,7 @@ dialog.deal:focus-visible { outline-offset: -4px; } /* the sheet fills a phone's
    over a row of buttons would take a third of what is left, so the stage would have ~120px. Here only the buttons stay in view, as on a phone, the
    board scrolls with the stage, and the head and the character shrink to give the stage the height. Tall windows keep the docked scoreboard. */
 @media (max-height: 520px) and (min-width: 761px) {
-  dialog.deal { max-height: calc(100vh - .5rem); max-height: calc(100dvh - .5rem); padding: .5rem 1rem 0; scroll-padding-bottom: 3.6rem; }
+  dialog.deal { max-height: calc(100vh - .5rem); max-height: calc(100dvh - .5rem); padding: .5rem 1rem 0; scroll-padding-bottom: 4.4rem; /* the sticky foot (about 3.5rem here) and the 5px a focus ring reaches past a control */ }
   .deal { gap: .45rem; }
   .deal-top { gap: .25rem .6rem; padding-left: .6rem; } .deal-top h2 { flex-basis: 10rem; font-size: 1.02rem; }
   .deal-steps { gap: 1rem; padding: 0; } .deal-steps .ds { padding: .08rem .7rem .08rem .25rem; } .deal-steps .ds + .ds::before { width: 1rem; } .deal-steps .n { width: 1.3rem; height: 1.3rem; }

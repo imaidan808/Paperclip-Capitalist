@@ -56,8 +56,8 @@ h1, h2, h3 { margin: 0 0 .5rem; letter-spacing: .02em; line-height: 1.2; }
 h1 { font-size: 1.7rem; } h2 { font-size: 1.1rem; text-transform: uppercase; letter-spacing: .08em; } h3 { font-size: .95rem; }
 p { margin: .35rem 0 .7rem; } a { color: var(--cyan); }
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
-.skip { position: absolute; left: -999px; top: 0; background: var(--gold); color: var(--on-gold); padding: .5rem 1rem; z-index: var(--z-skip); }
-.skip:focus { left: 0; }
+.skip { position: absolute; left: -999px; top: 8px; background: var(--gold); color: var(--on-gold); padding: .5rem 1rem; z-index: var(--z-skip); }
+.skip:focus { left: 8px; } /* 8px in from the corner: the focus ring reaches 5px past the link (3px line, 2px out), and at 0 the window edge cut it on two sides */
 :focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
 button, select, summary, [role="button"] { -webkit-tap-highlight-color: transparent; touch-action: manipulation; } /* no 300ms tap delay, no grey flash: pressed states are ours */
 main#app:focus { outline: none; }
@@ -144,6 +144,7 @@ label { display: block; font-size: .82rem; color: var(--mute); margin-bottom: .2
 .toast { transition: opacity .2s, transform .2s; } .toast.out { opacity: 0; transform: translateY(6px); } /* common.js adds .out, then removes the toast */
 @keyframes slidein { from { transform: translateY(8px); opacity: 0; } to { transform: none; opacity: 1; } }
 dialog { background: var(--panel); color: var(--ink); border: var(--bw) solid var(--gold); box-shadow: 8px 8px 0 rgba(0,0,0,.6), 0 24px 60px rgba(0,0,0,.5); padding: 1.1rem 1.3rem; width: min(46rem, 94vw); max-height: 92vh; max-height: calc(100dvh - var(--edge-t) - var(--edge-b)); overflow: auto; overscroll-behavior: contain; border-radius: 2px; }
+dialog:not([open]) { display: none; } /* a class that sets `display` (.deal) must not keep a closed dialog on the page: the browser's own rule has the weakest say */
 dialog[open] { animation: dlgin .18s ease-out; }
 @keyframes dlgin { from { transform: translateY(10px); opacity: 0; } to { transform: none; opacity: 1; } }
 dialog::backdrop { background: rgba(0,0,0,.72); }

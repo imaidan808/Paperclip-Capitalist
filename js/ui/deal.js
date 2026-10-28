@@ -292,7 +292,14 @@ export function createSession(ctx, run) {
   };
   const after = () => {
     const d = el();
-    if (ses.focusHead) { ses.focusHead = false; ses.was = null; const h = d.querySelector('[data-stage-head]'); const f = d.querySelector('.deal-foot [autofocus], .deal-stage [autofocus]'); (f || h)?.focus?.({ preventScroll: true }); }
+    if (ses.focusHead) {
+      ses.focusHead = false; ses.was = null;
+      const h = d.querySelector('[data-stage-head]'), f = d.querySelector('.deal-foot [autofocus], .deal-stage [autofocus]');
+      (f || h)?.focus?.({ preventScroll: true });
+      // The foot's buttons are sticky and always in sight, but a control in the stage (the repair dial's Stop) can lie below the fold of a short or narrow sheet, where neither it nor its
+      // ring is seen. Bring it just into view: 'nearest' moves nothing when it is already there and otherwise rests it clear of the foot (the sheet's scroll-padding-bottom).
+      if (f && f.closest('.deal-stage')) f.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
+    }
     else keepFocus(d);
     if (run.key === 'fix' && !run.res.fix && !ses.reduced()) startDial(); else stopDial();
     // presentation only: the result is staged (numbers tick up, the stamp lands, the bars grow) the first time it is painted and never again, so a later paint

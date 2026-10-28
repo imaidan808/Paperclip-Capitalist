@@ -5,6 +5,9 @@
 // quarter of the window (they are smooth), stretched ONCE into a bitmap of the canvas's own pixels, and stamped one-to-one: a straight copy is about ten
 // times cheaper than stretching a small bitmap over the whole window every frame (measured: 0.4 ms against 3.9 ms at 1440x900, 1.6 against 15.3 at 2x).
 // Where the browser has no OffscreenCanvas (the Node tests) each pass falls back to a direct gradient, as the world always drew.
+// What a full-window pass costs on a CPU-drawn canvas (2160 x 1350, headless Chrome with the GPU off): a plain stamp 0.9 to 1.6 ms, but a stamp or fill in any other composite
+// (multiply, lighter) 3.0 to 3.6 ms. So a frame keeps to plain stamps: the shafts, which are additive, are baked into the day and night crossfade with the rest of the air,
+// where they cost a pass once a step and nothing in the frames between (the grade's multiply tint is the one pass left in another composite).
 import { clamp, h2 } from './iso.js';
 import { surface, stampGlow, hasOffscreen } from './gfx.js';
 
@@ -120,6 +123,7 @@ function fogSprites() {
 const IDLE_MS = 20000; // a full-size layer nobody has stamped for this long is let go (night's and the shafts' come back in one stretch when the light returns)
 const LAYERS = ['day', 'night', 'shafts', 'mix'];
 const STEPS = 24; // the crossfade of day and night is made in this many steps (each a still bitmap), so a dusk costs a few dozen makes and one stamp a frame, not two stamps a frame
+const SHAFT_STEPS = 8; // the strength of the dusk and dawn shafts baked into it: eight steps, so the shafts add at most eight makes to a dusk
 export class Lighting {
   constructor() {
     this.size = ''; this.src = { day: null, night: null, shafts: null };           // the layers as painted, a quarter of the window each
@@ -163,18 +167,22 @@ export class Lighting {
   }
 
   /**
-   * Day and night crossfaded into one bitmap at `dq` and `nq` steps of STEPS: made when the step changes, stamped in one go every frame between. A step that cannot be made
-   * this frame (the frame's one full-size layer has gone to the night's, say) leaves the step before on show, a twenty-fourth away, and is made on the next; null while there is none yet.
+   * Day and night crossfaded into one bitmap at `dq` and `nq` steps of STEPS, with the dusk and dawn shafts at `sq` steps of SHAFT_STEPS added in: made when a step changes,
+   * stamped in one go every frame between. A step that cannot be made this frame (the frame's one full-size layer has gone to a layer it is made of, say) leaves the step
+   * before on show, a twenty-fourth away, and is made on the next; null while there is none yet. A zero leaves that part out (a morning with no night left in it, still shafts).
    */
-  mix(pw, ph, dq, nq, t) {
-    this.fit(pw, ph); const at = dq + '|' + nq;
+  mix(pw, ph, dq, nq, sq, t) {
+    this.fit(pw, ph); const at = dq + '|' + nq + '|' + sq;
     if (this.big.mix && this.mixAt === at) { this.used.mix = t; return this.big.mix; }
-    const a = this.layer('day', pw, ph, t), b = this.layer('night', pw, ph, t);
-    if (!a || !b || this.allow < 1) return this.big.mix;
+    const a = dq ? this.layer('day', pw, ph, t) : true, b = nq ? this.layer('night', pw, ph, t) : true, c = sq ? this.layer('shafts', pw, ph, t) : true;
+    if (!a || !b || !c || this.allow < 1) return this.big.mix;
     this.allow--; this.used.mix = t;
     if (!this.big.mix) { const s = surface(pw, ph); if (!s) return null; this.big.mix = s.c; this.mixG = s.g; this.mixAt = ''; }
     const g = this.mixG; g.clearRect(0, 0, pw, ph);
-    g.globalAlpha = dq / STEPS; g.drawImage(a, 0, 0); g.globalAlpha = nq / STEPS; g.drawImage(b, 0, 0); g.globalAlpha = 1;
+    if (dq) { g.globalAlpha = dq / STEPS; g.drawImage(a, 0, 0); }
+    if (nq) { g.globalAlpha = nq / STEPS; g.drawImage(b, 0, 0); }
+    if (sq) { g.globalCompositeOperation = 'lighter'; g.globalAlpha = (sq / SHAFT_STEPS) * 0.38; g.drawImage(c, 0, 0); g.globalCompositeOperation = 'source-over'; } // light adds to the air it stands in
+    g.globalAlpha = 1;
     this.mixAt = at; return this.big.mix;
   }
 
@@ -197,15 +205,16 @@ export class Lighting {
     if (lite) { // the quiet tier: whichever of day and night is stronger, one stamp, no shafts
       const L = this.layer(night > 0.5 ? 'night' : 'day', pw, ph, t); if (L) { ctx.globalAlpha = clamp(0.8 + night * 0.2, 0, 1); ctx.drawImage(L, 0, 0); }
     } else {
-      const day = (1 - night) * (crunch ? 0.6 : 1), nt = clamp(night + (crunch ? 0.3 : 0), 0, 1);
-      if (day > 0.02 && nt > 0.02) { // the dusk and dawn, and rain by day: both airs at once, one stamp
-        const L = this.mix(pw, ph, Math.round(day * STEPS), Math.round(nt * STEPS), t);
+      const day = (1 - night) * (crunch ? 0.6 : 1), nt = clamp(night + (crunch ? 0.3 : 0), 0, 1), dayOn = day > 0.02, nightOn = nt > 0.02;
+      const sq = dusk > 0.05 && !calm && !crunch ? Math.round(clamp(dusk, 0, 1) * SHAFT_STEPS) : 0; // the dawn and dusk shafts (none in rain or reduced motion)
+      if ((dayOn && nightOn) || sq) { // the dusk and dawn, and rain by day: both airs and the shafts at once, one stamp
+        const L = this.mix(pw, ph, dayOn ? Math.round(day * STEPS) : 0, nightOn ? Math.round(nt * STEPS) : 0, sq, t);
         if (L) ctx.drawImage(L, 0, 0);
-        else { const D = this.layer('day', pw, ph, t); if (D) { ctx.globalAlpha = day; ctx.drawImage(D, 0, 0); } } // not made yet (one full-size layer a frame): the day's air alone, for a frame or two
+        else if (dayOn) { const D = this.layer('day', pw, ph, t); if (D) { ctx.globalAlpha = day; ctx.drawImage(D, 0, 0); } } // not made yet (one full-size layer a frame): the day's air alone, for a frame or two
+        else { const N = this.layer('night', pw, ph, t); if (N) { ctx.globalAlpha = nt; ctx.drawImage(N, 0, 0); } }
       }
-      else if (day > 0.02) { const L = this.layer('day', pw, ph, t); if (L) { ctx.globalAlpha = day; ctx.drawImage(L, 0, 0); } }
-      else if (nt > 0.02) { const L = this.layer('night', pw, ph, t); if (L) { ctx.globalAlpha = nt; ctx.drawImage(L, 0, 0); } }
-      if (dusk > 0.05 && !calm && !crunch) { const L = this.layer('shafts', pw, ph, t); if (L) { ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = dusk * 0.38; ctx.drawImage(L, 0, 0); ctx.globalCompositeOperation = 'source-over'; } }
+      else if (dayOn) { const L = this.layer('day', pw, ph, t); if (L) { ctx.globalAlpha = day; ctx.drawImage(L, 0, 0); } }
+      else if (nightOn) { const L = this.layer('night', pw, ph, t); if (L) { ctx.globalAlpha = nt; ctx.drawImage(L, 0, 0); } }
     }
     ctx.restore();
     for (const n of LAYERS) if (this.big[n] && t - this.used[n] > IDLE_MS) { this.big[n] = null; if (n === 'mix') this.mixG = null; }

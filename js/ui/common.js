@@ -25,7 +25,9 @@ export function setHTML(el, html) {
   if (a && el.contains(a) && a.matches('input:not([type=checkbox]):not([type=radio]), select, textarea')) return false; // never re-render under a typing user
   const fid = a && el.contains(a) ? a.dataset.fid : null;
   el._html = html;
+  const kept = [...el.children].filter((c) => c.hasAttribute('data-keep')); // a layer put inside from outside (the Academy's coach card, in a dialog) is not part of the markup and survives it
   el.innerHTML = html;
+  for (const k of kept) el.appendChild(k);
   if (fid) el.querySelector(`[data-fid="${CSS.escape(fid)}"]`)?.focus({ preventScroll: true });
   return true;
 }
@@ -77,7 +79,21 @@ export function initDialog() {
   // and keeps it focusable by script (`dlg.open` falls back to it), and every control inside is still reached by Tab, which scrolls it into view; arrow keys and Page Down scroll
   // the dialog from any of them. Escape and the focus handed back on close are untouched.
   d.tabIndex = -1;
-  d.addEventListener('close', () => { d._onClose?.(); d._onClose = null; try { returnFocus?.focus({ preventScroll: true }); } catch { /* element gone */ } });
+  // When it closes the dialog is finished with: its class goes (a class that sets `display`, such as the Deal Room's, would keep a closed sheet drawn below the page, with its controls in
+  // the Tab order and the accessibility tree), and the cursor goes back to what opened it. That control is sometimes gone by then (a bought lot or a sold crate redrew the drawer it
+  // stood in): the cursor then goes to the open drawer's title, else to the game itself, never to a control of the closed sheet. The `d.open` checks are for a dialog that was opened
+  // again at once: `open` closes the one on screen first, and that close event is heard after the new content is already in.
+  d.addEventListener('close', () => {
+    d._onClose?.(); d._onClose = null;
+    if (!d.open) d.className = '';
+    try { returnFocus?.focus({ preventScroll: true }); } catch { /* element gone */ }
+    setTimeout(() => {
+      if (typeof document === 'undefined') return;
+      const a = document.activeElement;
+      if (d.open || (a && a !== document.body && a !== document.documentElement && a !== d && a.isConnected && !d.contains(a))) return; // it is somewhere real already
+      try { (document.querySelector('#drawer:not([hidden]) #dh-title') || document.getElementById('app'))?.focus({ preventScroll: true }); } catch { /* nothing to focus */ }
+    }, 0);
+  });
   d.addEventListener('click', (e) => { if (e.target === d) d.close(); });
 }
 

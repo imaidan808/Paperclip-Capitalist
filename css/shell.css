@@ -42,6 +42,9 @@ body:has(.stage) { background-image: none; overflow: hidden; overscroll-behavior
 .stage::before, .stage::after { content: ""; position: absolute; left: 0; right: 0; z-index: var(--z-scrim); pointer-events: none; }
 .stage::before { top: 0; height: calc(var(--hud-h) + 2rem); background: linear-gradient(180deg, rgba(var(--scrim), .70) 0, rgba(var(--scrim), .56) 32%, rgba(var(--scrim), .28) 64%, rgba(var(--scrim), .08) 88%, rgba(var(--scrim), 0)); }
 .stage::after { bottom: 0; height: calc(var(--dock-h) + 1.4rem); background: linear-gradient(0deg, rgba(var(--scrim), .66) 0, rgba(var(--scrim), .50) 36%, rgba(var(--scrim), .22) 70%, rgba(var(--scrim), 0)); }
+/* The canvas is a Tab stop and its focus ring (3px) is drawn 4px inside its edge, where the two scrims lie over it and dim it to under 3:1 on the top and bottom sides. While the canvas has the ring the scrims
+   start 6px in, so the ring is seen as it is; the 6px strip they leave bare is under the ring's own rows. */
+.stage:has(.worldcv:focus-visible)::before { top: 6px; } .stage:has(.worldcv:focus-visible)::after { bottom: 6px; }
 
 /* ---- the world's own controls: the camera column, and the list button under it ---- */
 .wvctl { position: absolute; z-index: var(--z-world-ui); left: var(--edge-l); top: var(--cam-top); display: grid; gap: var(--sp-2); width: max-content; }
