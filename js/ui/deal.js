@@ -69,7 +69,7 @@ function footHTML(m) {
   if (m.stage === 'result') return '';
   const bits = [];
   if (m.stageDone) bits.push(m.last ? '<button class="btn big" data-deal="finish" data-fid="go" autofocus>See the result</button>' : '<button class="btn big" data-deal="next" data-fid="go" autofocus>Continue</button>');
-  else if (m.canQuick) bits.push(quickBtn(QUICK_LABEL));
+  else if (m.canQuick) bits.push(quickBtn(QUICK_LABEL, !(m.first && m.steps.length > 1))); // two Quick buttons on a deal's first stage: the Academy's frame (data-anchor deal-quick) goes on the whole deal's, the one its lessons mean by "Quick deal"
   if (m.first && m.steps.length > 1 && m.canQuick) bits.push('<button class="btn ghost" data-deal="quick-all" data-anchor="deal-quick" data-fid="qa">Quick deal</button>');
   return bits.length ? `<footer class="deal-foot">${bits.join('')}</footer>` : '';
 }
@@ -425,11 +425,13 @@ export function createSession(ctx, run) {
   return ses;
 }
 
-/** What the open Deal Room is about, as ids ({ kind, lot, lead, asset, assetCls }; any may be missing) and whether its result is showing (done), or null when none is open. The Academy's coach card needs it to tell whether the
- *  thing a step points at is the very one on the table. */
+/** What the open Deal Room is about, as ids ({ kind, lot, lead, asset, assetCls }; any may be missing), whether its result is showing (done) and what its foot offers (stageDone: the stage in play is finished, so the foot says
+ *  Continue, or See the result when it is the `last` stage), or null when none is open. The Academy's coach card needs it to tell whether the thing a step points at is the very one on the table, and to name the button that is there. */
 export function openDealOf() {
   const p = active && !active.disposed && active.run ? active.run.plan : null;
-  return p ? { kind: p.kind, lot: p.lot?.id, lead: p.lead?.id, asset: p.asset?.id, assetCls: p.asset?.cls, done: !!active.run.over } : null;
+  if (!p) return null;
+  const r = active.run;
+  return { kind: p.kind, lot: p.lot?.id, lead: p.lead?.id, asset: p.asset?.id, assetCls: p.asset?.cls, done: !!r.over, stageDone: !r.over && !!r.res?.[r.key], last: Array.isArray(r.stages) && r.idx === r.stages.length - 1 };
 }
 
 /** The one function the shell calls (ctx.deal). Returns the session, or { ok:false, msg } when the deal cannot start. */

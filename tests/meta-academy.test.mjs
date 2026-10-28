@@ -349,7 +349,7 @@ test('steps: 3 to 9 per mission, each with a coach line, a real anchor, a wait a
     let drawerSeen = false, dealSeen = false;
     for (const s of stepsOf(m)) {
       const w = `${m.id} step ${s.i + 1} (${s.id})`;
-      keysOf(s, ['id', 'say', 'anchor', 'wait', 'hint', 'i'], w);
+      keysOf(s, ['id', 'say', 'anchor', 'wait', 'hint', 'i', 'pause'], w); // pause: the runner stops the clock when the step is done (m07's glut; tests/finish-repair.test.mjs)
       assert.ok(/^[a-z][a-z0-9-]*$/.test(s.id), `${w}: id is kebab-case`);
       assert.ok(isStr(s.say) && s.say.length >= 30 && s.say.length <= 220, `${w}: say is 30..220 characters (has ${s.say?.length})`);
       assert.ok(isStr(s.hint) && s.hint.length >= 20 && s.hint.length <= 200 && s.hint !== s.say, `${w}: hint is 20..200 characters and says something new (has ${s.hint?.length})`);

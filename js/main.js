@@ -7,7 +7,7 @@ import { $, esc, delegate, applySettings, initDialog, settingsDialog, dlg, toast
 import { mountDraft } from './ui/draft.js';
 import { mountAcademy, claimPendingRewards } from './ui/academy.js';
 import { mountGame } from './ui/shell.js';
-import { mountInstructor, FOLLOW_NOTE } from './ui/instructor.js';
+import { mountInstructor, FOLLOW_NOTE, RECOVER_WAIT_SECONDS } from './ui/instructor.js';
 import { mountDebrief } from './ui/debrief.js';
 
 const S = new Session();
@@ -88,7 +88,7 @@ const screens = {
             <div class="row gap"><button class="btn" data-act="instr">Create a room</button>${instr ? `<button class="btn ghost" data-act="instr-resume">Reopen room ${esc(instr.code)}</button>` : ''}</div>
             ${instrKey ? `<details class="gap"><summary class="small">Recovery code for room ${esc(instr.code)}</summary><p class="small mute">Keep it somewhere safe. With the room code it lets you run this room from another device, or after this browser has forgotten it.</p><p class="mono" id="ik-show" tabindex="0">${esc(instrKey)}</p></details>` : ''}
             <details class="gap" id="ires"><summary class="small">Resume as instructor: take back a room (another device, or this browser forgot it)</summary>
-              <p class="small mute">A room runs from the browser that made it. To run it from here, enter its room code and the recovery code you saved. The Relay URL above must be the one your students joined with. This dashboard waits a few seconds to hear the class's clock, and starts paused if nobody answers.</p>
+              <p class="small mute">A room runs from the browser that made it. To run it from here, enter its room code and the recovery code you saved. The Relay URL above must be the one your students joined with. This dashboard waits about ${RECOVER_WAIT_SECONDS} seconds to hear the class's clock, and starts paused if nobody answers.</p>
               <label for="ic" class="gap">Room code</label><input id="ic" maxlength="8" autocomplete="off" style="text-transform:uppercase" value="${esc(instr?.code || '')}">
               <label for="ik" class="gap">Recovery code</label><input id="ik" autocomplete="off" spellcheck="false" placeholder="xxxx-xxxx-xxxx-xxxx-xxxx-xxxx-xxxx-xxxx">
               <button class="btn ghost gap" data-act="instr-recover">Take the room back</button>

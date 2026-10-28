@@ -19,7 +19,7 @@ const ownList = (x) => (Array.isArray(x) ? x : []);
 /** Anchors that are real elements carrying data-anchor (HUD, dock, drawer and Deal Room provide them). */
 export const DOM_ANCHORS = ['hud-cash', 'hud-networth', 'hud-day', 'hud-clock', 'player-card', 'tracker', 'ticker', 'dock-stock', 'dock-market', 'dock-crew', 'dock-bank', 'dock-travel',
   'dock-codex', 'dock-quests', 'world', 'drawer', 'deal-room', 'deal-stage-read', 'deal-stage-pitch', 'deal-stage-close', 'deal-quick',
-  'hire-student', 'hire-broker', 'hire-logistics', 'hire-go']; // the last four live in the Crew drawer's hire dialog, which is open only while a manager is being hired
+  'hire-student', 'hire-broker', 'hire-logistics', 'hire-go', 'bank-repay', 'stock-sell-pool']; // hire-*: the Crew drawer's hire dialog, open only while a manager is being hired; bank-repay (on each loan's Repay buttons) and stock-sell-pool (under the ticked crates) are what a lesson's last step points at
 /** The anchors inside the hire dialog: one per manager on offer (css/data: the PIPE ids) and the button that hires. */
 export const HIRE_ANCHORS = Object.keys(PIPE).map((k) => 'hire-' + k).concat('hire-go');
 export const WORLD_ANCHOR_TYPES = ['lead', 'lot', 'asset', 'plot', 'static'];
@@ -151,15 +151,17 @@ export const winMatches = (win, evt) => !!win && !!evt && evt.type === win.event
 export const startRun = (mission) => ({ i: 0, n: ownList(mission?.steps).length, won: false });
 /**
  * Feeds one event to a lesson. One event advances at most one step; the win event counts only once every step is done, and the event that
- * finishes the last step may itself be the win. Returns { run, advanced, won } and never mutates `run`.
+ * finishes the last step may itself be the win. Returns { run, advanced, won, pause } and never mutates `run`. `pause` is true when the step that was just finished
+ * says `pause: true`: the runner then stops the sandbox's clock at that moment (m07's glut: a player who is told to pause "when it lands" has about three seconds to
+ * read the warning, close it and find the clock, and the lesson is about the state the clock leaves behind, so the lesson holds it there).
  */
 export function feedRun(mission, run, evt) {
-  if (run.won) return { run, advanced: false, won: false };
+  if (run.won) return { run, advanced: false, won: false, pause: false };
   const step = ownList(mission.steps)[run.i];
   let i = run.i, advanced = false;
   if (step && waitMatches(step.wait, evt)) { i++; advanced = true; }
   const won = i >= run.n && winMatches(mission.win, evt);
-  return { run: { ...run, i, won }, advanced, won };
+  return { run: { ...run, i, won }, advanced, won, pause: advanced && step.pause === true };
 }
 /** The synthetic event that would satisfy a step already true when it begins (an 'open this drawer' step whose drawer is open), else null. */
 export function satisfiedNow(step, snap = {}) {
@@ -174,8 +176,8 @@ export function coachFor(mission, run) {
     const s = steps[run.i];
     return { index: run.i, total: n, id: s.id, say: String(s.say ?? ''), hint: String(s.hint || 'Try the highlighted control.'), anchor: s.anchor, wait: s.wait, finishing: false };
   }
-  const last = steps[n - 1], fin = mission.finish; // a lesson whose last step is only "open this" and whose win is a separate act names that act (its first sentence is what the goal card shows)
-  return { index: n, total: n, id: 'finish', say: String(fin?.say || 'Almost there. Finish the goal on the card at the top left and the lesson is yours.'), hint: String(fin?.hint || last?.hint || 'Look at the goal card.'), anchor: 'tracker', wait: null, finishing: true };
+  const last = steps[n - 1], fin = mission.finish; // a lesson whose last step is only "open this" and whose win is a separate act names that act (its first sentence is what the goal card shows) and, when it can, the control it is done with (`anchor`; else the goal card)
+  return { index: n, total: n, id: 'finish', say: String(fin?.say || 'Almost there. Finish the goal on the card at the top left and the lesson is yours.'), hint: String(fin?.hint || last?.hint || 'Look at the goal card.'), anchor: typeof fin?.anchor === 'string' && parseAnchor(fin.anchor) ? fin.anchor : 'tracker', wait: null, finishing: true };
 }
 /** First sentence of a coach line, for the HUD goal card. */
 export function shortSay(text, max = 96) {
@@ -192,12 +194,15 @@ const DEAL_FROM = { inspect: ['buy'], buy: ['buy'], auction: ['buy'], haggle: ['
  * that says why and what to do, or '' when there is nothing to add: the thing is framed or exists but is too big to frame (`exists`), the step has no thing, or the player is
  * already doing what it asks. `anchor` and `wait` are the step's; `s` is what the runner sees:
  *   exists  the anchor resolved to something on screen the player can reach
+ *   clipped it exists, but a control of the drawer's body that has scrolled out of the body's view (the note says where it is and that Show me scrolls to it)
  *   modal   'deal' (the Deal Room is open), 'hire' (the hire dialog), 'dialog' (any other window over the game) or null
- *   deal    what the open Deal Room is about, { kind, lot, lead, asset, assetCls, done } (ids; any may be missing; done: its result is showing), when modal is 'deal'
+ *   deal    what the open Deal Room is about, { kind, lot, lead, asset, assetCls, done, stageDone, last } (ids; any may be missing; done: its result is showing; stageDone: the stage in play is finished and the room offers
+ *           Continue, or See the result when `last`), when modal is 'deal'
  */
 export function unseenNote(anchor, wait, s = {}) {
   const a = parseAnchor(anchor);
-  if (!a || s.exists) return '';
+  if (!a) return '';
+  if (s.exists) return s.clipped ? 'That control is lower down this panel. Press Show me and the panel scrolls to it.' : ''; // clipped: on the page, but scrolled out of its panel's view
   const ev = wait?.type === 'event' ? wait.event : null, deal = s.deal || {}, here = ownList(DEAL_FROM[ev]).includes(deal.kind);
   if (s.modal === 'hire') return ev === 'hire' ? 'Pick a manager in this window, then press Hire.' : 'Finish with this window, or close it with Escape, and the card can point again.';
   if (s.modal === 'deal') {
@@ -206,7 +211,11 @@ export function unseenNote(anchor, wait, s = {}) {
       if ([deal.lot, deal.lead, deal.asset, deal.assetCls].filter(Boolean).includes(a.id)) return ''; // the very thing on the table: this is the deal the step asks for
       return here ? 'It is behind the Deal Room. Close this deal, then tap it in the world.' : 'It is behind the Deal Room. Finish this deal, or close it, and the card can point again.';
     }
-    if (a.name.startsWith('deal-')) return 'That control is not on this stage of the deal. Continue moves on to the next stage, and closing the deal ends it.';
+    if (a.name.startsWith('deal-')) { // name the button the room really shows: Continue appears only once a stage is done, and the last stage's is See the result
+      const base = 'That control is not on this stage of the deal.';
+      if (deal.stageDone) return deal.last ? `${base} Press See the result to finish the deal.` : `${base} Press Continue to move on to the next stage.`;
+      return `${base} Finish this stage, or press its Quick, and Continue moves on. See the result ends the deal.`;
+    }
     return here ? '' : 'The Deal Room is open over the game. Finish this deal, or close it, and the card can point again.'; // a Repair from Stock opens the bench: the step is being done in this room
   }
   if (s.modal === 'dialog') return 'A window is open over the game. Finish with it, or close it with Escape, and the card can point again.';
@@ -215,6 +224,8 @@ export function unseenNote(anchor, wait, s = {}) {
   if (a.name.startsWith('hire-')) return 'That is in the hire window. Open Crew and press Hire a manager to open it.';
   if (a.name === 'ticker') return 'The news line shows up when there is news. Keep the clock running and it will appear.';
   if (a.name === 'drawer') return 'Open a panel from the dock below, and the card will point into it.';
+  if (a.name === 'bank-repay') return 'Open the Bank from the dock below. Each loan you owe has its Repay buttons.';
+  if (a.name === 'stock-sell-pool') return 'Open Stock and tick the crates to sell. Sell to the pool appears under the list.';
   return '';
 }
 

@@ -100,6 +100,7 @@ js/               config.js (every economy number), engine.js (the simulation, n
                   data/ (districts, assets, buyers, Backgrounds), play/ (the five skill games), meta/ (Codex, quests, Academy),
                   world/ (the 2.5D renderer), ui/ (the screens and drawers)
 server/           relay.mjs (the optional classroom relay) and static.mjs (the local file server)
+dev/              world-harness.html and .js, the 2.5D world on its own (a developer's page, never published)
 scripts/          stage.mjs and preload.mjs (the Pages artifact), cdp.mjs, boot.mjs, shots.mjs and perf.mjs (headless Chrome drivers)
 tests/            the suite, and the bot and harness scripts (bot.mjs, calibrate.mjs, balance.mjs, tune.mjs)
 docs/             FACULTY_KIT.md, ARCHITECTURE.md, COMPLIANCE.md, BALANCE.md, V2_DESIGN.md
@@ -110,7 +111,7 @@ docs/             FACULTY_KIT.md, ARCHITECTURE.md, COMPLIANCE.md, BALANCE.md, V2
 
 ## Privacy
 
-- **What the browser keeps.** A run, its settings, the Academy's progress and, for an instructor, the room's code and recovery code are saved in the browser's own storage (`localStorage` keys that start with `pc.`). Nothing else is stored and there are no cookies. "Start over" in the menu, or clearing the site's data, deletes it all.
+- **What the browser keeps.** A run, its settings, the Academy's progress and, for an instructor, the room's code and recovery code are saved in the browser's own storage (`localStorage` keys that start with `pc.`). Nothing else is stored and there are no cookies. "Start over" in the menu deletes the current run; the Founder ID, alias, identity key, settings, Academy progress and debrief notes stay until the site's data is cleared in the browser, which deletes it all.
 - **What leaves the browser.** Nothing, unless a student joins a classroom room. Rooms between tabs of one browser use `BroadcastChannel` and never leave it. A room on many devices uses the instructor's relay and shares a random Founder ID, the alias the student chose and game numbers (net worth, skills, niche counts, shock log, public stock, swap messages). No names, emails or accounts.
 - **No third parties.** No analytics script, no font or script from another host, no tracking pixel; the staged page is checked to make no request outside itself.
 - **The gradebook** is a CSV of Founder IDs and aliases that the instructor downloads. Map it to a roster in your LMS.

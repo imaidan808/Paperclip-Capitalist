@@ -99,7 +99,7 @@ export function seasonMult(def, zone, day) {
   if (!r || day == null || !def.tags.some((t) => r.tags.includes(t))) return 1;
   return 1 + r.amp * Math.sin((2 * Math.PI * day) / r.period);
 }
-/** The hidden truth of a lot or crate: { q: condition multiplier 0.6..1.2, fake }. A fake is worth about 8% of the real thing. */
+/** The hidden truth of a lot or crate: { q: condition multiplier 0.7..1.15 (0.85..1.15 in districts 1 and 2), fake }. A fake is worth about 8% of the real thing. */
 export const FAKE_VALUE = 0.08;
 export const truthMult = (a) => (a.truth ? (a.truth.fake ? FAKE_VALUE : a.truth.q) : 1);
 export function demandMult(def, zone, mods) {

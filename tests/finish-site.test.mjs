@@ -113,8 +113,8 @@ test('the real app: every module main.js reaches exists, deal.js\'s optional gam
   assert.equal(g.modules[0], ENTRY);
   for (const m of g.modules) assert.ok(exists(m), m);
   for (const m of ['js/session.js', 'js/engine.js', 'js/play/haggle.js', 'js/play/auction.js', 'js/meta/academy.js', 'js/world/world.js']) assert.ok(g.modules.includes(m), m);
-  // haggle.js and auction.js are loaded by deal.js with import(`./play/${name}.js`) and academy.js by ui/academy.js with import(): the page needs them, so they are staged and preloaded
-  assert.ok(g.dynamic.includes('js/play/haggle.js') && g.dynamic.includes('js/play/auction.js') && g.dynamic.includes('js/meta/academy.js'));
+  // haggle.js and auction.js are loaded by deal.js with import(`./play/${name}.js`): the page needs them, so they are staged and preloaded; academy.js is a static import of ui/academy.js and of the Codex drawer
+  assert.ok(g.dynamic.includes('js/play/haggle.js') && g.dynamic.includes('js/play/auction.js') && !g.dynamic.includes('js/meta/academy.js'), 'the lessons are a static import now (tests/finish-repair.test.mjs V5)');
   const all = walkDir(join(ROOT, 'js')).filter((f) => f.endsWith('.js')).map((f) => 'js/' + f);
   assert.deepEqual(all.filter((f) => !g.modules.includes(f)), ['js/meta/ids.js'], 'a module nothing imports is either dead or the tests\' alone: say which in this list');
   assert.ok(!/js\/meta\/ids\.js/.test(Object.values(g.edges).flatMap((e) => [...e.statics, ...e.dynamics]).join(' ')));
@@ -670,7 +670,7 @@ test('the faculty kit walks the v2 flow: Backgrounds, the Academy, the dashboard
   // the shocks and their days are the engine's
   for (const e of Object.values(EVENTS)) { assert.ok(md.includes(e.name.replace(/^The /, '')) || md.includes(e.short || e.name), e.name); assert.ok(md.includes(`Day ${e.day}`), `Day ${e.day}`); }
   // the recovery code and the seat
-  for (const need of ['32 letters and digits', 'Take back a room', 'SEAT_GRACE_MS', 'Reopen room', 'first connection']) assert.ok(md.includes(need), need);
+  for (const need of ['32 letters and digits', 'Resume as instructor', 'SEAT_GRACE_MS', 'Reopen room', 'first connection']) assert.ok(md.includes(need), need);
   assert.equal(JSON.parse(JSON.stringify({ g: 0 })).g, 0);
   // the grade: weights and the swap limits are the code's
   for (const need of ['30%', '20%', '10%', '40%']) assert.ok(md.includes(need), need);

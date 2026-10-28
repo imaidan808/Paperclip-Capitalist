@@ -26,10 +26,10 @@ export const ANCHORS = {
   16: { cx: 170, cy: 18, flip: true, z: 70, pad: [2, 6, 6, 2], gate: 'ferry' },
 };
 
-/** The four regions of the journey (starter streets, city and harbour, industry and countryside, the capital). */
+/** The four regions of the journey (starter streets, city and harbor, industry and countryside, the capital). */
 export const REGIONS = [
   { id: 'A', name: 'Starter streets', ids: [1, 2, 3, 4], tint: '#8a6a3a' },
-  { id: 'B', name: 'City and harbour', ids: [5, 6, 7, 8], tint: '#4a7aa8' },
+  { id: 'B', name: 'City and harbor', ids: [5, 6, 7, 8], tint: '#4a7aa8' },
   { id: 'C', name: 'Industry and countryside', ids: [9, 10, 11, 12], tint: '#7a9a4a' },
   { id: 'D', name: 'The capital', ids: [13, 14, 15, 16], tint: '#c9b878' },
 ];

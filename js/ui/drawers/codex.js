@@ -8,9 +8,8 @@ import { kv } from '../../session.js';
 import { ZONES, MIL, EVENTS, ASSETS, PIPE, LOANS, CLIENTS, UPGRADES } from '../../config.js';
 import { esc } from '../common.js';
 import { readAcademy } from '../academy-sandbox.js';
+import { ACADEMY as MISSIONS } from '../../meta/academy.js';
 
-let MISSIONS = [];
-try { ({ ACADEMY: MISSIONS } = await import('../../meta/academy.js')); } catch { /* TEMPORARY: academy.js merges from its own branch; this guard goes at the merge */ }
 
 export const CATEGORIES = ['Value', 'Markets', 'Operations', 'Finance', 'Risk', 'People', 'Strategy'];
 

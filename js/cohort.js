@@ -207,7 +207,7 @@ export const cleanId = (x) => (typeof x === 'string' && ID.test(x) ? x : null);
 export const NICHE_CAP = 80;    // keys a classmate may publish
 export const NICHE_MAX = 12;    // one niche's 48-hour count
 export const NICHE_TOTAL = 150; // all of a classmate's counts together
-export const NW_LIMIT = 1e8;    // an honest strong run ends near $2e7 at the very most (docs/BALANCE.md: the 90th percentile is $2.3e6); nothing a classmate reports is believed beyond this
+export const NW_LIMIT = 1e8;    // an honest strong run ends near $2e7 at the very most (docs/BALANCE.md: the 90th percentile of the day-90 net worth is about $2.1e6 at the quickest cadence); nothing a classmate reports is believed beyond this
 // The most a founder can be worth on a given day: what the strongest honest play reached (the heuristic bot deciding every two hours, 44 runs over a spread of Backgrounds, 2026-10-28: $0.2k on day 5, $11k on day 15,
 // $300k on day 30, $1.5M on day 50, $2.6M on day 65, $9M on day 80, $11.9M on day 90; and a run with no managers, played every four hours, reached $25M) with room to spare. A snapshot's claim is cut to it at the
 // class's own hour, so a made-up net worth can only be as good as the best run could be by now: not a hundred million on the first day. The envelope narrows the lie, it does not remove it (the server tally in docs/ARCHITECTURE.md does).

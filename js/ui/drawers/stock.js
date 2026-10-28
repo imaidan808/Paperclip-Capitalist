@@ -124,7 +124,7 @@ function selBarHTML(ctx, sel) {
   const broken = sel.filter((a) => a.cond === 'broken' && ASSETS[a.cls].repair);
   const bench = broken.length ? benchQuote(g, broken[0].id) : null, benchShut = !!bench && bench.ok && !bench.affordable; // the button repairs the first broken crate ticked, so it asks about that one
   const why = [];
-  const btn = (act, label, ok, cls = 'ghost') => `<button class="btn sm ${cls}" data-act="${act}" data-fid="st-${act}"${ok ? '' : ' aria-disabled="true"'}>${label}</button>`;
+  const btn = (act, label, ok, cls = 'ghost', anchor = '') => `<button class="btn sm ${cls}" data-act="${act}" data-fid="st-${act}"${anchor ? ` data-anchor="${anchor}"` : ''}${ok ? '' : ' aria-disabled="true"'}>${label}</button>`; // anchor: what the Academy's coach card frames
   if (!oneDistrict) why.push('Pick crates from one district to sell or ship them together.');
   else if (pq && !pq.ok) why.push(pq.msg);
   if (oneDistrict && s.zones.length < 2) why.push('Shipping needs a second district. Net worth opens the next one.');
@@ -132,7 +132,7 @@ function selBarHTML(ctx, sel) {
   return `<div class="stk-selbar" role="region" aria-label="Actions for the ticked crates">
     <div class="row"><b>${plural(sel.length, 'crate')} ticked</b><span class="small">worth <span class="mono">${m(worth)}</span>, you paid <span class="mono">${m(paid)}</span></span><span class="grow"></span><button class="btn sm ghost" data-act="stock-clear" data-fid="st-clear">Clear</button></div>
     <div class="row stk-acts">
-      ${btn('stock-sellpool', 'Sell to the pool', !!(pq && pq.ok), '')}
+      ${btn('stock-sellpool', 'Sell to the pool', !!(pq && pq.ok), '', 'stock-sell-pool')}
       ${rq && rq.ok ? btn('stock-route', 'Route digital', true) : ''}
       ${broken.length ? btn('stock-repair', broken.length > 1 ? `Repair first of ${broken.length}` : 'Repair', !benchShut) : ''}
       ${btn('stock-ship', 'Ship', oneDistrict && s.zones.length > 1)}

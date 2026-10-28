@@ -1,5 +1,5 @@
 // Zero-dependency static file server for local play: `npm start` then open http://localhost:8080
-// It serves the app and nothing else: index.html, css/, js/, docs/, dev/ and tests/ (the screenshot and performance drivers import tests/bot.mjs from the page).
+// It serves the app and nothing else: index.html, css/, js/, assets/ (the page's icons; not assets/src/, the scenes they are drawn from, which the published site leaves out too), docs/, dev/ and tests/ (the screenshot and performance drivers import tests/bot.mjs from the page).
 // Never a dotfile or a dot folder (.git, .github), never node_modules, never server/ or the package files. It listens on this machine only (HOST=0.0.0.0 to share a lab).
 import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url';
 
 const root = resolve(fileURLToPath(import.meta.url), '..', '..');
 const types = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.mjs': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.svg': 'image/svg+xml', '.md': 'text/markdown', '.png': 'image/png', '.ico': 'image/x-icon', '.woff2': 'font/woff2' };
-const DIRS = new Set(['css', 'js', 'docs', 'dev', 'tests']);
+const DIRS = new Set(['css', 'js', 'assets', 'docs', 'dev', 'tests']);
 
 /** The file a request asks for, relative to the root: { file } or { status } (400 for a request that makes no sense, 404 for one that is not the app's). Pure. */
 export function route(url) {
@@ -22,6 +22,7 @@ export function route(url) {
   if (!parts.length) parts.push('index.html');       // the front page; a folder is not a page
   else if (path.endsWith('/')) return { status: 404 };
   if (parts.length === 1 ? parts[0] !== 'index.html' : !DIRS.has(parts[0])) return { status: 404 };
+  if (parts[0] === 'assets' && parts[1] === 'src') return { status: 404 }; // the scenes the share image and the icon are drawn from are not part of the site
   const file = parts.join('/');
   return types[extname(file)] ? { file } : { status: 404 };
 }

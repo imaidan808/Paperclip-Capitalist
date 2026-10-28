@@ -26,6 +26,7 @@ import { countUp } from './polish.js';
 import { kv } from '../session.js';
 import { ZONES } from '../config.js';
 import { Progress, CODEX_BY_ID } from '../meta/progress.js';
+import { ACADEMY as MISSIONS } from '../meta/academy.js';
 import {
   parseAnchor, resolveAnchor, hitMatches, placeCard, coverScore, rectsOverlap, coverOf, pointInRect, startRun, feedRun, coachFor, satisfiedNow, shortSay, hintDue,
   newTeach, pickTeach, revealTeach, teachDone, teachFirstTry, readAcademy, markMission, nextIndex, rewardPlan, applyRewards,
@@ -33,8 +34,6 @@ import {
   newLookout, hireSnapshot, hireCoach, unseenNote,
 } from './academy-sandbox.js';
 
-let MISSIONS = [];
-try { ({ ACADEMY: MISSIONS } = await import('../meta/academy.js')); } catch { /* TEMPORARY: academy.js merges from its own branch; this guard goes at the merge */ }
 export const missionList = () => MISSIONS;
 
 let shellP = null;
@@ -66,7 +65,7 @@ export function introHTML(m, { index, total, st, concept, replay, missions = [] 
 }
 
 /**
- * The coach card's inside. o = { showMe, hint (bool), confirm (bool), manual (bool), title, where, framed, exists }. The runner says what the player can really see: `framed` (a gold frame is
+ * The coach card's inside. o = { showMe, hint (bool), confirm (bool), manual (bool), title, where, framed, exists, clipped }. The runner says what the player can really see: `framed` (a gold frame is
  * drawn round the thing), `exists` (the thing is on screen but too big to frame) and `where` (a sentence for a thing that is not on screen yet, or is under a window: academy-sandbox.js,
  * unseenNote). A card made without them (a test, a print) says what it always said. The card never claims a frame there is none of: Show me is honest about it.
  */
@@ -78,7 +77,7 @@ export function coachHTML(c, o = {}) {
       <div class="ac-btns"><button class="btn sm" data-act="ac-skip-yes">Yes, skip it</button><button class="btn sm ghost" data-act="ac-skip-no">Keep going</button></div>`;
   }
   const framed = o.framed !== false;
-  const look = !o.showMe ? '' : framed ? 'It is the control with the gold frame.' : o.exists ? 'It is too big for a frame: it covers most of the screen.' : 'Nothing to frame yet.';
+  const look = !o.showMe ? '' : framed ? 'It is the control with the gold frame.' : o.clipped ? 'It is lower down this panel.' : o.exists ? 'It is too big for a frame: it covers most of the screen.' : 'Nothing to frame yet.';
   return `${head}<p class="ac-say" id="ac-say">${esc(c.say)}</p>
     ${o.where ? `<p class="ac-where" role="note">${esc(o.where)}</p>` : ''}${look ? `<p class="ac-look" role="note">${esc(look)}</p>` : ''}
     ${o.hint ? `<p class="ac-hint" role="note"><b>Hint:</b> ${esc(c.hint)}</p>` : ''}
@@ -253,17 +252,29 @@ export function mountAcademy(root, S, { onDone, onSkip, only, missions, store = 
     // What the card must not hide, as { x, y, w, h, wt } (coverScore): the control the keyboard is on above all (a card over it hides the cursor itself), the drawer and the dock, the
     // controls of the game screen (the tracker, the camera and list buttons, the HUD, the news), and, inside a dialog, its own controls and its head.
     const CONTROLS = 'button, input, select, textarea, summary, a[href], [role="button"]';
+    const READ = '.deal .bubble, .deal-stage .callout, .deal-result .rhead, .deal-result .rlines, .deal-score > div';
     function keepRects(host, view) {
-      const out = [], add = (e, wt, pad = 0, focus = false) => {
+      const out = [], add = (e, wt, pad = 0, focus = false, clip = null, ctl = false) => { // clip: the part of the window the element can be seen in (a drawer's scrolling body), so a control scrolled out of it counts for nothing
         if (!e || e === cardEl || cardEl?.contains(e)) return;
-        const r = e.getBoundingClientRect();
-        if (r.width > 0 && r.height > 0) out.push({ x: r.x - pad, y: r.y - pad, w: r.width + pad * 2, h: r.height + pad * 2, wt, focus });
+        let r = e.getBoundingClientRect();
+        if (clip) { const x0 = Math.max(r.left, clip.left), y0 = Math.max(r.top, clip.top), x1 = Math.min(r.right, clip.right), y1 = Math.min(r.bottom, clip.bottom); r = { x: x0, y: y0, width: x1 - x0, height: y1 - y0 }; }
+        else r = { x: r.x, y: r.y, width: r.width, height: r.height };
+        if (r.width > 0 && r.height > 0) out.push({ x: r.x - pad, y: r.y - pad, w: r.width + pad * 2, h: r.height + pad * 2, wt, focus, ctl });
       };
       if (host === dlg.el) {
         for (const e of host.querySelectorAll(CONTROLS)) add(e, 1);
         add(host.querySelector('.deal-top'), 1);
+        // and what a lesson asks the player to READ in the room: the seller's reply, the stage's result line and the cells of the foot (Cash, Fair price, the quote). They count for less than a control,
+        // so the card prefers the empty part of the stage, and stands over them only where nothing is emptier
+        for (const e of host.querySelectorAll(READ)) add(e, 0.4);
       } else {
-        if (!ctx.el.drawer.hidden) add(ctx.el.drawer, 3);
+        if (!ctx.el.drawer.hidden) {
+          add(ctx.el.drawer, 3);
+          // the drawer's own controls, where they are NOW (it scrolls under a card that does not): on a phone the card has to stand over some of the drawer, and a tap that lands on the card is lost,
+          // so it stands over the part with the fewest buttons (the card is placed again whenever the drawer scrolls)
+          const body = ctx.el.drawer.querySelector('.db');
+          if (body) { const clip = body.getBoundingClientRect(); for (const e of body.querySelectorAll(CONTROLS)) add(e, 2, 0, false, clip, true); }
+        }
         add(ctx.el.dock, 3);
         for (const part of [ctx.el.tracker, ctx.el.ticker, ctx.el.hud, ctx.el.world.querySelector('.wvctl'), ctx.el.world.querySelector('.wvlist')]) {
           if (part) for (const e of part.querySelectorAll(CONTROLS)) add(e, 2);
@@ -277,6 +288,19 @@ export function mountAcademy(root, S, { onDone, onSkip, only, missions, store = 
       return out;
     }
 
+    // Is a DOM anchor's control inside the part of its panel it is seen in? Only a control in the drawer's scrolling body can be out of it (scrolled above or below); every other anchor is as it always was.
+    function fullyShown(res) {
+      const r = res.rect, el = domEls(res.anchor.name)[0], body = ctx.el.drawer.querySelector('.db');
+      if (!(el && body && body.contains(el))) return true;
+      const clip = body.getBoundingClientRect();
+      return r.x >= clip.left - 1 && r.y >= clip.top - 1 && r.x + r.w <= clip.right + 1 && r.y + r.h <= clip.bottom + 1;
+    }
+    // Show me brings a control of the drawer that is below its fold (or above it) into view first, so the frame lands on a control that can be seen
+    function bringIntoView() {
+      const a = parseAnchor(coachNow().anchor), el = a?.kind === 'dom' ? domEls(a.name)[0] : null, body = ctx.el.drawer.querySelector('.db');
+      if (el && body && body.contains(el)) { try { el.scrollIntoView({ block: 'nearest', inline: 'nearest' }); } catch { /* an old engine: the frame waits */ } }
+    }
+
     let placed = null; // where the card stands: { x, y, key } (a crowded dialog keeps a place that is still about as good, see the end of paintCoach)
     let said = ''; // what the card says about a thing it cannot frame (unseenNote), kept for the announcement a new step makes
     function paintCoach(force, snap) {
@@ -286,16 +310,17 @@ export function mountAcademy(root, S, { onDone, onSkip, only, missions, store = 
       const res = host === dlg.el && !inDialog(found) ? null : found; // the step's own thing is not in the sheet that has the card: nothing to ring
       if (layer.parentNode !== host) host.appendChild(layer);
       const view = { w: window.innerWidth, h: window.innerHeight };
-      const spot = res && res.via !== 'fallback' && coverOf(res.rect, view) < 0.6 ? res.rect : null, pad = 6;
+      const clipped = res?.via === 'dom' && !fullyShown(res); // a control of the drawer's body that has scrolled out of it: a frame would stand on the dock or off the window, and dim all of it
+      const spot = res && res.via !== 'fallback' && !clipped && coverOf(res.rect, view) < 0.6 ? res.rect : null, pad = 6;
       const exists = !!res && res.via !== 'fallback'; // on screen and reachable, framed or (a whole panel) too big to frame
-      const modal = modalKind(), where = c.stranded ? '' : unseenNote(c.anchor, c.wait, { exists, modal, deal: modal === 'deal' ? dealOf?.() : null });
+      const modal = modalKind(), where = c.stranded ? '' : unseenNote(c.anchor, c.wait, { exists, clipped, modal, deal: modal === 'deal' ? dealOf?.() : null });
       said = where;
-      const key = [c.id, c.stranded || c.inDialog ? c.say : '', hintOn, showMe, confirm, !!manual, where, spot ? 1 : 0, exists ? 1 : 0].join('|');
+      const key = [c.id, c.stranded || c.inDialog ? c.say : '', hintOn, showMe, confirm, !!manual, where, spot ? 1 : 0, exists ? 1 : 0, clipped ? 1 : 0].join('|');
       if (force || key !== lastKey) {
         const news = key !== lastKey && c.inDialog; // the dialog's words are spoken once, when they change
         lastKey = key;
         const had = cardEl.contains(document.activeElement) ? document.activeElement.dataset.act : null;
-        bodyEl.innerHTML = c.stranded && !confirm ? strandedHTML(c, { title: m.title }) : coachHTML(c, { showMe, hint: hintOn, confirm, manual: !!manual, title: m.title, where, framed: !!spot, exists });
+        bodyEl.innerHTML = c.stranded && !confirm ? strandedHTML(c, { title: m.title }) : coachHTML(c, { showMe, hint: hintOn, confirm, manual: !!manual, title: m.title, where, framed: !!spot, exists, clipped });
         cardEl.classList.toggle('stranded', !!c.stranded);
         if (had) cardEl.querySelector(`[data-act="${had}"]`)?.focus({ preventScroll: true });
         if (news) announce(c.say);
@@ -307,13 +332,27 @@ export function mountAcademy(root, S, { onDone, onSkip, only, missions, store = 
       const over = (p, s) => !!cursor && rectsOverlap({ x: p.x, y: p.y, w: s.w, h: s.h }, cursor);
       const sizeOf = () => { const b = cardEl.getBoundingClientRect(); return { w: b.width || 320, h: b.height || 150 }; };
       if (cursor && over(cardEl.getBoundingClientRect(), sizeOf())) snap = true; // the card is over the cursor now: it leaves at once, whatever moved the cursor or the card
-      const wasSmall = cardEl.classList.contains('compact'); cardEl.classList.remove('compact'); // the card is placed at its full size first
-      let size = sizeOf(), at = placeCard(spot, size, view, 14, 8, keep); // never over the target, the control the keyboard is on, the drawer or the dock, the game's buttons or an open dialog's
-      if (over(at, size)) { // no place is clear of the cursor (a phone on its side, a dialog of wide cards): the card shrinks to its head and its buttons, which fit where the whole card cannot
-        cardEl.classList.add('compact'); const small = sizeOf(), at2 = placeCard(spot, small, view, 14, 8, keep);
-        if (!over(at2, small)) { at = at2; size = small; } else cardEl.classList.remove('compact');
+      const TIERS = { full: '', slim: 'slim', compact: 'compact', min: 'compact min' }; // slim: the words without the notes (a drawer's buttons are in the way); compact: head, hint and buttons; min: head and two buttons
+      const tier = () => (cardEl.classList.contains('min') ? 'min' : cardEl.classList.contains('compact') ? 'compact' : cardEl.classList.contains('slim') ? 'slim' : 'full'), was = tier();
+      const setTier = (t) => { for (const k of ['slim', 'compact', 'min']) cardEl.classList.toggle(k, TIERS[t].split(' ').includes(k)); };
+      // The card is placed at its full size first, then at each smaller size while the place it would take is over the control the keyboard is on (a phone on its side, a dialog of wide cards, a window at 200% zoom that
+      // is 640 by 360 CSS pixels with the Bid and Drop out buttons in the middle of it: compact, then min) or over a button of the drawer (a tap that lands on the card is lost, and a drawer on a phone leaves the card
+      // nowhere else to stand: slim, which keeps the step's words). The first size that is clear wins; when none is, the one that hides the cursor least, and the full card when every one hides it. What a smaller card
+      // drops was read out when it arrived and is there again, in full, the moment nothing is under the card.
+      const touches = (p, s) => keep.filter((r) => r.ctl && rectsOverlap({ x: p.x, y: p.y, w: s.w, h: s.h }, r)).length;
+      const fit = (t) => { setTier(t); const s = sizeOf(), p = placeCard(spot, s, view, 14, 8, keep); return { t, s, p, cursor: over(p, s), n: touches(p, s) }; };
+      let pick = fit('full');
+      if (pick.cursor || pick.n) {
+        for (const t of ['slim', 'compact', 'min']) {
+          const f = fit(t);
+          if (!f.cursor && (pick.cursor || f.n < pick.n)) pick = f;
+          if (!pick.cursor && !pick.n) break;
+        }
+        if (pick.cursor) pick = fit('full'); // every size covers the cursor: the full card, as before
       }
-      if (cardEl.classList.contains('compact') !== wasSmall) snap = true;
+      setTier(pick.t);
+      let size = pick.s, at = pick.p;
+      if (tier() !== was) snap = true;
       const here = `${c.id}|${host === dlg.el ? 'dlg' : 'page'}|${Math.round(size.w)}x${Math.round(size.h)}`;
       if (placed && placed.key === here && !snap) { // a crowded place (nothing is clear) does not follow every scroll of the sheet: the old place stays while it covers about what a new one would
         const mine = { x: placed.x, y: placed.y, w: size.w, h: size.h }, now = coverScore({ x: at.x, y: at.y, w: size.w, h: size.h }, spot, keep), was = coverScore(mine, spot, keep);
@@ -354,6 +393,7 @@ export function mountAcademy(root, S, { onDone, onSkip, only, missions, store = 
       if (dead || gone || sheet || winPending || run.won) return;
       const r = feedRun(m, run, evt);
       run = r.run;
+      if (r.pause) { try { sb.setPaused(true); } catch { /* clock fixed */ } } // a step that says `pause`: the clock stops at the moment the step is done (m07's glut), before the next card is drawn
       if (r.advanced) stepChanged();
       if (r.won) win();
     }
@@ -398,7 +438,9 @@ export function mountAcademy(root, S, { onDone, onSkip, only, missions, store = 
     const onFocus = (e) => { if (!cardEl || cardEl.contains(e.target) || e.target.tagName === 'CANVAS') return; paintCoach(false, true); };
     document.addEventListener('focusin', onFocus);
     let raf = 0;
-    const mo = new MutationObserver(() => { if (!raf) raf = requestAnimationFrame(() => { raf = 0; paintCoach(); }); });
+    const later = () => { if (!raf) raf = requestAnimationFrame(() => { raf = 0; paintCoach(); }); };
+    ctx.el.drawer.addEventListener('scroll', later, true); // the drawer's body scrolls (scroll does not bubble, so: capture), and the buttons move under the card
+    const mo = new MutationObserver(later);
     for (const e of [ctx.el.hud, ctx.el.tracker, ctx.el.ticker, ctx.el.dock, ctx.el.drawer, ctx.el.world]) mo.observe(e, { childList: true, subtree: true, attributes: true, attributeFilter: ['hidden', 'class'] });
     mo.observe(dlg.el, { childList: true, subtree: true, attributes: true, attributeFilter: ['open', 'aria-pressed'] }); // the hire dialog: a manager picked, the dialog opened or shut
 
@@ -466,7 +508,7 @@ export function mountAcademy(root, S, { onDone, onSkip, only, missions, store = 
 
     // ---- actions (added to the shell's own table, so they work in the page and in the dialog)
     Object.assign(ctx.acts, {
-      'ac-showme'() { showMe = !showMe; paintCoach(true); const c = coachNow(), a = parseAnchor(c.anchor); if (showMe && a?.kind === 'dom' && !ringEl.hidden) domEls(a.name)[0]?.focus?.({ preventScroll: true }); }, // the cursor goes to the control only when a frame is on it
+      'ac-showme'() { showMe = !showMe; if (showMe) bringIntoView(); paintCoach(true); const c = coachNow(), a = parseAnchor(c.anchor); if (showMe && a?.kind === 'dom' && !ringEl.hidden) domEls(a.name)[0]?.focus?.({ preventScroll: true }); }, // the cursor goes to the control only when a frame is on it
       'ac-skip'() { confirm = true; paintCoach(true); cardEl.querySelector('[data-act="ac-skip-no"]')?.focus(); },
       'ac-skip-no'() { confirm = false; paintCoach(true); cardEl.querySelector('[data-act="ac-skip"]')?.focus(); },
       'ac-skip-yes'() { dlg.close(); skipNow(); },
@@ -504,7 +546,7 @@ export function mountAcademy(root, S, { onDone, onSkip, only, missions, store = 
       destroy() {
         gone = true; clearInterval(beat); for (const f of off) f();
         document.removeEventListener('click', onClick, true); document.removeEventListener('keydown', onKey); window.removeEventListener('resize', onResize); document.removeEventListener('focusin', onFocus);
-        mo.disconnect(); if (raf) cancelAnimationFrame(raf);
+        mo.disconnect(); if (raf) cancelAnimationFrame(raf); ctx.el.drawer.removeEventListener('scroll', later, true);
         for (const k of inerted) k.inert = false;
         layer?.remove(); sheet?.remove();
         try { mounted.destroy(); } catch (e) { console.error(e); }

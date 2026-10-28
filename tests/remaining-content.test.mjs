@@ -705,7 +705,6 @@ test('every player-facing string the game can show is spelled the American way (
   // every string literal of every source file (comments are not read: they are not shown)
   const stray2 = [], handedOver = [];
   for (const f of walkFiles('js/', '.js')) {
-    if (f.startsWith('js/world/')) continue; // the world's drawing code has no words for a player
     for (const s of literals(text(f))) for (const w of britishIn(s)) {
       if ((DELIBERATE[f] || []).includes(w)) continue;
       if ((HANDED_OVER[f] || []).includes(w)) { handedOver.push(`${f}: ${w}`); continue; }

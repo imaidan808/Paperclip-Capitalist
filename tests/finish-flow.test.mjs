@@ -293,8 +293,8 @@ test('the card follows into ANY open window, says what is behind it, and its hin
   const src = read('js/ui/academy.js'), css = read('css/ui-academy.css');
   assert.match(src, /const hostFor = \(\) => \(dlg\.el\.open \? dlg\.el : ctx\.el\.overlay\)/, 'a Cash breakdown, an alert, a confirmation: the card is in it, so its hint is never under a modal');
   assert.match(src, /const modalKind = \(\) => \(!dlg\.el\.open \? null : dealOpen\(\) \? 'deal' : dlg\.el\.querySelector\('\[data-anchor\^="hire-"\]'\) \? 'hire' : 'dialog'\)/);
-  assert.match(src, /unseenNote\(c\.anchor, c\.wait, \{ exists, modal, deal: modal === 'deal' \? dealOf\?\.\(\) : null \}\)/);
-  assert.match(src, /where, spot \? 1 : 0, exists \? 1 : 0\]\.join\('\|'\)/, 'the card is drawn again when the note or the frame changes');
+  assert.match(src, /unseenNote\(c\.anchor, c\.wait, \{ exists, clipped, modal, deal: modal === 'deal' \? dealOf\?\.\(\) : null \}\)/);
+  assert.match(src, /where, spot \? 1 : 0, exists \? 1 : 0, clipped \? 1 : 0\]\.join\('\|'\)/, 'the card is drawn again when the note or the frame changes');
   assert.match(src, /framed: !!spot, exists/, 'the card is told what the player can really see');
   assert.match(src, /announce\(`\$\{c\.finishing \? c\.say : `Step \$\{c\.index \+ 1\} of \$\{c\.total\}\. \$\{c\.say\}`\}\$\{said \? ` \$\{said\}` : ''\}`\)/, 'and so is a screen reader');
   assert.match(src, /if \(showMe && a\?\.kind === 'dom' && !ringEl\.hidden\) domEls\(a\.name\)\[0\]\?\.focus/, 'Show me moves the cursor only onto a control that has a frame');

@@ -35,6 +35,10 @@
 .ac-coach.compact :is(.ac-say, .ac-hint, .ac-look, .ac-lost) { display: none; } .ac-coach.compact .ac-coach-in { padding: .5rem .7rem .55rem; }
 /* ...but the two things that tell the player what to DO stay: the hint that arrives after 20 seconds and the note about a thing that is not on screen (below). A crowded window is where they are needed. */
 .ac-coach.compact :is(.ac-hint, .ac-where) { display: block; margin: .25rem 0 .45rem; }
+/* slim: the step's words and the buttons, without the notes under the words (a phone's drawer has buttons where the full card would stand) */
+.ac-coach.slim :is(.ac-hint, .ac-look, .ac-where) { display: none; }
+/* ...and when even that covers the control the keyboard is on, the card is only its head and its two buttons: a card over the cursor hides the one thing a keyboard player needs to see */
+.ac-coach.min :is(.ac-say, .ac-hint, .ac-look, .ac-lost, .ac-where), .ac-coach.min [data-act="ac-restart"] { display: none; }
 /* the caret is a turned square that carries the card's own colour at the edge it sits on (the lit top for "below", the plain panel elsewhere), so it joins the frame without a seam */
 .ac-coach::before { content: ""; position: absolute; display: none; width: 12px; height: 12px; background: var(--panel); border: var(--bw) solid var(--gold); transform: rotate(45deg); }
 .ac-coach[data-side="below"]::before { display: block; top: -8px; left: clamp(1.1rem, var(--ac-ax, 50%), calc(100% - 1.5rem)); margin-left: -6px; border-right: 0; border-bottom: 0; background: var(--ac-top); }
@@ -52,7 +56,7 @@
 .ac-btns .btn[aria-pressed="true"] { border-color: var(--gold); color: var(--gold); }
 
 /* ---- the sheets after a win */
-.ac-sheet { position: fixed; inset: 0; z-index: 40; background: rgba(5, 8, 14, .8); display: grid; justify-items: center; align-items: start; overflow: auto; padding: 4vh .8rem; }
+.ac-sheet { position: fixed; inset: 0; z-index: 40; background: rgba(5, 8, 14, .8); display: grid; justify-items: center; align-items: start; overflow: auto; padding: 4vh .8rem; scroll-padding-block: .5rem; }
 .ac-sheet-in { width: min(44rem, 100%); background: var(--panel); border: var(--bw) solid var(--gold); border-top-width: 6px; box-shadow: 8px 8px 0 rgba(0, 0, 0, .6); padding: 1.1rem 1.3rem 1.3rem; display: grid; gap: .5rem; min-width: 0; animation: ac-rise .26s cubic-bezier(.2, .9, .3, 1) both; }
 @keyframes ac-rise { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
 .ac-sheet-in h2 { margin: 0; overflow-wrap: anywhere; } .ac-sheet-in h3 { margin: .6rem 0 .2rem; } .ac-sheet-in p { margin: .25rem 0; overflow-wrap: anywhere; }
