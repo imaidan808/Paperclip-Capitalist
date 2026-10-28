@@ -189,7 +189,12 @@ function careless(p, rng) {
 const toReal = (s, a) => (a.type === 'anchor' ? { type: 'anchor', level: flip(s.role, a.level) } : a);
 
 function advise(s) { // the textbook move and the reason, from public information only
-  const p = pubOf(s), a = expert(p), $ = (u) => money(real(s, u)), sell = s.role === 'sell', fair = s.fair;
+  const p = pubOf(s), $ = (u) => money(real(s, u)), sell = s.role === 'sell', fair = s.fair;
+  let a = expert(p);
+  // The textbook move can be one the table does not allow: to come down when the ask is already at the floor (legal() offers no step then). Advice is always a move the table accepts, so at the floor the way
+  // out is to take their number, or the alternative when it is better (the same fallback the heuristic player makes).
+  const atFloor = a.type === 'concede' && !legal(s).some((l) => l.type === 'concede');
+  if (atFloor) a = p.alt != null && p.alt > p.bid + 0.01 ? { type: 'walk' } : { type: 'accept' };
   const zone = `${$(sell ? p.rl : p.rh)} and ${$(sell ? p.rh : p.rl)}`, edge = `${sell ? 'The most they will pay' : 'The least they will take'} is probably between ${zone}`;
   let text, concept = 'zopa';
   if (a.type === 'anchor') {
@@ -198,7 +203,7 @@ function advise(s) { // the textbook move and the reason, from public informatio
       (s.style === 'hard' ? (sell ? ' Hard bargainers dig in if you open past about 1.25 times their limit.' : ' Hard bargainers dig in if you open far below their lowest price.') : s.style === 'analytical' ? (sell ? ' They know the market price: a number far from fair makes them suspicious.' : ' They know the market price: an offer far under it is dismissed out of hand.') : s.style === 'impulsive' ? (sell ? ' A big first number excites them.' : ' A bold first offer excites them.') : '');
   } else if (a.type === 'leverage') { concept = 'batna'; text = `Mention your alternative (${$(p.alt)}). It is your BATNA, the best you can do without this deal: a real competing offer makes walking away credible and lifts what they will accept.`; }
   else if (a.type === 'walk') { concept = 'batna'; text = `Their best (${$(p.bid)}) is worse than your alternative (${$(p.alt)}). Never settle below your BATNA: walk away and take the alternative.`; }
-  else if (a.type === 'accept') text = `Their number, ${$(p.bid)}, is already near the edge of their range. ${edge}. Pushing further risks the whole deal. Take it.`;
+  else if (a.type === 'accept') text = atFloor ? `You are already at the ${sell ? 'lowest ask' : 'highest offer'} this talk allows (${$(p.ask)}), so there is no step left to take. Their number, ${$(p.bid)}, is the best on offer: take it, or walk away.` : `Their number, ${$(p.bid)}, is already near the edge of their range. ${edge}. Pushing further risks the whole deal. Take it.`;
   else if (a.type === 'hold') { concept = 'patience'; text = s.style === 'hard' ? 'Hold your number. Hard bargainers give ground slowly, but their patience also wears thin; wait, then close the gap in the last rounds.' : "Hold your number for a round and watch how fast their offers move: the pace of a counterparty's numbers shows where they are heading."; }
   else {
     concept = s.style === 'friendly' ? 'reciprocity' : 'zopa';
