@@ -1,0 +1,42 @@
+# Paperclip Capitalist
+
+> A free browser game for university entrepreneurship courses. Everyone starts with one paperclip and $0, drafts two of twelve Backgrounds and trades up through sixteen districts over a virtual 90-day run. It teaches arbitrage, working capital, customer acquisition, negotiation and risk. A class shares one economy, so the obvious deal gets crowded and the Creativity Engine punishes the herd.
+
+The site is a static web app: HTML, CSS and JavaScript modules served as they are, with no build step, no server code and no database. It is one page. The title screen, the Background draft, the Academy, the game world, the instructor dashboard and the debrief are all drawn by JavaScript on that page, so there is nothing else on the site to crawl.
+
+## The game
+
+- [Play Paperclip Capitalist](https://imaidan808.github.io/paperclip-capitalist/): the only page. Play solo, try the Academy (ten short guided missions), join a classroom with a room code, or create a room as an instructor.
+
+What a player does: drafts two of twelve Backgrounds (each has a real-world basis, a strength and a cost), trades in a 2.5D isometric world of sixteen districts from the Scrap Yard to the Global Exchange, plays the deals in five skill games (inspect, pitch, haggle, bid and repair) or takes Quick, survives macro shocks, and finishes with a debrief that assembles the evidence for a reflection paper.
+
+## How the site is organized
+
+- `index.html`: the shell and the entry point, `js/main.js`.
+- `js/`: the economy and the engine (no DOM), the skill games, the Academy and the Codex, the room protocol, and the screens.
+- `css/`: the stylesheets, one for the base look and one for each panel.
+- `assets/`: the share image and the icons.
+- `404.html`, `robots.txt`, `sitemap.xml` and this file.
+
+## What stays on the device
+
+- A run, its settings and the Academy's progress are saved in the browser's own storage (localStorage keys that start with `pc.`). Nothing else is stored, and there are no cookies.
+- There are no accounts, no analytics, no tracking and no third-party requests: no fonts, scripts or images come from another host.
+- "Start over" in the menu, or clearing the site's data, deletes everything the game kept.
+
+## Privacy model
+
+- The game asks for an alias, not a name. The only identifiers are a random Founder ID and the alias the student chooses.
+- Nothing is sent anywhere unless a student joins a classroom room. Rooms between tabs of one browser use the browser's BroadcastChannel and never leave the browser.
+- A room on many devices uses an optional relay server that the instructor runs (a WebSocket forwarder, `server/relay.mjs` in the repository). It then sees the room code, the Founder ID, a random secret that proves the ID is the same browser, the alias and the game numbers in each message. It keeps the latest snapshot per student in memory only, writes nothing to disk and never logs what a message holds.
+- The instructor's gradebook export is a CSV of Founder IDs and aliases that the instructor downloads. No student data is held by this site.
+
+## Source and documentation
+
+- [README](https://github.com/imaidan808/paperclip-capitalist/blob/main/README.md): what it is, how to run, test and host it.
+- [Faculty kit](https://github.com/imaidan808/paperclip-capitalist/blob/main/docs/FACULTY_KIT.md): setup for a class, the week map, grading and the reflection rubric.
+- [Architecture](https://github.com/imaidan808/paperclip-capitalist/blob/main/docs/ARCHITECTURE.md): the engine, the room protocol and the relay.
+- [Compliance](https://github.com/imaidan808/paperclip-capitalist/blob/main/docs/COMPLIANCE.md): what is and is not implemented for privacy, security and accessibility.
+- [Balance notes](https://github.com/imaidan808/paperclip-capitalist/blob/main/docs/BALANCE.md): the rules as built and how the economy was tuned.
+
+The source is MIT licensed.

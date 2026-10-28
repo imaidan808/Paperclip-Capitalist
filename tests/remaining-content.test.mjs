@@ -668,7 +668,7 @@ const britishIn = (s) => (s.replace(/\bGrey\b(?=-market)/g, '').match(BRITISH) |
  * carry a British spelling: a new one anywhere fails, and a fixed one needs no change here (the diagnostic below lists what is still waiting).
  */
 const HANDED_OVER = {
-  'js/ui/deal.js': ['offence'], // "They took offence at that number." (the Deal Room's screen is the presentation branch's to edit: a one-word change for its owner, and the only word left)
+  // Empty since the launch pass spelled "They took offense at that number." in js/ui/deal.js, the last word that waited for its owner. A word that must wait for one again is listed here with its file and the reason.
 };
 const DELIBERATE = {
   'js/play/pitch.js': ['sceptic'], // a quirk id and the words that recognise the player's own typing (both spellings are accepted)
@@ -713,8 +713,8 @@ test('every player-facing string the game can show is spelled the American way (
     }
   }
   assert.deepEqual(stray2, [], 'source literals');
-  // the one word left is in a file this round may not touch; nothing else is waiting for an owner any more
-  assert.deepEqual([...new Set(handedOver)], ['js/ui/deal.js: offence'], 'only the Deal Room screen\'s "offence" is still waiting for its owner');
+  // nothing is waiting for an owner any more: the Deal Room's "offense" was the last word
+  assert.deepEqual([...new Set(handedOver)], [], 'no British spelling is waiting for an owner');
   if (handedOver.length) t.diagnostic(`British spellings still waiting for their owners: ${[...new Set(handedOver)].join('; ')}`);
 });
 

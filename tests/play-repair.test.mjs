@@ -10,7 +10,7 @@ function findT(n, seed, target, from = 0, tol = 0.002) {
   for (let t = from; t < from + 30000; t++) if (Math.abs(pos(t, n, seed) - target) < tol) return t;
   throw new Error('marker never reaches ' + target);
 }
-/** Play all three steps, stopping each when the marker reads `aim` (0.5 = dead centre, 0 / 1 = as far from the sweet spot as it goes). */
+/** Play all three steps, stopping each when the marker reads `aim` (0.5 = dead center, 0 / 1 = as far from the sweet spot as it goes). */
 function playAt(params, aim) {
   let s = create(params);
   while (!s.done) s = act(s, { type: 'stop', t: findT(s.step, s.seed, aim, 500, aim === 0.5 ? 0.002 : 0.03) }).state;
@@ -69,7 +69,7 @@ test('perfect timing beats missing', () => {
   assert.match(high.say, /high side/);
 });
 
-test('the step accuracy is 1 at the centre, falls to 0 at the zone edge and stays 0 beyond', () => {
+test('the step accuracy is 1 at the center, falls to 0 at the zone edge and stays 0 beyond', () => {
   const half = zoneHalf(5), s = create({ ops: 5, seed: 8 });
   const acc = (target) => act(s, { type: 'stop', t: findT(0, 8, target, 0, 0.0008) }).state.steps[0].acc;
   assert.ok(acc(0.5) > 0.99);
