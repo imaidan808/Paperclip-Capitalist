@@ -63,11 +63,11 @@ export const assets = {
     dem: { 5: 9, 4: 3 }, repair: 130,
   },
   textbooks: {
-    name: 'Pallet: Exam-Prep Textbooks', icon: '📚', base: 540, sc: 4, dep: 3, tags: ['paper', 'training'],
+    name: 'Pallet: Exam-Prep Textbooks', icon: '📓', base: 540, sc: 4, dep: 3, tags: ['paper', 'training', 'tool'],
     dem: { 5: 8, 3: 3 },
   },
   laptops: {
-    name: 'Off-Lease Laptop Pallet', icon: '💻', base: 1150, sc: 5, dep: 6, tags: ['electronics', 'office', 'b2b'],
+    name: 'Off-Lease Laptop Pallet', icon: '⌨️', base: 1150, sc: 5, dep: 6, tags: ['electronics', 'office', 'b2b'],
     dem: { 5: 7, 4: 3 }, repair: 230,
   },
   webStore: {
@@ -81,19 +81,19 @@ export const assets = {
     dem: { 6: 9, 12: 3 }, repair: 380, fakeRisk: 0.4,
   },
   estateBox: {
-    name: 'Sealed Estate Box Lot', icon: '🎁', base: 620, sc: 7, dep: 1, tags: ['collectible', 'retro'],
+    name: 'Sealed Estate Box Lot', icon: '🧳', base: 620, sc: 7, dep: 1, tags: ['collectible', 'retro'],
     dem: { 6: 10, 4: 3 }, fakeRisk: 0.2,
   },
   vinylRecords: {
-    name: 'Estate Vinyl Collection', icon: '💿', base: 700, sc: 8, dep: 1, tags: ['retro', 'collectible', 'media'],
+    name: 'Estate Vinyl Collection', icon: '💿', base: 700, sc: 8, dep: 1, tags: ['collectible', 'media', 'prestige'], // a collection with a provenance, not a crate of records
     dem: { 6: 8, 4: 3 }, fakeRisk: 0.3,
   },
   watches: {
-    name: 'Vintage Wristwatch Lot', icon: '⌚', base: 2300, sc: 9, dep: 1, tags: ['luxury', 'collectible'],
+    name: 'Estate Watch Drawer Lot', icon: '⏱️', base: 2000, sc: 9, dep: 1, tags: ['luxury', 'collectible'],
     dem: { 6: 8, 4: 3 }, repair: 520, fakeRisk: 0.6,
   },
   toolChest: {
-    name: 'Master Machinist\'s Tool Chest', icon: '🧰', base: 900, sc: 6, dep: 1, tags: ['tool', 'collectible'],
+    name: 'Master Machinist\'s Tool Chest', icon: '⚒️', base: 900, sc: 6, dep: 1, tags: ['tool', 'collectible'],
     dem: { 6: 6, 7: 8, 9: 2 }, repair: 140, fakeRisk: 0.1,
   },
 
@@ -103,15 +103,15 @@ export const assets = {
     dem: { 7: 8, 9: 3 }, repair: 720,
   },
   classicCar: {
-    name: 'Barn-Find Classic Roadster', icon: '🏎️', base: 6800, sc: 9, dep: 1, tags: ['collectible', 'retro', 'prestige'],
-    dem: { 7: 7, 13: 3 }, repair: 2600, fakeRisk: 0.4,
+    name: 'Barn-Find Classic Roadster', icon: '🏎️', base: 5400, sc: 9, dep: 1, tags: ['collectible', 'retro', 'prestige'],
+    dem: { 7: 7, 13: 3 }, repair: 2000, fakeRisk: 0.4,
   },
   van: {
     name: 'Ex-Fleet Cargo Van', icon: '🚐', base: 4400, sc: 5, dep: 3, tags: ['vehicle', 'b2b'],
     dem: { 7: 8, 8: 6, 9: 3 }, repair: 1050,
   },
   domain: {
-    name: 'Premium Keyword Domain', icon: '🌐', base: 3500, sc: 8, dep: 1, tags: ['digital', 'b2b'],
+    name: 'Premium Keyword Domain', icon: '🔗', base: 3500, sc: 8, dep: 1, tags: ['digital', 'b2b', 'trend'],
     dem: { 7: 8, 10: 3 }, fakeRisk: 0.2,
   },
 

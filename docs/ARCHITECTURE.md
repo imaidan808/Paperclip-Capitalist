@@ -3,41 +3,47 @@
 ```
 index.html          shell: skip link, live regions, <dialog>, fx canvas
 css/styles.css      tokens first (WCAG-tested), then components
-js/config.js        every balance number and all content (assets, buyers, events, loans)
+js/config.js        every economy number (ECON, fees, loans, shocks, skills); re-exports the content below
+js/data/            the content: sixteen districts, the asset classes, the buyers (tier1..tier4.js), the twelve Backgrounds (perks.js), the validator (schema.js)
 js/market.js        pure formulas: utility, Creativity Multiplier, EEI, variance, Gini, FMV
 js/engine.js        the simulation: one step = one virtual hour; deterministic; no DOM
+js/deal.js          the Deal Room's glue: plans a deal, runs its stages (Read, Pitch, Close, Bid, Fix) and hands the result to the engine
+js/play/            the five skill games (inspect, pitch, haggle, auction, repair): pure, deterministic, each with an autoplay for Quick
+js/meta/            the Codex, quests, achievements and daily bounties, the Academy, and the Progress tracker that scores them from the engine's events
 js/cohort.js        ghost herd, synthetic students, peer aggregation (the "rest of the class")
 js/session.js       clock, autosave, room protocol, leaderboard, gradebook, practice partner
 js/net.js           transports: BroadcastChannel (tabs) and WebSocket (relay)
-js/world/            the 2.5D world: iso.js (projection + primitives), layout.js (island, slots), props.js (scenery art), world.js (camera, input, entities, light and weather)
-js/ui/worldview.js  the DOM around the canvas: toolbar, HUD, tooltip, accessible list view
-js/ui/*.js          views.js (pure HTML), game.js (actions), instructor.js, tutorial.js, debrief.js, common.js
+js/world/           the 2.5D world: iso.js (projection + primitives), island.js and layout.js (the island and its slots), props.js (scenery art), world.js (camera, input, entities, light and weather)
+js/ui/              shell.js (the game screen), worldview.js (the DOM around the canvas), drawers/ (the seven dock drawers), deal.js, hud.js, draft.js, academy.js, instructor.js, debrief.js, common.js
 server/relay.mjs    optional classroom relay (ws); server/static.mjs local file server
-tests/              engine, multiplayer (spawns the real relay), accessibility; bot.mjs + calibrate.mjs
+tests/              engine, content, multiplayer (spawns the real relay), accessibility, UI; bot.mjs drives the heuristic player for calibrate.mjs, balance.mjs and tune.mjs
 ```
 
 ## Engine contract
-`new Game({profile, specialty, handle, pid, startHour})`, then `game.advanceTo(hour)` and the action methods (`pitch`, `buyLot`, `repair`, `sellPool`, `ship`, `hirePipeline`, `draw`, `repay`, `resolveAudit`, `exit`, `createOffer`/`acceptOffer`/`finalizeOffer`). Every action returns `{ok, msg, ...}`. State is a plain JSON object (`game.s`); the RNG seed is part of it, so a save replays identically. The environment (`game.env`) injects the cohort, difficulty and world seed.
+`new Game({perks: [a, b], specialty, handle, pid, startHour, seed})`, where `perks` are the ids of exactly two of the twelve Backgrounds in `js/data/perks.js` (an unknown id is dropped, so the game would start without it), then `game.advanceTo(hour)` and the action methods (`pitch`, `buyLot`, `repair`, `sellPool`, `ship`, `hirePipeline`, `draw`, `repay`, `resolveAudit`, `exit`, `createOffer`/`acceptOffer`/`finalizeOffer`). Every action returns `{ok, msg, ...}`. State is a plain JSON object (`game.s`); the RNG seed is part of it, so a save replays identically. The environment (`game.env`) injects the cohort, difficulty and world seed. Quests, achievements, daily bounties and the Codex live in `game.s.meta` and are scored by `Progress` (`js/meta/progress.js`) from the events the engine emits (`game.onEvent`).
 
 ## Room protocol (JSON over either transport)
 | Message | From | Meaning |
 |---|---|---|
 | `hello`, `bye` | anyone | presence |
-| `snap` | student | public snapshot: net worth, skills, 48h niche counts, shock log, public inventory |
+| `snap` | student | public snapshot: net worth, skills, 48h niche counts, shock log, public inventory. What it says is believed only within bounds: the score is recomputed, an online founder is placed at the class's hour (within two days), and net worth is cut to what the best honest run reaches on that day (`nwCeiling`, `js/cohort.js`: $100 on day 1, $1.2M on day 30, $40M on day 90), so a made-up fortune is no better than the best real one could be by then and no better; the server tally below is the real fix |
 | `clock` | instructor | `{hour, speed, paused, difficulty, ghosts, algo}`; students adopt only the instructor's (or, with no instructor, the lowest Founder ID's) |
 | `inject`, `rewind` | instructor | deploy a shock (idempotent by id) / restore daily checkpoints |
-| `offer`, `accept`, `decline`, `withdraw` | student | peer swap: proposer escrows, recipient validates and delivers, proposer finalises |
+| `offer`, `accept`, `confirm`, `deliver`, `ack`, `decline`, `withdraw` | student | peer swap in three steps: the proposer escrows and makes the offer; the addressee asks to `accept`; the proposer `confirm`s that it still holds the escrow (and holds it for them: it cannot be withdrawn or expire under them, once per try and twice per offer); only then does the addressee commit (and not at all on a confirmation that comes after its own 30-second wait) and `deliver`. The addressee has committed when it delivers, so the proposer takes any reply that names the crates it asked for (by id and class) and the exact cash, whatever district a crate is in now, credited as it described each crate and no better; only a reply that crates and cash together are worth under 45% of the description is refused. It answers `ack`, and the addressee sends the delivery again (five tries over two minutes) until it hears one. A swap whose addressee was confirmed is finished even if the bell rang meanwhile |
 | `flag` | student | a blocked offer outside +/-40% of fair value |
-| `royalty` | student | daily payment on a royalty stream |
+| `royalty` | student | daily payment on a royalty stream. A payer short of cash carries the rest as arrears (a liability in its net worth and in an exit's proceeds) and a stream whose receiver's run is over ends; the receiver takes at most a day's rate a message and never more than was promised in all |
+
+## Who is who on the relay
+A Founder ID is a name, not a proof: every message carries its sender's, so every classmate knows everyone's, the instructor's included. So a connection to the relay must bring `key`, a random secret its browser keeps beside the ID (`pc.key.<slot>` in localStorage). The first connection to use an ID in a room binds the ID to a hash of its key (nothing else of it is kept, and it is never logged); a later connection for that ID with another key, or none, is refused. That is what stops a classmate from taking the instructor's seat, or another student's name and snapshot, by connecting with an ID they have read off the wire. The instructor's seat is the first connection to claim it, kept for its ID (and so its key), for as long as the room lives: another ID is never handed it by waiting (a laptop lid closed for a break must not make a student the instructor), and the first holder takes it back from anyone. An operator who wants a handover after a long absence sets `SEAT_GRACE_MS`. A connection that closes is announced to the room as a `bye`, and a pid that connected, never sent a snapshot and has been gone 30 seconds is forgotten when the table of pids is full, so a script that greets and leaves cannot fill it. A full relay forgets the room that has been empty longest before it turns a class away. Two tabs of one browser with the same slot share both. Over a browser's own tabs (`BroadcastChannel`) there is no relay and no key: every tab is the same browser, and it is not a place to defend against.
 
 ## Moving to a scalable, authoritative backend
 1. Run `engine.js` on the server per student (it has no DOM), accept actions over HTTP/WebSocket, and persist `game.s` per Founder ID in Postgres with point-in-time recovery.
 2. Move the cohort aggregation (`cohort.js`) server-side so niche volumes cannot be spoofed.
-3. Validate peer trades server-side with the same `checkOffer`.
+3. Validate peer trades server-side with the same `checkOffer`. Without it a client is still believed about one thing: the cash and the crates it says it handed over (the proposer credits what the reply says, clamped to the offer, but cannot check the other side really gave them up), so a hostile classmate can still take what a proposer escrowed for a crate it never parted with. Two sides' reports of the same swap, cross-checked, are the cheapest fix.
 4. Add an LTI 1.3 launch to mint the pseudonymous Founder ID and an Assignment and Grade Services call from the gradebook export.
 5. Keep the front end unchanged: swap `net.js`'s relay for the API.
 
 ## The 2.5D world
-`World` (js/world/world.js) is a Canvas 2D renderer with no dependencies. The island is a tile grid in isometric projection (`sx = (gx - gy) * 32`, `sy = (gx + gy) * 16 - gz`); three districts sit at different elevations joined by ramps. Each game tick `sync()` reconciles *entities* with live game state: buyer NPCs per lead (they walk to a slot and walk away when the lead goes), pallets per lot, crates per stored asset, buildings per pipeline (height = level), empty plots, trucks per freight run. Static scenery is a deterministic list in `layout.js`. The frame loop draws ground, then depth-sorted props and entities, then screen-space passes (night multiply, lights, rain, labels, bubbles). Hit shapes are recorded while drawing and picked back-to-front.
+`World` (js/world/world.js) is a Canvas 2D renderer with no dependencies. The island is a tile grid in isometric projection (`sx = (gx - gy) * 32`, `sy = (gx + gy) * 16 - gz`); the sixteen districts sit on plateaus at different elevations joined by roads, bridges and a ferry. Each game tick `sync()` reconciles *entities* with live game state: buyer NPCs per lead (they walk to a slot and walk away when the lead goes), pallets per lot, crates per stored asset, buildings per pipeline (height = level), empty plots, trucks per freight run. Static scenery is a deterministic list in `layout.js`. The frame loop draws ground, then depth-sorted props and entities, then screen-space passes (night multiply, lights, rain, labels, bubbles). Hit shapes are recorded while drawing and picked back-to-front.
 
-Rules that keep it honest: the world never changes game state itself (clicks go through `api.activate` to the same `acts` as the dashboard); one broken object cannot blank the scene (each item draws inside try/catch and logs once); the clock-driven day/night is rate-limited and fixed at fast clock speeds (no strobing); reduced motion draws only on change; quality drops automatically (30 to 20 fps, lower device-pixel ratio) on a slow machine. `tests/world.test.mjs` draws every entity type, zone, mode, hour and shock against a recording canvas.
+Rules that keep it honest: the world never changes game state itself (clicks go through `api.activate` to the same `acts` as the dashboard); one broken object cannot blank the scene (each item draws inside try/catch and logs once); the clock-driven day/night is rate-limited and fixed at fast clock speeds (no strobing); reduced motion draws only on change; quality drops automatically (30 to 20 fps, lower device-pixel ratio) on a slow machine. `tests/world.test.mjs` draws every entity type, district, mode, hour and shock against a recording canvas.

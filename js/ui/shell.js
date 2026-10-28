@@ -133,7 +133,7 @@ export function mountGame(root, S, hooks) {
     let body = '';
     if (k === 'cash' || k === 'nw') {
       const inv = game.invValue(), pip = s.pipes.reduce((a, p) => a + p.basis, 0), fly = s.pipes.reduce((a, p) => a + (p.inflight || 0), 0), set = s.settle.reduce((a, x) => a + x.amt, 0);
-      const esc2 = s.escrow.reduce((a, e) => a + (e.cash || 0) + e.assets.reduce((x, y) => x + game.val(y), 0), 0), tr = s.freight.reduce((a, f) => a + f.items.reduce((x, y) => x + game.val(y, f.to), 0), 0);
+      const esc2 = s.escrow.reduce((a, e) => a + (e.cash || 0) + e.assets.reduce((x, y) => x + game.val(y), 0), 0), tr = s.freight.reduce((a, f) => a + game.inTransit(f), 0); // the engine counts a crate on a truck at the lower of where it left and where it is going, so the dialog's rows add up to the net worth beside them
       body = `<dl class="kv">${row('Cash on hand', money(s.cash))}${row('Inventory at fair value', money(inv))}${row('Assets in transit', money(tr))}${row('Manager capital (book)', money(pip))}${row('Capital in running cycles', money(fly))}${row('Settling sales', money(set))}${row('Held in escrow', money(esc2))}${row('Debt', '-' + money(game.debt()), 'red')}<div class="sep"></div>${row('Net worth', money(game.netWorth()), 'gold')}${row('Net worth peak', money(s.peak))}</dl><p class="small mute">Districts open as your net worth passes their gate. Stock decays and running cycles earn, so money that keeps moving beats money that sits.</p>`;
     } else if (k === 'day') {
       const ev = s.events.filter((e) => e.warned);
@@ -201,7 +201,7 @@ export function mountGame(root, S, hooks) {
     g().onEvent = (evt) => {
       progress.onEvent(evt);
       ctx.emit(evt);
-      if (evt.type === 'level') { toast(`Level ${evt.level}. You earned a skill point.`, 'good'); sfx.level(); burst({ power: 1.2 }); }
+      if (evt.type === 'level') { sfx.level(); burst({ power: 1.2 }); } // the words are the engine's own note (Level N: a skill point, or the XP a mastered founder gets instead), which the news feed already toasts
     };
   }
   attachGame();

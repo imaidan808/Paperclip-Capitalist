@@ -1,6 +1,6 @@
 // HAGGLE: a negotiation against a counterparty with a hidden limit. Teaches anchoring (the first number pulls the talk),
 // the ZOPA (the zone between your floor and their limit), the BATNA (a real alternative is leverage, a fake one is not)
-// and that people differ: hard bargainers punish insults, analytical ones punish low-balls and ignore noise, friendly ones
+// and that people differ: hard bargainers punish insults, analytical ones punish low-balls (a buyer's suspicion of a low ask; a seller has none for a generous offer) and ignore noise, friendly ones
 // trade concessions in kind, impulsive ones pay for excitement and cool off with time. Pure logic: no DOM, timers or globals.
 //
 // Internally everything lives in the SELLER's frame, in units of `fair` (u = price / fair). A buyer's game is the mirror
@@ -12,7 +12,7 @@
 // read of their limit (tightened by `insight`) and the pace of their offers, never the hidden limit itself.
 import { RNG, hash } from '../rng.js';
 
-const LO = 0.6, HI = 1.4, MKT = 1.15, LEV_CAP = 0.985;
+const LO = 0.6, HI = 1.4, MKT = 1.15, LEV_CAP = 0.985, CEIL_PAD = 0.015; // CEIL_PAD: half a small step, so even a flawless close reads a hair under 1
 const clamp = (x, a, b) => Math.min(b, Math.max(a, x));
 const sig = (x) => Number(Number(x).toPrecision(6));
 const num = (x) => typeof x === 'number' && Number.isFinite(x);
@@ -34,10 +34,16 @@ const LINES = {
   impulsive: { far: 'Whoa, too much! %t!', reach: 'Hmm, hmm... %t?', near: "Ooh, tempting! %t, quick, before I change my mind!", yes: 'Yes! Done, done!', bye: 'Ugh, never mind, I lost the mood.', walk: 'Wait, really? Fine!', levYes: 'Someone else wants it?! No way, %t!', levNo: "Meh. %t, that's still better.", splitNo: "Splitting? Not feeling it." },
   analytical: { far: "That is off by my numbers. %t is defensible.", reach: 'Closer. My model says %t.', near: 'Within tolerance. %t.', yes: 'Acceptable. Agreed.', bye: 'We have exhausted the useful rounds. Goodbye.', walk: 'Noted.', mad: 'That is outside any reasonable range.', sus: "That is far under market. What is wrong with it? %t, at most.", levYes: 'A comparable offer is evidence. Revising to %t.', levNo: "That offer is below mine. %t stands.", splitNo: 'The midpoint is not supported by my numbers.' },
 };
+// For role 'buy' the voice on the other side is a SELLER's, and a seller answers a low offer, not a high ask: the lines of the table above that say "too much", "ambitious" and "steep" are said the other way round.
+const BUY_LINES = {
+  friendly: { far: "Ha, that's a lowball! How about %t?", mad: "That's a bit low, friend. Let's be sensible.", levYes: "Oh, you can get it elsewhere? Then let me do %t.", levNo: 'Honestly, %t is better than that other offer.' },
+  impulsive: { far: 'Whoa, too little! %t!', levYes: 'You can get it somewhere else?! No way, %t!' },
+  analytical: { levYes: 'A comparable listing is evidence. Revising to %t.', levNo: "That listing is no better than mine. %t stands." },
+};
 const money = (x) => '$' + (x >= 100 ? String(Math.round(x)).replace(/\B(?=(\d{3})+(?!\d))/g, ',') : x >= 1 ? x.toFixed(2) : x >= 0.01 ? x.toFixed(3) : Number(x.toPrecision(2)));
 const flip = (role, level) => (role === 'sell' ? level : level === 'high' ? 'low' : level === 'low' ? 'high' : level); // literal <-> frame
 const real = (s, u) => sig((s.role === 'sell' ? u : 2 - u) * s.fair);
-const line = (s, key) => (LINES[s.style][key] || LINES[s.style].far).replace('%t', s.bid == null ? '' : money(real(s, s.bid)));
+const line = (s, key) => ((s.role === 'buy' && BUY_LINES[s.style]?.[key]) || LINES[s.style][key] || LINES[s.style].far).replace('%t', s.bid == null ? '' : money(real(s, s.bid)));
 
 export function create(p = {}) {
   const role = p.role === 'buy' ? 'buy' : 'sell';
@@ -52,10 +58,12 @@ export function create(p = {}) {
   const alt = num(altRaw) && altRaw > 0 ? f(altRaw) : null;
   const rng = new RNG(hash('haggle' + seed));
   const tau0 = P[style].tau0 + (rng.next() * 2 - 1) * 0.03;
-  const hw = [0.22, 0.18, 0.14, 0.1, 0.07, 0.04][insight], off = (rng.next() * 2 - 1) * hw * 0.7; // the read always contains the truth
+  // The read is a window of fixed width (in units of fair) whose centre is off the truth by up to 0.7 of the half-width, so it always
+  // holds the limit. Its width must NOT scale with the limit: width / (2 x half-width) would hand the limit over exactly.
+  const hw = [0.22, 0.18, 0.14, 0.1, 0.07, 0.04][insight], off = (rng.next() * 2 - 1) * hw * 0.7;
   return {
-    v: 1, role, fair, style, seed, rs: rng.s, insight, assist: !!p.assist, n, R, alt, tau0, tau: tau0,
-    readLo: R * (1 + off - hw), readHi: R * (1 + off + hw), round: 0, ask: null, bid: null, tell: null, holds: 0,
+    v: 1, role, fair, style, seed, rs: rng.s, insight, assist: !!p.assist, n, n0: n, R, alt, tau0, tau: tau0,
+    readLo: R + off - hw, readHi: R + off + hw, round: 0, ask: null, bid: null, tell: null, holds: 0,
     levUsed: false, lift: 0, susp: null, flag: null, anchor: null, done: false, end: null, price: null, log: [],
   };
 }
@@ -66,11 +74,18 @@ function aLine(s) { // the most they accept right now (hidden)
   if (s.susp != null) a = Math.min(a, s.susp);
   return Math.max(a, s.lift);
 }
-function ceilOf(s) { // the best price this counterparty could ever have been brought to
+// The most a flawless play can lift their accept line (share of their limit): a hard bargainer respects confidence a little, a friendly one
+// answers every small step in kind, an impulsive one is excited by a high number, an analytical one by nothing.
+const LIFTS = { hard: 0.03, friendly: 0.2, impulsive: 0.12, analytical: 0 };
+function ceilOf(s) { // the best price this counterparty could ever have been brought to, whatever the path
+  // Not the accept line of the LAST round: an impulsive buyer cools (grow < 0), so its best line is the first one, and a high anchor or a
+  // friendly buyer's tit-for-tat lift a line above any single round's. Take the best round's line, plus what the temperament allows.
   const st = P[s.style];
-  let a = s.R * clamp(s.tau0 + st.grow * (s.n - 1), 0.3, st.cap);
+  let tau = -Infinity;
+  for (let r = 1, n = s.n0 ?? s.n; r <= n; r++) tau = Math.max(tau, s.tau0 + st.grow * (r - 1));
+  let a = s.R * Math.min(st.cap, tau + LIFTS[s.style]);
   if (s.style === 'analytical') a = Math.min(a, MKT);
-  return Math.max(a, s.lift, LO + 0.05);
+  return Math.max(a, s.lift, LO + 0.05) + CEIL_PAD;
 }
 
 export function legal(s) {
@@ -90,7 +105,7 @@ function anchorEffect(s, level) { // the first number pulls the talk, or insults
   if (s.style === 'hard') { if (rho > 1.25) { s.tau -= 0.1; s.n = Math.max(2, s.n - 2); s.flag = 'mad'; } else if (rho > 1) s.tau += 0.03; }
   else if (s.style === 'friendly') { if (rho > 1.25) { s.tau -= 0.04; s.flag = 'mad'; } else if (rho > 1) s.tau += 0.02; }
   else if (s.style === 'impulsive') s.tau += 0.12 * (level === 'high' ? 1 : level === 'fair' ? 0.3 : -0.3) * (rho > 1.5 ? 0 : rho > 1.25 ? 0.5 : 1);
-  else if (level === 'low') { s.tau -= 0.1; s.susp = 0.92 * s.ask; s.flag = 'sus'; } // "if it is that cheap, what is wrong with it?"
+  else if (level === 'low' && s.role === 'sell') { s.tau -= 0.1; s.susp = 0.92 * s.ask; s.flag = 'sus'; } // "if it is that cheap, what is wrong with it?" (a buyer's reaction to a low ASK; a seller has no such reaction to a generous offer)
   else if (rho > 1.25) { s.tau -= 0.04; s.n = Math.max(2, s.n - 1); s.flag = 'mad'; }
 }
 
@@ -180,7 +195,7 @@ function advise(s) { // the textbook move and the reason, from public informatio
   if (a.type === 'anchor') {
     concept = 'anchoring';
     text = `Open ${flip(s.role, a.level)} at ${$(ANCHORS[a.level])}. The first number pulls the whole talk toward it. ${edge}, so this stays inside the zone of possible agreement (ZOPA) without insulting them.` +
-      (s.style === 'hard' ? ' Hard bargainers dig in if you open past about 1.25 times their limit.' : s.style === 'analytical' ? ' They know the market price: a number far from fair makes them suspicious.' : s.style === 'impulsive' ? ' A big first number excites them.' : '');
+      (s.style === 'hard' ? (sell ? ' Hard bargainers dig in if you open past about 1.25 times their limit.' : ' Hard bargainers dig in if you open far below their lowest price.') : s.style === 'analytical' ? (sell ? ' They know the market price: a number far from fair makes them suspicious.' : ' They know the market price: an offer far under it is dismissed out of hand.') : s.style === 'impulsive' ? (sell ? ' A big first number excites them.' : ' A bold first offer excites them.') : '');
   } else if (a.type === 'leverage') { concept = 'batna'; text = `Mention your alternative (${$(p.alt)}). It is your BATNA, the best you can do without this deal: a real competing offer makes walking away credible and lifts what they will accept.`; }
   else if (a.type === 'walk') { concept = 'batna'; text = `Their best (${$(p.bid)}) is worse than your alternative (${$(p.alt)}). Never settle below your BATNA: walk away and take the alternative.`; }
   else if (a.type === 'accept') text = `Their number, ${$(p.bid)}, is already near the edge of their range. ${edge}. Pushing further risks the whole deal. Take it.`;
@@ -188,7 +203,7 @@ function advise(s) { // the textbook move and the reason, from public informatio
   else {
     concept = s.style === 'friendly' ? 'reciprocity' : 'zopa';
     const to = $(Math.max(LO, p.ask - STEPS[a.size]));
-    text = `${sell ? 'Lower your ask' : 'Raise your offer'} by a ${a.size} step (${money(STEPS[a.size] * fair)}, to ${to}). ${s.style === 'friendly' ? (a.size === 'small' ? 'Friendly counterparties answer small steps in kind.' : 'That closes the gap fast, but friendly counterparties only match small steps.') : s.style === 'impulsive' ? 'Impulsive buyers cool off: close while they are keen.' : `They look ${p.tell || 'close'}: step toward the zone, not past it.`}`;
+    text = `${sell ? 'Lower your ask' : 'Raise your offer'} by a ${a.size} step (${money(STEPS[a.size] * fair)}, to ${to}). ${s.style === 'friendly' ? (a.size === 'small' ? 'Friendly counterparties answer small steps in kind.' : 'That closes the gap fast, but friendly counterparties only match small steps.') : s.style === 'impulsive' ? `Impulsive ${sell ? 'buyers' : 'sellers'} cool off: close while they are keen.` : `They look ${p.tell || 'close'}: step toward the zone, not past it.`}`;
   }
   return { action: toReal(s, a), text, concept };
 }
@@ -222,7 +237,9 @@ export function result(s) {
   let score = clamp((s.price - LO) / (ceil - LO), 0, 1);
   if (s.alt != null && s.price < s.alt - 1e-9) score *= 0.6; // took less than the alternative: should have walked
   const share = Math.round(100 * clamp((s.price - LO) / Math.max(0.05, s.R - LO), 0, 1));
-  const why = s.flag === 'mad' ? 'Opening far past their limit soured the talk.' : s.flag === 'sus' ? 'A low-ball made them suspicious and capped what they would pay.' : s.anchor === 'high' && share >= 70 ? 'Your high opening set the frame.' : share < 50 ? 'You gave ground faster than they did.' : 'You read where the zone ended.';
+  // The model lives in the seller's frame; the words are the player's own. For a buyer the aggressive opening (frame 'high') is a LOW offer.
+  const sell = s.role === 'sell', said = flip(s.role, s.anchor);
+  const why = s.flag === 'mad' ? (sell ? 'Opening far past their limit soured the talk.' : 'Opening far under their lowest price soured the talk.') : s.flag === 'sus' ? 'A low-ball made them suspicious and capped what they would pay.' : s.anchor === 'high' && share >= 70 ? `Your ${said} opening set the frame.` : share < 50 ? 'You gave ground faster than they did.' : 'You read where the zone ended.';
   return { ...base, deal: true, price, mult, score, reveal: { reserve: real(s, s.R) }, lesson: { concept: s.flag ? 'anchoring' : 'zopa', text: `Closed at ${mult.toFixed(2)} times fair, ${share}% of the way to their limit (${money(real(s, s.R))}). ${why}` } };
 }
 

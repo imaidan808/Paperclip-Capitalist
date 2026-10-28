@@ -138,6 +138,7 @@ function exitHTML(v) {
   let body;
   if (s.exiting) body = `<div class="callout good"><b>Your exit is settling.</b> ${dur(s.exiting.at - s.hour)} to go. The sale money lands then.</div>`;
   else if (s.exit) body = `<div class="callout good"><b>You exited.</b> Your score is locked at ${m(s.exit.nw)} with ${Math.round(s.exit.daysLeft)} days to spare.</div>`;
+  else if (s.over) body = `<p class="small mute">The run is over. Your score is locked at <b>${g.eei().toFixed(2)}</b>.</p>`;
   else body = `<p class="small mute">Exiting ends your run early and locks your score. The score multiplier is 1 plus the days you have left over 90, so leaving early only wins if you could not have grown more than that by playing on. If you stopped now your score would be <b>${g.eei().toFixed(2)}</b>.</p><div class="bk-grid">${exitCard(v, 'sale')}${exitCard(v, 'ipo')}</div>`;
   return `<section class="bk-sec" aria-label="Exit"><h3 class="bk-h3">Exit</h3>${body}</section>`;
 }
@@ -150,10 +151,12 @@ export function ledgerCsv(rows) {
 function ledgerHTML(v) {
   const { s, m, B } = v, open = B.ledger;
   const types = ['all', ...[...new Set(s.ledger.map((e) => e.type))].sort()];
-  const f = types.includes(B.logf) ? B.logf : 'all', rows = [...s.ledger].reverse().filter((e) => f === 'all' || e.type === f).slice(0, 40);
-  return `<section class="bk-sec" aria-label="Ledger"><button class="btn ghost bk-lt" data-act="bank-ledger" aria-expanded="${open}" data-fid="bk-ledger"><span aria-hidden="true">${open ? '▾' : '▸'}</span> Ledger: every dollar in and out</button>
+  const f = types.includes(B.logf) ? B.logf : 'all', head = s.ledger[0]?.type === 'summary' && (f === 'all' || f === 'summary') ? s.ledger[0] : null;
+  // newest first, and the summary of what was folded away (the oldest line there is) is always at the foot of the list, never cut off by the forty
+  const body = [...s.ledger].reverse().filter((e) => e !== head && (f === 'all' || e.type === f)).slice(0, 40), rows = head ? [...body, head] : body;
+  return `<section class="bk-sec" aria-label="Ledger"><button class="btn ghost bk-lt" data-act="bank-ledger" aria-expanded="${open}" data-fid="bk-ledger"><span aria-hidden="true">${open ? '▾' : '▸'}</span> Ledger: what you did, and what it gained or cost you</button>
     ${open ? `<div class="row bk-lf"><label for="bk-logf">Show</label><select id="bk-logf" data-change="bank-logf" data-fid="bk-logf">${types.map((t) => `<option value="${esc(t)}" ${t === f ? 'selected' : ''}>${esc(t)}</option>`).join('')}</select><span class="grow"></span><button class="btn ghost" data-act="bank-csv" data-fid="bk-csv">Download CSV</button></div>
-      <p class="small mute">The last ${rows.length} of ${plural(s.ledger.length, 'line')}. The download holds all of them.</p>
+      <p class="small mute">The last ${body.length} of ${plural(s.ledger.length, 'line')}. A line is a gain or a cost, not always a cash payment (a sale is booked against its fair value, a swap by what it was worth), so the lines do not add up to your cash.${s.ledgerDropped ? ` The ${plural(s.ledgerDropped, 'oldest line')} ${s.ledgerDropped === 1 ? 'is' : 'are'} folded into one summary line at the foot of the list, with their totals by type; the download has that line and every other.` : ' The download holds all of them.'}</p>
       <div class="scroll bk-scroll"><table class="tbl"><thead><tr><th scope="col">Day</th><th scope="col">Type</th><th scope="col">What</th><th scope="col" class="right">Amount</th></tr></thead><tbody>${rows.map((e) => `<tr><td class="mono">${Math.floor(e.h / 24) + 1}</td><td>${esc(e.type)}</td><td>${esc(e.text)}</td><td class="right mono ${e.amt >= 0 ? 'green' : 'red'}">${e.amt ? m(e.amt, { plus: true }) : ''}</td></tr>`).join('') || '<tr><td colspan="4" class="mute">Nothing yet.</td></tr>'}</tbody></table></div>` : ''}</section>`;
 }
 

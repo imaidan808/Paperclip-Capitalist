@@ -21,7 +21,7 @@ This is the single source of truth for the v2 redesign. Parallel work (data, min
 
 ## 3. Backgrounds (replace Profiles)
 
-Pick **two** of twelve. All twelve are balanced against each other (a test plays every pair with the bot and requires all 66 pairs to reach milestones within 35% of the median time). Fields in `mods` are read through `Game.P` (aggregated by `perkMods(ids)`; numbers add, multipliers multiply).
+Pick **two** of twelve. All twelve are balanced against each other. The target is that every one of the 66 pairs reaches the milestones within 35% of the median time; `node tests/balance.mjs` plays every pair with the bot over several seeds and reports the ones outside it (docs/BALANCE.md says which, today), and `tests/audit-repair.test.mjs` holds the late game of a sample of the pairs to bounds in CI. It is a target and a report, not a gate: the pairs near the line change places with any change to the data. Fields in `mods` are read through `Game.P` (aggregated by `perkMods(ids)`; numbers add, multipliers multiply).
 
 | id | Background | Real-world basis | Strength | Cost |
 |---|---|---|---|---|
@@ -47,9 +47,9 @@ One avenue runs through all sixteen. Unlock is by **net worth** (`gate`). `scale
 | # | District | Tier | Gate | Scale | Signature rule | Teaches (codex id) | Unlock bonus |
 |---|---|---|---|---|---|---|---|
 | 1 | The Scrap Yard | 1 | $0 | $1 | Barter ladder. Urgent buyers pay for need, not cost | `utility-fit` | none |
-| 2 | Flea Market Row | 1 | $20 | $6 | **Haggle stalls**: every deal can be bargained; mystery boxes | `negotiation` | none |
+| 2 | Flea Market Row | 1 | $20 | $6 | **Haggle stalls**: every deal can be bargained; sealed boxes are a gamble on condition | `negotiation` | none |
 | 3 | Campus Quad | 1 | $80 | $25 | **Semester waves**: paper, training and electronics demand swings on a 28-day cycle; trends spread fast | `saturation-herd` | none |
-| 4 | Pawn District | 1 | $250 | $90 | **Fakes and auctions**: 22% of lots are counterfeit; appraisal is the game | `information-asymmetry` | none |
+| 4 | Pawn District | 1 | $250 | $90 | **Fakes and auctions**: 22% of the lots are counterfeit (shared out by each good's `fakeRisk`, so a watch is fake about a third of the time); appraisal is the game | `information-asymmetry` | none |
 | 5 | Metro Hub | 2 | $1,000 | $400 | **Managers and the Bank open**; client contracts | `working-capital` | Managers, Bank, clients |
 | 6 | Estate Sales | 2 | $2,500 | $900 | **Auctions** (50% of lots); hidden-value boxes | `winners-curse` | lots +1 slot |
 | 7 | Auto Row | 2 | $6,000 | $2,500 | **Repair bays**: 60% of lots are broken; repair costs 25% less here | `repair-roi` | repairs 10% cheaper everywhere |
@@ -60,7 +60,7 @@ One avenue runs through all sixteen. Unlock is by **net worth** (`gate`). `scale
 | 12 | Creative Quarter | 3 | $150,000 | $50,000 | **Royalties**: IP and media assets pay you daily while you hold them | `recurring-revenue` | none |
 | 13 | Corporate Valley | 4 | $250,000 | $90,000 | **Enterprise clients**; M&A and IPO preparation (Milestone 3) | `enterprise-sales` | enterprise credit |
 | 14 | Financial District | 4 | $500,000 | $180,000 | **Credit markets**: spreads fall; leverage is the weapon and the risk | `leverage-risk` | loan spreads -20% |
-| 15 | Real Estate Row | 4 | $1,000,000 | $400,000 | **Rent yields**: property pays rent; long cycles; appraisal disputes | `asset-cash-flow` | rent income +25% |
+| 15 | Real Estate Row | 4 | $1,000,000 | $400,000 | **Rent yields**: property pays rent; big tickets; foreclosure auctions | `asset-cash-flow` | rent income +25% |
 | 16 | Global Exchange | 4 | $2,500,000 | $1,000,000 | **World markets**: price gaps between districts are arbitrage; exits and IPO | `arbitrage-at-scale` | exit multiples +10% |
 
 Zone fields, rule keys and bonus keys are enforced by `js/data/schema.js` (`validateData`). Do not invent others.
@@ -142,7 +142,7 @@ A campaign of ten short missions in the real UI against the real engine in a scr
 
 ## 11. Balance targets (tested with the bot)
 
-Time to reach each district's gate for a competent bot, by zone: 1-4 within days 1-14; 5 (Bank) by day 14-22; 9 (audits) by day 30-40; 13 (Corporate) by day 55-70; 16 by day 85+ only for strong play. No Background pair may deviate from the median milestone day by more than 35%. Skill play must matter: Deal-Room-optimal play beats Quick play by 15-30% on profit per deal; random play loses to Quick.
+Time to reach each district's gate for a competent bot, by zone: 1-4 within days 1-14; 5 (Bank) by day 14-22; 9 (audits) by day 30-40; 13 (Corporate) by day 55-70; 16 by day 85+ only for strong play. The target is that no Background pair deviates from the median milestone day by more than 35% (reported by `tests/balance.mjs`; docs/BALANCE.md lists the pairs that do). The late game is held too, for a bot that decides every four virtual hours (at every three it is about one run in five: docs/BALANCE.md): no more than about one run in six reaches district 16 by day 90, and the day-90 net worth of the 90th percentile is at most about three times the 10th's. Skill play must matter: Deal-Room-optimal play beats Quick play by 15-30% on profit per deal; random play loses to Quick.
 
 ## 4.1 District numbers and rule semantics (what the engine will do with your data)
 

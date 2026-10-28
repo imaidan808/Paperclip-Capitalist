@@ -5,13 +5,17 @@
 // matching event adds 1. Only payload keys listed for the event in js/meta/ids.js (EVENT_PAYLOAD) are used.
 //
 // Extra fields beyond the section 12 schema (all optional for the engine; ignoring them is safe):
-//   ACHIEVEMENTS[].reward  { xp, points? }  what the achievement pays out; scaled by rarity (common < rare < epic).
-//   ACHIEVEMENTS[].bg      a BACKGROUND_IDS entry   the Background this achievement is themed to (a highlight only: anyone can earn it).
+//   ACHIEVEMENTS[].reward  { xp, points? }  what the achievement pays out; scaled by rarity (common < rare < epic). Only the epics in POINT_EPICS add a skill point.
+//   ACHIEVEMENTS[].bg      a BACKGROUND_IDS entry   the Background this achievement is themed to (a highlight only: anyone can earn it,
+//                          except a-bg-heir, which needs the Legacy Heir's own safety net and so stays hidden until it is earned).
 //
 // Design rules followed here:
 //  - Story quests chain: q01a -> q01b -> q02a -> ... -> q16b. Arrival quests use repeatable events scoped to the district (pitch, buy, ship, hire,
 //    auction), never the one-shot `zone` unlock event, so a quest that becomes active after the district was opened can still be completed.
-//  - Counts are small (1-5 for quests, up to 25 for achievements); money milestones use `sum`.
+//  - Counts are small (1-5 for quests, up to 25 for achievements); money milestones use `sum`. No count may ask for more than a default
+//    90-day run can produce (tests/audit-content.test.mjs plays the audit and rent counts out in the engine).
+//  - Skill points are scarce: three skills top out at level 8, so a founder can spend 19 points at most (the Heir 21). Quests (8), the Academy (5)
+//    and POINT_EPICS (6) together stay within that; levels give points too, and the engine turns any surplus into XP (Game.grantPoints).
 //  - String payload values are the v1 ids (cond 'broken', client tier 'ent', shock kinds 'fed' | 'tiktok' | 'tariff', exit kind 'ipo', audit choice 'C').
 //    Where a rename is plausible the match lists the likely synonyms with `in`.
 //  - No em dashes anywhere (house style).
@@ -92,17 +96,19 @@ export const QUESTS = [
     { event: 'repay', count: 50000, sum: 'amount' }, 2200, 1, 'q14a'),
   quest('q15a', 15, 'Key in Hand', '🔑', 'Sell 2 goods on Real Estate Row.',
     { event: 'pitch', match: { zone: 15, outcome: SOLD() }, count: 2 }, 1600, 0, 'q14b'),
-  quest('q15b', 15, 'Landlord Life', '🏠', 'Collect $60,000 in cycle income on Real Estate Row. Rent pays on long cycles, so patience is the strategy.',
-    { event: 'cycle', match: { zone: 15, net: { gt: 0 } }, count: 60000, sum: 'net' }, 2600, 0, 'q15a'),
+  quest('q15b', 15, 'Landlord Life', '🏠', 'Collect $25,000 in cycle income on Real Estate Row. Rent pays every day you hold property, so buy early and be patient.',
+    { event: 'cycle', match: { zone: 15, net: { gt: 0 } }, count: 25000, sum: 'net' }, 2600, 0, 'q15a'),
   quest('q16a', 16, 'Opening Bell', '🔔', 'Sell 2 goods at Global Exchange.',
     { event: 'pitch', match: { zone: 16, outcome: SOLD() }, count: 2 }, 2000, 0, 'q15b'),
   quest('q16b', 16, 'Close the Gap', '🌍', 'Sell 3 goods at Global Exchange at least 12% above fair price. Buy where it is cheap, ship it, sell where it is dear.',
     { event: 'pitch', match: { zone: 16, outcome: SOLD(), gain: { gte: 0.12 } }, count: 3 }, 3500, 2, 'q16a'),
 ];
 
-// Rewards scale with rarity: common 60-120 xp, rare 220-300 xp, epic 650-900 xp plus one skill point.
-const ach =(id, rarity, title, icon, desc, goal, xp, extra = {}) => ({
-  id, title, desc, icon, rarity, goal, reward: rarity === 'epic' ? { xp, points: 1 } : { xp }, ...extra,
+// Rewards scale with rarity: common 60-120 xp, rare 220-300 xp, epic 650-900 xp. Six of the epics, the skill-game ones, also pay a skill point:
+// a founder can only spend 19 points, so the rest of the epics pay xp alone.
+const POINT_EPICS = new Set(['a-poker-face', 'a-counterfeit-cop', 'a-perfectionist', 'a-auction-shark', 'a-unstoppable', 'a-trailblazer']);
+const ach = (id, rarity, title, icon, desc, goal, xp, extra = {}) => ({
+  id, title, desc, icon, rarity, goal, reward: POINT_EPICS.has(id) ? { xp, points: 1 } : { xp }, ...extra,
 });
 
 /** Achievements: skill play, streaks, risk, the Creativity Engine, the twelve Backgrounds, tiers, audits, peers, levels, money and a few secrets. */
@@ -114,12 +120,12 @@ export const ACHIEVEMENTS = [
     { event: 'haggle', match: { deal: true }, count: 10 }, 100),
   ach('a-silver-tongue', 'rare', 'Silver Tongue', '🗣️', 'Sell 5 goods through a haggle at 20% or more above fair price.',
     { event: 'haggle', match: { role: 'sell', deal: true, mult: { gte: 1.2 } }, count: 5 }, 250),
-  ach('a-bargain-hunter', 'rare', 'Bargain Hunter', '🏷️', 'Buy 5 goods through a haggle at 15% or more below fair price.',
-    { event: 'haggle', match: { role: 'buy', deal: true, mult: { lte: 0.85 } }, count: 5 }, 250),
-  ach('a-bg-pro', 'rare', 'Old School Charm', '🎩', 'Seasoned Pro: close 5 haggled deals with a score of 80% or better. Steady hands win.',
-    { event: 'haggle', match: { deal: true, score: { gte: 0.8 } }, count: 5 }, 230, { bg: 'pro' }),
-  ach('a-poker-face', 'epic', 'Poker Face', '🃏', 'Close 10 haggled deals with a score of 95% or better. Anchor well, never blink.',
-    { event: 'haggle', match: { deal: true, score: { gte: 0.95 } }, count: 10 }, 700),
+  ach('a-bargain-hunter', 'rare', 'Bargain Hunter', '🏷️', 'Buy 5 goods through a haggle at 5% or more below the asking price.',
+    { event: 'haggle', match: { role: 'buy', deal: true, mult: { lte: 0.95 } }, count: 5 }, 250),
+  ach('a-bg-pro', 'rare', 'Old School Charm', '🎩', 'Seasoned Pro: close 5 sales through a haggle with a score of 80% or better and a price 10% or more above fair. Steady hands win.',
+    { event: 'haggle', match: { role: 'sell', deal: true, score: { gte: 0.8 }, mult: { gte: 1.1 } }, count: 5 }, 230, { bg: 'pro' }),
+  ach('a-poker-face', 'epic', 'Poker Face', '🃏', 'Close 10 sales through a haggle with a score of 95% or better and a price 10% or more above fair. Anchor well, never blink.',
+    { event: 'haggle', match: { role: 'sell', deal: true, score: { gte: 0.95 }, mult: { gte: 1.1 } }, count: 10 }, 700),
 
   // ---------------------------------------------------------------- inspect
   ach('a-good-eye', 'common', 'Good Eye', '👁️', 'Finish 5 inspections with a score of 80% or better.',
@@ -202,11 +208,11 @@ export const ACHIEVEMENTS = [
     { event: 'pitch', match: { outcome: SOLD(), S: { lte: 0.25 }, gain: { gte: 0.1 } }, count: 5 }, 260, { bg: 'grad' }),
   ach('a-bg-immigrant', 'rare', 'Diaspora Express', '✈️', 'Immigrant Hustler: ship 25 crates between districts. Your network moves goods.',
     { event: 'ship', count: 25, sum: 'count' }, 250, { bg: 'immigrant' }),
-  ach('a-bg-heir', 'rare', 'Family Safety Net', '🪂', 'Legacy Heir: let the family catch you. Trigger your Legacy Heir safety net.',
-    { event: 'perk', match: { id: 'heir' }, count: 1 }, 250, { bg: 'heir' }),
+  ach('a-bg-heir', 'rare', 'Family Safety Net', '🪂', 'Legacy Heir: take a margin call and let the family catch you. Only the Heir has this safety net.',
+    { event: 'perk', match: { id: 'heir', effect: 'bailout' }, count: 1 }, 250, { bg: 'heir', hidden: true }),
   ach('a-bg-creator', 'rare', 'Gone Viral', '📱', 'Creator: close 3 pitches at 30% or more above fair price. The audience shows up.',
     { event: 'pitch', match: { outcome: SOLD(), gain: { gte: 0.3 } }, count: 3 }, 250, { bg: 'creator' }),
-  ach('a-bg-gigger', 'common', 'Hustle Season', '🛵', 'Side-Hustler: complete 20 manager cycles. Always something running.',
+  ach('a-bg-gigger', 'common', 'Hustle Season', '🛵', 'Side-Hustler: complete 20 cycles, manager runs or paid days of rent and royalties. Always something running.',
     { event: 'cycle', count: 20 }, 120, { bg: 'gigger' }),
   ach('a-bg-roots', 'common', 'Hometown Favorite', '🏡', 'Small-Town Roots: close 12 sales in your first two districts. Locals remember.',
     { event: 'pitch', match: { zone: { lte: 2 }, outcome: SOLD() }, count: 12 }, 110, { bg: 'roots' }),
@@ -230,8 +236,8 @@ export const ACHIEVEMENTS = [
   // ---------------------------------------------------------------- audits
   ach('a-clean-books', 'rare', 'Clean Books', '📒', 'Pass 3 audits.',
     { event: 'audit', match: { ok: true }, count: 3 }, 260),
-  ach('a-audit-proof', 'epic', 'Audit-Proof', '🛡️', 'Pass 8 audits. Your paperwork could be framed.',
-    { event: 'audit', match: { ok: true }, count: 8 }, 700),
+  ach('a-audit-proof', 'epic', 'Audit-Proof', '🛡️', 'Pass 5 audits. Your paperwork could be framed. Audits come every 15 days once Industrial Park is open, so open it by about day 30.',
+    { event: 'audit', match: { ok: true }, count: 5 }, 700),
   ach('a-lucky-bypass', 'rare', 'Not Today, Auditor', '🎲', 'Skip the paperwork and still pass an audit. Do not make a habit of it.',
     { event: 'audit', match: { choice: 'C', ok: true }, count: 1 }, 250, { hidden: true }),
 
@@ -264,7 +270,7 @@ export const ACHIEVEMENTS = [
     { event: 'pitch', match: { outcome: SOLD() }, count: 100000, sum: 'price' }, 280),
   ach('a-rev-5m', 'epic', 'Seven Figures', '🤑', 'Sell $5,000,000 worth of goods in total.',
     { event: 'pitch', match: { outcome: SOLD() }, count: 5000000, sum: 'price' }, 850),
-  ach('a-cycle-income', 'rare', 'Money While You Sleep', '😴', 'Earn $10,000 in total from manager cycles.',
+  ach('a-cycle-income', 'rare', 'Money While You Sleep', '😴', 'Earn $10,000 in total from cycles: manager runs and days of rent or royalties.',
     { event: 'cycle', match: { net: { gt: 0 } }, count: 10000, sum: 'net' }, 260),
   ach('a-first-hire', 'common', 'First Hire', '👋', 'Hire your first manager.',
     { event: 'hire', count: 1 }, 80),
@@ -288,7 +294,7 @@ export const ACHIEVEMENTS = [
   // ---------------------------------------------------------------- the calendar
   ach('a-day-30', 'common', 'One Month In', '📅', 'Reach day 30.',
     { event: 'day', match: { day: { gte: 30 } }, count: 1 }, 80),
-  ach('a-day-90', 'epic', 'Full Season', '🎖️', 'Reach day 90 and see the whole season through.',
+  ach('a-day-90', 'epic', 'Last Day', '🎖️', 'Reach day 90, the last day of the season.',
     { event: 'day', match: { day: { gte: 90 } }, count: 1 }, 650),
 ];
 
@@ -302,8 +308,8 @@ export const DAILIES = [
     goal: { event: 'buy', count: 3 }, reward: { xp: 40 } },
   { id: 'd-haggle-day', title: 'Haggle Day', desc: 'Close 2 haggled deals.', icon: '🗣️',
     goal: { event: 'haggle', match: { deal: true }, count: 2 }, reward: { xp: 50 } },
-  { id: 'd-buy-low', title: 'Buy Low', desc: 'Haggle a purchase down to 5% or more below fair price.', icon: '🏷️',
-    goal: { event: 'haggle', match: { role: 'buy', deal: true, mult: { lte: 0.95 } }, count: 1 }, reward: { xp: 40 } },
+  { id: 'd-buy-low', title: 'Buy Low', desc: 'Haggle a purchase down to the asking price or lower.', icon: '🏷️',
+    goal: { event: 'haggle', match: { role: 'buy', deal: true, mult: { lte: 1 } }, count: 1 }, reward: { xp: 40 } },
   { id: 'd-look-first', title: 'Look First', desc: 'Inspect 2 lots before you buy.', icon: '🔍',
     goal: { event: 'inspect', count: 2 }, reward: { xp: 40 } },
   { id: 'd-sharp-eyes', title: 'Sharp Eyes', desc: 'Finish 2 inspections with a score of 70% or better.', icon: '👁️',

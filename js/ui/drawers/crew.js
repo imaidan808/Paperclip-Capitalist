@@ -56,14 +56,14 @@ function hireBlock(v, zone) {
 }
 
 /** Ranked lanes for a district: the engine's radar, best first. */
-function lanesFor(v, zone, take, keep) {
-  const { g } = v, all = g.radar(zone, 60), key = (r) => `${r.cls}|${r.seg}`;
+function lanesFor(v, zone, take, keep, skip = null) { // `skip`: the manager being edited, whose own cycles are not part of the crowd it sells into (as its forecast reads them)
+  const { g } = v, all = g.radar(zone, 60, skip), key = (r) => `${r.cls}|${r.seg}`;
   const rank = new Map(all.map((r, i) => [key(r), i + 1]));
   const rows = all.slice(0, take).map((r) => ({ ...r, rank: rank.get(key(r)) }));
   for (const k of keep) {
     if (!k.cls || !k.seg || rows.some((r) => key(r) === key(k))) continue;
     const got = all.find((r) => key(r) === key(k));
-    rows.push(got ? { ...got, rank: rank.get(key(k)) } : { cls: k.cls, seg: k.seg, fit: fitOf(k.cls, k.seg), ...g.cmFor(zone, k.cls, k.seg), rank: 0 });
+    rows.push(got ? { ...got, rank: rank.get(key(k)) } : { cls: k.cls, seg: k.seg, fit: fitOf(k.cls, k.seg), ...g.cmFor(zone, k.cls, k.seg, skip), rank: 0 });
   }
   return { rows, total: all.length };
 }
@@ -188,28 +188,29 @@ function clientBlock(v, id) {
   const { g, s, m } = v, C = CLIENTS[id];
   if (!s.zones.includes(C.zone)) return `Opens with ${ZONES[C.zone].name}.`;
   if (C.needs && !s.mil[C.needs]) { const z = ZONES[MIL_ZONE[C.needs]]; return `Opens at ${z.name} (${m(z.gate)} net worth).`; }
-  if (s.clients.filter((c) => c.tier === id).length >= C.max) return `You already hold all ${C.max} of these accounts.`;
+  if (g.liveClients(id).length >= C.max) return `You already hold all ${C.max} of these accounts.`;
   if (s.pipes.length < C.minRunning) return `Hire ${plural(C.minRunning - s.pipes.length, 'more manager')} first: this client needs ${C.minRunning} running every day.`;
   const q = g.clientQuote(id);
+  if (!q.worthwhile) return `This contract could not earn back its ${m(q.cac)} before day 90: ${plural(q.payDays, 'paying day')} left, and it needs ${Math.ceil(q.payback)}.`; // the engine refuses it for this reason
   return s.cash < q.cac ? `Short by ${m(q.cac - s.cash)}.` : '';
 }
 
 function clientCard(v, id) {
-  const { g, s, m } = v, C = CLIENTS[id], q = g.clientQuote(id), n = s.clients.filter((c) => c.tier === id).length, block = clientBlock(v, id);
+  const { g, s, m } = v, C = CLIENTS[id], q = g.clientQuote(id), n = g.liveClients(id).length, block = clientBlock(v, id);
   const run = g.runningPipes(), met = run >= C.minRunning, top = Math.max(q.cac, q.ltv, 1);
   const verdict = q.ratio >= 3 ? { t: 'good', g: '★', w: 'Strong' } : q.ratio >= 1.5 ? { t: 'warn', g: '◐', w: 'Thin' } : { t: 'bad', g: '⚠', w: 'Risky' };
   return `<article class="cr-client"><div class="row"><span class="cr-ic" aria-hidden="true">${C.icon}</span><div class="grow"><b>${esc(C.name)}</b><p class="small mute">${esc(C.blurb)}</p></div><span class="chip">${n} of ${C.max}</span></div>
     <div class="cr-vs" role="group" aria-label="What it costs to win this client against what they pay you">
       <div class="cr-vsrow"><span class="cr-vsl">You pay to win them (CAC)</span><span class="cr-vsb" aria-hidden="true"><i class="cost" style="width:${(q.cac / top * 100).toFixed(1)}%"></i></span><b class="mono">${m(q.cac)}</b></div>
-      <div class="cr-vsrow"><span class="cr-vsl">They pay you over ${C.days} days (LTV)</span><span class="cr-vsb" aria-hidden="true"><i class="ltv" style="width:${(q.ltv / top * 100).toFixed(1)}%"></i></span><b class="mono">${m(q.ltv)}</b></div></div>
-    <p class="small"><span class="chip ${verdict.t}"><span aria-hidden="true">${verdict.g}</span> ${verdict.w}</span> They pay ${q.ratio.toFixed(1)}x what they cost you to win, and you earn it back in about ${q.payback.toFixed(1)} days.</p>
+      <div class="cr-vsrow"><span class="cr-vsl">They pay you ${q.payDays < C.days ? `over the ${plural(q.payDays, 'day')} you have left` : `over ${C.days} days`} (LTV)</span><span class="cr-vsb" aria-hidden="true"><i class="ltv" style="width:${(q.ltv / top * 100).toFixed(1)}%"></i></span><b class="mono">${m(q.ltv)}</b></div></div>
+    <p class="small"><span class="chip ${verdict.t}"><span aria-hidden="true">${verdict.g}</span> ${verdict.w}</span> They pay ${q.ratio.toFixed(1)}x what they cost you to win, and you earn it back in about ${q.payback.toFixed(1)} days${q.worthwhile ? '' : ', which is more than the run has left'}.</p>
     <p class="small cr-sla"><span class="chip ${met ? 'good' : 'bad'}"><span aria-hidden="true">${met ? '✓' : '✗'}</span> ${met ? 'SLA met' : 'SLA not met'}</span> Needs ${plural(C.minRunning, 'manager')} running every day. You have ${run} running. Miss it on two days and they leave, with ${m(C.perDay * 2)} in penalties each time.</p>
     <button class="btn" data-act="crew-client" data-t="${id}" data-fid="cl-${id}" ${block ? 'aria-disabled="true"' : ''}>Sign for ${m(q.cac)}</button>${block ? `<p class="cr-why small">${esc(block)}</p>` : ''}</article>`;
 }
 
 function clientsTab(v) {
-  const { s, m } = v;
-  const live = s.clients.map((c) => { const C = CLIENTS[c.tier]; return `<article class="cr-active"><div class="row"><b class="grow">${C.icon} ${esc(C.name)}</b><span class="mono green">${sgn(v, c.earned)} earned</span></div><div class="bar green" aria-hidden="true"><i data-bar="client:${c.id}"></i></div>
+  const { s, m, g } = v;
+  const live = g.liveClients().map((c) => { const C = CLIENTS[c.tier]; return `<article class="cr-active"><div class="row"><b class="grow">${C.icon} ${esc(C.name)}</b><span class="mono green">${sgn(v, c.earned)} earned</span></div><div class="bar green" aria-hidden="true"><i data-bar="client:${c.id}"></i></div>
       <p class="small mute">${c.breaches ? `<span class="red">${c.breaches} of 2 SLA breaches.</span> ` : 'No SLA breaches. '}Ends in ${dur(c.until - s.hour)}. You paid ${m(c.cac)} to win them.</p></article>`; }).join('');
   return `<p class="small mute">Clients pay you every day while enough managers are running. Winning one costs money now (CAC); what they pay over the contract is their lifetime value (LTV). The deal is good when LTV beats CAC and you can keep the promise (the SLA).</p>
     <div class="cr-grid">${Object.keys(CLIENTS).map((id) => clientCard(v, id)).join('')}</div>
@@ -258,7 +259,7 @@ function hireBody(ctx) {
   const edit = H.edit ? s.pipes.find((p) => p.id === H.edit) : null, locked = !!(edit && edit.inflight);
   const t = tmpPipe(v, H), cap = g.pipeCap(t), alloc = Math.min(+H.alloc || 0, cap), cost = edit ? 0 : g.pipeCost(H.kind, H.zone), left = s.cash - cost;
   const take = H.more ? 60 : g.P.radar || s.upg.research ? 8 : 5;
-  const { rows, total } = lanesFor(v, H.zone, take, [{ cls: H.cls, seg: H.buyer }]);
+  const { rows, total } = lanesFor(v, H.zone, take, [{ cls: H.cls, seg: H.buyer }], H.edit || null);
   const kinds = edit ? `<p class="small"><span class="cr-ic" aria-hidden="true">${PIPE[edit.kind].icon}</span> <b>${esc(PIPE[edit.kind].name)}</b> <span class="chip">Lv ${edit.level} of ${PIPE_RULES.maxLevel}</span></p>`
     : `<h3 class="cr-h3">1. Choose a manager</h3><div class="cr-kinds" role="group" aria-label="Manager type">${Object.entries(PIPE).map(([id, K]) => `<button class="cr-kind" aria-pressed="${H.kind === id}" data-act="crew-hkind" data-k="${id}" data-fid="hk-${id}">
         <span class="cr-ic" aria-hidden="true">${K.icon}</span><b>${esc(K.name)}</b><span class="small">${esc(K.blurb)}</span>

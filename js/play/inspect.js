@@ -56,7 +56,13 @@ export function create(p = {}) {
   const s = { kind: 'inspect', seed, truth, budget: clamp(Math.floor(num(p.budget, 0)), 0, 30), spent: 0, accuracy: clamp(num(p.accuracy, 0.5), 0, 1), fakeDetect: !!p.fakeDetect,
     used: [], evidence: [], found: [], warning: null, done: false, sd: clamp(num(pr.sd, 0.17), 0.02, 1), sd0: clamp(num(pr.sd, 0.17), 0.02, 1), d2: 0, odds: Math.log(fake0 / (1 - fake0)),
     belief: { quality: num(pr.quality, 0.9), fakeProb: fake0 }, opening: OPEN[seed % OPEN.length] };
-  if (s.fakeDetect) { // the Second-Chance gut feeling: a free, noisy counterfeit signal before any probe
+  if (s.fakeDetect && typeof p.warned === 'boolean') {
+    // The Second-Chance gut feeling as the game sets it for a real lot: the SAME flag the Market shows (a flagged lot is a counterfeit for certain, and the street sense misses `warnMiss` of the counterfeits),
+    // not a second roll of the dice. A flag is as good as proof; a quiet lot is only a lot it did not catch: the odds fall by exactly the chance that a counterfeit would have gone unflagged.
+    const d = 1.5, miss = clamp(num(p.warnMiss, 0.1), 0.01, 1);
+    s.odds = p.warned ? Math.log(99) : s.odds + Math.log(miss); s.d2 = d * d;
+    s.warning = p.warned ? 'Your street sense snags on this one: something about it feels counterfeit.' : 'Your street sense stays quiet. That is no proof: it misses some.';
+  } else if (s.fakeDetect) { // a free, noisy counterfeit signal before any probe (when no lot's own flag is given)
     const d = 1.5, llr = d * ((truth.fake ? d / 2 : -d / 2) + gauss(seed, 'warn'));
     s.odds += llr; s.d2 = d * d;
     s.warning = llr > 1 ? 'Your street sense snags on this one: something about it feels counterfeit.'
@@ -127,7 +133,7 @@ function plan(s, target, k) {
   let best = [], bv = -1, bc = 0;
   for (let m = 0; m < 1 << IDS.length; m++) {
     const ids = IDS.filter((_, i) => m & (1 << i)), cost = ids.reduce((a, id) => a + PROBES[id].cost, 0);
-    if (cost > Math.min(target, s.budget - s.spent)) continue;
+    if (cost > Math.min(target, s.budget - s.spent) || ids.some((id) => s.used.includes(id))) continue; // a probe already bought is not bought twice
     const prec = ids.reduce((a, id) => a + 1 / qSd(s, id) ** 2, 0), d2 = ids.reduce((a, id) => a + dOf(s, id) ** 2, 0);
     const gain = 1 - 1 / (1 + var0 * prec) + 4 * p * (1 - p) * (1 - Math.exp(-d2 / 4));
     const val = gain * (1 + (1 - k) * 0.8 * (u(s.seed, 'plan' + m) * 2 - 1));
@@ -136,11 +142,13 @@ function plan(s, target, k) {
   return best.sort((a, b) => PROBES[a].cost - PROBES[b].cost);
 }
 
-export function autoplay(params, skill = 0.5) {
+/** `from` carries on a read that is already under way (a lot looked at before): the probes in it are paid for, so only what is left of this skill's
+ *  share of the budget is spent, on probes not yet used. The log holds the new actions only. */
+export function autoplay(params, skill = 0.5, from = null) {
   const k = clamp(num(skill, 0.5), 0, 1), log = [];
-  let s = create(params);
+  let s = from && from.kind === 'inspect' ? from : create(params);
   const go = (action) => { const r = act(s, action); if (r.say !== null) { s = r.state; log.push({ action, say: r.say }); } };
-  for (const id of plan(s, Math.round(s.budget * clamp(1.25 * k - 0.05, 0, 1)), k)) go({ type: 'probe', id });
+  for (const id of plan(s, Math.max(0, Math.round(s.budget * clamp(1.25 * k - 0.05, 0, 1)) - s.spent), k)) go({ type: 'probe', id });
   go({ type: 'conclude' });
   return { ...result(s), log };
 }

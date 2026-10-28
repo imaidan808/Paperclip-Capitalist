@@ -6,7 +6,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { CODEX } from '../js/meta/codex.js';
 import { REQUIRED_CODEX, EVENT_TYPES, EVENT_PAYLOAD } from '../js/meta/ids.js';
-import { TEACHES } from '../js/data/schema.js';
+import { TEACHES, fitTags, demandOf } from '../js/data/schema.js';
+import { ASSETS, BUYERS, ZONES } from '../js/data/index.js';
 import { matchEvent } from '../js/meta/match.js';
 
 const CATEGORIES = ['Value', 'Markets', 'Operations', 'Finance', 'Risk', 'People', 'Strategy'];
@@ -192,44 +193,53 @@ function boxLossChance(n) {
   let neg = 0; for (const [s, p] of dist) if (s < 0) neg += p;
   return neg;
 }
-const penFmv = 9 * idx(9 * 10 - 1);
+/** The game's own data: an example that names a good or a buyer must quote its real stats (audit-content.test.mjs runs the engine against the same text). */
+const fmvAt = (cls, z) => ASSETS[cls].base * idx(ASSETS[cls].sc * demandOf(ASSETS[cls], z) - ASSETS[cls].dep);
+const fitTo = (cls, buyer) => fitTags(ASSETS[cls].tags, BUYERS[buyer].like);
+const penFmv = fmvAt('pen', 1);
 const penPitch = penFmv * fitMult(0.85) * 0.6;
-const bikeFmv = 240 * idx(5 * 8 - 3);
-const vanWork = 5000 * idx(5 * 8 - 3); // the Fleet Van example: working value $4,350 in a district where its utility is 37
-const vanAsIs = vanWork * 0.3;
-const repairCost = (ops) => 1200 * 0.42 ** (ops - 1);
+const bikeFmv = fmvAt('bike', 3);
+const carWork = fmvAt('classicCar', 7); // the Barn-Find Classic Roadster example, worked in Auto Row
+const carAsIs = carWork * 0.3;
+const AUTO_ROW = (1 - ZONES[7].rules.repair) * ZONES[7].bonus.repairMult; // 25% off in the district, 10% off for opening it
+const repairCost = (ops) => ASSETS.classicCar.repair * 0.42 ** (ops - 1) * AUTO_ROW;
+const MARGIN = 1.15; // ECON.margin 1 x PIPE_RULES.marginBase 1.15: one number for every district
+const PITCH = 0.6 * 0.92; // the pitch baseline x ECON.pitchK
+const BROKER = 0.068 * MARGIN, LOGISTICS = 0.055 * MARGIN, STUDENT = 0.052 * MARGIN; // margin per cycle before costs: the manager's margin x the margin every district shares
+const penAt = (pitches) => { const A = ASSETS.pen; return A.base * idx(A.sc * demandOf(A, 1) * (1 - 0.4 * Math.min(1, pitches / 220)) - A.dep); }; // the pen's price with this many pitches in the last two days (the crowd factor of Market Saturation)
+const cyc = (speed, k) => Math.round(132 / speed * k); // cycle hours (ECON.cycleBase 132)
 const restore = (ops) => 0.5 + 0.5 * Math.min(1, (ops - 1) / 4);
 const nonDis = (hard, cash, debt, avg, mult, fails = 0) => { const prem = avg * mult * Math.max(0.3, 1 - 0.15 * fails); return cash + hard + prem - 0.12 * (hard + prem) - debt; };
 const survive3 = 1 - (0.95 ** 20 + 20 * 0.05 * 0.95 ** 19 + choose(20, 2) * 0.05 ** 2 * 0.95 ** 18);
 
 const FACTS = {
-  'utility-fit': [fitMult(1).toFixed(2) + 'x', fitMult(0.5).toFixed(3) + 'x', fitMult(0.2).toFixed(2) + 'x'],
-  'negotiation': [(65 / 60).toFixed(2) + 'x', (50 / 60).toFixed(2) + 'x', (78 / 60).toFixed(2) + 'x'],
-  'saturation-herd': [idx(4 * 11.2 - 2).toFixed(3), idx(4 * 4.8 - 2).toFixed(3), (idx(4 * 11.2 - 2) / idx(4 * 4.8 - 2)).toFixed(2), String(cm(45, 60))],
-  'information-asymmetry': [usd(0.78 * 120 + 0.22 * 15), usd(110 - (0.78 * 120 + 0.22 * 15))],
+  'utility-fit': [fitMult(fitTo('paperclip', 'student')).toFixed(2) + 'x', fitMult(fitTo('paperclip', 'barista')).toFixed(2) + 'x', fitMult(fitTo('paperclip', 'dmitri')).toFixed(2) + 'x', 'factor of ' + (fitMult(fitTo('paperclip', 'student')) / fitMult(fitTo('paperclip', 'dmitri'))).toFixed(1)],
+  'negotiation': (() => { const f = fmvAt('radio', 2), ask = f * 1.4 - f * 0.09; return [usd(f), usd(f * 1.4), usd(f * 0.09), usd(ask), usd((ask + 9.21) / 2), ((ask + 9.21) / 2 / f).toFixed(2) + 'x', (8 / f).toFixed(2) + 'x']; })(),
+  'saturation-herd': (() => { const cb = ASSETS.courseBooks, a = ZONES[3].rules.season.amp, d = demandOf(cb, 3), uP = cb.sc * d * (1 + a) - cb.dep, uT = cb.sc * d * (1 - a) - cb.dep; return [(d * (1 + a)).toFixed(2), uP.toFixed(1), idx(uP).toFixed(3), usd(cb.base * idx(uP)), (d * (1 - a)).toFixed(2), uT.toFixed(1), idx(uT).toFixed(3), usd(cb.base * idx(uT)), (idx(uP) / idx(uT)).toFixed(2), pct(idx(uP) / idx(uT) - 1, 0), String(cm(45, 60))]; })(),
+  'information-asymmetry': (() => { const w = fmvAt('pawnWatch', 4), fake = w * 0.08, blind = 0.68 * w + 0.32 * fake, posted = Math.round(w * 0.97 * 100) / 100; return ['32%', usd(w), usd(fake), usd(blind), usd(posted), usd(posted - blind), usd(w - posted, 0), usd(w, 0), usd(posted - blind, 0), usd(blind, 0)]; })(),
   'working-capital': [usd(1000 * 0.03, 0), usd((1000 * 0.12 / 30) * 3, 0), usd(1000 * 0.03 + (1000 * 0.12 / 30) * 3, 0), usd(300 - 42, 0)],
   'winners-curse': [pct(0.2 * 4 / 6), usd(1000 * (1 + 0.2 * 4 / 6), 0), usd(1000 * 0.2 * 4 / 6, 0)],
-  'repair-roi': [usd(repairCost(4)), usd(vanWork * restore(4), 0), usd(vanWork * restore(1) - vanAsIs - repairCost(1), 0), usd(repairCost(4) * 0.75)],
-  'supply-chain': [usd(2000 * 0.045, 0), usd(0.15 * 0.2 * 2000, 0), usd(0.3 * 0.02 * 2000, 0), pct((90 + 60 + 12) / 2000), pct((63 + 60 + 12) / 2000, 2)],
+  'repair-roi': [usd(carWork, 0), usd(carAsIs), usd(ASSETS.classicCar.repair, 0), usd(repairCost(1), 0), usd(carWork * restore(1), 0), '-' + usd(carWork * restore(1) - carAsIs - repairCost(1)), pct((repairCost(1) + carAsIs - carWork * restore(1)) / repairCost(1), 0), usd(repairCost(4)), usd(carWork * restore(4), 0), usd(carWork * restore(4) - carAsIs - repairCost(4)), usd(ASSETS.classicCar.repair * 0.42 ** 3), '0.675', usd(carWork * restore(4) - carAsIs - repairCost(4), 0)],
+  'supply-chain': [usd(2000 * 0.045 * 0.7, 0), usd(0.15 * 0.2 * 2000, 0), usd(ZONES[8].rules.customs * 0.02 * 2000, 0), usd(2000 * 0.045 * 0.7 + 60 + ZONES[8].rules.customs * 0.02 * 2000, 0), pct((2000 * 0.045 * 0.7 + 60 + ZONES[8].rules.customs * 0.02 * 2000) / 2000, 2), usd(2000 * 0.045 + 60 + ZONES[8].rules.customs * 0.02 * 2000, 0), pct((2000 * 0.045 + 60 + ZONES[8].rules.customs * 0.02 * 2000) / 2000)],
   'scale-compliance': [pct(80 / 750), pct(80 / 7500), usd(5000 * 1.5, 0), usd(5000 * 1.5 ** 2, 0)],
-  'obsolescence': [usd(10000 * 0.96 ** 5, 0), usd(10000 * 0.96 ** 10, 0), Math.round(Math.log(0.5) / Math.log(0.96)) + ' days', usd(10000 - 10000 * 0.96 ** 10, 0)],
-  'inventory-risk': [usd(2000 * 0.94, 0), usd(2000 * 0.94 ** 4, 0), usd(2000 * 0.94 ** 8, 0), Math.round(0.94 ** 8 * 100) + '%'],
-  'recurring-revenue': [pct(350 / 50000), Math.round(50000 / 350) + ' days', usd(350 * 90, 0)],
+  'obsolescence': (() => { const v = fmvAt('mobileApp', 10); return [usd(v, 0), usd(v * 0.96 ** 5, 0), usd(v * 0.96 ** 10, 0), Math.round(Math.log(0.5) / Math.log(0.96)) + ' days', usd(v - v * 0.96 ** 10, 0), pct(ASSETS.mobileApp.dep * 0.002 * 2, 0)]; })(),
+  'inventory-risk': (() => { const A = ASSETS.produceReefer, v = fmvAt('produceReefer', 11), k = (1 - 0.8 / A.perish) * (1 - A.dep * 0.002); return [usd(v, 0), k.toFixed(4), usd(v * k, 0), usd(v * k ** 4, 0), usd(v * k ** 8, 0), Math.round(k ** 8 * 100) + '%', Math.round(k ** 10 * 100) + '%', pct(0.8 / A.perish), pct(k)]; })(),
+  'recurring-revenue': (() => { const A = ASSETS.musicRights, v = fmvAt('musicRights', 12); return [usd(v, 0), pct(A.yield), usd(v * A.yield), Math.round(v / (v * A.yield)) + ' days', pct(A.dep * 0.002)]; })(),
   'enterprise-sales': [usd(3200 * (1 - 0.126), 0), usd(3200 * (1 - 0.126) * 60, 0), (40000 / (3200 * (1 - 0.126))).toFixed(1) + ' days', pct(2797 / 3797)],
   'leverage-risk': [pct(0.06 * 3 - 0.012 * 2), pct(-0.15 * 3 - 0.012 * 2), usd(10000 * (1 - 0.15 * 3 - 0.012 * 2), 0), usd(20000 / 4.5, 0), pct((10000 - 20000 / 4.5) / 30000)],
-  'asset-cash-flow': [pct(320 * 30 / 400000), usd(400 * 30, 0), usd(0.08 * 400000, 0), usd(0.08 * 400000 - 12000, 0)],
-  'arbitrage-at-scale': [usd(67200 - 60000 - 2700 - 0.025 * 67200, 0), usd(67200 - 60000 - 1890 - 0.025 * 67200, 0), pct(2820 / 60000), pct(3630 / 60000, 2), pct(1.045 / 0.975 - 1), pct(1.0315 / 0.975 - 1)],
+  'asset-cash-flow': (() => { const A = ASSETS.apartmentBlock, v = fmvAt('apartmentBlock', 15), R = ZONES[15].bonus.rentMult; return [usd(v, 0), pct(A.yield), pct(A.yield * R), usd(v * A.yield * R, 0), usd(v * 0.09, 0), usd(Math.round(v * 0.029 / 100) * 100, 0), usd(Math.round(v * 0.031 / 100) * 100, 0)]; })(),
+  'arbitrage-at-scale': (() => { const a = fmvAt('copperCargo', 13), b = fmvAt('copperCargo', 16), fr = 0.045 * 1.5 * 0.7, tf = ZONES[16].tax + 0.025, freight = a * fr, profit = b * (1 - tf) - a - freight; return [usd(a, 0), usd(b, 0), pct(b / a - 1), usd(freight, 0), usd(b * tf, 0), usd(b * (1 - tf), 0), usd(profit, 0), pct(profit / a), pct((1 + fr) / (1 - tf) - 1), pct(1 - profit / (b - a), 0), usd(1.25 * a, 0), usd(1.25 * a * (1 - tf) - a - freight, 0)]; })(),
   'fair-market-value': [usd(bikeFmv), usd(bikeFmv * 0.9 * 0.95), usd(bikeFmv * 0.3)],
-  'asset-utility-score': [usd(penFmv), usd(150 * idx(26)), usd(150 * idx(53)), pct(idx(53) / idx(26) - 1)],
-  'creativity-multiplier': [usd(penPitch), usd(penPitch * 3.14), usd(penPitch * cm(10, 100)), usd(penPitch * 0.4), cm(10, 100).toFixed(2), (0.4 + Math.log(42)).toFixed(2)],
+  'asset-utility-score': [usd(penFmv), usd(fmvAt('scrap', 1)), usd(ASSETS.scrap.base * idx(53)), pct(idx(53) / idx(26) - 1), pct(idx(39) / idx(26) - 1, 0)],
+  'creativity-multiplier': (() => { const f = fitMult(fitTo('pen', 'marguerite')), base40 = penAt(40) * f * PITCH, base100 = penAt(100) * f * PITCH; return [usd(penFmv), fitTo('pen', 'marguerite').toFixed(2), usd(penAt(40)), usd(penAt(100)), usd(base40), usd(base100), usd(base40 * 3.14), usd(base100 * cm(10, 100)), usd(base100 * 0.4), cm(10, 100).toFixed(2), (0.4 + Math.log(42)).toFixed(2), '0.92']; })(),
   'market-saturation': [cm(4, 20).toFixed(2), cm(8, 24).toFixed(2), pct(1 - cm(8, 24) / cm(4, 20), 0)],
-  'persona-fit': [fitMult(0.9).toFixed(3), fitMult(0.5).toFixed(3), (fitMult(0.9) / fitMult(0.5)).toFixed(2)],
-  'urgency-premium': [usd(12 * 0.6 * cm(0, 0)), usd(12 * 0.775 * 0.6 * cm(0, 0)), Math.round(12 * 0.6 * cm(0, 0) / 0.05) + 'x'],
+  'persona-fit': [(1 + 0.2 * 0.2 / 0.3).toFixed(3), (1 + 0.15 * -0.2 / 0.3).toFixed(2), ((1 + 0.2 * 0.2 / 0.3) / (1 + 0.15 * -0.2 / 0.3)).toFixed(2)],
+  'urgency-premium': [usd(6 * PITCH * cm(0, 0)), usd(6 * 0.775 * PITCH * cm(0, 0)), Math.round(6 * PITCH * cm(0, 0) / 0.05) + 'x', cm(0, 0).toFixed(3), usd(fmvAt('paperclip', 1))],
   'margin': [pct(3 / 9), pct(3 / 12), pct(2.7 / 12)],
-  'depreciation': [(0.988 ** 30).toFixed(3), usd(900 * 0.988 ** 30, 0), (0.996 ** 30).toFixed(3), (0.998 ** 30).toFixed(3), usd(900 - 900 * 0.988 ** 30, 0)],
-  'opportunity-cost': [(72 / 22).toFixed(2), usd(40 * 72 / 22, 0), '-' + usd(40 * 72 / 22 - 120, 0)],
-  'cash-flow-velocity': [(6.8 * 24 / 22).toFixed(2) + '%', (5.5 * 24 / 17).toFixed(2) + '%', (1.068 ** (240 / 22)).toFixed(2) + 'x', (1.055 ** (240 / 17)).toFixed(2) + 'x'],
-  'compounding': [usd(50 * 1.06 ** 12), usd(50 * 1.06 ** 24), usd(50 * 1.03 ** 24), usd(24 * 3, 0)],
+  'depreciation': (() => { const g = fmvAt('gadgets', 5), k = 1 - ASSETS.gadgets.dep * 0.002; return [k ** 30 < 1 ? (k ** 30).toFixed(3) : '', usd(g, 0), usd(g * k ** 30, 0), usd(g - g * k ** 30, 0), usd((g - g * k ** 30) / 30, 0), ((1 - ASSETS.textbooks.dep * 0.002) ** 30).toFixed(3), pct(1 - (1 - ASSETS.textbooks.dep * 0.002) ** 30, 0), ((1 - ASSETS.pen.dep * 0.002) ** 30).toFixed(3), pct(1 - (1 - ASSETS.pen.dep * 0.002) ** 30, 0), Math.round(k ** 30 * 100) + '%', Math.round(0.998 ** 30 * 100) + '%']; })(),
+  'opportunity-cost': [cyc(2.2, 1) + ' hours', 120 / cyc(2.2, 1) + ' cycles', usd(2 * 31.5, 0), '-' + usd(2 * 31.5 - 20, 0), '$31.50'], // a level-1 Broker on $1,000 nets $31.52 a cycle after fee, tax, royalty and overhead (audit-content.test.mjs reads it off the engine)
+  'cash-flow-velocity': [(BROKER * 100).toFixed(2) + '%', (LOGISTICS * 100).toFixed(2) + '%', (STUDENT * 100).toFixed(2) + '%', (BROKER * 100 * 24 / cyc(2.2, 1)).toFixed(2) + '%', (LOGISTICS * 100 * 24 / cyc(2.2, 0.8)).toFixed(2) + '%', (STUDENT * 100 * 24 / cyc(2.2, 1.3)).toFixed(2) + '%', ((1 + BROKER) ** (240 / cyc(2.2, 1))).toFixed(2) + 'x', ((1 + LOGISTICS) ** (240 / cyc(2.2, 0.8))).toFixed(2) + 'x', ((1 + STUDENT) ** (240 / cyc(2.2, 1.3))).toFixed(2) + 'x', pct(1 - (STUDENT * 24 / cyc(2.2, 1.3)) / (LOGISTICS * 24 / cyc(2.2, 0.8)), 0)],
+  'compounding': [usd(50 * 1.03 ** 24), usd(50 * 1.03 ** 48), usd(50 * 0.03), usd(1.5 * 48, 0), usd(50 * 1.015 ** 48), usd(50 * 1.03 ** 48, 0), usd(50 * 1.015 ** 48, 0)],
   'interest-and-compounding': [usd(2000 * 0.12 / 30), usd(2000 * (1 + 0.12 / 30) ** 30, 0), usd(2000 * 1.12 ** 3, 0), usd(2000 * (1 + 0.12 / 30) ** 90, 0), usd(2000 * 1.12 ** 3 - 2000, 0), usd(2000 * (1 + 0.12 / 30) ** 90 - 2000, 0)],
   'debt-to-equity': [(1530 / 1870).toFixed(2), usd(3 * 1870 - 1530, 0), (1530 / (1870 - 380)).toFixed(2)],
   'margin-call': [usd(3000 * (1 + 1 / 4.5), 0), pct(1 - 3000 * (1 + 1 / 4.5) / 4000), usd(1800 * 0.65, 0), usd(1800 * 0.35, 0), '-' + usd(1800 - (3000 - 0.65 * 1800), 0)],
@@ -237,18 +247,18 @@ const FACTS = {
   'cac-vs-ltv': [usd(52.25 * 30), (52.25 * 30 / 450).toFixed(1), (450 / 52.25).toFixed(1) + ' days', usd(450 * 0.84, 0), (52.25 * 30 / (450 * 0.84)).toFixed(1), (450 * 0.84 / 52.25).toFixed(1) + ' days', (52.25 * 30 / 1200).toFixed(1)],
   'sla': [usd(2 * 380, 0), usd(2 * 2 * 380, 0), usd(32 * 361, 0)],
   'audit-compliance': [usd(0.85 * 5000, 0), usd(0.85 * 5000 - 1200, 0), pct(0.15 ** 3)],
-  'tariffs': [usd(1230 - 1000 - 45 - 30.75), usd(1230 - 1000 - 45 - 30.75 - 100), pct(154.25 / 1000), pct(54.25 / 1000)],
+  'tariffs': [(BROKER * 1.3 * 100).toFixed(2) + '%', (BROKER * 1.3 * 100 * 24 / 60).toFixed(2) + '%', (BROKER * 100 * 24 / 60).toFixed(2) + '%', (BROKER * 1.3 * 100 * 24 / 156).toFixed(2) + '%', pct((BROKER * 1.3 * 24 / 60) / (BROKER * 24 / 60) - 1, 0), pct(1 - (BROKER * 1.3 * 24 / 156) / (BROKER * 24 / 60), 0)],
   'credit-crunch': [usd(2000 * 0.07 / 30), usd(2000 * 0.13 / 30), usd((2000 * 0.13 / 30 - 2000 * 0.07 / 30) * 15, 0), Math.round((0.13 / 0.07 - 1) * 100) + '%'],
-  'demand-shock': [usd(900 * idx(6 * 6 - 6), 0), usd(900 * idx(6 * 30 - 6), 0), usd(900 * idx(6 * 6 - 6) * 0.5, 0), usd(900 * idx(174) - 720, 0), usd(900 * idx(174) - 360, 0)],
+  'demand-shock': (() => { const g = fmvAt('gadgets', 5), A = ASSETS.gadgets, surge = A.base * idx(A.sc * demandOf(A, 5) * 5 - A.dep); return [usd(g), String(A.sc * demandOf(A, 5) * 5 - A.dep), usd(surge, 0), pct(surge / g - 1, 0), usd(g * 0.5), usd(surge - g, 0), usd(g * 0.5, 0), usd(surge - g * 0.5, 0)]; })(),
   'diversification': [pct(0.3 / Math.sqrt(4), 0), usd(0.3 * 4000, 0), usd(0.15 * 4000, 0)],
-  'hedging': [usd(0.15 * 1500, 0), usd(0.5 * 1500, 0), pct(225 / 750, 0), usd(3000 * 0.5 - 525, 0), usd(525, 0)],
-  'anchoring': [usd((560 + 320) / 2, 0), (440 / 400).toFixed(2) + 'x', (400 / 400).toFixed(2) + 'x', usd(1.25 * 480, 0)],
-  'batna-zopa': [usd(240 * 0.875, 0), usd((245 + 270) / 2), usd(245 - 210, 0), usd(257.5 - 240)],
+  'hedging': (() => { const f = ZONES[5].friction + 0.025; return [pct(ZONES[5].friction), pct(f), usd(f * 1500), usd(0.5 * 1500, 0), pct(f * 1500 / 750), usd(750 + f * 1500), usd(1500 - 750 - f * 1500)]; })(),
+  'anchoring': (() => { const s = fmvAt('sneakers', 5); return [usd(s), usd(s * 1.4), usd(s * 0.7), usd((s * 1.4 + 295) / 2), ((s * 1.4 + 295) / 2 / s).toFixed(2) + 'x', usd((s + 295) / 2), ((s + 295) / 2 / s).toFixed(2) + 'x', (s * 1.4 / 390).toFixed(2), usd(1.25 * 390), usd(s * 0.4), usd((s * 1.4 + 295) / 2 - (s + 295) / 2)]; })(),
+  'batna-zopa': (() => { const pool = bikeFmv * (1 - ZONES[3].friction - 0.025); return [usd(bikeFmv), pct(1 - ZONES[3].friction - 0.025), usd(pool), usd(34 - pool), usd((pool + 34) / 2), usd((29.5 + 34) / 2), usd(29.5 - pool), usd((29.5 + 34) / 2 - (pool + 34) / 2)]; })(),
   'adverse-selection': [pct(11 / (11 + 7.8))],
   'due-diligence': ['-' + usd(0.78 * 10 - 0.22 * 80), '+' + usd(0.78 * 10 - 0.044 * 80), usd(0.78 * 10 - 0.044 * 80 + (0.22 * 80 - 0.78 * 10))],
   'comparative-advantage': [String(10 + 2), String(5 + 4), String(18)],
-  'specialization': [usd(repairCost(5)), usd(vanWork - vanAsIs - repairCost(5), 0), usd(repairCost(3)), usd(vanWork * restore(3) - vanAsIs - repairCost(3), 0), usd((vanWork - vanAsIs - repairCost(5)) - (vanWork * restore(3) - vanAsIs - repairCost(3)), 0)],
-  'economies-of-scale': [usd(6 + 0.002 * 100), usd(0.068 * 500 - 7, 0), usd(0.068 * 1000 - 8, 0), pct((0.068 * 5000 - (6 + 0.002 * 5000)) / 5000)],
+  'specialization': [usd(repairCost(5), 0), usd(carWork * restore(5) - carAsIs - repairCost(5), 0), usd(repairCost(3), 0), usd(carWork * restore(3), 0), usd(carWork * restore(3) - carAsIs - repairCost(3), 0), usd((carWork * restore(5) - carAsIs - repairCost(5)) - (carWork * restore(3) - carAsIs - repairCost(3)), 0), usd(carAsIs, 0), usd(carWork, 0)],
+  'economies-of-scale': (() => { const g = BROKER, net = (a) => a * g - (6 + 0.002 * a); return [usd(100 * g), usd(6 + 0.2), usd(net(100)), pct(net(100) / 100), usd(500 * g), usd(7), usd(net(500)), pct(net(500) / 500), usd(1000 * g), usd(8), usd(net(1000)), pct(net(1000) / 1000), pct(net(5000) / 5000), pct(16 / 5000)]; })(),
   'network-effects': [String(5 * 4 / 2), String(10 * 9 / 2), String(20 * 19 / 2)],
   'risk-of-ruin': [Math.round(0.95 ** 10 * 100) + '%', Math.round(0.95 ** 20 * 100) + '%', Math.round(0.95 ** 40 * 100) + '%', pct(survive3, 1), Math.round(0.75 ** 3 * 100) + '%'],
   'expected-value': [usd(0.5 * 10 + 0.35 * 25 + 0.15 * 60), usd(22.75 - 20), Math.round(boxLossChance(20) * 100) + '%', Math.round(boxLossChance(100) * 100) + '%'],
@@ -256,10 +266,10 @@ const FACTS = {
   'reputation': [usd(5 * 60, 0), pct(40 / 300, 0)],
   'exit-valuation': [usd(nonDis(90000, 20000, 30000, 4000, 6), 0), usd(nonDis(90000, 20000, 30000, 4000, 10), 0), usd(nonDis(90000, 20000, 30000, 4000, 6, 2), 0),
     usd(nonDis(90000, 20000, 30000, 4000, 10) - nonDis(90000, 20000, 30000, 4000, 6), 0), usd(nonDis(90000, 20000, 30000, 4000, 6) - nonDis(90000, 20000, 30000, 4000, 6, 2), 0)],
-  'supply-and-demand': [usd(9 * idx(9 * 9 - 1)), usd(9 * idx(9 * 8 - 1)), usd(9 * idx(9 * 6 - 1)), pct(1 - idx(71) / idx(89), 0), pct(1 - idx(53) / idx(89), 0)],
-  'net-worth': [usd(300 + 58.2 + 600 - 500), usd(100 + 0.875 * 58.2 + 600 - 300), usd(58.2 * 0.125), usd(0.875 * 58.2)],
+  'supply-and-demand': (() => { const A = ASSETS.radio, p = (c) => A.base * idx(A.sc * demandOf(A, 2) * c - A.dep); return [usd(p(1)), usd(p(0.9)), usd(p(0.8)), usd(p(0.6)), pct(1 - p(0.8) / p(1), 0), pct(1 - p(0.6) / p(1), 0), (A.sc * 7.2 - A.dep).toFixed(1), idx(A.sc * 7.2 - A.dep).toFixed(3), (A.sc * 6.4 - A.dep).toFixed(1), (A.sc * 4.8 - A.dep).toFixed(1)]; })(),
+  'net-worth': (() => { const r = fmvAt('radio', 2), h = ZONES[2].friction + 0.025; return [usd(300 + r + 600 - 500), pct(h), usd(r * (1 - h)), usd(300 + r + 600 - 500 - r * h), usd(r * h)]; })(),
   'liquidity': [usd(3000 * 0.875, 0), usd(5000 * 0.35 / 24), (250 / (5000 * 0.35 / 24)).toFixed(1) + ' hours', usd(3000 * 0.125, 0)],
-  'sunk-cost': [usd(620 * 0.988 ** 10, 0), usd(600 * 1.01 ** 10, 0), usd(600 * 1.01 ** 10 - 620 * 0.988 ** 10, 0)],
+  'sunk-cost': (() => { const k = 1 - ASSETS.gadgets.dep * 0.002; return [pct(ASSETS.gadgets.dep * 0.002), usd(620 * k ** 10, 0), usd(620 - 620 * k ** 10, 0), usd(600 * 1.01 ** 10, 0), usd(600 * 1.01 ** 10 - 620 * k ** 10, 0)]; })(),
 };
 
 test('worked numbers in the examples match the formulas they state', () => {
@@ -281,9 +291,9 @@ test('the foundational formulas are the game\'s own', () => {
   assert.equal(cm(10, 100).toFixed(2), '2.36');
   assert.equal(cm(0, 40), 3.14);
   assert.equal(cm(60, 100), 0.4);
-  assert.equal(penFmv.toFixed(2), '12.51');
+  assert.equal(penFmv.toFixed(2), '2.85'); // the Vintage Fountain Pen in the Scrap Yard (was $12.51 at the v1 base price)
   assert.equal((0.4 + 0.95 * 1).toFixed(2), '1.35');
-  assert.equal((4350 * 0.3).toFixed(0), '1305');
-  assert.equal(repairCost(6).toFixed(2), '15.68');
+  assert.equal(carAsIs.toFixed(0), '1814'); // a broken Barn-Find Classic Roadster in Auto Row (was the v1 Fleet Van, $1,305)
+  assert.equal(repairCost(6).toFixed(2), '17.64');
   assert.equal(boxLossChance(1), 0.5);
 });

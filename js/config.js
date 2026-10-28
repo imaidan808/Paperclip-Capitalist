@@ -9,9 +9,21 @@ export const MIL = { m1: 1000, m2: 25000, m3: 250000 };
 export const MIL_ZONE = { m1: 5, m2: 9, m3: 13 };
 export const CM = { min: 0.4, max: 3.14, ref: 1.68, beta: 0.4, pitchBase: 0.6 };
 export const FEES = { base: 0.025, crunch: 0.12, digitalRouting: 0.12, exitBrokerage: 0.12 };
-// Economy tuning knobs (docs/BALANCE.md). Mutable on purpose: tests/tune.mjs sweeps them against the pacing targets of docs/V2_DESIGN.md section 11.
-export const ECON = { lotDiscHi: 0.97, lotDiscLo: 0.84, lotSlots: 4, lotEvery: 1.5, leadEvery: 1, cycleBase: 80, pitchK: 1, margin: 0.4 }; // provisional: the 66-pair balance pass retunes these
+// Economy tuning knobs (docs/BALANCE.md).
+export const ECON = {
+  lotDiscHi: 0.97, lotDiscLo: 0.84, lotSlots: 4, lotEvery: 1.5, leadEvery: 1.15, cycleBase: 132, pitchK: 0.92, margin: 1,
+  brokenLo: 0.9, brokenSlope: 0.015, // sourcing a broken lot: price = as-is value x max(brokenLo, 1 - brokenSlope x (Ops - 1)) (Ops 1 pays 0.985, the floor is reached at Ops 8)
+  urgentK: 0.9, urgentFade: 0.9, // an urgent buyer's budget = fair value x (1 + (0.4 to 2.6) x urgentK x (1 - urgentFade x how far past district 4, over eight districts)): need pays well at the Scrap Yard, a trade price in Corporate Valley
+  pointXp: 120, warnMiss: 0.1, // pointXp: what a skill point is worth in XP once every skill is at mastery. warnMiss: the share of counterfeits the Second-Chance street sense misses
+}; // provisional: the 66-pair balance pass retunes these (docs/BALANCE.md). Mutable on purpose: tests/tune.mjs sweeps them against the pacing targets of docs/V2_DESIGN.md section 11
 export const FMV_BAND = 0.4; // peer-to-peer guardrail: +/-40%
+// What a completed swap with a real classmate pays the run. It was a flat 120 XP and a counted swap for any swap at all, so two tabs trading paperclips back and forth maxed every skill in minutes.
+// A swap counts (swap total, trade total, experience, quests and the gradebook's engagement) only when it moves at least `minValue` of real value, at most `perDay` a day, once per partner a day;
+// its experience is `xpBase` + `xpScale` x log10(1 + the value that came in), at most `xpMax`. The snapshot door (cohort.js) holds a classmate's reported swaps to the same daily bound.
+// `appraisal`: what a swap refused on a crate's hidden worth costs, as a share of the value it was refused at (engine _appraisal).
+export const SWAPS = { perDay: 3, minValue: 0.5, xpBase: 10, xpScale: 30, xpMax: 120, appraisal: 0.03 };
+// A delivered reply is credited as the proposer described it and no better; crates and cash that together are worth less than this share of the description cannot have come through both ends' +/-40% guardrails (1 / 1.4^2 = 0.51).
+export const DELIVERY_FLOOR = 0.45;
 export const EEI_FLOOR_DEFAULT = 1000; // = Milestone 1. See docs/BALANCE.md: a $0.05 start would otherwise score ~1,000,000x the others
 export const BASE_RATE = 0.025; // monthly index; +600 bps in the credit crunch
 export const DEBT = { maxDE: 3.0, callDE: 4.5, fireSale: 0.35 };
@@ -40,10 +52,16 @@ export const PIPE = {
   logistics: { name: 'Logistics Agent', icon: '🚛', hire: 420, royalty: 0.06, margin: 0.055, cycle: 0.8, overhead: 5, cap: 700, blurb: 'Fastest cycles. Also cuts freight cost 20% and damage risk in half.' },
 };
 // Pipelines scale with a district's gate: a manager in district 13 handles about 27x the money of one in district 5.
-export const PIPE_RULES = { cycleBase: 48, maxLevel: 8, hireGrowth: 1.7, levelGrowth: 2.5 };
-export const pipeScale = (zone) => Math.max(1, Math.pow(zone.gate / 1000, 0.62));
-export const pipeMargin = (zone) => Math.max(0.5, 1 - 0.045 * (zone.id - 5));
-export const pipeOverhead = (zone) => Math.max(1, Math.pow(zone.gate / 1000, 0.5));
+// A cycle's gross is allocation x kind margin x ECON.margin x pipeMargin x (Cm / 1.68) x lane. With marginBase 1.15 a balanced niche (Cm 1.68) pays 6.0% (student), 7.8% (broker) or 6.3% (logistics) before costs,
+// an empty one (Cm 1.09, nobody else selling) 5.1% to a broker, and the best lane of every district 5 to 16 clears the 2.5% fee, tax, royalty and overhead (tests/audit-engine-core.test.mjs walks them all).
+// One number for every district: cycles are shorter and stakes larger further out, but the return per cycle is meant to be the same everywhere (docs/V2_DESIGN.md section 4). That makes a manager's return per DAY
+// grow with the district (a cycle is 2.5 times shorter in the Global Exchange than in Metro Hub), on stakes 20 to 130 times larger, and with ECON.cycleBase at 80 it ran away: 59% of the Quick-bot runs reached district 16
+// by day 90 and the day-90 net worth was 6x apart between the 10th and the 90th percentile. The margin per cycle cannot be what gives (a level-1 broker with no perks nets 1.1% a cycle in its best lane; take
+// a district's margin down and it loses money), so ECON.cycleBase is: a cycle is 65% longer everywhere, the return per cycle stays as it was (docs/BALANCE.md).
+export const PIPE_RULES = { cycleBase: 48, maxLevel: 8, hireGrowth: 1.7, levelGrowth: 2.5, scaleExp: 0.62, overheadExp: 0.5, marginBase: 1.15, marginSlope: 0 };
+export const pipeScale = (zone) => Math.max(1, Math.pow(zone.gate / 1000, PIPE_RULES.scaleExp));
+export const pipeMargin = (zone) => Math.max(0.5, PIPE_RULES.marginBase + PIPE_RULES.marginSlope * (zone.id - 5));
+export const pipeOverhead = (zone) => Math.max(1, Math.pow(zone.gate / 1000, PIPE_RULES.overheadExp));
 
 export const UPGRADES = {
   jit: { name: 'Just-In-Time (JIT) Inventory', cost: 2500, zone: 5, blurb: 'Pipeline cycles 20% shorter, 50% slower inventory decay, 10% lower overhead. Less capital sits idle.' },

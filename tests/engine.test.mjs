@@ -317,7 +317,7 @@ test('review: storage counts crates in escrow and in transit, so a withdrawn off
 test('review: an asset received from a peer lands in a district the founder can enter', () => {
   const g = mk([], 5); g.s.cash = 600;
   const book = { cls: 'textbooks', cond: 'ok', quality: 1, wear: 1, zone: 5, id: 'z' };
-  const off = { id: 'Ox', from: 'P', fromHandle: 'P', give: { assets: [book], cash: 0, royalty: null }, want: { assets: [], cash: Math.round(g.sideValue({ assets: [book] })) }, skills: {} };
+  const off = { id: 'Ox', from: 'P', fromHandle: 'P', give: { assets: [book], cash: 0, royalty: null }, want: { assets: [], cash: Math.round(g.sideValue({ assets: [book] }, { landing: true }) * 100) / 100 }, skills: {} }; // priced where it will sit (audit S5: the district-5 price was a 427% overpay in district 1)
   const r = g.acceptOffer(off); assert.ok(r.ok, r.msg);
   const got = g.s.assets.filter((x) => x.from === 'p2p');
   assert.ok(got.length === 1 && g.s.zones.includes(got[0].zone), 'delivered to district ' + got[0].zone + ' which this founder can enter');
