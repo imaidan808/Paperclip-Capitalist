@@ -1,9 +1,9 @@
 // Tier 1 content: districts 1-4, the on-ramp (docs/V2_DESIGN.md sections 4, 4.1, 5 and 13).
 //
 //   1 The Scrap Yard     scale $1    barter ladder; urgent buyers pay for need, not cost      (utility-fit)
-//   2 Flea Market Row    scale $6    every deal can be haggled; sealed mystery boxes           (negotiation)
+//   2 Flea Market Row    scale $6    every deal can be haggled; sealed boxes are a gamble      (negotiation)
 //   3 Campus Quad        scale $25   a 28-day semester wave; cheap trends herd                 (saturation-herd)
-//   4 Pawn District      scale $90   about one lot in five is fake; appraisal is the game      (information-asymmetry)
+//   4 Pawn District      scale $90   about one lot in seven is fake; appraisal is the game     (information-asymmetry)
 //
 // Everyone starts with one paperclip (fair value about five cents) and no cash. Two ways up:
 //   * sell it to someone who needs it right now (Wen the stressed student) and take the first dollars, or
@@ -21,20 +21,20 @@ export const zones = {
   },
   2: {
     id: 2, name: 'Flea Market Row', short: 'Flea Market', icon: '🎪', theme: 'market', tier: 1,
-    blurb: 'A bazaar of canvas stalls where every deal can be haggled and sealed mystery boxes hide anything from junk to treasure. Learn to anchor and to walk away.',
+    blurb: 'A bazaar of canvas stalls where every deal can be haggled and sealed boxes are a gamble on condition. Learn to anchor and to walk away.',
     teaches: 'negotiation', gate: 20, scale: 6, tax: 0.01, friction: 0.104, pool: 5000, speed: 1.3, store: 12, leadEvery: 3, lotEvery: 4, urgent: 0.3,
     auto: false, plots: 0, palette: ['#c4571a', '#ffc93c'], rules: { haggle: true }, bonus: {},
   },
   3: {
     id: 3, name: 'Campus Quad', short: 'Campus', icon: '🎓', theme: 'campus', tier: 1,
-    blurb: 'Books, notes and gadgets rise and fall on a 28-day semester wave, and cheap trends spread fast. Learn why the crowd favourite stops paying.',
+    blurb: 'Books, notes and gadgets rise and fall on a 28-day semester wave, and cheap trends spread fast. Learn why the crowd favorite stops paying.',
     teaches: 'saturation-herd', gate: 80, scale: 25, tax: 0.02, friction: 0.108, pool: 5000, speed: 1.6, store: 13, leadEvery: 3, lotEvery: 4, urgent: 0.25,
     auto: false, plots: 0, palette: ['#9b3b2f', '#2f9e5b'],
     rules: { season: { period: 28, amp: 0.35, tags: ['paper', 'training', 'electronics'] } }, bonus: {},
   },
   4: {
-    id: 4, name: 'Pawn District', short: 'Pawn Row', icon: '💍', theme: 'pawn', tier: 1,
-    blurb: 'About one lot in five is a fake and a third of the stock goes to auction. Inspect before you bid: the seller always knows more than you do.',
+    id: 4, name: 'Pawn District', short: 'Pawn', icon: '💍', theme: 'pawn', tier: 1,
+    blurb: 'About one lot in seven is a fake and a third of the stock goes to auction. Inspect before you bid: the seller always knows more than you do.',
     teaches: 'information-asymmetry', gate: 250, scale: 90, tax: 0.03, friction: 0.112, pool: 5000, speed: 1.9, store: 15, leadEvery: 3, lotEvery: 5, urgent: 0.2,
     auto: false, plots: 0, palette: ['#0e6f6b', '#e3b341'], rules: { fakes: 0.22, auction: 0.35, gray: true }, bonus: {},
   },
@@ -97,7 +97,7 @@ export const assets = {
     name: 'Acoustic Guitar, Some Wear', icon: '🎸', base: 120, sc: 5, dep: 2, tags: ['media', 'retro'], dem: { 3: 4, 4: 9 }, repair: 34, fakeRisk: 0.9,
   },
   pawnWatch: {
-    name: 'Vintage Wristwatch', icon: '⌚', base: 260, sc: 8, dep: 1, tags: ['prestige', 'luxury', 'collectible'], dem: { 3: 2, 4: 9 }, fakeRisk: 1,
+    name: 'Pawn-Shop Wristwatch', icon: '⌚', base: 260, sc: 8, dep: 1, tags: ['prestige', 'luxury', 'collectible'], dem: { 3: 2, 4: 9 }, fakeRisk: 1,
   },
   signedBall: {
     name: 'Signed Game-Used Baseball', icon: '⚾', base: 150, sc: 7, dep: 1, tags: ['collectible', 'prestige'], dem: { 3: 3, 4: 7 }, fakeRisk: 1,
@@ -208,7 +208,7 @@ export const buyers = {
     holds: [{ cls: 'pawnGuitar' }, { cls: 'pawnLaptop', cond: 'broken' }, { cls: 'bike' }],
   },
   okafor: {
-    zone: 4, name: 'Mr. Okafor, watch and jewellery dealer', icon: '💎', pop: 0.35, like: { luxury: 1, prestige: 0.9, collectible: 0.7, gem: 0.5 }, budget: [45, 1100],
+    zone: 4, name: 'Mr. Okafor, watch and jewelry dealer', icon: '💎', pop: 0.35, like: { luxury: 1, prestige: 0.9, collectible: 0.7, gem: 0.5 }, budget: [45, 1100],
     style: 'analytical', patience: 6, bias: 'prestige', hello: 'Provenance first. Pictures later, if ever.',
     holds: [{ cls: 'pawnWatch' }],
   },

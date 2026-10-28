@@ -174,9 +174,12 @@ test('money goals read as money and fractions are capped at the goal', () => {
   assert.match(t, /\$50,000 \/ \$50,000/, 'capped at the goal, in dollars');
 });
 
-test('daily bounties: three a day with bars; none yet on the first morning', () => {
+test('daily bounties: three a day with bars, from the first morning on', () => {
   const ctx = mk(), pr = ctx.progress;
-  assert.match(text(quests.html(ctx)), /0 of 3 today/); assert.match(text(quests.html(ctx)), /Three fresh bounties arrive with every new day/);
+  assert.equal(pr.dailies().length, 3, 'day 1 has its three bounties already');
+  assert.match(text(quests.html(ctx)), /0 of 3 today/);
+  pr.m.d = { day: 0, list: [] }; // a save from before bounties were rolled on day 1
+  assert.match(text(quests.html(ctx)), /Three fresh bounties arrive with every new day/);
   pr.onEvent({ type: 'day', day: 2 });
   assert.equal(pr.dailies().length, 3);
   let h = quests.html(ctx); const t = text(h);

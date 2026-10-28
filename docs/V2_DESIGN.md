@@ -47,9 +47,9 @@ One avenue runs through all sixteen. Unlock is by **net worth** (`gate`). `scale
 | # | District | Tier | Gate | Scale | Signature rule | Teaches (codex id) | Unlock bonus |
 |---|---|---|---|---|---|---|---|
 | 1 | The Scrap Yard | 1 | $0 | $1 | Barter ladder. Urgent buyers pay for need, not cost | `utility-fit` | none |
-| 2 | Flea Market Row | 1 | $20 | $6 | **Haggle stalls**: every deal can be bargained; mystery boxes | `negotiation` | none |
+| 2 | Flea Market Row | 1 | $20 | $6 | **Haggle stalls**: every deal can be bargained; sealed boxes are a gamble on condition | `negotiation` | none |
 | 3 | Campus Quad | 1 | $80 | $25 | **Semester waves**: paper, training and electronics demand swings on a 28-day cycle; trends spread fast | `saturation-herd` | none |
-| 4 | Pawn District | 1 | $250 | $90 | **Fakes and auctions**: 22% of lots are counterfeit; appraisal is the game | `information-asymmetry` | none |
+| 4 | Pawn District | 1 | $250 | $90 | **Fakes and auctions**: the fake rate is 22% (scaled by each good's `fakeRisk`; about one lot in seven turns out fake); appraisal is the game | `information-asymmetry` | none |
 | 5 | Metro Hub | 2 | $1,000 | $400 | **Managers and the Bank open**; client contracts | `working-capital` | Managers, Bank, clients |
 | 6 | Estate Sales | 2 | $2,500 | $900 | **Auctions** (50% of lots); hidden-value boxes | `winners-curse` | lots +1 slot |
 | 7 | Auto Row | 2 | $6,000 | $2,500 | **Repair bays**: 60% of lots are broken; repair costs 25% less here | `repair-roi` | repairs 10% cheaper everywhere |
@@ -60,7 +60,7 @@ One avenue runs through all sixteen. Unlock is by **net worth** (`gate`). `scale
 | 12 | Creative Quarter | 3 | $150,000 | $50,000 | **Royalties**: IP and media assets pay you daily while you hold them | `recurring-revenue` | none |
 | 13 | Corporate Valley | 4 | $250,000 | $90,000 | **Enterprise clients**; M&A and IPO preparation (Milestone 3) | `enterprise-sales` | enterprise credit |
 | 14 | Financial District | 4 | $500,000 | $180,000 | **Credit markets**: spreads fall; leverage is the weapon and the risk | `leverage-risk` | loan spreads -20% |
-| 15 | Real Estate Row | 4 | $1,000,000 | $400,000 | **Rent yields**: property pays rent; long cycles; appraisal disputes | `asset-cash-flow` | rent income +25% |
+| 15 | Real Estate Row | 4 | $1,000,000 | $400,000 | **Rent yields**: property pays rent; big tickets; foreclosure auctions | `asset-cash-flow` | rent income +25% |
 | 16 | Global Exchange | 4 | $2,500,000 | $1,000,000 | **World markets**: price gaps between districts are arbitrage; exits and IPO | `arbitrage-at-scale` | exit multiples +10% |
 
 Zone fields, rule keys and bonus keys are enforced by `js/data/schema.js` (`validateData`). Do not invent others.

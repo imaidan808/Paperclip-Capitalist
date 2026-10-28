@@ -18,7 +18,12 @@ jobs:
       - uses: actions/setup-node@v7
         with: { node-version: 22 }
       - run: npm ci --prefix server
-      - run: npm test
+      - name: Run the tests
+        shell: bash
+        run: |
+          npm test 2>&1 | tee test.log
+          # A test marked todo is a known fault. It does not change the exit code, so the site would deploy with it: stop here instead.
+          if grep -Eq 'todo [1-9][0-9]*$' test.log; then echo 'A test is marked todo, which means a known fault. Fix it before deploying.'; exit 1; fi
   deploy:
     needs: test
     runs-on: ubuntu-latest

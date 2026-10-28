@@ -272,6 +272,7 @@ test('lots are booths: the price, Working or Broken, the district\'s quality lin
 test('the free counterfeit warning and the player\'s own read are shown, nothing else about authenticity is', () => {
   const ctx = fakeCtx({ days: 25, perks: PAIRS[1] }), g = ctx.g();
   ctx.U.marketTab = 'lots'; ctx.U.zone = 4;
+  while (g.s.lots[4].length < 3) g._spawnLot(4); // how many lots the bot's day-25 shelf holds depends on the content, so the test makes sure of three
   const [a, b, c] = g.s.lots[4];
   for (const l of g.s.lots[4]) { delete l.warn; delete l.belief; }
   a.warn = true;
