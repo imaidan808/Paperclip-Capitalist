@@ -157,7 +157,7 @@ test('Repair under reduced motion: setting the slider and pressing Stop lands wh
   ctx.g = () => g; ctx.reduced = () => true;
   const ses = UI.createSession(ctx, start(g, spec)); ses.show();
   for (let i = 0; i < 3; i++) { ses.slider = 0.5; ses.acts.stop(); }
-  assert.ok(ses.run.stageDone('fix')); assert.ok(ses.run.res.fix.precision > 0.9, `precision ${ses.run.res.fix.precision}`);
+  assert.ok(ses.run.stageDone('fix')); assert.ok(ses.run.res.fix.precision > 0.8 && ses.run.res.fix.precision <= 0.85 + 1e-9, `precision ${ses.run.res.fix.precision}: centred, but a par option (SLIDER_CAP), not a flawless hand`);
   ses.slider = 0.5; // the slider is remembered across steps; Careful needs no timing at all
   const ses2 = UI.createSession(ctx, start(g, brokenCrate(g))); ses2.show(); ses2.acts.careful(); assert.ok(ses2.run.stageDone('fix')); assert.equal(ses2.run.res.fix.careful, true);
 });

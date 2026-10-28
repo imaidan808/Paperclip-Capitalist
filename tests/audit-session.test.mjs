@@ -653,7 +653,8 @@ test('#21 a forged or malformed accept, decline, withdraw or reject cannot touch
 
 test('#33 the royalty a swap carries is agreed once: what arrives is capped by the total that was offered', async () => {
   const { a, b } = await trio();
-  a.game.s.cash = 1000;
+  a.game.s.cash = 1000; a._sendSnap(true); // a promise is worth what its maker has published to the room, so the room has to have heard how much that is
+  await until(() => b.peers.get('ADA')?.snap?.nw >= 1000);
   const r = a.propose({ to: 'GRACE', giveIds: [], giveCash: 20, royalty: { perDay: 10, days: 3 }, want: { assets: [], cash: 40 } });
   assert.ok(r.ok, r.msg);
   b.game.s.cash = 100;
@@ -740,8 +741,9 @@ async function startRelay(env = {}) {
   return { child, port, st, url: `ws://localhost:${port}`, stop: () => child.kill() };
 }
 /** A bare WebSocket in a room, recording everything it is sent. */
-function raw(relay, room, pid, role = 'student') {
-  const ws = new WebSocket(`${relay.url}/?room=${room}&pid=${pid}&role=${role}`);
+const keyFor = (pid) => ('key-' + pid).replace(/[^A-Za-z0-9_-]/g, '_').padEnd(16, '0'); // the secret a browser keeps beside its pid (the relay refuses a connection without one)
+function raw(relay, room, pid, role = 'student', key = keyFor(pid)) {
+  const ws = new WebSocket(`${relay.url}/?room=${room}&pid=${pid}&key=${key}&role=${role}`);
   const c = { ws, got: [], closed: null, ready: new Promise((res) => { ws.onopen = res; }), send: (m) => ws.send(typeof m === 'string' ? m : JSON.stringify(m)) };
   ws.onmessage = (e) => c.got.push(JSON.parse(e.data));
   ws.onclose = (e) => { c.closed = e.code; };

@@ -29,14 +29,17 @@ tests/              engine, content, multiplayer (spawns the real relay), access
 | `snap` | student | public snapshot: net worth, skills, 48h niche counts, shock log, public inventory |
 | `clock` | instructor | `{hour, speed, paused, difficulty, ghosts, algo}`; students adopt only the instructor's (or, with no instructor, the lowest Founder ID's) |
 | `inject`, `rewind` | instructor | deploy a shock (idempotent by id) / restore daily checkpoints |
-| `offer`, `accept`, `decline`, `withdraw` | student | peer swap: proposer escrows, recipient validates and delivers, proposer finalises |
+| `offer`, `accept`, `confirm`, `deliver`, `decline`, `withdraw` | student | peer swap in three steps: the proposer escrows and makes the offer; the addressee asks to `accept`; the proposer `confirm`s that it still holds the escrow (and holds it for them: it cannot be withdrawn or expire under them, once per try and twice per offer); only then does the addressee commit and `deliver`. The proposer credits each crate as it described it in the offer and no better (a reply that promises more, or is far worse, changes nothing) |
 | `flag` | student | a blocked offer outside +/-40% of fair value |
-| `royalty` | student | daily payment on a royalty stream |
+| `royalty` | student | daily payment on a royalty stream. A payer short of cash carries the rest as arrears (a liability in its net worth and in an exit's proceeds) and a stream whose receiver's run is over ends; the receiver takes at most a day's rate a message and never more than was promised in all |
+
+## Who is who on the relay
+A Founder ID is a name, not a proof: every message carries its sender's, so every classmate knows everyone's, the instructor's included. So a connection to the relay must bring `key`, a random secret its browser keeps beside the ID (`pc.key.<slot>` in localStorage). The first connection to use an ID in a room binds the ID to a hash of its key (nothing else of it is kept, and it is never logged); a later connection for that ID with another key, or none, is refused. That is what stops a classmate from taking the instructor's seat, or another student's name and snapshot, by connecting with an ID they have read off the wire. The instructor's seat is the first connection to claim it, kept for its ID (and so its key). Two tabs of one browser with the same slot share both. Over a browser's own tabs (`BroadcastChannel`) there is no relay and no key: every tab is the same browser, and it is not a place to defend against.
 
 ## Moving to a scalable, authoritative backend
 1. Run `engine.js` on the server per student (it has no DOM), accept actions over HTTP/WebSocket, and persist `game.s` per Founder ID in Postgres with point-in-time recovery.
 2. Move the cohort aggregation (`cohort.js`) server-side so niche volumes cannot be spoofed.
-3. Validate peer trades server-side with the same `checkOffer`.
+3. Validate peer trades server-side with the same `checkOffer`. Without it a client is still believed about one thing: the cash and the crates it says it handed over (the proposer credits what the reply says, clamped to the offer, but cannot check the other side really gave them up), so a hostile classmate can still take what a proposer escrowed for a crate it never parted with. Two sides' reports of the same swap, cross-checked, are the cheapest fix.
 4. Add an LTI 1.3 launch to mint the pseudonymous Founder ID and an Assignment and Grade Services call from the gradebook export.
 5. Keep the front end unchanged: swap `net.js`'s relay for the API.
 

@@ -37,6 +37,7 @@ const ONLINE_MS = 20000;               // heard from in this long: online
 const COHORT_MS = 2000;                // the market's view of the class is rebuilt at most this often, however many snapshots arrive
 const ACCEPT_WAIT_MS = 30000;          // an acceptor waits this long for the proposer to confirm
 const LOCK_MS = 60000;                 // a proposer holds its escrow for an acceptor this long
+const MAX_LOCKS = 2;                   // ...and holds one offer for a classmate at most this many times
 const CKPT_KEEP = 9, CKPT_BUDGET = 2e6; // daily checkpoints kept across a reload: how many, and about how many characters in all
 const RESERVED = /^(NPC|SYN)-/;
 const peerId = (x) => { const id = cleanId(x); return id && id.length <= 24 && !RESERVED.test(id) ? id : null; };
@@ -62,6 +63,12 @@ export class Clock {
 }
 
 const rid = () => 'PC-' + Math.random().toString(36).slice(2, 6).toUpperCase();
+/** A secret that stays in this browser beside the Founder ID and proves to the relay that the one who connects as that ID is the one who first did (server/relay.mjs). 128 random bits as 32 hex characters. */
+const newKey = () => {
+  const c = globalThis.crypto;
+  if (c?.getRandomValues) return Array.from(c.getRandomValues(new Uint8Array(16)), (b) => b.toString(16).padStart(2, '0')).join('');
+  return Array.from({ length: 4 }, () => Math.random().toString(16).slice(2, 10).padEnd(8, '0')).join('');
+};
 
 export class Session {
   constructor() {
@@ -86,6 +93,7 @@ export class Session {
     this.t = { snap: 0, save: 0, clock: 0, refresh: 0, cohort: 0, roster: 0 };
     this.refreshMs = new URLSearchParams(typeof location !== 'undefined' ? location.search : '').get('refresh') ? +new URLSearchParams(location.search).get('refresh') * 1000 : 60000;
     this.pid = kv.get('pid') || (() => { const p = rid(); kv.set('pid', p); return p; })();
+    this.key = (() => { const k = kv.get('key'); if (typeof k === 'string' && /^[A-Za-z0-9_-]{16,64}$/.test(k)) return k; const n = newKey(); kv.set('key', n); return n; })();
     this.handle = kv.get('handle') || '';
     this.npc = { id: 'NPC-PARTNER', handle: 'Practice Partner', skills: { ops: 1, growth: 6, fintech: 2 }, n: 0, paid: { day: -1, cash: 0 } };
     this.worldSeed = 'solo';
@@ -105,6 +113,7 @@ export class Session {
     this._clearCkpt();
     this.sent.clear(); this.accepting.clear(); this.incoming = [];
     this.game = new Game({ perks, specialty, handle: this.handle, pid: this.pid, startHour, worldSeed: this.worldSeed });
+    if (this.room) this.room.handle = this.handle; // the room has been calling this founder by the placeholder it joined with
     this._wire();
     this.synth = this.mode === 'solo' ? makeSynth(11, this.worldSeed) : [];
     this.save(true);
@@ -116,6 +125,7 @@ export class Session {
     g.env.cohort = this.cohort; g.env.difficulty = this.difficulty; g.env.worldSeed = this.worldSeed; g.env.algo = this.algo;
     this.cohort.seed = this.worldSeed; this.cohort.ghosts = this.ghosts; this.cohort.refresh();
     g.onNote = (n) => this.emit('note', n);
+    g.env.peerClosed = (pid) => this.peers.get(pid)?.snap?.flags?.over === true; // a royalty is not sent to a founder whose run is over: they would refuse it and the money would be lost
   }
   restore() {
     const d = kv.get('save');
@@ -157,8 +167,9 @@ export class Session {
     const switching = this.roomInfo && this.roomInfo.code !== code;
     this._closeRoom();
     if (switching) this._resetRoomSettings();
-    const h = handle || this.handle || 'Instructor';
-    this.room = new Room({ code, pid: this.pid, handle: h, role, relay: relay || undefined });
+    // a student who has not typed an alias yet is not "Instructor": the room shows them by their Founder ID until startGame gives them a name
+    const h = handle || this.handle || (role === 'instructor' ? 'Instructor' : 'Founder-' + this.pid.slice(3));
+    this.room = new Room({ code, pid: this.pid, key: this.key, handle: h, role, relay: relay || undefined });
     this.roomInfo = { code, relay, role };
     this.mode = role === 'instructor' ? 'instructor' : 'student';
     this.worldSeed = code;
@@ -250,7 +261,7 @@ export class Session {
         const instr = this._isInstructor(m, from);
         const trusted = instr || (Date.now() - this.instructorSeen > 20000 && from === this.leaderPid());
         if (instr) { this.instructorSeen = Date.now(); this.instructorPid = from; }
-        if (this.mode === 'student' && trusted) this._adoptClock(c);
+        if (this.mode === 'student' && trusted) this._adoptClock(c, instr);
         break;
       }
       case 'inject': {
@@ -305,14 +316,15 @@ export class Session {
     if (worst && Date.now() - worst.seen > 10 * 60000) { this.peers.delete(worst.pid); return true; }
     return false;
   }
-  _adoptClock(c) {
+  /** `fromInstructor`: only the instructor's clock may change the class's settings (difficulty, the herd, the algorithmic events); a student standing in for them carries the hour, the speed and the pause alone. */
+  _adoptClock(c, fromInstructor = false) {
     const first = !this.clockAdopted;
     const lag = c.paused ? 0 : c.age / 1000 / SEC_PER_HOUR * c.speed; // the relay replays the last clock to a joiner: it is a moment old
     this.clock.hour = Math.min(TOTAL_HOURS, c.hour + lag); this.clock.wall = Date.now(); this.clock.speed = c.speed; this.clock.paused = c.paused;
     this.clockAdopted = true;
-    if (c.difficulty) Object.assign(this.difficulty, c.difficulty);
-    if (c.ghosts != null) { this.ghosts = c.ghosts; this.cohort.ghosts = c.ghosts; this.cohort.refresh(); }
-    if (c.algo != null) { this.algo = c.algo; if (this.game) this.game.env.algo = c.algo; }
+    if (fromInstructor && c.difficulty) Object.assign(this.difficulty, c.difficulty);
+    if (fromInstructor && c.ghosts != null) { this.ghosts = c.ghosts; this.cohort.ghosts = c.ghosts; this.cohort.refresh(); }
+    if (fromInstructor && c.algo != null) { this.algo = c.algo; if (this.game) this.game.env.algo = c.algo; }
     if (first) this._rebase();
   }
   /** A run that has not been touched, started before the class clock was heard, starts again at the class's hour (everyone starts identical, whenever they sit down). */
@@ -452,6 +464,7 @@ export class Session {
     const target = this.clock.now(wall);
     const before = g.s.hour;
     if (this.mode === 'student' && this.clockAdopted && !this.clock.paused && wall - this.t.clock > 8000 && this.room && wall - this.instructorSeen > 20000 && this.leaderPid() === this.pid) { this.t.clock = wall; this.room.send({ t: 'clock', hour: target, speed: this.clock.speed, paused: this.clock.paused }); }
+    this._lapseLocks(wall);
     if (target > g.s.hour) g.advanceTo(target);
     for (const m of g.out.splice(0)) this._deliver(m);
     if (this.room) this._sendSnap(false);
@@ -577,6 +590,9 @@ export class Session {
     const want = this._ownWant(o);
     if (!want) { this._tell(from, 'decline', { offerId: o.id }); return; } // it asks for something we do not hold: say so now, their escrow comes back
     o.want.assets = want;
+    // a royalty is a promise from the proposer, and it is worth what they are worth: the number they published to the room in their snapshot, not the one written in the offer (which is theirs to make up)
+    const snapNw = this.peers.get(from)?.snap?.nw;
+    if (typeof snapNw === 'number' && Number.isFinite(snapNw)) o.nw = o.nw === undefined ? snapNw : Math.min(o.nw, snapNw); else delete o.nw;
     const handle = text(m.handle) || o.fromHandle;
     this.incoming.push({ offer: o, at: Date.now(), handle, from });
     this.emit('offer', o);
@@ -606,8 +622,16 @@ export class Session {
     if (s.offer.to !== from) return; // only the classmate the offer was made to
     const e = g.s.escrow.find((x) => x.offerId === id);
     if (!e || g.s.over || g.s.exiting) { this.sent.delete(id); this._tell(from, 'reject', { offerId: id, msg: 'That offer is no longer open.' }); return; }
-    e.lockedBy = from; e.lockedAt = Date.now(); e.at = g.s.hour;
+    // The escrow is held for this classmate ONCE per try: said again while it is held, it only repeats the confirmation; and an offer is held at most twice in all (a lost reply, one more try). Held again and again
+    // with a fresh clock each time, it could be kept out of its owner's hands for the whole run, and their cash with it.
+    if (e.lockedBy === from && !e.lockLapsed) { this._tell(from, 'confirm', { offerId: id }); return; }
+    if ((e.locks || 0) >= MAX_LOCKS) { this._tell(from, 'reject', { offerId: id, msg: 'That offer is no longer open.' }); return; }
+    e.lockedBy = from; e.lockedAt = Date.now(); e.locks = (e.locks || 0) + 1; delete e.lockLapsed;
     this._tell(from, 'confirm', { offerId: id });
+  }
+  /** A hold nobody delivered into within LOCK_MS lapses: the owner may withdraw, the engine may expire the offer or sell the business. (A late delivery is still taken while the escrow stands.) */
+  _lapseLocks(wall) {
+    for (const e of this.game.s.escrow) if (e.lockedBy && !e.lockLapsed && wall - (e.lockedAt || 0) > LOCK_MS) e.lockLapsed = true;
   }
   /** Step two, received by the acceptor: the proposer is committed, so the acceptor commits and hands its side over. */
   _onConfirm(m, from) {
@@ -639,7 +663,8 @@ export class Session {
     const cash = typeof d.cash === 'number' && Number.isFinite(d.cash) ? Math.min(Math.max(d.cash, 0), want.cash) : 0;
     const name = text(m.handle) || from;
     const r = g.finalizeOffer(id, { assets, cash }, name);
-    this.sent.delete(id);
+    if (r.ok) this.sent.delete(id);
+    else { delete e.lockedBy; delete e.lockedAt; delete e.lockLapsed; } // a reply that is not that swap changes nothing: the offer is open again, and the hold is let go
     const short = assets.length < want.assets.length || cash < want.cash - 0.005;
     g.note(r.ok ? (short ? 'warn' : 'good') : 'bad', r.ok ? (short ? `${name} delivered less than the swap said. What arrived was added.` : `${name} accepted. Swap completed.`) : r.msg);
     this.emit('change');
@@ -647,7 +672,7 @@ export class Session {
   _onAbort(m, from) {
     const g = this.game, id = cleanId(m.offerId), e = id && g?.s.escrow.find((x) => x.offerId === id);
     if (!e || m.to !== this.pid || e.lockedBy !== from) return;
-    delete e.lockedBy; delete e.lockedAt;
+    delete e.lockedBy; delete e.lockedAt; delete e.lockLapsed;
     g.note('info', `${this.peers.get(from)?.handle || 'Your counterparty'} could not complete the swap. Your offer is still open.`);
     this.emit('change');
   }
@@ -671,10 +696,7 @@ export class Session {
     if (!g || m.to !== this.pid || !id) return;
     const r = g.s.royalties.find((x) => x.dir === 'recv' && x.offer === id && x.peer === from); // a stream we really hold, from the one who owes it
     if (!r || typeof m.amount !== 'number' || !(m.amount > 0)) return;
-    const total = r.cap ?? r.perDay * (Math.ceil(Math.max(0, r.until - g.s.hour) / 24) + 1);
-    const amount = Math.min(m.amount, r.perDay, total - (r.got || 0)); // a day's rate, and never more in all than was agreed
-    if (!(amount > 0)) return;
-    g.receiveRoyalty(amount, id, from); // the engine books what it takes into r.got itself: counting it here as well made every payment count twice against the total
+    g.receiveRoyalty(m.amount, id, from); // the engine holds the caps (a day's rate a message, never more in all than was agreed) and books what it takes into r.got itself
   }
   _onFlag(m, from) {
     if (this.mode !== 'instructor' || m.role !== 'student' || !isObj(m.offer)) return;
@@ -690,7 +712,7 @@ export class Session {
   }
   withdraw(offerId) {
     const o = this.sent.get(offerId), e = this.game.s.escrow.find((x) => x.offerId === offerId);
-    if (e?.lockedBy && Date.now() - e.lockedAt < LOCK_MS) return { ok: false, msg: 'They are accepting this offer right now. Give it a moment.' };
+    if (e?.lockedBy && !e.lockLapsed && Date.now() - e.lockedAt < LOCK_MS) return { ok: false, msg: 'They are accepting this offer right now. Give it a moment.' };
     const r = this.game.cancelOffer(offerId);
     if (o) this.room?.send({ t: 'withdraw', to: o.offer.to, offer: offerId });
     this.sent.delete(offerId);
@@ -736,8 +758,9 @@ export class Session {
       if (p.role !== 'student' || !p.snap) continue;
       if (!p.clean) { p.snap = cleanSnap(p.snap, p.pid); p.clean = true; if (!p.snap) continue; } // a snapshot placed here without passing the door
       const sn = p.snap;
-      // the score is recomputed from the numbers, never taken from the sender (a run that is over keeps the score it locked)
-      const eei = sn.flags.exited ? sn.eei : eeiCalc(sn.nw, sn.startCap, TOTAL_DAYS - sn.hour / 24, floor);
+      // the score is recomputed from the numbers, never taken from the sender: not even for a run that has exited (the flag is the sender's too). An honest exit froze its hour and its net worth, so the same
+      // formula gives the score it locked; a made-up one can only be as good as the net worth it reports, which cohort.js bounds.
+      const eei = eeiCalc(sn.nw, sn.startCap, TOTAL_DAYS - sn.hour / 24, floor);
       rows.push({ ...sn, eei, seen: p.seen, online: now - p.seen < ONLINE_MS, rewind: this.rewindReport.get(p.pid) || null });
     }
     const mine = this.game && this.mode !== 'instructor' ? [{ ...this.game.publicSnapshot(), me: true, online: true }] : [];
@@ -757,7 +780,7 @@ export class Session {
     const rows = this.students();
     const med = {};
     // a founder wiped out after a shock has a ratio of ~0 (or below): it scores zero adaptability, it does not make the log (and the grade) NaN
-    const ratio = (s) => Math.max(0.001, s.nwAfter / s.nw);
+    const ratio = (s) => clamp(s.nwAfter / s.nw, 0.001, 20); // and a founder who "grew twenty-fold" is believed no further: an unbounded ratio let one made-up shock row set the whole class's median
     const logged = (r) => (Array.isArray(r.shockLog) ? r.shockLog : []);
     for (const id of new Set(rows.flatMap((r) => logged(r).map((s) => s.id)))) {
       const ratios = rows.map((r) => logged(r).find((s) => s.id === id)).filter((s) => s && s.nwAfter != null && s.nw > 0).map(ratio);

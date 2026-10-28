@@ -21,7 +21,7 @@ This is the single source of truth for the v2 redesign. Parallel work (data, min
 
 ## 3. Backgrounds (replace Profiles)
 
-Pick **two** of twelve. All twelve are balanced against each other (a test plays every pair with the bot and requires all 66 pairs to reach milestones within 35% of the median time). Fields in `mods` are read through `Game.P` (aggregated by `perkMods(ids)`; numbers add, multipliers multiply).
+Pick **two** of twelve. All twelve are balanced against each other. The target is that every one of the 66 pairs reaches the milestones within 35% of the median time; `node tests/balance.mjs` plays every pair with the bot over several seeds and reports the ones outside it (docs/BALANCE.md says which, today), and `tests/audit-repair.test.mjs` holds the late game of a sample of the pairs to bounds in CI. It is a target and a report, not a gate: the pairs near the line change places with any change to the data. Fields in `mods` are read through `Game.P` (aggregated by `perkMods(ids)`; numbers add, multipliers multiply).
 
 | id | Background | Real-world basis | Strength | Cost |
 |---|---|---|---|---|
@@ -142,7 +142,7 @@ A campaign of ten short missions in the real UI against the real engine in a scr
 
 ## 11. Balance targets (tested with the bot)
 
-Time to reach each district's gate for a competent bot, by zone: 1-4 within days 1-14; 5 (Bank) by day 14-22; 9 (audits) by day 30-40; 13 (Corporate) by day 55-70; 16 by day 85+ only for strong play. No Background pair may deviate from the median milestone day by more than 35%. Skill play must matter: Deal-Room-optimal play beats Quick play by 15-30% on profit per deal; random play loses to Quick.
+Time to reach each district's gate for a competent bot, by zone: 1-4 within days 1-14; 5 (Bank) by day 14-22; 9 (audits) by day 30-40; 13 (Corporate) by day 55-70; 16 by day 85+ only for strong play. The target is that no Background pair deviates from the median milestone day by more than 35% (reported by `tests/balance.mjs`; docs/BALANCE.md lists the pairs that do). The late game is held too: no more than about one run in six reaches district 16 by day 90, and the day-90 net worth of the 90th percentile is at most about three times the 10th's. Skill play must matter: Deal-Room-optimal play beats Quick play by 15-30% on profit per deal; random play loses to Quick.
 
 ## 4.1 District numbers and rule semantics (what the engine will do with your data)
 

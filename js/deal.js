@@ -13,6 +13,7 @@ import { clamp, fitLabel, FAKE_VALUE } from './market.js';
 import * as inspect from './play/inspect.js';
 import * as pitch from './play/pitch.js';
 import * as repair from './play/repair.js';
+import { closedWhy } from './engine.js';
 
 // Haggle and Auction arrive from their own branch; until both are merged the glue still loads and those two stages simply do not exist.
 const optional = async (name) => { try { return await import(`./play/${name}.js`); } catch { return null; } };
@@ -73,6 +74,7 @@ export function inspectParams(g, zone, lot, { seed } = {}) {
     budget: 3 + Math.floor(ops / 2) + (P.probeBonus || 0),
     accuracy: clamp(0.45 + 0.07 * ops + 0.05 * (P.inspectBonus || 0), 0.3, 0.95),
     fakeDetect: !!P.fakeDetect,
+    ...(P.fakeDetect ? { warned: !!lot.warn, warnMiss: ECON.warnMiss } : {}), // the Second-Chance street sense is ONE thing: the flag the Market shows on a lot is what Read says about it too
     prior: { quality: early ? 1.0 : 0.925, sd: early ? 0.09 : 0.13, fake: Math.max(0.005, rate) }, // what a stranger would guess about a lot like this one
     seed: seed ?? stageSeed(seedFor(g, { kind: 'buy', zone, lotId: lot.id }), 'read'),
   };
@@ -176,6 +178,8 @@ export function tForPos(x, step, seed) {
 // ------------------------------------------------------------------ planning: everything public about a deal, before it starts
 export function planFor(g, spec) {
   if (!spec || !['sell', 'buy', 'repair'].includes(spec.kind)) return fail('Unknown deal.');
+  const closed = closedWhy(g); // after the bell, or while an exit settles, no deal can be struck: say so at the door instead of letting a whole Deal Room be played for nothing
+  if (closed) return fail(closed);
   return spec.kind === 'sell' ? planSell(g, spec) : spec.kind === 'buy' ? planBuy(g, spec) : planRepair(g, spec);
 }
 const leadOf = (g, id) => { for (const z of g.s.zones) { const l = (g.s.leads[z] || []).find((x) => x.id === id); if (l) return l; } return null; };
@@ -404,7 +408,9 @@ export class DealRun {
     if (this.over) return this.summary;
     const { g, plan } = this, s = g.s, before = { xp: s.xp, cash: s.cash, streak: s.streak };
     const cmp = this.compare(), secret = this.secret(), res = this.res;
-    let r = null, deal = this.walked ? null : dealFrom(plan.kind, res), noDeal = !deal;
+    // A repair whose Fix stage was not played to its end repairs nothing and charges nothing (dealFrom would hand it the neutral terms, which beat both Quick and Careful, and the summary would then read a stage that is not there).
+    const unplayed = plan.kind === 'repair' && !res.fix;
+    let r = null, deal = this.walked || unplayed ? null : dealFrom(plan.kind, res), noDeal = !deal;
     // Every game the player finishes is recorded (XP, the debrief's per-game stats and the quest events); `quick` says whether Quick played it.
     // `key` names the thing played for (the lot, the lead, the crate): the engine pays a key once, so opening the same lot again and again pays
     // nothing more. A run that was walked away from buys, sells and repairs nothing, so only the Read (a lesson of its own) is recorded: a haggle
@@ -413,10 +419,12 @@ export class DealRun {
     if (plan.kind === 'buy') {
       const lot0 = this.lot(), news = !lot0 || !lot0.belief || probedOn(lot0).length > this.probes0; // a lot read before and read with nothing new this time is not a new lesson
       if (done('read') && (q('read') || res.read.spent > 0) && news) g.recordInspect(plan.zone, plan.lot.id, { ...res.read, quick: q('read'), key: plan.lot.id }); // reading nothing earns nothing
-      if (played && done('close') && res.close.rounds > 0) g.recordPlay('haggle', { ...res.close, role: 'buy', quick: q('close'), key: plan.lot.id });
-      if (played && done('bid') && res.bid.rounds > 0) g.recordPlay('auction', { ...res.bid, quick: q('bid'), key: plan.lot.id });
       if (res.bid && res.bid.won === false) g.passLot(plan.zone, plan.lot.id, `You dropped out of the auction for the ${plan.lot.name}.`);
       else if (deal) r = g.buyLot(plan.zone, plan.lot.id, deal);
+      // A haggle or an auction counts as played once the purchase it led to has gone through (or it led to none): a price agreed that the cash could not pay was no deal, and must not count as one closed.
+      const bought = !deal || (r && r.ok);
+      if (bought && played && done('close') && res.close.rounds > 0) g.recordPlay('haggle', { ...res.close, role: 'buy', quick: q('close'), key: plan.lot.id });
+      if (bought && played && done('bid') && res.bid.rounds > 0) g.recordPlay('auction', { ...res.bid, quick: q('bid'), key: plan.lot.id });
     } else if (plan.kind === 'sell') {
       if (played && done('pitch')) g.recordPlay('pitch', { score: res.pitch.score, quick: q('pitch'), key: plan.lead.id });
       if (played && done('close') && res.close.rounds > 0) g.recordPlay('haggle', { ...res.close, role: 'sell', quick: q('close'), key: plan.lead.id });
@@ -538,7 +546,7 @@ function summarize(run, { r, deal, noDeal, before, after, cmp, secret }) {
       Object.assign(out, { tone: 'info', title: 'Left as it was', headline: `You left the bench. The ${plan.asset.name} is still broken and nothing was spent.` });
       out.numbers = { unit: 'net gain after the bill', better: 'high', you: null, quick: r2(cmp.quick.net), expert: r2(cmp.expert.net), quickNet: r2(cmp.quick.net), expertNet: r2(cmp.expert.net), expertVia: null };
       out.lesson = { concept: 'repair-roi', text: 'A repair is an investment: it only pays when the value it adds beats the bill. Leaving a crate as it is costs nothing, and the numbers on the bench are there to be checked first.' };
-    } else if (!q) Object.assign(out, { tone: 'warn', title: 'Not repaired', headline: r ? r.msg : 'The repair could not be done.' });
+    } else if (!q) Object.assign(out, { tone: 'warn', title: 'Not repaired', headline: r ? r.msg : !fx ? 'The Fix stage was not finished, so nothing was repaired and nothing was charged.' : 'The repair could not be done.' });
     else {
       const gain = q.after - q.before - q.cost;
       Object.assign(out, { tone: gain > 0 ? 'good' : 'warn', title: gain > 0 ? 'Repaired, and it pays' : 'Repaired', headline: `${plan.asset.name} is back at ${Math.round(q.quality * 100)}% quality for ${money(q.cost)}.` });

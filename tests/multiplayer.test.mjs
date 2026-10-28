@@ -31,9 +31,9 @@ test('WebSocket relay forwards, isolates rooms, and replays the last snapshot an
   try {
     const port = await new Promise((res, rej) => { const to = setTimeout(() => rej(new Error('relay did not start')), 8000); child.stdout.on('data', (d) => { const m = /listening on :(\d+)/.exec(String(d)); if (m) { clearTimeout(to); res(+m[1]); } }); child.on('exit', () => rej(new Error('relay exited early'))); });
     const url = `ws://localhost:${port}`;
-    const teacher = track(new Room({ code: 'CLASS', pid: 'T', handle: 'teacher', role: 'instructor', relay: url }));
-    const s1 = track(new Room({ code: 'CLASS', pid: 'S1', handle: 's1', role: 'student', relay: url }));
-    const stranger = track(new Room({ code: 'ELSE', pid: 'X', handle: 'x', role: 'student', relay: url }));
+    const teacher = track(new Room({ code: 'CLASS', pid: 'T', key: 'key-' + 'T' + '-0000000000', handle: 'teacher', role: 'instructor', relay: url }));
+    const s1 = track(new Room({ code: 'CLASS', pid: 'S1', key: 'key-' + 'S1' + '-0000000000', handle: 's1', role: 'student', relay: url }));
+    const stranger = track(new Room({ code: 'ELSE', pid: 'X', key: 'key-' + 'X' + '-0000000000', handle: 'x', role: 'student', relay: url }));
     const seenS1 = [], seenX = [];
     s1.on((m) => seenS1.push(m)); stranger.on((m) => seenX.push(m));
     await until(() => teacher.state === 'open' && s1.state === 'open' && stranger.state === 'open');
@@ -41,14 +41,14 @@ test('WebSocket relay forwards, isolates rooms, and replays the last snapshot an
     s1.send({ t: 'snap', snap: { pid: 'S1', nw: 123 } });
     await until(() => seenS1.some((m) => m.t === 'clock'));
     assert.equal(seenX.length, 0, 'no leakage between rooms');
-    const late = track(new Room({ code: 'CLASS', pid: 'S2', handle: 's2', role: 'student', relay: url }));
+    const late = track(new Room({ code: 'CLASS', pid: 'S2', key: 'key-' + 'S2' + '-0000000000', handle: 's2', role: 'student', relay: url }));
     const seenLate = []; late.on((m) => seenLate.push(m));
     await until(() => seenLate.some((m) => m.t === 'clock') && seenLate.some((m) => m.t === 'snap'));
     assert.equal(seenLate.find((m) => m.t === 'clock').hour, 100);
     assert.equal(seenLate.find((m) => m.t === 'snap').snap.nw, 123);
     // a student may not set the room clock for everyone
     s1.send({ t: 'clock', hour: 5, speed: 99, paused: true });
-    const late2 = track(new Room({ code: 'CLASS', pid: 'S3', handle: 's3', role: 'student', relay: url }));
+    const late2 = track(new Room({ code: 'CLASS', pid: 'S3', key: 'key-' + 'S3' + '-0000000000', handle: 's3', role: 'student', relay: url }));
     const seen2 = []; late2.on((m) => seen2.push(m));
     await until(() => seen2.some((m) => m.t === 'clock'));
     assert.equal(seen2.find((m) => m.t === 'clock').hour, 100, 'only the instructor clock is remembered');

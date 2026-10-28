@@ -29,7 +29,7 @@ Start with the **Academy** (short guided missions, ungraded), then draft two **B
 | Same browser | Instructor creates a room, students open the link in other tabs (use `?slot=name` to keep saves apart) | Demos, a shared lab machine, development |
 | Relay | `cd server && npm install && npm start`, deploy anywhere that serves WebSockets (Render, Fly, a campus VM) behind TLS, then enter `wss://your-relay` when creating or joining a room, or add `&relay=...` to the student link | A real class on many devices |
 
-The relay forwards messages and keeps the latest snapshot per student in memory; it stores nothing on disk.
+The relay forwards messages and keeps the latest snapshot per student in memory; it stores nothing on disk. A connection brings the secret key its browser keeps beside its Founder ID (the app does this), and the relay refuses a second connection for an ID with another key, so a classmate cannot take the instructor's seat or another student's name with an ID read off the wire (docs/ARCHITECTURE.md). A relay that cannot listen (the port is taken) exits with an error instead of looking started.
 
 ## For instructors
 Create a room, pick a pace, press Start. The dashboard shows wealth Gini (alert above 0.65), a niche saturation heat map, stalled founders, flagged peer trades and a pre-filled gradebook; controls pause, speed, rewind (10 days), deploy shocks, and scale friction and audit frequency. See [docs/FACULTY_KIT.md](docs/FACULTY_KIT.md) for the syllabus, week map and rubrics.

@@ -28,7 +28,7 @@ Students play in a 2.5D isometric world of sixteen districts, from the Scrap Yar
 | Economic performance | 30% | Percentile of EEI **among everyone in the room** (everyone starts with one paperclip, so no start is compared separately; gradebook CSV) |
 | Strategic adaptability | 20% | Net-worth change over the 5 days after each shock vs the cohort median, plus credit for pivoting (telemetry) |
 | Metacognitive reflection | 40% | Your rubric below, on the written debrief |
-| Peer market engagement | 10% | Completed peer swaps inside the fair-value band, minus flagged attempts |
+| Peer market engagement | 10% | Completed peer swaps inside the fair-value band that moved real value (the game counts three a day at most and one per partner a day, so trading paperclips back and forth earns nothing), minus flagged attempts (a flag means the deal was out of the band on the values the player could see, never a refusal made on a crate's hidden truth) |
 
 The dashboard pre-fills the 60 automated points. The **Export gradebook CSV** button uses pseudonymous Founder IDs and aliases only; map them to students through your LMS roster (students share their Founder ID and alias with you, for example by pasting it into the assignment).
 

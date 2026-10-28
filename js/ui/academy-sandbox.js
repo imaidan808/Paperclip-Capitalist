@@ -198,13 +198,13 @@ export function rewardPlan(mission, { done = false, skipped = false } = {}) {
 export function applyRewards(game, plan, info, makeProgress) {
   const s = game.s, xp0 = s.xp;
   if (plan.xp) game.xp(plan.xp);
-  if (plan.points) s.points += plan.points;
+  const granted = plan.points ? game.grantPoints(plan.points) : { points: 0, xp: 0 }; // the engine banks a point only if a skill can still take it, and pays the rest as XP
   const prog = makeProgress(game), fresh = [];
   for (const id of plan.codex) if (prog.unlockCodex(id, game.day)) fresh.push(id);
   const m = prog.m;
   m.mission ||= {};
   m.mission[info.id] = { day: game.day, tries: info.tries ?? 1, skipped: !!info.skipped };
-  return { xp: s.xp - xp0, points: plan.points, newCodex: fresh, knownCodex: plan.codex.filter((id) => !fresh.includes(id)) };
+  return { xp: s.xp - xp0, points: granted.points, newCodex: fresh, knownCodex: plan.codex.filter((id) => !fresh.includes(id)) };
 }
 /** Lessons played before a real run exists keep their rewards here until the run starts (main.js hands them over with claimPending). */
 export function readPending(store) {

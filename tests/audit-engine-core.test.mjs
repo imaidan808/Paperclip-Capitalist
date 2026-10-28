@@ -168,7 +168,7 @@ test('a pioneer-band sale that lost money is not a pioneer sale, and does not pa
   assert.ok(!prog.m.a['a-pioneer']?.done, 'no pioneer achievement for a loss');
 });
 
-test('pioneer and herd are never reported on a sale that did not pay; a sale that did pay keeps its niche label [F5]', () => {
+test('pioneer is never reported on a sale that did not pay; a sale made in the herd is a herd sale, whatever it paid [F5, repair round]', () => {
   const sale = (herd, budget, need) => {
     const g = mk([], 7);
     g.env.cohort = { counts: () => ({ total: 30, byBuyer: herd ? { student: 30 } : {} }) }; // a crowd selling to this buyer, or a busy class where nobody does
@@ -176,7 +176,7 @@ test('pioneer and herd are never reported on a sale that did not pay; a sale tha
     const r = g.pitch(a.id, l.id); return { r, e: evs.find((x) => x.type === 'pitch') };
   };
   const herdLoss = sale(true, 1e9, null), pioneerLoss = sale(false, 0.05, null);
-  assert.equal(herdLoss.r.ci.band.id, 'herd'); assert.ok(herdLoss.e.gain < 0, 'sold into the herd at a loss: ' + herdLoss.e.gain); assert.equal(herdLoss.e.outcome, 'flat'); assert.equal(herdLoss.r.outcome, 'flat');
+  assert.equal(herdLoss.r.ci.band.id, 'herd'); assert.ok(herdLoss.e.gain < 0, 'sold into the herd at a loss: ' + herdLoss.e.gain); assert.equal(herdLoss.e.outcome, 'herd', 'the loss in the herd is the lesson, so it keeps the herd label'); assert.equal(herdLoss.r.outcome, 'herd');
   assert.equal(pioneerLoss.r.ci.band.id, 'pioneer'); assert.ok(pioneerLoss.e.gain < 0); assert.equal(pioneerLoss.e.outcome, 'flat');
   const herdWin = sale(true, 1e9, 'paper'), pioneerWin = sale(false, 1e9, 'paper'); // an urgent buyer who needs it pays well even in the herd
   assert.equal(herdWin.r.ci.band.id, 'herd'); assert.ok(herdWin.e.gain > 0.02, '' + herdWin.e.gain); assert.equal(herdWin.e.outcome, 'herd');
@@ -275,7 +275,7 @@ test('a contract pays exactly its days whatever hour it is signed, and frees its
       const g = desk([], 3); g.s.cash = 1e6;
       g.advanceTo(signHour); assert.equal(g.acquireClient('smb').ok, true);
       g.advanceTo(signHour + 30 * 24 + 48);
-      return g.s.ledger.filter((e) => e.type === 'client' && /contract ended/.test(e.text)).map((e) => e.amt + CLIENTS.smb.cac);
+      return g.s.ledger.filter((e) => e.type === 'client' && /contract ended/.test(e.text)).map((e) => e.earned); // the closing row is a memo: the income was booked day by day, the CAC at signing
     };
     const day = CLIENTS.smb.perDay * (1 - ZONES[5].tax * 1);
     for (const h of [24, 25, 36, 47, 48]) { const e = earned(h); assert.equal(e.length, 1, 'hour ' + h); near(e[0], 30 * day, 1.5); }
@@ -404,7 +404,7 @@ test('the forecast a manager shows is what its next cycles pay: it does not satu
     const b = bestLane(g, z), h = g.hirePipeline('broker', z, { cls: b.cls, buyer: b.buyer, alloc: 1e12 });
     assert.equal(h.ok, true); const p = h.pipe;
     const f0 = g.forecast(p), cap = g.pipeCap(p), nets = [];
-    for (let i = 0; i < 24 * 12; i++) { const n = p.cycles; g.stepHour(); if (p.cycles > n) nets.push(g.s.ledger.filter((e) => e.type === 'pipe').at(-1)); }
+    for (let i = 0; i < 24 * 20; i++) { const n = p.cycles; g.stepHour(); if (p.cycles > n) nets.push(g.s.ledger.filter((e) => e.type === 'pipe').at(-1)); }
     assert.ok(nets.length >= 6, 'cycles ran: ' + nets.length);
     for (const r of nets) { assert.ok(r.cm > 1, `district ${z}: cycle cm ${r.cm} (a lone manager is not a herd of one)`); assert.ok(r.amt > 0, `district ${z}: a cycle lost money`); rel(r.amt / cap, f0.net / f0.alloc, 0.02); }
     assert.ok(g.s.niche.filter((n) => n[4] === p.id).length >= 1, 'its cycles are logged against the pipeline');
@@ -414,7 +414,7 @@ test('the forecast a manager shows is what its next cycles pay: it does not satu
 test('a manager does not crowd itself, but you and your other managers do [E3]', () => {
   const g = desk2(30, false); g.s.cash = 1e12;
   const b = bestLane(g, 5), h = g.hirePipeline('broker', 5, { cls: b.cls, buyer: b.buyer, alloc: 1e12 }); const p = h.pipe;
-  for (let i = 0; i < 24 * 4; i++) g.stepHour();
+  for (let i = 0; i < 24 * 8; i++) g.stepHour();
   assert.ok(p.cycles >= 2);
   const mine = g.cmFor(5, b.cls, b.buyer, p.id), seen = g.cmFor(5, b.cls, b.buyer);
   assert.ok(mine.cm > seen.cm && mine.vN === 0 && seen.vN >= 1, `with its own cycles left out ${mine.cm.toFixed(2)}, with them ${seen.cm.toFixed(2)}`);

@@ -768,10 +768,11 @@ test('offers disclose the truth: what leaves for a classmate is worth what it tr
   A.s.assets.find((a) => a.id === flawed.id).belief = { quality: 0.9, fakeProb: 0.1, confidence: 0.5 };
   // the described value of both is the same as the real thing's, but a fake dressed as a real crate is blocked by the 40% guardrail
   const blocked = A.createOffer({ to: 'BBB', giveIds: [fake.id], want: { assets: [want], cash: 0 } });
-  assert.equal(blocked.ok, false); assert.match(blocked.msg, /Extreme Asymmetric Premium/);
+  assert.equal(blocked.ok, false); assert.equal(blocked.msg, 'This crate cannot be traded at that price.'); assert.equal(blocked.chk, undefined);
+  assert.ok(!A.out.some((m) => m.t === 'flag'), 'a refusal made on a hidden truth does not reach the instructor: the owner did nothing wrong');
   assert.ok(A.s.assets.some((a) => a.id === fake.id), 'and it stays with its owner');
-  // a flawed crate goes out at its true quality
-  const cash = Math.round(A.val(flawed) * 0.7 * 100) / 100;
+  // a flawed crate goes out at its true quality (its owner prices it by what they believe, 0.9: the guardrail does not read the truth out to them)
+  const cash = Math.round(A.val(flawed) * 0.9 * 100) / 100;
   const off = A.createOffer({ to: 'BBB', giveIds: [flawed.id], giveCash: 0, want: { assets: [], cash } });
   assert.ok(off.ok, off.msg);
   const sent = off.offer.give.assets[0];

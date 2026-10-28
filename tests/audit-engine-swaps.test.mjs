@@ -288,14 +288,22 @@ test('L2, L11: a reply that lists the crate twice delivers it once', () => {
 
 test('L2: a delivery that carries a hidden truth or odd numbers arrives as a plain, known crate with real numbers', () => {
   const { A, B, scrap, offer } = swap();
-  const sent = { ...B.pub(scrap), truth: { fake: true, q: 1 }, belief: { quality: 1 }, quality: 'high', wear: Infinity, basis: 1e12 };
+  const sent = { ...B.pub(scrap), truth: { fake: false, q: 0.9 }, belief: { quality: 1 }, quality: 'high', wear: Infinity, basis: 1e12 };
   const r = A.finalizeOffer(offer.id, { assets: [sent], cash: 0 });
   assert.ok(r.ok, r.msg);
   const got = A.s.assets.find((x) => x.from === 'p2p');
   assert.equal(got.truth, undefined); assert.equal(got.belief, undefined); assert.equal(got.known, true);
   assert.equal(bad(A.s), null, 'no NaN or Infinity got into the save');
-  near(got.quality, FAKE_VALUE, 1e-9); // the truth was folded into the worth, the crate was not laundered into a genuine one
+  near(got.quality, 0.9, 1e-9); // the truth was folded into the worth, never launders a worse crate into a better one
   assert.ok(got.basis < 100, 'and the basis is what it is worth, not what the sender said');
+});
+
+test('L2, repair round: a counterfeit sent against a genuine description is not that swap: nothing is credited and the escrow stays held', () => {
+  const { A, B, scrap, offer } = swap();
+  const fake = { ...B.pub(scrap), truth: { fake: true, q: 1 } };
+  const r = A.finalizeOffer(offer.id, { assets: [fake], cash: 0 });
+  assert.equal(r.ok, false); assert.match(r.msg, /not what the offer asked for/);
+  assert.equal(A.s.escrow.length, 1, 'the escrow is still held'); assert.ok(!A.s.assets.some((x) => x.from === 'p2p'));
 });
 
 // ------------------------------------------------------------------------------------------------------------------------- royalties (L3, shared contract d, g)
@@ -328,9 +336,11 @@ test('L3: a royalty is credited only for a stream this founder was promised, at 
   near(P.s.cash - base, 150, 1e-9); // five days of thirty: the promise and not a cent more
   assert.equal(P.receiveRoyalty(30, offer.id).ok, false);
   assert.equal(bad(P.s), null);
-  const Q = royaltyPair(); // a stream that has run out pays nothing more
+  const Q = royaltyPair(); // after the end date, what the payer still owes (arrears) is taken, up to the promise and not a cent more
   Q.B.s.hour = Q.B.s.royalties.find((r) => r.dir === 'recv').until + 3;
-  assert.equal(Q.B.receiveRoyalty(1, Q.offer.id).ok, false);
+  const q0 = Q.B.s.cash;
+  for (let i = 0; i < 20; i++) Q.B.receiveRoyalty(30, Q.offer.id);
+  near(Q.B.s.cash - q0, 150, 1e-9); assert.equal(Q.B.receiveRoyalty(1, Q.offer.id).ok, false, 'paid up');
   const R = royaltyPair(); // while it runs, a payment a little late (an hour or two) still counts
   R.B.s.hour = R.B.s.royalties.find((r) => r.dir === 'recv').until + 1;
   assert.equal(R.B.receiveRoyalty(30, R.offer.id).ok, true);
@@ -397,7 +407,8 @@ test('S5: the guardrail values what comes in where the receiver would hold it: a
   const price = Math.round(RICH.pub(van).fmv * 100) / 100;
   // POOR proposes: cash for the crate in district 7
   const mine = POOR.createOffer({ to: 'RICH', giveCash: price, want: { assets: [RICH.pub(van)], cash: 0 } });
-  assert.equal(mine.ok, false); assert.match(mine.msg, /Extreme Asymmetric/);
+  assert.equal(mine.ok, false); assert.match(mine.msg, /once what you ask for lands/);
+  assert.ok(!POOR.out.some((m) => m.t === 'flag'), 'a bid for a crate from a district the buyer cannot enter is not misconduct: no flag for the instructor');
   // RICH proposes the same to POOR: the recipient is protected too
   const offer = { id: 'Ov', from: 'RICH', fromHandle: 'R', to: 'POOR', give: { assets: [{ ...RICH.pub(van) }], cash: 0, royalty: null }, want: { assets: [], cash: price }, skills: {} };
   const cash = POOR.s.cash, nw = POOR.netWorth();
@@ -422,7 +433,7 @@ test('F2, S11: the acceptor\'s crate is checked and sent as it truly is: a count
   const off = A.createOffer({ to: 'BBB', giveCash: Math.round(B.pub(fake).fmv * 100) / 100, want: { assets: [B.pub(fake)], cash: 0 } });
   assert.ok(off.ok, 'A sees only the description: ' + off.msg);
   const acc = B.acceptOffer(off.offer);
-  assert.equal(acc.ok, false, 'B\'s own check values the crate as it truly is'); assert.match(acc.msg, /Blocked/);
+  assert.equal(acc.ok, false, 'B\'s own check values the crate as it truly is'); assert.equal(acc.msg, 'This crate cannot be traded at that price.', 'and says nothing about what it truly is worth'); assert.equal(acc.chk, undefined);
   assert.ok(B.s.assets.some((x) => x.id === fake.id), 'and the crate stays with B');
   // one its owner has proven fake sells at its true worth, and the delivery carries that worth in its quality, not as a secret
   const known = put(B, 'bike', 1, { truth: { q: 1, fake: true, defects: [] }, known: true });

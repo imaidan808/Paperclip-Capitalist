@@ -2,7 +2,7 @@
 //   1. real peers (their published 48h niche counts),
 //   2. a deterministic ghost cohort that behaves like a herd (so solo play still teaches saturation),
 //   3. synthetic students, used for the instructor demo and as leaderboard filler.
-import { ASSETS, BUYERS, ZONES, ZONE_IDS, PERK_IDS, PERKS, TOTAL_DAYS, TOTAL_HOURS, MIL, EEI_FLOOR_DEFAULT } from './config.js';
+import { ASSETS, BUYERS, ZONES, ZONE_IDS, PERK_IDS, PERKS, TOTAL_DAYS, TOTAL_HOURS, MIL, EEI_FLOOR_DEFAULT, SWAPS } from './config.js';
 import { fitOf, nicheKey, gini, demandOf, truthMult } from './market.js';
 import { hash, hash01 } from './rng.js';
 
@@ -200,13 +200,14 @@ const ID = /^[\w.@:-]{1,48}$/;
 /** A pid, offer id or asset id: short, no spaces or markup. */
 export const cleanId = (x) => (typeof x === 'string' && ID.test(x) ? x : null);
 
-// What an honest founder publishes (the heuristic bot, which plays far more than a person, over 90 days): at most 51 niches, 11 sales in one, 143 in all.
-// The caps are a few times that. A classmate who lies is still believed up to them, so one cheat can crowd a niche by a fifth at most, not pin it: the real fix
-// is the one docs/ARCHITECTURE.md plans, aggregating the counts on a server.
-export const NICHE_CAP = 120;   // keys a classmate may publish
-export const NICHE_MAX = 60;    // one niche's 48-hour count
-export const NICHE_TOTAL = 400; // all of a classmate's counts together
-export const NW_LIMIT = 1e10;   // an honest strong run ends near $3e7 (docs/BALANCE.md); nothing a classmate reports is believed beyond this
+// What an honest founder publishes (the heuristic bot, which plays far more than a person, with managers, over 90 days; measured again after the managers were mended, 2026-10-28): at most 46 niches, 8 sales in one
+// in a 48-hour window, 102 in all. The caps are a half again as much. A classmate who lies is still believed up to them, which is not nothing: one cheat claiming 12 sales in a lane takes a pioneer niche (Cm 3.1)
+// to a crowded one (about 0.9), though no longer to the 0.40 floor that a claim of 60 pinned it to (claims of 20 to 60 all did). Everyone's counts are believed alike: weighting them down (a square root, say) would
+// understate a real class crowding a lane, which is what the game teaches. The real fix is the one docs/ARCHITECTURE.md plans, aggregating the counts on a server.
+export const NICHE_CAP = 80;    // keys a classmate may publish
+export const NICHE_MAX = 12;    // one niche's 48-hour count
+export const NICHE_TOTAL = 150; // all of a classmate's counts together
+export const NW_LIMIT = 1e8;    // an honest strong run ends near $2e7 at the very most (docs/BALANCE.md: the 90th percentile is $2.3e6); nothing a classmate reports is believed beyond this
 export const INV_CAP = 24;      // what publicSnapshot() shares
 export const SIDE_CAP = 12;     // crates on one side of a swap
 
@@ -268,7 +269,7 @@ export function cleanSnap(raw, from) {
     eei: num(raw.eei, -1e12, 1e12, 0), // what they say; the session recomputes it unless the run is over
     zones: int(raw.zones, 1, ZONE_IDS.length, 1), pipelines: int(raw.pipelines, 0, 999, 0), lastAutoHour: num(raw.lastAutoHour, 0, TOTAL_HOURS, 0), autoEligible: raw.autoEligible === true,
     niches: cleanNiches(raw.niches), cmAvg: num(raw.cmAvg, 0, 5, 0),
-    trades, p2p: Math.min(int(raw.p2p, 0, 1e5, 0), trades), // a swap is a trade: more swaps than trades is not possible
+    trades, p2p: Math.min(int(raw.p2p, 0, 1e5, 0), trades, SWAPS.perDay * (Math.floor(num(raw.hour, 0, TOTAL_HOURS, 0) / 24) + 1)), // a swap is a trade, and the engine counts at most SWAPS.perDay a day: more is not possible
     flags: { insolvent: fl.insolvent === true, exited: fl.exited === true, over: fl.over === true },
     shockLog, hoursPlayed: num(raw.hoursPlayed, 0, TOTAL_DAYS, 0), auditFail: int(raw.auditFail, 0, 999, 0),
     inventory: (Array.isArray(raw.inventory) ? raw.inventory : []).slice(0, INV_CAP).map(cleanPub).filter(Boolean),

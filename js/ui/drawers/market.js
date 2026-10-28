@@ -204,7 +204,7 @@ function lotsHTML(ctx, z) {
       worth = `<p class="small">Worth about <span class="mono">${m(described)}</span> if it is as described: ${gap >= 0 ? `<b class="green"><span aria-hidden="true">${UP}</span> +${m(gap)}</b>` : `<b class="red"><span aria-hidden="true">${DOWN}</span> -${m(-gap)}</b>`} against the price.</p>`;
     }
     const bel = beliefLine(ctx, l.belief);
-    const read = bel ? `<p class="small${bel.fake ? ' mkt-warnline' : ''}">${bel.fake ? '<span aria-hidden="true">⚠</span> ' : ''}${e(bel.text)}</p>` : '<p class="small mute">Not inspected yet.</p>';
+    const read = bel ? `<p class="small${bel.fake ? ' mkt-warnline' : ''}">${bel.fake ? '<span aria-hidden="true">⚠</span> ' : ''}${e(bel.text)}</p>` : (l.probed && l.probed.length ? `<p class="small mute">Looked over with ${l.probed.length} check${l.probed.length === 1 ? '' : 's'}, no conclusion yet.</p>` : '<p class="small mute">Not inspected yet.</p>');
     const warn = l.warn ? '<p class="callout bad small"><b><span aria-hidden="true">⚠</span> Counterfeit warning.</b> Your street sense says this one is a fake. Walk away.</p>' : '';
     const short = s.cash < l.price, noRoom = full;
     const reason = noRoom ? 'Storage is full here.' : short ? `You need ${m(l.price - s.cash)} more.` : '';
@@ -260,7 +260,7 @@ export function matrixHTML(ctx) {
   const myP = o.want.assets.reduce((a, w) => a + g.projected(w), 0), theirP = o.give.assets.reduce((a, w) => a + g.projected(w, x.partner.skills), 0);
   const side = (arr, cash) => `${arr.map((a) => `${ASSETS[a.cls].icon} ${e(nameOf(a.cls, a.cond))}`).join('<br>') || '<span class="mute">no crates</span>'}${cash ? `<br>${m(cash)} cash` : ''}`;
   return `<table class="tbl mkt-matrix"><caption class="sr">Your proposed swap</caption><thead><tr><th scope="col">Part of the deal</th><th scope="col">You give</th><th scope="col">${e(x.partner.handle)} gives</th></tr></thead><tbody>
-    <tr><th scope="row">Crates and cash</th><td>${side(o.give.assets, o.give.cash)}${o.give.royalty ? `<br>${m(o.give.royalty.perDay)} a day for ${o.give.royalty.days} days` : ''}</td><td>${side(o.want.assets, o.want.cash)}</td></tr>
+    <tr><th scope="row">Crates and cash</th><td>${side(o.give.assets, o.give.cash)}${o.give.royalty ? `<br>${m(o.give.royalty.perDay)} a day for ${o.give.royalty.days} days<br><span class="small mute">Counted at no more than a tenth of what you are worth. A promise is a debt: what you cannot pay stays owed.</span>` : ''}</td><td>${side(o.want.assets, o.want.cash)}</td></tr>
     <tr><th scope="row">Fair value</th><td class="mono">${m(chk.va)}</td><td class="mono">${m(chk.vb)}</td></tr>
     <tr><th scope="row">Worth in the new owner's hands</th><td class="mono">${m(myP)} <span class="tiny mute">to you</span></td><td class="mono">${m(theirP)} <span class="tiny mute">to them</span></td></tr>
     <tr><th scope="row">Fair-value check</th><td colspan="2"><span class="chip ${chk.ok ? 'good' : 'bad'}"><span aria-hidden="true">${chk.ok ? '✓' : '✕'}</span> ${(chk.variance * 100).toFixed(1)}% apart, ${chk.ok ? 'inside' : 'outside'} the safe limit of ${FMV_BAND * 100}%</span>

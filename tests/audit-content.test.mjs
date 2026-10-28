@@ -432,12 +432,12 @@ test('Codex: manager cycles, margins and overhead are the forecast of a real bro
   g.s.skills.ops = 1; // the Codex works the examples at Ops 1 (a level of Ops trims overhead 4%)
   const f = (kind, extra = {}, alloc = 1000) => { const p = { kind, zone: 5, alloc, level: 1, cycles: 0, ...extra }; return { len: g.cycleLen(p), ...g.forecast(p) }; };
   const b = f('broker'), l = f('logistics'), s = f('student');
-  assert.deepEqual([b.len, l.len, s.len], [36, 29, 47]);
+  assert.deepEqual([b.len, l.len, s.len], [60, 48, 78]);
   assert.deepEqual([b, l, s].map((x) => (x.margin * 100).toFixed(2)), ['7.82', '6.33', '5.98'], '6.8%, 5.5% and 5.2% a cycle x the 1.15 every district shares');
-  assert.deepEqual([b.margin * 24 / b.len, l.margin * 24 / l.len, s.margin * 24 / s.len].map((x) => (x * 100).toFixed(2)), ['5.21', '5.23', '3.05']);
+  assert.deepEqual([b.margin * 24 / b.len, l.margin * 24 / l.len, s.margin * 24 / s.len].map((x) => (x * 100).toFixed(2)), ['3.13', '3.16', '1.84']);
   const v = prose('cash-flow-velocity');
-  for (const x of ['36 hours', '29 hours', '47 hours', '7.82%', '6.33%', '5.98%', '5.21%', '5.23%', '3.05%', '1.65x', '1.66x', '1.35x', '42%']) assert.ok(v.includes(x), x);
-  for (const [m, h, grown] of [[0.0782, 36, 1.65], [0.0633, 29, 1.66], [0.0598, 47, 1.35]]) assert.equal(Math.pow(1 + m, 240 / h).toFixed(2), grown.toFixed(2), 'ten days of reinvesting');
+  for (const x of ['60 hours', '48 hours', '78 hours', '7.82%', '6.33%', '5.98%', '3.13%', '3.16%', '1.84%', '1.35x', '1.36x', '1.20x', '42%']) assert.ok(v.includes(x), x);
+  for (const [m, h, grown] of [[0.0782, 60, 1.35], [0.0633, 48, 1.36], [0.0598, 78, 1.20]]) assert.equal(Math.pow(1 + m, 240 / h).toFixed(2), grown.toFixed(2), 'ten days of reinvesting');
   assert.equal(Math.round((1 - (s.margin * 24 / s.len) / (l.margin * 24 / l.len)) * 100), 42, 'the Student earns 42% less a day than the Logistics Agent');
   // economies of scale
   const e = prose('economies-of-scale');
@@ -449,9 +449,9 @@ test('Codex: manager cycles, margins and overhead are the forecast of a real bro
   for (const x of ['$7.82', '$6.20', '$1.62', '$39.10', '$7.00', '$32.10', '$78.20', '$8.00', '$70.20', '7.5%', '0.3%']) assert.ok(e.includes(x), x);
   const big = f('broker', {}, 5000); assert.equal(((big.gross - big.overhead) / big.alloc * 100).toFixed(1), '7.0', 'the manager\'s own cap stops a level-1 Broker at $1,000, so the $5,000 line is the formula, not a forecast');
   assert.equal((((0.068 * 1.15 * 5000) - (6 + 0.002 * 5000)) / 5000 * 100).toFixed(1), '7.5');
-  // the game's own cycle base is 80 hours, not the 48 of PIPE_RULES that nothing reads
-  assert.equal(ECON.cycleBase, 80);
-  assert.ok(codex('opportunity-cost').example.setup.includes('80 / 2.2 = 36 hours'));
+  // the game's own cycle base is 132 hours (it was 80 until the late game was seen to run away, docs/BALANCE.md), not the 48 of PIPE_RULES that nothing reads
+  assert.equal(ECON.cycleBase, 132);
+  assert.ok(codex('opportunity-cost').example.setup.includes('132 / 2.2 = 60 hours'));
   // the example's manager nets what a real Broker nets on $1,000 per cycle, after fee, tax, royalty and overhead
   assert.equal(usd(b.net), '$31.52'); assert.ok(codex('opportunity-cost').example.setup.includes('$31.50'));
   assert.ok(prose('opportunity-cost').includes('earns $63') && prose('opportunity-cost').includes('-$43') && prose('opportunity-cost').includes('lost $43'));
@@ -462,13 +462,13 @@ test('Codex: the tariff lock slows international lanes, which is all the example
   const g = new Game({ perks: [], seed: 1 });
   const domestic = { kind: 'broker', zone: 5, alloc: 1000, level: 1 }, intl = { ...domestic, channel: 'intl' };
   assert.equal(Math.round(g.forecast(intl).margin * 1e4), 1017, '7.82% x 1.3');
-  assert.equal(g.cycleLen(intl), 36, 'before the lock');
+  assert.equal(g.cycleLen(intl), 60, 'before the lock');
   g.s.hour = 74 * 24 + 1; g._m = null; // day 75, the lock is on
-  assert.equal(g.cycleLen(intl), 132); assert.equal(g.cycleLen(domestic), 36);
+  assert.equal(g.cycleLen(intl), 156); assert.equal(g.cycleLen(domestic), 60);
   const t = prose('tariffs');
-  for (const x of ['7.82%', '10.17%', '6.78%', '5.21%', '132 hours', '1.85%', '30%', '65%', '96 hours']) assert.ok(t.includes(x), x);
+  for (const x of ['7.82%', '10.17%', '4.07%', '3.13%', '156 hours', '1.56%', '30%', '50%', '96 hours']) assert.ok(t.includes(x), x);
   const day = (p) => g.forecast(p).margin * 24 / g.cycleLen(p);
-  assert.equal((day(domestic) * 100).toFixed(2), '5.21'); assert.equal((day(intl) * 100).toFixed(2), '1.85'); assert.equal(Math.round((day(intl) / day(domestic) - 1) * 100), -65, 'from 30% ahead to 65% behind');
+  assert.equal((day(domestic) * 100).toFixed(2), '3.13'); assert.equal((day(intl) * 100).toFixed(2), '1.56'); assert.equal(Math.round((day(intl) / day(domestic) - 1) * 100), -50, 'from 30% ahead to 50% behind');
   assert.equal(g.mods().repair, 1.45, 'repairs cost 45% more'); assert.ok(codex('tariffs').body[0].includes('outside the four starter districts'));
   const gg = rich(); const a = crate(gg, 'sedan', 3, { cond: 'broken' }); gg.s.hour = 74 * 24 + 1; gg._m = null; const inStarter = gg.repairMultFor(3); assert.equal(inStarter, (1 - (ZONES[3].rules.repair || 0)) * gg.P.repairMult * gg.B.repairMult, 'the lock does not touch the starter districts');
   void a;

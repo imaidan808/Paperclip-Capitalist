@@ -207,7 +207,7 @@ const MARGIN = 1.15; // ECON.margin 1 x PIPE_RULES.marginBase 1.15: one number f
 const PITCH = 0.6 * 0.92; // the pitch baseline x ECON.pitchK
 const BROKER = 0.068 * MARGIN, LOGISTICS = 0.055 * MARGIN, STUDENT = 0.052 * MARGIN; // margin per cycle before costs: the manager's margin x the margin every district shares
 const penAt = (pitches) => { const A = ASSETS.pen; return A.base * idx(A.sc * demandOf(A, 1) * (1 - 0.4 * Math.min(1, pitches / 220)) - A.dep); }; // the pen's price with this many pitches in the last two days (the crowd factor of Market Saturation)
-const cyc = (speed, k) => Math.round(80 / speed * k); // cycle hours
+const cyc = (speed, k) => Math.round(132 / speed * k); // cycle hours (ECON.cycleBase 132)
 const restore = (ops) => 0.5 + 0.5 * Math.min(1, (ops - 1) / 4);
 const nonDis = (hard, cash, debt, avg, mult, fails = 0) => { const prem = avg * mult * Math.max(0.3, 1 - 0.15 * fails); return cash + hard + prem - 0.12 * (hard + prem) - debt; };
 const survive3 = 1 - (0.95 ** 20 + 20 * 0.05 * 0.95 ** 19 + choose(20, 2) * 0.05 ** 2 * 0.95 ** 18);
@@ -237,7 +237,7 @@ const FACTS = {
   'urgency-premium': [usd(6 * PITCH * cm(0, 0)), usd(6 * 0.775 * PITCH * cm(0, 0)), Math.round(6 * PITCH * cm(0, 0) / 0.05) + 'x', cm(0, 0).toFixed(3), usd(fmvAt('paperclip', 1))],
   'margin': [pct(3 / 9), pct(3 / 12), pct(2.7 / 12)],
   'depreciation': (() => { const g = fmvAt('gadgets', 5), k = 1 - ASSETS.gadgets.dep * 0.002; return [k ** 30 < 1 ? (k ** 30).toFixed(3) : '', usd(g, 0), usd(g * k ** 30, 0), usd(g - g * k ** 30, 0), usd((g - g * k ** 30) / 30, 0), ((1 - ASSETS.textbooks.dep * 0.002) ** 30).toFixed(3), pct(1 - (1 - ASSETS.textbooks.dep * 0.002) ** 30, 0), ((1 - ASSETS.pen.dep * 0.002) ** 30).toFixed(3), pct(1 - (1 - ASSETS.pen.dep * 0.002) ** 30, 0), Math.round(k ** 30 * 100) + '%', Math.round(0.998 ** 30 * 100) + '%']; })(),
-  'opportunity-cost': [cyc(2.2, 1) + ' hours', 72 / cyc(2.2, 1) + ' cycles', usd(2 * 31.5, 0), '-' + usd(2 * 31.5 - 20, 0), '$31.50'], // a level-1 Broker on $1,000 nets $31.52 a cycle after fee, tax, royalty and overhead (audit-content.test.mjs reads it off the engine)
+  'opportunity-cost': [cyc(2.2, 1) + ' hours', 120 / cyc(2.2, 1) + ' cycles', usd(2 * 31.5, 0), '-' + usd(2 * 31.5 - 20, 0), '$31.50'], // a level-1 Broker on $1,000 nets $31.52 a cycle after fee, tax, royalty and overhead (audit-content.test.mjs reads it off the engine)
   'cash-flow-velocity': [(BROKER * 100).toFixed(2) + '%', (LOGISTICS * 100).toFixed(2) + '%', (STUDENT * 100).toFixed(2) + '%', (BROKER * 100 * 24 / cyc(2.2, 1)).toFixed(2) + '%', (LOGISTICS * 100 * 24 / cyc(2.2, 0.8)).toFixed(2) + '%', (STUDENT * 100 * 24 / cyc(2.2, 1.3)).toFixed(2) + '%', ((1 + BROKER) ** (240 / cyc(2.2, 1))).toFixed(2) + 'x', ((1 + LOGISTICS) ** (240 / cyc(2.2, 0.8))).toFixed(2) + 'x', ((1 + STUDENT) ** (240 / cyc(2.2, 1.3))).toFixed(2) + 'x', pct(1 - (STUDENT * 24 / cyc(2.2, 1.3)) / (LOGISTICS * 24 / cyc(2.2, 0.8)), 0)],
   'compounding': [usd(50 * 1.03 ** 24), usd(50 * 1.03 ** 48), usd(50 * 0.03), usd(1.5 * 48, 0), usd(50 * 1.015 ** 48), usd(50 * 1.03 ** 48, 0), usd(50 * 1.015 ** 48, 0)],
   'interest-and-compounding': [usd(2000 * 0.12 / 30), usd(2000 * (1 + 0.12 / 30) ** 30, 0), usd(2000 * 1.12 ** 3, 0), usd(2000 * (1 + 0.12 / 30) ** 90, 0), usd(2000 * 1.12 ** 3 - 2000, 0), usd(2000 * (1 + 0.12 / 30) ** 90 - 2000, 0)],
@@ -247,7 +247,7 @@ const FACTS = {
   'cac-vs-ltv': [usd(52.25 * 30), (52.25 * 30 / 450).toFixed(1), (450 / 52.25).toFixed(1) + ' days', usd(450 * 0.84, 0), (52.25 * 30 / (450 * 0.84)).toFixed(1), (450 * 0.84 / 52.25).toFixed(1) + ' days', (52.25 * 30 / 1200).toFixed(1)],
   'sla': [usd(2 * 380, 0), usd(2 * 2 * 380, 0), usd(32 * 361, 0)],
   'audit-compliance': [usd(0.85 * 5000, 0), usd(0.85 * 5000 - 1200, 0), pct(0.15 ** 3)],
-  'tariffs': [(BROKER * 1.3 * 100).toFixed(2) + '%', (BROKER * 1.3 * 100 * 24 / 36).toFixed(2) + '%', (BROKER * 100 * 24 / 36).toFixed(2) + '%', (BROKER * 1.3 * 100 * 24 / 132).toFixed(2) + '%', pct((BROKER * 1.3 * 24 / 36) / (BROKER * 24 / 36) - 1, 0), pct(1 - (BROKER * 1.3 * 24 / 132) / (BROKER * 24 / 36), 0)],
+  'tariffs': [(BROKER * 1.3 * 100).toFixed(2) + '%', (BROKER * 1.3 * 100 * 24 / 60).toFixed(2) + '%', (BROKER * 100 * 24 / 60).toFixed(2) + '%', (BROKER * 1.3 * 100 * 24 / 156).toFixed(2) + '%', pct((BROKER * 1.3 * 24 / 60) / (BROKER * 24 / 60) - 1, 0), pct(1 - (BROKER * 1.3 * 24 / 156) / (BROKER * 24 / 60), 0)],
   'credit-crunch': [usd(2000 * 0.07 / 30), usd(2000 * 0.13 / 30), usd((2000 * 0.13 / 30 - 2000 * 0.07 / 30) * 15, 0), Math.round((0.13 / 0.07 - 1) * 100) + '%'],
   'demand-shock': (() => { const g = fmvAt('gadgets', 5), A = ASSETS.gadgets, surge = A.base * idx(A.sc * demandOf(A, 5) * 5 - A.dep); return [usd(g), String(A.sc * demandOf(A, 5) * 5 - A.dep), usd(surge, 0), pct(surge / g - 1, 0), usd(g * 0.5), usd(surge - g, 0), usd(g * 0.5, 0), usd(surge - g * 0.5, 0)]; })(),
   'diversification': [pct(0.3 / Math.sqrt(4), 0), usd(0.3 * 4000, 0), usd(0.15 * 4000, 0)],

@@ -356,7 +356,7 @@ export const CODEX = [
     summary: "Arbitrage profits from a price gap between two places. At global scale the gap must beat every cost, and trading closes it.",
     body: [
       "The Global Exchange links world markets, and the same asset sells at different prices in different districts. Buying where it is cheap and selling where it is dear is arbitrage. It is the oldest trade there is, and it only works while the gap lasts.",
-      "A gap is not a profit. You must subtract freight, the destination's tax, selling fees, customs and the time your money spends in transit. Every trade also narrows the gap: your buying pushes up the price at the source, your selling pushes it down at the destination, and so do the same moves by the rest of the class.",
+      "A gap is not a profit. You must subtract freight, the destination's tax, selling fees, customs and the time your money spends in transit. Every trade also narrows the gap: your selling pushes the price down at the destination, and so does the same move by the rest of the class, until the gap is gone.",
       "At scale three limits bite: the size of the gap, the depth of the pool you can sell into, and how fast others close the gap.",
     ],
     formula: "profit = sell price - buy price - freight - fees; break-even sell/buy ratio = (1 + freight rate) / (1 - district tax - fee rate)",
@@ -567,9 +567,9 @@ export const CODEX = [
     ],
     formula: "economic profit = accounting profit - best alternative return over the same time",
     example: {
-      setup: "You have $1,000. Option A is a lot that will make $20 profit in 3 days. Option B is a Broker lane in Metro Hub: its cycle is 80 / 2.2 = 36 hours and it nets about $31.50 per cycle on $1,000, after fees, tax, royalty and overhead.",
+      setup: "You have $1,000. Option A is a lot that will make $20 profit in 5 days. Option B is a Broker lane in Metro Hub: its cycle is 132 / 2.2 = 60 hours and it nets about $31.50 per cycle on $1,000, after fees, tax, royalty and overhead.",
       steps: [
-        "In 3 days (72 hours) the manager completes 72 / 36 = 2 cycles and earns $63.",
+        "In 5 days (120 hours) the manager completes 120 / 60 = 2 cycles and earns $63.",
         "Lot profit: $20. Economic profit: $20 - $63 = -$43.",
       ],
       result: "The lot showed a $20 profit and still lost $43 against the next best use of the money. Choose it only if it buys something else you value, such as a pioneer niche.",
@@ -584,17 +584,17 @@ export const CODEX = [
     summary: "How fast your money goes round the loop. A thin return on a short cycle often beats a fat one on a long cycle.",
     body: [
       "Return per cycle is only half the story. The other half is how many cycles fit in a day. Cash flow velocity is the rate at which your capital completes the loop of buy, improve, sell and reinvest. Two lanes with different margins and different cycle lengths should be compared on return per day, not per cycle.",
-      "District speed matters (a higher district number means faster cycles), and so do your Growth skill and the manager you hire. Speed also protects you: money that returns in 29 hours is exposed to fewer surprises than money tied up for 47.",
+      "District speed matters (a higher district number means faster cycles), and so do your Growth skill and the manager you hire. Speed also protects you: money that returns in 48 hours is exposed to fewer surprises than money tied up for 78.",
       "None of this says margin is unimportant. It says you cannot judge a deal until you know how long it holds your cash.",
     ],
     formula: "return per day = return per cycle x (24 / cycle hours)",
     example: {
-      setup: "In Metro Hub (speed 2.2) a cycle takes 80 / 2.2 = 36 hours for a Broker, 0.8 times as long for a Logistics Agent (29 hours) and 1.3 times as long for a Supply-Chain Student (47 hours). At a balanced Creativity Multiplier their margins, before costs, are 7.82%, 6.33% and 5.98% per cycle.",
+      setup: "In Metro Hub (speed 2.2) a cycle takes 132 / 2.2 = 60 hours for a Broker, 0.8 times as long for a Logistics Agent (48 hours) and 1.3 times as long for a Supply-Chain Student (78 hours). At a balanced Creativity Multiplier their margins, before costs, are 7.82%, 6.33% and 5.98% per cycle.",
       steps: [
-        "Broker: 7.82% x 24 / 36 = 5.21% a day.",
-        "Logistics Agent: 6.33% x 24 / 29 = 5.23% a day.",
-        "Student: 5.98% x 24 / 47 = 3.05% a day.",
-        "Reinvested for 10 days: 1.0782^(240 / 36) = 1.65x, 1.0633^(240 / 29) = 1.66x and 1.0598^(240 / 47) = 1.35x.",
+        "Broker: 7.82% x 24 / 60 = 3.13% a day.",
+        "Logistics Agent: 6.33% x 24 / 48 = 3.16% a day.",
+        "Student: 5.98% x 24 / 78 = 1.84% a day.",
+        "Reinvested for 10 days: 1.0782^(240 / 60) = 1.35x, 1.0633^(240 / 48) = 1.36x and 1.0598^(240 / 78) = 1.20x.",
       ],
       result: "The Logistics Agent's thinner margin earns the same per day as the Broker's, and the Student's almost identical margin earns 42% less per day, because it turns over so much more slowly.",
     },
@@ -797,13 +797,13 @@ export const CODEX = [
     ],
     formula: "return per day = gross margin x 24 / cycle hours; the lock adds 96 hours to every international cycle",
     example: {
-      setup: "A Broker in Metro Hub runs one international lane (margin x1.3) and one domestic lane. Gross margin is 7.82% per cycle at a balanced Creativity Multiplier, and a domestic cycle takes 36 hours.",
+      setup: "A Broker in Metro Hub runs one international lane (margin x1.3) and one domestic lane. Gross margin is 7.82% per cycle at a balanced Creativity Multiplier, and a domestic cycle takes 60 hours.",
       steps: [
-        "Before the lock, international: 7.82% x 1.3 = 10.17% per cycle, and 10.17% x 24 / 36 = 6.78% a day. Domestic: 7.82% x 24 / 36 = 5.21% a day.",
-        "The lock adds 96 hours: the international cycle takes 132 hours, so 10.17% x 24 / 132 = 1.85% a day.",
-        "Domestic still pays 5.21% a day.",
+        "Before the lock, international: 7.82% x 1.3 = 10.17% per cycle, and 10.17% x 24 / 60 = 4.07% a day. Domestic: 7.82% x 24 / 60 = 3.13% a day.",
+        "The lock adds 96 hours: the international cycle takes 156 hours, so 10.17% x 24 / 156 = 1.56% a day.",
+        "Domestic still pays 3.13% a day.",
       ],
-      result: "The lock turned the better lane into the worse one: from 30% ahead of the domestic lane to 65% behind it. Moving it to a domestic channel the day the warning arrives keeps the income.",
+      result: "The lock turned the better lane into the worse one: from 30% ahead of the domestic lane to 50% behind it. Moving it to a domestic channel the day the warning arrives keeps the income.",
     },
     mistakes: ["Assuming a tariff only hurts the other side.", "Thinking a lock only costs you the days: the slow lane earns less per day.", "Staying on international lanes through a lock."],
     tryIt: "When a tariff warning arrives, open the Crew drawer and compare your international lanes with a domestic one before the first cycle runs slow.",

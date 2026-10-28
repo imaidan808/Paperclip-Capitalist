@@ -1,10 +1,12 @@
 // A heuristic player that drives the same public API as the UI (Quick play: no Deal Room). Used for pacing calibration and end-to-end tests.
 import { Game } from '../js/engine.js';
 import { Cohort } from '../js/cohort.js';
-import { ASSETS, ZONES, UPGRADES, CLIENTS } from '../js/config.js';
+import { ASSETS, ZONES, UPGRADES, CLIENTS, PERKS } from '../js/config.js';
 import { restoreQuality } from '../js/market.js';
 
 export function makeGame(perks = [], specialty = 'ops', seed = 7) {
+  const unknown = perks.filter((id) => !Object.prototype.hasOwnProperty.call(PERKS, id)); // the engine drops an id it does not know and starts the game without that Background: a typo here once made a whole table of results about the wrong build
+  if (unknown.length) throw new Error('Unknown Background id: ' + unknown.join(', '));
   const g = new Game({ perks, specialty, seed, handle: 'Bot', pid: 'BOT-1' });
   g.env.cohort = new Cohort({ seed: 'test', ghosts: 36 });
   return g;

@@ -6,10 +6,14 @@
 //  - every socket has an error handler, a message rate and a size limit; a frame that is binary, oversize, not JSON or of an unknown type is dropped;
 //  - `from` and `role` are stamped by the relay from the connection, never taken from the message. The first connection to claim the instructor's seat in a
 //    room holds it (its own pid can always reclaim it); only the instructor can send clock, inject or rewind;
+//  - a pid is not an identity (every message carries the sender's, so every classmate knows everyone's): a connection must bring `key`, a secret its browser keeps beside the pid. The first connection
+//    to use a pid in a room binds the pid to a hash of its key (nothing else is kept of it, and it is never logged), and a later connection for that pid with another key, or none, is refused. That is
+//    what stops a classmate from taking the instructor's seat, or a classmate's name and snapshot, by connecting with the pid they have read off the wire;
 //  - a message with a `to` goes to that founder alone, not to the whole room;
 //  - snapshots are kept only for sockets still connected, are size-capped, and are replayed with their age; rooms, clients, bytes are all bounded.
 import { WebSocketServer } from 'ws';
 import { createServer } from 'node:http';
+import { createHash } from 'node:crypto';
 
 const env = (k, d) => (process.env[k] != null && process.env[k] !== '' && Number.isFinite(+process.env[k]) ? +process.env[k] : d);
 const PORT = env('PORT', 8787);
@@ -24,8 +28,9 @@ const EMPTY_MS = env('EMPTY_MS', 10 * 60 * 1000);          // an empty room is f
 const TYPES = new Set(['hello', 'bye', 'snap', 'clock', 'inject', 'rewind', 'rewound', 'offer', 'accept', 'confirm', 'abort', 'reject', 'deliver', 'decline', 'withdraw', 'royalty', 'flag']);
 const INSTRUCTOR_ONLY = new Set(['clock', 'inject', 'rewind']);
 const PID = /^[A-Za-z0-9_.-]{1,24}$/;
+const KEY = /^[A-Za-z0-9_-]{16,64}$/;
 
-const rooms = new Map(); // code -> { clients:Set, snaps:Map<pid,{ws,text,at}>, clock:{text,at}|null, seat:{pid,ws,left}|null, gone:Timer|null }
+const rooms = new Map(); // code -> { clients:Set, snaps:Map<pid,{ws,text,at}>, clock:{text,at}|null, seat:{pid,ws,left}|null, gone:Timer|null, keys:Map<pid,hash> }
 let snapBytes = 0;
 
 const http = createServer((req, res) => {
@@ -34,8 +39,11 @@ const http = createServer((req, res) => {
   res.end('Paperclip Capitalist relay. Connect with a WebSocket: ?room=CODE&pid=ID\n');
 });
 const wss = new WebSocketServer({ server: http, maxPayload: MAX_MSG });
-http.on('error', (e) => console.error('relay: http error:', e.message));
-wss.on('error', (e) => console.error('relay: socket server error:', e.message));
+// An error before the relay is listening (the port is taken, or not ours to use) is the end of this process, with a failing exit code so `npm start` and a service manager see it. Afterwards a fault is logged and the classes go on.
+let listening = false;
+const fatal = (what) => (e) => { console.error(`relay: ${what} error:`, e.message); if (!listening) process.exit(1); };
+http.on('error', fatal('http'));
+wss.on('error', fatal('socket server'));
 // the last resort: a fault in one message must not end every class on this relay
 process.on('uncaughtException', (e) => console.error('relay: uncaught:', e && e.message));
 process.on('unhandledRejection', (e) => console.error('relay: unhandled:', e && e.message));
@@ -66,12 +74,22 @@ wss.on('connection', (ws, req) => {
   const code = (u.searchParams.get('room') || '').toUpperCase();
   const pid = u.searchParams.get('pid') || '';
   if (!/^[A-Z0-9]{3,12}$/.test(code) || !PID.test(pid)) { ws.close(1008, 'bad room'); return; }
+  const key = u.searchParams.get('key') || '';
+  if (!KEY.test(key)) { ws.close(1008, 'identity key required'); return; } // before a room is made for it
   let room = rooms.get(code);
   if (!room) {
     if (rooms.size >= MAX_ROOMS) { ws.close(1013, 'relay full'); return; }
-    rooms.set(code, (room = { clients: new Set(), snaps: new Map(), clock: null, seat: null, gone: null }));
+    rooms.set(code, (room = { clients: new Set(), snaps: new Map(), clock: null, seat: null, gone: null, keys: new Map() }));
   }
   if (room.clients.size >= MAX_ROOM) { ws.close(1013, 'room full'); return; }
+  // who this is: the pid is the name, the key is the proof (see the head of the file). Refused before anything else is done for the connection: it is not told about the room, and it joins nothing.
+  const proof = createHash('sha256').update(code + '|' + pid + '|' + key).digest('hex');
+  const bound = room.keys.get(pid);
+  if (bound !== undefined && bound !== proof) { ws.close(1008, 'identity does not match'); return; }
+  if (bound === undefined) {
+    if (room.keys.size >= MAX_ROOM * 2) { ws.close(1013, 'room full'); return; }
+    room.keys.set(pid, proof);
+  }
   if (room.gone) { clearTimeout(room.gone); room.gone = null; }
   const now = Date.now();
   ws.pid = pid; ws.alive = true; ws.tokens = BURST; ws.refilled = now; ws.strikes = 0;
@@ -120,4 +138,4 @@ setInterval(() => {
   for (const ws of wss.clients) { if (!ws.alive) { ws.terminate(); continue; } ws.alive = false; try { ws.ping(); } catch { /* gone */ } }
 }, 20000).unref();
 
-http.listen(PORT, () => console.log(`relay listening on :${http.address().port}`));
+http.listen(PORT, () => { listening = true; console.log(`relay listening on :${http.address().port}`); });

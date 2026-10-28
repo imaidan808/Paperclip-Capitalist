@@ -40,6 +40,12 @@ export class Progress {
   }
   onEvent(evt) {
     const m = this.m;
+    // A swap with the Practice Partner teaches the mechanics and pays nothing (the engine says so with `npc`): it opens the Codex page, as reading the lesson would, but completes no quest, achievement or bounty,
+    // which would be spent for nothing and could then never be earned from a real classmate.
+    if (evt.npc === true) {
+      for (const c of CODEX) if (m.cx[c.id] == null && typeof c.unlock === 'object' && evt.type === c.unlock.event && matchEvent(c.unlock.match, evt)) this.unlockCodex(c.id, evt.day);
+      return;
+    }
     for (const q of QUESTS) {
       if (!this.active(q)) continue;
       const d = goalDelta(q.goal, evt);

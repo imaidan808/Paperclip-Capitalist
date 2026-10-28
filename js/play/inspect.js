@@ -56,7 +56,13 @@ export function create(p = {}) {
   const s = { kind: 'inspect', seed, truth, budget: clamp(Math.floor(num(p.budget, 0)), 0, 30), spent: 0, accuracy: clamp(num(p.accuracy, 0.5), 0, 1), fakeDetect: !!p.fakeDetect,
     used: [], evidence: [], found: [], warning: null, done: false, sd: clamp(num(pr.sd, 0.17), 0.02, 1), sd0: clamp(num(pr.sd, 0.17), 0.02, 1), d2: 0, odds: Math.log(fake0 / (1 - fake0)),
     belief: { quality: num(pr.quality, 0.9), fakeProb: fake0 }, opening: OPEN[seed % OPEN.length] };
-  if (s.fakeDetect) { // the Second-Chance gut feeling: a free, noisy counterfeit signal before any probe
+  if (s.fakeDetect && typeof p.warned === 'boolean') {
+    // The Second-Chance gut feeling as the game sets it for a real lot: the SAME flag the Market shows (a flagged lot is a counterfeit for certain, and the street sense misses `warnMiss` of the counterfeits),
+    // not a second roll of the dice. A flag is as good as proof; a quiet lot is only a lot it did not catch: the odds fall by exactly the chance that a counterfeit would have gone unflagged.
+    const d = 1.5, miss = clamp(num(p.warnMiss, 0.1), 0.01, 1);
+    s.odds = p.warned ? Math.log(99) : s.odds + Math.log(miss); s.d2 = d * d;
+    s.warning = p.warned ? 'Your street sense snags on this one: something about it feels counterfeit.' : 'Your street sense stays quiet. That is no proof: it misses some.';
+  } else if (s.fakeDetect) { // a free, noisy counterfeit signal before any probe (when no lot's own flag is given)
     const d = 1.5, llr = d * ((truth.fake ? d / 2 : -d / 2) + gauss(seed, 'warn'));
     s.odds += llr; s.d2 = d * d;
     s.warning = llr > 1 ? 'Your street sense snags on this one: something about it feels counterfeit.'

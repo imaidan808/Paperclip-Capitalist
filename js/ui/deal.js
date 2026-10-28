@@ -276,7 +276,7 @@ export function createSession(ctx, run) {
     const v = run.view(); if (!v) return { ok: false };
     const t = ses.reduced() ? tForPos(ses.slider, v.step, v.seed) : performance.now() - ses.t0;
     stopDial(); ses.t0 = 0;
-    return run.act({ type: 'stop', t });
+    return run.act(ses.reduced() ? { type: 'stop', t, slider: true } : { type: 'stop', t }); // the slider is a par option (play/repair.js SLIDER_CAP), not a free perfect score
   };
 
   const say = (r) => { if (r && r.ok && r.say) ctx.announce?.(r.say); };

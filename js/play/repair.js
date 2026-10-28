@@ -6,6 +6,9 @@
 import { hash, step } from '../rng.js';
 
 export const STEPS = 3;
+/** The most a stop made with the reduced-motion slider can score. The slider is the accessible way to play the dial (nothing is timing-only), and a marker you can set to the middle of a zone you can see would
+ *  score a flawless 0.98 on every step, better than the best timed play (an Expert at Ops 1 averages 0.86 to 0.92): so it is a par option, at the level of a good but not a perfect hand. */
+export const SLIDER_CAP = 0.85;
 export const STEP_NAMES = ['Strip and clean', 'Fit and tighten', 'Final tune'];
 const clamp = (x, a, b) => Math.min(b, Math.max(a, x));
 const num = (x, d) => (Number.isFinite(x) ? x : d);
@@ -47,7 +50,7 @@ export function act(s, a) {
   let steps, say;
   if (a.type === 'stop') {
     if (!Number.isFinite(a.t) || a.t < 0) return bad;
-    const x = pos(a.t, s.step, s.seed), acc = accuracy(x, s.half);
+    const x = pos(a.t, s.step, s.seed), acc = Math.min(accuracy(x, s.half), a.slider === true ? SLIDER_CAP : 1);
     steps = [...s.steps, { acc, careful: false }];
     const line = LINES.find(([lo]) => acc >= lo)[1], side = acc >= 0.9 ? '' : x < 0.5 ? ' You stopped it on the low side.' : ' You stopped it on the high side.';
     say = `${STEP_NAMES[s.step]}: ${line}${side}`;
