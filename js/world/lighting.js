@@ -125,6 +125,14 @@ export class Lighting {
     this.size = ''; this.src = { day: null, night: null, shafts: null };           // the layers as painted, a quarter of the window each
     this.big = { day: null, night: null, shafts: null, mix: null }; this.bigKey = ''; this.used = { day: 0, night: 0, shafts: 0, mix: 0 }; // the same, stretched to the canvas's own pixels (made on first use)
     this.mixG = null; this.mixAt = '';                                              // the crossfade's context, and the step it shows
+    this.perFrame = Infinity; this.allow = Infinity;                                 // how many full-size layers one `ambient` may make or remake (the world sets 1: see `layer`)
+  }
+
+  /** Let go of every layer (the screen is leaving): the next `ambient` bakes and stretches what it needs again. */
+  release() {
+    this.size = ''; this.bigKey = ''; this.mixG = null; this.mixAt = '';
+    this.src.day = this.src.night = this.src.shafts = null;
+    this.big.day = this.big.night = this.big.shafts = this.big.mix = null;
   }
 
   /** Paint (or repaint) the ambient layers for a window size. Cheap and rare: only a resize asks for it. */
@@ -141,20 +149,30 @@ export class Lighting {
    * it is wanted (a daylit sky never makes the night's) and let go after IDLE_MS unused, so the memory is what the light of the moment needs.
    */
   layer(name, pw, ph, t) {
-    const key = pw + 'x' + ph; if (key !== this.bigKey) { this.big.day = this.big.night = this.big.shafts = this.big.mix = null; this.mixG = null; this.bigKey = key; }
-    this.used[name] = t;
+    this.fit(pw, ph); this.used[name] = t;
     let c = this.big[name]; if (c) return c;
+    if (this.allow < 1) return null; // this frame has made its one full-size layer already: the caller does without until the next frame
     const src = this.src[name], s = src && surface(pw, ph); if (!s) return null;
+    this.allow--;
     s.g.drawImage(src, 0, 0, pw, ph);
     return (this.big[name] = s.c);
   }
+  /** Layers are for one canvas size; a different size drops them all. */
+  fit(pw, ph) {
+    const key = pw + 'x' + ph; if (key !== this.bigKey) { this.big.day = this.big.night = this.big.shafts = this.big.mix = null; this.mixG = null; this.bigKey = key; }
+  }
 
-  /** Day and night crossfaded into one bitmap at `dq` and `nq` steps of STEPS: made when the step changes, stamped in one go every frame between. */
+  /**
+   * Day and night crossfaded into one bitmap at `dq` and `nq` steps of STEPS: made when the step changes, stamped in one go every frame between. A step that cannot be made
+   * this frame (the frame's one full-size layer has gone to the night's, say) leaves the step before on show, a twenty-fourth away, and is made on the next; null while there is none yet.
+   */
   mix(pw, ph, dq, nq, t) {
-    const a = this.layer('day', pw, ph, t), b = this.layer('night', pw, ph, t); if (!a || !b) return null;
-    this.used.mix = t;
+    this.fit(pw, ph); const at = dq + '|' + nq;
+    if (this.big.mix && this.mixAt === at) { this.used.mix = t; return this.big.mix; }
+    const a = this.layer('day', pw, ph, t), b = this.layer('night', pw, ph, t);
+    if (!a || !b || this.allow < 1) return this.big.mix;
+    this.allow--; this.used.mix = t;
     if (!this.big.mix) { const s = surface(pw, ph); if (!s) return null; this.big.mix = s.c; this.mixG = s.g; this.mixAt = ''; }
-    const at = dq + '|' + nq; if (this.mixAt === at) return this.big.mix;
     const g = this.mixG; g.clearRect(0, 0, pw, ph);
     g.globalAlpha = dq / STEPS; g.drawImage(a, 0, 0); g.globalAlpha = nq / STEPS; g.drawImage(b, 0, 0); g.globalAlpha = 1;
     this.mixAt = at; return this.big.mix;
@@ -172,7 +190,7 @@ export class Lighting {
    */
   ambient(ctx, w) {
     const { W, H, night, dusk } = w, calm = w.reduced(), lite = w.lite, crunch = w.env.crunch, t = w.t;
-    this.bake(W, H);
+    this.bake(W, H); this.allow = this.perFrame;
     if (!this.src.day) { ctx.save(); this.vignetteDirect(ctx, W, H, night); ctx.restore(); return; } // no offscreen surfaces: one gradient, as the world always drew
     const pw = w.cv?.width || Math.ceil(W * (w.dpr || 1)), ph = w.cv?.height || Math.ceil(H * (w.dpr || 1));
     ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); // device pixels: every layer is a one-to-one copy of the canvas's own size
@@ -180,7 +198,11 @@ export class Lighting {
       const L = this.layer(night > 0.5 ? 'night' : 'day', pw, ph, t); if (L) { ctx.globalAlpha = clamp(0.8 + night * 0.2, 0, 1); ctx.drawImage(L, 0, 0); }
     } else {
       const day = (1 - night) * (crunch ? 0.6 : 1), nt = clamp(night + (crunch ? 0.3 : 0), 0, 1);
-      if (day > 0.02 && nt > 0.02) { const L = this.mix(pw, ph, Math.round(day * STEPS), Math.round(nt * STEPS), t); if (L) ctx.drawImage(L, 0, 0); } // the dusk and dawn, and rain by day: both airs at once, one stamp
+      if (day > 0.02 && nt > 0.02) { // the dusk and dawn, and rain by day: both airs at once, one stamp
+        const L = this.mix(pw, ph, Math.round(day * STEPS), Math.round(nt * STEPS), t);
+        if (L) ctx.drawImage(L, 0, 0);
+        else { const D = this.layer('day', pw, ph, t); if (D) { ctx.globalAlpha = day; ctx.drawImage(D, 0, 0); } } // not made yet (one full-size layer a frame): the day's air alone, for a frame or two
+      }
       else if (day > 0.02) { const L = this.layer('day', pw, ph, t); if (L) { ctx.globalAlpha = day; ctx.drawImage(L, 0, 0); } }
       else if (nt > 0.02) { const L = this.layer('night', pw, ph, t); if (L) { ctx.globalAlpha = nt; ctx.drawImage(L, 0, 0); } }
       if (dusk > 0.05 && !calm && !crunch) { const L = this.layer('shafts', pw, ph, t); if (L) { ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = dusk * 0.38; ctx.drawImage(L, 0, 0); ctx.globalCompositeOperation = 'source-over'; } }

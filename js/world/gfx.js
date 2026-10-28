@@ -14,6 +14,24 @@ export function surface(w, h) {
   } catch { return null; }
 }
 
+let SOFT = null;
+/**
+ * Is this browser drawing canvases on the CPU? A browser whose GPU is off, blocklisted or only emulated (SwiftShader, llvmpipe) refuses a WebGL context asked for with
+ * `failIfMajorPerformanceCaveat` (or has no WebGL at all), and a 2D canvas is on the CPU on exactly those machines. Every full-window layer of the world is then a pass over all
+ * its pixels on the main thread, so the world caps its pixel density there (see World.targetDpr). Asked once, and only ever on a high-density screen, so a 1x screen pays
+ * nothing; no document (the Node tests) answers false. The probe context is released at once.
+ */
+export function softwareRaster() {
+  if (SOFT !== null) return SOFT;
+  SOFT = false;
+  try {
+    if (typeof document === 'undefined') return SOFT;
+    const c = document.createElement('canvas'), gl = c.getContext?.('webgl', { failIfMajorPerformanceCaveat: true });
+    if (gl) gl.getExtension?.('WEBGL_lose_context')?.loseContext(); else SOFT = typeof c.getContext === 'function';
+  } catch { /* a browser that throws on the probe: capable */ }
+  return SOFT;
+}
+
 /** A small least-recently-used map: sprites live here so the draw loop looks them up instead of drawing them again. */
 export class Cache {
   constructor(max = 256) { this.max = max; this.m = new Map(); }

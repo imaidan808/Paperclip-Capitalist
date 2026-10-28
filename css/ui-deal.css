@@ -6,7 +6,7 @@
    Section map: frame, stepper, scene (cast, bubble), stage panel, Read, Pitch, Close, Bid, Fix, scoreboard and foot (one dock), result, big screens, tablets, small screens, reduced motion. */
 
 /* ---- frame */
-dialog.deal { width: min(68rem, 96vw); padding: .9rem 1.1rem 1rem; scroll-padding-bottom: 8rem; animation: deal-in .24s cubic-bezier(.2, .9, .3, 1) both; }
+dialog.deal { width: min(68rem, 96vw); padding: .9rem 1.1rem 1rem; scroll-padding: .5rem .5rem 8rem; /* a control scrolled into view rests inside the edge, ring and all; the foot is the dock's height */ animation: deal-in .24s cubic-bezier(.2, .9, .3, 1) both; }
 dialog.deal::backdrop { background: rgba(3, 6, 12, .78); }
 @keyframes deal-in { from { opacity: 0; transform: translateY(14px) scale(.985); } to { opacity: 1; transform: none; } }
 .deal { display: grid; gap: .75rem; font-variant-numeric: tabular-nums; }
@@ -199,6 +199,9 @@ dialog.deal::backdrop { background: rgba(3, 6, 12, .78); }
 .why ul { margin: 0; padding-left: 1.1rem; font-size: .86rem; display: grid; gap: .25rem; } .reveal p { margin: 0; font-size: .88rem; }
 .xp { margin: 0; color: var(--gold); font-size: 1.05rem; animation: rise .4s .7s ease-out both; }
 .lesson { margin: 0; padding: .6rem .8rem; border-left: 4px solid var(--violet); background: var(--panel); font-size: .9rem; animation: rise .4s .95s ease-out both; }
+/* The result's Continue rides the foot of the sheet, as the other stages' buttons do: on a tablet or a phone the result is taller than the window, and the one thing to do next
+   must not be below the fold. It stands on the panel's colour, so the lines scrolling under it are covered; in the panel's side gutters there is nothing to cover. */
+.deal-result > .row:last-child { position: sticky; bottom: 0; z-index: 1; padding: .5rem 0 .1rem; background: var(--panel2); border-top: 1px dashed var(--line); }
 /* a result that has been staged once (js/ui/deal.js: .revealed) is drawn at rest when the sheet is painted again */
 .deal-result.revealed :is(.rtitle, .rhead, .rlines, .rver, .vbar i, .xp, .lesson) { animation: none; }
 

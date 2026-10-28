@@ -72,6 +72,19 @@
 .ac-cxcard { border-left: 4px solid var(--cyan); display: grid; grid-template-columns: 2.4rem 1fr; gap: .6rem; align-items: start; padding: .5rem .7rem; background: var(--panel2); border: 1px solid var(--line); }
 .ac-cxi { font-size: 1.6rem; text-align: center; line-height: 1.2; } .ac-cxcard p { margin: .1rem 0 0; }
 
+/* A phone on its side is 390px tall or less: the card is tightened (a smaller emblem and title, a shorter scene, the ten step markers on one line) until "Start the lesson"
+   is on the first screen, as it is in a taller window. */
+@media (max-height: 520px) {
+  .ac-intro { margin: .5rem auto; gap: .35rem; padding-block: .7rem; }
+  .ac-intro h1 { gap: .55rem; font-size: 1.3rem; }
+  .ac-intro h1 > span[aria-hidden="true"] { width: 2.5rem; height: 2.5rem; font-size: 1.5rem; border-radius: 8px; }
+  .ac-scene { margin: 0; padding: .3rem .8rem; font-size: .92rem; line-height: 1.4; }
+  .ac-pips { flex-wrap: nowrap; gap: .3rem; margin: .1rem 0; }
+  .ac-pip { flex: 1 1 0; min-width: 0; max-width: 1.8rem; width: auto; height: 1.6rem; font-size: .72rem; }
+  .ac-pip + .ac-pip::before { width: .3rem; }
+  .ac-intro > .row { gap: .5rem; }
+  .ac-intro > .row .btn { min-height: 2.6rem; }
+}
 @media (max-width: 760px) {
   .ac-coach { width: calc(100vw - 1rem); } .ac-coach-in { max-height: 46vh; }
   .ac-sheet { padding: 1vh .4rem; } .ac-sheet-in { padding: .8rem .85rem 1rem; }

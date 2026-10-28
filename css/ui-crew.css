@@ -8,7 +8,7 @@
 .cr-tabs .btn { display: inline-flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: .15rem .3rem; font-size: .72rem; letter-spacing: .01em; text-transform: uppercase; padding-left: .3rem; padding-right: .3rem; white-space: normal; line-height: 1.2; }
 .cr-tabs .chip { margin-left: 0; padding-left: .35rem; padding-right: .35rem; }
 .cr-tabs .chip { border-color: currentColor; margin-left: .2rem; }
-.cr-sum { display: grid; grid-template-columns: repeat(auto-fit, minmax(5.2rem, 1fr)); gap: .4rem; }
+.cr-sum { display: grid; grid-template-columns: repeat(auto-fit, minmax(6.2rem, 1fr)); gap: .4rem; } /* a tile never narrower than a six-figure sum needs: it wraps to the next row first */
 .cr-sum > div { background: var(--panel2); border: 1px solid var(--line); padding: .3rem .55rem; min-width: 0; }
 .cr-sum small { display: block; font-size: .64rem; text-transform: uppercase; letter-spacing: .08em; color: var(--mute); }
 .cr-sum b { font-size: 1.05rem; overflow-wrap: anywhere; }
@@ -93,8 +93,8 @@
 .crd input[type=range] { min-height: 2.75rem; margin: 0; }
 .crd output { color: var(--gold); font-weight: 700; }
 
+@media (max-width: 480px), (max-height: 520px) { .cr-sum { grid-template-columns: repeat(2, minmax(0, 1fr)); } } /* a phone, or a phone on its side: two and two, so a sum is never squeezed to a break in the middle of its digits */
 @media (max-width: 480px) {
-  .cr-sum { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .cr-nums { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .cr-top { grid-template-columns: auto minmax(0, 1fr); } .cr-top > .chip { grid-column: 1 / -1; justify-self: start; }
 }

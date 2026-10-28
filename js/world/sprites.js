@@ -8,10 +8,15 @@
 // While the zoom is changing (a wheel turn, a camera glide) props are drawn directly and nothing is built, so a gesture never pays for a rebuild; once the scale has
 // rested 90 ms the next frames build what is missing, a few milliseconds' worth a frame (BUILD_MS), and a prop whose turn has not come yet is served by its sprite of
 // the neighbouring night or fog step (or drawn directly if it has none), so a dusk that crosses a bucket never rebuilds the whole district in one frame.
-// Memory is bounded (SPRITE_BUDGET pixels, least recently used go first; the sprite being drawn is never the one to go).
+// A zoom that is still moving (or a sprite whose turn to be built has not come) shows the prop's sprite of the zoom before, scaled by the ratio of the two, in place of drawing the prop
+// again: a scaled copy is one blit, drawing it directly is hundreds of path operations, and the copy is exact again as soon as the zoom rests and its own sprite is built.
+// Memory is bounded (the budget below, least recently used go first; the sprite being drawn is never the one to go).
 // Where there is no canvas (a Node test) drawSprite() answers undefined and the caller draws directly, exactly as before.
 
-export const SPRITE_BUDGET = 22e6;    // pixels across every sprite: about 88 MB of 4-byte pixels
+export const SPRITE_BUDGET = 22e6;    // pixels across every sprite at a pixel density of 1: about 88 MB of 4-byte pixels
+let budget = SPRITE_BUDGET;           // what is allowed now (setSpriteBudget): the same scenery is more pixels at a higher density, so a sharp screen gets more room, not a thrash
+const REUSE_STEPS = Math.round(0.6 * 1024); // a sprite of another zoom stands in for a prop when it is within this many zoom keys (0.6 octave, about 1.5 times) of the one wanted
+const BIG_PX = 2.2e6, BIG_REST_MS = 260;    // a sprite of more pixels than this is built only once the scale has rested this long: it is the one build that could take a frame by itself
 const MAX_SIDE = 3072;                // a sprite wider or taller than this (device pixels) is not cached
 const MOVING_MS = 90;                 // the scale must rest this long before sprites are built
 const PER_PROP = 3;                   // variants kept per prop (zoom, fog or night differ)
@@ -34,8 +39,13 @@ const drop = (e) => { if (ALL.delete(e)) stats.pixels -= e.w * e.h; free(e); };
 const forget = (e) => { const arr = STORE.get(e.p); if (arr) { const i = arr.indexOf(e); if (i >= 0) arr.splice(i, 1); } drop(e); };
 function trim(keep) { // least recently used first, down to 85% of the budget; `keep` (the sprite just built) is never evicted
   const list = [...ALL].sort((a, b) => a.last - b.last);
-  for (const e of list) { if (stats.pixels <= SPRITE_BUDGET * 0.85) break; if (e === keep) continue; forget(e); stats.evicted++; }
+  for (const e of list) { if (stats.pixels <= budget * 0.85) break; if (e === keep) continue; forget(e); stats.evicted++; }
 }
+/**
+ * Size the memory for a pixel density (the world's canvas density): a density of 1 has SPRITE_BUDGET pixels, and the budget grows with the density towards 1.5 times that (a bit over 130 MB),
+ * which holds the working set of one view at 2x (measured: the budget was crossed at every zoom pass, and each pass rebuilt about a hundred sprites it had just dropped).
+ */
+export function setSpriteBudget(dpr = 1) { budget = Math.round(SPRITE_BUDGET * Math.max(1, Math.min(1.5, 1 + (dpr - 1) * 0.7))); }
 /** Forget every sprite (tests, and a quality change that wants a clean slate). */
 export function clearSprites() { for (const e of [...ALL]) forget(e); ALL.clear(); stats.pixels = 0; }
 /** Switch the cache off (every prop draws directly) or back on: for comparisons, tests and a quality setting that would rather not hold the memory. */
@@ -53,9 +63,13 @@ export function spriteBounds(p, layer) {
 /** Change how much building one frame allows, and what counts as a frame (tests; a quality setting that wants sprites spread thinner). Starts a fresh frame. */
 export function setBuildBudget(ms = 3, gapMs = 6, maxMs = 100) { BUILD_MS = ms; GAP_MS = gapMs; MAX_MS = maxMs; winAt = -1e9; lastCall = -1e9; spent = 0; }
 
-/** Is there time left in this frame to build another sprite? A frame is the run of calls with no pause of GAP_MS between them: the ground is drawn before the first prop of every frame. */
-function mayBuild(now, before) {
+/**
+ * Is there time left in this frame to build another sprite? A frame is the run of calls with no pause of GAP_MS between them: the ground is drawn before the first prop of every
+ * frame. The first build of a frame goes ahead whatever it costs (so something is always made), except a big one (`px` pixels), which waits for the scale to have rested.
+ */
+function mayBuild(now, before, px) {
   if (now - before > GAP_MS || now - winAt > MAX_MS) { winAt = now; spent = 0; }
+  if (px > BIG_PX && BUILD_MS < 1e6 && (now - changedAt < BIG_REST_MS || spent > 0)) return false; // (an unlimited building time, as the tests set, is no gate at all)
   return spent < BUILD_MS;
 }
 
@@ -72,26 +86,33 @@ export function drawSprite(ctx, p, env, layer) {
   if (a !== lastA) { lastA = a; changedAt = now; }
   const key = Math.round(Math.log2(a) * ZOOM_STEPS), dq = Math.round((env.dim || 0) * 16), nq = layer.night === false ? 0 : Math.round((env.night || 0) * 8);
   const fl = (env.lite ? 1 : 0) | (env.crunch ? 2 : 0);
-  let arr = STORE.get(p), e = null, near = null;
+  let arr = STORE.get(p), e = null, near = null, other = null;
   if (arr) for (let i = 0; i < arr.length; i++) {
-    const c = arr[i]; if (c.key !== key || c.fl !== fl) continue;
-    if (c.dq === dq && c.nq === nq) { e = c; break; }
-    if (Math.abs(c.dq - dq) <= 2 && Math.abs(c.nq - nq) <= 1 && (!near || c.last > near.last)) near = c; // one step of evening or three of fog off: close enough for a frame or two
+    const c = arr[i]; if (c.fl !== fl) continue;
+    const dk = Math.abs(c.key - key), close = Math.abs(c.dq - dq) <= 2 && Math.abs(c.nq - nq) <= 1; // one step of evening or three of fog off: close enough for a frame or two
+    if (dk === 0) {
+      if (c.dq === dq && c.nq === nq) { e = c; break; }
+      if (close && (!near || c.last > near.last)) near = c;
+    } else if (close && dk <= REUSE_STEPS && (!other || dk < Math.abs(other.key - key))) other = c; // the nearest zoom that has one
   }
   if (e) stats.hits++;
   else {
-    if (now - changedAt < MOVING_MS) { stats.direct++; return undefined; } // the zoom is moving: draw directly, build when it rests
-    if (mayBuild(now, before)) {
-      e = build(ctx, p, env, layer, key, dq, nq, fl);
-      lastCall = performance.now(); spent += lastCall - now;
-      if (!e) return undefined;
-      if (!arr) STORE.set(p, arr = []);
-      if (arr.length >= PER_PROP) { let o = 0; for (let i = 1; i < arr.length; i++) if (arr[i].last < arr[o].last) o = i; const old = arr[o]; arr.splice(o, 1); drop(old); }
-      e.last = ++tick; // recent before anything can be trimmed: the entry just built must not be the least recently used
-      arr.push(e); ALL.add(e); stats.pixels += e.w * e.h; stats.builds++;
-      if (stats.pixels > SPRITE_BUDGET) trim(e);
-    } else if (near) { e = near; stats.stale++; }
-    else { stats.direct++; stats.deferred++; return undefined; } // nothing to show yet and no time to build: this frame draws the prop directly
+    if (now - changedAt < MOVING_MS) { // the zoom is moving: nothing is built; the sprite of the zoom before stands in, scaled, else the prop is drawn directly
+      if (other) { e = other; stats.stale++; } else { stats.direct++; return undefined; }
+    } else {
+      const B = spriteBounds(p, layer), px = Math.ceil((B.x1 - B.x0) * Math.pow(2, key / ZOOM_STEPS)) * Math.ceil((B.y1 - B.y0) * Math.pow(2, key / ZOOM_STEPS));
+      if (mayBuild(now, before, px)) {
+        e = build(ctx, p, env, layer, key, dq, nq, fl);
+        lastCall = performance.now(); spent += lastCall - now;
+        if (!e) return undefined;
+        if (!arr) STORE.set(p, arr = []);
+        if (arr.length >= PER_PROP) { let o = 0; for (let i = 1; i < arr.length; i++) if (arr[i].last < arr[o].last) o = i; const old = arr[o]; arr.splice(o, 1); drop(old); }
+        e.last = ++tick; // recent before anything can be trimmed: the entry just built must not be the least recently used
+        arr.push(e); ALL.add(e); stats.pixels += e.w * e.h; stats.builds++;
+        if (stats.pixels > budget) trim(e);
+      } else if (near || other) { e = near || other; stats.stale++; }
+      else { stats.direct++; stats.deferred++; return undefined; } // nothing to show yet and no time to build: this frame draws the prop directly
+    }
   }
   e.last = ++tick;
   // blit on whole device pixels in identity space (a sprite on a half pixel would be a blurred copy of itself). The sprite was built at this very scale, so it is copied

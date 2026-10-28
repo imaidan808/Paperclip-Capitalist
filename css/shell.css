@@ -125,7 +125,7 @@ body:has(.stage) { background-image: none; overflow: hidden; overscroll-behavior
 .dk .ic { font-size: 1.35rem; line-height: 1.2; }
 .dk .lb { font-size: var(--t-micro); line-height: var(--lh-tight); text-transform: uppercase; letter-spacing: .06em; color: var(--mute); }
 .dk[aria-pressed="true"] .lb { color: var(--gold); }
-.dk .bd { position: absolute; top: -.1rem; right: .1rem; min-width: 1.15rem; height: 1.15rem; padding: 0 .28rem; display: grid; place-items: center; background: var(--red); color: #2a0503; font-size: var(--t-micro); font-weight: 800; line-height: 1; border-radius: var(--r-pill); box-shadow: 0 0 0 2px var(--panel); }
+.dk .bd { position: absolute; top: -.1rem; left: min(calc(50% + .5rem), calc(100% - 1.4rem)); /* on the icon's corner, not the button's: a stretched button (a tablet's dock) would send the badge away from its icon */ min-width: 1.15rem; height: 1.15rem; padding: 0 .28rem; display: grid; place-items: center; background: var(--red); color: #2a0503; font-size: var(--t-micro); font-weight: 800; line-height: 1; border-radius: var(--r-pill); box-shadow: 0 0 0 2px var(--panel); }
 
 /* ---- drawer ---- */
 .drawer { position: absolute; z-index: var(--z-drawer); top: var(--hud-h); right: var(--edge-r); bottom: calc(var(--dock-h) + var(--sp-2)); width: var(--drawer-w); display: flex; flex-direction: column; background: var(--panel); border: var(--bw) solid var(--line); border-radius: var(--r-2); box-shadow: var(--elev-2); overflow: hidden; animation: dslide .22s ease-out; }
@@ -135,7 +135,11 @@ body:has(.stage) { background-image: none; overflow: hidden; overscroll-behavior
 .dh { position: relative; display: flex; align-items: center; justify-content: space-between; gap: var(--sp-2); padding: var(--sp-2) var(--sp-3); background: var(--plate); border-bottom: 1px dashed var(--line); }
 .dh h2 { margin: 0; min-width: 0; overflow-wrap: anywhere; } .dh h2:focus { outline: none; }
 /* --db-pad is the body's own padding, published so a panel's sticky bar can bleed out to the drawer's edges by exactly that much (ui-quests.css .qs-nav, ui-travel.css .tv-shiprow). */
-.db { --db-pad: var(--sp-3); flex: 1; min-height: 0; overflow: auto; overscroll-behavior: contain; padding: var(--db-pad); display: grid; gap: .7rem; align-content: start; }
+.db { --db-pad: var(--sp-3); flex: 1; min-height: 0; overflow: auto; overscroll-behavior: contain; padding: var(--db-pad); display: grid; gap: .7rem; align-content: start;
+  scroll-padding: var(--sp-2); } /* a control scrolled into view by Tab rests this far inside the edge, so its focus ring is never cut by the clip */
+/* ...and clear of a bar that stands over the scroller's edge: the Quests jump bar at the top, the Travel ship row at the foot (Focus Not Obscured) */
+.db:has(.qs-nav) { scroll-padding-top: 4.4rem; }
+.db:has(.tv-shiprow) { scroll-padding-bottom: 5.6rem; }
 .db .sect > h3 { display: flex; justify-content: space-between; gap: var(--sp-2); border-bottom: 1px dashed var(--line); padding-bottom: var(--sp-1); margin-bottom: var(--sp-2); text-transform: uppercase; letter-spacing: .06em; font-size: var(--t-sm); color: var(--mute); }
 .dtabs { display: flex; gap: .3rem; flex-wrap: wrap; } .dtabs .btn[aria-pressed="true"] { background: var(--gold); color: var(--on-gold); border-color: var(--gold); }
 .overlay { position: absolute; inset: 0; z-index: var(--z-overlay); pointer-events: none; } .overlay > * { pointer-events: auto; }
@@ -149,6 +153,9 @@ body:has(.stage) { background-image: none; overflow: hidden; overscroll-behavior
 body:has(.stage) #toasts { --toast-r: var(--edge-r); --toast-max: 26rem; left: auto; right: var(--toast-r); bottom: calc(var(--dock-h) + var(--tick-h) + var(--sp-3)); justify-items: end;
   width: min(var(--toast-max), calc(100vw - var(--toast-r) - var(--edge-l) - var(--cam-w) - var(--sp-2))); }
 body:has(.stage[data-drawer]:not([data-drawer=""])) #toasts { --toast-r: max(var(--edge-r), min(calc(var(--edge-r) + var(--drawer-w) + var(--sp-2)), calc(100vw - var(--edge-l) - var(--cam-w) - var(--sp-2) - 14rem))); }
+
+/* a side drawer with too little room beside it for a toast (the window is small, or the text big): the newest toast only; shell.js sets data-toasts on the stage */
+body:has(.stage[data-toasts="tight"]) #toasts .toast:nth-last-child(n+2) { display: none; }
 
 /* ---- touch: every control the shell owns is 44px (--target) on a coarse pointer; the world's buttons grow with it ---- */
 @media (pointer: coarse) {

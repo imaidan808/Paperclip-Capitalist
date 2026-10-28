@@ -270,7 +270,21 @@ export function createSession(ctx, run) {
   const el = () => ctx.dlg.el;
   const live = !!(doc && el() && el().querySelector);
 
+  // Where the keyboard was in the sheet before a paint (the control's name and its place among the sheet's controls), so a paint that removes or disables that control can
+  // put the cursor on its neighbour instead of letting it fall to the page (a used probe is disabled, the Pitch button goes once the pitch is made, the anchor row is replaced).
+  const fids = (d) => [...d.querySelectorAll('.deal-stage [data-fid], .deal-foot [data-fid]')];
+  const noteFocus = () => { const d = el(), a = doc.activeElement; ses.was = a && d.contains(a) && a.dataset && a.dataset.fid ? { fid: a.dataset.fid, at: fids(d).indexOf(a) } : null; };
+  const keepFocus = (d) => {
+    const a = doc.activeElement, lost = !a || a === doc.body || a === d || !d.contains(a) || a.disabled; // setHTML has already put it back on a control that still stands
+    if (!lost || !ses.was) { ses.was = null; return; }
+    const ok = fids(d).filter((x) => !x.disabled && x.getAttribute('aria-disabled') !== 'true'), same = ok.find((x) => x.dataset.fid === ses.was.fid);
+    const near = same || ok.reduce((best, x) => (!best || Math.abs(fids(d).indexOf(x) - ses.was.at) < Math.abs(fids(d).indexOf(best) - ses.was.at) ? x : best), null);
+    (near || d.querySelector('[data-stage-head]'))?.focus?.({ preventScroll: true });
+    ses.was = null;
+  };
+
   const paint = () => {
+    if (live && ses.shown) noteFocus();
     const html = sheetHTML(viewModel(ses));
     if (!ses.shown) { ctx.dlg.open(html, { cls: 'deal', label: titleOf(modelOf(run)) }); ses.shown = true; if (live) el()._html = html; bind(); }
     else if (live && ctx.setHTML) ctx.setHTML(el(), html); else ctx.dlg.open(html, { cls: 'deal', label: titleOf(modelOf(run)) });
@@ -278,7 +292,8 @@ export function createSession(ctx, run) {
   };
   const after = () => {
     const d = el();
-    if (ses.focusHead) { ses.focusHead = false; const h = d.querySelector('[data-stage-head]'); const f = d.querySelector('.deal-foot [autofocus], .deal-stage [autofocus]'); (f || h)?.focus?.({ preventScroll: true }); }
+    if (ses.focusHead) { ses.focusHead = false; ses.was = null; const h = d.querySelector('[data-stage-head]'); const f = d.querySelector('.deal-foot [autofocus], .deal-stage [autofocus]'); (f || h)?.focus?.({ preventScroll: true }); }
+    else keepFocus(d);
     if (run.key === 'fix' && !run.res.fix && !ses.reduced()) startDial(); else stopDial();
     // presentation only: the result is staged (numbers tick up, the stamp lands, the bars grow) the first time it is painted and never again, so a later paint
     // of the same screen, such as the Assist box being toggled, shows it at rest instead of replaying it

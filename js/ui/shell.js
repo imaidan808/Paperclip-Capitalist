@@ -20,11 +20,15 @@ import { createWorldView } from './worldview.js';
 import { Progress } from '../meta/progress.js';
 import { fmtMoney as money, fmtPct as pct } from '../market.js';
 
+// Closes the shared dialog from any [data-close] inside it. It lives out here, not inside mountGame: a handler on the page-wide <dialog> that was made in mountGame would keep
+// that mount's whole scope (the stage, the world and its bitmaps) reachable for as long as the page lives, long after the game screen has gone.
+function closeOnClick(e) { if (e.target.closest('[data-close]')) dlg.close(); }
+
 export function mountGame(root, S, hooks) {
   const g = () => S.game;
   const U = { zone: 1, drawer: null, sel: new Set(), queue: [], last: 0, prev: {}, features: null, tracker: null };
   const listeners = new Set();
-  let wv = null, dead = false, progress = null;
+  let wv = null, dead = false, progress = null, wasOpen = false;
 
   root.innerHTML = `<div class="stage" id="stage">
       <div class="worldhost" id="worldhost" data-anchor="world"></div>
@@ -98,6 +102,7 @@ export function mountGame(root, S, hooks) {
     }
     if (el.drawer.dataset.d !== key) el.drawer.dataset.d = key;
     wv?.update();
+    if (open !== wasOpen) { wasOpen = open; fitToasts(); }
     if (redrawn) collectBars();
     paintBars(redrawn);
     pumpQueue();
@@ -117,8 +122,21 @@ export function mountGame(root, S, hooks) {
     const trk = el.tracker.offsetHeight;
     put('trk-b', Math.min(trk ? el.tracker.offsetTop + trk : el.hud.offsetHeight, el.stage.clientHeight * 0.6));
   }
-  const sizer = typeof ResizeObserver === 'function' ? new ResizeObserver(measure) : null;
-  sizer?.observe(el.hud); sizer?.observe(el.dock); sizer?.observe(el.ticker); sizer?.observe(el.tracker);
+  // Toasts stand to the left of an open side drawer as far as the camera buttons allow (css/shell.css, --toast-r). When the window (or a big text size) leaves less than a
+  // toast's own width between the two, they would lie over the drawer: then the stack is cut to the newest one, at the drawer's foot, where it covers a row of the body and never its
+  // tabs. Every toast is still read out. Looked at when the drawer opens or shuts and when anything resizes, never per tick (it reads the layout).
+  let tight = false;
+  function fitToasts() {
+    let now = false;
+    const dr = U.drawer && !el.drawer.hidden ? el.drawer.getBoundingClientRect() : null, cam = dr && el.world.querySelector('.wvctl');
+    if (dr && cam && dr.width && dr.left > dr.width * 0.1) { // a side drawer (a bottom sheet starts at the left edge: its toasts go above it)
+      const rem = parseFloat(getComputedStyle(docEl).fontSize) || 16;
+      now = dr.left - cam.getBoundingClientRect().right - 8 < 14 * rem;
+    }
+    if (now !== tight) { tight = now; if (now) el.stage.dataset.toasts = 'tight'; else delete el.stage.dataset.toasts; }
+  }
+  const sizer = typeof ResizeObserver === 'function' ? new ResizeObserver(() => { measure(); fitToasts(); }) : null;
+  sizer?.observe(el.hud); sizer?.observe(el.dock); sizer?.observe(el.ticker); sizer?.observe(el.tracker); sizer?.observe(el.stage);
 
   // A phone's bottom sheet closes the way a native one does: drag its header down. Only the header takes the gesture (touch-action: none there); the close button and Escape stay.
   const SHEET = '(max-width: 820px) and (min-height: 521px)';
@@ -166,11 +184,12 @@ export function mountGame(root, S, hooks) {
     for (let i = 0; i < bars.length; i++) if (bars[i].w !== next[i] && bars[i].b.isConnected) { bars[i].w = next[i]; bars[i].b.style.width = next[i] + '%'; }
   }
   function barLoop() {
-    barT = 0; if (dead) return;
-    if (!document.hidden) { if (++barPass % 10 === 0) collectBars(); paintBars(); }
+    barT = 0; if (dead || document.hidden) return; // a hidden tab asks for nothing: `wake` starts the loop again when it is shown
+    if (++barPass % 10 === 0) collectBars();
+    paintBars();
     barT = setTimeout(barLoop, reduced() ? 600 : S.clock.paused ? 250 : 100); // slow while nothing moves, still quick to catch a resume
   }
-  const wake = () => { if (document.hidden || dead) return; collectBars(); paintBars(true); }; // back from another tab: catch up at once
+  const wake = () => { if (document.hidden || dead) return; collectBars(); paintBars(true); if (!barT) barLoop(); }; // back from another tab: catch up at once, and start the loop if it had stopped
   document.addEventListener('visibilitychange', wake);
   barLoop();
 
@@ -237,15 +256,19 @@ export function mountGame(root, S, hooks) {
   for (const d of DRAWERS) Object.assign(acts, d.acts?.(ctx) || {});
   delegate(root, acts);
   delegate(dlg.el, acts);
-  if (!dlg.el._closer) { dlg.el._closer = true; dlg.el.addEventListener('click', (e) => { if (e.target.closest('[data-close]')) dlg.close(); }); }
+  dlg.el.addEventListener('click', closeOnClick); // the same function every mount, so adding it again changes nothing (see closeOnClick)
   ctx.acts = acts;
   ctx.call = (name, ds = {}, value = '') => acts[name]?.({ dataset: ds, value, closest: () => null });
 
+  // A select whose list is open uses Escape to close the list, not the drawer (`:open`, where the browser knows it).
+  const listOpen = (t) => { try { return !!t.matches?.('select:open'); } catch { return false; } };
   const keydown = (e) => {
     if (dlg.el.open || e.metaKey || e.ctrlKey || e.altKey) return;
-    if (e.target.matches?.('input, select, textarea, [contenteditable]')) return;
-    if (e.key === 'Escape' && U.drawer) { closeDrawer(); e.preventDefault(); }
-    else if (/^[1-7]$/.test(e.key)) { const vis = DRAWERS.filter((d) => visibleIds().has(d.id)); const d = vis[+e.key - 1]; if (d) { U.drawer === d.id ? closeDrawer() : openDrawer(d.id); e.preventDefault(); } }
+    const field = e.target.matches?.('input, select, textarea, [contenteditable]');
+    // Escape closes the drawer from inside one of its fields too, so the keyboard is never stuck in a form (the 1 to 7 shortcuts stay out of fields, they are typed there)
+    if (e.key === 'Escape' && U.drawer && !e.defaultPrevented && !e.isComposing && !(field && listOpen(e.target))) { closeDrawer(); e.preventDefault(); return; }
+    if (field) return;
+    if (/^[1-7]$/.test(e.key)) { const vis = DRAWERS.filter((d) => visibleIds().has(d.id)); const d = vis[+e.key - 1]; if (d) { U.drawer === d.id ? closeDrawer() : openDrawer(d.id); e.preventDefault(); } }
   };
   document.addEventListener('keydown', keydown);
 
@@ -293,6 +316,7 @@ export function mountGame(root, S, hooks) {
     dead = true; off(); clearInterval(over); clearTimeout(barT); sizer?.disconnect();
     document.removeEventListener('keydown', keydown); document.removeEventListener('visibilitychange', wake);
     for (const k in anchors) docEl.style.removeProperty('--' + k); // the next screen falls back to the stylesheet's values
+    if (dlg.el._acts === acts) dlg.el._acts = null; // the shared dialog's action table is this mount's until another screen swaps it: let go of it, it holds the whole mount
     wv?.destroy(); if (g()) g().onEvent = null;
   }
   render();

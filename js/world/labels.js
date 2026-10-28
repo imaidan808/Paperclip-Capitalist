@@ -14,6 +14,9 @@ const PAD = 4;
 export class Labels {
   constructor() { this.cache = new Cache(240); this.widths = new Cache(600); this.dpr = 0; this.scratch = null; }
 
+  /** Let go of every sprite and the measuring surface (the screen is leaving); they are made again when a label is next wanted. */
+  release() { this.cache.clear(); this.widths.clear(); this.scratch = null; this.dpr = 0; }
+
   /** Tell the cache the pixel density; a change drops every sprite (they are drawn for one density). */
   setDpr(d) { if (d !== this.dpr) { this.dpr = d; this.cache.clear(); } }
 

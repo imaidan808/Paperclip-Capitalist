@@ -11,7 +11,8 @@ import { drawProp } from './props.js';
 import { Fx } from './fx.js';
 import { Lighting, dayTargets } from './lighting.js';
 import { Labels, qs } from './labels.js';
-import { surface, snap, mono, sans, stampGlow, rgbOf } from './gfx.js';
+import { surface, snap, mono, sans, stampGlow, rgbOf, softwareRaster } from './gfx.js';
+import { clearSprites, setSpriteBudget } from './sprites.js';
 
 const TAG_COLOR = { tool: '#a0a6ad', office: '#d9d2c0', prestige: '#7a5fb0', paper: '#e8e2cc', retro: '#b07a3a', electronics: '#4a8fb0', vehicle: '#b0493a', consumer: '#c45f7a', trend: '#ff3da8', scrap: '#6b5a4a', industrial: '#8a7a62', training: '#46a06a', digital: '#7be3ff', b2b: '#5a6fb0', franchise: '#e8cd6a', infra: '#6a5fa0',
   food: '#d98a3a', farm: '#8aa84a', bulk: '#9a8a6a', marine: '#3a8ab0', collectible: '#c9a227', luxury: '#b88adf', fashion: '#e06aa0', ip: '#9b6dff', media: '#d04aa8', realty: '#c47a5a', finance: '#4aa87a', energy: '#e0c030', medical: '#e0e8f0', home: '#b09070', outdoor: '#5a9a5a', gem: '#7ae0d0' };
@@ -25,6 +26,7 @@ export const FAR_ZOOM = 0.42;      // below this zoom the world draws plain bloc
 const PIP_ZOOM = 0.45;                 // below this zoom a building's own bar is dropped (it is a few pixels) and the district shows pips instead; the bar returns at and above it
 export const SLOW_MS = 22, FAST_MS = 16; // quality governor: a smoothed frame cost over SLOW_MS steps quality down, under FAST_MS steps it back up
 const GOV_WAIT = 10, GOV_DOWN = 3;         // frames of good cost before one step back up (it doubles while the picture keeps tipping over), frames of bad cost before one step down
+const SOFT_DPR = 1.5;                      // the most pixel density a CPU-drawn canvas gets: every full-window layer is a pass over all its pixels, and 1.5 has 44% fewer of them than 2
 const CARS = 18;
 const BY_KEY = (a, b) => a.key - b.key;
 const CONFETTI = ['#ff3da8', '#7be3ff', '#ffd36e'];
@@ -66,14 +68,15 @@ export class World {
     this.cam = { x: 0, y: 0, z: 0.9 }; this.camTo = null;
     this.mode = 'world';
     this.W = 800; this.H = 500; this.dpr = 1;
+    this.inset = { l: 0, r: 0 };                                                                // px of the window's left and right edges that the camera buttons stand over: the island is fitted to what they leave
     this.ents = new Map(); this.lights = []; this.hits = []; this.overlay = [];
     this.hover = null; this.focusKey = null; this.t = 0; this.vt = 0; this.last = 0; this.night = 0; this.dusk = 0; this.fps = 30; this.slow = 0; this.warm = 0; this.lite = false;
     // presentation layer: particles, lighting, label sprites, and the draw loop's reusable scratch (nothing here is game state)
-    this.fx = new Fx(); this.light = new Lighting(); this.labels = new Labels(); this.rainOn = false;
+    this.fx = new Fx(); this.light = new Lighting(); this.light.perFrame = 1; this.labels = new Labels(); this.rainOn = false;
     this.gov = { cost: 0, bad: 0, good: 0, wait: GOV_WAIT, upAt: -1e9, prev: 0 };            // the quality governor's smoothed state
     this.gc = null; this.gcKey = new Float64Array(9); this.gcSeen = 0; this.gcValid = false; // the ground cache: an offscreen copy of the terrain for a still camera
     this.items = []; this.itemPool = []; this.vz = new Set(); this.carList = Array.from({ length: CARS }, () => ({ gx: 0, gy: 0, i: 0, key: 0, horiz: true, fade: 1 }));
-    this.vis = true; this.ledLast = undefined; this.tod = { night: 0, dusk: 0 }; this.unlockHash = 0; this.itemN = 0;                                                         // is the canvas on screen; the last ledger entry the world has seen
+    this.vis = true; this.dprDown = false; this.mm = null; this.mmFn = null; this.ledLast = undefined; this.tod = { night: 0, dusk: 0 }; this.unlockHash = 0; this.itemN = 0;                                                         // is the canvas on screen; the last ledger entry the world has seen
     this.decals = new Map();                                                                      // per district: its animated decals (water, pulses) drawn live over the cached ground
     this.player = { x: 0, y: 0, path: [], zone: 1, moving: false, dir: 1, speed: 16, placed: false };
     this.zpip = new Uint8Array(3 * (Math.max(...LAYOUT.ids) + 1));                                // per district: pipelines running, paused, starved (for the whole-island pips)
@@ -85,7 +88,13 @@ export class World {
   }
 
   get g() { return this.api.session.game; }
-  reduced() { return document.documentElement.dataset.motion === 'reduce' || (typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches); }
+  /** Is motion reduced (the page's own setting, or the system's)? Called many times a frame, so the media query is made once and read live (`matches` follows the system). */
+  reduced() {
+    if (document.documentElement.dataset.motion === 'reduce') return true;
+    if (typeof matchMedia !== 'function') return false;
+    if (this.mmFn !== matchMedia) { this.mmFn = matchMedia; this.mm = matchMedia('(prefers-reduced-motion: reduce)'); } // a new matchMedia (a test's stand-in) is asked afresh
+    return !!this.mm?.matches;
+  }
 
   // ------------------------------------------------------------------ lifecycle
   attach(host) {
@@ -101,14 +110,33 @@ export class World {
     this.resize();
     this.start();
   }
-  detach() { this.stop(); this.ro?.disconnect(); this.io?.disconnect(); this.vis = true; }
+  detach() { this.stop(); this.ro?.disconnect(); this.io?.disconnect(); this.vis = true; this.release(); }
+  /**
+   * Give back every bitmap the world holds for its size: the ground cache, the sea, the light layers, the label sprites and the scenery sprites. Called when the screen goes
+   * away (the world and its stage can stay reachable from a handler that outlives the screen, and the bitmaps are tens of megabytes at 2x); a world that is attached again
+   * makes what it needs again on demand, exactly as after a resize.
+   */
+  release() {
+    this.gc = null; this.gcValid = false; this.gcSeen = 0; this.waterGr = null;
+    this.light.release(); this.labels.release(); clearSprites();
+  }
   start() { if (this.running) return; this.running = true; this.last = performance.now(); this.raf = requestAnimationFrame((t) => this.frame(t)); }
   stop() { this.running = false; cancelAnimationFrame(this.raf); }
-  targetDpr() { return Math.max(1, Math.min(2, window.devicePixelRatio || 1) * (this.slow > 3 ? 0.75 : 1)); }
+  /**
+   * The pixel density the canvas is drawn at. The screen's own, to 2; at most SOFT_DPR where the canvas is drawn on the CPU. The quality governor takes a quarter off at
+   * its fourth tier, and puts it back only below its second: a picture that tips between two tiers must not reallocate the canvas (and every layer made for it) each time.
+   */
+  targetDpr() {
+    const native = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+    const top = native > SOFT_DPR && softwareRaster() ? SOFT_DPR : native;
+    if (this.slow > 3) this.dprDown = true; else if (this.slow <= 1) this.dprDown = false;
+    return Math.max(1, top * (this.dprDown ? 0.75 : 1));
+  }
   resize() {
     const r = this.host.getBoundingClientRect(); if (!r.width) return;
     this.W = Math.max(1, Math.floor(r.width)); this.H = Math.max(1, Math.floor(r.height));
     this.dpr = this.targetDpr(); this.warm = 30;
+    this.refreshInset(); setSpriteBudget(this.dpr);
     this.cv.width = Math.floor(this.W * this.dpr); this.cv.height = Math.floor(this.H * this.dpr);
     this.cv.style.width = this.W + 'px'; this.cv.style.height = this.H + 'px';
     this.gc = null; this.gcValid = false; this.labels.setDpr(this.dpr); this.waterGr = null; // what was made for the old size is made again on demand
@@ -118,9 +146,15 @@ export class World {
 
   // ------------------------------------------------------------------ camera
   bounds() { return LAYOUT.bounds; }
-  fitZoom() { const b = this.bounds(); return Math.min(this.W / (b.x1 - b.x0), this.H / (b.y1 - b.y0)) * 0.98; }
+  /**
+   * The camera buttons stand over one edge of the window (the left in the wide layouts, the right in a phone's bottom-sheet layout), so the whole island is fitted to the
+   * part they leave free. The page says how much they cover (`api.insets`, measured from the real buttons) when the window changes size and before a fit; the maths here never
+   * touches the page. With nothing covered everything below is exactly the plain fit.
+   */
+  refreshInset() { const i = this.api.insets?.() || null, I = this.inset; I.l = i ? Math.max(0, Math.round(i.l) || 0) : 0; I.r = i ? Math.max(0, Math.round(i.r) || 0) : 0; if (I.l + I.r > this.W * 0.4) I.l = I.r = 0; /* a nonsense reading is no reading */ }
+  fitZoom() { const b = this.bounds(), I = this.inset; return Math.min((this.W - I.l - I.r) / (b.x1 - b.x0), this.H / (b.y1 - b.y0)) * 0.98; }
   zoomRange() { return this.mode === 'map' ? [this.fitZoom() * 0.9, 1.4] : [Math.min(0.5, this.fitZoom()), 2.4]; }
-  fit(animate = true) { const b = this.bounds(); this.goTo((b.x0 + b.x1) / 2, (b.y0 + b.y1) / 2, this.fitZoom(), animate); }
+  fit(animate = true) { this.refreshInset(); const b = this.bounds(), z = this.fitZoom(), I = this.inset; this.goTo((b.x0 + b.x1) / 2 - (I.l - I.r) / 2 / z, (b.y0 + b.y1) / 2, z, animate); } // the island's middle at the middle of the free part
   /** Frame one district: its whole block fills the view. */
   focusZone(z, animate = true) {
     const d = DIST[z]; if (!d) return;
@@ -133,9 +167,10 @@ export class World {
   }
   clampCam() {
     const b = this.bounds(), [lo, hi] = this.zoomRange(); this.cam.z = clamp(this.cam.z, lo, hi);
-    const hw = this.W / 2 / this.cam.z, hh = this.H / 2 / this.cam.z;
-    this.cam.x = clamp(this.cam.x, b.x0 + Math.min(hw, (b.x1 - b.x0) / 2), b.x1 - Math.min(hw, (b.x1 - b.x0) / 2));
-    this.cam.y = clamp(this.cam.y, b.y0 + Math.min(hh, (b.y1 - b.y0) / 2), b.y1 - Math.min(hh, (b.y1 - b.y0) / 2));
+    // the camera is clamped by the middle of the free part of the window (the whole window when no button stands over it): `ox` is how far that middle is right of the canvas's
+    const z = this.cam.z, I = this.inset, ox = (I.l - I.r) / 2, hw = (this.W - I.l - I.r) / 2 / z, hh = this.H / 2 / z, mx = Math.min(hw, (b.x1 - b.x0) / 2), my = Math.min(hh, (b.y1 - b.y0) / 2);
+    this.cam.x = clamp(this.cam.x + ox / z, b.x0 + mx, b.x1 - mx) - ox / z;
+    this.cam.y = clamp(this.cam.y, b.y0 + my, b.y1 - my);
   }
   zoomBy(f, px = this.W / 2, py = this.H / 2) {
     const before = this.s2w(px, py); this.cam.z *= f; this.clampCam();
@@ -981,8 +1016,8 @@ export class World {
     this.tagN = m;
     return nr;
   }
-  /** The span (written into `out.lo` and `out.hi`) a tag `hw` either side of its centre may stand in: inside the screen, with a margin, when its district's own x is on it (a tag is never cut by the screen's edge), else anywhere. */
-  tagSpan(px, hw, out) { const lo = hw + 4, hi = this.W - hw - 4, on = px >= 0 && px <= this.W && lo < hi; out.lo = on ? lo : -1e9; out.hi = on ? hi : 1e9; }
+  /** The span (written into `out.lo` and `out.hi`) a tag `hw` either side of its centre may stand in: inside the free part of the screen, with a margin, when its district's own x is on it (a tag is never cut by the screen's edge), else anywhere. */
+  tagSpan(px, hw, out) { const I = this.inset, lo = I.l + hw + 4, hi = this.W - I.r - hw - 4, on = px >= 0 && px <= this.W && lo < hi; out.lo = on ? lo : -1e9; out.hi = on ? hi : 1e9; } // (a tag keeps clear of the camera buttons too: `inset`)
   /** Name tags over each visible district while zoomed out, so you always know where you are: draws what `planZoneTags` worked out. */
   drawZoneTags(ctx) {
     const plan = this.tagPlan; if (!plan) return;
@@ -1078,7 +1113,7 @@ export class World {
       const sp = this.labels.card(D, l1, l2, compact, open, cur, hov);
       let w, h;
       if (sp) { w = sp.cw; h = sp.ch; } else { ctx.font = '800 12px ui-monospace, Menlo, monospace'; const w1 = ctx.measureText(l1).width; ctx.font = '600 10px ui-monospace, Menlo, monospace'; const w2 = ctx.measureText(l2).width; w = Math.max(w1, compact ? 0 : w2) + 34; h = compact ? 24 : 38; }
-      const x = clamp(cx - w / 2, 4, this.W - w - 4), y = clamp(cy - h / 2, 4, this.H - h - 4);
+      const x = clamp(cx - w / 2, this.inset.l + 4, this.W - this.inset.r - w - 4), y = clamp(cy - h / 2, 4, this.H - h - 4);
       cards.push({ D, sp, l1, l2, open, cur, hov, x, y, w, h, cx, cy });
     }
     for (const k in cnt) cnt[k] = 0;
@@ -1091,7 +1126,7 @@ export class World {
       X /= n; const text = `${R.id}  ${R.name.toUpperCase()}`, w = ctx.measureText(text).width, h = 20;
       let bx = X, by = Y + 54, best = 1e9, free = false;
       search: for (const dy of NAME_STEPS) for (const dx of NAME_SHIFT) {
-        const x = clamp(X + dx, w / 2 + 6, this.W - w / 2 - 6), y = clamp(Y + 54 + dy, 24, this.H - 20), r0 = x - w / 2, r1 = x + w / 2, c0 = y - 16, c1 = y + 6;
+        const x = clamp(X + dx, this.inset.l + w / 2 + 6, this.W - this.inset.r - w / 2 - 6), y = clamp(Y + 54 + dy, 24, this.H - 20), r0 = x - w / 2, r1 = x + w / 2, c0 = y - 16, c1 = y + 6;
         let hit = 0; for (const c of cards) if (r0 < c.x + c.w + 6 && r1 > c.x - 6 && c0 < c.y + c.h + 4 && c1 > c.y - 4) hit++;
         for (const q of placed) if (r0 < q[2] + 8 && r1 > q[0] - 8 && c0 < q[3] && c1 > q[1]) hit++;
         if (hit < best) { best = hit; bx = x; by = y; } if (!hit) { free = true; break search; }
@@ -1129,7 +1164,7 @@ export class World {
   }
   /** Cards that would overlap are pushed apart in a few passes (mostly sideways-neutral, preferring up and down), so a small screen still shows every district's name. */
   spreadCards(cards) {
-    const W = this.W, H = this.H;
+    const W = this.W, H = this.H, L = this.inset.l, Rt = this.inset.r;
     for (let it = 0; it < 24; it++) {
       let moved = false;
       for (let i = 0; i < cards.length; i++) for (let j = i + 1; j < cards.length; j++) {
@@ -1139,7 +1174,7 @@ export class World {
         if (oy <= ox * 1.6) { const d = oy / 2, up = a.y + a.h / 2 <= b.y + b.h / 2 ? -1 : 1; a.y += up * d; b.y -= up * d; }
         else { const d = ox / 2, left = a.x + a.w / 2 <= b.x + b.w / 2 ? -1 : 1; a.x += left * d; b.x -= left * d; }
       }
-      for (const c of cards) { c.x = clamp(c.x, 4, W - c.w - 4); c.y = clamp(c.y, 4, H - c.h - 4); }
+      for (const c of cards) { c.x = clamp(c.x, L + 4, W - Rt - c.w - 4); c.y = clamp(c.y, 4, H - c.h - 4); }
       if (!moved) break;
     }
   }
