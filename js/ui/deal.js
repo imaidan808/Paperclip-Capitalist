@@ -138,7 +138,7 @@ export function closeHTML(m) {
     <div class="neg-scale" aria-hidden="true"><span>${money(lo)}</span><span>fair ${money(v.fair)}</span><span>${money(hi)}</span></div>`;
   const pips = `<span class="pips" role="img" aria-label="${v.roundsLeft} round${v.roundsLeft === 1 ? '' : 's'} left of ${v.rounds}">${Array.from({ length: v.rounds }, (_, i) => `<i class="${i < v.round ? 'spent' : ''}"></i>`).join('')}</span>`;
   const read = `<p class="small">Your read of their limit: <b>${money(Math.min(v.read.lo, v.read.hi))} to ${money(Math.max(v.read.lo, v.read.hi))}</b>. ${m.plan.alt ? `Your other option: <b>${money(m.plan.alt)}</b>.` : ''}</p>`;
-  const flag = v.flag === 'mad' ? '<div class="callout warn">They took offence at that number.</div>' : v.flag === 'sus' ? '<div class="callout warn">They are suspicious of a price that low.</div>' : '';
+  const flag = v.flag === 'mad' ? '<div class="callout warn">They took offense at that number.</div>' : v.flag === 'sus' ? '<div class="callout warn">They are suspicious of a price that low.</div>' : '';
   let moves;
   if (m.stageDone) moves = '';
   else if (v.round === 0) {
@@ -222,7 +222,7 @@ export function resultHTML(m) {
   const rev = s.reveal ? `<div class="reveal"><h4>What the lot really was</h4><p><b>${esc(s.reveal.truth)}.</b> ${s.reveal.total ? `You found ${s.reveal.found} of its ${s.reveal.total} flaw${s.reveal.total === 1 ? '' : 's'}${s.reveal.defects.length ? `: ${esc(s.reveal.defects.join(', '))}` : ''}.` : 'It had no flaws to find.'} <span class="mute">Your read: ${esc(s.reveal.estimate)}.</span></p></div>` : '';
   const why = s.reasons.length ? `<div class="why"><h4>Why</h4><ul>${s.reasons.map((r) => `<li><b>${esc(r.label)}.</b> ${esc(r.text)}</li>`).join('')}</ul></div>` : '';
   const labels = { 'due-diligence': 'Due diligence', anchoring: 'Anchoring', 'persona-fit': 'Persona fit', 'winners-curse': "The winner's curse", 'repair-roi': 'Quality control', zopa: 'The zone of agreement', batna: 'Your alternative', reciprocity: 'Reciprocity', patience: 'Patience', 'saturation-herd': 'The herd' };
-  // the one-line verdict: where you stand against Quick (a stamp, so it never rests on colour alone)
+  // the one-line verdict: where you stand against Quick (a stamp, so it never rests on color alone)
   const gain = n.you == null || n.quick == null ? null : (n.better === 'low' ? n.quick - n.you : n.you - n.quick), tiny = Math.max(1e-9, top * 0.005);
   const verdict = gain == null ? '' : gain > tiny ? '<p class="rver win">Better than Quick</p>' : gain < -tiny ? '<p class="rver lose">Quick would have done better</p>' : '<p class="rver even">Same as Quick</p>';
   return `<section class="deal-result ${s.tone}${m.revealed ? ' revealed' : ''}" data-anchor="deal-result" aria-labelledby="ds-title">
@@ -274,7 +274,7 @@ export function createSession(ctx, run) {
   const live = !!(doc && el() && el().querySelector);
 
   // Where the keyboard was in the sheet before a paint (the control's name and its place among the sheet's controls), so a paint that removes or disables that control can
-  // put the cursor on its neighbour instead of letting it fall to the page (a used probe is disabled, the Pitch button goes once the pitch is made, the anchor row is replaced).
+  // put the cursor on its neighbor instead of letting it fall to the page (a used probe is disabled, the Pitch button goes once the pitch is made, the anchor row is replaced).
   const fids = (d) => [...d.querySelectorAll('.deal-stage [data-fid], .deal-foot [data-fid]')];
   const noteFocus = () => { const d = el(), a = doc.activeElement; ses.was = a && d.contains(a) && a.dataset && a.dataset.fid ? { fid: a.dataset.fid, at: fids(d).indexOf(a) } : null; };
   const keepFocus = (d) => {

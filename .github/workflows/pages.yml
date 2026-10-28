@@ -32,11 +32,13 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with: { node-version: 22 }
       - uses: actions/configure-pages@v6
-      - name: Stage the static site
-        run: |
-          mkdir _site
-          cp -r index.html css js docs .nojekyll _site/
+      - name: Stage the site
+        # scripts/stage.mjs builds exactly what is served (the page with its module preload lines, 404.html, robots.txt, sitemap.xml, llms.txt, assets/, css/, and the modules js/main.js imports)
+        # and checks it hangs together before it exits 0. Nothing else goes up: no tests, server, docs, scripts or hidden files.
+        run: node scripts/stage.mjs _site --lastmod "$(git log -1 --format=%cs)"
       - uses: actions/upload-pages-artifact@v5
         with: { path: _site }
       - id: deployment

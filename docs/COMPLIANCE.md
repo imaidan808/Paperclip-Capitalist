@@ -6,11 +6,14 @@ This repository is a **static web app plus an optional message relay**. It is bu
 | Area | Status | Detail |
 |---|---|---|
 | No student PII collected | Implemented | The only identifiers are a random Founder ID (`PC-XXXX`) and a self-chosen alias. No names, emails, accounts or analytics scripts. No third-party requests. |
-| Data location | Implemented | Game state lives in the browser's `localStorage` only (`pc.*` keys). Rooms exchange gameplay numbers, never identity. |
-| Relay server | Implemented, minimal | Forwards messages and keeps the **latest snapshot per founder in memory** for late joiners. Nothing is written to disk and payloads are never logged. Rooms are capped at 400. |
+| Data location | Implemented | Game state lives in the browser's `localStorage` only (`pc.*` keys). Rooms exchange gameplay numbers, the random Founder ID and the alias the student chose, never a name or an account. |
+| Relay server | Implemented, minimal | Forwards messages and keeps the **latest snapshot per founder in memory** for late joiners. Nothing is written to disk and payloads are never logged. A room holds 400 connections and a relay 200 rooms (`MAX_ROOM`, `MAX_ROOMS`). A connection brings a secret key its browser keeps beside its Founder ID, and an instructor's also the room's owner token; the relay keeps only a hash of each, to refuse another connection that claims the same ID or the instructor's seat (`docs/ARCHITECTURE.md`, who is who). |
 | Encryption in transit | Deploy-time | Use `wss://` behind TLS (any host that terminates TLS 1.2+ works). The code does not weaken it. |
 | Accessibility | Implemented, self-assessed | WCAG 2.2 AA targeted: contrast ratios are checked in `tests/a11y.test.mjs` for both themes, keyboard operable, native dialogs, live-region announcements, reduced motion, text sizing, 24px minimum targets. A formal audit and a VPAT still need to be done by a human. |
 | Student deletion | Implemented | "Start over" in the menu deletes local data; clearing site data does too. |
+| No cookies, no third parties | Implemented, checked | The game stores in `localStorage` only (keys that start with `pc.`). No cookies, no analytics, no fonts, scripts or images from another host: the staged page and its stylesheets are checked to ask for nothing outside the site (`scripts/stage.mjs`, `tests/finish-site.test.mjs`). The only network connection the code can open is a WebSocket to a relay address a person types in. |
+| What a crawler and a link preview see | Implemented | The page has a description, a canonical address, Open Graph and Twitter cards, a schema.org description, a `noscript` message, a 404 page, `robots.txt`, `sitemap.xml` and `llms.txt`; none of them contains student data (there is none on the site). `robots.txt` and `sitemap.xml` are written for the address https://imaidan808.github.io/paperclip-capitalist/. Crawlers read `robots.txt` only at the root of a host, so on a GitHub project site it takes effect with a custom domain or a user site, and the sitemap can be given to a search engine's console directly. |
+| Custom domain | Not set up | None is configured. With one, the address in `scripts/stage.mjs`, `index.html`, `404.html`, `robots.txt`, `sitemap.xml` and `llms.txt` changes (the launch test lists every place), and a `CNAME` file would be added to what is staged. |
 
 ## What is NOT implemented (and what would be needed)
 | Requirement in the brief | Status | Needed |
@@ -27,6 +30,7 @@ This repository is a **static web app plus an optional message relay**. It is bu
 | Element | Where | Retention | Removal |
 |---|---|---|---|
 | Founder ID, alias | Browser; relay memory while connected | Until cleared | Start over, or clear site data; relay forgets on disconnect and restart |
+| Identity key (every student) and owner token (an instructor's, shown as the recovery code) | Browser; a hash of each in relay memory | Until cleared; the relay forgets a room 10 minutes after it empties | Start over, or clear site data. Anyone who has an owner token can run that room, so the instructor keeps it like a password |
 | Game state and ledger | Browser | Until cleared | As above |
 | Gradebook export | Instructor's download | Instructor's control | Delete the file |
 

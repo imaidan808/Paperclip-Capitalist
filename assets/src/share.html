@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Paperclip Capitalist: share image (1200 x 630)</title>
+<!-- The scene assets/share.png is rendered from (node assets/src/render.mjs). Static on purpose: no script, no request, only the game's own look:
+     the dark ground and 24px grid of css/styles.css, the gold of the paperclip mark, the hard offset shadow of its headings, and the sixteen districts
+     as a staircase of plates in each district's own two colors (js/data/tier1..4.js), climbing from the Scrap Yard to the Global Exchange. -->
+<style>
+  :root { --bg: #0d1117; --ink: #e8eef6; --mute: #a3b3c9; --gold: #ffc247; --line: #34445c; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; width: 1200px; height: 630px; overflow: hidden; background: var(--bg); }
+  body { position: relative; color: var(--ink); font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    background-image: linear-gradient(rgba(255,255,255,.035) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.035) 1px, transparent 1px); background-size: 24px 24px; }
+  .frame { position: absolute; inset: 18px; border: 2px solid var(--line); }
+  .mono { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+  .kicker { position: absolute; left: 66px; top: 50px; margin: 0; font-size: 22px; letter-spacing: .14em; text-transform: uppercase; color: var(--mute); }
+  h1 { position: absolute; left: 62px; top: 82px; margin: 0; font-size: 108px; line-height: 1.02; letter-spacing: .01em; color: var(--gold); text-shadow: 6px 6px 0 #000; font-weight: 800; }
+  .tag { position: absolute; left: 66px; top: 316px; margin: 0; font-size: 46px; line-height: 1.1; font-weight: 700; color: var(--ink); text-shadow: 3px 3px 0 #000; }
+  .facts { position: absolute; left: 66px; top: 378px; margin: 0; font-size: 22px; color: var(--mute); }
+  .facts b { color: var(--gold); font-weight: 700; }
+  svg { position: absolute; left: 0; top: 0; }
+</style>
+</head>
+<body>
+  <div class="frame"></div>
+  <p class="kicker mono">A free 90-day entrepreneurship simulation</p>
+  <h1 class="mono">PAPERCLIP<br>CAPITALIST</h1>
+  <p class="tag">One paperclip. Sixteen districts.</p>
+  <p class="facts mono"><b>12</b> Backgrounds &nbsp;&middot;&nbsp; <b>5</b> skill games &nbsp;&middot;&nbsp; <b>10</b> Academy missions</p>
+  <svg width="1200" height="630" viewBox="0 0 1200 630" role="img" aria-label="A gold paperclip above a staircase of sixteen district plates rising from the Scrap Yard to the Global Exchange">
+    <!-- the paperclip mark of the favicon, large, with the hard offset shadow the game gives its headings -->
+    <g transform="translate(878 62) scale(10.5)" fill="none" stroke-width="2.4" stroke-linecap="square">
+      <path d="M11 22V9a4 4 0 0 1 8 0v12a2.5 2.5 0 0 1-5 0V11" stroke="#000" transform="translate(.6 .6)"/>
+      <path d="M11 22V9a4 4 0 0 1 8 0v12a2.5 2.5 0 0 1-5 0V11" stroke="#ffc247"/>
+    </g>
+    <!-- sixteen plates, back to front: the first is the Scrap Yard, the last the Global Exchange -->
+    <g>
+    <g><path d="M46 530 L110 562 L110 606 L46 574 Z" fill="#4d502b"/><path d="M174 530 L110 562 L110 606 L174 574 Z" fill="#37381e"/><path d="M110 498 L174 530 L110 562 L46 530 Z" fill="#b5651d"/><path d="M110 498 L174 530 L110 562 L46 530 Z" fill="none" stroke="#000" stroke-opacity=".35" stroke-width="2"/></g>
+    <g><path d="M110 522 L174 554 L174 598 L110 566 Z" fill="#944d27"/><path d="M238 522 L174 554 L174 598 L238 566 Z" fill="#68371c"/><path d="M174 490 L238 522 L174 554 L110 522 Z" fill="#ffc93c"/><path d="M174 490 L238 522 L174 554 L110 522 Z" fill="none" stroke="#000" stroke-opacity=".35" stroke-width="2"/></g>
+    <g><path d="M174 514 L238 546 L238 590 L174 558 Z" fill="#783a36"/><path d="M302 514 L238 546 L238 590 L302 558 Z" fill="#552926"/><path d="M238 482 L302 514 L238 546 L174 514 Z" fill="#2f9e5b"/><path d="M238 482 L302 514 L238 546 L174 514 Z" fill="none" stroke="#000" stroke-opacity=".35" stroke-width="2"/></g>
+    <g><path d="M238 506 L302 538 L302 582 L238 550 Z" fill="#195d5e"/><path d="M366 506 L302 538 L302 582 L366 550 Z" fill="#124243"/><path d="M302 474 L366 506 L302 538 L238 506 Z" fill="#e3b341"/><path d="M302 474 L366 506 L302 538 L238 506 Z" fill="none" stroke="#000" stroke-opacity=".35" stroke-width="2"/></g>
+    <g><path d="M302 498 L366 530 L366 574 L302 542 Z" fill="#39475b"/><path d="M430 498 L366 530 L366 574 L430 542 Z" fill="#283240"/><path d="M366 466 L430 498 L366 530 L302 498 Z" fill="#3b9bff"/><path d="M366 466 L430 498 L366 530 L302 498 Z" fill="none" stroke="#000" stroke-opacity=".35" stroke-width="2"/></g>
+    <g><path d="M366 490 L430 522 L430 566 L366 534 Z" fill="#583054"/><path d="M494 490 L430 522 L430 566 L494 534 Z" fill="#3e223b"/><path d="M430 458 L494 490 L430 522 L366 490 Z" fill="#f2e3c6"/><path d="M430 458 L494 490 L430 522 L366 490 Z" fill="none" stroke="#000" stroke-opacity=".35" stroke-width="2"/></g>
+    <g><path d="M430 482 L494 514 L494 558 L430 526 Z" fill="#353a41"/><path d="M558 482 L494 514 L494 558 L558 526 Z" fill="#26292e"/><path d="M494 450 L558 482 L494 514 L430 482 Z" fill="#e63b2e"/><path d="M494 450 L558 482 L494 514 L430 482 Z" fill="none" stroke="#000" stroke-opacity=".35" stroke-width="2"/></g>
+    <g><path d="M494 474 L558 506 L558 550 L494 518 Z" fill="#1d3353"/><path d="M622 474 L558 506 L558 550 L622 518 Z" fill="#14243b"/><path d="M558 442 L622 474 L558 506 L494 474 Z" fill="#ff8c1a"/><path d="M558 442 L622 474 L558 506 L494 474 Z" fill="none" stroke="#000" stroke-opacity=".35" stroke-width="2"/></g>
+    <g><path d="M558 466 L622 498 L622 542 L558 510 Z" fill="#424f5d"/><path d="M686 466 L622 498 L622 542 L686 510 Z" fill="#2f3842"/><path d="M622 434 L686 466 L622 498 L558 466 Z" fill="#f5c518"/><path d="M622 434 L686 466 L622 498 L558 466 Z" fill="none" stroke="#000" stroke-opacity=".35" stroke-width="2"/></g>
+    <g><path d="M622 458 L686 490 L686 534 L622 502 Z" fill="#343d4e"/><path d="M750 458 L686 490 L686 534 L750 502 Z" fill="#252c37"/><path d="M686 426 L750 458 L686 490 L622 458 Z" fill="#19e3f2"/><path d="M686 426 L750 458 L686 490 L622 458 Z" fill="none" stroke="#000" stroke-opacity=".35" stroke-width="2"/></g>
+    <g><path d="M686 450 L750 482 L750 526 L686 494 Z" fill="#2f5a39"/><path d="M814 450 L750 482 L750 526 L814 494 Z" fill="#214029"/><path d="M750 418 L814 450 L750 482 L686 450 Z" fill="#e3b93c"/><path d="M750 418 L814 450 L750 482 L686 450 Z" fill="none" stroke="#000" stroke-opacity=".35" stroke-width="2"/></g>
+    <g><path d="M750 442 L814 474 L814 518 L750 486 Z" fill="#79255e"/><path d="M878 442 L814 474 L814 518 L878 486 Z" fill="#561a43"/><path d="M814 410 L878 442 L814 474 L750 442 Z" fill="#8f5bff"/><path d="M814 410 L878 442 L814 474 L750 442 Z" fill="none" stroke="#000" stroke-opacity=".35" stroke-width="2"/></g>
+    <g><path d="M814 434 L878 466 L878 510 L814 478 Z" fill="#2c5b8c"/><path d="M942 434 L878 466 L878 510 L942 478 Z" fill="#1f4063"/><path d="M878 402 L942 434 L878 466 L814 434 Z" fill="#cfeaff"/><path d="M878 402 L942 434 L878 466 L814 434 Z" fill="none" stroke="#000" stroke-opacity=".35" stroke-width="2"/></g>
+    <g><path d="M878 426 L942 458 L942 502 L878 470 Z" fill="#255a4b"/><path d="M1006 426 L942 458 L942 502 L1006 470 Z" fill="#1a4035"/><path d="M942 394 L1006 426 L942 458 L878 426 Z" fill="#6d9f8d"/><path d="M942 394 L1006 426 L942 458 L878 426 Z" fill="none" stroke="#000" stroke-opacity=".35" stroke-width="2"/></g>
+    <g><path d="M942 418 L1006 450 L1006 494 L942 462 Z" fill="#8b4b3d"/><path d="M1070 418 L1006 450 L1006 494 L1070 462 Z" fill="#63352c"/><path d="M1006 386 L1070 418 L1006 450 L942 418 Z" fill="#f0d2a8"/><path d="M1006 386 L1070 418 L1006 450 L942 418 Z" fill="none" stroke="#000" stroke-opacity=".35" stroke-width="2"/></g>
+    <g><path d="M1006 410 L1070 442 L1070 486 L1006 454 Z" fill="#967e34"/><path d="M1134 410 L1070 442 L1070 486 L1134 454 Z" fill="#6a5925"/><path d="M1070 378 L1134 410 L1070 442 L1006 410 Z" fill="#ffc247"/><path d="M1070 378 L1134 410 L1070 442 L1006 410 Z" fill="none" stroke="#000" stroke-opacity=".35" stroke-width="2"/></g>
+    </g>
+  </svg>
+</body>
+</html>
