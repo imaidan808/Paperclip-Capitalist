@@ -219,6 +219,20 @@ dialog.deal::backdrop { background: rgba(3, 6, 12, .78); }
 }
 @media (min-width: 761px) and (max-width: 900px) { .angles { grid-template-columns: repeat(3, minmax(0, 1fr)); } } /* too narrow for five: a hand of three and two */
 
+/* ---- short windows (a phone on its side, a laptop with its toolbars out): the sheet is wider than a phone but barely taller than one, and a docked scoreboard
+   over a row of buttons would take a third of what is left, so the stage would have ~120px. Here only the buttons stay in view, as on a phone, the
+   board scrolls with the stage, and the head and the character shrink to give the stage the height. Tall windows keep the docked scoreboard. */
+@media (max-height: 520px) and (min-width: 761px) {
+  dialog.deal { max-height: calc(100vh - .5rem); max-height: calc(100dvh - .5rem); padding: .5rem 1rem 0; scroll-padding-bottom: 3.6rem; }
+  .deal { gap: .45rem; }
+  .deal-top { gap: .25rem .6rem; padding-left: .6rem; } .deal-top h2 { flex-basis: 10rem; font-size: 1.02rem; }
+  .deal-steps { gap: 1rem; padding: 0; } .deal-steps .ds { padding: .08rem .7rem .08rem .25rem; } .deal-steps .ds + .ds::before { width: 1rem; } .deal-steps .n { width: 1.3rem; height: 1.3rem; }
+  .deal-stage, .deal-result { padding: .6rem .75rem; gap: .5rem; }
+  .deal-cast { padding: .6rem .6rem .6rem; } .cast-floor { width: 5.2rem; height: 5.2rem; margin-bottom: .4rem; } .cast-icon { font-size: 2.8rem; } .deal-cast::before { height: 6rem; }
+  .deal-dock { display: contents; }
+  .deal-foot { position: sticky; bottom: 0; z-index: 1; margin: 0 -1rem; padding: .3rem 1rem .35rem; background: var(--panel); border-top: 1px dashed var(--line); }
+}
+
 /* ---- small screens: the dialog fills the screen, the character becomes a row, and the foot is one tidy line */
 @media (max-width: 760px) {
   dialog.deal { width: 100vw; max-width: 100vw; height: 100vh; height: 100dvh; max-height: 100vh; max-height: 100dvh; margin: 0; border-width: 0; border-top: 4px solid var(--gold); padding: .7rem .8rem 0; box-shadow: none; }

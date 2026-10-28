@@ -5,6 +5,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { countUp } from '../js/ui/polish.js';
 import * as UI from '../js/ui/deal.js';
+import * as H from '../js/play/haggle.js';
 
 const read = (f) => readFileSync(new URL('../' + f, import.meta.url), 'utf8');
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -145,4 +146,67 @@ test('the Deal Room keeps the scoreboard and the buttons in one band along the f
   const m = { ...result({ you: 100 }), kind: 'sell', stage: 'read', zone: null, assistLocked: false, assist: false, steps: [], says: [], say: '', cast: { name: 'Wen', icon: 'W', role: 'buyer', hello: 'Hi', style: 'steady' }, plan: { kind: 'sell', asset: { name: 'Clip' }, buyer: { name: 'Wen' }, fair: 5, budget: 6 }, cash: 10, view: null, canQuick: true, first: true, stageDone: false };
   const h = UI.sheetHTML({ ...m, stage: 'result', plan: { kind: 'sell', asset: { name: 'Clip' }, buyer: { name: 'Wen' } } });
   assert.ok(!/deal-dock/.test(h), 'a result has neither a scoreboard nor buttons, so no band');
+});
+
+// ---- the concession cards: "lands" is where the step leaves your number, not the step read as a price
+const pctVsFair = (price, fair) => `${price >= fair ? '+' : '-'}${Math.abs(Math.round((price / fair - 1) * 100))}% vs fair`;
+const cardLine = (h, size) => { const m = h.match(new RegExp(`data-size="${size}"[^>]*>.*?<small class="mv-d">([^<]*)</small>`)); return m && m[1]; };
+
+test('a concession card says where the step lands: what the haggle then shows against fair, for a buyer and a seller, at any price and any opening', () => {
+  let checked = 0;
+  for (const role of ['buy', 'sell']) for (const fair of [0.46, 4.6, 18.87, 250]) for (const style of ['friendly', 'hard']) for (const level of ['high', 'fair', 'low']) {
+    const open = () => H.act(H.create({ role, fair, style, seed: 7 }), { type: 'anchor', level }).state;
+    const v = H.view(open());
+    if (v.done) continue; // a generous enough opening is taken at once: there is no Close stage left to draw
+    const h = UI.closeHTML({ plan: { kind: role }, view: v, stageDone: false });
+    for (const size of ['small', 'medium', 'large']) {
+      if (!v.actions.some((x) => x.type === 'concede' && x.size === size)) continue;
+      const after = H.view(H.act(open(), { type: 'concede', size }).state);
+      assert.notEqual(after.yours, v.yours, 'the move moved the number');
+      assert.equal(cardLine(h, size), `lands ${pctVsFair(after.yours, fair)}`, `${role} at ${fair}, ${style}, opened ${level}, a ${size} step`);
+      assert.ok(Math.abs(UI.concedeTo(v, size) - after.yours) <= 1e-4 * fair, 'the card\'s number is the one the haggle then holds');
+      checked++;
+    }
+  }
+  assert.ok(checked >= 60, `enough openings were checked: ${checked}`);
+});
+
+test('a concession card never reads a step as a price: no "-96% vs fair" for a small step, whatever the deal', () => {
+  for (const role of ['buy', 'sell']) for (const fair of [4.6, 18.87]) {
+    const s = H.act(H.create({ role, fair, style: 'hard', seed: 3 }), { type: 'anchor', level: 'fair' }).state;
+    assert.ok(!s.done);
+    const h = UI.closeHTML({ plan: { kind: role }, view: H.view(s), stageDone: false });
+    for (const size of ['small', 'medium', 'large']) {
+      const n = Number((cardLine(h, size).match(/([+-]\d+)%/) || [])[1]);
+      assert.ok(Math.abs(n) <= 40, `${size} reads ${n}%: the haggle's whole range is 40% either side of fair`);
+    }
+    assert.ok(!/-9[0-9]% vs fair/.test(h));
+  }
+});
+
+test('the last step stops at the floor, as the haggle does: concedeTo never goes past it, and says nothing without a number of yours', () => {
+  const v = { role: 'sell', fair: 100, yours: 62, floor: 60, steps: { small: 4, medium: 9, large: 16 } };
+  assert.equal(UI.concedeTo(v, 'small'), 60, 'a seller stops at the floor');
+  assert.equal(UI.concedeTo(v, 'large'), 60);
+  const b = { ...v, role: 'buy', yours: 138, floor: 140 };
+  assert.equal(UI.concedeTo(b, 'large'), 140, 'a buyer stops at the ceiling');
+  assert.equal(UI.concedeTo({ ...v, yours: 80 }, 'medium'), 71);
+  assert.equal(UI.concedeTo({ ...b, yours: 90 }, 'medium'), 99);
+  assert.equal(UI.concedeTo({ ...v, yours: null }, 'small'), null);
+  assert.equal(UI.concedeTo({ ...v, steps: {} }, 'small'), null);
+  assert.equal(UI.concedeTo(null, 'small'), null);
+  assert.equal(cardLine(UI.closeHTML({ plan: { kind: 'sell' }, view: { ...H.view(H.act(H.create({ role: 'sell', fair: 10, seed: 1 }), { type: 'anchor', level: 'fair' }).state), fair: 0 }, stageDone: false }), 'small'), '', 'no fair price, no comparison');
+});
+
+// ---- the foot on a short window
+test('a short window (a phone on its side) docks only the buttons: the scoreboard scrolls with the stage, and the rule never overlaps the phone layout', () => {
+  const css = read('css/ui-deal.css'), at = css.indexOf('@media (max-height: 520px) and (min-width: 761px)');
+  assert.ok(at > 0, 'a rule for short windows that are wider than a phone');
+  const block = css.slice(at, css.indexOf('\n}', at));
+  assert.match(block, /\.deal-dock \{ display: contents; \}/, 'the board is no longer pinned');
+  assert.match(block, /\.deal-foot \{ position: sticky; bottom: 0;[^}]*background: var\(--panel\);/, 'the buttons are, on the panel colour');
+  assert.match(block, /dialog\.deal \{[^}]*max-height: calc\(100dvh - \.5rem\)/, 'the sheet takes the height the screen has');
+  assert.ok(at > css.indexOf('min-width: 1800px'), 'it follows the big-screen block, so its padding is the one the foot\'s margin matches');
+  assert.ok(!/@media \(max-height: 520px\)[^{]*\{[^]*?\.deal-dock \{ position: sticky/.test(block), 'and pins nothing but the foot');
+  assert.match(css, /\.deal-dock \{ position: sticky; bottom: -1rem;/, 'a tall window keeps the docked scoreboard');
 });

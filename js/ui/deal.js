@@ -17,6 +17,15 @@ const pc = (x) => `${Math.round(num(x) * 100)}%`;
 const at = (v, lo, hi) => `${Math.max(0, Math.min(100, ((num(v) - lo) / Math.max(1e-9, hi - lo)) * 100)).toFixed(1)}%`;
 /** "+12% vs fair": a price against the fair price, for the offer cards. Empty when there is nothing to compare with. */
 const vsFair = (price, fair) => (Number.isFinite(price) && fair > 0 ? `${price >= fair ? '+' : '-'}${Math.abs(Math.round((price / fair - 1) * 100))}% vs fair` : '');
+/** Where a concession of size k leaves your number. view().steps holds the SIZE of each move (a distance, not a price), so it is taken from your
+ *  number when you ask (sell) and added to it when you offer (buy); the last step stops at the floor, as the haggle itself does (js/play/haggle.js, concede).
+ *  Null when there is no number of yours yet. Exported so the card and its test read the one rule. */
+export function concedeTo(v, k) {
+  const step = v && v.steps ? v.steps[k] : null;
+  if (!v || !Number.isFinite(v.yours) || !Number.isFinite(step)) return null;
+  const buy = v.role === 'buy', to = buy ? v.yours + step : v.yours - step;
+  return Number.isFinite(v.floor) ? (buy ? Math.min(to, v.floor) : Math.max(to, v.floor)) : to;
+}
 const flip = (v, lo, hi) => ((num(v) - lo) / Math.max(1e-9, hi - lo) > 0.8 ? ' flip' : ''); // a label near the right edge hangs to the left of its line
 const ANGLE = { prestige: ['👑', 'Prestige', 'status, standing, how it looks to others'], utility: ['🔧', 'Utility', 'what it does and how well'], scarcity: ['⏳', 'Scarcity', 'rare, now or never'], price: ['🏷️', 'Price', 'a bargain, good value'], story: ['📖', 'Story', 'where it came from, why it matters'] };
 const PROBE = { look: ['👀', 'Look it over', 'Cheap. Catches obvious wear.'], serial: ['🔎', 'Check the serial', 'The best test for a counterfeit.'], power: ['⚡', 'Power it up', 'The sharpest read on condition.'], papers: ['📄', 'Read the paperwork', 'A cheap second opinion on both.'], expert: ['🧑‍🔧', 'Hire an expert', 'Dear, but needs no skill of yours.'] };
@@ -137,7 +146,7 @@ export function closeHTML(m) {
     moves = `<p class="small">Your first number pulls the whole talk toward it. ${buy ? 'Offering' : 'Asking'}:</p><div class="moves anchors">${['high', 'fair', 'low'].map((lv) => `<button class="move${recIf('anchor', 'level', lv)}" data-deal="anchor" data-level="${lv}" data-fid="mv-${lv}" ${can(v, 'anchor', 'level', lv) ? '' : 'disabled'}><span><span aria-hidden="true">${G[lv]}</span> ${L[lv][0]}</span><b>${money(v.anchors[lv])}</b><small class="mv-d">${vsFair(v.anchors[lv], v.fair)}</small></button>`).join('')}</div>
       <div class="row"><button class="btn ghost sm" data-deal="walk" data-fid="walk">${buy ? 'Pass on this lot' : 'Walk away'}</button></div>`;
   } else {
-    const verb = buy ? 'Raise your offer' : 'Come down', sz = (k) => `<button class="move${recIf('concede', 'size', k)}" data-deal="concede" data-size="${k}" data-fid="mv-${k}" ${can(v, 'concede', 'size', k) ? '' : 'disabled'}><span>${verb}</span><b>${money(v.steps[k])}</b><small class="mv-d">${vsFair(v.steps[k], v.fair)}</small></button>`;
+    const verb = buy ? 'Raise your offer' : 'Come down', landNote = (w, k) => { const to = concedeTo(w, k), d = to == null ? '' : vsFair(to, w.fair); return d && `lands ${d}`; }, sz = (k) => `<button class="move${recIf('concede', 'size', k)}" data-deal="concede" data-size="${k}" data-fid="mv-${k}" ${can(v, 'concede', 'size', k) ? '' : 'disabled'}><span>${verb}</span><b>${money(v.steps[k])}</b><small class="mv-d">${landNote(v, k)}</small></button>`;
     moves = `<div class="moves">
       <button class="move${recIf('hold')}" data-deal="hold" data-fid="mv-hold"><span>Hold</span><b>${money(v.yours)}</b><small class="mv-d">${vsFair(v.yours, v.fair)}</small></button>${sz('small')}${sz('medium')}${sz('large')}
       <button class="move${recIf('split')}" data-deal="split" data-fid="mv-split" ${can(v, 'split') ? '' : 'disabled'}><span>Split the difference</span><b>${v.yours != null && v.theirs != null ? money((v.yours + v.theirs) / 2) : '-'}</b><small class="mv-d">${v.yours != null && v.theirs != null ? vsFair((v.yours + v.theirs) / 2, v.fair) : ''}</small></button>

@@ -7,7 +7,7 @@ import { SKILLS, SKILL_MAX, PERKS, ZONES, xpForLevel } from '../../config.js';
 import { esc } from '../common.js';
 import { fmtMoney as money, restoreQuality } from '../../market.js';
 import { QUEST_BY_ID } from '../../meta/progress.js';
-import { goToDistrict, keepScroll } from './travel.js';
+import { goToDistrict, keepScroll, rememberScroll } from './travel.js';
 
 const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
 const pctN = (x) => Math.round(x * 100);
@@ -187,6 +187,14 @@ function html(ctx) {
   return `<div class="qs">${nav}${heroHTML(ctx)}${skills}${has ? `${questsHTML(ctx)}${dailiesHTML(ctx)}${achievementsHTML(ctx)}` : ''}</div>`;
 }
 
+/** The wash a heading gets when a jump lands on it (css .landed); it restarts when the same heading is jumped to twice running. */
+function landed(h) {
+  const c = h && h.classList;
+  if (!c) return;
+  c.remove('landed'); void h.offsetWidth; c.add('landed');
+  if (h.addEventListener) h.addEventListener('animationend', () => c.remove('landed'), { once: true });
+}
+
 function acts(ctx) {
   const set = (patch) => { ctx.U.quests = { ...(ctx.U.quests || {}), ...patch }; ctx.render(); };
   keepScroll(ctx, ['quests']);
@@ -204,13 +212,18 @@ function acts(ctx) {
     'quests-jump'(el) {
       const sec = ctx.$?.(`[data-qsect="${el.dataset.to}"]`, ctx.el?.drawer);
       if (!sec) return;
-      const behavior = ctx.reduced?.() ? 'auto' : 'smooth', db = sec.closest?.('.db');
+      // The jump is instant, never smooth, whatever the motion setting: the shell redraws the open drawer every 230 ms and writes the list's scrollTop back
+      // each time, which cancels a smooth scroll in flight and strands the jump part way (measured: Badges stopped at 70 of 3257). An instant jump has no
+      // animation to cancel and lands exactly under the sticky jump bar; the heading's brief wash (.landed) is what shows the eye where it went.
+      const db = sec.closest?.('.db'), h3 = sec.querySelector?.('h3');
       if (db && typeof db.scrollTo === 'function' && typeof sec.getBoundingClientRect === 'function') {
         // scroll the drawer's own list, and nothing else: scrollIntoView would also move the whole stage (overflow hidden) and slide the HUD off the screen
         const clear = parseFloat(getComputedStyle(sec).scrollMarginTop) || 0;
-        db.scrollTo({ top: Math.max(0, sec.getBoundingClientRect().top - db.getBoundingClientRect().top + db.scrollTop - clear), behavior });
-      } else sec.scrollIntoView?.({ behavior, block: 'start' });
-      sec.querySelector('h3')?.focus?.({ preventScroll: true });
+        db.scrollTo({ top: Math.max(0, sec.getBoundingClientRect().top - db.getBoundingClientRect().top + db.scrollTop - clear), behavior: 'auto' });
+      } else sec.scrollIntoView?.({ behavior: 'auto', block: 'start' });
+      rememberScroll(ctx);
+      h3?.focus?.({ preventScroll: true });
+      landed(h3);
     },
   };
 }
