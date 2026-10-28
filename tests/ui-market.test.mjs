@@ -309,7 +309,7 @@ test('Look it over opens the Deal Room; Quick buy opens it too and plays it with
   assert.equal(g.s.assets.length, crates + 1, 'the crate arrived');
   assert.ok(!g.s.lots[2].some((l) => l.id === lot.id), 'the lot is gone');
   assert.ok(g.s.cash < cash);
-  assert.equal(seen.at(-1), 'buy', 'the buy is the last thing the engine hears');
+  assert.ok(seen.includes('buy'), 'the buy is heard (the haggle is counted once the purchase has gone through, so it may follow it)');
   assert.ok(seen.includes('inspect') && seen.some((t) => t === 'haggle' || t === 'auction'), `a Quick buy is read and haggled or bid for like any other: ${seen.join(', ')}`);
   assert.match(ctx.calls.filter((c) => c[0] === 'dlg').at(-1)[1], /deal-result/, 'and the room shows its result');
   // a lot that has gone is said, not crashed on, by both buttons
