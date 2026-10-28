@@ -485,9 +485,7 @@ test('the real Academy: every anchor and wait is one the driver understands, and
   }
 });
 // Known faults in the lesson data (not in the driver), kept visible rather than hidden: the test is a `todo` until the data is fixed, and passes then.
-const KNOWN_DATA_FAULTS = {
-  m10: 'set in district 6 but sells district-5 goods: the boutique lead wants Viral Gadget Pallets, which have no demand in Estate Sales, so quotePitch says "Nobody in Estates wants Viral Gadget Pallet" and the last step cannot be done',
-};
+const KNOWN_DATA_FAULTS = {}; // empty: every lesson in js/meta/academy.js is winnable by scripted engine play
 for (const m of REAL) {
   test(`the real lesson ${m.id} (${m.title}) can be won by scripted engine play`, { todo: KNOWN_DATA_FAULTS[m.id] }, () => {
     const r = playLesson(m);
