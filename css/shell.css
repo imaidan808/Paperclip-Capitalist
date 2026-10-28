@@ -134,7 +134,8 @@ body:has(.stage) { background-image: none; overflow: hidden; overscroll-behavior
 @keyframes dsheet { from { transform: translateY(32px); opacity: 0; } to { transform: none; opacity: 1; } }
 .dh { position: relative; display: flex; align-items: center; justify-content: space-between; gap: var(--sp-2); padding: var(--sp-2) var(--sp-3); background: var(--plate); border-bottom: 1px dashed var(--line); }
 .dh h2 { margin: 0; min-width: 0; overflow-wrap: anywhere; } .dh h2:focus { outline: none; }
-.db { flex: 1; min-height: 0; overflow: auto; overscroll-behavior: contain; padding: var(--sp-3); display: grid; gap: .7rem; align-content: start; }
+/* --db-pad is the body's own padding, published so a panel's sticky bar can bleed out to the drawer's edges by exactly that much (ui-quests.css .qs-nav, ui-travel.css .tv-shiprow). */
+.db { --db-pad: var(--sp-3); flex: 1; min-height: 0; overflow: auto; overscroll-behavior: contain; padding: var(--db-pad); display: grid; gap: .7rem; align-content: start; }
 .db .sect > h3 { display: flex; justify-content: space-between; gap: var(--sp-2); border-bottom: 1px dashed var(--line); padding-bottom: var(--sp-1); margin-bottom: var(--sp-2); text-transform: uppercase; letter-spacing: .06em; font-size: var(--t-sm); color: var(--mute); }
 .dtabs { display: flex; gap: .3rem; flex-wrap: wrap; } .dtabs .btn[aria-pressed="true"] { background: var(--gold); color: var(--on-gold); border-color: var(--gold); }
 .overlay { position: absolute; inset: 0; z-index: var(--z-overlay); pointer-events: none; } .overlay > * { pointer-events: auto; }

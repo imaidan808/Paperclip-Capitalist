@@ -57,7 +57,7 @@
 .tv-gap.up { color: var(--green); }
 .tv-gap.down { color: var(--red); }
 .tv-warn { margin: 0; font-size: .78rem; color: var(--gold); overflow-wrap: anywhere; }
-.tv-shiprow { position: sticky; bottom: -.8rem; z-index: 1; display: grid; gap: .4rem; margin: .7rem -.8rem -.8rem; padding: .6rem .8rem; background: var(--panel); border-top: 1px dashed var(--line); } /* the Ship button stays in reach of a long list */
+.tv-shiprow { position: sticky; bottom: calc(-1 * var(--db-pad, .8rem)); z-index: 1; display: grid; gap: .4rem; margin: .7rem calc(-1 * var(--db-pad, .8rem)) calc(-1 * var(--db-pad, .8rem)); padding: .6rem var(--db-pad, .8rem); background: var(--panel); border-top: 1px dashed var(--line); } /* the Ship button stays in reach of a long list */
 .tv-shiprow .btn.big { width: 100%; }
 .tv-why { margin: 0; color: var(--gold); }
 .tv-empty { display: grid; gap: .5rem; justify-items: center; text-align: center; padding: 1rem; background: var(--panel2); border: 2px dashed var(--line); }
