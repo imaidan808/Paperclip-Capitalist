@@ -1,5 +1,7 @@
 // node tests/balance.mjs [seeds=5] [every=4] [--no-managers]  -> plays all 66 pairs of Backgrounds with the heuristic bot and reports the day each pair reaches districts 5, 9 and 13
-// (--no-managers plays the same bot with hiring forbidden: the hand-play side of the managers-versus-hand comparison in docs/BALANCE.md)
+// (--no-managers plays the same bot with hiring forbidden: the hand-play side of the managers-versus-hand comparison in docs/BALANCE.md;
+// --compare plays both and prints, for every Background (its eleven pairs) and for the whole table, the day-90 median net worth of hand play over the median with managers: the number the design wants under 1
+// for every family at a decision every 4 and 8 hours, `handOverManagers()` below. Ten seeds is the check the finishing round used: `node tests/balance.mjs 10 4 --compare`.)
 // (docs/V2_DESIGN.md section 11: the target is that no pair deviates from the median milestone day by more than 35%; this script REPORTS the pairs that do, it is not a CI gate).
 // It also reports where the whole table ends up: how many runs reach district 16, the day-90 net worth percentiles, and how far apart the pairs' net worths are. The milestone days alone cannot see a late game
 // that runs away (most runs in district 16 and a spread of net worth far past three passed it unnoticed once): `lateGame()` is what tests/audit-repair.test.mjs and tests/remaining-balance.test.mjs hold to bounds on a sample of the pairs.
@@ -29,7 +31,7 @@ export function balance({ seeds = DEFAULT_SEEDS, every = DEFAULT_EVERY, pairs = 
       if (wipedOut(g)) { wiped++; continue; }
       GATES.forEach((z, i) => days[i].push(m[z] ?? 91)); // 91: never got there in 90 days
       nw += g.netWorth();
-      ends.push({ nw: g.netWorth(), d16: m[16] ?? 91 });
+      ends.push({ nw: g.netWorth(), d16: m[16] ?? 91, k });
     }
     const live = seeds - wiped;
     rows.push({ pair: a + '+' + b, d: days.map((x) => (x.length ? med(x) : null)), nw: live ? nw / live : 0, wiped, ends });
@@ -51,9 +53,33 @@ export function lateGame(rows) {
   };
 }
 
+/**
+ * Hand play against managers, family by family. A family is one Background's pairs among `pairs` (eleven of the 66). `ratio` is the median day-90 net worth of the bot that never hires over the median of the bot
+ * with managers, wipe-outs left out of both (the design: under 1 for every family at a decision every 4 and 8 hours, docs/BALANCE.md, Managers and hand play); `paired` is the median of the same ratio taken run by run
+ * (the same pair, the same seed), which the chance of one lucky run moves less. `all` is the same over every pair.
+ */
+export function handOverManagers({ seeds = DEFAULT_SEEDS, every = DEFAULT_EVERY, pairs = PERK_PAIRS } = {}) {
+  const m = balance({ seeds, every, pairs, managers: true }), h = balance({ seeds, every, pairs, managers: false });
+  const runs = (r, test) => r.rows.filter((x) => test(x.pair.split('+'))).flatMap((x) => x.ends.map((e) => ({ key: x.pair + '#' + e.k, nw: e.nw })));
+  const cell = (test) => {
+    const a = runs(h, test), b = runs(m, test), by = new Map(b.map((x) => [x.key, x.nw]));
+    const paired = a.filter((x) => by.has(x.key) && by.get(x.key) > 0).map((x) => x.nw / by.get(x.key));
+    return { hand: med(a.map((x) => x.nw)), managers: med(b.map((x) => x.nw)), ratio: med(a.map((x) => x.nw)) / med(b.map((x) => x.nw)), paired: paired.length ? med(paired) : null, runs: Math.min(a.length, b.length) };
+  };
+  const ids = [...new Set(pairs.flat())];
+  return { all: cell(() => true), families: ids.map((id) => ({ id, ...cell((p) => p.includes(id)) })).sort((x, y) => y.ratio - x.ratio), managers: m, hand: h };
+}
+
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const nums = process.argv.slice(2).filter((x) => !x.startsWith('--'));
   const seeds = +(nums[0] || DEFAULT_SEEDS), every = +(nums[1] || DEFAULT_EVERY), managers = !process.argv.includes('--no-managers');
+  if (process.argv.includes('--compare')) {
+    const c = handOverManagers({ seeds, every }), $c = (x) => Math.round(x).toLocaleString();
+    console.log(`${seeds} seeds, a decision every ${every} hours: day-90 median net worth of hand play (no managers) over the bot with managers, by Background (its eleven pairs)`);
+    for (const f of c.families) console.log(f.id.padEnd(10), 'ratio', f.ratio.toFixed(2), ' paired', f.paired == null ? '-' : f.paired.toFixed(2), ' hand', $c(f.hand).padStart(11), ' managers', $c(f.managers).padStart(11), f.ratio > 1 ? '  <- hand play ahead' : '');
+    console.log('all pairs'.padEnd(10), 'ratio', c.all.ratio.toFixed(2), ' paired', c.all.paired == null ? '-' : c.all.paired.toFixed(2), ' hand', $c(c.all.hand).padStart(11), ' managers', $c(c.all.managers).padStart(11));
+    process.exit(0);
+  }
   const r = balance({ seeds, every, managers });
   console.log(`${seeds} seeds, a decision every ${every} hours${managers ? '' : ', managers forbidden'}. Median day to districts 5 / 9 / 13:`, r.base.join(' / '));
   console.log('pair'.padEnd(22), 'day d5 / d9 / d13', '  deviation from the median'.padEnd(34), ' mean NW'.padEnd(12), 'wipe-outs');
