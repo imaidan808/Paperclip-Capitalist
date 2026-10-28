@@ -220,7 +220,7 @@ test('A3: inside the dialog the coach points at the manager the wallet can feed,
 test('A3: the runner hops the card into the dialog for a dialog anchor and watches the dialog for a manager picked', () => {
   const src = readFileSync(new URL('../js/ui/academy.js', import.meta.url), 'utf8');
   assert.match(src, /dlg\.el\.open && dlg\.el\.contains\(el\)/, 'a card whose anchor lives in the dialog is carried into it');
-  assert.match(src, /hostFor = \(res\) => \(dealOpen\(\) \|\| inDialog\(res\) \? dlg\.el : ctx\.el\.overlay\)/, 'and so is every card while a Deal Room is open, whatever its step points at');
+  assert.match(src, /hostFor = \(\) => \(dlg\.el\.open \? dlg\.el : ctx\.el\.overlay\)/, 'and so is every card while any window is open (the Deal Room, an alert, a breakdown), whatever its step points at: a hint is never under a modal');
   assert.match(src, /hireCoach\(steps\[run\.i\], hireSnap\(\)\)/); assert.match(src, /\[data-anchor\^="hire-"\]\[aria-pressed="true"\]/, 'the manager picked is read from the dialog itself');
   assert.match(src, /mo\.observe\(dlg\.el, \{ childList: true, subtree: true, attributes: true, attributeFilter: \['open', 'aria-pressed'\] \}\)/, 'a pick repaints the card at once');
   assert.match(src, /const c = coachNow\(\), a = parseAnchor\(c\.anchor\)/, 'Show me points at the control the card names now');

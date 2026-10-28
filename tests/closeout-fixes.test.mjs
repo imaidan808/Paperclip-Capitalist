@@ -35,7 +35,10 @@ test('A5: a lesson shows no level, XP or skill point of its own, and its pretend
 
 test('the Deal Room: the focused Stop is brought into view, and the short window keeps the foot clear of the ring', () => {
   const src = read('js/ui/deal.js');
-  assert.match(src, /f\.closest\('\.deal-stage'\)\) f\.scrollIntoView\?\.\(\{ block: 'nearest', inline: 'nearest' \}\)/, 'a control of the stage that was focused on arrival is scrolled just into view (not the foot, which is sticky)');
+  // DESIGN CHANGE on purpose (tests/finish-flow.test.mjs): the one scrollIntoView for the Stop that was focused on arrival became a scroll after EVERY paint, for wherever the cursor is (the
+  // next probe, Bid after a bid, the Stop of the second repair step, a stage's head), measured against the real foot instead of a guessed scroll-padding.
+  assert.match(src, /const reveal = \(d\) => \{ const a = doc\.activeElement; if \(a && a !== d && d\.contains\(a\)\) keepInView\(d, a, \{ sticky: STICKY \}\); \};/, 'a control the cursor is on is scrolled just into view (never the foot, which is sticky)');
+  assert.match(src, /else keepFocus\(d\);\n    reveal\(d\);/, 'after the cursor has been put back, whichever way it went');
   const css = read('css/ui-deal.css'), short = css.slice(css.indexOf('@media (max-height: 520px) and (min-width: 761px)'));
   const pad = short.match(/scroll-padding-bottom: ([\d.]+)rem/);
   assert.ok(pad && +pad[1] * 16 >= 55.4 + 5, `the room kept under a scrolled-to control (${pad && +pad[1] * 16}px) is the foot (55.4px at 844 x 390) and the ring's 5px`);
@@ -60,10 +63,11 @@ test('setHTML leaves a child marked data-keep where it is, so a layer put into t
   delete globalThis.document;
 });
 
-test('the Academy card: the layer is marked to be kept, the runner keeps clear of what the keyboard is on, and follows into the Deal Room for any step', () => {
+test('the Academy card: the layer is marked to be kept, the runner keeps clear of what the keyboard is on, and follows into any open window', () => {
   const src = read('js/ui/academy.js');
   assert.match(src, /layer\.dataset\.keep = ''/);
-  assert.match(src, /const hostFor = \(res\) => \(dealOpen\(\) \|\| inDialog\(res\) \? dlg\.el : ctx\.el\.overlay\)/);
+  // DESIGN CHANGE on purpose (tests/finish-flow.test.mjs): the card follows into ANY open window, not only the Deal Room and a dialog that holds its anchor, so a lesson's hint is never under a modal
+  assert.match(src, /const hostFor = \(\) => \(dlg\.el\.open \? dlg\.el : ctx\.el\.overlay\)/);
   assert.match(src, /host === dlg\.el && !inDialog\(found\) \? null : found/, 'a step whose thing is not in the sheet gets no ring there');
   assert.match(src, /document\.addEventListener\('focusin', onFocus\)/); assert.match(src, /document\.removeEventListener\('focusin', onFocus\)/, 'and lets the listener go with the lesson');
   assert.match(src, /classList\.add\('compact'\)/, 'and where no place is clear of it, the card shrinks to its head and buttons'); assert.match(read('css/ui-academy.css'), /\.ac-coach\.compact :is\(\.ac-say, \.ac-hint, \.ac-look, \.ac-lost\) \{ display: none; \}/);

@@ -18,6 +18,9 @@
 //  - A lesson can send the player into a dialog. The hire dialog is a modal over the Crew drawer, so a coach card behind it could never be read: while it is open, a step that
 //    waits for the hire is pointed at the dialog's own controls (data-anchor hire-<manager> and hire-go, drawers/crew.js) and the card hops into the dialog, as it does into the
 //    Deal Room. Any step may also name one of those anchors itself.
+//  - A card must be readable wherever the player is. While ANY window is open (the Deal Room, a Cash breakdown, an alert) the card is inside it, so its 20-second hint is never under a
+//    modal. A thing the card cannot frame is never pointed at as if it could: unseenNote (./academy-sandbox.js) says what to do to bring it up (a Deal Room control before a deal is
+//    open, the news line before there is news) or that it is behind the window, and Show me says "Nothing to frame yet" rather than "the gold frame".
 import { $, esc, delegate, dlg, toast, announce, sfx, burst, reduced } from './common.js';
 import { countUp } from './polish.js';
 import { kv } from '../session.js';
@@ -27,7 +30,7 @@ import {
   parseAnchor, resolveAnchor, hitMatches, placeCard, coverScore, rectsOverlap, coverOf, pointInRect, startRun, feedRun, coachFor, satisfiedNow, shortSay, hintDue,
   newTeach, pickTeach, revealTeach, teachDone, teachFirstTry, readAcademy, markMission, nextIndex, rewardPlan, applyRewards,
   readPending, addPending, claimPending, codexSeed, emptyMeta, makeSandboxSession, featuresFor, KEYS,
-  newLookout, hireSnapshot, hireCoach,
+  newLookout, hireSnapshot, hireCoach, unseenNote,
 } from './academy-sandbox.js';
 
 let MISSIONS = [];
@@ -35,7 +38,7 @@ try { ({ ACADEMY: MISSIONS } = await import('../meta/academy.js')); } catch { /*
 export const missionList = () => MISSIONS;
 
 let shellP = null;
-const loadShell = () => (shellP ||= import('./shell.js')); // loaded when a lesson starts: the intro and the pure parts do not need the whole game screen
+const loadShell = () => (shellP ||= Promise.all([import('./shell.js'), import('./deal.js')]).then(([sh, dl]) => ({ mountGame: sh.mountGame, openDealOf: dl.openDealOf }))); // loaded when a lesson starts: the intro and the pure parts do not need the whole game screen
 
 export const pendingRewards = (store = kv) => readPending(store);
 export function claimPendingRewards(game, store = kv) { return claimPending(store, game, (g) => new Progress(g)); }
@@ -62,7 +65,11 @@ export function introHTML(m, { index, total, st, concept, replay, missions = [] 
   </section>`;
 }
 
-/** The coach card's inside. o = { showMe, hint (bool), confirm (bool), manual (bool), title }. */
+/**
+ * The coach card's inside. o = { showMe, hint (bool), confirm (bool), manual (bool), title, where, framed, exists }. The runner says what the player can really see: `framed` (a gold frame is
+ * drawn round the thing), `exists` (the thing is on screen but too big to frame) and `where` (a sentence for a thing that is not on screen yet, or is under a window: academy-sandbox.js,
+ * unseenNote). A card made without them (a test, a print) says what it always said. The card never claims a frame there is none of: Show me is honest about it.
+ */
 export function coachHTML(c, o = {}) {
   const dots = Array.from({ length: Math.min(12, Math.max(0, c.total | 0)) }, (_, i) => `<i${c.finishing || i <= c.index ? ' class="on"' : ''}></i>`).join('');
   const head = `<div class="ac-head"><small class="ac-eyebrow mono">${esc(o.title || 'Lesson')} &middot; ${c.finishing ? 'Last step' : `Step ${c.index + 1} of ${c.total}`}</small>${dots ? `<span class="ac-dots" aria-hidden="true">${dots}</span>` : ''}</div>`;
@@ -70,8 +77,10 @@ export function coachHTML(c, o = {}) {
     return `${head}<p class="ac-say" id="ac-say">Skip this lesson? You will still see why it works and answer one question.</p>
       <div class="ac-btns"><button class="btn sm" data-act="ac-skip-yes">Yes, skip it</button><button class="btn sm ghost" data-act="ac-skip-no">Keep going</button></div>`;
   }
+  const framed = o.framed !== false;
+  const look = !o.showMe ? '' : framed ? 'It is the control with the gold frame.' : o.exists ? 'It is too big for a frame: it covers most of the screen.' : 'Nothing to frame yet.';
   return `${head}<p class="ac-say" id="ac-say">${esc(c.say)}</p>
-    ${o.showMe ? '<p class="ac-look" role="note">It is the control with the gold frame.</p>' : ''}
+    ${o.where ? `<p class="ac-where" role="note">${esc(o.where)}</p>` : ''}${look ? `<p class="ac-look" role="note">${esc(look)}</p>` : ''}
     ${o.hint ? `<p class="ac-hint" role="note"><b>Hint:</b> ${esc(c.hint)}</p>` : ''}
     <div class="ac-btns">${o.manual ? '<button class="btn sm" data-act="ac-continue">Continue</button>' : ''}<button class="btn sm ghost" data-act="ac-showme" aria-pressed="${!!o.showMe}">Show me</button><button class="btn sm ghost" data-act="ac-skip">Skip lesson</button>${o.hint ? '<button class="btn sm ghost" data-act="ac-restart">Restart</button>' : ''}</div>`;
 }
@@ -130,6 +139,15 @@ export function rewardHTML(m, paid, lookup, { last, skipped, replay, index, tota
     <div class="row gap"><button class="btn big" data-act="ac-reward-next">${last ? (only ? 'Done' : 'Finish the Academy') : 'Next lesson'}</button></div>`;
 }
 
+/**
+ * The stops Tab visits in one of the sheets that follow a lesson, in order: what a keyboard can reach by Tab, which is not the heading (tabindex -1: the page puts the cursor there
+ * so it is read, and Tab never lands on it, so a ring would only be drawn for a stop nobody can come back to). `active` is kept even when it is hidden, so the trap still knows where it is.
+ */
+export const TAB_STOP = 'a[href], button:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), summary, [tabindex]:not([tabindex="-1"])';
+export function tabStops(root, active) {
+  return [...root.querySelectorAll(TAB_STOP)].filter((x) => x.offsetParent !== null || x === active);
+}
+
 // ------------------------------------------------------------------ the driver
 export function mountAcademy(root, S, { onDone, onSkip, only, missions, store = kv } = {}) {
   const list = Array.isArray(missions) ? missions : MISSIONS;
@@ -167,20 +185,20 @@ export function mountAcademy(root, S, { onDone, onSkip, only, missions, store = 
     if (dead) return;
     cleanupPlay();
     pauseReal();
-    try { cur = lesson(shell.mountGame, idx); } catch (err) { console.error(err); toast('The lesson could not start. You can leave the Academy and try again later.', 'bad'); intro(idx); }
+    try { cur = lesson(shell.mountGame, idx, shell.openDealOf); } catch (err) { console.error(err); toast('The lesson could not start. You can leave the Academy and try again later.', 'bad'); intro(idx); }
   }
 
-  function lesson(mountGame, idx) {
+  function lesson(mountGame, idx, dealOf) {
     const m = list[idx];
     const pend = readPending(store), meta = { ...emptyMeta(), cx: codexSeed(real()?.s.meta?.cx, pend) };
     const sb = makeSandboxSession(m.setup, { id: m.id, zone: m.zone, handle: S?.handle || 'You', meta });
     const stubs = { onDebrief() {}, onTutorial() {}, onJoin() {}, onReset() {}, onAcademy: () => toast('Finish or leave this lesson first.', 'info') };
     const mounted = mountGame(root, sb, stubs);
-    try { return wire(mounted, m, sb, idx); } catch (err) { try { mounted.destroy(); } catch { /* half built */ } throw err; }
+    try { return wire(mounted, m, sb, idx, dealOf); } catch (err) { try { mounted.destroy(); } catch { /* half built */ } throw err; }
   }
 
   /** The lesson on top of a mounted game screen: coach marks, the step resolver, the sheets, the heartbeat. Returns { destroy }. */
-  function wire(mounted, m, sb, idx) {
+  function wire(mounted, m, sb, idx, dealOf) {
     const steps = m.steps || [];
     const { ctx } = mounted, U = ctx.U, off = [];
     U.features = Array.isArray(m.setup?.features) ? featuresFor(m) : null;
@@ -225,12 +243,13 @@ export function mountAcademy(root, S, { onDone, onSkip, only, missions, store = 
       ctx.el.overlay.appendChild(layer);
       lastKey = '';
     }
-    // A modal dialog (the top layer) hides the overlay the card normally lives in, so while one is open that carries the lesson the card goes into it: the Deal Room for any
-    // step (the step's own thing, a buyer or a lot in the world, is behind the sheet), or a dialog that holds the step's anchor (the hire dialog). A card for a thing the sheet
-    // does not show points at nothing (no ring) and stands where it covers the least.
+    // A modal dialog (the top layer) hides the overlay the card normally lives in, so while ANY window is open the card goes into it: the Deal Room, the hire dialog, a Cash breakdown, an
+    // alert, a confirmation. The card must be readable, and its 20-second hint seen, wherever the player is stuck. A card for a thing the window does not show points at nothing (no ring),
+    // says so (unseenNote: it is behind the window, or what to do to make it appear) and stands where it covers the least.
     const dealOpen = () => dlg.el.open && dlg.el.classList.contains('deal');
     const inDialog = (res) => { const el = res?.anchor?.kind === 'dom' ? domEls(res.anchor.name)[0] : null; return !!el && dlg.el.open && dlg.el.contains(el); };
-    const hostFor = (res) => (dealOpen() || inDialog(res) ? dlg.el : ctx.el.overlay);
+    const hostFor = () => (dlg.el.open ? dlg.el : ctx.el.overlay);
+    const modalKind = () => (!dlg.el.open ? null : dealOpen() ? 'deal' : dlg.el.querySelector('[data-anchor^="hire-"]') ? 'hire' : 'dialog');
     // What the card must not hide, as { x, y, w, h, wt } (coverScore): the control the keyboard is on above all (a card over it hides the cursor itself), the drawer and the dock, the
     // controls of the game screen (the tracker, the camera and list buttons, the HUD, the news), and, inside a dialog, its own controls and its head.
     const CONTROLS = 'button, input, select, textarea, summary, a[href], [role="button"]';
@@ -259,24 +278,28 @@ export function mountAcademy(root, S, { onDone, onSkip, only, missions, store = 
     }
 
     let placed = null; // where the card stands: { x, y, key } (a crowded dialog keeps a place that is still about as good, see the end of paintCoach)
+    let said = ''; // what the card says about a thing it cannot frame (unseenNote), kept for the announcement a new step makes
     function paintCoach(force, snap) {
       if (dead || gone || sheet || winPending || run.won) return;
       ensureLayer();
-      const c = coachNow(), found = c.stranded ? null : resolve(c.anchor), host = hostFor(found);
+      const c = coachNow(), found = c.stranded ? null : resolve(c.anchor), host = hostFor();
       const res = host === dlg.el && !inDialog(found) ? null : found; // the step's own thing is not in the sheet that has the card: nothing to ring
       if (layer.parentNode !== host) host.appendChild(layer);
-      const key = [c.id, c.stranded || c.inDialog ? c.say : '', hintOn, showMe, confirm, !!manual].join('|');
+      const view = { w: window.innerWidth, h: window.innerHeight };
+      const spot = res && res.via !== 'fallback' && coverOf(res.rect, view) < 0.6 ? res.rect : null, pad = 6;
+      const exists = !!res && res.via !== 'fallback'; // on screen and reachable, framed or (a whole panel) too big to frame
+      const modal = modalKind(), where = c.stranded ? '' : unseenNote(c.anchor, c.wait, { exists, modal, deal: modal === 'deal' ? dealOf?.() : null });
+      said = where;
+      const key = [c.id, c.stranded || c.inDialog ? c.say : '', hintOn, showMe, confirm, !!manual, where, spot ? 1 : 0, exists ? 1 : 0].join('|');
       if (force || key !== lastKey) {
         const news = key !== lastKey && c.inDialog; // the dialog's words are spoken once, when they change
         lastKey = key;
         const had = cardEl.contains(document.activeElement) ? document.activeElement.dataset.act : null;
-        bodyEl.innerHTML = c.stranded && !confirm ? strandedHTML(c, { title: m.title }) : coachHTML(c, { showMe, hint: hintOn, confirm, manual: !!manual, title: m.title });
+        bodyEl.innerHTML = c.stranded && !confirm ? strandedHTML(c, { title: m.title }) : coachHTML(c, { showMe, hint: hintOn, confirm, manual: !!manual, title: m.title, where, framed: !!spot, exists });
         cardEl.classList.toggle('stranded', !!c.stranded);
         if (had) cardEl.querySelector(`[data-act="${had}"]`)?.focus({ preventScroll: true });
         if (news) announce(c.say);
       }
-      const view = { w: window.innerWidth, h: window.innerHeight };
-      const spot = res && res.via !== 'fallback' && coverOf(res.rect, view) < 0.6 ? res.rect : null, pad = 6;
       ringEl.hidden = !spot;
       ringEl.classList.toggle('show', !!spot && showMe);
       if (spot) { ringEl.style.width = spot.w + pad * 2 + 'px'; ringEl.style.height = spot.h + pad * 2 + 'px'; ringEl.style.transform = `translate(${Math.round(spot.x - pad)}px, ${Math.round(spot.y - pad)}px)`; }
@@ -308,7 +331,7 @@ export function mountAcademy(root, S, { onDone, onSkip, only, missions, store = 
       const c = coachFor(m, run);
       manual = satisfiedNow(steps[run.i], { drawer: U.drawer });
       paintCoach(true);
-      announce(c.finishing ? c.say : `Step ${c.index + 1} of ${c.total}. ${c.say}`);
+      announce(`${c.finishing ? c.say : `Step ${c.index + 1} of ${c.total}. ${c.say}`}${said ? ` ${said}` : ''}`);
       setTimeout(() => { if (!dead && !gone) ctx.render(); }, 0); // after the click that caused it has been handled
       soon();
     }
@@ -364,8 +387,8 @@ export function mountAcademy(root, S, { onDone, onSkip, only, missions, store = 
       if (res?.via === 'world' && pointInRect(e.clientX, e.clientY, res.rect)) feed({ type: 'click', anchor: want });
     };
     document.addEventListener('click', onClick, true);
-    const onKey = (e) => { // C jumps to the coach card
-      if ((e.key !== 'c' && e.key !== 'C') || e.metaKey || e.ctrlKey || e.altKey || sheet || dlg.el.open || e.target.matches?.('input, select, textarea, [contenteditable]')) return;
+    const onKey = (e) => { // C jumps to the coach card (in a window that carries it too)
+      if ((e.key !== 'c' && e.key !== 'C') || e.metaKey || e.ctrlKey || e.altKey || sheet || (dlg.el.open && !(cardEl && dlg.el.contains(cardEl))) || e.target.matches?.('input, select, textarea, [contenteditable]')) return;
       cardEl?.querySelector('button')?.focus(); e.preventDefault();
     };
     document.addEventListener('keydown', onKey);
@@ -390,10 +413,10 @@ export function mountAcademy(root, S, { onDone, onSkip, only, missions, store = 
         sheet.addEventListener('keydown', (e) => {
           if (/^[1-7]$/.test(e.key) || e.key === 'Escape') e.stopPropagation(); // the dock's shortcuts must not fire behind a card
           if (e.key !== 'Tab') return;
-          const f = [...sheet.querySelectorAll('button:not([aria-disabled="true"]), [tabindex="-1"]')].filter((x) => x.offsetParent !== null || x === document.activeElement);
+          const f = tabStops(sheet, document.activeElement);
           if (!f.length) return;
-          const first = f[0], lastEl = f[f.length - 1];
-          if (e.shiftKey && document.activeElement === first) { lastEl.focus(); e.preventDefault(); } else if (!e.shiftKey && document.activeElement === lastEl) { first.focus(); e.preventDefault(); }
+          const first = f[0], lastEl = f[f.length - 1], on = document.activeElement, away = !f.includes(on); // away: the cursor is on the heading, which the page put it on and Tab never reaches
+          if (e.shiftKey && (on === first || away)) { lastEl.focus(); e.preventDefault(); } else if (!e.shiftKey && on === lastEl) { first.focus(); e.preventDefault(); }
         });
         ctx.el.overlay.appendChild(sheet);
         inerted = stageKids(); for (const k of inerted) k.inert = true;
@@ -443,7 +466,7 @@ export function mountAcademy(root, S, { onDone, onSkip, only, missions, store = 
 
     // ---- actions (added to the shell's own table, so they work in the page and in the dialog)
     Object.assign(ctx.acts, {
-      'ac-showme'() { showMe = !showMe; paintCoach(true); const c = coachNow(), a = parseAnchor(c.anchor); if (showMe && a?.kind === 'dom') domEls(a.name)[0]?.focus?.({ preventScroll: true }); },
+      'ac-showme'() { showMe = !showMe; paintCoach(true); const c = coachNow(), a = parseAnchor(c.anchor); if (showMe && a?.kind === 'dom' && !ringEl.hidden) domEls(a.name)[0]?.focus?.({ preventScroll: true }); }, // the cursor goes to the control only when a frame is on it
       'ac-skip'() { confirm = true; paintCoach(true); cardEl.querySelector('[data-act="ac-skip-no"]')?.focus(); },
       'ac-skip-no'() { confirm = false; paintCoach(true); cardEl.querySelector('[data-act="ac-skip"]')?.focus(); },
       'ac-skip-yes'() { dlg.close(); skipNow(); },

@@ -32,6 +32,73 @@ export function setHTML(el, html) {
   return true;
 }
 
+// ---- keeping the cursor in sight
+// A repaint that puts the keyboard on a control with `preventScroll` (so the page does not jump under a mouse) can leave that control where nobody sees it: under a sticky foot,
+// or above the top edge of a sheet that was scrolled for the screen before. These three work out and make the one scroll that brings it back; they never move the cursor.
+/** A focus ring is a 3px line drawn 2px out from its control (css/styles.css, :focus-visible): the room a control needs on every side to be seen with its ring. */
+export const RING_REACH = 5;
+/**
+ * Pure. How far a scrolling sheet must move, in screen pixels (positive: the content goes up), for a control and its ring to lie inside `band`, the part of the sheet that can
+ * be seen ({ top, bottom }). Nothing when they already do, so a control the player can see is never moved; the nearest edge otherwise; the control's own top edge when it is
+ * taller than the band (its name is at the top). `box` is the control's rect ({ top, bottom }). Anything that is not a number answers 0.
+ */
+export function scrollDelta(box, band, reach = RING_REACH) {
+  if (!box || !band) return 0;
+  const top = box.top - reach, bottom = box.bottom + reach;
+  if (![top, bottom, band.top, band.bottom].every(Number.isFinite)) return 0;
+  if (bottom - top > band.bottom - band.top) return top - band.top;
+  if (top < band.top) return top - band.top;
+  if (bottom > band.bottom) return bottom - band.bottom;
+  return 0;
+}
+const stickyNow = (e, style) => { const cs = style(e); return cs.position === 'sticky' && cs.display !== 'contents'; };
+/**
+ * The part of a scrolling sheet `d` that a control can be seen in, in screen pixels: from the sheet's top edge to its foot, or to the top of whatever sticks to the foot (a dock of
+ * buttons, a Continue row) when that is not the control itself. `k` is the sheet's scale on the screen (an arriving sheet is drawn a little small), so a distance read from the screen can
+ * be turned back into scroll pixels. `sticky` narrows the elements that are looked at (a selector); `style` is getComputedStyle (a test hands in its own).
+ */
+export function bandOf(d, el, { sticky = '*', style = (e) => getComputedStyle(e) } = {}) {
+  const r = d.getBoundingClientRect(), k = d.offsetHeight > 0 && r.height > 0 ? r.height / d.offsetHeight : 1;
+  const top = r.top + d.clientTop * k;
+  let bottom = top + d.clientHeight * k;
+  for (const e of d.querySelectorAll(sticky)) {
+    if (e === el || e.contains(el) || !stickyNow(e, style)) continue;
+    const q = e.getBoundingClientRect();
+    if (q.width > 0 && q.height > 0 && q.top > (top + bottom) / 2 && q.top < bottom) bottom = q.top; // a foot: it hides what lies under it
+  }
+  return { top, bottom, k };
+}
+/**
+ * Where `el` stands in the screen by its LAYOUT (offsetTop and its kin), as { top, bottom }, or null when that cannot be told. The screen rect of a control that is moving for a moment
+ * (a heading that pops in at a scale of .7, a card lifted by a hover) is not where it will stand: measured then, the control is a few pixels off the place it settles in.
+ */
+function layoutBox(d, el, band) {
+  let top = 0, e = el;
+  for (; e && e !== d; e = e.offsetParent) { if (!Number.isFinite(e.offsetTop)) return null; top += e.offsetTop; }
+  if (e !== d || !Number.isFinite(el.offsetHeight)) return null;
+  const t = band.top + (top - d.scrollTop) * band.k;
+  return { top: t, bottom: t + el.offsetHeight * band.k };
+}
+/**
+ * Scrolls the sheet `d` just far enough that `el` and its ring are in the band (see bandOf, scrollDelta), and returns how far it went (0: nothing moved). The box it keeps in sight is
+ * the larger of where the control is drawn now and where its layout puts it, so a control caught half way through an animation is still kept in sight where it will stand. It sets
+ * scrollTop, which is instant (no stylesheet here asks for smooth scrolling), so reduced motion has nothing to switch off, and it never calls focus(). A control on the sticky foot
+ * itself is always in sight and is left alone, and so is one that has no box (hidden).
+ */
+export function keepInView(d, el, opts = {}) {
+  if (!d || !el || el === d || !d.contains?.(el)) return 0;
+  const style = opts.style || ((e) => getComputedStyle(e));
+  for (let e = el; e && e !== d; e = e.parentElement) if (stickyNow(e, style)) return 0;
+  const rect = el.getBoundingClientRect();
+  if (!(rect.width > 0 && rect.height > 0)) return 0;
+  const band = bandOf(d, el, { sticky: opts.sticky, style }), lay = layoutBox(d, el, band);
+  const box = lay ? { top: Math.min(rect.top, lay.top), bottom: Math.max(rect.bottom, lay.bottom) } : rect, delta = scrollDelta(box, band, opts.reach);
+  if (!delta) return 0;
+  const before = d.scrollTop;
+  d.scrollTop = before + delta / band.k;
+  return d.scrollTop - before;
+}
+
 // ---- announcements and toasts
 export function announce(msg, assertive = false) {
   const el = $(assertive ? '#alert-live' : '#live');

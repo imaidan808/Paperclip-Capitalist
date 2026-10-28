@@ -184,6 +184,40 @@ export function shortSay(text, max = 96) {
   return one.length > max ? one.slice(0, max - 1).trimEnd() + '…' : one;
 }
 
+// ------------------------------------------------------------------ a step whose thing the card cannot frame
+/** Which Deal Room kinds a game event can come from: a step that waits for one of these can be done inside the room that is open. */
+const DEAL_FROM = { inspect: ['buy'], buy: ['buy'], auction: ['buy'], haggle: ['buy', 'sell'], pitch: ['sell'], repair: ['repair'] };
+/**
+ * What the coach card adds when the thing a step is about has no frame, so it never points at nothing and never says "the gold frame" about a frame that is not there. A sentence
+ * that says why and what to do, or '' when there is nothing to add: the thing is framed or exists but is too big to frame (`exists`), the step has no thing, or the player is
+ * already doing what it asks. `anchor` and `wait` are the step's; `s` is what the runner sees:
+ *   exists  the anchor resolved to something on screen the player can reach
+ *   modal   'deal' (the Deal Room is open), 'hire' (the hire dialog), 'dialog' (any other window over the game) or null
+ *   deal    what the open Deal Room is about, { kind, lot, lead, asset, assetCls, done } (ids; any may be missing; done: its result is showing), when modal is 'deal'
+ */
+export function unseenNote(anchor, wait, s = {}) {
+  const a = parseAnchor(anchor);
+  if (!a || s.exists) return '';
+  const ev = wait?.type === 'event' ? wait.event : null, deal = s.deal || {}, here = ownList(DEAL_FROM[ev]).includes(deal.kind);
+  if (s.modal === 'hire') return ev === 'hire' ? 'Pick a manager in this window, then press Hire.' : 'Finish with this window, or close it with Escape, and the card can point again.';
+  if (s.modal === 'deal') {
+    if (deal.done) return 'That deal is finished. Press Continue to close it, and the card can point again.'; // the result is up: nothing on it is what the step asks for
+    if (a.kind === 'world') {
+      if ([deal.lot, deal.lead, deal.asset, deal.assetCls].filter(Boolean).includes(a.id)) return ''; // the very thing on the table: this is the deal the step asks for
+      return here ? 'It is behind the Deal Room. Close this deal, then tap it in the world.' : 'It is behind the Deal Room. Finish this deal, or close it, and the card can point again.';
+    }
+    if (a.name.startsWith('deal-')) return 'That control is not on this stage of the deal. Continue moves on to the next stage, and closing the deal ends it.';
+    return here ? '' : 'The Deal Room is open over the game. Finish this deal, or close it, and the card can point again.'; // a Repair from Stock opens the bench: the step is being done in this room
+  }
+  if (s.modal === 'dialog') return 'A window is open over the game. Finish with it, or close it with Escape, and the card can point again.';
+  if (a.kind === 'world') return 'I cannot put a frame on it from here. It may be off the screen: move the view, or pick it from the list under the world.';
+  if (a.name.startsWith('deal-')) return "The Deal Room is not open yet. Open a deal first, from a buyer's card in Market or a lot in the world, and this control is inside it.";
+  if (a.name.startsWith('hire-')) return 'That is in the hire window. Open Crew and press Hire a manager to open it.';
+  if (a.name === 'ticker') return 'The news line shows up when there is news. Keep the clock running and it will appear.';
+  if (a.name === 'drawer') return 'Open a panel from the dock below, and the card will point into it.';
+  return '';
+}
+
 // ------------------------------------------------------------------ a lesson that can no longer be finished
 /**
  * Can every wait from step `from` on, and the win, still happen from the sandbox's state alone? A lesson is scripted (nothing spawns, nothing refills), so the one

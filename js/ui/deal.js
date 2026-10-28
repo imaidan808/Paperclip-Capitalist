@@ -5,7 +5,7 @@
 //   * HTML builders, (model) -> string, exported so they can be tested without a DOM. They only ever see modelOf(run), which never holds a lot's truth.
 //   * createSession(ctx, run): the thin DOM half. It forwards clicks (data-deal="...") to the run, repaints the sheet, runs the repair dial and
 //     plays the sounds. openDeal(ctx, spec) is the one function the shell calls.
-import { esc } from './common.js';
+import { esc, keepInView } from './common.js';
 import { kv } from '../session.js';
 import { fmtMoney as money, fmtPct } from '../market.js';
 import { startRun, modelOf, tForPos, STAGE_LABEL } from '../deal.js';
@@ -211,11 +211,14 @@ const dialWord = (x, z) => (x < z.lo ? `Dial at ${pc(x)}: below the green zone` 
 // ------------------------------------------------------------------ the result
 export function resultHTML(m) {
   const s = m.summary, n = s.numbers, f = (x) => (x == null ? 'walks away' : money(x));
+  // Quick's and the expert's figures at a table never sat at are withheld (numbers.hidden, js/deal.js): they would be the next sitting's answers. A blank there is not "walks away"
+  // (they would have sat down and played); it is "kept back", and the box says why. Your own row is still your own: you did walk.
+  const kept = !!n.hidden, g = (x) => (x == null && kept ? 'kept back' : f(x));
   const better = n.better === 'low' ? Math.min : Math.max;
   const vals = [n.quick, n.expert, n.you].filter((x) => x != null && x > 0), top = Math.max(1e-9, ...vals.map(Math.abs)), best = vals.length ? better(...vals) : null;
   const tied = [n.quick, n.expert, n.you].filter((x) => x != null && x === best).length; // a three-way tie has no best row to mark
-  const row = (label, x, cls) => `<div class="vs ${cls}${x != null && x === best && tied < 3 ? ' best' : ''}"><dt>${label}</dt><dd${x == null ? '' : ` data-count="${x}" data-fmt="money"`}>${f(x)}</dd><span class="vbar" aria-hidden="true"><i style="width:${x == null ? 0 : Math.max(2, (Math.abs(x) / top) * 100).toFixed(1)}%"></i></span></div>`;
-  const net = m.plan.kind === 'buy' && n.net != null ? `<p class="small mute">Against what it was really worth: Quick ${money(n.quickNet)}, expert ${money(n.expertNet)}${n.net !== undefined && s.reveal ? `, you ${money(n.net)}` : ''}.</p>` : '';
+  const row = (label, x, cls, say = f) => `<div class="vs ${cls}${x != null && x === best && tied < 3 ? ' best' : ''}"><dt>${label}</dt><dd${x == null ? '' : ` data-count="${x}" data-fmt="money"`}>${say(x)}</dd><span class="vbar" aria-hidden="true"><i style="width:${x == null ? 0 : Math.max(2, (Math.abs(x) / top) * 100).toFixed(1)}%"></i></span></div>`;
+  const net = m.plan.kind === 'buy' && n.net != null && !kept ? `<p class="small mute">Against what it was really worth: Quick ${money(n.quickNet)}, expert ${money(n.expertNet)}${n.net !== undefined && s.reveal ? `, you ${money(n.net)}` : ''}.</p>` : '';
   const rev = s.reveal ? `<div class="reveal"><h4>What the lot really was</h4><p><b>${esc(s.reveal.truth)}.</b> ${s.reveal.total ? `You found ${s.reveal.found} of its ${s.reveal.total} flaw${s.reveal.total === 1 ? '' : 's'}${s.reveal.defects.length ? `: ${esc(s.reveal.defects.join(', '))}` : ''}.` : 'It had no flaws to find.'} <span class="mute">Your read: ${esc(s.reveal.estimate)}.</span></p></div>` : '';
   const why = s.reasons.length ? `<div class="why"><h4>Why</h4><ul>${s.reasons.map((r) => `<li><b>${esc(r.label)}.</b> ${esc(r.text)}</li>`).join('')}</ul></div>` : '';
   const labels = { 'due-diligence': 'Due diligence', anchoring: 'Anchoring', 'persona-fit': 'Persona fit', 'winners-curse': "The winner's curse", 'repair-roi': 'Quality control', zopa: 'The zone of agreement', batna: 'Your alternative', reciprocity: 'Reciprocity', patience: 'Patience', 'saturation-herd': 'The herd' };
@@ -226,8 +229,8 @@ export function resultHTML(m) {
     <h3 id="ds-title" class="rtitle" tabindex="-1" data-stage-head>${esc(s.title)}</h3><p class="rhead">${esc(s.headline)}</p>
     ${s.lines.length ? `<ul class="rlines">${s.lines.map((l) => `<li>${esc(l)}</li>`).join('')}</ul>` : ''}
     <div class="vsbox" role="group" aria-label="How you compare"><h4>${esc(cap(n.unit))}: Quick, expert, you</h4>${verdict}
-      <dl>${row('Quick', n.quick, 'quick')}${row('Expert', n.expert, 'expert')}${row('You', n.you, 'you')}</dl>
-      <p class="small mute">Quick plays every stage for you at average skill. Expert plays the same deal, with the same luck, at full skill${n.expertVia ? ` (here by selling to ${esc(n.expertVia)})` : ''}. ${n.better === 'low' ? 'Lower is better.' : 'Higher is better.'}</p>${net}</div>
+      <dl>${row('Quick', n.quick, 'quick', g)}${row('Expert', n.expert, 'expert', g)}${row('You', n.you, 'you')}</dl>
+      ${kept ? `<p class="small kept" role="note">Quick's and the expert's figures are kept back until you have sat at the table: they would be this table's answers, and you can still sit at it.</p>` : ''}<p class="small mute">Quick plays every stage for you at average skill. Expert plays the same deal, with the same luck, at full skill${n.expertVia ? ` (here by selling to ${esc(n.expertVia)})` : ''}. ${n.better === 'low' ? 'Lower is better.' : 'Higher is better.'}</p>${net}</div>
     ${why}${rev}
     <p class="xp"><b data-count="${num(s.xp)}" data-fmt="int" data-pre="+" data-post=" XP">+${s.xp} XP</b>${m.plan.kind === 'sell' ? ` · deal streak ${s.streak}` : ''}</p>
     <blockquote class="lesson"><b>${esc(labels[s.lesson.concept] || 'Lesson')}.</b> ${esc(s.lesson.text)}</blockquote>
@@ -290,17 +293,24 @@ export function createSession(ctx, run) {
     else if (live && ctx.setHTML) ctx.setHTML(el(), html); else ctx.dlg.open(html, { cls: 'deal', label: titleOf(modelOf(run)) });
     if (live) after();
   };
+  // Where the cursor is after a paint must be somewhere it can be seen. Every paint puts it back with preventScroll (a page that jumps under a mouse is worse), so a control that sits under
+  // the sticky foot, or above the top of a sheet that was scrolled for the last stage, was never brought into view: the next probe after one is used, the Stop of the second repair step,
+  // Bid after a bid, a stage's own head after Continue. One scroll after every paint, wherever the cursor went (kept, moved to its neighbour or put on the stage head), brings it just in.
+  const STICKY = '.deal-dock, .deal-foot, .deal-result > .row:last-child';
+  const reveal = (d) => { const a = doc.activeElement; if (a && a !== d && d.contains(a)) keepInView(d, a, { sticky: STICKY }); };
   const after = () => {
     const d = el();
     if (ses.focusHead) {
       ses.focusHead = false; ses.was = null;
+      d.scrollTop = 0; // a new stage, or the result, is a new page: it opens at its head, not half way down the last one
       const h = d.querySelector('[data-stage-head]'), f = d.querySelector('.deal-foot [autofocus], .deal-stage [autofocus]');
       (f || h)?.focus?.({ preventScroll: true });
-      // The foot's buttons are sticky and always in sight, but a control in the stage (the repair dial's Stop) can lie below the fold of a short or narrow sheet, where neither it nor its
-      // ring is seen. Bring it just into view: 'nearest' moves nothing when it is already there and otherwise rests it clear of the foot (the sheet's scroll-padding-bottom).
-      if (f && f.closest('.deal-stage')) f.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
     }
     else keepFocus(d);
+    reveal(d);
+    // the sheet arrives drawn a little small and low (deal-in): measured then, a control is a few pixels off, so it is looked at again when the arrival is over
+    const arriving = (d.getAnimations?.() || []).filter((x) => x.playState === 'running');
+    if (arriving.length) Promise.all(arriving.map((x) => x.finished)).then(() => { if (!ses.disposed) reveal(d); }, () => {});
     if (run.key === 'fix' && !run.res.fix && !ses.reduced()) startDial(); else stopDial();
     // presentation only: the result is staged (numbers tick up, the stamp lands, the bars grow) the first time it is painted and never again, so a later paint
     // of the same screen, such as the Assist box being toggled, shows it at rest instead of replaying it
@@ -384,14 +394,20 @@ export function createSession(ctx, run) {
     e.preventDefault(); acts.stop();
   };
   const onClose = () => { if (el().open) return; dispose(); }; // a deal shown over this one has already reopened the dialog
+  // The keyboard's own moves (Tab, Shift+Tab, a ring showing): the browser scrolls the control in by the sheet's scroll-padding, which is a guess at the foot's height and can leave the
+  // ring a pixel under it. Looked at once the browser has scrolled, and only where a ring shows: a click that focused a half-seen button must not move it before the button is released.
+  const ringShows = (t) => { try { return !!t.matches(':focus-visible'); } catch { return true; } }; // a browser without :focus-visible shows a ring for every focus
+  const onFocusIn = (e) => { const t = e.target; if (!t || !ringShows(t)) return; requestAnimationFrame(() => { if (!ses.disposed && el().open && el().contains(t)) reveal(el()); }); };
+  const onResize = () => { if (el().open && el().classList.contains('deal')) reveal(el()); }; // a turned phone, a window made smaller: the foot changed its height
   function bind() {
     if (!live) return;
     const d = el();
-    d.addEventListener('click', onClick); d.addEventListener('change', onChange); d.addEventListener('input', onInput); d.addEventListener('keydown', onKey); d.addEventListener('close', onClose);
+    d.addEventListener('click', onClick); d.addEventListener('change', onChange); d.addEventListener('input', onInput); d.addEventListener('keydown', onKey); d.addEventListener('close', onClose); d.addEventListener('focusin', onFocusIn);
+    window.addEventListener('resize', onResize);
   }
   function dispose() {
     if (ses.disposed) return; ses.disposed = true; stopDial();
-    if (live) { const d = el(); d.removeEventListener('click', onClick); d.removeEventListener('change', onChange); d.removeEventListener('input', onInput); d.removeEventListener('keydown', onKey); d.removeEventListener('close', onClose); }
+    if (live) { const d = el(); d.removeEventListener('click', onClick); d.removeEventListener('change', onChange); d.removeEventListener('input', onInput); d.removeEventListener('keydown', onKey); d.removeEventListener('close', onClose); d.removeEventListener('focusin', onFocusIn); window.removeEventListener('resize', onResize); }
     if (ses.paused && S && S.clock && S.clock.paused) S.setPaused(false);
     if (active === ses) active = null;
     ctx.render?.();
@@ -407,6 +423,13 @@ export function createSession(ctx, run) {
   };
   ses.paint = paint;
   return ses;
+}
+
+/** What the open Deal Room is about, as ids ({ kind, lot, lead, asset, assetCls }; any may be missing) and whether its result is showing (done), or null when none is open. The Academy's coach card needs it to tell whether the
+ *  thing a step points at is the very one on the table. */
+export function openDealOf() {
+  const p = active && !active.disposed && active.run ? active.run.plan : null;
+  return p ? { kind: p.kind, lot: p.lot?.id, lead: p.lead?.id, asset: p.asset?.id, assetCls: p.asset?.cls, done: !!active.run.over } : null;
 }
 
 /** The one function the shell calls (ctx.deal). Returns the session, or { ok:false, msg } when the deal cannot start. */
