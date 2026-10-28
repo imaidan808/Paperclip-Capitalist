@@ -1,5 +1,6 @@
 // Shared UI plumbing: DOM helpers, focus-safe rendering, announcements, dialogs, settings, sound and pixel fx.
 import { kv } from '../session.js';
+import { audio, bindSettings, initAudio, legacySfx, migrateAudio, mirrorFlat, audioSettingsHTML, bindAudioSettings } from '../audio/index.js';
 export { fmtMoney as money, fmtPct as pct, fmtX as xfmt } from '../market.js';
 
 export const $ = (s, r = document) => r.querySelector(s);
@@ -7,12 +8,18 @@ export const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 const ESC = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
 export const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ESC[c]);
 
-// ---- settings (contrast, motion, text size, sound). Stored locally only.
+// ---- settings (contrast, motion, text size, sound). Stored locally only. `settings.audio` holds the sound settings (js/audio/settings.js, docs/AUDIO.md 7.1); `sound`, `vol`, `sfxUi`, `sfxGame`
+// and `ambient` mirror it, and an older save that only knows `sound` is migrated (a player who turned sound off stays silent). `?sound=off|quiet|full` is read before the first save.
 export const settings = Object.assign({ contrast: 'normal', motion: 'auto', size: 'm', sound: true }, kv.get('settings') || {});
+settings.audio = migrateAudio(settings, typeof location !== 'undefined' ? location.search : '');
+mirrorFlat(settings);
+bindSettings(settings);
 export function applySettings() {
   const r = document.documentElement;
   r.dataset.contrast = settings.contrast; r.dataset.motion = settings.motion; r.dataset.size = settings.size;
+  mirrorFlat(settings);
   kv.set('settings', settings);
+  audio.sync(settings.audio);
   if (reduced()) fxStop();
 }
 export const reduced = () => settings.motion === 'reduce' || (typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches);
@@ -95,6 +102,7 @@ export function initDialog() {
     }, 0);
   });
   d.addEventListener('click', (e) => { if (e.target === d) d.close(); });
+  initAudio({ settings, save: applySettings, announce, toast }); // the page-wide sound layer: the unlock, key M, the control table, the dialog and toast observers
 }
 
 // ---- delegated actions: <button data-act="name" data-x="..."> -> acts.name(el, event)
@@ -120,26 +128,8 @@ export function delegate(root, acts) {
   });
 }
 
-// ---- sound (synthesised: no audio files to ship)
-let ac;
-function tone(freq, t0, dur, type = 'square', gain = 0.05) {
-  if (!settings.sound) return;
-  try {
-    ac ||= new (window.AudioContext || window.webkitAudioContext)();
-    if (ac.state === 'suspended') ac.resume();
-    const o = ac.createOscillator(), g = ac.createGain(), t = ac.currentTime + t0;
-    o.type = type; o.frequency.value = freq;
-    g.gain.setValueAtTime(gain, t); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-    o.connect(g); g.connect(ac.destination); o.start(t); o.stop(t + dur + 0.03);
-  } catch { /* audio unavailable */ }
-}
-export const sfx = {
-  kaching() { tone(1318, 0, 0.09); tone(1760, 0.09, 0.4); tone(2349, 0.09, 0.3, 'triangle', 0.03); },
-  buzz() { tone(110, 0, 0.28, 'sawtooth', 0.07); },
-  level() { [523, 659, 784, 1047, 1319].forEach((f, i) => tone(f, i * 0.09, 0.2)); },
-  blip() { tone(880, 0, 0.05, 'square', 0.03); },
-  alarm() { tone(440, 0, 0.15, 'sawtooth', 0.06); tone(330, 0.18, 0.25, 'sawtooth', 0.06); },
-};
+// ---- sound (synthesised in the browser: no audio files to ship). The five legacy names are thin aliases over the engine in js/audio (docs/AUDIO.md 8.4): no-ops once the wiring is installed.
+export const sfx = legacySfx;
 
 // ---- pixel burst on a full-screen canvas
 // One pooled particle array (nothing is allocated after the first burst), one rAF loop that sleeps the moment nothing is alive, physics by elapsed time (a 120 Hz screen
@@ -202,13 +192,14 @@ export function settingsDialog(onChange) {
       <div><label for="s-contrast">Contrast</label><select id="s-contrast" data-k="contrast"><option value="normal">Standard dark</option><option value="high">High contrast</option></select></div>
       <div><label for="s-motion">Motion</label><select id="s-motion" data-k="motion"><option value="auto">Follow my system</option><option value="reduce">Reduce motion</option></select></div>
       <div><label for="s-size">Text size</label><select id="s-size" data-k="size"><option value="s">Small</option><option value="m">Medium</option><option value="l">Large</option><option value="xl">Extra large</option></select></div>
-      <div><label for="s-sound">Sound effects</label><select id="s-sound" data-k="sound"><option value="1">On</option><option value="0">Off</option></select></div>
     </div>
+    ${audioSettingsHTML(settings.audio, audio.state)}
     <p class="small mute gap">Settings are stored only in this browser. No account, no personal data.</p>`, { label: 'Settings' });
   for (const sel of d.querySelectorAll('select[data-k]')) {
     const k = sel.dataset.k;
-    sel.value = k === 'sound' ? (settings.sound ? '1' : '0') : settings[k];
-    sel.onchange = () => { settings[k] = k === 'sound' ? sel.value === '1' : sel.value; applySettings(); onChange?.(); };
+    sel.value = settings[k];
+    sel.onchange = () => { settings[k] = sel.value; applySettings(); onChange?.(); };
   }
+  bindAudioSettings(d, { audio, settings, save: () => { applySettings(); onChange?.(); }, announce });
   d.querySelector('[data-close]').onclick = () => dlg.close();
 }
