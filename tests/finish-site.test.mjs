@@ -1,4 +1,4 @@
-// The launch pass: the page a visitor (or a crawler, or a link preview) meets at https://imaidan808.github.io/paperclip-capitalist/, and the pipeline that builds exactly what is served.
+// The launch pass: the page a visitor (or a crawler, or a link preview) meets at https://imaidan808.github.io/Paperclip-Capitalist/, and the pipeline that builds exactly what is served.
 // Pure parts first (the import scanner, the staging, the Pages stand-in, the workflow), then the source pages, then the docs, then one real run of the staged site in headless Chrome
 // (skipped where there is no Chrome, as every Chrome-driven check of this repository is: PC_NO_BROWSER=1 skips it too).
 import { test, after } from 'node:test';
@@ -259,7 +259,7 @@ test('the Pages stand-in answers as a project site does: under its folder, 404.h
     }
     assert.equal((await get(port, '/')).status, 404);
     assert.equal((await get(port, '/other-repo/')).status, 404);
-    assert.equal((await get(port, '/paperclip-capitalist/%')).status, 400);
+    assert.equal((await get(port, '/Paperclip-Capitalist/%')).status, 400);
     assert.equal((await get(port, BASE_PATH, { method: 'POST' })).status, 405);
     const head = await get(port, BASE_PATH + 'js/main.js', { method: 'HEAD' });
     assert.equal(head.status, 200); assert.equal(head.body.length, 0);
@@ -561,8 +561,8 @@ test('404.html: friendly, in the game\'s look, needs no script and no other file
 });
 
 test('the site\'s address is the same everywhere it is written', () => {
-  assert.equal(SITE_URL, 'https://imaidan808.github.io/paperclip-capitalist/');
-  assert.equal(BASE_PATH, '/paperclip-capitalist/');
+  assert.equal(SITE_URL, 'https://imaidan808.github.io/Paperclip-Capitalist/');
+  assert.equal(BASE_PATH, '/Paperclip-Capitalist/');
   for (const f of ['index.html', '404.html', 'robots.txt', 'sitemap.xml', 'llms.txt', 'README.md', 'docs/FACULTY_KIT.md', 'docs/COMPLIANCE.md', 'scripts/stage.mjs']) {
     const found = [...read(f).matchAll(/https?:\/\/imaidan808\.github\.io[^\s"'<>)`]*/g)].map((m) => m[0]);
     for (const u of found) assert.ok(u.startsWith(SITE_URL), `${f}: ${u} is not under ${SITE_URL}`);
@@ -586,7 +586,7 @@ test('robots.txt, sitemap.xml and llms.txt', () => {
   const llms = read('llms.txt');
   assert.match(llms, /^# Paperclip Capitalist\n\n> /);
   for (const need of ['one paperclip and $0', 'twelve Backgrounds', 'sixteen districts', '90-day', 'static web app', 'no build step', 'What stays on the device', 'Privacy model', 'no accounts', 'no analytics', 'no third-party requests', 'unless a student joins a classroom room', 'BroadcastChannel', 'relay', 'writes nothing to disk', 'ten short guided missions']) assert.ok(llms.includes(need), need);
-  for (const link of llms.matchAll(/\]\((https?:\/\/[^)]+)\)/g)) assert.ok(link[1].startsWith(SITE_URL) || link[1].startsWith('https://github.com/imaidan808/paperclip-capitalist/blob/main/'), link[1]);
+  for (const link of llms.matchAll(/\]\((https?:\/\/[^)]+)\)/g)) assert.ok(link[1].startsWith(SITE_URL) || link[1].startsWith('https://github.com/imaidan808/Paperclip-Capitalist/blob/main/'), link[1]);
   for (const m of llms.matchAll(/blob\/main\/([^)]+)\)/g)) assert.ok(exists(m[1]), 'llms.txt links ' + m[1]);
   for (const f of ['robots.txt', 'sitemap.xml', 'llms.txt']) assert.ok(!/\u2014/.test(read(f)), f + ': no em dash');
   assert.ok(!/zone/i.test(llms) && !/lorem|TODO/i.test(llms));
@@ -701,7 +701,7 @@ test('the architecture notes carry the royalty row, the 155-second swap lock, th
   // the pipeline
   const pipe = md.slice(md.indexOf('## The staged site'));
   assert.ok(pipe.length > 1500, 'a section of its own');
-  for (const need of ['scripts/stage.mjs', 'scripts/preload.mjs', 'modulepreload', 'import(`./play/${name}.js`)', 'allowlist', '404.html', 'robots.txt', 'sitemap.xml', 'llms.txt', 'assets/src/', 'npm run preview', '/paperclip-capitalist/', 'tests/finish-site.test.mjs', 'js/meta/ids.js']) assert.ok(pipe.includes(need), `the pipeline section says "${need}"`);
+  for (const need of ['scripts/stage.mjs', 'scripts/preload.mjs', 'modulepreload', 'import(`./play/${name}.js`)', 'allowlist', '404.html', 'robots.txt', 'sitemap.xml', 'llms.txt', 'assets/src/', 'npm run preview', '/Paperclip-Capitalist/', 'tests/finish-site.test.mjs', 'js/meta/ids.js']) assert.ok(pipe.includes(need), `the pipeline section says "${need}"`);
   assert.ok(!/\bzones?\b/i.test(md));
 });
 

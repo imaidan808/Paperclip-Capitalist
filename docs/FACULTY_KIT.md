@@ -1,6 +1,6 @@
 # Faculty kit: Applied Entrepreneurship and Market Arbitrage (4-week module)
 
-Everything a course needs to run Paperclip Capitalist: the setup, what the students do, every control on the dashboard, the shocks, the way back into a room, the grade, the rubric and the reflection paper. The game is at https://imaidan808.github.io/paperclip-capitalist/ and needs nothing installed.
+Everything a course needs to run Paperclip Capitalist: the setup, what the students do, every control on the dashboard, the shocks, the way back into a room, the grade, the rubric and the reflection paper. The game is at https://imaidan808.github.io/Paperclip-Capitalist/ and needs nothing installed.
 
 ## Five-minute setup
 1. Open the game, choose **Instructor, Create a room**. Note the 4-letter code, keep the **recovery code** the game shows you (see below) and press **Copy student link**.

@@ -376,7 +376,7 @@ test('V2: the licence the site declares is a file in the repository', () => {
 });
 
 test('V3: the dashboard\'s grading line links to a rubric a visitor can open (docs/ is not published)', () => {
-  assert.equal(KIT_URL, 'https://github.com/imaidan808/paperclip-capitalist/blob/main/docs/FACULTY_KIT.md');
+  assert.equal(KIT_URL, 'https://github.com/imaidan808/Paperclip-Capitalist/blob/main/docs/FACULTY_KIT.md');
   const s = new Session(); s.pid = 'TEACH'; s.mode = 'instructor'; s.roomInfo = { code: 'ROOM', relay: '' };
   const g = instructorParts(s, {}).grade;
   assert.ok(g.includes(`<a href="${KIT_URL}" target="_blank" rel="noopener noreferrer">faculty kit</a>`), 'a link, opened in its own tab, without the opener');

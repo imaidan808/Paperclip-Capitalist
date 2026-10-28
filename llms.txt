@@ -6,7 +6,7 @@ The site is a static web app: HTML, CSS and JavaScript modules served as they ar
 
 ## The game
 
-- [Play Paperclip Capitalist](https://imaidan808.github.io/paperclip-capitalist/): the only page. Play solo, try the Academy (ten short guided missions), join a classroom with a room code, or create a room as an instructor.
+- [Play Paperclip Capitalist](https://imaidan808.github.io/Paperclip-Capitalist/): the only page. Play solo, try the Academy (ten short guided missions), join a classroom with a room code, or create a room as an instructor.
 
 What a player does: drafts two of twelve Backgrounds (each has a real-world basis, a strength and a cost), trades in a 2.5D isometric world of sixteen districts from the Scrap Yard to the Global Exchange, plays the deals in five skill games (inspect, pitch, haggle, bid and repair) or takes Quick, survives macro shocks, and finishes with a debrief that assembles the evidence for a reflection paper.
 
@@ -33,10 +33,10 @@ What a player does: drafts two of twelve Backgrounds (each has a real-world basi
 
 ## Source and documentation
 
-- [README](https://github.com/imaidan808/paperclip-capitalist/blob/main/README.md): what it is, how to run, test and host it.
-- [Faculty kit](https://github.com/imaidan808/paperclip-capitalist/blob/main/docs/FACULTY_KIT.md): setup for a class, the week map, grading and the reflection rubric.
-- [Architecture](https://github.com/imaidan808/paperclip-capitalist/blob/main/docs/ARCHITECTURE.md): the engine, the room protocol and the relay.
-- [Compliance](https://github.com/imaidan808/paperclip-capitalist/blob/main/docs/COMPLIANCE.md): what is and is not implemented for privacy, security and accessibility.
-- [Balance notes](https://github.com/imaidan808/paperclip-capitalist/blob/main/docs/BALANCE.md): the rules as built and how the economy was tuned.
+- [README](https://github.com/imaidan808/Paperclip-Capitalist/blob/main/README.md): what it is, how to run, test and host it.
+- [Faculty kit](https://github.com/imaidan808/Paperclip-Capitalist/blob/main/docs/FACULTY_KIT.md): setup for a class, the week map, grading and the reflection rubric.
+- [Architecture](https://github.com/imaidan808/Paperclip-Capitalist/blob/main/docs/ARCHITECTURE.md): the engine, the room protocol and the relay.
+- [Compliance](https://github.com/imaidan808/Paperclip-Capitalist/blob/main/docs/COMPLIANCE.md): what is and is not implemented for privacy, security and accessibility.
+- [Balance notes](https://github.com/imaidan808/Paperclip-Capitalist/blob/main/docs/BALANCE.md): the rules as built and how the economy was tuned.
 
 The source is MIT licensed.
