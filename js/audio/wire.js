@@ -311,8 +311,7 @@ export function initAudio(d = {}) {
       audio.hold(open); audio.setEnv({ busy: open });
       if (open) {
         pageState.bids = 0;
-        if (dlg.classList.contains('deal')) audio.play('deal.open', { variant: { buy: 'buy', repair: 'fix' }[dlg.querySelector('[data-kind]')?.dataset.kind] || 'sell', cause: 'dialog' }); // the sheet says what it is for (data-kind: sell, buy or repair)
-        else if (dlg.classList.contains('alert')) { /* the alert note plays alert.advance */ }
+        if (dlg.classList.contains('deal') || dlg.classList.contains('alert')) { /* the Deal Room plays its own opening (js/ui/deal.js: it knows the kind, and a Quick deal opens none); the alert note plays alert.advance */ }
         else if (dlg.querySelector('[data-act="confirm-go"]')) audio.play('ui.ask', { variant: dlg.querySelector('.btn.danger') ? 'danger' : 'normal', cause: 'dialog' });
         else audio.play('ui.dialog-open', { cause: 'dialog' });
       } else if (was) audio.play('ui.dialog-close', { cause: 'dialog' });

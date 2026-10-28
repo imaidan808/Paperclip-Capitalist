@@ -52,7 +52,7 @@ export function createWorldView(ctx) {
       let sel = pickIn(h.zone);
       if (!sel) {
         if (here.length === 1) { U.sel.add(here[0].id); sel = here[0]; }
-        else { toast(here.length ? 'Pick one of your crates first, then click the buyer.' : 'You have nothing to sell here. Buy a lot from a booth first.', 'warn'); ctx.openDrawer('stock'); return; }
+        else { toast(here.length ? 'Pick one of your crates first, then click the buyer.' : 'You have nothing to sell here. Buy a lot from a booth first.', 'warn'); ctx.openDrawer('stock', { quiet: true }); return; } // the toast's nudge says what happened; the drawer sliding open is not a second sound
       }
       ctx.deal({ kind: 'sell', assetId: sel.id, leadId: h.id }); return;
     }

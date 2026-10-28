@@ -31,5 +31,11 @@ lengths, brightness, the mid body, the ladders, the beds and the tier gaps throu
   turns the World's hover, activation, footsteps and camera into `ui` events and plays (`rectOf` gives the stereo pan; `night` the ambient). The HUD has the speaker button and the Draft plays
   `draft.pick`, `ui.refuse` and `draft.begin` itself. The control table in `wire.js` gained the Deal Room's moves, the title's presses, the instructor's ceremonies, the sounds a control
   has of its own (`OWN`) or always gets from its outcome (`QUIET`), the crate box, the disclosure sound and `data-close`; the toast fallback waits 40 ms so the collector's sound is heard first.
-- Still not wired (other tracks): the Deal Room's `ui:'deal'` emissions and its Sound toggle (`js/ui/deal.js`), the Academy's `acad.*` calls, and the engine's `kind`/`reason`/`delay`/`pid` fields
-  (the wiring matches the note text and treats a pool sale as immediate until they land); `repair.stop` by precision needs the room's own answer.
+- Wired by `v2/audio-deal`: the Deal Room (`js/ui/deal.js`) chooses every move's sound from what the screen shows, says the cause sounds over the page's event bus as `{type:'ui', ui:'deal', what}` (`dealCalls`),
+  has its own Sound switch, and marks the buttons that play their own sound `data-snd` (the control table's `dealControl` rows are therefore the fallback for an unmarked deal button, not a second voice); the
+  Academy plays `academySounds` (`js/ui/academy-sandbox.js`) at the moments of a lesson.
+- One path per trigger, settled at the merge. The room opens with its own `deal.open` (it knows the kind and plays none for a Quick deal), so the dialog observer says nothing for `#dlg.deal`. A buyer clicked with no crate
+  ticked is a tick and the toast's nudge: the stock drawer it opens is quiet. A few triggers still make two calls for one sound on purpose, and the engine's same-id cooldown (rank-aware, 120 to 150 ms) admits the first:
+  the dock and the drawer's close button (the click, then the shell's `open-drawer`/`close-drawer` event), and a dialog opened or closed by a press (the click, then the dialog observer). Counted in headless Chrome
+  against `audio.stats().played`: each of those admits exactly one voice.
+- Still not wired: the engine's `kind`/`reason`/`delay`/`pid` fields (the wiring matches the note text and treats a pool sale as immediate until they land); `repair.stop` by precision needs the room's own answer.

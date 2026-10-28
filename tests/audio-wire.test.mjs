@@ -103,7 +103,7 @@ function gameCtx(r, { game = makeGame(['trades', 'pro'], 'ops', 13), zone = 1, s
 const hoursToMs = (h, speed = 1) => (h * 7000) / speed;
 
 // ---------------------------------------------------------------- the control table against the whole app
-function sources(dir) { const out = []; for (const f of readdirSync(dir)) { const p = dir + '/' + f; if (statSync(p).isDirectory()) out.push(...sources(p)); else if (f.endsWith('.js') && !p.includes('/audio/')) out.push(p); } return out; }
+function sources(dir, root = dir) { const out = []; for (const f of readdirSync(dir)) { const p = dir + '/' + f; if (statSync(p).isDirectory()) out.push(...sources(p, root)); else if (f.endsWith('.js') && !p.slice(root.length).includes('/audio/')) out.push(p); } return out; } // js/audio is left out; judged from the js folder down, so a checkout that is itself called "audio" still finds the controls
 test('every control of the app maps to a sound that exists, a sound of its own, or the neutral tick; nothing maps to a variant that does not', () => {
   const src = sources(new URL('../js', import.meta.url).pathname).map((p) => readFileSync(p, 'utf8')).join('\n');
   const acts = new Set([...src.matchAll(/data-(?:act|change|deal|wv)="([a-z0-9-]+)"/g)].map((m) => m[1]));
@@ -506,4 +506,13 @@ test('the Draft plays its own sounds and tells the control table so (cards and R
   for (const act of ['pick', 'drop', 'clear', 'reroll']) assert.equal(wire.controlFor({ act, kind: act === 'pick' ? 'change' : 'click', checkbox: true }), null, act);
   const src = readFileSync(new URL('../js/ui/draft.js', import.meta.url), 'utf8');
   for (const s of ["'draft.pick'", "'ui.refuse'", "request('draft.begin')", 'rattle']) assert.ok(src.includes(s), s);
+});
+
+// ---------------------------------------------------------------- one path per trigger (settled when the wiring and the Deal Room were merged)
+test('the Deal Room opens itself and the dialog observer leaves #dlg.deal to it; a buyer clicked with no crate ticked opens the stock drawer quietly', () => {
+  const w = readFileSync(new URL('../js/audio/wire.js', import.meta.url), 'utf8'), d = readFileSync(new URL('../js/ui/deal.js', import.meta.url), 'utf8'), wv = readFileSync(new URL('../js/ui/worldview.js', import.meta.url), 'utf8');
+  assert.ok(!/audio\.play\('deal\.open'/.test(w), 'wire.js plays no deal.open: the room does, and it knows the kind and a Quick deal');
+  assert.match(w, /classList\.contains\('deal'\)[^\n]*\{ \/\*/, 'the observer names the deal sheet and plays nothing for it');
+  assert.match(d, /hear: \['deal\.open'/, 'the room plays its own opening');
+  assert.match(wv, /Pick one of your crates first[^\n]*openDrawer\('stock', \{ quiet: true \}\)/, 'the toast\'s nudge says it; the drawer is not a second sound');
 });
