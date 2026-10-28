@@ -177,7 +177,7 @@ function buyersHTML(ctx, z) {
       ${fraudLine}${fitRow}${sat}${verify}${sell}</li>`;
   };
   const empty = here.length === 0 && leads.length ? `<p class="callout small">You hold nothing to sell in ${e(ZONES[z].short)}. ${s.assets.length ? 'Ship stock in from another district, or ' : ''}${s.assets.length ? 'buy' : 'Buy'} a lot here, then come back.</p>` : '';
-  return `${scamNote}${empty}${use}<ul class="mkt-list">${leads.map(card).join('') || '<li class="mute">No buyers right now. New ones arrive every few hours.</li>'}</ul>`;
+  return `${scamNote}${empty}${use}<ul class="mkt-list">${leads.map(card).join('') || '<li class="k-empty"><span class="k-empty-ic" aria-hidden="true">🕰️</span><p>No buyers right now. New ones arrive every few hours.</p></li>'}</ul>`;
 }
 
 // ---- lots
@@ -214,18 +214,18 @@ function lotsHTML(ctx, z) {
         <div class="mkt-head"><b>${e(def.name)}</b> ${broken ? '<span class="badge red">Broken</span>' : '<span class="badge cyan">Working</span>'} ${auction ? '<span class="badge">Auction</span>' : ''}</div>
         <p class="mkt-price"><span class="mono gold">${m(l.price)}</span> <span class="small mute">${auction ? 'guide price' : 'asking price'}</span></p>
         ${warn}${read}${worth}
-        ${auction ? '<p class="tiny mute">Rival bidders will push the price. Quick buy skips the bidding and pays the guide price.</p>' : ''}
+        ${auction ? '<p class="tiny mute">Rival bidders will push the price. Quick buy bids for you at average skill, and a rival may outbid you.</p>' : ''}
         <p class="tiny mute">The seller moves it in ${dur(l.exp - s.hour)}.</p>
         <div class="row">
           <button class="btn" data-act="market-look" data-lot="${l.id}" data-fid="mk-look-${l.id}">Look it over<span class="sr">: ${e(def.name)}</span></button>
-          <button class="btn ghost" data-act="market-buy" data-lot="${l.id}" data-fid="mk-buy-${l.id}"${reason ? ' aria-disabled="true"' : ''}>Quick buy ${m(l.price)}<span class="sr">: ${e(def.name)}</span></button>
+          <button class="btn ghost" data-act="market-buy" data-lot="${l.id}" data-fid="mk-buy-${l.id}"${reason ? ' aria-disabled="true"' : ''}>Quick buy about ${m(l.price)}<span class="sr">: ${e(def.name)}</span></button>
         </div>
         ${reason ? `<p class="tiny red">${e(reason)}</p>` : ''}
       </div></li>`;
   };
   return `<p class="small mkt-qual"><span aria-hidden="true">🔎</span> ${e(qualityLine(Z))}</p>
     <p class="tiny mute">Storage here: ${held} of ${cap}${full ? ' <span class="badge red">Full</span>' : ''}. Cash: <span class="mono">${m(s.cash)}</span>.</p>
-    <ul class="mkt-list">${lots.map(card).join('') || '<li class="mute">No lots right now. Sellers bring new ones every few hours.</li>'}</ul>`;
+    <ul class="mkt-list">${lots.map(card).join('') || '<li class="k-empty"><span class="k-empty-ic" aria-hidden="true">🧺</span><p>No lots right now. Sellers bring new ones every few hours.</p></li>'}</ul>`;
 }
 
 // ---- radar
@@ -354,10 +354,14 @@ export default {
         if (!g().s.lots[zone]?.some((l) => l.id === lotId)) { ctx.toast('That lot is gone.', 'warn'); ctx.render(); return; }
         ctx.deal({ kind: 'buy', zone, lotId });
       },
+      // Quick buy is a Quick deal: it opens the Deal Room and plays it with the room's own Quick deal action (average skill at every stage), so a purchase made here is read,
+      // haggled or bid for, recorded and bought by the same code as one made at the lot's booth, and the engine hears the same events from either (inspect, haggle or auction,
+      // then buy). It never calls game.buyLot itself. A blocked deal (not enough cash, no room) is left open for the room to say why, and nothing is played.
       'market-buy'(el) {
-        const r = g().buyLot(focusZone(ctx), el.dataset.lot);
-        if (!r.ok) ctx.say(r); else { ctx.toast(`Bought ${nameOf(r.asset.cls, r.asset.cond)} for ${ctx.money(r.price)}.`, 'good'); ctx.sfx?.blip?.(); }
-        ctx.render();
+        const lotId = el.dataset.lot, zone = focusZone(ctx);
+        if (!g().s.lots[zone]?.some((l) => l.id === lotId)) { ctx.toast('That lot is gone.', 'warn'); ctx.render(); return; }
+        const ses = ctx.deal({ kind: 'buy', zone, lotId });
+        if (ses && ses.ok !== false && ses.run && !ses.run.plan?.blocker) ses.acts?.['quick-all']?.();
       },
       'market-gostock'() { ctx.openDrawer('stock'); },
       // the classmate Exchange (the peer-to-peer rules live in the engine and the session)

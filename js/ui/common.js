@@ -13,6 +13,7 @@ export function applySettings() {
   const r = document.documentElement;
   r.dataset.contrast = settings.contrast; r.dataset.motion = settings.motion; r.dataset.size = settings.size;
   kv.set('settings', settings);
+  if (reduced()) fxStop();
 }
 export const reduced = () => settings.motion === 'reduce' || (typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches);
 
@@ -24,7 +25,9 @@ export function setHTML(el, html) {
   if (a && el.contains(a) && a.matches('input:not([type=checkbox]):not([type=radio]), select, textarea')) return false; // never re-render under a typing user
   const fid = a && el.contains(a) ? a.dataset.fid : null;
   el._html = html;
+  const kept = [...el.children].filter((c) => c.hasAttribute('data-keep')); // a layer put inside from outside (the Academy's coach card, in a dialog) is not part of the markup and survives it
   el.innerHTML = html;
+  for (const k of kept) el.appendChild(k);
   if (fid) el.querySelector(`[data-fid="${CSS.escape(fid)}"]`)?.focus({ preventScroll: true });
   return true;
 }
@@ -38,12 +41,14 @@ export function announce(msg, assertive = false) {
 }
 export function toast(msg, level = 'info', ms = 4200) {
   const box = $('#toasts');
-  const t = document.createElement('div');
-  t.className = 'toast ' + level;
-  t.textContent = msg;
-  box.appendChild(t);
-  while (box.children.length > 4) box.firstChild.remove();
-  setTimeout(() => t.remove(), ms);
+  if (box) {
+    const t = document.createElement('div');
+    t.className = 'toast ' + level;
+    t.textContent = msg;
+    box.appendChild(t);
+    while (box.children.length > 4) box.firstChild.remove();
+    setTimeout(() => { t.classList.add('out'); setTimeout(() => t.remove(), 200); }, ms); // fade, then go: a toast never just vanishes
+  }
   announce(msg, level === 'bad');
 }
 
@@ -60,6 +65,7 @@ export const dlg = {
     d.innerHTML = html;
     d._onClose = onClose;
     d.showModal();
+    d.scrollTop = 0; // the element is reused: a tall dialog must not open half way down
     (d.querySelector('[autofocus]') || d.querySelector('h1,h2,h3') || d).focus?.();
     return d;
   },
@@ -68,7 +74,26 @@ export const dlg = {
 };
 export function initDialog() {
   const d = D();
-  d.addEventListener('close', () => { d._onClose?.(); d._onClose = null; try { returnFocus?.focus({ preventScroll: true }); } catch { /* element gone */ } });
+  // The dialog is where the cursor lives, never a stop on the way. Chrome gives every scrolling element a Tab stop of its own, and a scrolling dialog is one: a stop that does
+  // nothing, whose ring (3px, 2px out) lies outside the screen when the dialog fills it (the Deal Room on a phone, a laptop at 200%). tabindex -1 takes it out of the Tab order
+  // and keeps it focusable by script (`dlg.open` falls back to it), and every control inside is still reached by Tab, which scrolls it into view; arrow keys and Page Down scroll
+  // the dialog from any of them. Escape and the focus handed back on close are untouched.
+  d.tabIndex = -1;
+  // When it closes the dialog is finished with: its class goes (a class that sets `display`, such as the Deal Room's, would keep a closed sheet drawn below the page, with its controls in
+  // the Tab order and the accessibility tree), and the cursor goes back to what opened it. That control is sometimes gone by then (a bought lot or a sold crate redrew the drawer it
+  // stood in): the cursor then goes to the open drawer's title, else to the game itself, never to a control of the closed sheet. The `d.open` checks are for a dialog that was opened
+  // again at once: `open` closes the one on screen first, and that close event is heard after the new content is already in.
+  d.addEventListener('close', () => {
+    d._onClose?.(); d._onClose = null;
+    if (!d.open) d.className = '';
+    try { returnFocus?.focus({ preventScroll: true }); } catch { /* element gone */ }
+    setTimeout(() => {
+      if (typeof document === 'undefined') return;
+      const a = document.activeElement;
+      if (d.open || (a && a !== document.body && a !== document.documentElement && a !== d && a.isConnected && !d.contains(a))) return; // it is somewhere real already
+      try { (document.querySelector('#drawer:not([hidden]) #dh-title') || document.getElementById('app'))?.focus({ preventScroll: true }); } catch { /* nothing to focus */ }
+    }, 0);
+  });
   d.addEventListener('click', (e) => { if (e.target === d) d.close(); });
 }
 
@@ -117,27 +142,55 @@ export const sfx = {
 };
 
 // ---- pixel burst on a full-screen canvas
-let parts = [], raf = 0;
+// One pooled particle array (nothing is allocated after the first burst), one rAF loop that sleeps the moment nothing is alive, physics by elapsed time (a 120 Hz screen
+// is not twice as fast as a 60 Hz one), and a canvas that owns pixels only while particles fly: left standing, a full-screen canvas holds tens of megabytes at 1440p.
+// Same call as ever: burst({ x, y, color, n, power }); nothing happens in reduced motion.
+const FX = { c: null, g: null, pool: [], live: 0, raf: 0, t: 0, w: 0, h: 0, cols: [], watching: false, seen: false };
+const FX_MAX = 480, FX_TAIL = 14; // pool size; frames over which a dying particle fades
+const fxCol = (c) => { let i = FX.cols.indexOf(c); if (i < 0) { if (FX.cols.length >= 8) FX.cols.length = 3; i = FX.cols.push(c) - 1; } return i; };
+function fxFit() { // the canvas is the window's size in CSS pixels, backed by up to 2x device pixels, and drawn in CSS pixels
+  const c = FX.c, dpr = Math.min(2, window.devicePixelRatio || 1);
+  FX.w = innerWidth; FX.h = innerHeight;
+  c.hidden = false; c.width = Math.round(FX.w * dpr); c.height = Math.round(FX.h * dpr);
+  FX.g = c.getContext('2d'); FX.g.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+function fxStop() {
+  if (FX.raf) cancelAnimationFrame(FX.raf);
+  FX.raf = 0; FX.live = 0;
+  if (FX.c) { FX.c.width = FX.c.height = 0; FX.c.hidden = true; } // give the backing store back
+  if (FX.watching) { removeEventListener('resize', fxFit); FX.watching = false; }
+}
+function fxFrame(now) {
+  const { g, pool } = FX, k = Math.min(3, Math.max(0.1, (now - FX.t) / 16.667 || 1)); // frames elapsed, capped so a returning tab does not jump
+  FX.t = now;
+  for (let i = 0; i < FX.live;) {
+    const p = pool[i]; p.x += p.vx * k; p.y += p.vy * k; p.vy += 0.35 * k; p.life -= k;
+    if (p.life <= 0 || p.y > FX.h + 24) { pool[i] = pool[--FX.live]; pool[FX.live] = p; } else i++; // swap-remove: the dead one goes back to the pool
+  }
+  g.clearRect(0, 0, FX.w, FX.h);
+  for (let ci = 0; ci < FX.cols.length; ci++) { // one fillStyle per colour, solid particles first
+    g.fillStyle = FX.cols[ci];
+    for (let i = 0; i < FX.live; i++) { const p = pool[i]; if (p.c === ci && p.life >= FX_TAIL) g.fillRect(Math.round(p.x), Math.round(p.y), p.s, p.s); }
+  }
+  for (let i = 0; i < FX.live; i++) { const p = pool[i]; if (p.life < FX_TAIL) { g.globalAlpha = p.life / FX_TAIL; g.fillStyle = FX.cols[p.c]; g.fillRect(Math.round(p.x), Math.round(p.y), p.s, p.s); } }
+  g.globalAlpha = 1;
+  FX.raf = FX.live ? requestAnimationFrame(fxFrame) : 0;
+  if (!FX.live) fxStop();
+}
 export function burst({ x, y, color = '#46e38e', n = 90, power = 1 } = {}) {
   if (reduced()) return;
-  const c = $('#fx'), g = c.getContext('2d');
-  c.width = innerWidth; c.height = innerHeight;
+  FX.c ||= $('#fx'); if (!FX.c) return;
+  if (!FX.watching) { FX.watching = true; addEventListener('resize', fxFit); }
+  if (FX.c.hidden) fxFit(); // idle: the canvas has no pixels; give it some for as long as the burst lasts
+  if (!FX.seen) { FX.seen = true; document.addEventListener('visibilitychange', () => { if (document.hidden) fxStop(); }); } // a hidden tab's burst is over when it returns
   x ??= innerWidth / 2; y ??= innerHeight / 2.4;
-  const cols = [color, '#ffc247', '#ffffff'];
+  const cols = [fxCol(color), fxCol('#ffc247'), fxCol('#ffffff')];
   for (let i = 0; i < n; i++) {
     const a = Math.random() * 6.283, v = (2 + Math.random() * 7) * power;
-    parts.push({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v - 3, life: 40 + Math.random() * 40, s: 4 + Math.floor(Math.random() * 3) * 2, c: cols[i % 3] });
+    const p = FX.live < FX.pool.length ? FX.pool[FX.live++] : FX.pool.length < FX_MAX ? (FX.pool.push({}), FX.pool[FX.live++]) : FX.pool[(Math.random() * FX.live) | 0]; // reuse, grow to the cap, then recycle a live one
+    p.x = x; p.y = y; p.vx = Math.cos(a) * v; p.vy = Math.sin(a) * v - 3; p.life = 40 + Math.random() * 40; p.s = 4 + Math.floor(Math.random() * 3) * 2; p.c = cols[i % 3];
   }
-  clearTimeout(burst._t); burst._t = setTimeout(() => { parts = []; raf = 0; g.clearRect(0, 0, c.width, c.height); }, 2600);
-  if (raf) return;
-  const loop = () => {
-    g.clearRect(0, 0, c.width, c.height);
-    parts = parts.filter((p) => p.life-- > 0);
-    for (const p of parts) { p.x += p.vx; p.y += p.vy; p.vy += 0.35; g.fillStyle = p.c; g.fillRect(Math.round(p.x), Math.round(p.y), p.s, p.s); }
-    raf = parts.length ? requestAnimationFrame(loop) : 0;
-    if (!parts.length) g.clearRect(0, 0, c.width, c.height);
-  };
-  raf = requestAnimationFrame(loop);
+  if (!FX.raf) { FX.t = performance.now(); FX.raf = requestAnimationFrame(fxFrame); }
 }
 
 export function settingsDialog(onChange) {

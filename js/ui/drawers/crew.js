@@ -261,7 +261,7 @@ function hireBody(ctx) {
   const take = H.more ? 60 : g.P.radar || s.upg.research ? 8 : 5;
   const { rows, total } = lanesFor(v, H.zone, take, [{ cls: H.cls, seg: H.buyer }], H.edit || null);
   const kinds = edit ? `<p class="small"><span class="cr-ic" aria-hidden="true">${PIPE[edit.kind].icon}</span> <b>${esc(PIPE[edit.kind].name)}</b> <span class="chip">Lv ${edit.level} of ${PIPE_RULES.maxLevel}</span></p>`
-    : `<h3 class="cr-h3">1. Choose a manager</h3><div class="cr-kinds" role="group" aria-label="Manager type">${Object.entries(PIPE).map(([id, K]) => `<button class="cr-kind" aria-pressed="${H.kind === id}" data-act="crew-hkind" data-k="${id}" data-fid="hk-${id}">
+    : `<h3 class="cr-h3">1. Choose a manager</h3><div class="cr-kinds" role="group" aria-label="Manager type">${Object.entries(PIPE).map(([id, K]) => `<button class="cr-kind" aria-pressed="${H.kind === id}" data-act="crew-hkind" data-k="${id}" data-fid="hk-${id}" data-anchor="hire-${id}">
         <span class="cr-ic" aria-hidden="true">${K.icon}</span><b>${esc(K.name)}</b><span class="small">${esc(K.blurb)}</span>
         <span class="small mono">${m(g.pipeCost(id, H.zone))} to hire</span><span class="small mute">Up to ${m(startCap(g, id, H.zone))} per cycle. ${K.cycle < 1 ? 'Fast' : K.cycle > 1 ? 'Slow' : 'Steady'} cycles. Takes ${Math.round(K.royalty * 100)}% of profit.</span></button>`).join('')}</div>`;
   const shown = locked ? rows.filter((r) => r.cls === H.cls && r.seg === H.buyer) : rows, intl = 1.3 + (g.P.intlBonus || 0);
@@ -281,7 +281,7 @@ function hireBody(ctx) {
     <input id="ch-amt" type="range" min="0" max="100" step="5" value="${cap ? Math.round(alloc / cap * 100) : 0}" data-input="crew-hamt" data-fid="ch-amt">
     <div class="row"><button class="btn ghost" data-act="crew-hmax" data-fid="hmax">Use full capacity</button>${!edit && left > 0 && left < alloc ? `<button class="btn ghost" data-act="crew-hafford" data-fid="hafford">Use what I can afford (${m(left)})</button>` : ''}</div>
     <div id="chprev" class="gap">${previewHTML(ctx)}</div>
-    <div class="cr-foot">${why ? `<p class="cr-why small">${esc(why)}</p>` : ''}<div class="row"><button class="btn" data-act="crew-hgo" data-fid="hgo" ${why ? 'aria-disabled="true"' : ''}>${edit ? 'Save changes' : `Hire for ${m(cost)}`}</button><button class="btn ghost" data-close>Cancel</button></div></div>`;
+    <div class="cr-foot">${why ? `<p class="cr-why small">${esc(why)}</p>` : ''}<div class="row"><button class="btn" data-act="crew-hgo" data-fid="hgo" data-anchor="hire-go" ${why ? 'aria-disabled="true"' : ''}>${edit ? 'Save changes' : `Hire for ${m(cost)}`}</button><button class="btn ghost" data-close>Cancel</button></div></div>`;
 }
 
 function hireDialog(ctx) {
@@ -331,7 +331,9 @@ function consume(ctx) {
     if (todo.hire) openHire(ctx, { zone: +todo.hire });
     if (todo.focus) {
       const el = ctx.el?.drawer?.querySelector?.(`[data-pipe="${todo.focus}"]`);
-      el?.scrollIntoView?.({ block: 'center' });
+      const db = el?.closest?.('.db');
+      if (db && typeof db.scrollTo === 'function') db.scrollTo({ top: Math.max(0, el.getBoundingClientRect().top - db.getBoundingClientRect().top + db.scrollTop - (db.clientHeight - el.offsetHeight) / 2) }); // the drawer's own list only: scrollIntoView would slide the whole stage
+      else el?.scrollIntoView?.({ block: 'center' });
       if (!todo.hire) el?.focus?.({ preventScroll: true });
       later(() => ctx.render(), 3300);
     }

@@ -11,19 +11,55 @@
 }
 :root[data-size="s"] { --fs: 14px; } :root[data-size="l"] { --fs: 18px; } :root[data-size="xl"] { --fs: 21px; }
 
+/* ---- Layout tokens. Not colours: tests/a11y.test.mjs reads the first :root block above, so every colour stays there. ---------------------------------
+   Z-INDEX SCALE. One ladder for everything that stacks; never write a bare number in a sheet you own, use a token (the ladder is drawn in css/shell.css). The stage (.stage)
+   is its own stacking context, so 0-9 are relative to it; 60 and up are page level, above the whole stage. A <dialog> is in the browser's top layer and beats every number.
+   ui-academy.css still writes 30 and 40 inside the overlay; they only order those two layers among themselves.
+   TYPE SCALE in rem, so Settings > Text size scales all of it; the 11px floor keeps the smallest labels readable at Small. SPACING SCALE on a 4px grid.
+   SAFE AREA: --edge-* are the gutters every anchored thing keeps from the screen edge, never less than the device's notch or home bar. */
+:root {
+  color-scheme: dark;
+  --z-world: 0; --z-world-ui: 2; --z-scrim: 3; --z-aux: 4; --z-hud: 5; --z-tip: 6; --z-dock: 7; --z-drawer: 8; --z-overlay: 9; --z-toast: 60; --z-fx: 80; --z-skip: 99;
+  --t-micro: max(.7rem, 11px); --t-sm: .8rem; --t-md: .92rem; --t-lg: 1.15rem; --t-xl: 1.4rem; --t-2xl: 1.8rem; --lh-tight: 1.15; --lh-body: 1.45; --ls-caps: .08em;
+  --sp-1: .25rem; --sp-2: .5rem; --sp-3: .75rem; --sp-4: 1rem; --sp-5: 1.5rem; --sp-6: 2rem;
+  --r-1: 2px; --r-2: 6px; --r-3: 12px; --r-pill: 99px;
+  --edge-t: max(var(--sp-2), env(safe-area-inset-top, 0px)); --edge-r: max(var(--sp-3), env(safe-area-inset-right, 0px));
+  --edge-b: max(var(--sp-2), env(safe-area-inset-bottom, 0px)); --edge-l: max(var(--sp-3), env(safe-area-inset-left, 0px));
+  --target: 2.4rem; --ui-scale: 1;
+  /* Raised surfaces: a 1px top light, a hard offset (the game's pixel look) and a soft ambient shadow so a plate sits on the world instead of being pasted on it. */
+  --hi: rgba(255, 255, 255, .07); --scrim: 8, 12, 18;
+  --plate: linear-gradient(180deg, var(--panel2), var(--panel));
+  --elev-1: inset 0 1px 0 var(--hi), 0 2px 0 rgba(0, 0, 0, .45), 0 6px 14px rgba(0, 0, 0, .32);
+  --elev-2: inset 0 1px 0 var(--hi), 4px 4px 0 rgba(0, 0, 0, .55), 0 14px 30px rgba(0, 0, 0, .38);
+  /* Where the HUD ends, the dock begins, how tall the ticker is and where the HUD and the goal tracker end together. These are the CSS fallbacks; shell.js measures the real
+     pieces and writes the exact values on <html>, so the tracker, ticker, camera, list, drawer and toasts stay clear of each other whatever wraps. */
+  --hud-h: 4.85rem; --dock-h: 4.55rem; --tick-h: 0px; --trk-b: calc(var(--hud-h) + 6.5rem);
+  /* The side drawer's width, and the camera column (a column of four buttons; two by two on a phone on its side): other pieces keep clear of both by these. */
+  --drawer-w: min(30rem, calc(100vw - var(--edge-l) - var(--edge-r)));
+  --cam-w: var(--target); --cam-h: calc(4 * var(--target) + 3 * var(--sp-2));
+}
+:root[data-contrast="high"] { --hi: transparent; --scrim: 0, 0, 0; --plate: var(--panel); --elev-1: none; --elev-2: none; }
+@media (pointer: coarse) { :root { --target: 44px; } }
+@media (max-width: 900px) { :root { --hud-h: 8.9rem; --dock-h: 4rem; } }  /* first-frame fallback for a HUD that wraps to two rows (shell.js measures the real one) */
+@media (max-height: 520px) { :root { --hud-h: 4.1rem; --dock-h: 4rem; --trk-b: calc(var(--hud-h) + 3rem); --drawer-w: min(26rem, calc(100vw - var(--edge-l) - var(--edge-r))); --cam-w: calc(2 * var(--target) + var(--sp-1)); --cam-h: calc(2 * var(--target) + var(--sp-1)); } } /* a phone on its side */
+/* A very large screen reads small at the same rem: one step up for 1440p and beyond (Settings > Text size still stacks on top). */
+@media (min-width: 2200px) and (min-height: 1200px) { :root { --ui-scale: 1.2; } }
+
 * { box-sizing: border-box; }
-html { font-size: var(--fs); }
-body { margin: 0; background: var(--bg); color: var(--ink); font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; line-height: 1.45; min-height: 100vh;
+html { font-size: calc(var(--fs) * var(--ui-scale)); -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+body { margin: 0; background: var(--bg); color: var(--ink); font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; line-height: var(--lh-body); min-height: 100vh; min-height: 100dvh;
   background-image: linear-gradient(rgba(255,255,255,.025) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.025) 1px, transparent 1px); background-size: 24px 24px; }
 :root[data-contrast="high"] body { background-image: none; }
 .mono, .num, h1, h2, h3, .btn, .tab, .chip, .badge { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+.mono, .num, .kv dd, .tbl td, .quote, .badge, .chip, .btn { font-variant-numeric: tabular-nums; } /* money must not jiggle as digits change */
 h1, h2, h3 { margin: 0 0 .5rem; letter-spacing: .02em; line-height: 1.2; }
 h1 { font-size: 1.7rem; } h2 { font-size: 1.1rem; text-transform: uppercase; letter-spacing: .08em; } h3 { font-size: .95rem; }
 p { margin: .35rem 0 .7rem; } a { color: var(--cyan); }
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
-.skip { position: absolute; left: -999px; top: 0; background: var(--gold); color: var(--on-gold); padding: .5rem 1rem; z-index: 99; }
-.skip:focus { left: 0; }
+.skip { position: absolute; left: -999px; top: 8px; background: var(--gold); color: var(--on-gold); padding: .5rem 1rem; z-index: var(--z-skip); }
+.skip:focus { left: 8px; } /* 8px in from the corner: the focus ring reaches 5px past the link (3px line, 2px out), and at 0 the window edge cut it on two sides */
 :focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+button, select, summary, [role="button"] { -webkit-tap-highlight-color: transparent; touch-action: manipulation; } /* no 300ms tap delay, no grey flash: pressed states are ours */
 main#app:focus { outline: none; }
 [hidden] { display: none !important; }
 .mute { color: var(--mute); } .gold { color: var(--gold); } .green { color: var(--green); } .red { color: var(--red); } .cyan { color: var(--cyan); }
@@ -38,9 +74,10 @@ main#app:focus { outline: none; }
 .callout.good { border-color: var(--green); background: var(--good-bg); } .callout.bad { border-color: var(--red); background: var(--bad-bg); } .callout.warn { border-color: var(--gold); background: var(--warn-bg); }
 
 /* controls */
-.btn { appearance: none; border: var(--bw) solid var(--gold); background: var(--gold); color: var(--on-gold); font-weight: 700; padding: .45rem .85rem; cursor: pointer; border-radius: 2px; font-size: .88rem; box-shadow: 3px 3px 0 rgba(0,0,0,.5); text-transform: uppercase; letter-spacing: .04em; min-height: 2.4rem; }
-.btn:hover:not(:disabled) { filter: brightness(1.1); } .btn:active:not(:disabled) { transform: translate(2px, 2px); box-shadow: 1px 1px 0 rgba(0,0,0,.5); }
-.btn.ghost { background: transparent; color: var(--ink); border-color: var(--field); } .btn.ghost:hover:not(:disabled) { border-color: var(--gold); }
+.btn { appearance: none; border: var(--bw) solid var(--gold); background: var(--gold); color: var(--on-gold); font-weight: 700; padding: .45rem .85rem; cursor: pointer; border-radius: 2px; font-size: .88rem; box-shadow: 3px 3px 0 rgba(0,0,0,.5); text-transform: uppercase; letter-spacing: .04em; min-height: 2.4rem; transition: filter .12s, transform .06s, box-shadow .06s, border-color .12s; }
+@media (hover: hover) { .btn:hover:not(:disabled) { filter: brightness(1.1); } }
+.btn:active:not(:disabled) { transform: translate(2px, 2px); box-shadow: 1px 1px 0 rgba(0,0,0,.5); }
+.btn.ghost { background: transparent; color: var(--ink); border-color: var(--field); } .btn.ghost:hover:not(:disabled), .btn.ghost:active:not(:disabled) { border-color: var(--gold); }
 .btn.green { background: var(--green); border-color: var(--green); color: #04210f; } .btn.danger { background: var(--red); border-color: var(--red); color: #2a0503; }
 .btn.sm { padding: .25rem .55rem; min-height: 1.9rem; font-size: .78rem; } .btn.big { padding: .8rem 1.3rem; font-size: 1rem; }
 .btn:disabled, .btn[aria-disabled="true"] { opacity: .5; cursor: not-allowed; box-shadow: none; }
@@ -62,7 +99,7 @@ label { display: block; font-size: .82rem; color: var(--mute); margin-bottom: .2
 .gauge > i { position: absolute; inset: 0 auto 0 0; background: var(--green); } .gauge .mk { position: absolute; top: -3px; bottom: -3px; width: 2px; background: var(--ink); }
 
 /* layout */
-#app { max-width: 1480px; margin: 0 auto; padding: .8rem; }
+#app { max-width: 1480px; margin: 0 auto; padding: max(.8rem, env(safe-area-inset-top, 0px)) max(.8rem, env(safe-area-inset-right, 0px)) max(.8rem, env(safe-area-inset-bottom, 0px)) max(.8rem, env(safe-area-inset-left, 0px)); }
 .hub { display: grid; grid-template-columns: auto repeat(4, minmax(8.5rem, 1fr)) auto; gap: .6rem; align-items: stretch; margin-bottom: .8rem; }
 .hub .stat { background: var(--panel); border: var(--bw) solid var(--line); padding: .4rem .7rem; min-width: 0; }
 .hub .stat .lbl { font-size: .7rem; color: var(--mute); text-transform: uppercase; letter-spacing: .08em; }
@@ -99,14 +136,22 @@ label { display: block; font-size: .82rem; color: var(--mute); margin-bottom: .2
 @keyframes dash { to { stroke-dashoffset: -24; } } .route { stroke-dasharray: 8 6; animation: dash 1s linear infinite; }
 
 /* toasts, dialog, fx */
-#toasts { position: fixed; right: .8rem; bottom: .8rem; display: grid; gap: .5rem; z-index: 60; max-width: min(26rem, 90vw); pointer-events: none; }
-.toast { background: var(--panel2); border: var(--bw) solid var(--line); border-left-width: 6px; padding: .55rem .8rem; box-shadow: var(--shadow); animation: slidein .25s; font-size: .88rem; }
+/* Toasts stack up from the bottom-right on the plain screens. Over the game they stand above the dock and the ticker and step clear of the drawer and the camera buttons
+   (css/shell.css), so a toast never covers a control and never leaves the screen. They are aria-hidden: the same words go to the live region. */
+#toasts { position: fixed; right: var(--edge-r); bottom: var(--edge-b); display: grid; gap: .5rem; justify-items: end; z-index: var(--z-toast); width: min(26rem, calc(100vw - var(--edge-l) - var(--edge-r))); pointer-events: none; }
+.toast { background: var(--plate); border: var(--bw) solid var(--line); border-left-width: 6px; padding: .55rem .8rem; box-shadow: var(--elev-2); animation: slidein .25s ease-out; font-size: var(--t-md); line-height: var(--lh-tight); max-width: 100%; overflow-wrap: anywhere; }
 .toast.good { border-color: var(--green); } .toast.bad { border-color: var(--red); } .toast.warn { border-color: var(--gold); }
-@keyframes slidein { from { transform: translateX(30px); opacity: 0; } to { transform: none; opacity: 1; } }
-dialog { background: var(--panel); color: var(--ink); border: var(--bw) solid var(--gold); box-shadow: 8px 8px 0 rgba(0,0,0,.6); padding: 1.1rem 1.3rem; width: min(46rem, 94vw); max-height: 92vh; overflow: auto; border-radius: 2px; }
+.toast { transition: opacity .2s, transform .2s; } .toast.out { opacity: 0; transform: translateY(6px); } /* common.js adds .out, then removes the toast */
+@keyframes slidein { from { transform: translateY(8px); opacity: 0; } to { transform: none; opacity: 1; } }
+dialog { background: var(--panel); color: var(--ink); border: var(--bw) solid var(--gold); box-shadow: 8px 8px 0 rgba(0,0,0,.6), 0 24px 60px rgba(0,0,0,.5); padding: 1.1rem 1.3rem; width: min(46rem, 94vw); max-height: 92vh; max-height: calc(100dvh - var(--edge-t) - var(--edge-b)); overflow: auto; overscroll-behavior: contain; border-radius: 2px; }
+dialog:not([open]) { display: none; } /* a class that sets `display` (.deal) must not keep a closed dialog on the page: the browser's own rule has the weakest say */
+dialog[open] { animation: dlgin .18s ease-out; }
+@keyframes dlgin { from { transform: translateY(10px); opacity: 0; } to { transform: none; opacity: 1; } }
 dialog::backdrop { background: rgba(0,0,0,.72); }
+dialog[open]::backdrop { animation: dlgfade .18s ease-out; } @keyframes dlgfade { from { opacity: 0; } to { opacity: 1; } }
 dialog.alert { border-color: var(--red); } dialog .x { float: right; }
-#fx { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 80; }
+/* The burst canvas holds no memory while idle: common.js shows it only while particles fly and gives its backing store back after. */
+#fx { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: var(--z-fx); }
 .result { text-align: center; padding: .6rem; } .result .rtitle { font-size: 1.6rem; font-weight: 800; font-family: ui-monospace, Menlo, monospace; margin-bottom: .4rem; }
 .result.good .rtitle { color: var(--green); } .result.bad .rtitle { color: var(--red); } .result.warn .rtitle { color: var(--gold); }
 .popin { animation: pop .35s cubic-bezier(.2, 1.4, .4, 1); } @keyframes pop { from { transform: scale(.7); opacity: 0; } to { transform: none; opacity: 1; } }

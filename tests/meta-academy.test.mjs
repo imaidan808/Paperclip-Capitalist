@@ -502,7 +502,9 @@ test('coach and hints use the names on the screen: Done reading, Bid, Drop out, 
   assert.ok(deal.includes('data-deal="quick-all"') && deal.includes('data-deal="quick-stage"'), 'the stage Quick and the footer Quick deal are still two buttons (m04 tells them apart)');
   // m02, m03 and m10 name the Market card's controls: Look it over opens the Deal Room, Quick buy does not (it calls game.buyLot and sends only a buy)
   for (const label of ['Look it over', 'Quick buy', 'Crowded: most sellers pick this buyer.', 'Almost nobody else sells this to them.']) assert.ok(market.includes(label), `the Market drawer no longer says "${label}"`);
-  assert.ok(/'market-buy'\(el\) \{\s*const r = g\(\)\.buyLot\(/.test(market), 'the card\'s Quick buy still calls game.buyLot directly; if it now opens the Deal Room, the "Look it over, not Quick buy" words in m02 and m10 are redundant, not wrong, and this line can go');
+  // (the card's Quick buy used to call game.buyLot directly and send only a buy; js/ui/drawers/market.js now opens the Deal Room and plays its Quick deal, so the card and the sprite
+  // send the same events, and the extra words in m02 and m10 are redundant, not wrong. This line holds the card to that.)
+  { const buy = market.slice(market.indexOf("'market-buy'(el)"), market.indexOf("'market-gostock'")); assert.ok(buy.includes("ctx.deal({ kind: 'buy'") && !market.includes('.buyLot('), 'the card\'s Quick buy opens the Deal Room and never calls game.buyLot itself'); }
   assert.ok(bank.includes('Borrow'), 'the Bank no longer says "Borrow"');
   assert.ok(stock.includes('Sell to the pool') && stock.includes('Tick crates'), 'Stock no longer says "Sell to the pool" and "Tick crates"');
   for (const label of ['Hire a manager', 'Use what I can afford', 'Capital per cycle']) assert.ok(crew.includes(label), `the Crew drawer no longer says "${label}"`);

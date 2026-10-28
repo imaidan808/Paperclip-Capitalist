@@ -49,6 +49,8 @@ test('anchors: dom names and world references parse, junk does not', () => {
   assert.deepEqual(A.parseAnchor('world:plot:5:0'), { kind: 'world', type: 'plot', id: '5:0' });
   for (const bad of ['', null, undefined, 'world:', 'world:lead', 'world:cow:1', 'Dock Market', 'dock_market', '<b>']) assert.equal(A.parseAnchor(bad), null, String(bad));
   for (const a of A.DOM_ANCHORS) assert.equal(A.parseAnchor(a).kind, 'dom', a);
+  for (const k of Object.keys(PIPE)) assert.ok(A.DOM_ANCHORS.includes('hire-' + k), `the ${k} card in the hire dialog is a listed anchor`);
+  assert.ok(A.DOM_ANCHORS.includes('hire-go'), 'and so is its Hire button');
 });
 
 test('anchors: any rect shape becomes { x, y, w, h }; rects with no area are nothing', () => {
@@ -110,6 +112,29 @@ test('card placer: it stays off an open drawer and off the dock icons', () => {
   const inDrawer = A.placeCard({ x: 700, y: 200, w: 120, h: 40 }, card, view, 14, 8, [drawer, dock]); assert.ok(clear(inDrawer, { x: 700, y: 200, w: 120, h: 40 }), 'a target inside the drawer still gets a card that does not cover it');
   assert.equal(A.placeCard(null, card, view, 14, 8, [{ x: 382, y: 489, w: 336, h: 181 }]).side, 'center', 'with no target the card finds a free corner of the screen');
   assert.ok(A.placeCard(market, card, view, 14, 8, [null]).side, 'a missing rect in the list is ignored');
+});
+
+test('card placer: where nothing is clear it covers the least, and never the target or the control the keyboard is on', () => {
+  const view = { w: 390, h: 844 }, card = { w: 344, h: 200 };
+  const clear = (at, r) => !A.rectsOverlap({ x: at.x, y: at.y, w: card.w, h: card.h }, r);
+  // a phone: the HUD above, a column of controls down the middle, the dock below, so no place is clear; the focused button (weight 1000) is the one thing the card must not cover
+  const hud = { x: 0, y: 0, w: 390, h: 150, wt: 2 }, dock = { x: 0, y: 770, w: 390, h: 74, wt: 3 }, focus = { x: 20, y: 300, w: 120, h: 44, wt: 1000 };
+  const rows = Array.from({ length: 8 }, (_, i) => ({ x: 20, y: 160 + i * 70, w: 350, h: 56, wt: 1 }));
+  const at = A.placeCard(null, card, view, 14, 8, [hud, dock, focus, ...rows]);
+  assert.ok(clear(at, focus), 'the focused control is not under the card: ' + JSON.stringify(at));
+  assert.ok(at.x >= 8 && at.y >= 8 && at.x + card.w <= 382 && at.y + card.h <= 836, 'and the card is inside the view');
+  // the score is the covered area, the target six times over and each rect by its weight
+  const p = { x: 0, y: 0, w: 100, h: 100 };
+  assert.equal(A.coverScore(p, null, []), 0);
+  assert.equal(A.coverScore(p, { x: 50, y: 50, w: 100, h: 100 }, []), 2500 * 6, 'the target counts six times');
+  assert.equal(A.coverScore(p, null, [{ x: 0, y: 0, w: 10, h: 10, wt: 1000 }, { x: 90, y: 90, w: 20, h: 20 }, null]), 100 * 1000 + 100, 'weights multiply the area, none means one, a missing rect is ignored');
+  // a target that is not alone: beside it if that place is clear, as before
+  const t = { x: 200, y: 100, w: 80, h: 40 };
+  const free = A.placeCard(t, { w: 150, h: 80 }, { w: 1000, h: 700 }, 14, 8, [{ x: 0, y: 600, w: 1000, h: 100, wt: 3 }]);
+  assert.equal(free.side, 'below', 'a clear place beside the target is still the first choice');
+  // a wall of controls with the target in it: the card still stands off the target, and says it is not beside it
+  const crowded = A.placeCard(t, { w: 150, h: 80 }, { w: 1000, h: 700 }, 14, 8, [{ x: 0, y: 0, w: 1000, h: 700, wt: 1 }]);
+  assert.ok(!A.rectsOverlap({ x: crowded.x, y: crowded.y, w: 150, h: 80 }, t), 'not over the target: ' + JSON.stringify(crowded));
 });
 
 // ---------------------------------------------------------------- the step resolver
@@ -315,6 +340,7 @@ test('the cards are clean HTML: intro, coach, why, teach-back (before, after a m
     intro, introReplay: D.introHTML(m, { index: 0, total: 8, st, concept: null, replay: true, missions: LESSONS }),
     coach: D.coachHTML(A.coachFor(m, A.startRun(m)), { title: m.title }), coachHint: D.coachHTML(A.coachFor(m, A.startRun(m)), { title: m.title, hint: true, showMe: true, manual: true }),
     coachConfirm: D.coachHTML(A.coachFor(m, A.startRun(m)), { title: m.title, confirm: true }), coachFinish: D.coachHTML(A.coachFor(m, { i: 2, n: 2 }), { title: m.title }),
+    stranded: D.strandedHTML(A.strandedFor([{ type: 'pitch' }]), { title: m.title }),
     why: D.whyHTML(m, { index: 0, total: 8 }), whySkipped: D.whyHTML(m, { skipped: true, index: 0, total: 8 }),
     teach0: D.teachHTML(m, A.newTeach()), teachMiss: D.teachHTML(m, A.pickTeach(m.teachBack, A.newTeach(), 0).state),
     teachOk: D.teachHTML(m, A.pickTeach(m.teachBack, A.pickTeach(m.teachBack, A.newTeach(), 0).state, 1).state), teachShown: D.teachHTML(m, A.revealTeach(A.pickTeach(m.teachBack, A.newTeach(), 2).state)),
@@ -330,6 +356,7 @@ test('the cards are clean HTML: intro, coach, why, teach-back (before, after a m
   assert.match(cards.coach, /Step 1 of 2/); assert.match(cards.coach, /Show me/); assert.match(cards.coach, /Skip lesson/); assert.ok(!/Hint:/.test(cards.coach));
   assert.match(cards.coachHint, /Hint:/); assert.match(cards.coachHint, /gold frame/); assert.match(cards.coachHint, /ac-continue/); assert.match(cards.coachHint, /aria-pressed="true"/); assert.match(cards.coachHint, /Restart/);
   assert.match(cards.coachConfirm, /ac-skip-yes/); assert.match(cards.coachFinish, /Last step/);
+  assert.match(cards.stranded, /Closed early/); assert.match(cards.stranded, /That sale closed the lesson early/); assert.match(cards.stranded, /data-act="ac-restart"/);
   assert.match(cards.why, /fit = min\(1/); assert.match(cards.why, /<ol><li>Strongest like is 1\.0\./); assert.match(cards.why, /Result:/); assert.match(cards.whySkipped, /skipped the hands-on part/); assert.match(cards.why, /Test myself/);
   assert.equal((cards.teach0.match(/data-act="ac-pick"/g) || []).length, 3, 'three large options'); assert.ok(!/ac-why/.test(cards.teach0), 'no reasons before a pick');
   assert.match(cards.teachMiss, /Not quite/); assert.match(cards.teachMiss, /tempting idea 0/); assert.match(cards.teachMiss, /Show me the answer/); assert.ok(!/need and fit set/.test(cards.teachMiss), 'a wrong pick does not give the answer away');

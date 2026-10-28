@@ -1,4 +1,5 @@
-// The DOM around the 2.5D canvas: camera buttons, tooltip and the keyboard/screen-reader list of everything in view.
+// The DOM around the 2.5D canvas: camera buttons, tooltip and the keyboard/screen-reader list of everything in view. The list's button stands under the camera column
+// (a bulleted-list glyph, so it is not taken for the HUD's menu); css/shell.css says where its panel opens.
 // Clicks on the world open the same Deal Room and drawers as the dock does (through ctx), so there is exactly one rulebook.
 import { World } from '../world/world.js';
 import { ZONES, ASSETS, BUYERS, PIPE } from '../config.js';
@@ -69,19 +70,44 @@ export function createWorldView(ctx) {
     }
   }
 
-  const tip = () => host?.querySelector('.wvtip');
-  function hover(h, ev) {
-    const t = tip(); if (!t) return;
-    if (!h) { t.hidden = true; return; }
-    t.textContent = describe(h);
-    t.hidden = false;
-    const r = world.cv.getBoundingClientRect(), x = (ev?.clientX ?? r.left) - r.left, y = (ev?.clientY ?? r.top) - r.top;
-    t.style.left = Math.min(x + 14, r.width - 260) + 'px'; t.style.top = Math.max(6, Math.min(y + 14, r.height - 80)) + 'px';
+  /**
+   * How much of the window's left and right edges the camera buttons stand over, for the world to fit the island to what they leave. The buttons are on the left in the wide
+   * layouts and on the right in a phone's bottom-sheet layout (css/shell.css), so this reads where they are instead of assuming a side.
+   */
+  function insets() {
+    const ctl = host?.querySelector('.wvctl'); if (!ctl) return null;
+    const h = host.getBoundingClientRect(), c = ctl.getBoundingClientRect(); if (!h.width || !c.width) return null;
+    const gap = 6; // a little air between the buttons and the island
+    return c.left + c.width / 2 > h.left + h.width / 2 ? { l: 0, r: h.right - c.left + gap } : { l: c.right - h.left + gap, r: 0 };
   }
 
+  // ---- tooltip. Its words are worked out only when what they depend on changes (the thing under the pointer, the hour, the picked crate): a pointer sliding over a
+  // buyer would otherwise price a pitch on every move. It is placed with one transform inside the free band between the HUD and the dock, flipped to the other side
+  // of the pointer when it would run off, so it never covers the dock or leaves the screen. Size is read only when the words change.
+  let tipEl = null, tipKey = '', tipW = 0, tipH = 0;
+  const tip = () => (tipEl ||= host?.querySelector('.wvtip'));
+  function hover(h, ev) {
+    const t = tip(); if (!t) return;
+    if (!h) { tipKey = ''; if (!t.hidden) t.hidden = true; return; }
+    const key = `${h.kind}|${h.id}|${h.zone ?? ''}|${g().s.hour}|${U.sel.size ? [...U.sel].join(',') : ''}`;
+    if (key !== tipKey) { tipKey = key; t.textContent = describe(h); t.hidden = false; tipW = t.offsetWidth; tipH = t.offsetHeight; }
+    else if (t.hidden) t.hidden = false;
+    const W = host.clientWidth, H = host.clientHeight, pad = 8, gap = 14;
+    const lo = (ctx.el?.hud?.offsetHeight ?? 0) + 4, hi = (ctx.el?.dock ? ctx.el.dock.offsetTop : H) - 4; // the free band: from the HUD's foot to the dock's top
+    let px = ev?.offsetX, py = ev?.offsetY;
+    if (px == null) { const r = world.cv.getBoundingClientRect(); px = (ev?.clientX ?? r.left) - r.left; py = (ev?.clientY ?? r.top) - r.top; }
+    let x = px + gap, y = py + gap;
+    if (x + tipW > W - pad) x = px - gap - tipW;       // no room on the right: the left of the pointer
+    if (y + tipH > hi) y = py - gap - tipH;            // no room below: above it
+    x = Math.max(pad, Math.min(x, W - tipW - pad)); y = Math.max(lo, Math.min(y, hi - tipH));
+    t.style.transform = `translate(${Math.round(x)}px, ${Math.round(y)}px)`;
+  }
+
+  // ---- the keyboard and screen-reader list. A closed <details> shows none of its content, so the list is built only while it is open (and when it is opened).
   function list() {
+    const box = host.querySelector('.wvlist'), ul = box.querySelector('.wvul');
+    if (!box.open) { ul.dataset.sig = ''; return; }
     const z = U.zone, items = world.hotspots().filter((h) => !h.zone || h.zone === z);
-    const ul = host.querySelector('.wvul');
     const sig = z + '|' + items.map((h) => h.kind + h.id + h.label).join(',');
     if (ul.dataset.sig === sig) return;
     ul.dataset.sig = sig;
@@ -107,8 +133,8 @@ export function createWorldView(ctx) {
       el.innerHTML = `<div class="wvcv"></div>
         <div class="wvctl" role="group" aria-label="Camera"><button class="ibtn" data-wv="zin" aria-label="Zoom in">+</button><button class="ibtn" data-wv="zout" aria-label="Zoom out">−</button><button class="ibtn" data-wv="fit" aria-label="Show the whole island">◎</button><button class="ibtn" data-wv="me" aria-label="Back to my district">⌂</button></div>
         <div class="wvtip" hidden></div>
-        <details class="wvlist"><summary>List of everything in this district (for keyboard and screen readers)</summary><ul class="wvul"></ul></details>`;
-      world = new World({ session: S, ui: U, activate, hover, reveal: () => {} });
+        <details class="wvlist"><summary><svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false"><path d="M6.5 4H14M6.5 8H14M6.5 12H14" fill="none" stroke="currentColor" stroke-width="2"/><path d="M2 4h1.6M2 8h1.6M2 12h1.6" fill="none" stroke="currentColor" stroke-width="2.4"/></svg><span class="wvl-t">List of everything in this district <span class="wvl-x">(for keyboard and screen readers)</span></span></summary><ul class="wvul"></ul></details>`;
+      world = new World({ session: S, ui: U, activate, hover, reveal: () => {}, insets });
       if (window.pc) window.pc.world = world;
       world.attach(el.querySelector('.wvcv'));
       world.setMode?.('world');
@@ -122,6 +148,7 @@ export function createWorldView(ctx) {
         const a = b.dataset.wv;
         if (a === 'zin') world.zoomBy(1.25); else if (a === 'zout') world.zoomBy(0.8); else if (a === 'fit') world.fit(); else if (a === 'me') world.focusZone(U.zone, true);
       };
+      el.querySelector('.wvlist').addEventListener('toggle', (e) => { if (e.target.open) list(); }); // build the list the moment it is opened
       this.update();
     },
     update() {
@@ -130,6 +157,10 @@ export function createWorldView(ctx) {
       if (U.zone !== lastZone) { lastZone = U.zone; world.focusZone(U.zone, true); }
       list();
     },
-    destroy() { world?.stop(); world?.detach?.(); host = null; world = null; },
+    destroy() {
+      world?.stop(); world?.detach?.(); // detach lets go of the bitmaps; the debugging handle must not keep the whole world reachable either
+      if (window.pc && window.pc.world === world) window.pc.world = null;
+      host = null; world = null;
+    },
   };
 }

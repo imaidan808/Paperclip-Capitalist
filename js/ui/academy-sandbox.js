@@ -6,7 +6,8 @@
 // room and never reads the saved run). Rewards reach the real run only through applyRewards()/claimPending(), once per lesson.
 import { Game } from '../engine.js';
 import { Session, Clock } from '../session.js';
-import { ASSETS, BUYERS, ZONES, PERKS, MIL_ZONE, EVENTS, ALGO_EVENTS, SKILLS } from '../config.js';
+import { ASSETS, BUYERS, ZONES, PERKS, PIPE, MIL_ZONE, EVENTS, ALGO_EVENTS, SKILLS } from '../config.js';
+import { fmtMoney } from '../market.js';
 import { matchEvent } from '../meta/match.js';
 import { hash } from '../rng.js';
 
@@ -17,7 +18,10 @@ const ownList = (x) => (Array.isArray(x) ? x : []);
 // ------------------------------------------------------------------ anchors
 /** Anchors that are real elements carrying data-anchor (HUD, dock, drawer and Deal Room provide them). */
 export const DOM_ANCHORS = ['hud-cash', 'hud-networth', 'hud-day', 'hud-clock', 'player-card', 'tracker', 'ticker', 'dock-stock', 'dock-market', 'dock-crew', 'dock-bank', 'dock-travel',
-  'dock-codex', 'dock-quests', 'world', 'drawer', 'deal-room', 'deal-stage-read', 'deal-stage-pitch', 'deal-stage-close', 'deal-quick'];
+  'dock-codex', 'dock-quests', 'world', 'drawer', 'deal-room', 'deal-stage-read', 'deal-stage-pitch', 'deal-stage-close', 'deal-quick',
+  'hire-student', 'hire-broker', 'hire-logistics', 'hire-go']; // the last four live in the Crew drawer's hire dialog, which is open only while a manager is being hired
+/** The anchors inside the hire dialog: one per manager on offer (css/data: the PIPE ids) and the button that hires. */
+export const HIRE_ANCHORS = Object.keys(PIPE).map((k) => 'hire-' + k).concat('hire-go');
 export const WORLD_ANCHOR_TYPES = ['lead', 'lot', 'asset', 'plot', 'static'];
 
 /** 'dock-market' -> { kind:'dom', name }; 'world:lead:L1' -> { kind:'world', type:'lead', id:'L1' }; anything else -> null. */
@@ -72,27 +76,53 @@ export function resolveAnchor(anchor, provider = {}) {
   return f ? { rect: f, via: 'fallback', anchor: a } : null;
 }
 
+const overlapArea = (a, b) => Math.max(0, Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x)) * Math.max(0, Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y));
+/**
+ * How much a card at p covers of what must stay clear, in square pixels (0 = nothing). The target counts six times over, and each rect in `avoid` by its own weight (`wt`,
+ * 1 when it has none: the focused control carries one that outweighs the rest together, the open drawer a middling one, a button in a dialog the plain one). Exported so the runner can keep a
+ * placement for as long as it stays about as good as a new one (a card that hops at every scroll of a dialog is worse than one that covers a little).
+ */
+export function coverScore(p, rect, avoid = []) {
+  let s = rect ? overlapArea(p, rect) * 6 : 0;
+  for (const r of avoid) if (r) s += overlapArea(p, r) * (Number.isFinite(r.wt) ? r.wt : 1);
+  return s;
+}
+
 /**
  * Where the coach card goes: below the target, else above, else beside it, else floating above the dock; never over the target or over anything in `avoid`
- * (the open drawer), always inside the view. rect may be null (centred above the dock). Returns { x, y, side } for a card of size { w, h } in a view { w, h }.
+ * (the open drawer, the dock, the camera buttons, the control the keyboard is on, the controls of an open dialog), always inside the view. rect may be null (centred
+ * above the dock). When no place is clear of all of it (a phone, a dialog that is all controls) the card goes where it covers the least (`coverScore`: the target and the
+ * heavier rects first, ties to the places named above), so the card is never put on the one thing it must not hide. Returns { x, y, side } for a card of size { w, h }
+ * in a view { w, h }.
  */
 export function placeCard(rect, card, view, gap = 14, margin = 8, avoid = []) {
   const cw = Math.min(card.w, view.w - 2 * margin), ch = Math.min(card.h, view.h - 2 * margin);
   const cx = (x) => clamp(x, margin, Math.max(margin, view.w - cw - margin)), cy = (y) => clamp(y, margin, Math.max(margin, view.h - ch - margin));
   const free = (p) => (!rect || !rectsOverlap(p, rect)) && !avoid.some((r) => r && rectsOverlap(p, r));
   const floats = [[(view.w - cw) / 2, view.h - ch - 90], [margin, view.h - ch - 90], [(view.w - cw) / 2, 80]].map(([x, y]) => ({ x: cx(x), y: cy(y), w: cw, h: ch }));
-  const float = () => { const p = floats.find(free) || floats[0]; return { x: p.x, y: p.y, side: rect ? 'float' : 'center' }; };
-  if (!rect) return float();
+  const floatSide = rect ? 'float' : 'center';
+  // the last resort: every place worth naming, then a grid over the view, scored; the first of the lowest scores wins, and the grid is walked from the dock's end up
+  const leastCovered = (tries) => {
+    const cands = tries.map((t) => ({ ...t, side: rect && rectsOverlap({ x: t.x, y: t.y, w: cw, h: ch }, rect) ? floatSide : t.side })).concat(floats.map((p) => ({ x: p.x, y: p.y, side: floatSide }))); // a caret points at the target only from a place that is beside it
+    const NX = 8, NY = 10, spanX = Math.max(0, view.w - cw - 2 * margin), spanY = Math.max(0, view.h - ch - 2 * margin);
+    for (let j = NY; j >= 0; j--) for (let i = 0; i <= NX; i++) cands.push({ x: cx(margin + (spanX * i) / NX), y: cy(margin + (spanY * j) / NY), side: floatSide });
+    let best = null;
+    for (const c of cands) {
+      const sc = coverScore({ x: c.x, y: c.y, w: cw, h: ch }, rect, avoid);
+      if (!best || sc < best.sc - 1e-6) best = { c, sc };
+      if (sc === 0) break; // nothing covered: no later place can beat it
+    }
+    return { x: best.c.x, y: best.c.y, side: best.c.side };
+  };
+  const float = () => { const p = floats.find(free); return p ? { x: p.x, y: p.y, side: floatSide } : null; };
+  if (!rect) return float() || leastCovered([]);
   const mid = { x: rect.x + rect.w / 2, y: rect.y + rect.h / 2 };
   const tries = [
     ['below', mid.x - cw / 2, rect.y + rect.h + gap], ['above', mid.x - cw / 2, rect.y - ch - gap],
     ['right', rect.x + rect.w + gap, mid.y - ch / 2], ['left', rect.x - cw - gap, mid.y - ch / 2],
-  ];
-  for (const [side, x, y] of tries) {
-    const p = { x: cx(x), y: cy(y), w: cw, h: ch };
-    if (free(p)) return { x: p.x, y: p.y, side };
-  }
-  return float();
+  ].map(([side, x, y]) => ({ side, x: cx(x), y: cy(y) }));
+  for (const t of tries) if (free({ x: t.x, y: t.y, w: cw, h: ch })) return t;
+  return float() || leastCovered(tries);
 }
 
 // ------------------------------------------------------------------ the step resolver
@@ -144,6 +174,116 @@ export function shortSay(text, max = 96) {
   const s = String(text ?? '').trim(), cut = s.search(/[.!?](\s|$)/);
   const one = cut >= 0 ? s.slice(0, cut + 1) : s;
   return one.length > max ? one.slice(0, max - 1).trimEnd() + '…' : one;
+}
+
+// ------------------------------------------------------------------ a lesson that can no longer be finished
+/**
+ * Can every wait from step `from` on, and the win, still happen from the sandbox's state alone? A lesson is scripted (nothing spawns, nothing refills), so the one
+ * paperclip sold to the wrong buyer, the only counterfeit bought blind, a manager the wallet cannot feed or a scripted shock spent before its step leave a lesson that can
+ * only be restarted, and the coach cannot know unless the runner asks. The runner asks after every game event, whenever a step begins and once a second (js/ui/academy.js).
+ * This is the check the lesson author's tests hold (tests/meta-academy.test.mjs, `stillPossible`, which plays each of these mistakes), kept here because the data cannot carry code.
+ * It is price- and capital-aware: a wait that names a PRICE (m01: the first dollar) is held to the best deal the Deal Room can give (x1.4), and a manager must be able to
+ * start a cycle, not only to be paid. It fails open: a fault in the check answers "yes", because it must never take a lesson away from a player.
+ */
+export function stillPossible(mission, game, from = 0) {
+  try { return reachable(mission, game, Math.max(0, from | 0)); } catch (err) { return true; }
+}
+function reachable(m, g, from) {
+  const s = g.s, assets = s.assets, leads = Object.values(s.leads).flat(), lots = Object.values(s.lots).flat();
+  // something to sell: an asset a buyer of the right kind will take (a broken one once it is fixed), or a lot still on the shelf that can become one
+  const need = (mt) => mt.price?.gte;
+  const sells = (mt = {}) => assets.some((a) => (mt.cls == null || a.cls === mt.cls) && leads.some((l) => (mt.seg == null || l.seg === mt.seg) && (() => {
+    if (a.cond === 'broken' && ASSETS[a.cls].repair && need(mt) == null) return true;
+    const q = g.quotePitch(a.id, l.id, need(mt) == null ? undefined : { mult: 1.4 });
+    return q.ok && !q.rejected && (need(mt) == null || q.price >= need(mt));
+  })()))
+    || (need(mt) == null && lots.some((l) => mt.cls == null || l.cls === mt.cls) && leads.some((l) => mt.seg == null || l.seg === mt.seg));
+  // a manager that cannot start its first cycle: the fee has left the wallet and the working capital is not there (the hire dialog opens on the Broker, which $620 cannot feed)
+  const kinds = Object.keys(PIPE).map((k) => pipeFace(g, k, m.zone));
+  const fed = (p) => p.cycles > 0 || p.inflight > 0 || s.cash >= p.alloc;
+  const can = (w) => {
+    if (!w || w.type === 'ui') return true;
+    if (w.type === 'click') {
+      const x = /^world:(lead|lot|asset|plot|static):(.+)$/.exec(w.anchor);
+      if (x) { const [, k, id] = x; return k === 'lead' ? leads.some((l) => l.id === id) : k === 'lot' ? lots.some((l) => l.id === id) : k === 'asset' ? assets.some((a) => a.cls === id || a.id === id) : true; }
+      return w.anchor === 'deal-room' ? assets.length > 0 || lots.length > 0 : true;
+    }
+    const mt = w.match || {};
+    switch (w.event) {
+      case 'pitch': return sells(mt);
+      case 'buy': case 'inspect': return lots.some((l) => (mt.fake == null || l.truth.fake === mt.fake) && (mt.cls == null || l.cls === mt.cls));
+      case 'auction': return lots.some((l) => l.mode === 'auction');
+      case 'haggle': return mt.role === 'buy' ? lots.some((l) => l.mode !== 'auction') : mt.role === 'sell' ? sells() : sells() || lots.length > 0;
+      case 'repair': return assets.some((a) => a.cond === 'broken') || lots.some((l) => l.cond === 'broken');
+      case 'sell-pool': return assets.length > 0;
+      case 'shock': return s.events.some((e) => !e.started && (!mt.kind || e.kind === mt.kind));
+      case 'hire': return s.pipes.length > 0 || kinds.some((k) => k.fee <= s.cash);
+      case 'cycle': return s.pipes.length ? s.pipes.some(fed) : kinds.some((k) => k.fee + k.cap <= s.cash);
+      default: return true;
+    }
+  };
+  const waits = ownList(m.steps).slice(from).map((st) => st.wait);
+  if (m.win) waits.push({ type: 'event', event: m.win.event, match: m.win.match });
+  return waits.every(can);
+}
+
+/**
+ * What the coach card says when a lesson can no longer be finished, by what the player did last: `events` is the game events since the last look (an array, or one event).
+ * The last one that is an action of the player's counts (an event of the engine's own, such as a level-up, is not what closed the lesson). Returns { say, hint }.
+ */
+const CLOSED_BY = {
+  pitch: 'That sale closed the lesson early.', buy: 'That purchase closed the lesson early.', 'sell-pool': 'That sale to the pool closed the lesson early.',
+  hire: 'That hire closed the lesson early: the manager has no cash left to start a cycle.', repair: 'That repair closed the lesson early.', auction: 'That auction closed the lesson early.',
+  shock: 'The clock ran past the moment this lesson needed.',
+};
+export function strandedFor(events) {
+  const list = Array.isArray(events) ? events : [events], last = [...list].reverse().find((e) => e && Object.hasOwn(CLOSED_BY, e.type));
+  return { say: last ? CLOSED_BY[last.type] : 'The lesson cannot be finished from here.', hint: 'Nothing in a lesson touches your real run. Press Restart to set the scene up again.' };
+}
+
+/**
+ * The runner's eye on a lesson: `note(evt)` takes every game event as it comes, `look(run)` (once the action that sent them is over) asks stillPossible from the step the run is
+ * on and says whether the answer changed. The first "no" carries what the player did last (strandedFor), a later "no" keeps that first word, and a "yes" after it clears it.
+ * Returns { changed, stranded } where stranded is { say, hint } or null. No DOM, so a test can play a lesson through the real engine and watch it close.
+ */
+export function newLookout(mission, game) {
+  let since = [], stranded = null;
+  return {
+    note(evt) { if (evt && evt.type !== 'ui' && evt.type !== 'click') { since.push(evt); if (since.length > 8) since.shift(); } },
+    look(run) {
+      if (run?.won) return { changed: false, stranded }; // a lesson that is won has nothing left to lose
+      const seen = since; since = [];
+      const ok = stillPossible(mission, game, run?.i ?? 0);
+      if (ok === !stranded) return { changed: false, stranded };
+      stranded = ok ? null : strandedFor(seen);
+      return { changed: true, stranded };
+    },
+    get stranded() { return stranded; },
+  };
+}
+
+// ------------------------------------------------------------------ the hire dialog (a modal over the drawer, so the coach card has to follow the player into it)
+const pipeFace = (g, kind, zone) => ({ kind, name: PIPE[kind].name, fee: g.pipeCost(kind, zone), cap: g.pipeCap({ kind, zone, level: 1 }) });
+/**
+ * What the hire dialog is showing, in numbers: the wallet, the manager now chosen, and the dearest manager the wallet can both pay and feed (fee plus one cycle's capital),
+ * which is the one a lesson about working capital wants. `picked` is a PIPE id or null; `zone` the district the manager would work in.
+ */
+export function hireSnapshot(game, zone, picked) {
+  const cash = game.s.cash, faces = Object.keys(PIPE).map((k) => pipeFace(game, k, zone)), feeds = (f) => f.fee + f.cap <= cash;
+  const fed = faces.filter(feeds).sort((a, b) => b.fee - a.fee)[0] || null, p = faces.find((f) => f.kind === picked) || null;
+  return { cash, picked: p, fed, pickedFed: !!p && feeds(p) };
+}
+/**
+ * The coach inside the hire dialog: for a step that waits for the hire, point at the manager the wallet can feed while another is chosen, then at the Hire button.
+ * Returns { id, anchor, say } or null (any other step, or nothing the dialog can help with: a wallet that feeds no manager is a stranded lesson, which has its own card).
+ */
+export function hireCoach(step, snap) {
+  const w = step?.wait;
+  if (!snap || !snap.picked || w?.type !== 'event' || w.event !== 'hire') return null;
+  const m = fmtMoney, { picked, fed, cash } = snap;
+  if (snap.pickedFed) return { id: 'hire-go', anchor: 'hire-go', say: `Good: you can pay the ${picked.name}'s ${m(picked.fee)} fee and still feed its ${m(picked.cap)} of capital from your ${m(cash)}. Press the Hire button.` };
+  if (!fed) return null;
+  return { id: 'hire-' + fed.kind, anchor: 'hire-' + fed.kind, say: `Pick the ${fed.name}. The ${picked.name} costs ${m(picked.fee)} and works with up to ${m(picked.cap)}, but you hold ${m(cash)}: it would be hired and then could never start a cycle.` };
 }
 
 // ------------------------------------------------------------------ teach-back

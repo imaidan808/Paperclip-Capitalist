@@ -7,7 +7,10 @@
 .qs .bar { display: block; }
 .qs h3:focus { outline: none; }
 .qs [data-qsect] { scroll-margin-top: 3.9rem; } /* clear of the sticky jump bar */
-.qs-nav { position: sticky; top: -.8rem; z-index: 2; display: flex; gap: .35rem; flex-wrap: wrap; margin: -.8rem -.8rem 0; padding: .45rem .8rem; background: var(--panel); border-bottom: 1px dashed var(--line); }
+/* a jump lands at once (js/ui/drawers/quests.js): the heading it lands on takes a brief wash of gold so the eye finds it. Only the start is named, so it fades to the heading's own look; reduced motion cuts it to nothing. */
+.qs h3.landed { animation: qs-landed .9s ease-out; }
+@keyframes qs-landed { from { background: color-mix(in srgb, var(--gold) 30%, transparent); } }
+.qs-nav { position: sticky; top: calc(-1 * var(--db-pad, .8rem)); z-index: 2; display: flex; gap: .35rem; flex-wrap: wrap; margin: calc(-1 * var(--db-pad, .8rem)) calc(-1 * var(--db-pad, .8rem)) 0; padding: .45rem var(--db-pad, .8rem); background: var(--panel); border-bottom: 1px dashed var(--line); }
 .qs-nav .btn { flex: 1 1 4rem; }
 .qs-ic { font-size: 1.5rem; line-height: 1; flex: none; width: 2rem; text-align: center; }
 .qs-prog { display: flex; align-items: center; gap: .6rem; }

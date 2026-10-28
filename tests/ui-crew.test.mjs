@@ -127,6 +127,19 @@ test('crew: the hire dialog opens on the best lane and a manager can be hired', 
   assert.ok(crew.html(ctx).includes('cr-focus'), 'the new manager is highlighted');
 });
 
+test('crew: the hire dialog anchors each manager card and the Hire button for the Academy\'s coach, and nothing else', () => {
+  const ctx = fakeCtx({ days: 10 }), g = ctx.g(), s = g.s, acts = crew.acts(ctx);
+  s.cash = 6000; g.advanceTo(s.hour + 2); assert.ok(s.mil.m1 && s.zones.includes(5), 'Metro Hub is open'); s.cash = 1e6;
+  acts['crew-hire'](el({ d: '5' }));
+  const html = lastDlg(ctx), found = [...html.matchAll(/data-anchor="([^"]+)"/g)].map((m) => m[1]);
+  assert.deepEqual(found, [...Object.keys(PIPE).map((k) => 'hire-' + k), 'hire-go'], 'a card for each manager, in the order they are offered, then the button');
+  for (const k of Object.keys(PIPE)) assert.match(html, new RegExp(`data-act="crew-hkind" data-k="${k}"[^>]*data-anchor="hire-${k}"`));
+  assert.match(html, /data-act="crew-hgo"[^>]*data-anchor="hire-go"/);
+  // a redraw of the dialog (a manager picked) keeps them: the coach finds the button again
+  acts['crew-hkind'](el({ k: 'student' })); // no dialog element in this stub, so only the state moves
+  assert.equal(ctx.U.crew.hire.kind, 'student');
+});
+
 test('crew: a first-ever hire bursts, a second one does not', () => {
   const ctx = fakeCtx({ days: 10 }), g = ctx.g(), s = g.s, acts = crew.acts(ctx), { bursts, sfx } = spies(ctx);
   s.cash = 6000; g.advanceTo(s.hour + 2);
