@@ -204,7 +204,8 @@ export function resultHTML(m) {
   const s = m.summary, n = s.numbers, f = (x) => (x == null ? 'walks away' : money(x));
   const better = n.better === 'low' ? Math.min : Math.max;
   const vals = [n.quick, n.expert, n.you].filter((x) => x != null && x > 0), top = Math.max(1e-9, ...vals.map(Math.abs)), best = vals.length ? better(...vals) : null;
-  const row = (label, x, cls) => `<div class="vs ${cls}${x != null && x === best ? ' best' : ''}"><dt>${label}</dt><dd${x == null ? '' : ` data-count="${x}" data-fmt="money"`}>${f(x)}</dd><span class="vbar" aria-hidden="true"><i style="width:${x == null ? 0 : Math.max(2, (Math.abs(x) / top) * 100).toFixed(1)}%"></i></span></div>`;
+  const tied = [n.quick, n.expert, n.you].filter((x) => x != null && x === best).length; // a three-way tie has no best row to mark
+  const row = (label, x, cls) => `<div class="vs ${cls}${x != null && x === best && tied < 3 ? ' best' : ''}"><dt>${label}</dt><dd${x == null ? '' : ` data-count="${x}" data-fmt="money"`}>${f(x)}</dd><span class="vbar" aria-hidden="true"><i style="width:${x == null ? 0 : Math.max(2, (Math.abs(x) / top) * 100).toFixed(1)}%"></i></span></div>`;
   const net = m.plan.kind === 'buy' && n.net != null ? `<p class="small mute">Against what it was really worth: Quick ${money(n.quickNet)}, expert ${money(n.expertNet)}${n.net !== undefined && s.reveal ? `, you ${money(n.net)}` : ''}.</p>` : '';
   const rev = s.reveal ? `<div class="reveal"><h4>What the lot really was</h4><p><b>${esc(s.reveal.truth)}.</b> ${s.reveal.total ? `You found ${s.reveal.found} of its ${s.reveal.total} flaw${s.reveal.total === 1 ? '' : 's'}${s.reveal.defects.length ? `: ${esc(s.reveal.defects.join(', '))}` : ''}.` : 'It had no flaws to find.'} <span class="mute">Your read: ${esc(s.reveal.estimate)}.</span></p></div>` : '';
   const why = s.reasons.length ? `<div class="why"><h4>Why</h4><ul>${s.reasons.map((r) => `<li><b>${esc(r.label)}.</b> ${esc(r.text)}</li>`).join('')}</ul></div>` : '';
@@ -212,7 +213,7 @@ export function resultHTML(m) {
   // the one-line verdict: where you stand against Quick (a stamp, so it never rests on colour alone)
   const gain = n.you == null || n.quick == null ? null : (n.better === 'low' ? n.quick - n.you : n.you - n.quick), tiny = Math.max(1e-9, top * 0.005);
   const verdict = gain == null ? '' : gain > tiny ? '<p class="rver win">Better than Quick</p>' : gain < -tiny ? '<p class="rver lose">Quick would have done better</p>' : '<p class="rver even">Same as Quick</p>';
-  return `<section class="deal-result ${s.tone}" data-anchor="deal-result" aria-labelledby="ds-title">
+  return `<section class="deal-result ${s.tone}${m.revealed ? ' revealed' : ''}" data-anchor="deal-result" aria-labelledby="ds-title">
     <h3 id="ds-title" class="rtitle" tabindex="-1" data-stage-head>${esc(s.title)}</h3><p class="rhead">${esc(s.headline)}</p>
     ${s.lines.length ? `<ul class="rlines">${s.lines.map((l) => `<li>${esc(l)}</li>`).join('')}</ul>` : ''}
     <div class="vsbox" role="group" aria-label="How you compare"><h4>${esc(cap(n.unit))}: Quick, expert, you</h4>${verdict}
@@ -227,6 +228,11 @@ const cap = (s) => String(s).charAt(0).toUpperCase() + String(s).slice(1);
 
 // ------------------------------------------------------------------ the whole sheet
 const BODY = { read: readHTML, pitch: pitchHTML, close: closeHTML, bid: bidHTML, fix: fixHTML, result: resultHTML };
+/** The scoreboard and the buttons, one band along the foot of the sheet (the result has neither). */
+function dockHTML(m) {
+  const parts = (m.stage === 'result' ? '' : scoreHTML(m)) + footHTML(m);
+  return parts ? `<div class="deal-dock">${parts}</div>` : '';
+}
 export function sheetHTML(m) {
   const z = m.zone, style = z && z.palette ? ` style="--zg:${esc(z.palette[0])};--za:${esc(z.palette[1])}"` : '';
   const lock = m.assistLocked ? ' disabled' : '';
@@ -237,12 +243,13 @@ export function sheetHTML(m) {
       <button class="btn ghost sm" data-close data-fid="leave">${m.stage === 'result' ? 'Close' : 'Leave'}</button></header>
     ${m.stage === 'result' ? '' : stepperHTML(m)}
     <div class="deal-scene">${castHTML(m)}<div class="deal-main">${(BODY[m.stage] || resultHTML)(m)}</div></div>
-    ${m.stage === 'result' ? '' : scoreHTML(m)}${footHTML(m)}</div>`;
+    ${dockHTML(m)}</div>`;
 }
 /** modelOf plus the little the screen itself remembers (picked angles, the slider). */
 export function viewModel(session) {
   const m = modelOf(session.run, { reduced: session.reduced() });
   m.pick = session.pick; m.slider = session.slider;
+  m.revealed = !!session.revealed; // the result has been staged once: a later paint (Assist toggled) shows it at rest
   return m;
 }
 
@@ -264,7 +271,9 @@ export function createSession(ctx, run) {
     const d = el();
     if (ses.focusHead) { ses.focusHead = false; const h = d.querySelector('[data-stage-head]'); const f = d.querySelector('.deal-foot [autofocus], .deal-stage [autofocus]'); (f || h)?.focus?.({ preventScroll: true }); }
     if (run.key === 'fix' && !run.res.fix && !ses.reduced()) startDial(); else stopDial();
-    if (d.querySelector('[data-anchor="deal-result"]')) countUp(d, { reduced: ses.reduced() }); // presentation only: the numbers tick up
+    // presentation only: the result is staged (numbers tick up, the stamp lands, the bars grow) the first time it is painted and never again, so a later paint
+    // of the same screen, such as the Assist box being toggled, shows it at rest instead of replaying it
+    if (d.querySelector('[data-anchor="deal-result"]')) { if (!ses.revealed) { ses.revealed = true; countUp(d, { reduced: ses.reduced() }); } } else ses.revealed = false;
   };
 
   // ---- the repair dial: the marker is a function of time, so a frame only moves one element

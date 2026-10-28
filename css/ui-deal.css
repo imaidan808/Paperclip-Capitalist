@@ -3,10 +3,10 @@
    along the foot and a result screen that reveals you against Quick and an expert.
    Tokens only (styles.css). Motion is decoration: every animation here is switched off by the global reduced-motion rules in styles.css, and the ones that
    use a delay are also taken off by name at the foot of this file, because a delay would still hold them hidden.
-   Section map: frame, stepper, scene (cast, bubble), stage panel, Read, Pitch, Close, Bid, Fix, scoreboard and foot, result, small screens, reduced motion. */
+   Section map: frame, stepper, scene (cast, bubble), stage panel, Read, Pitch, Close, Bid, Fix, scoreboard and foot (one dock), result, big screens, tablets, small screens, reduced motion. */
 
 /* ---- frame */
-dialog.deal { width: min(68rem, 96vw); padding: .9rem 1.1rem 1rem; animation: deal-in .24s cubic-bezier(.2, .9, .3, 1) both; }
+dialog.deal { width: min(68rem, 96vw); padding: .9rem 1.1rem 1rem; scroll-padding-bottom: 8rem; animation: deal-in .24s cubic-bezier(.2, .9, .3, 1) both; }
 dialog.deal::backdrop { background: rgba(3, 6, 12, .78); }
 @keyframes deal-in { from { opacity: 0; transform: translateY(14px) scale(.985); } to { opacity: 1; transform: none; } }
 .deal { display: grid; gap: .75rem; font-variant-numeric: tabular-nums; }
@@ -49,7 +49,8 @@ dialog.deal::backdrop { background: rgba(3, 6, 12, .78); }
 .bubble { position: relative; margin-top: .7rem; padding: .6rem .75rem; width: 100%; text-align: left; background: var(--panel); border: 2px solid var(--ink); border-radius: 6px; box-shadow: 3px 3px 0 rgba(0, 0, 0, .45); color: var(--ink); font-size: .88rem; line-height: 1.42; animation: pop .3s cubic-bezier(.2, 1.4, .4, 1); }
 .bubble::before { content: ""; position: absolute; top: -9px; left: 50%; margin-left: -8px; width: 14px; height: 14px; background: var(--panel); border-left: 2px solid var(--ink); border-top: 2px solid var(--ink); transform: rotate(45deg); }
 .bubble p { margin: 0; overflow-wrap: anywhere; }
-.deal-log { width: 100%; text-align: left; font-size: .76rem; color: var(--mute); margin-top: .35rem; } .deal-log summary { cursor: pointer; } .deal-log ol { margin: .3rem 0 0; padding-left: 1.1rem; } .deal-log li { margin-bottom: .2rem; overflow-wrap: anywhere; }
+.deal-log { width: 100%; text-align: left; font-size: .76rem; color: var(--mute); margin-top: .35rem; } .deal-log summary { cursor: pointer; padding: .2rem 0; } .deal-log ol { margin: .3rem 0 0; padding-left: 1.1rem; } .deal-log li { margin-bottom: .2rem; overflow-wrap: anywhere; }
+.deal-log[open] ol { max-height: 9rem; overflow-y: auto; }
 
 /* ---- the stage panel */
 .deal-main { min-width: 0; }
@@ -92,14 +93,14 @@ dialog.deal::backdrop { background: rgba(3, 6, 12, .78); }
 
 /* ---- Pitch: five angle cards, dealt like a hand. Two can be played, and a played card is lifted, numbered and ringed. */
 .angles { display: grid; grid-template-columns: repeat(auto-fit, minmax(8.6rem, 1fr)); gap: .55rem; padding: .4rem .2rem .2rem; }
-.angle { position: relative; display: grid; gap: .2rem; justify-items: start; align-content: start; text-align: left; font: inherit; color: var(--ink); background: var(--panel); border: var(--bw) solid var(--field); padding: .6rem .6rem .55rem; cursor: pointer; border-radius: 3px; transition: transform .14s ease-out, border-color .14s, box-shadow .14s; }
+.angle { position: relative; display: flex; flex-direction: column; align-items: flex-start; gap: .2rem; text-align: left; font: inherit; color: var(--ink); background: var(--panel); border: var(--bw) solid var(--field); padding: .6rem .6rem .55rem; cursor: pointer; border-radius: 3px; transition: transform .14s ease-out, border-color .14s, box-shadow .14s; }
 .angle:nth-child(odd) { transform: rotate(-.6deg); } .angle:nth-child(even) { transform: rotate(.5deg); }
 .angle:hover:not(:disabled) { border-color: var(--gold); transform: translateY(-4px) rotate(0deg); box-shadow: 0 6px 0 rgba(0, 0, 0, .35); }
 .angle:disabled { cursor: default; opacity: .78; }
 .angle.on { border-color: var(--gold); background: var(--warn-bg); box-shadow: inset 0 0 0 1px var(--gold), 0 6px 0 rgba(0, 0, 0, .4); transform: translateY(-6px) rotate(0deg); }
 .angle .aic { display: grid; place-items: center; width: 2.4rem; height: 2.4rem; font-size: 1.5rem; line-height: 1; border-radius: 50%; background: var(--panel2); border: 1px solid var(--line); }
 .angle.on .aic { background: var(--gold); border-color: var(--gold); }
-.angle .anm { font-weight: 700; font-size: .98rem; } .angle .awh { font-size: .74rem; color: var(--mute); min-height: 2.1em; }
+.angle .anm { font-weight: 700; font-size: .98rem; } .angle .awh { flex: 1 1 auto; font-size: .74rem; line-height: 1.3; color: var(--mute); } /* the description takes the spare height, so every card's bar and tag sit on one line */
 .angle .apick { position: absolute; top: -.6rem; right: -.45rem; display: grid; place-items: center; width: 1.5rem; height: 1.5rem; border-radius: 50%; background: var(--gold); color: var(--on-gold); border: 2px solid var(--bg); font: 800 .8rem ui-monospace, Menlo, monospace; }
 .angle .abar { display: block; width: 100%; height: .5rem; margin-top: .25rem; background: var(--bg); border: 1px solid var(--line); }
 .angle .abar i { display: block; height: 100%; background: var(--green); background-image: repeating-linear-gradient(90deg, transparent 0 calc(20% - 2px), var(--bg) calc(20% - 2px) 20%); }
@@ -166,7 +167,10 @@ dialog.deal::backdrop { background: rgba(3, 6, 12, .78); }
 .deal-score div { flex: 1 1 7rem; padding: .35rem .7rem; background: var(--panel2); min-width: 0; }
 .deal-score dt { font-size: .66rem; text-transform: uppercase; letter-spacing: .08em; color: var(--mute); } .deal-score dd { margin: 0; font-family: ui-monospace, Menlo, monospace; font-weight: 700; overflow-wrap: anywhere; }
 .deal-score .hot { background: var(--panel); box-shadow: inset 0 -3px 0 var(--gold); } .deal-score .hot dd { font-size: 1.12rem; color: var(--gold); }
-.deal-foot { display: flex; flex-wrap: wrap; gap: .5rem; justify-content: flex-end; position: sticky; bottom: -1rem; margin: 0 -1.1rem -1rem; padding: .6rem 1.1rem; background: var(--panel); border-top: 1px dashed var(--line); z-index: 1; }
+/* the scoreboard and the buttons ride together along the foot of the sheet, so the figure to watch (the gold cell) is on screen whatever the height of the stage above it */
+.deal-dock { position: sticky; bottom: -1rem; z-index: 1; display: flex; flex-wrap: wrap; align-items: center; gap: .5rem .8rem; margin: 0 -1.1rem -1rem; padding: .55rem 1.1rem .6rem; background: var(--panel); border-top: 1px dashed var(--line); }
+.deal-dock .deal-score { flex: 1 1 20rem; } .deal-dock .deal-score:has(> div:nth-child(5)) { flex-basis: 36rem; } /* a board of five or six cells wants a row of its own on a narrow sheet */
+.deal-foot { display: flex; flex-wrap: wrap; gap: .5rem; justify-content: flex-end; margin-left: auto; }
 
 /* ---- the result: a banner for the verdict, then you against Quick and the expert, bars that grow in, then why and the lesson */
 .deal-result .rtitle { font-size: 1.45rem; letter-spacing: .03em; text-transform: none; border: 0; padding: 0; animation: pop .45s cubic-bezier(.2, 1.4, .4, 1) both; }
@@ -189,14 +193,31 @@ dialog.deal::backdrop { background: rgba(3, 6, 12, .78); }
 @keyframes grow { from { transform: scaleX(0); } to { transform: scaleX(1); } }
 .vs.quick .vbar i { animation-delay: .25s; } .vs.expert .vbar i { animation-delay: .4s; } .vs.you .vbar i { animation-delay: .55s; }
 .vs.you .vbar i { background: var(--gold); } .vs.expert .vbar i { background: var(--cyan); }
-.vs.best dd::after { content: "\00a0\2713\00a0best"; font-size: .72rem; color: var(--green); font-weight: 700; }
+/* a hex escape takes up to six digits and one space after it: "\00a0be" would be U+A0BE, so the space after the last escape is the terminator and is not printed */
+.vs.best dd::after { content: "\00a0\2713\00a0 best"; font-size: .72rem; color: var(--green); font-weight: 700; }
 .vs { padding: .2rem .35rem; border-left: 3px solid transparent; } .vs.you { background: color-mix(in srgb, var(--gold) 12%, transparent); border-left-color: var(--gold); }
 .why ul { margin: 0; padding-left: 1.1rem; font-size: .86rem; display: grid; gap: .25rem; } .reveal p { margin: 0; font-size: .88rem; }
 .xp { margin: 0; color: var(--gold); font-size: 1.05rem; animation: rise .4s .7s ease-out both; }
 .lesson { margin: 0; padding: .6rem .8rem; border-left: 4px solid var(--violet); background: var(--panel); font-size: .9rem; animation: rise .4s .95s ease-out both; }
+/* a result that has been staged once (js/ui/deal.js: .revealed) is drawn at rest when the sheet is painted again */
+.deal-result.revealed :is(.rtitle, .rhead, .rlines, .rver, .vbar i, .xp, .lesson) { animation: none; }
 
 /* ---- big screens: a larger stage, so the scene keeps its weight on a wide monitor */
-@media (min-width: 1800px) { dialog.deal { width: min(82rem, 90vw); padding: 1.1rem 1.3rem 1.2rem; } .deal-scene { grid-template-columns: minmax(15rem, 18rem) minmax(0, 1fr); gap: 1.3rem; } .cast-floor { width: 10.5rem; height: 10.5rem; } .cast-icon { font-size: 5.4rem; } .deal-foot { margin: 0 -1.3rem -1.2rem; padding: .7rem 1.3rem; bottom: -1.2rem; } }
+@media (min-width: 1800px) { dialog.deal { width: min(82rem, 90vw); padding: 1.1rem 1.3rem 1.2rem; } .deal-scene { grid-template-columns: minmax(15rem, 18rem) minmax(0, 1fr); gap: 1.3rem; } .cast-floor { width: 10.5rem; height: 10.5rem; } .cast-icon { font-size: 5.4rem; } .deal-dock { margin: 0 -1.3rem -1.2rem; padding: .6rem 1.3rem .7rem; bottom: -1.2rem; } }
+
+/* ---- tablets and small laptops: a slimmer rail for the character and the five angle cards in one row, so the Pitch button is on the first screen at 1024 by 768 */
+@media (min-width: 761px) and (max-width: 1100px) {
+  .deal { gap: .6rem; }
+  .deal-scene { grid-template-columns: minmax(10.5rem, 12.5rem) minmax(0, 1fr); gap: .8rem; }
+  .deal-stage, .deal-result { gap: .5rem; padding: .7rem .8rem; }
+  .lotcard { padding: .4rem .6rem; } .lotcard .ic { width: 2.6rem; height: 2.6rem; font-size: 1.7rem; }
+  .deal-cast { padding: .8rem .6rem .7rem; } .cast-floor { width: 7rem; height: 7rem; margin-bottom: .5rem; } .cast-icon { font-size: 3.6rem; }
+  .angles { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: .4rem; padding: .3rem .1rem .1rem; }
+  .angle { padding: .5rem .45rem .45rem; gap: .15rem; }
+  .angle .aic { width: 2rem; height: 2rem; font-size: 1.2rem; } .angle .anm { font-size: .88rem; } .angle .awh { font-size: .7rem; line-height: 1.25; } .angle .atag { font-size: .68rem; }
+  .angle .ahint { font-size: .64rem; border-radius: 6px; }
+}
+@media (min-width: 761px) and (max-width: 900px) { .angles { grid-template-columns: repeat(3, minmax(0, 1fr)); } } /* too narrow for five: a hand of three and two */
 
 /* ---- small screens: the dialog fills the screen, the character becomes a row, and the foot is one tidy line */
 @media (max-width: 760px) {
@@ -210,14 +231,15 @@ dialog.deal::backdrop { background: rgba(3, 6, 12, .78); }
   .cast-floor { width: 4.4rem; height: 4.4rem; grid-row: span 2; margin: 0; box-shadow: 0 0 0 3px color-mix(in srgb, var(--za, var(--gold)) 18%, transparent); } .cast-floor::after { display: none; }
   .cast-icon { font-size: 2.5rem; } .cast-name { margin: 0; font-size: .95rem; } .cast-role { justify-content: flex-start; }
   .bubble { grid-column: 1 / -1; margin-top: .5rem; font-size: .84rem; } .bubble::before { left: 2rem; margin-left: 0; }
-  .deal-log { display: none; }
+  .deal-log { grid-column: 1 / -1; margin-top: .2rem; } .deal-log summary { padding: .4rem 0; }
   .deal-stage, .deal-result { padding: .7rem .75rem; }
+  dialog.deal { scroll-padding-bottom: 4.5rem; }
   .deal-score div { flex: 1 1 28%; padding: .25rem .5rem; } .deal-score dd { font-size: .92rem; } .deal-score .hot dd { font-size: 1rem; }
-  .deal-foot { margin: 0 -.8rem 0; bottom: 0; padding: .5rem .8rem calc(.5rem + env(safe-area-inset-bottom, 0px)); gap: .4rem; justify-content: stretch; }
-  .deal-foot .btn { flex: 1 1 auto; font-size: .78rem; padding: .35rem .6rem; min-height: 2.6rem; }
-  .deal-foot [data-deal="quick-stage"] { flex: 3 1 0; } .deal-foot [data-deal="quick-all"] { flex: 1 1 0; }
+  .deal-dock { display: contents; } /* on a phone only the buttons stay in view: the scoreboard scrolls with the stage */
+  .deal-foot { position: sticky; bottom: 0; z-index: 1; margin: 0 -.8rem 0; padding: .5rem .8rem calc(.5rem + env(safe-area-inset-bottom, 0px)); gap: .4rem; justify-content: stretch; background: var(--panel); border-top: 1px dashed var(--line); }
+  .deal-foot .btn { flex: 1 1 auto; font-size: .78rem; padding: .35rem .6rem; min-height: 2.6rem; white-space: nowrap; }
+  .deal-foot [data-deal="quick-stage"] { flex: 1 1 0; white-space: normal; line-height: 1.25; } .deal-foot [data-deal="quick-all"] { flex: 0 0 auto; }
   .angles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .angle .awh { min-height: 0; }
   .probes { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .auc-moves { gap: .5rem; } .paddle { width: 7rem; min-height: 8.6rem; } .paddle::before { width: 6.2rem; height: 6.2rem; margin-left: -3.1rem; } .paddle::after { top: 5.6rem; }
   .paddle span { margin-top: 1.2rem; }

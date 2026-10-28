@@ -169,7 +169,7 @@ export function mountAcademy(root, S, { onDone, onSkip, only, missions, store = 
     U.zone = sb.game.sandbox.zone;
     let run = startRun(m), stepAt = performance.now(), hintOn = false, showMe = false, confirm = false, manual = null, gone = false;
     let sheet = null, teach = newTeach(), skipped = false, winPending = false, lastKey = '', inerted = [];
-    let layer = null, ringEl = null, cardEl = null;
+    let layer = null, ringEl = null, cardEl = null, bodyEl = null; // the card is a frame with a caret on its edge; its text scrolls in bodyEl, so the caret is never clipped
 
     U.tracker = () => { const c = coachFor(m, run); return { title: m.title, desc: shortSay(c.say), icon: m.icon, p: Math.min(run.i, steps.length), n: steps.length, drawer: null }; };
     sb.game.onEvent = (evt) => ctx.emit(evt);  // the sandbox feeds the steps, never quests, achievements or the Codex
@@ -189,8 +189,8 @@ export function mountAcademy(root, S, { onDone, onSkip, only, missions, store = 
       if (layer && layer.isConnected) return;
       layer = document.createElement('div');
       layer.className = 'ac-layer'; layer.dataset.academy = '';
-      layer.innerHTML = '<div class="ac-ring" aria-hidden="true" hidden></div><section class="ac-coach" role="dialog" aria-modal="false" aria-labelledby="ac-say" tabindex="-1"></section>';
-      ringEl = layer.firstChild; cardEl = layer.lastChild;
+      layer.innerHTML = '<div class="ac-ring" aria-hidden="true" hidden></div><section class="ac-coach" role="dialog" aria-modal="false" aria-labelledby="ac-say" tabindex="-1"><div class="ac-coach-in"></div></section>';
+      ringEl = layer.firstChild; cardEl = layer.lastChild; bodyEl = cardEl.firstChild;
       ctx.el.overlay.appendChild(layer);
       lastKey = '';
     }
@@ -205,7 +205,7 @@ export function mountAcademy(root, S, { onDone, onSkip, only, missions, store = 
       if (force || key !== lastKey) {
         lastKey = key;
         const had = cardEl.contains(document.activeElement) ? document.activeElement.dataset.act : null;
-        cardEl.innerHTML = coachHTML(c, { showMe, hint: hintOn, confirm, manual: !!manual, title: m.title });
+        bodyEl.innerHTML = coachHTML(c, { showMe, hint: hintOn, confirm, manual: !!manual, title: m.title });
         if (had) cardEl.querySelector(`[data-act="${had}"]`)?.focus({ preventScroll: true });
       }
       const view = { w: window.innerWidth, h: window.innerHeight };

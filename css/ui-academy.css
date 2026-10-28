@@ -1,11 +1,14 @@
 /* ui-academy: the Academy's intro card, its coach marks (spotlight ring and card) and the sheets after a lesson (why it worked, teach-back, reward). Tokens come from styles.css. */
 
 /* ---- intro */
-.ac-intro { max-width: 46rem; margin: 3vh auto; display: grid; gap: .6rem; border-top: 6px solid var(--gold); background: linear-gradient(180deg, color-mix(in srgb, var(--gold) 8%, var(--panel)), var(--panel) 9rem); }
+.ac-intro { max-width: 46rem; margin: clamp(1rem, 12vh, 6rem) auto 3vh; display: grid; gap: .6rem; border-top: 6px solid var(--gold); background: linear-gradient(180deg, color-mix(in srgb, var(--gold) 8%, var(--panel)), var(--panel) 9rem); }
 .ac-eyebrow { margin: 0; font-size: .72rem; text-transform: uppercase; letter-spacing: .1em; color: var(--gold); }
 .ac-head { display: flex; align-items: center; justify-content: space-between; gap: .6rem; margin-bottom: .1rem; }
 .ac-dots { display: inline-flex; gap: .25rem; flex: none; } .ac-dots i { width: .5rem; height: .5rem; border: 1px solid var(--gold); border-radius: 50%; } .ac-dots i.on { background: var(--gold); }
-.ac-intro h1 { margin: 0; font-size: clamp(1.5rem, 4vw, 2.2rem); color: var(--gold); text-shadow: 3px 3px 0 #000; overflow-wrap: anywhere; }
+.ac-intro h1 { display: flex; align-items: center; gap: .75rem; margin: 0; font-size: clamp(1.5rem, 4vw, 2.2rem); color: var(--gold); text-shadow: 3px 3px 0 #000; overflow-wrap: anywhere; }
+/* the lesson's emblem is a framed tile of its own, the first thing the eye lands on: the one object on an otherwise quiet card */
+.ac-intro h1 > span[aria-hidden="true"] { display: inline-grid; place-items: center; flex: none; width: 3.5rem; height: 3.5rem; font-size: 2.15rem; line-height: 1; text-shadow: 0 0 1px rgba(255, 255, 255, .85), 0 0 2px rgba(255, 255, 255, .3);
+  background: radial-gradient(circle at 50% 38%, color-mix(in srgb, var(--gold) 22%, var(--bg)), var(--bg) 78%); border: 2px solid var(--gold); border-radius: 10px; box-shadow: 3px 3px 0 rgba(0, 0, 0, .55); }
 .ac-intro h1:focus, .ac-sheet h2:focus { outline: none; }
 .ac-scene { font-size: 1.05rem; border-left: 4px solid var(--cyan); padding: .55rem .95rem; background: var(--info-bg); margin: .3rem 0; line-height: 1.5; }
 .ac-facts { list-style: none; padding: 0; margin: 0; display: flex; gap: .4rem; flex-wrap: wrap; }
@@ -24,10 +27,13 @@
 .ac-ring.show { border-width: 5px; border-color: var(--focus); animation: ac-show .9s ease-in-out infinite; }
 @keyframes ac-pulse { 0%, 100% { box-shadow: 0 0 0 100vmax rgba(5, 8, 14, .55), 0 0 0 1px rgba(5, 8, 14, .85), 0 0 0 0 rgba(255, 194, 71, .7); } 50% { box-shadow: 0 0 0 100vmax rgba(5, 8, 14, .55), 0 0 0 1px rgba(5, 8, 14, .85), 0 0 0 12px rgba(255, 194, 71, 0); } }
 @keyframes ac-show { 0%, 100% { box-shadow: 0 0 0 100vmax rgba(5, 8, 14, .66), 0 0 0 1px rgba(5, 8, 14, .85), 0 0 0 0 rgba(255, 242, 122, .9); } 50% { box-shadow: 0 0 0 100vmax rgba(5, 8, 14, .66), 0 0 0 1px rgba(5, 8, 14, .85), 0 0 0 18px rgba(255, 242, 122, 0); } }
-.ac-coach { position: fixed; left: 0; top: 0; width: min(21.5rem, calc(100vw - 1rem)); max-height: 60vh; overflow: auto; background: var(--panel); background: linear-gradient(180deg, color-mix(in srgb, var(--gold) 10%, var(--panel)), var(--panel) 3.4rem); border: var(--bw) solid var(--gold); border-radius: 4px; box-shadow: 0 0 0 1px var(--bg), 6px 6px 0 rgba(0, 0, 0, .55), 0 14px 34px rgba(0, 0, 0, .5); padding: .7rem .9rem .8rem; pointer-events: auto; transition: transform .25s ease; }
+/* The card is a frame that never clips: the caret on its edge sticks out past the border, so the frame has overflow visible and the words scroll in .ac-coach-in. */
+.ac-coach { position: fixed; left: 0; top: 0; width: min(21.5rem, calc(100vw - 1rem)); background: var(--panel); background: linear-gradient(180deg, var(--ac-top), var(--panel) 3.4rem); border: var(--bw) solid var(--gold); border-radius: 4px; box-shadow: 0 0 0 1px var(--bg), 6px 6px 0 rgba(0, 0, 0, .55), 0 14px 34px rgba(0, 0, 0, .5); pointer-events: auto; transition: transform .25s ease; --ac-top: color-mix(in srgb, var(--gold) 10%, var(--panel)); }
+.ac-coach-in { max-height: 60vh; overflow: auto; padding: .7rem .9rem .8rem; border-radius: 2px; }
 .ac-coach:focus { outline: none; }
+/* the caret is a turned square that carries the card's own colour at the edge it sits on (the lit top for "below", the plain panel elsewhere), so it joins the frame without a seam */
 .ac-coach::before { content: ""; position: absolute; display: none; width: 12px; height: 12px; background: var(--panel); border: var(--bw) solid var(--gold); transform: rotate(45deg); }
-.ac-coach[data-side="below"]::before { display: block; top: -8px; left: clamp(1.1rem, var(--ac-ax, 50%), calc(100% - 1.5rem)); margin-left: -6px; border-right: 0; border-bottom: 0; }
+.ac-coach[data-side="below"]::before { display: block; top: -8px; left: clamp(1.1rem, var(--ac-ax, 50%), calc(100% - 1.5rem)); margin-left: -6px; border-right: 0; border-bottom: 0; background: var(--ac-top); }
 .ac-coach[data-side="above"]::before { display: block; bottom: -8px; left: clamp(1.1rem, var(--ac-ax, 50%), calc(100% - 1.5rem)); margin-left: -6px; border-left: 0; border-top: 0; }
 .ac-coach[data-side="right"]::before { display: block; left: -8px; top: clamp(1.1rem, var(--ac-ay, 50%), calc(100% - 1.5rem)); margin-top: -6px; border-right: 0; border-top: 0; }
 .ac-coach[data-side="left"]::before { display: block; right: -8px; top: clamp(1.1rem, var(--ac-ay, 50%), calc(100% - 1.5rem)); margin-top: -6px; border-left: 0; border-bottom: 0; }
@@ -67,7 +73,7 @@
 .ac-cxi { font-size: 1.6rem; text-align: center; line-height: 1.2; } .ac-cxcard p { margin: .1rem 0 0; }
 
 @media (max-width: 760px) {
-  .ac-coach { width: calc(100vw - 1rem); max-height: 46vh; }
+  .ac-coach { width: calc(100vw - 1rem); } .ac-coach-in { max-height: 46vh; }
   .ac-sheet { padding: 1vh .4rem; } .ac-sheet-in { padding: .8rem .85rem 1rem; }
 }
 @media (prefers-reduced-motion: reduce) { .ac-ring, .ac-ring.show, .ac-sheet-in, .ac-rw .chip { animation: none; } .ac-ring, .ac-coach { transition: none; } }
