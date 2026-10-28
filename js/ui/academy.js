@@ -347,7 +347,10 @@ export function mountAcademy(root, S, { onDone, onSkip, only, missions, store = 
       const w = steps[run.i]?.wait;
       if (!w || w.type !== 'click' || sheet) return;
       const want = w.anchor, a = parseAnchor(want);
-      if (a?.kind === 'dom') { if (e.target.closest?.(`[data-anchor="${want}"]`)) feed({ type: 'click', anchor: want }); return; }
+      if (a?.kind === 'dom') { // (the clock's anchor wraps the speed picker, Help and Menu as well: only the Play / Pause button runs time)
+        if (e.target.closest?.(`[data-anchor="${want}"]`) && (want !== 'hud-clock' || e.target.closest?.('[data-act="pause"]'))) feed({ type: 'click', anchor: want });
+        return;
+      }
       if (!a) return;
       const hs = e.target.closest?.('[data-hs]');
       if (hs) { // the keyboard route to a world thing: the list under the world

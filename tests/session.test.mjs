@@ -178,7 +178,7 @@ test('the leaderboard ranks by EEI with contiguous ranks, includes the player an
 
 test('gradebook: econ is the percentile of EEI among all players, adapt scores shocks against the class median, engage rewards swaps and docks flagged ones', () => {
   const s = solo();
-  const row = (pid, eei, extra = {}) => ({ pid, eei, nw: eei, shockLog: [], p2p: 0, ...extra });
+  const row = (pid, eei, extra = {}) => ({ pid, eei, nw: eei, shockLog: [], p2p: 0, hour: 24 * 60, ...extra }); // (day 60: the Day 45 shock's five days are over)
   s.students = () => [row('a', 1), row('b', 2), row('c', 3), row('d', 4)];
   let gb = s.gradebook();
   assert.deepEqual(gb.map((r) => Math.round(r.econ)), [0, 33, 67, 100]);

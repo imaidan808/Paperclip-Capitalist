@@ -7,13 +7,17 @@
 //   accept -> confirm -> deliver -> ack   two steps: the acceptor ASKS, the proposer confirms it still holds the escrow (and locks it), only then does the
 //                          acceptor hand over its side. A stale, withdrawn, rewound or forged accept changes nothing on either side. The acceptor has committed when it delivers, so it sends the delivery again,
 //                          a few times, until the proposer says (`ack`) that it was taken: a delivery lost on the way (the proposer's connection dropped between its confirmation and the reply) is not the end of the swap.
+//                          After five quick tries it goes on every 30 seconds for half an hour (and a committed swap survives a reload: the save carries it).
+//   recall -> holding | free   when the proposer's hold has run out it asks the acceptor before it takes the escrow back: a committed acceptor says `holding` (and sends the delivery again, so the hold is renewed for five minutes),
+//                          one that never committed says `free` (and forgets the offer, so a confirmation that comes late cannot commit). Silence for RECALL_WAIT_MS lets the hold go.
 //   decline / withdraw / reject / abort   the ways out
 //   royalty                one daily payment on a stream both sides really hold, never more in total than was agreed
 //   rewound                a student telling the instructor how far its rewind could go
 import { Game } from './engine.js';
 import { Cohort, makeSynth, synthSnapshot, synthFlags, median, cleanSnap, cleanClock, cleanInject, cleanOffer, cleanAsset, cleanDifficulty, cleanId, DEFAULT_DIFFICULTY, num, text, nwCeiling } from './cohort.js';
 import { Room, cleanCode } from './net.js';
-import { SEC_PER_HOUR, TOTAL_HOURS, TOTAL_DAYS, EEI_FLOOR_DEFAULT, ASSETS, ZONES, SWAPS } from './config.js';
+import { SEC_PER_HOUR, TOTAL_HOURS, TOTAL_DAYS, EEI_FLOOR_DEFAULT, ASSETS, ZONES, SWAPS, EVENTS } from './config.js';
+import { hash01 } from './rng.js';
 import { eei as eeiCalc, clamp, demandOf, fmvVariance } from './market.js';
 
 const slot = new URLSearchParams(typeof location !== 'undefined' ? location.search : '').get('slot') || 'main';
@@ -38,8 +42,19 @@ const MAX_INCOMING = 24, MAX_INCOMING_PER = 6;
 const ONLINE_MS = 20000;               // heard from in this long: online
 const COHORT_MS = 2000;                // the market's view of the class is rebuilt at most this often, however many snapshots arrive
 const ACCEPT_WAIT_MS = 30000;          // an acceptor waits this long for the proposer to confirm
-const LOCK_MS = 60000;                 // a proposer holds its escrow for an acceptor this long
-const DELIVER_RETRY_MS = 5000, DELIVER_TRIES = 5; // an acceptor sends its delivery again after this long (then twice, three times as long...), this many times in all, until it is acknowledged
+const DELIVER_RETRY_MS = 5000, DELIVER_TRIES = 5; // an acceptor sends its delivery again after this long (then twice, three times as long...), this many times in all (the last at 80 seconds), until it is acknowledged
+const DELIVER_SLOW_MS = 30000, DELIVER_HOLD_MS = 30 * 60000; // ...and then every 30 seconds until half an hour after it committed (then it says so and stops)
+/** A proposer holds its escrow for an acceptor while the acceptor is making its quick tries: they run to DELIVER_RETRY_MS x DELIVER_TRIES squared (125 seconds) after it committed, and a confirmation
+ *  can take up to the acceptor's own wait to arrive. A hold that lapsed sooner (it was a minute) let the proposer withdraw while a delivery was still on its way: the acceptor had committed, the proposer had its
+ *  crate back, and the fourth try then arrived at an escrow that was gone. */
+export const LOCK_MS = DELIVER_RETRY_MS * DELIVER_TRIES ** 2 + ACCEPT_WAIT_MS;
+/** What the hold's end is not allowed to guess. A delivery lost for longer than the quick tries (the last was at 80 seconds, and the proposer's hold ran to 155) would be made twice: the acceptor has committed and the
+ *  proposer, its hold over, takes its crate back. So the end of the hold is a question (`recall`): the proposer waits this long for the answer, and an acceptor that says `holding` (it has committed; the delivery
+ *  is on its way) renews the hold for RENEW_MS, at most MAX_HOLDS times, so an acceptor that never delivers cannot keep the escrow out of its owner's hands for ever. */
+export const RECALL_WAIT_MS = 60000;
+const MAX_HOLDS = 6, RENEW_MS = 5 * 60000; // a `holding` renews the hold for five minutes, six times at most: about half an hour in all, as long as an acceptor goes on delivering (DELIVER_HOLD_MS)
+const SHOCK_QUORUM = 3, SHOCK_BEYOND = 2.5; // a shock is graded when this many founders logged it, and a result more than this many times the class's median is not believed (Session.gradebook)
+const RECOVER_WAIT_MS = 15000;      // a recovered instructor waits this long for the class's clock before it reads the hour off the snapshots
 const MAX_SETTLED = 200;               // swaps remembered as settled (to acknowledge a repeated delivery)
 const MAX_LOCKS = 2;                   // ...and holds one offer for a classmate at most this many times
 const CKPT_KEEP = 9, CKPT_BUDGET = 2e6; // daily checkpoints kept across a reload: how many, and about how many characters in all
@@ -74,6 +89,9 @@ const newKey = () => {
   return Array.from({ length: 4 }, () => Math.random().toString(16).slice(2, 10).padEnd(8, '0')).join('');
 };
 
+/** An owner token as typed or pasted (groups, dashes, spaces, any case): 32 hex characters, or null. */
+export const cleanOwner = (x) => { const t = typeof x === 'string' ? x.replace(/[\s-]/g, '').toLowerCase() : ''; return /^[0-9a-f]{32}$/.test(t) ? t : null; };
+
 export class Session {
   constructor() {
     this.mode = 'solo';              // solo | student | instructor
@@ -93,7 +111,9 @@ export class Session {
     this.clockAdopted = true;        // a student in a room is false until the class clock has been heard, or none has come for CLOCK_WAIT_MS and the run goes on by itself
     this.clockHeard = true;          // ...and this one stays false until the class clock REALLY has been heard, however late: the first one rebases a run nobody has played yet
     this.joinedAt = 0;
+    this.recovering = false;         // an instructor who took a running room back with its recovery code (a new device, or storage that was cleared): it knows nothing of the class's hour, and says nothing about it until it has heard it
     this.rewindReport = new Map();   // instructor: pid -> how far that student's rewind went
+    this.injected = new Map();       // shock id -> the hour it begins: the shocks this room's instructor sent. With the scheduled ones and the algorithmic ones the seed rolls, the room's own record of what happened to it
     this.lastError = null;           // the last message that threw (the room carries on)
     this.ckDays = new Set(); this.ckSkip = new Set(); this.cohortDirty = false; this.rosterDirty = false;
     this.timers = { snap: 0, clock: 0 };
@@ -152,37 +172,53 @@ export class Session {
     this._resync();
     this.synth = this.mode === 'solo' ? makeSynth(11, this.worldSeed) : [];
     const code = d.room && cleanCode(d.room.code);
-    if (code && this.mode === 'student') this.joinRoom({ code, relay: typeof d.room.relay === 'string' ? d.room.relay : '', role: 'student' });
+    if (code && this.mode === 'student') { this.joinRoom({ code, relay: typeof d.room.relay === 'string' ? d.room.relay : '', role: 'student' }); this._loadDelivering(d.delivering); }
     else this.mode = 'solo';
     return true;
+  }
+  /** The swaps this side had committed to and not heard acknowledged when it was saved. Anything malformed is dropped. */
+  _loadDelivering(list) {
+    if (!Array.isArray(list)) return;
+    for (const row of list.slice(-MAX_SETTLED)) {
+      const [id, v] = Array.isArray(row) ? row : [], cid = cleanId(id), to = isObj(v) ? peerId(v.to) : null;
+      if (!cid || !to || !isObj(v.payload) || cleanId(v.payload.offerId) !== cid) continue;
+      this.delivering.set(cid, { to, payload: v.payload, at: num(v.at, 0, 1e15, Date.now()), last: num(v.last, 0, 1e15, 0) || undefined, tries: Math.round(num(v.tries, 1, 1000, 1)), name: text(v.name) });
+    }
   }
   save(force = false) {
     if (!this.game) return;
     const now = Date.now();
     if (!force && now - this.t.save < 4000) return;
     this.t.save = now;
-    kv.set('save', { v: 1, mode: this.mode, worldSeed: this.worldSeed, difficulty: this.mode === 'student' ? this.difficulty : undefined, clock: this.clock.toJSON(), room: this.roomInfo, state: this.game.s, savedAt: now });
+    // (`delivering` is a swap this side has committed to and not heard acknowledged: it must outlive a reload, or the proposer's recall would be answered `free` for a crate that is already gone from here)
+    const delivering = this.mode === 'student' && this.delivering.size ? [...this.delivering].slice(-MAX_SETTLED) : undefined;
+    kv.set('save', { v: 1, mode: this.mode, worldSeed: this.worldSeed, difficulty: this.mode === 'student' ? this.difficulty : undefined, clock: this.clock.toJSON(), room: this.roomInfo, state: this.game.s, delivering, savedAt: now });
   }
   reset() {
     kv.del('save'); this._clearCkpt(); this.leaveRoom(); this.game = null; this.mode = 'solo'; this.clock = new Clock({ speed: 1 });
-    this.peers.clear(); this.incoming = []; this.sent.clear(); this.accepting.clear(); this.delivering.clear(); this.settled.clear(); this.flags = []; this.rewindReport.clear(); this.cohort.setPeers([]);
+    this.peers.clear(); this.incoming = []; this.sent.clear(); this.accepting.clear(); this.delivering.clear(); this.settled.clear(); this.flags = []; this.rewindReport.clear(); this.injected.clear(); this.cohort.setPeers([]);
   }
 
   // ---- room
-  joinRoom({ code, relay = '', role = 'student', handle }) {
+  joinRoom({ code, relay = '', role = 'student', handle, owner, recover = false }) {
     code = String(code);
     const switching = this.roomInfo && this.roomInfo.code !== code;
     this._closeRoom();
     if (switching) this._resetRoomSettings();
     // a student who has not typed an alias yet is not "Instructor": the room shows them by their Founder ID until startGame gives them a name
     const h = handle || this.handle || (role === 'instructor' ? 'Instructor' : 'Founder-' + this.pid.slice(3));
-    this.room = new Room({ code, pid: this.pid, key: this.key, handle: h, role, relay: relay || undefined });
+    // An instructor brings the room's owner token (server/relay.mjs, `claim`): the one this browser made when it opened the room, or the one the instructor pasted from their copy of it (a new device, or storage that was cleared).
+    // The relay hands the seat to whoever brings it, whatever Founder ID they have.
+    const token = role === 'instructor' ? this._ownerFor(code, owner) : undefined;
+    this.room = new Room({ code, pid: this.pid, key: this.key, handle: h, role, relay: relay || undefined, owner: token });
     this.roomInfo = { code, relay, role };
     this.mode = role === 'instructor' ? 'instructor' : 'student';
     this.worldSeed = code;
     // every role reads the same market: the instructor's heat map must show what the students' prices are made of
     this.cohort.seed = code; this.cohort.ghosts = this.ghosts; this.cohort.refresh();
     this.joinedAt = Date.now(); this.instructorSeen = 0; this.instructorPid = null;
+    this.recovering = role === 'instructor' && recover === true;
+    if (this.recovering) this.clock = new Clock({ hour: 0, paused: true, speed: 1 }); // (a clock of hour 0 sent to a class that is on day 40 would stand it still: see _sendClock)
     if (role === 'student') {
       // The class clock has not been heard yet, and a clock that is not the class's must not run the game (a saved one would play out the whole absence):
       // it stands still at the game's hour until the instructor's arrives.
@@ -200,7 +236,7 @@ export class Session {
     if (this.room) this.room.close();
     this.room = null; this.roomInfo = null; this.peers.clear(); this.cohort.setPeers([]);
     for (const k of Object.keys(this.timers)) { if (this.timers[k]) clearTimeout(this.timers[k]); this.timers[k] = 0; }
-    this.incoming = []; this.accepting.clear(); this.delivering.clear(); this.settled.clear(); this.flags = []; this.rewindReport.clear(); this.cohortDirty = false;
+    this.incoming = []; this.accepting.clear(); this.delivering.clear(); this.settled.clear(); this.flags = []; this.rewindReport.clear(); this.injected.clear(); this.cohortDirty = false;
   }
   /** What a classroom tunes belongs to the classroom: leaving it, or starting a new one, puts every dial back. */
   _resetRoomSettings() {
@@ -217,6 +253,30 @@ export class Session {
     this.clockAdopted = true; this.clockHeard = true;
     this._resetRoomSettings();
     if (this.game) { this.worldSeed = this.worldSeed.startsWith('solo') ? this.worldSeed : 'solo-' + Math.floor(Math.random() * 1e6); this.game.env.worldSeed = this.worldSeed; this.cohort.seed = this.worldSeed; }
+  }
+  /** The owner token of an instructor's room: 32 hex characters, made here the first time the room is opened and kept in this browser beside the room's code. A pasted one (any spacing or dashes) replaces it. */
+  _ownerFor(code, pasted) {
+    const all = kv.get('owners'), owners = isObj(all) ? all : {};
+    const given = cleanOwner(pasted), token = given || (typeof owners[code] === 'string' && cleanOwner(owners[code])) || newKey();
+    if (owners[code] !== token) { owners[code] = token; kv.set('owners', owners); }
+    return token;
+  }
+  /** What the instructor keeps to run this room from another device, or after this browser forgets it: the owner token in groups of four. Null when this is not an instructor's room. */
+  recoveryCode() {
+    const code = this.roomInfo?.code;
+    if (this.mode !== 'instructor' || !code) return null;
+    return this.recoveryCodeFor(code);
+  }
+  /** The same for a room this browser made, by its code (the title screen shows it beside "Reopen room"). Null for a code this browser never opened as an instructor. */
+  recoveryCodeFor(code) {
+    const all = kv.get('owners'), t = isObj(all) && typeof code === 'string' && Object.prototype.hasOwnProperty.call(all, code) ? cleanOwner(all[code]) : null;
+    return t ? t.replace(/(.{4})(?=.)/g, '$1-') : null;
+  }
+  /** A recovered room has heard the class's hour (or waited long enough): from here on it keeps the clock. The class's dials (difficulty, herd, events) are the room's own and come back at their defaults. */
+  _recovered(hour, speed, paused) {
+    this.clock = new Clock({ hour: Math.min(TOTAL_HOURS, Math.max(0, hour)), speed: Number.isFinite(speed) && speed > 0 ? speed : 1, paused: paused !== false });
+    this.recovering = false;
+    this.emit('change');
   }
   alivePeers(ms = 30000) {
     const now = Date.now();
@@ -266,6 +326,7 @@ export class Session {
       case 'clock': {
         const c = cleanClock(m);
         if (!c) return;
+        if (this.mode === 'instructor' && this.recovering && m.role === 'student') { this._recovered(c.hour + (c.paused ? 0 : c.age / 1000 / SEC_PER_HOUR * c.speed), c.speed, c.paused); break; } // the class's clock, kept by the student standing in for the instructor
         const instr = this._isInstructor(m, from);
         const trusted = instr || (Date.now() - this.instructorSeen > 20000 && from === this.leaderPid());
         if (instr) { this.instructorSeen = Date.now(); this.instructorPid = from; }
@@ -277,6 +338,7 @@ export class Session {
         const c = cleanInject(m, Math.floor(this.clock.now()));
         if (!c) return;
         g.injectEvent(c.kind, c.atHour, { id: c.id, replace: c.replace, injected: true, cls: c.cls });
+        this._noteShock(c.id, c.atHour);
         this.emit('change');
         break;
       }
@@ -287,6 +349,9 @@ export class Session {
       case 'confirm': this._onConfirm(m, from); break;
       case 'deliver': this._onDeliver(m, from); break;
       case 'ack': { const d = cleanId(m.offerId) && this.delivering.get(m.offerId); if (d && d.to === from && m.to === this.pid) this.delivering.delete(m.offerId); break; }
+      case 'recall': this._onRecall(m, from); break;
+      case 'holding': this._onHolding(m, from); break;
+      case 'free': this._onFree(m, from); break;
       case 'abort': this._onAbort(m, from); break;
       case 'reject': this._onReject(m, from); break;
       case 'decline': this._onDecline(m, from); break;
@@ -382,15 +447,16 @@ export class Session {
     if (this.timers.clock) return; // a class joining at once is answered by one clock a second, not one each
     this.timers.clock = setTimeout(() => { this.timers.clock = 0; this._sendClock(); }, Math.max(0, 1000 - (Date.now() - this.t.clock)));
   }
-  _sendSnap(force) {
+  /** `include`: ids of the crates an offer is about to take out of the stock, listed first in the published stock (the classmate who gets the offer checks it against that stock). */
+  _sendSnap(force, include) {
     if (!this.room || !this.game || this.mode === 'instructor') return;
     const now = Date.now();
     if (!force && now - this.t.snap < 4000) return;
     this.t.snap = now;
-    this.room.send({ t: 'snap', snap: this.game.publicSnapshot() });
+    this.room.send({ t: 'snap', snap: this.game.publicSnapshot(include) });
   }
   _sendClock() {
-    if (this.mode !== 'instructor' || !this.room) return;
+    if (this.mode !== 'instructor' || !this.room || this.recovering) return; // a recovered room has not heard the class's hour yet: the clock it would send is a made-up one
     this.t.clock = Date.now();
     this.room.send({ t: 'clock', hour: this.clock.now(), speed: this.clock.speed, paused: this.clock.paused, difficulty: cleanDifficulty(this.difficulty), ghosts: this.ghosts, algo: this.algo });
   }
@@ -460,11 +526,12 @@ export class Session {
     if (!this.rosterDirty || !this.roomInfo || wall - this.t.roster < 10000) return;
     this.t.roster = wall; this.rosterDirty = false;
     const peers = [...this.peers.values()].filter((p) => p.role === 'student' && p.snap).map((p) => ({ pid: p.pid, handle: p.handle, seen: p.seen, snap: { ...p.snap, inventory: [] } }));
-    kv.set('roster', { code: this.roomInfo.code, peers });
+    kv.set('roster', { code: this.roomInfo.code, peers, shocks: [...this.injected] });
   }
   _loadRoster(code) {
     const r = kv.get('roster');
     if (!isObj(r) || r.code !== code || !Array.isArray(r.peers)) return;
+    if (Array.isArray(r.shocks)) for (const e of r.shocks.slice(0, 200)) if (Array.isArray(e)) this._noteShock(e[0], e[1]); // the shocks this instructor sent survive a reload of the dashboard
     for (const e of r.peers.slice(0, MAX_PEERS)) {
       const pid = isObj(e) && peerId(e.pid), snap = pid && cleanSnap(e.snap, pid);
       if (snap) this.peers.set(pid, { pid, handle: text(e.handle), role: 'student', snap, clean: true, seen: num(e.seen, 0, Date.now(), 0) });
@@ -474,6 +541,10 @@ export class Session {
   // ---- the loop
   tick(wall = Date.now()) {
     if (this.mode === 'instructor') {
+      if (this.recovering && wall - this.joinedAt > RECOVER_WAIT_MS) { // nobody stood in for us: the hour the class's snapshots show, paused, for the instructor to start when ready
+        const hs = [...this.peers.values()].filter((p) => p.role === 'student' && p.snap && Number.isFinite(p.snap.hour)).map((p) => p.snap.hour);
+        this._recovered(hs.length ? median(hs) : 0, 1, true);
+      }
       if (wall - this.t.clock > 4000) this._sendClock();
       if (this.cohortDirty && wall - this.t.cohort >= COHORT_MS) this._flushCohort();
       this._saveRoster(wall);
@@ -493,10 +564,11 @@ export class Session {
     if (this.room) this._sendSnap(false);
     if (this.cohortDirty && wall - this.t.cohort >= COHORT_MS) this._flushCohort();
     for (const [id, p] of this.accepting) if (wall - p.at > ACCEPT_WAIT_MS) { this.accepting.delete(id); g.note('warn', `${p.name} did not confirm in time. Nothing changed hands.`); }
-    for (const [id, d] of this.delivering) { // committed, and no word yet that the proposer took the delivery: say it again (the proposer answers a repeat the same way), a few times
-      if (wall - d.at < DELIVER_RETRY_MS * d.tries * d.tries) continue;
-      if (d.tries >= DELIVER_TRIES) { this.delivering.delete(id); g.note('warn', `${d.name} has not said the swap arrived. If it did not, ask them to check the offer: what you gave is already with them.`); continue; }
-      d.tries++; this._tell(d.to, 'deliver', d.payload);
+    for (const [id, d] of this.delivering) { // committed, and no word yet that the proposer took the delivery: say it again (the proposer answers a repeat the same way), quickly at first and then every half minute
+      const age = wall - d.at, due = d.tries < DELIVER_TRIES ? age >= DELIVER_RETRY_MS * d.tries * d.tries : wall - (d.last ?? d.at) >= DELIVER_SLOW_MS;
+      if (!due) continue;
+      if (age > DELIVER_HOLD_MS) { this.delivering.delete(id); g.note('warn', `${d.name} has not said the swap arrived. If it did not, ask them to check the offer: what you gave is already with them.`); continue; }
+      d.tries++; d.last = wall; this._tell(d.to, 'deliver', d.payload);
     }
     if (this.mode === 'student') this._persistCkpt();
     if (wall - this.t.refresh > this.refreshMs) { this.t.refresh = wall; this.cohort.refresh(); this.emit('refresh'); }
@@ -550,6 +622,8 @@ export class Session {
     if (!isNpc && !this.peers.has(to)) return { ok: false, msg: 'That classmate is not in your room.' };
     const crowded = this._noRoomFor(args);
     if (crowded) { this.emit('change'); return { ok: false, msg: crowded }; }
+    // The classmate checks the offer against the stock this founder has published, and the crates in an offer leave the stock the moment it is made: so the stock is published first, with those crates in it.
+    if (!isNpc && Array.isArray(args?.giveIds) && args.giveIds.length) this._sendSnap(true, args.giveIds);
     const r = g.createOffer(args);
     if (!r.ok) { this.emit('change'); return r; }
     const offer = r.offer;
@@ -621,10 +695,28 @@ export class Session {
     // a royalty is a promise from the proposer, and it is worth what they are worth: the number they published to the room in their snapshot, not the one written in the offer (which is theirs to make up)
     const snapNw = this.peers.get(from)?.snap?.nw;
     if (typeof snapNw === 'number' && Number.isFinite(snapNw)) { const known = Math.min(snapNw, nwCeiling(this.hourNow())); o.nw = o.nw === undefined ? known : Math.min(o.nw, known); } else delete o.nw; // (and no founder is worth more than the best run of this day could be)
+    // A royalty a day bigger than the promiser's whole worth is not a promise that can be kept; and the crates an offer describes must be crates the sender has published (see _publishedCovers). Either is answered
+    // as an offer for something we do not hold is: declined, so an honest proposer's escrow comes back.
+    const pub = this.peers.get(from)?.snap;
+    if (o.give.royalty && o.nw !== undefined && o.give.royalty.perDay > Math.max(1, o.nw)) { this._tell(from, 'decline', { offerId: o.id }); return; }
+    if (!this._publishedCovers(pub, o.give.assets, o.nw)) { this._tell(from, 'decline', { offerId: o.id }); return; }
     const handle = text(m.handle) || o.fromHandle;
     this.incoming.push({ offer: o, at: Date.now(), handle, from });
     this.emit('offer', o);
     g.note('info', `${handle || 'A classmate'} proposed a swap. Open Market, then Exchange, to review it.`);
+  }
+  /** Does what the sender published say they hold these crates? Every crate an offer describes must be in the stock the sender last published (the same id, class and condition), and together they cannot be worth
+   *  more than the sender is allowed to be (their published net worth, cut to the best a run could be on this day, and their debt: the crates are bought with it). A hand-built offer for a crate nobody holds
+   *  is not an offer. The stock is the sender's own word too, so this is a bound and not a proof (the two-sided cross-check in docs/ARCHITECTURE.md is the proof); it makes a made-up crate something the whole room
+   *  can see in the roster, and bounds it by the worth the sender can claim. */
+  _publishedCovers(snap, assets, nw) {
+    if (!assets.length) return true;
+    const stock = snap && Array.isArray(snap.inventory) ? snap.inventory : null;
+    if (!stock) return false;
+    const byId = new Map(stock.map((a) => [a.id, a]));
+    for (const a of assets) { const p = byId.get(a.id); if (!p || p.cls !== a.cls || p.cond !== a.cond) return false; }
+    const worth = this.game.sideValue({ assets }), allowed = (Math.max(0, nw ?? 0) + (snap.debt || 0)) * 1.5 + 5;
+    return worth <= allowed;
   }
   /** Step one, taken by the acceptor: nothing leaves its hands. It asks the proposer to confirm it still holds the escrow. */
   acceptIncoming(offerId) {
@@ -654,12 +746,48 @@ export class Session {
     // with a fresh clock each time, it could be kept out of its owner's hands for the whole run, and their cash with it.
     if (e.lockedBy === from && !e.lockLapsed) { this._tell(from, 'confirm', { offerId: id }); return; }
     if ((e.locks || 0) >= MAX_LOCKS) { this._tell(from, 'reject', { offerId: id, msg: 'That offer is no longer open.' }); return; }
-    e.lockedBy = from; e.lockedAt = Date.now(); e.locks = (e.locks || 0) + 1; delete e.lockLapsed;
+    e.lockedBy = from; e.lockedAt = Date.now(); e.locks = (e.locks || 0) + 1; delete e.lockLapsed; delete e.recalling;
     this._tell(from, 'confirm', { offerId: id });
   }
-  /** A hold nobody delivered into within LOCK_MS lapses: the owner may withdraw, the engine may expire the offer or sell the business. (A late delivery is still taken while the escrow stands.) */
+  /** A hold nobody delivered into within LOCK_MS ends, but not on a guess: the acceptor is asked whether it committed (`recall`), and until it answers (or RECALL_WAIT_MS has gone by) the escrow is still held, so the
+   *  owner may not withdraw, the engine may not expire the offer and the business may not be sold under it. Once the hold has lapsed the owner may withdraw and the engine may expire the offer. (A late delivery is
+   *  still taken while the escrow stands.) With no room to ask, or after the acceptor has renewed the hold MAX_HOLDS times, it lapses at once. */
   _lapseLocks(wall) {
-    for (const e of this.game.s.escrow) if (e.lockedBy && !e.lockLapsed && wall - (e.lockedAt || 0) > LOCK_MS) e.lockLapsed = true;
+    for (const e of this.game.s.escrow) {
+      if (!e.lockedBy || e.lockLapsed) continue;
+      if (e.recalling) { if (wall - e.recalling > RECALL_WAIT_MS) { e.lockLapsed = true; delete e.recalling; } continue; } // nobody answered: they are out of reach
+      if (wall - (e.lockedAt || 0) <= LOCK_MS) continue;
+      if (!this.room || (e.holds || 0) >= MAX_HOLDS) { e.lockLapsed = true; continue; }
+      e.recalling = wall; this._tell(e.lockedBy, 'recall', { offerId: e.offerId });
+    }
+  }
+  /** Received by the acceptor: the proposer's hold ran out and it asks whether we committed. We did if the swap is in `delivering` (it is there until the proposer has said it took the delivery): say so, and send the
+   *  delivery again at once, so the hold is renewed and the swap completes. Otherwise we have not and will not: forget the offer, so a confirmation that comes late finds nothing to commit to, and say we are free. */
+  _onRecall(m, from) {
+    const id = cleanId(m.offerId);
+    if (!this.game || !id || m.to !== this.pid) return;
+    const d = this.delivering.get(id);
+    if (d && d.to === from) { d.last = Date.now(); this._tell(from, 'holding', { offerId: id }); this._tell(from, 'deliver', d.payload); return; }
+    this.incoming = this.incoming.filter((x) => !(x.offer.id === id && x.offer.from === from));
+    const p = this.accepting.get(id); if (p && p.from === from) this.accepting.delete(id);
+    this._tell(from, 'free', { offerId: id });
+    this.emit('change');
+  }
+  /** Received by the proposer, from the classmate its hold was for, in answer to a recall: they have committed and the delivery is coming, so the hold starts again. */
+  _onHolding(m, from) {
+    const g = this.game, id = cleanId(m.offerId), e = id && g?.s.escrow.find((x) => x.offerId === id);
+    if (!e || m.to !== this.pid || e.lockedBy !== from || !e.recalling) return;
+    delete e.recalling; e.lockedAt = Date.now() + RENEW_MS - LOCK_MS; e.holds = (e.holds || 0) + 1; // (the next lapse is RENEW_MS from now)
+    g.note('info', `${this.peers.get(from)?.handle || 'Your counterparty'} has already sent their side. It is on its way, so your offer stays held.`);
+    this.emit('change');
+  }
+  /** Received by the proposer, in answer to a recall: they never committed, so nothing of theirs is on its way. The hold is let go and the offer is open again (the owner may withdraw it). */
+  _onFree(m, from) {
+    const g = this.game, id = cleanId(m.offerId), e = id && g?.s.escrow.find((x) => x.offerId === id);
+    if (!e || m.to !== this.pid || e.lockedBy !== from || !e.recalling) return;
+    delete e.lockedBy; delete e.lockedAt; delete e.recalling; delete e.lockLapsed;
+    g.note('info', `${this.peers.get(from)?.handle || 'Your counterparty'} had not accepted the swap. Your offer is open again.`);
+    this.emit('change');
   }
   /** Step two, received by the acceptor: the proposer is committed, so the acceptor commits and hands its side over. */
   _onConfirm(m, from) {
@@ -680,11 +808,9 @@ export class Session {
       this._tell(from, 'abort', { offerId: id });
       g.note('bad', `${p.name}: ${r.msg} Nothing changed hands.`);
     } else {
-      const stream = g.s.royalties.find((x) => x.dir === 'recv' && x.offer === id);
-      if (stream && offer.give.royalty) { stream.cap = offer.give.royalty.perDay * offer.give.royalty.days; stream.got = 0; } // what was agreed is the most that can ever arrive
       const payload = { offerId: id, deliver: { cash: r.deliver.cash, assets: r.deliver.assets.map((a) => cleanAsset(a, { fold: true })).filter(Boolean) }, handle: this.handle };
       this._tell(from, 'deliver', payload);
-      this.delivering.set(id, { to: from, payload, at: Date.now(), tries: 1, name: p.name });
+      this.delivering.set(id, { to: from, payload, at: Date.now(), last: Date.now(), tries: 1, name: p.name });
       g.note('good', `Swap completed with ${p.name}.`);
     }
     this.emit('change');
@@ -706,7 +832,7 @@ export class Session {
       this.sent.delete(id);
       this.settled.set(id, from); if (this.settled.size > MAX_SETTLED) this.settled.delete(this.settled.keys().next().value);
       this._tell(from, 'ack', { offerId: id });
-    } else { delete e.lockedBy; delete e.lockedAt; delete e.lockLapsed; } // a reply that is not that swap changes nothing: the offer is open again, and the hold is let go
+    } else { delete e.lockedBy; delete e.lockedAt; delete e.lockLapsed; delete e.recalling; } // a reply that is not that swap changes nothing: the offer is open again, and the hold is let go
     const short = assets.length < want.assets.length || cash < want.cash - 0.005;
     g.note(r.ok ? (short ? 'warn' : 'good') : 'bad', r.ok ? (short ? `${name} delivered less than the swap said. What arrived was added.` : `${name} accepted. Swap completed.`) : r.msg);
     this.emit('change');
@@ -714,7 +840,7 @@ export class Session {
   _onAbort(m, from) {
     const g = this.game, id = cleanId(m.offerId), e = id && g?.s.escrow.find((x) => x.offerId === id);
     if (!e || m.to !== this.pid || e.lockedBy !== from) return;
-    delete e.lockedBy; delete e.lockedAt; delete e.lockLapsed;
+    delete e.lockedBy; delete e.lockedAt; delete e.lockLapsed; delete e.recalling;
     g.note('info', `${this.peers.get(from)?.handle || 'Your counterparty'} could not complete the swap. Your offer is still open.`);
     this.emit('change');
   }
@@ -738,7 +864,7 @@ export class Session {
     if (!g || m.to !== this.pid || !id) return;
     const r = g.s.royalties.find((x) => x.dir === 'recv' && x.offer === id && x.peer === from); // a stream we really hold, from the one who owes it
     if (!r || typeof m.amount !== 'number' || !(m.amount > 0)) return;
-    g.receiveRoyalty(m.amount, id, from); // the engine holds the caps (a day's rate a message, never more in all than was agreed) and books what it takes into r.got itself
+    g.receiveRoyalty(m.amount, id, from, Math.floor(this.clock.now())); // the engine holds the caps (a day's rate a message, never more in all than was agreed and counted, never faster than the days go by: by the class's clock, which this game can trail) and books what it takes into r.got itself
   }
   _onFlag(m, from) {
     if (this.mode !== 'instructor' || m.role !== 'student' || !isObj(m.offer)) return;
@@ -753,8 +879,9 @@ export class Session {
     this.emit('change');
   }
   withdraw(offerId) {
+    this._lapseLocks(Date.now()); // a hold that has run out is asked about now, not at the next tick
     const o = this.sent.get(offerId), e = this.game.s.escrow.find((x) => x.offerId === offerId);
-    if (e?.lockedBy && !e.lockLapsed && Date.now() - e.lockedAt < LOCK_MS) return { ok: false, msg: 'They are accepting this offer right now. Give it a moment.' };
+    if (e?.lockedBy && !e.lockLapsed) return { ok: false, msg: e.recalling ? `Checking whether ${this.peers.get(e.lockedBy)?.handle || 'they'} already sent their side. Give it a moment.` : 'They are accepting this offer right now. Give it a moment.' };
     const r = this.game.cancelOffer(offerId);
     if (o) this.room?.send({ t: 'withdraw', to: o.offer.to, offer: offerId });
     this.sent.delete(offerId);
@@ -768,6 +895,7 @@ export class Session {
     const h = Math.floor(this.clock.now());
     const at = when === 'now' ? h : h + when;
     const id = `inj-${kind}-${at}-${Math.floor(Math.random() * 1e4)}`;
+    this._noteShock(id, at);
     this.room?.send({ t: 'inject', kind, atHour: at, id, replace, cls });
     this.emit('change');
   }
@@ -787,6 +915,25 @@ export class Session {
     this.demo = n;
     this.synth = n ? makeSynth(n, this.room?.code || 'demo') : [];
     this.emit('change');
+  }
+
+  // ---- the room's own record of its shocks
+  /** Remember a shock the instructor injected (bounded: a room has a handful). */
+  _noteShock(id, start) {
+    if (typeof id !== 'string' || !id || id.length > 120 || !Number.isFinite(start) || this.injected.has(id)) return;
+    if (this.injected.size >= 200) this.injected.delete(this.injected.keys().next().value);
+    this.injected.set(id, start); this.rosterDirty = true;
+  }
+  /** The hour a shock of this id began, if this room really had it: a scheduled one (js/config.js EVENTS), an algorithmic one this room's seed rolls (the engine's own draw), or one its instructor injected.
+   *  Null for any other id: a shock that never happened is not graded, whoever says it did. */
+  shockStart(id) {
+    if (typeof id !== 'string') return null;
+    if (this.injected.has(id)) return this.injected.get(id);
+    const at = id.indexOf('@'), kind = at > 0 ? id.slice(0, at) : '';
+    if (kind && Object.prototype.hasOwnProperty.call(EVENTS, kind)) { const start = (EVENTS[kind].day - 1) * 24; return id === `${kind}@${start}` ? start : null; }
+    const m = /^algo-(\d{1,2})$/.exec(id);
+    if (m) { const day = +m[1]; return day >= 4 && day <= 86 && hash01(this.worldSeed + 'algo' + day) <= 0.14 ? (day - 1) * 24 + 8 : null; }
+    return null;
   }
 
   // ---- views
@@ -809,7 +956,7 @@ export class Session {
       // the score is recomputed from the numbers, never taken from the sender: not even for a run that has exited (the flag is the sender's too). An honest exit froze its hour and its net worth, so the same
       // formula gives the score it locked; a made-up one can only be as good as the net worth it reports, which is bounded above.
       const eei = eeiCalc(nw, sn.startCap, TOTAL_DAYS - at / 24, floor);
-      rows.push({ ...sn, nw, p2p, eei, seen: p.seen, online, rewind: this.rewindReport.get(p.pid) || null });
+      rows.push({ ...sn, nw, p2p, eei, at, seen: p.seen, online, rewind: this.rewindReport.get(p.pid) || null });
     }
     const mine = this.game && this.mode !== 'instructor' ? [{ ...this.game.publicSnapshot(), me: true, online: true }] : [];
     const syn = this.synth.map((s) => { const sn = synthSnapshot(s, hour); sn.eei = eeiCalc(sn.nw, sn.startCap, TOTAL_DAYS - hour / 24, floor); sn.online = true; return sn; });
@@ -823,30 +970,45 @@ export class Session {
   }
   flagsAll() { return this.demo ? [...this.flags, ...synthFlags(this.synth, this.clock.now()).map((f) => ({ ...f, synth: true }))] : this.flags; }
 
+  /** A student's shock rows as the grade may use them: only shocks this room really had (see shockStart), the first row for an id, a net worth no honest run could not reach by then dropped (the same envelope as the
+   *  leaderboard's), and the net worth five days after counted only once the founder's own hour has got there. What a classmate's snapshot says about a shock is their word; this keeps it to what could be true. */
+  _shocksOf(r) {
+    const at = Number.isFinite(r.at) ? r.at : Number.isFinite(r.hour) ? r.hour : 0, seen = new Set(), out = [];
+    for (const x of Array.isArray(r.shockLog) ? r.shockLog : []) {
+      if (!x || seen.has(x.id)) continue;
+      seen.add(x.id);
+      const start = this.shockStart(x.id);
+      if (start == null || !(x.nw <= nwCeiling(start))) continue;
+      const done = x.nwAfter != null && at >= start + 120 && x.nwAfter <= nwCeiling(start + 120);
+      out.push({ id: x.id, nw: x.nw, nwAfter: done ? x.nwAfter : null, pivots: x.pivots });
+    }
+    return out;
+  }
   /** Pre-fills the LMS gradebook: 30% economic (percentile among all players: everyone starts with one paperclip, so no start is compared separately), 20% adaptability, 10% engagement. 40% reflection is the instructor's. */
   gradebook() {
     const rows = this.students();
     const med = new Map(); // (a Map: an id is text a classmate chose)
     // a founder wiped out after a shock has a ratio of ~0 (or below): it scores zero adaptability, it does not make the log (and the grade) NaN
     const ratio = (s) => clamp(s.nwAfter / s.nw, 0.001, 20); // and a founder who "grew twenty-fold" is believed no further: an unbounded ratio let one made-up shock row set the whole class's median
-    const logged = (r) => (Array.isArray(r.shockLog) ? r.shockLog : []);
     // one pass over every row (each shock id keeps the ratios of the rows that logged it, the first entry of a row for an id): the dashboard asks about once a second, and a table of unique ids
-    // used to be searched once per id and per row
-    const byId = new Map();
+    // used to be searched once per id and per row. Only the shocks the room really had are in it (_shocksOf).
+    const byId = new Map(), shocksOf = new Map();
     for (const r of rows) {
-      const seen = new Set();
-      for (const s of logged(r)) {
-        if (seen.has(s.id)) continue;
-        seen.add(s.id);
-        if (s.nwAfter != null && s.nw > 0) { const list = byId.get(s.id); if (list) list.push(ratio(s)); else byId.set(s.id, [ratio(s)]); }
-      }
+      const mine = this._shocksOf(r);
+      shocksOf.set(r, mine);
+      for (const s of mine) if (s.nwAfter != null && s.nw > 0) { const list = byId.get(s.id); if (list) list.push(ratio(s)); else byId.set(s.id, [ratio(s)]); }
     }
     for (const [id, ratios] of byId) med.set(id, median(ratios));
+    // A row is believed for a shock only if the class shows it was possible: at least SHOCK_QUORUM founders logged that shock (a class smaller than that, all of them), and what it claims is not far beyond what the class
+    // itself got (SHOCK_BEYOND times the median). A made-up row for a shock that really happened ("a net worth of a cent, twenty times that five days later") used to score a full 100 against honest founders at 35 to 57.
+    // (A claim inside the class's range is the founder's word, as every number of a snapshot is: the server tally in docs/ARCHITECTURE.md is the proof.)
+    const quorum = Math.min(SHOCK_QUORUM, rows.length);
+    const believed = (s) => byId.get(s.id)?.length >= quorum && ratio(s) <= med.get(s.id) * SHOCK_BEYOND;
     const flags = this.flagsAll();
     return rows.map((r) => {
       const below = rows.filter((x) => x.eei < r.eei).length;
       const econ = rows.length > 1 ? (below / (rows.length - 1)) * 100 : 50;
-      const shocks = logged(r).filter((s) => s.nwAfter != null && s.nw > 0 && med.get(s.id) > 0);
+      const shocks = shocksOf.get(r).filter((s) => s.nwAfter != null && s.nw > 0 && med.get(s.id) > 0 && believed(s));
       const adapt = shocks.length ? shocks.reduce((a, s) => a + clamp(50 + 50 * Math.tanh(Math.log(ratio(s) / med.get(s.id)) * 3) + (s.pivots > 0 ? 10 : 0), 0, 100), 0) / shocks.length : null;
       const flagged = flags.filter((f) => f.from === r.pid).length;
       const engage = clamp((r.p2p || 0) * 25 - flagged * 10, 0, 100);

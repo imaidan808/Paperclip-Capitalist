@@ -5,7 +5,7 @@
 // Background hooks, so no single build owns the tier: Trades fixes the machines of 9 and the tractors of 11; Veteran's faster freight
 // keeps produce fresh but cannot read the fads of 10; Native sells digital goods at +20% in 10 and 12 and pays for it in fakes (the
 // fakeRisk goods); Roots has loyal buyers in the Co-op but few elsewhere; Creator owns trend media in 12; Pro appraises 9's medical gear
-// and 12's rights but is penalised on digital; Second-Chance and Pro both get something from the small fakes rules.
+// and 12's rights but is penalized on digital; Second-Chance and Pro both get something from the small fakes rules.
 // The suggested numbers of section 4.1 are used as written (friction is the straight line .10 to .16; urgent the straight fall from .12 at
 // district 5 to .06 at 16, rounded). The one addition is a small `fakes` rule in 9, 10 and 12, which gives `fakeRisk` and the Inspect game
 // something to do at this scale (counterfeit chips and cloned licenses, forged mill certificates, rights with a clouded title).
@@ -212,7 +212,7 @@ export const buyers = {
   goldenValleyMill: {
     zone: 11, name: 'Amber Valley Mill and Cannery', icon: '🥫', pop: 0.6, style: 'analytical', patience: 6, bias: 'utility',
     like: { bulk: 1, food: 0.9, farm: 0.6, industrial: 0.6, energy: 0.5 }, budget: [6000, 110000],
-    hello: 'We take it by the tonne, on contract, and we test every load for moisture.',
+    hello: 'We take it by the ton, on contract, and we test every load for moisture.',
   },
   elmwoodCoop: {
     zone: 11, name: "Elmwood Growers' Co-op", icon: '🐄', pop: 0.8, style: 'friendly', patience: 7, bias: 'story',

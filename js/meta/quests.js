@@ -60,7 +60,7 @@ export const QUESTS = [
     { event: 'auction', match: { won: true, surplus: { gt: 0 } }, count: 2 }, 520, 1, 'q06a'),
   quest('q07a', 7, 'Junkyard Dreams', '🚗', 'Buy 2 broken goods in Auto Row. Broken goods are cheap, and 6 in 10 lots here are broken.',
     { event: 'buy', match: { zone: 7, cond: 'broken' }, count: 2 }, 350, 0, 'q06b'),
-  quest('q07b', 7, 'Worth the Wrench', '🔧', 'Repair 3 goods at 80% precision or better. The bays in Auto Row cost 25% less, so this is the place to practise.',
+  quest('q07b', 7, 'Worth the Wrench', '🔧', 'Repair 3 goods at 80% precision or better. The bays in Auto Row cost 25% less, so this is the place to practice.',
     { event: 'repair', match: { precision: { gte: 0.8 } }, count: 3 }, 620, 0, 'q07a'),
   quest('q08a', 8, 'Dockside Delivery', '🚢', 'Ship a crate to Harbor Docks.',
     { event: 'ship', match: { to: 8 }, count: 1 }, 450, 0, 'q07b'),

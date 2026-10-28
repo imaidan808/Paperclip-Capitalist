@@ -88,6 +88,14 @@ export function coverScore(p, rect, avoid = []) {
   return s;
 }
 
+/** The rectangles the coach card must stay off, heaviest first: the open drawer and the dock (weight 3), then every control of an open dialog (weight 1). Empty or missing rects are dropped. */
+export function keepClear({ drawer = null, dock = null, controls = [] } = {}) {
+  const out = [], add = (r, wt) => { if (r && num(r.w, 0) > 0 && num(r.h, 0) > 0) out.push({ x: num(r.x, 0), y: num(r.y, 0), w: r.w, h: r.h, wt }); };
+  add(drawer, 3); add(dock, 3);
+  for (const r of ownList(controls)) add(r, 1);
+  return out;
+}
+
 /**
  * Where the coach card goes: below the target, else above, else beside it, else floating above the dock; never over the target or over anything in `avoid`
  * (the open drawer, the dock, the camera buttons, the control the keyboard is on, the controls of an open dialog), always inside the view. rect may be null (centred
@@ -166,8 +174,8 @@ export function coachFor(mission, run) {
     const s = steps[run.i];
     return { index: run.i, total: n, id: s.id, say: String(s.say ?? ''), hint: String(s.hint || 'Try the highlighted control.'), anchor: s.anchor, wait: s.wait, finishing: false };
   }
-  const last = steps[n - 1];
-  return { index: n, total: n, id: 'finish', say: 'Almost there. Finish the goal on the card at the top left and the lesson is yours.', hint: String(last?.hint || 'Look at the goal card.'), anchor: 'tracker', wait: null, finishing: true };
+  const last = steps[n - 1], fin = mission.finish; // a lesson whose last step is only "open this" and whose win is a separate act names that act (its first sentence is what the goal card shows)
+  return { index: n, total: n, id: 'finish', say: String(fin?.say || 'Almost there. Finish the goal on the card at the top left and the lesson is yours.'), hint: String(fin?.hint || last?.hint || 'Look at the goal card.'), anchor: 'tracker', wait: null, finishing: true };
 }
 /** First sentence of a coach line, for the HUD goal card. */
 export function shortSay(text, max = 96) {
@@ -390,6 +398,7 @@ export function lotTruthFrom(truth = {}) {
 /** A lesson is scripted: no random buyers or lots, no algorithmic shocks. Everything the lesson needs is in its setup. */
 export function sandboxify(game) {
   game._spawnLead = () => {}; game._spawnLot = () => {}; game._algoEvent = () => {};
+  game.xp = () => {}; // practice pays nothing here: a lesson's experience, level and skill point are paid once, by its reward card, into the real run (the bar and the result card used to show XP, levels and a point that were never kept)
   game.env.algo = false;
   game.sandbox ||= { warnings: [] };
   return game;

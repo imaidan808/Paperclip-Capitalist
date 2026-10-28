@@ -56,7 +56,7 @@ function gaugeHTML(v) {
     ${stress != null ? `<p class="small mute"><b>Stress test:</b> if your net worth fell 30% tomorrow, this ratio would jump to <b class="${stress > DEBT.callDE ? 'red' : stress > DEBT.maxDE ? 'gold' : ''}">${stress.toFixed(2)}</b>${stress > DEBT.callDE ? ', which is a margin call' : stress > DEBT.maxDE ? ', which freezes new loans' : ', which is still fine'}.</p>` : ''}
     <ul class="bk-rules small"><li><b>Up to ${DEBT.maxDE.toFixed(1)}:</b> the bank lends while your debt stays under ${DEBT.maxDE.toFixed(1)} times your net worth.</li>
       <li><b>${DEBT.maxDE.toFixed(1)} to ${DEBT.callDE.toFixed(1)}:</b> no new loans. Interest keeps building.</li>
-      <li><b>Above ${DEBT.callDE.toFixed(1)}:</b> margin call. The bank sells your biggest manager at ${Math.round(DEBT.fireSale * 100)}% off, again and again, until you are back at ${DEBT.maxDE.toFixed(1)}.${s.ps.bailout > 0 ? ` Your family will clear ${Math.round(g.P.bailout.fraction * 100)}% of your debt once, first.` : ''}</li></ul>
+      <li><b>Above ${DEBT.callDE.toFixed(1)}:</b> margin call. The bank sells your biggest manager (or, with none, your most valuable stock) at ${Math.round(DEBT.fireSale * 100)}% off, again and again, until you are back at ${DEBT.maxDE.toFixed(1)}.${s.ps.bailout > 0 ? ` Your family will clear ${Math.round(g.P.bailout.fraction * 100)}% of your debt once, first.` : ''}</li></ul>
     <p class="small mute">The bank's base rate is ${base.toFixed(1)}% per 30 days${mods.rateBps ? ' (a credit crunch is pushing it up)' : ''}. Your Capital Sourcing level ${g.lvl('fintech')} trims every spread.</p></section>`;
 }
 

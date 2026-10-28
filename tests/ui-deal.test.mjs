@@ -159,7 +159,9 @@ test('Repair under reduced motion: setting the slider and pressing Stop lands wh
   for (let i = 0; i < 3; i++) { ses.slider = 0.5; ses.acts.stop(); }
   assert.ok(ses.run.stageDone('fix')); assert.ok(ses.run.res.fix.precision > 0.8 && ses.run.res.fix.precision <= 0.85 + 1e-9, `precision ${ses.run.res.fix.precision}: centred, but a par option (SLIDER_CAP), not a flawless hand`);
   ses.slider = 0.5; // the slider is remembered across steps; Careful needs no timing at all
-  const ses2 = UI.createSession(ctx, start(g, brokenCrate(g))); ses2.show(); ses2.acts.careful(); assert.ok(ses2.run.stageDone('fix')); assert.equal(ses2.run.res.fix.careful, true);
+  // (another broken crate: the first one's Fix was played by hand and left, and a table sat at before is played at Quick the next time, tests/remaining-engine.test.mjs)
+  const first = g.s.assets.find((x) => ASSETS[x.cls].repair), twin = g._mk(g.s, first.cls, { zone: first.zone, basis: 1, cond: 'broken' }); g.s.assets.push(twin);
+  const ses2 = UI.createSession(ctx, start(g, { kind: 'repair', assetId: twin.id })); ses2.show(); ses2.acts.careful(); assert.ok(ses2.run.stageDone('fix')); assert.equal(ses2.run.res.fix.careful, true);
 });
 
 // ------------------------------------------------------------------ Assist

@@ -332,7 +332,7 @@ test('L3: a royalty is credited only for a stream this founder was promised, at 
   assert.equal(P.receiveRoyalty(30, offer.id, 'MALLORY').ok, false, 'when the sender is known it must be the one promised');
   const r = P.receiveRoyalty(1e12, offer.id, 'AAA');
   assert.ok(r.ok); near(P.s.cash - base, 30, 1e-9); // clamped to the day's amount
-  for (let i = 0; i < 20; i++) P.receiveRoyalty(30, offer.id);
+  for (let i = 0; i < 20; i++) { P.s.hour += 24; P.receiveRoyalty(30, offer.id); } // (a day's rate for each day: a stream is paced, tests/remaining-engine.test.mjs)
   near(P.s.cash - base, 150, 1e-9); // five days of thirty: the promise and not a cent more
   assert.equal(P.receiveRoyalty(30, offer.id).ok, false);
   assert.equal(bad(P.s), null);

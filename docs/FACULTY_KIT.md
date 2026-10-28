@@ -9,6 +9,8 @@
 
 Students on different devices need the optional relay server (`server/relay.mjs`, see the README). Without it, rooms work between tabs of one browser, which is fine for a demo or a single shared lab machine.
 
+**Keep the recovery code.** A new room shows its recovery code once (32 letters and digits in groups of four), and the title screen shows it again, under **Recovery code**, beside **Reopen room**. The relay gives the instructor's seat to the first connection that claims it and to nobody else, so if you lose this browser's storage, or want to run the room from your own laptop after starting it on a lab machine, the room code and the recovery code are the only way back in. On the other device choose **Instructor, Take back a room**, enter both and press **Take the room back**. The dashboard then waits a few seconds for the class's clock (a student's browser keeps it going while no instructor is there), starts from that hour, and leaves the pace paused if it could not hear one, so nothing you do on the new device can set a running class back to Day 1. The risk sliders, herd size and algorithmic events come back at their defaults: set them again. Anyone who has the recovery code can run the room, so treat it like a password. If you cannot find it, the relay's operator can set `SEAT_GRACE_MS` (milliseconds; 0 by default, which means never): once the seat's holder has been gone that long, another Founder ID that connects as the instructor is given the seat. Leave it at 0 unless you need a handover, because with a value set an instructor whose laptop lid stays shut for longer than that comes back to find someone else in the seat (the recovery code takes it back from them whatever the setting says).
+
 ## The World and the dock
 Students play in a 2.5D isometric world of sixteen districts, from the Scrap Yard to the Global Exchange, each opening at a net-worth gate. A dock of seven icons opens the drawers (Stock, Market, Crew, Bank, Travel, Codex, Quests). Shocks are visible, not only announced: rain for the credit crunch, neon and confetti for the demand surge, red hazard signs at the freight depots for the tariff. Every object in the world also appears in a list below it, so the game is fully playable by keyboard and with a screen reader.
 
@@ -36,16 +38,16 @@ The dashboard pre-fills the 60 automated points. The **Export gradebook CSV** bu
 | Criterion | Mastery 90-100% | Proficiency 75-89% | Developing 60-74% | Deficient <60% |
 |---|---|---|---|---|
 | Arbitrage logic and asset utility | Explains value creation through the Asset Utility Score; shows how scarcity and local demand shifts were used | Identifies winning swaps; misses depreciation or persona alignment | Describes swaps as luck; no link to drivers | Cannot explain valuation shifts |
-| Working capital and pipeline velocity | Justifies reinvestment tempo; contrasts static stock with high-velocity pipelines | Understands automation; over-invested in stock at key moments | Upgrades randomly, no runway maths | Insolvency from unmanaged overhead |
+| Working capital and pipeline velocity | Justifies reinvestment tempo; contrasts static stock with high-velocity pipelines | Understands automation; over-invested in stock at key moments | Upgrades randomly, no runway math | Insolvency from unmanaged overhead |
 | Risk mitigation and black swans | Evaluates responses to Days 15, 45 and 75 and what changed in the capital structure | Survived the shocks reactively | Overwhelmed; no change of strategy | Ignored the signals |
-| Market saturation and innovation | Uses Creativity Engine maths; shows how segments were pivoted to avoid the herd | Knows crowding cuts margins; adjusted late | Blames luck rather than copycat strategy | Followed an online meta guide blindly |
+| Market saturation and innovation | Uses Creativity Engine math; shows how segments were pivoted to avoid the herd | Knows crowding cuts margins; adjusted late | Blames luck rather than copycat strategy | Followed an online meta guide blindly |
 
 ## Reflection paper (1,000-1,500 words)
 The **Debrief** screen assembles each student's own evidence (ledger rows, Day 45 capital structure, crowded-niche table) and exports a Markdown workbook. Ask for the three prompts:
 
 - **A, the asymmetric trade.** Identify a swap with a classmate whose specialty differed from yours. State the asset before and after, and explain with margin data how it created value neither of you could create alone.
 - **B, the Day 45 credit crunch.** Detail your capital structure when the shock went live. If leveraged, explain what you did to prevent margin compression; if holding cash, how you exploited the drop in asset values.
-- **C, decoding the creativity penalty.** Pick a phase where the Creativity Engine compressed your margins. Using the formula, analyse how cohort volume drove your returns and which niche you pivoted to.
+- **C, decoding the creativity penalty.** Pick a phase where the Creativity Engine compressed your margins. Using the formula, analyze how cohort volume drove your returns and which niche you pivoted to.
 
 ## Tuning for your course
 Instructor sliders: transaction friction, audit frequency, synthetic-classmate count, algorithmic events, EEI floor. Everything else is in `js/config.js` (rates, fees, shocks, the economy's knobs) and `js/data/` (districts, assets, buyers, Backgrounds).

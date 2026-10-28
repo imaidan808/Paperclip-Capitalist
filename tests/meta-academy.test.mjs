@@ -31,7 +31,7 @@ import { CODEX } from '../js/meta/codex.js';
 import { REQUIRED_CODEX, DOCK_IDS, EVENT_TYPES, EVENT_PAYLOAD, BACKGROUND_IDS } from '../js/meta/ids.js';
 import { matchEvent } from '../js/meta/match.js';
 import { ZONE_COUNT, TAGS } from '../js/data/schema.js';
-import { ASSETS, BUYERS, ZONES, PERKS, SKILLS, EVENTS, ALGO_EVENTS, EEI_FLOOR_DEFAULT, DEBT, TOTAL_DAYS, SEC_PER_HOUR, FEES } from '../js/config.js';
+import { ASSETS, BUYERS, ZONES, PERKS, SKILLS, EVENTS, ALGO_EVENTS, EEI_FLOOR_DEFAULT, DEBT, TOTAL_DAYS, SEC_PER_HOUR, FEES, ECON } from '../js/config.js';
 import { Game } from '../js/engine.js';
 import { demandOf, eei as eeiCalc, FAKE_VALUE, fitOf, fitMult } from '../js/market.js';
 import * as D from '../js/deal.js';
@@ -153,10 +153,10 @@ function playMission(m, script) {
 
 // ---------------------------------------------------------------------------------------------------------------------------------------
 test('the economy the lessons are written against: pitch price rule, Quick par, EEI floor, the Deal Room glue', () => {
-  // quotePitch must stay reference x fit term x 0.60 x Cm x Growth x Background x deal, with pitchK 1 (D.rawPrice rebuilds it)
+  // quotePitch must stay reference x fit term x 0.60 x pitchK x Cm x Growth x Background x deal (D.rawPrice rebuilds it), and every lesson prints the 0.92 of pitchK as "× 0.92"
   const g = sandbox(M('m01')), a = g.s.assets[0], q = g.quotePitch(a.id, 'cafe-barista');
-  assert.ok(near(q.price, rawPrice(q), 1e-9), 'pitchK must be 1, or every worked example moves');
-  assert.equal(q.parts.base, 0.6);
+  assert.ok(near(q.price, rawPrice(q), 1e-9), 'D.rawPrice must rebuild the engine\'s own pitch price');
+  assert.equal(q.parts.base, 0.6); assert.equal(ECON.pitchK, 0.92, 'buyers pay 8% under the base pitch price: the m01 and m08 formulas print 0.92, and every sale in every lesson is scaled by it');
   assert.equal(EEI_FLOOR_DEFAULT, 1000);
   assert.equal(DEBT.maxDE, 3.0); assert.equal(DEBT.callDE, 4.5); assert.equal(DEBT.fireSale, 0.35);
   assert.equal(FEES.base, 0.025); assert.equal(FEES.exitBrokerage, 0.12);
@@ -169,7 +169,7 @@ test('the economy the lessons are written against: pitch price rule, Quick par, 
   const run = buyRun(g2, 4, 'second-watch'); readBy(run, ['serial']); run.next(); run.quick();
   assert.deepEqual(events, [], 'nothing reaches the engine while the stages are played');
   run.finish();
-  assert.deepEqual(events.filter((t) => ['inspect', 'haggle', 'buy'].includes(t)), ['inspect', 'haggle', 'buy'], 'a finished purchase sends inspect, then haggle, then buy');
+  assert.deepEqual(events.filter((t) => ['inspect', 'haggle', 'buy'].includes(t)), ['inspect', 'buy', 'haggle'], 'a finished purchase sends inspect, then buy, then haggle (js/deal.js finish: the haggle counts once the purchase has gone through)');
 });
 
 test('exactly ten missions m01..m10, in the order of section 9', () => {
@@ -180,10 +180,11 @@ test('exactly ten missions m01..m10, in the order of section 9', () => {
 });
 
 const MISSION_KEYS = ['id', 'title', 'icon', 'zone', 'concept', 'minutes', 'intro', 'setup', 'steps', 'win', 'why', 'teachBack', 'reward'];
+const OPTIONAL_KEYS = ['finish']; // what the coach says after the last step when the win is a separate act (js/ui/academy-sandbox.js coachFor)
 const SETUP_KEYS = ['clock', 'assets', 'leads', 'lots', 'cash', 'zones', 'features', 'skills', 'perks', 'cohort', 'events'];
 test('mission fields, types and limits', () => {
   for (const m of ACADEMY) {
-    keysOf(m, MISSION_KEYS, m.id);
+    keysOf(m, [...MISSION_KEYS, ...OPTIONAL_KEYS], m.id);
     for (const k of MISSION_KEYS) assert.ok(k in m, `${m.id}: missing ${k}`);
     assert.ok(isStr(m.title) && m.title.length <= 40, `${m.id}: title`);
     assert.ok(isStr(m.icon) && [...m.icon].length <= 3, `${m.id}: icon is a single emoji`);
@@ -313,8 +314,9 @@ const rolesOf = (m) => ({
   assets: new Set([...m.setup.assets.map((a) => a.cls), ...m.setup.lots.map((l) => l.cls)]), // a won lot becomes an asset of its class
 });
 const stepsOf = (m) => m.steps.map((s, i) => ({ ...s, i }));
-/** The two lessons whose last step and win are one event (see js/meta/academy.js, Conventions), and the rule that makes that safe: every key of the win is in the step. */
-const SAME_EVENT = ['m01', 'm02'];
+/** The lessons whose last step and win are one event (see js/meta/academy.js, Conventions), and the rule that makes that safe: every key of the win is in the step. A deal sends its
+ *  pitch (a sale) or its buy (a purchase) before its haggle, so nothing is left to arrive after the event that names the buyer or the lot: every lesson that ends in a deal ends on that event. */
+const SAME_EVENT = ['m01', 'm02', 'm03', 'm04', 'm05', 'm08', 'm10'];
 const implies = (have = {}, want = {}) => Object.entries(want || {}).every(([k, v]) => k in (have || {}) && JSON.stringify(have[k]) === JSON.stringify(v));
 
 /** A match object may only use payload fields of its event, and values that can really occur. */
@@ -423,27 +425,42 @@ test('wait and win events are real, carry real payload fields and can be reached
     // the mission completes when the win event arrives after the last step. Either the win is a different, later event than the one the last step waits on, or it is
     // the very same event and the step's match implies the win's, so that one event finishes the step AND wins (js/ui/academy-sandbox.js feedRun does exactly that).
     // Anything in between, the same event with a looser step match, would finish the step on an event that is not a win and the win would never come again.
-    if (last.wait.type === 'event' && last.wait.event === m.win.event) {
-      assert.ok(SAME_EVENT.includes(m.id), `${m.id}: the win event "${m.win.event}" is also the last step's wait; only ${SAME_EVENT.join(' and ')} are written that way, for the reasons in js/meta/academy.js`);
+    const same = last.wait.type === 'event' && last.wait.event === m.win.event;
+    if (same) {
+      assert.ok(SAME_EVENT.includes(m.id), `${m.id}: the win event "${m.win.event}" is also the last step's wait; only ${SAME_EVENT.join(', ')} are written that way, for the reasons in js/meta/academy.js`);
       assert.ok(implies(last.wait.match, m.win.match), `${m.id}: the last step's match ${JSON.stringify(last.wait.match)} must imply the win's ${JSON.stringify(m.win.match)}, or the step could finish on an event that is not a win`);
     }
+    // A deal sends its pitch (a sale) or its buy (a purchase) BEFORE its haggle (js/deal.js finish), so nothing is left to arrive after the event that names the buyer or the lot:
+    // a lesson that ends in a deal ends on that event, or its win would have gone by before its last step could be done (the old shape, a last step on the haggle and a win on the pitch).
+    if (['pitch', 'buy'].includes(m.win.event)) assert.ok(same, `${m.id}: a lesson that ends in a ${m.win.event === 'pitch' ? 'sale' : 'purchase'} ends on that deal's own "${m.win.event}", the last step's wait must be it too`);
+    assert.equal(SAME_EVENT.includes(m.id), same, `${m.id}: SAME_EVENT lists the lessons that end on one event`);
+    // and no step waits for a haggle: it names no buyer, it comes after the pitch or the buy of the same finish (a stray one would finish the NEXT step), and a capped or Quick sale sends none
+    for (const st of m.steps) assert.notEqual(st.wait.event, 'haggle', `${m.id}/${st.id}: no step waits for a haggle; wait for the pitch or the buy of the deal`);
   }
 });
 
-test('m01 and m02 finish their last step and win on one event, and only on the right one (the wrong sale, the wrong lot and the card\'s Quick buy)', () => {
+test('the lessons that end in a deal finish their last step and win on one event, and only on the right one (the wrong sale, the wrong lot, the card\'s Quick buy and the haggle that follows every pitch)', () => {
   const run = (m, evt) => A.feedRun(m, { i: m.steps.length - 1, n: m.steps.length, won: false }, evt);
   { const m = M('m01');
     // a sale to anyone sends the same haggle (role, mult, score, deal name no buyer), so the step waits for the pitch, which names the buyer
     for (const evt of [{ type: 'haggle', role: 'sell', mult: 1, deal: true }, { type: 'pitch', seg: 'yard-mechanic', outcome: 'win', price: 0.03 }, { type: 'pitch', seg: 'mechanic', outcome: 'win', price: 0.03 }, { type: 'pitch', seg: 'barista', outcome: 'win', price: 0.04 }]) {
       const r = run(m, evt); assert.equal(r.advanced, false, `m01: ${JSON.stringify(evt)} must not finish the step`); assert.equal(r.won, false);
     }
-    const r = run(m, { type: 'pitch', seg: 'student', outcome: 'win', price: 2.62 }); assert.deepEqual([r.advanced, r.won, r.run.i, r.run.won], [true, true, 4, true], 'the sale to Wen finishes the step and wins on one event'); }
+    const r = run(m, { type: 'pitch', seg: 'student', outcome: 'win', price: 2.41 }); assert.deepEqual([r.advanced, r.won, r.run.i, r.run.won], [true, true, 4, true], 'the sale to Wen finishes the step and wins on one event'); }
   { const m = M('m02');
     // the Market card's Quick buy (game.buyLot) sends a buy and no haggle: the buy itself finishes the step, but only a genuine watch is the win
     for (const evt of [{ type: 'haggle', role: 'buy', mult: 1, deal: true }, { type: 'buy', cls: 'pawnWatch', fake: true, price: 277 }, { type: 'inspect', fake: false }]) {
       const r = run(m, evt); assert.equal(r.advanced, false, `m02: ${JSON.stringify(evt)} must not finish the step`); assert.equal(r.won, false);
     }
     const r = run(m, { type: 'buy', cls: 'pawnWatch', fake: false, price: 277 }); assert.deepEqual([r.advanced, r.won], [true, true], 'a genuine buy finishes the step and wins on one event'); }
+  // every lesson that ends on a deal: the haggle that follows the pitch (or the buy) in the same finish finishes nothing and wins nothing, whoever is on the other side of it
+  for (const id of SAME_EVENT) for (const role of ['sell', 'buy']) {
+    const m = M(id), r = run(m, { type: 'haggle', role, mult: 1.2, score: 0.9, deal: true });
+    assert.equal(r.advanced, false, `${id}: a stray ${role} haggle must not finish the last step`); assert.equal(r.won, false, `${id}: nor win`);
+  }
+  // m03, m05 and m08 name the buyer in the step; a sale to anyone else finishes nothing (m04 and m10 are covered by their own tests)
+  { const wrong = [[ 'm03', { type: 'pitch', seg: 'bree', outcome: 'herd', price: 1.58, mult: 1, S: 0.65 }], ['m05', { type: 'pitch', cls: 'van', seg: 'collector', outcome: 'win', price: 900, mult: 1 }], ['m08', { type: 'pitch', seg: 'boutique', outcome: 'herd', S: 0.57, price: 120, mult: 1 }], ['m08', { type: 'pitch', seg: 'popup', outcome: 'win', S: 0.7, price: 600, mult: 1 }], ['m10', { type: 'pitch', seg: 'boutique', outcome: 'win', price: 900, mult: 1 }]];
+    for (const [id, evt] of wrong) { const m = M(id), r = run(m, evt); assert.equal(r.advanced, false, `${id}: ${JSON.stringify(evt)} must not finish the step`); assert.equal(r.won, false); } }
   // the same through the engine: the card's Quick buy, the Deal Room's Quick deal and a hand-played buy all win the genuine watch
   for (const how of ['card', 'quick', 'hand']) {
     const m = M('m02'), c = lesson(m); c.i = m.steps.length - 1;
@@ -453,32 +470,35 @@ test('m01 and m02 finish their last step and win on one event, and only on the r
   }
 });
 
-test('a step that waits for a sale or a purchase waits for the haggle, and the Close stage is really played there (the buyer is not capped by a thin budget)', () => {
-  // js/deal.js planSell: when the fair price is within 12% of the buyer's whole budget there is nothing to haggle over, the Close is "auto" and the engine never hears a haggle,
-  // so a step that waits for one would never end. None of the sales a lesson sets up is like that; this holds each of them to it, with the crates the lesson can offer
-  // (the starting ones, a broken one once repaired, a lot once won).
+test('the engine sends a deal\'s events in the order the steps lean on (pitch, then haggle; inspect, buy, then haggle or auction), and where a lesson depends on the Close it is really played', () => {
+  // js/deal.js finish(): a sale is the engine's pitch() and then, once it has gone through, the Close's haggle; a purchase is the read, the buy and then the haggle or the auction (a lost auction sends the auction alone).
+  // Each is paid once per buyer or lot (`key`). A step that waited for the haggle of a sale and a win on the pitch after it (the shape before the audit) can never be won: the pitch has gone by.
+  { const m = M('m03'), g = sandbox(m), got = []; g.onEvent = (e) => { if (['haggle', 'pitch', 'inspect', 'buy', 'auction'].includes(e.type)) got.push(e.type); }; sellDeal(g, g.s.assets[0].id, 'pageturner'); assert.deepEqual(got, ['pitch', 'haggle']); }
+  { const m = M('m02'), g = sandbox(m), got = []; g.onEvent = (e) => { if (['haggle', 'pitch', 'inspect', 'buy', 'auction'].includes(e.type)) got.push(e.type); }; const r = buyRun(g, 4, 'second-watch'); readBy(r, ['serial']); r.next(); r.quick(); r.finish(); assert.deepEqual(got, ['inspect', 'buy', 'haggle']); }
+  { const m = M('m10'), g = sandbox(m), got = []; g.onEvent = (e) => { if (['haggle', 'pitch', 'inspect', 'buy', 'auction'].includes(e.type)) got.push(e.type + (e.won === undefined ? '' : ':' + e.won)); };
+    auctionDeal(g, 6, 'estate-lot-d', { ceiling: 100 }); auctionDeal(g, 6, 'estate-lot-a', { ceiling: 700 });
+    assert.deepEqual(got, ['inspect', 'auction:false', 'inspect', 'buy', 'auction:true'], 'a lost auction sends the auction alone, a won one the buy and then the auction'); }
+  { // paid once: a second sitting at the same table (and the same lot read again) sends nothing more, which is why a step never waits for a repeat
+    const m = M('m02'), g = sandbox(m), got = []; g.onEvent = (e) => { if (['haggle', 'inspect', 'buy'].includes(e.type)) got.push(e.type); };
+    const r1 = buyRun(g, 4, 'second-watch'); readBy(r1, ['serial']); r1.next(); r1.walkAway(); const r2 = buyRun(g, 4, 'second-watch'); assert.ok(r2.act({ type: 'conclude' }).ok); r2.next(); r2.walkAway();
+    assert.deepEqual(got, ['inspect'], 'reading a lot twice and walking away twice is one inspect and no haggle'); }
+  // The Close matters to a lesson only where a step or the win is about its result (m04: a sale 10% over fair). There the Close must really be played for every sale the lesson can offer
+  // (js/deal.js planSell: within 12% of the buyer's whole budget there is nothing to haggle over, the Close is "auto" and a sale is priced by the Pitch alone), with the crates it can offer:
+  // the starting ones, a broken one once repaired, a lot once won, and the barter goods a sale brings in.
   const played = (run) => run.plan.stages.some((x) => x.key === 'close' && !x.auto);
   let checked = 0;
   for (const m of ACADEMY) {
-    const steps = m.steps.filter((x) => x.wait.type === 'event' && x.wait.event === 'haggle');
-    if (!steps.length) continue;
+    const aboutPrice = [...m.steps.map((x) => x.wait.match), m.win.match].some((mt) => mt && mt.mult);
+    if (!aboutPrice) continue;
     const g = sandbox(m);
-    const won = g.s.lots[m.zone].find((l) => l.mode === 'auction'); if (won) assert.ok(g.buyLot(m.zone, won.id, { mult: 0.9 }).ok); // the lot a player has won
-    for (const a of g.s.assets) if (a.cond === 'broken') assert.ok(g.repair(a.id, {}).ok);
-    for (const st of steps) {
-      if (st.wait.match.role === 'buy') { for (const l of g.s.lots[m.zone].filter((x) => x.mode !== 'auction')) { assert.ok(played(buyRun(g, m.zone, l.id)), `${m.id}/${st.id}: the Close of ${l.id} is not played`); checked++; } continue; }
-      for (const a of g.s.assets) for (const l of g.s.leads[m.zone]) {
-        const q = g.quotePitch(a.id, l.id, undefined, { blind: true }); if (!q.ok || q.rejected || q.fit < 0.15) continue;
-        const run = sellRun(g, a.id, l.id); assert.ok(played(run), `${m.id}/${st.id}: selling ${a.cls} to ${l.id} has no Close to haggle in (capped ${run.plan.capped}), so the step would never hear its haggle`); checked++;
-      }
+    for (const a of g.s.assets) for (const l of g.s.leads[m.zone]) {
+      const q = g.quotePitch(a.id, l.id, undefined, { blind: true }); if (!q.ok || q.rejected || q.fit < 0.15) continue;
+      const run = sellRun(g, a.id, l.id); assert.ok(played(run), `${m.id}: selling ${a.cls} to ${l.id} has no Close to haggle in (capped ${run.plan.capped}), so a win that asks for a price over fair could not be reached`); checked++;
     }
   }
-  assert.ok(checked >= 15, `${checked} sales checked`);
-  // the order the engine sends them in is what the steps lean on: a sale is haggle then pitch, a purchase is inspect, haggle (or auction), buy
-  { const m = M('m03'), g = sandbox(m), got = []; g.onEvent = (e) => { if (['haggle', 'pitch', 'inspect', 'buy', 'auction'].includes(e.type)) got.push(e.type); }; sellDeal(g, g.s.assets[0].id, 'bookstore-buyer'); assert.deepEqual(got, ['haggle', 'pitch']); }
-  { const m = M('m02'), g = sandbox(m), got = []; g.onEvent = (e) => { if (['haggle', 'pitch', 'inspect', 'buy', 'auction'].includes(e.type)) got.push(e.type); }; const r = buyRun(g, 4, 'second-watch'); readBy(r, ['serial']); r.next(); r.quick(); r.finish(); assert.deepEqual(got, ['inspect', 'haggle', 'buy']); }
-  // and where the last deal's step is the haggle, the win is a LATER event of the same finish (the pitch or the buy): m01 and m02 name the buyer or the lot, so they wait for that event itself
-  for (const m of ACADEMY) { const last = m.steps.at(-1); if (last.wait.type === 'event' && last.wait.event === 'haggle') assert.ok(['pitch', 'buy'].includes(m.win.event), `${m.id}: a haggle is followed by the pitch or the buy`); }
+  assert.ok(checked >= 3, `${checked} sales checked`);
+  // and in the lessons that never ask for a price, a capped sale would still be a sale: no lesson step is lost to a thin budget
+  for (const m of ACADEMY) { const g = sandbox(m); for (const lead of Object.values(g.s.leads).flat()) for (const a of g.s.assets) { const q = g.quotePitch(a.id, lead.id, undefined, { blind: true }); if (q.ok && !q.rejected) assert.ok(q.price < lead.budget, `${m.id}: ${a.cls} to ${lead.id} is capped by the buyer's budget, so the price a worked example quotes would be the budget`); } }
 });
 
 test('every coach line names the control it points at', () => {
@@ -623,7 +643,8 @@ test('every skill is met by mission 10, and mission 10 uses them all', () => {
   assert.ok(evs(M('m02')).has('inspect'), 'Inspect in mission 2');
   assert.ok(anchors(M('m03')).has('deal-stage-pitch') && evs(M('m03')).has('pitch'), 'Pitch in mission 3');
   assert.ok(M('m04').steps.every((st) => st.id === 'market' || /\bClose\b/.test(st.say)) && !!M('m04').steps.find((st) => st.id === 'careful').say.match(/Aim high/), 'the Close stage in mission 4');
-  assert.ok(evs(M('m04')).has('haggle'), 'Haggle in mission 4');
+  // the Close is what mission 4 teaches, and no step waits for a haggle (its payload names nobody): the win is a sale 10% over fair, a price only a played Close can reach
+  assert.deepEqual(M('m04').win, { event: 'pitch', match: { mult: { gte: 1.1 } } }, 'Haggle in mission 4');
   assert.ok(evs(M('m05')).has('repair'), 'Repair in mission 5');
   assert.ok(evs(M('m06')).has('hire') && evs(M('m06')).has('cycle'), 'Managers in mission 6');
   assert.ok(evs(M('m07')).has('draw') && evs(M('m07')).has('repay'), 'The Bank in mission 7');
@@ -632,20 +653,22 @@ test('every skill is met by mission 10, and mission 10 uses them all', () => {
   const talk = ten.steps.map((s) => s.say).join(' ');
   for (const word of ['READ', 'AUCTION', 'FIX', 'PITCH', 'CLOSE']) assert.ok(talk.includes(word), `and its coach names the ${word} stage`);
   const events = new Set(ACADEMY.flatMap((m) => [...evs(m)]));
-  for (const ev of ['pitch', 'buy', 'inspect', 'haggle', 'repair', 'auction', 'hire', 'cycle', 'draw', 'repay', 'shock', 'sell-pool']) assert.ok(events.has(ev), `the Academy exercises "${ev}"`);
+  for (const ev of ['pitch', 'buy', 'inspect', 'repair', 'auction', 'hire', 'cycle', 'draw', 'repay', 'shock', 'sell-pool']) assert.ok(events.has(ev), `the Academy exercises "${ev}"`);
 });
 
 test('pacing: the play of a mission, by a rough clock, fits 90-150 seconds with the Why card and teach-back (about 30 s)', () => {
   // A first-time player, playing most stages by hand. Quick is always allowed, so a hurried player is faster. The clock steps assume a fast speed.
   const EV = { pitch: 14, buy: 12, inspect: 18, auction: 22, repair: 22, haggle: 8, hire: 14, draw: 10, repay: 8, shock: 8, 'sell-pool': 12, cycle: 14 };
   const CLICK = { 'hud-cash': 4, 'hud-clock': 4, 'hud-networth': 6 };
-  const WIN = { pitch: 6, buy: 4, haggle: 20, cycle: 14, repay: 8, 'sell-pool': 12 }; // the work between the last click and the win event
+  const WIN = { pitch: 6, buy: 4, haggle: 20, cycle: 30, repay: 8, 'sell-pool': 12 }; // the work between the last click and the win event (m06: the first cycle is 68 hours at 16x, 30 s on the clock)
   // a deal done by hand costs more than its event says (the Close of mission 4 is the lesson; mission 2 buys by hand), and a step that opens its own Deal Room
   // is also the tap on the card (6 s) that used to be a step of its own
-  const HAND = { 'm02/buy': 16, 'm04/careless': 16, 'm04/careful': 16 };
+  // (m10: the read and the bid are one visit to the Deal Room, whose inspect, buy and auction arrive together, so the auction step is only the bidding on top of the read)
+  const HAND = { 'm02/buy': 16, 'm04/careless': 16, 'm04/careful': 16, 'm10/auction': -10 };
   const act = (m, st) => { const w = st.wait; return (HAND[`${m.id}/${st.id}`] || 0) + (w.type === 'ui' ? 5 : w.type === 'click' ? CLICK[w.anchor] ?? 4 : EV[w.event] ?? 15) + (['pitch', 'haggle'].includes(w.event) && st.anchor.startsWith('deal-') && /\btap\b/i.test(st.say) ? 6 : 0); };
   for (const m of ACADEMY) {
-    const play = m.steps.reduce((t, st) => t + 2 + st.say.length / 28 + act(m, st), 0) + (WIN[m.win.event] ?? 10);
+    const last = m.steps.at(-1), same = last.wait.type === 'event' && last.wait.event === m.win.event; // the win IS the last step's event: no work between them
+    const play = m.steps.reduce((t, st) => t + 2 + st.say.length / 28 + act(m, st), 0) + (same ? 0 : WIN[m.win.event] ?? 10);
     const total = play + 30;
     assert.ok(total >= 90 && total <= 150, `${m.id}: about ${Math.round(total)} seconds in all (${Math.round(play)} of play); aim for 90..150`);
     assert.ok(Math.abs(m.minutes * 60 - total) <= 30, `${m.id}: minutes (${m.minutes}) should be near the estimate (${Math.round(total)} s)`);
@@ -694,25 +717,26 @@ test('m01: need beats budget by a mile, and the first swap earns the first dolla
   const wen = q('sim-student'), mech = q('yard-mechanic'), bar = q('cafe-barista');
   assert.ok(near(g.val(a), 0.0504, 1e-6) && ui(g.val(a)) === '$0.05', 'the clip is worth about five cents');
   assert.ok(near(wen.ci.cm, 0.4 + Math.log(2), 1e-9) && n2(wen.ci.cm) === '1.09', 'with nobody pitching, the market factor (Cm) = 0.40 + ln 2');
-  assert.ok(wen.fit === 1 && near(wen.parts.term, 1) && near(wen.price, 4 * 0.6 * wen.ci.cm, 1e-9), 'urgent: budget x (0.55 + 0.45 x fit) x 0.60 x Cm');
+  assert.ok(wen.fit === 1 && near(wen.parts.term, 1) && near(wen.price, 4 * 0.6 * ECON.pitchK * wen.ci.cm, 1e-9), 'urgent: budget x (0.55 + 0.45 x fit) x 0.60 x 0.92 x Cm');
   assert.equal(n2(bar.fit), '0.80'); assert.equal(n2(bar.parts.term), '1.16'); assert.equal(n2(mech.fit), '0.60'); assert.equal(n2(mech.parts.term), '0.97');
   // the student pays part in the barter goods her stall holds, and the rest in cash after the engine's 2.5% fee
   assert.equal(wen.goods.cls, 'paperbacks'); assert.ok(near(wen.fee, 0.025, 1e-9));
   assert.ok(wen.change > 1, 'the first swap puts more than a dollar of cash in the wallet');
-  assert.equal(ui(wen.price), '$2.62'); assert.equal(ui(bar.price), '$0.04'); assert.equal(ui(mech.price), '$0.03');
+  assert.equal(ui(wen.price), '$2.41'); assert.equal(ui(bar.price), '$0.04'); assert.equal(ui(mech.price), '$0.03');
   // one idea at a time: urgency and fit. The utility score and its price index belong to the Codex page this mission unlocks
   assert.ok(!/Utility Score|price index|2 × 7|0\.63|\bniche\b/.test(text({ b: m.why.body, f: m.why.formula, e: m.why.example })), 'the first card does not carry the utility-score arithmetic or the word niche');
   whyHas(m, ui(wen.price), ui(bar.price), ui(mech.price), '$14.00', 'about five cents', 'urgency premium', 'budget becomes the starting price', 'only a ceiling', 'market factor');
-  has('m01 example setup', m.why.example.setup, '$4.00', '1.09', 'ordinary', 'mission 8 explains it'); assert.ok(/Mission 8 shows how far/.test(text(M('m03').why)), 'and mission 3 points forward to the same mission');
-  stepHas(m, 0, `$4.00 × 1.00 × 0.60 × ${n2(wen.ci.cm)} = ${ui(wen.price)}`, ui(wen.goods.value), ui(wen.change), '2.5% fee');
-  stepHas(m, 1, `$0.05 × ${n2(bar.parts.term)} × 0.60 × ${n2(wen.ci.cm)} = ${ui(bar.price)}`, '0.80');
-  stepHas(m, 2, `$0.05 × ${n2(mech.parts.term)} × 0.60 × ${n2(wen.ci.cm)} = ${ui(mech.price)}`, '0.60', '$14.00');
+  has('m01 example setup', m.why.example.setup, '$0.0504', '$4.00', '1.09', 'ordinary', 'mission 8 explains it', '0.92', '8%'); assert.ok(/Mission 8 shows how far/.test(text(M('m03').why)), 'and mission 3 points forward to the same mission');
+  stepHas(m, 0, `$4.00 × 1.00 × 0.60 × 0.92 × ${n2(wen.ci.cm)} = ${ui(wen.price)}`, ui(wen.goods.value), ui(wen.change), '2.5% fee');
+  stepHas(m, 1, `$0.0504 × ${n2(bar.parts.term)} × 0.60 × 0.92 × ${n2(wen.ci.cm)} = ${ui(bar.price)}`, '0.80');
+  stepHas(m, 2, `$0.0504 × ${n2(mech.parts.term)} × 0.60 × 0.92 × ${n2(wen.ci.cm)} = ${ui(mech.price)}`, '0.60', '$14.00');
+  assert.ok(near(g.val(a), 0.0504, 1e-6), 'the card prints the clip\'s value to four places so its arithmetic redoes to the cent');
   exampleSteps(m, 3);
-  // "65 to 70 times" holds for the dollars on screen (2.62 / 0.04) and for the unrounded offers; "65 to 87" is the same against the mechanic
-  const onScreen = 2.62 / 0.04, unrounded = wen.price / bar.price;
-  assert.ok(onScreen >= 65 && onScreen < 66 && unrounded > 68 && unrounded <= 71, `Wen's offer is ${onScreen.toFixed(1)} (on screen) to ${unrounded.toFixed(1)} times the barista's`);
-  assert.equal(Math.round(2.62 / 0.03), 87);
-  whyHas(m, 'about 65 to 70 times', 'by about 20% (1.16 against 0.97)', '65 to 87 times', `first ${ui(wen.change)}`);
+  // "60 to 70 times" holds for the dollars on screen (2.41 / 0.04) and for the unrounded offers; "60 to 80" is the same against the mechanic ($0.03 on screen, 2.41 / 0.03)
+  const onScreen = 2.41 / 0.04, unrounded = wen.price / bar.price;
+  assert.ok(onScreen >= 60 && onScreen < 61 && unrounded > 68 && unrounded <= 71, `Wen's offer is ${onScreen.toFixed(1)} (on screen) to ${unrounded.toFixed(1)} times the barista's`);
+  assert.equal(Math.round(2.41 / 0.03), 80); assert.ok(wen.price / mech.price > 79 && wen.price / mech.price < 83);
+  whyHas(m, 'about 60 to 70 times', 'by about 20% (1.16 against 0.97)', '60 to 80 times', `first ${ui(wen.change)}`);
   assert.ok(bar.parts.term / mech.parts.term > 1.15 && bar.parts.term / mech.parts.term < 1.25, 'fit moves the calm buyers\' offers by about 20%');
   // the card's two ideas do not contradict each other: urgency turned Wen's budget into her reference; the mechanic's budget only capped him
   assert.ok(near(wen.parts.ref, 4, 1e-9) && near(mech.parts.ref, g.val(a), 1e-9) && mech.price < 0.1, 'an urgent buyer starts from the budget, a calm one from fair value');
@@ -735,7 +759,7 @@ test('m01: need beats budget by a mile, and the first swap earns the first dolla
   // mission 9 is where a whole market moves, and an answer true of it must not be marked wrong here
   assert.ok(/pouring/.test(m.teachBack.q) && /tourist/.test(m.teachBack.q) && /commuter/.test(m.teachBack.q), 'the weather is held constant and the two buyers are the only difference');
   teachHas(m, 'The rain was the same for both', 'the tourist would pay more too');
-  onlyEngineDollars(m, [0, g.val(a), wen.price, mech.price, bar.price, wen.goods.value, wen.change, 4, 14, 6, '$1', '$8']);
+  onlyEngineDollars(m, [0, g.val(a), '$0.0504', wen.price, mech.price, bar.price, wen.goods.value, wen.change, 4, 14, 6, '$1', '$8']);
 });
 
 test('m02: a look is worth more than a discount, because here the price does not warn you', () => {
@@ -823,55 +847,68 @@ test('m02: a look is worth more than a discount, because here the price does not
 });
 const plus = (s) => (s.startsWith('-') ? s : '+' + s);
 
-test('m03: know the buyer: the right two angles keep the full price, the wrong two cost about 9%, and the crowd is a different lesson', () => {
+test('m03: know the buyer: the right two angles keep the full price, the wrong two cost a step of about 9%, and the crowd is a different lesson', () => {
   const m = M('m03'), g = sandbox(m), a = g.s.assets[0], q = (id) => g.quotePitch(a.id, id);
   assert.ok(m.setup.perks.includes('grad') && g.P.radar, 'a borrowed Niche Radar');
   assert.equal(m.setup.assets.filter((x) => x.cls === 'enamelPins').length, 2, 'two sets: one for the crowd, one for the quiet buyer');
-  const bree = q('thrift-flipper'), del = q('bookstore-buyer');
+  const bree = q('thrift-flipper'), del = q('pageturner');
   assert.ok(bree.ci.band.id === 'herd' && del.ci.band.id === 'pioneer', 'the crowded buyer sits on the floor and the quiet one on the ceiling (foreshadowing mission 8)');
   assert.equal(n2(bree.fit), '1.00'); assert.equal(n2(del.fit), '0.50');
   assert.equal(cents(bree.fmv), '$5.30');
-  // the lesson is the Pitch stage: what Bree is told, what the pins can back, and what every pair does at an average close
+  // The lesson is played in its own order: Bree takes the first set, Delphine the second. The Deal Room's dice are fixed by the crate and the buyer (js/deal.js seedFor), so every figure below is
+  // read in that order, and a lead id is chosen with the story it tells (js/meta/academy.js Conventions): 'pageturner' gives a worst pair that costs one step with either set.
+  const FLOW = (breeAngles = 'best', delAngles = 'best', ids = [0, 1]) => {
+    const g2 = sandbox(m), crates = g2.s.assets.map((x) => x.id);
+    const b = sellDeal(g2, crates[ids[0]], 'thrift-flipper', { pitch: breeAngles, close: 'quick' }), probe = sellRun(g2, crates[ids[1]], 'pageturner'), pairs = anglePairs(probe);
+    const d = sellDeal(g2, crates[ids[1]], 'pageturner', { pitch: delAngles, close: 'quick' });
+    return { b, d, pairs, fair: probe.plan.fair, view: probe.view() };
+  };
   const probe = sellRun(g, a.id, 'thrift-flipper'), view = probe.view();
-  assert.equal(probe.plan.fair, bree.price); assert.equal(ui(probe.plan.fair), '$1.72');
+  assert.equal(probe.plan.fair, bree.price); assert.equal(ui(probe.plan.fair), '$1.58');
   assert.deepEqual(view.hints.map((h) => h.kind), ['temper']); assert.deepEqual(view.hints[0].angles, ['prestige', 'scarcity', 'story']); assert.match(view.hints[0].text, /feeling/);
   assert.deepEqual(Object.fromEntries(view.asset.features.map((f) => [f.angle, f.strength])), { prestige: 0.4, scarcity: 0.7, story: 0.4 }, 'the pins back prestige, scarcity and story, scarcity best');
-  const outcomeOf = (lead, angles) => { const g2 = sandbox(m), { run, summary } = sellDeal(g2, g2.s.assets[0].id, lead, { pitch: angles, close: 'quick' }); return { keen: run.res.pitch.mult, closeMult: run.res.close.mult, price: summary.numbers.you, fair: run.plan.fair }; };
-  const pairsFor = (lead) => { const g2 = sandbox(m); return anglePairs(sellRun(g2, g2.s.assets[0].id, lead)); };
-  const result = {};
-  for (const [name, lead] of [['bree', 'thrift-flipper'], ['delphine', 'bookstore-buyer']]) {
-    const pairs = pairsFor(lead);
-    assert.ok(pairs.every((p) => p.mult >= 0.85 - 1e-9 && p.mult <= 1.2 + 1e-9), `${name}: every pair stays inside the Pitch game's x0.85..x1.20`);
-    const best = pairs.reduce((x, y) => (y.mult > x.mult ? y : x)), worst = pairs.reduce((x, y) => (y.mult < x.mult ? y : x));
-    result[name] = { best: { ...best, ...outcomeOf(lead, best.angles) }, worst: { ...worst, ...outcomeOf(lead, worst.angles) } };
-  }
-  const B = result.bree, Dl = result.delphine;
-  assert.deepEqual([...B.best.angles].sort(), ['prestige', 'scarcity'], 'Bree: scarcity with prestige is the best pair'); assert.deepEqual([...B.worst.angles].sort(), ['price', 'utility'], 'and utility with price the worst');
-  assert.deepEqual([...Dl.best.angles].sort(), ['scarcity', 'story']); assert.deepEqual([...Dl.worst.angles].sort(), ['price', 'utility']);
-  assert.equal(n2(B.best.keen), '1.13'); assert.equal(n2(B.worst.keen), '0.98'); assert.equal(n2(Dl.best.keen), '1.07'); assert.equal(n2(Dl.worst.keen), '0.94');
-  assert.ok(near(B.best.closeMult, 1, 1e-3)); assert.equal(ui(B.best.price), '$1.72'); assert.equal(n2(B.worst.closeMult), '0.91'); assert.equal(ui(B.worst.price), '$1.56');
-  assert.ok(near(Dl.best.closeMult, 1, 1e-3)); assert.equal(ui(Dl.best.price), '$8.74'); assert.equal(ui(Dl.worst.price), '$7.95'); assert.equal(ui(Dl.best.price - Dl.worst.price), '$0.79');
-  assert.ok(near(1 - B.worst.price / B.best.price, 0.09, 0.01) && near(1 - Dl.worst.price / Dl.best.price, 0.09, 0.01), 'the wrong pair costs about 9% at an average close');
-  // the bounds the card quotes belong to the Pitch game, and a keen buyer (x1.00 or more) is the one that accepts fair
-  assert.equal(Math.max(...pairsFor('thrift-flipper').map((p) => p.mult)) <= 1.2, true);
-  assert.ok(B.best.keen >= 1 && Dl.best.keen >= 1 && B.worst.keen < 1 && Dl.worst.keen < 1);
+  const bestOf = (pairs) => pairs.reduce((x, y) => (y.mult > x.mult ? y : x)), worstOf = (pairs) => pairs.reduce((x, y) => (y.mult < x.mult ? y : x));
+  const g3 = sandbox(m), bp = anglePairs(sellRun(g3, g3.s.assets[0].id, 'thrift-flipper'));
+  assert.ok(bp.every((p) => p.mult >= 0.85 - 1e-9 && p.mult <= 1.2 + 1e-9), "every pair stays inside the Pitch game's x0.85..x1.20");
+  const Bbest = bestOf(bp), Bworst = worstOf(bp);
+  assert.deepEqual([...Bbest.angles].sort(), ['prestige', 'scarcity'], 'Bree: scarcity with prestige is the best pair'); assert.equal(n2(Bbest.mult), '1.14');
+  // Bree is sold on these pins whatever she is told: her coolest pair is still about x1.0 and she closes at fair (the card does not claim a cost for her)
+  assert.ok(Bworst.mult > 0.97, `Bree's coolest pair is x${n2(Bworst.mult)}`);
+  const base = FLOW();
+  assert.equal(ui(base.b.summary.numbers.you), '$1.58'); assert.ok(near(base.b.run.res.close.mult, 1, 1e-3));
+  assert.equal(ui(base.fair), '$8.03', 'once Bree has bought, the second set is priced at the crowd of the day');
+  assert.deepEqual(base.view.hints.map((h) => h.kind), ['temper']); assert.deepEqual(base.view.hints[0].angles, ['utility', 'price']); assert.match(base.view.hints[0].text, /head/);
+  const Dbest = bestOf(base.pairs), Dworst = worstOf(base.pairs);
+  assert.deepEqual([...Dbest.angles].sort(), ['scarcity', 'story']); assert.deepEqual([...Dworst.angles].sort(), ['price', 'utility'], "the pair she would expect from the hint is the one the pins cannot back");
+  const best = FLOW('best', Dbest.angles), worst = FLOW('best', Dworst.angles);
+  assert.equal(n2(Dbest.mult), '1.07'); assert.equal(n2(Dworst.mult), '0.94');
+  assert.ok(near(best.d.run.res.close.mult, 1, 1e-3)); assert.equal(ui(best.d.summary.numbers.you), '$8.03');
+  assert.equal(n2(worst.d.run.res.close.mult), '0.91'); assert.equal(ui(worst.d.summary.numbers.you), '$7.31'); assert.equal(ui(best.d.summary.numbers.you - worst.d.summary.numbers.you), '$0.72');
+  assert.ok(near(1 - worst.d.summary.numbers.you / best.d.summary.numbers.you, 0.09, 0.01), 'the wrong pair costs a step of about 9% at an average close');
+  // ...with either set in either hand: the player may tick the second set for Bree, and the story holds (the keenness moves a point or two with the crate, the step does not)
+  { const sw = FLOW('best', 'best', [1, 0]); const w2 = FLOW('best', worstOf(sw.pairs).angles, [1, 0]);
+    assert.deepEqual([...worstOf(sw.pairs).angles].sort(), ['price', 'utility']); assert.ok(near(sw.d.run.res.close.mult, 1, 1e-3) && n2(w2.d.run.res.close.mult) === '0.91', 'with the sets the other way round the best pair still closes at fair and the worst at one step down'); }
+  // what a step costs is a property of the Close, not of this crate: across many tables a buyer at x1.00 or more pays fair and each point of keenness under it costs about two points of price
+  { const L = g.s.leads[3].find((l) => l.id === 'pageturner'), fair = base.fair, mean = (keen) => { let t = 0; const N = 400; for (let seed = 1; seed <= N; seed++) t += haggle.autoplay(D.haggleParams(g, { role: 'sell', fair, buyer: BUYERS.bookstore, lead: L, zone: 3, alt: null, assist: false, warmth: keen, seed }), D.QUICK).mult; return t / N; };
+    assert.ok(mean(1.06) > 0.995 && mean(1.0) > 0.97, 'a keen buyer pays fair'); const slope = (mean(1.0) - mean(0.9)) / 0.1; assert.ok(slope > 1.5 && slope < 2.5, `each point of keenness under x1.00 costs ${slope.toFixed(1)} points of price at an average close`); }
   assert.equal((bree.parts.term).toFixed(2), '1.35'); assert.equal(del.parts.term, 0.875);
+  assert.ok(Bbest.mult >= 1 && Dbest.mult >= 1 && Dworst.mult < 1, 'the best pairs are keen (x1.00 or more) and the coolest one is not');
   // the crowd is the other lesson: it stays on the cards, and the price gap it makes is mission 8's to quantify
   assert.ok(del.price / bree.price > 5, 'the quiet buyer pays about five times more, whatever the angles');
   const cmf = g.cmFor(3, 'enamelPins', 'bree'); assert.ok(near(cmf.cm, bree.ci.cm, 1e-12) && near(cmf.S, bree.ci.S, 1e-12), 'the card shows what cmFor says');
   assert.ok(!/Cm =|V_total|V_niche|409/.test(text(m.why)), 'the saturation formula and its 409% belong to mission 8');
-  whyHas(m, '1.00', '0.50', '0.40 + 0.95 × fit', '0.15', 'x0.85', 'x1.20', 'about 9% off', 'Mission 8 shows how far');
-  has('m03 example setup', m.why.example.setup, cents(bree.fmv), ui(B.best.price), ui(Dl.best.price), 'Quick');
-  stepHas(m, 0, 'Scarcity with prestige', 'x1.13', 'fair price', ui(B.best.price));
-  stepHas(m, 1, 'Utility with price', 'x0.98', 'about 9% off', ui(B.worst.price));
-  stepHas(m, 2, 'scarcity with story (x1.07)', ui(Dl.best.price), 'utility with price (x0.94)', ui(Dl.worst.price), ui(Dl.best.price - Dl.worst.price));
+  whyHas(m, '1.00', '0.50', '0.40 + 0.95 × fit', '0.15', 'x0.85', 'x1.20', 'in steps of about 9%', 'Mission 8 shows how far');
+  has('m03 example setup', m.why.example.setup, cents(bree.fmv), ui(base.b.summary.numbers.you), ui(best.d.summary.numbers.you), 'once she has bought', 'Quick');
+  stepHas(m, 0, 'Scarcity with prestige', `x${n2(Bbest.mult)}`, 'fair price', ui(base.b.summary.numbers.you));
+  stepHas(m, 1, 'Scarcity with story', `x${n2(Dbest.mult)}`, 'fair price', ui(best.d.summary.numbers.you), 'neither utility nor price');
+  stepHas(m, 2, 'Utility with price', `x${n2(Dworst.mult)}`, 'about 9% off', ui(worst.d.summary.numbers.you), ui(best.d.summary.numbers.you - worst.d.summary.numbers.you));
   exampleSteps(m, 3);
   whyHas(m, 'about 9%');
   // the Quick route skips the angles (Quick is an average pitch), and the coach says so
   has('m03 hint', M('m03').steps.find((s) => s.id === 'bree').hint, 'skips the practice'); has('m03 hint', M('m03').steps.find((s) => s.id === 'delphine').hint, 'Quick skips the angles');
   // the price gap the player sees between the two sales is the crowd's (Cm 0.40 against 3.14), not the angles': the steps and the card both say which is which
-  sayHas(m, 'delphine', 'mostly the crowd'); whyHas(m, 'the gap between Bree\'s price and Delphine\'s is the crowd', 'smaller, steadier 9%');
-  assert.ok(del.price / bree.price > 4 * (B.best.price / B.worst.price), `the crowd moves the price x${(del.price / bree.price).toFixed(1)}, the angles x${(B.best.price / B.worst.price).toFixed(2)}`);
+  sayHas(m, 'delphine', 'mostly the crowd'); whyHas(m, 'the gap between Bree\'s price and Delphine\'s is the crowd', 'smaller 9% step');
+  assert.ok(del.price / bree.price > 4 * (best.d.summary.numbers.you / worst.d.summary.numbers.you), `the crowd moves the price x${(del.price / bree.price).toFixed(1)}, the angles x${(best.d.summary.numbers.you / worst.d.summary.numbers.you).toFixed(2)}`);
   // the crowd is told in words on the Market card (js/ui/drawers/market.js satWords: 0.5 to 0.75 reads "Crowded: most sellers pick this buyer.", under 0.1 "Almost nobody else sells this
   // to them."; with the radar a count and a percentage follow). There is no crowd meter: the card's only bar is the buyer's "Leaves in" timer, so no step may send a player to read one
   assert.ok(bree.ci.vT >= 1 && bree.ci.S >= 0.5 && bree.ci.S < 0.75 && del.ci.S < 0.1, `Bree's card reads Crowded (S ${bree.ci.S.toFixed(2)}) and Delphine's reads almost nobody (S ${del.ci.S.toFixed(2)})`);
@@ -893,13 +930,13 @@ test('m03: know the buyer: the right two angles keep the full price, the wrong t
       assert.ok(up >= 1.12 && up - ss >= 0.08 && up - ps >= 0.08 && ss < 1.05 && ps < 1.03 && bestAll(seed) - up < 0.02, `seed ${seed}: utility with price x${up.toFixed(3)}, scarcity with story x${ss.toFixed(3)}, prestige with scarcity x${ps.toFixed(3)}`);
     }
     const K = { up: mult(base.seed, 'utility', 'price'), ss: mult(base.seed, 'scarcity', 'story'), ps: mult(base.seed, 'prestige', 'scarcity') };
-    assert.deepEqual([n2(K.up), n2(K.ss), n2(K.ps)], ['1.13', '1.01', '1.00'], 'the figures the reasons quote, at the lesson\'s own seed');
+    assert.deepEqual([n2(K.up), n2(K.ss), n2(K.ps)], ['1.13', '1.02', '1.00'], 'the figures the reasons quote, at the lesson\'s own seed');
     const pairOf = (o) => { const x = /^(\w+) with (\w+)/.exec(o.text); return [x[1].toLowerCase(), x[2].toLowerCase()]; };
     assert.deepEqual(m.teachBack.options.map(pairOf), [['scarcity', 'story'], ['utility', 'price'], ['prestige', 'scarcity']]); assert.deepEqual(m.teachBack.options.map((o) => o.correct), [false, true, false]);
     assert.ok(!/utility|price|scarcity|story|prestige/i.test(m.teachBack.q), 'the stem names no angle: the temper and the goods are described, not labelled');
     assert.ok(/Kenji/.test(m.teachBack.q) && /physics tutor/.test(m.teachBack.q) && /calculator/.test(m.teachBack.q) && /head/.test(m.teachBack.q));
-    teachHas(m, 'Scarcity with story', 'Bree', 'about x1.01', 'about x1.13', 'Utility with price', 'Prestige with scarcity', 'about x1.00', 'cannot back', 'feeling', 'proof and numbers'); }
-  onlyEngineDollars(m, [bree.fmv, B.best.price, B.worst.price, Dl.best.price, Dl.worst.price, Dl.best.price - Dl.worst.price]);
+    teachHas(m, 'Scarcity with story', 'Bree', 'about x1.02', 'about x1.13', 'Utility with price', 'Prestige with scarcity', 'about x1.00', 'cannot back', 'feeling', 'proof and numbers'); }
+  onlyEngineDollars(m, [bree.fmv, base.b.summary.numbers.you, best.d.summary.numbers.you, worst.d.summary.numbers.you, best.d.summary.numbers.you - worst.d.summary.numbers.you]);
 });
 
 /** The Haggle game played on its own parameters. careless: open at fair, take the first answer. patient: open at fair, then hold. careful: what the Assist coach advises at every move. */
@@ -922,33 +959,35 @@ test('m04: the first number is worth money, patience more, and an alternative ma
   assert.ok(near(col.price, dol.price, 1e-9), 'both buyers fit the radio at 1.00 and the same fair price');
   const fair = rawPrice(col), alt = rawPrice(tar);
   assert.ok(alt >= 0.8 * fair && alt <= 1.3 * fair, `the busker's offer (${n2(alt / fair)} of fair) counts as the alternative the Deal Room offers`);
-  assert.equal(ui(fair), '$10.61'); assert.equal(ui(alt), '$8.74');
+  assert.equal(ui(fair), '$9.76'); assert.equal(ui(alt), '$8.04');
   // the worked example is NOT a deal of this sandbox: one made-up hard buyer with a hidden limit of 1.21 x fair, met three times with the same seed through the real Haggle game
   const made = { role: 'sell', fair, reserve: fair * 1.21, style: BUYERS.collector.style, patience: BUYERS.collector.patience + 1, handicap: 0, insight: D.insightOf(g), alt, seed: 1 };
   const cl = hagglePlay(made, 'careless'), pa = hagglePlay(made, 'patient'), cf = hagglePlay(made, 'careful');
   assert.ok(cl.res.deal && pa.res.deal && cf.res.deal);
   const limit = fair * 1.21, firstCounter = cl.log[0].theirs, careless = cl.res.price, patient = pa.res.price, careful = cf.res.price;
-  assert.equal(ui(limit), '$12.84'); assert.equal(ui(firstCounter), '$7.47'); assert.equal(ui(careless), '$7.47'); assert.equal(n2(careless / fair), '0.70');
-  assert.equal(ui(patient), '$10.61'); assert.equal(pa.res.mult, 1, 'opening at fair and holding closes at exactly fair: the most opening at fair can ever earn');
-  assert.equal(cf.log[0].do, 'anchor high'); assert.equal(ui(cf.log[0].yours), '$14.85'); assert.equal(n2(cf.log[0].yours / fair), '1.40');
+  const gap1 = r2(r2(patient) - r2(careless)), gap2 = r2(r2(careful) - r2(patient)); // the card subtracts the prices as printed, so a reader who redoes the sum gets the same cents
+  assert.equal(ui(limit), '$11.81'); assert.equal(ui(firstCounter), '$6.87'); assert.equal(ui(careless), '$6.87'); assert.equal(n2(careless / fair), '0.70');
+  assert.equal(ui(patient), '$9.76'); assert.equal(pa.res.mult, 1, 'opening at fair and holding closes at exactly fair: the most opening at fair can ever earn');
+  assert.equal(cf.log[0].do, 'anchor high'); assert.equal(ui(cf.log[0].yours), '$13.66'); assert.equal(n2(cf.log[0].yours / fair), '1.40');
   const concessions = cf.log.filter((x) => x.do.startsWith('concede')).map((x) => ui(x.yours));
-  assert.deepEqual(concessions, ['$13.15', '$12.20', '$11.78']); assert.equal(ui(careful), '$11.78'); assert.equal(n2(careful / fair), '1.11');
+  assert.deepEqual(concessions, ['$12.10', '$11.22', '$10.83']); assert.equal(ui(careful), '$10.83'); assert.equal(n2(careful / fair), '1.11');
   // where the gap comes from: patience (the first answer is not the limit) is most of it, the high anchor the rest, in dollars as the card shows them
-  assert.equal(ui(patient - careless), '$3.14'); assert.equal(ui(careful - patient), '$1.17');
-  assert.ok(patient - careless > careful - patient, 'patience is worth more than the anchor in this scenario, as the card says');
+  assert.equal(ui(gap1), '$2.89'); assert.equal(ui(gap2), '$1.07');
+  assert.ok(gap1 > gap2, 'patience is worth more than the anchor in this scenario, as the card says');
   assert.ok(careless < alt && careful > alt, 'the careless price is below the alternative, so the BATNA says refuse it; the careful one is above');
   has('m04 example setup', m.why.example.setup, ui(fair), ui(limit), ui(alt), 'made-up');
   stepHas(m, 0, `Open at fair (${ui(fair)})`, `first counter, ${ui(firstCounter)}`, `you sell at ${ui(careless)}`, `${n2(careless / fair)} × fair`);
-  stepHas(m, 1, 'hold your ground', `they come up to ${ui(patient)}`, `worth ${ui(patient - careless)}`);
-  stepHas(m, 2, `Open high (${ui(cf.log[0].yours)}, 1.40 × fair)`, concessions.join(', '), `agree at ${ui(careful)}`, `${n2(careful / fair)} × fair`, `added another ${ui(careful - patient)}`);
+  stepHas(m, 1, 'hold your ground', `they come up to ${ui(patient)}`, `worth ${ui(gap1)}`);
+  stepHas(m, 2, `Open high (${ui(cf.log[0].yours)}, 1.40 × fair)`, concessions.join(', '), `agree at ${ui(careful)}`, `${n2(careful / fair)} × fair`, `added another ${ui(gap2)}`);
   stepHas(m, 3, `${ui(alt)} is your BATNA`, ui(careless));
   exampleSteps(m, 4);
-  whyHas(m, `${ui(careless)}, ${ui(patient)} and ${ui(careful)}`, `Patience was worth ${ui(patient - careless)} and the high anchor ${ui(careful - patient)} more`, `the ${ui(alt)} alternative`, 'Mention your other option', 'Customer Acquisition Velocity');
+  whyHas(m, `${ui(careless)}, ${ui(patient)} and ${ui(careful)}`, `Patience was worth ${ui(gap1)} and the high anchor ${ui(gap2)} more`, `the ${ui(alt)} alternative`, 'Mention your other option', 'Customer Acquisition Velocity');
   has('m04 formula', m.why.formula, '1.40 × fair', '4%, 9% or 16%');
   assert.deepEqual([haggle.ANCHORS.high, haggle.STEPS.small, haggle.STEPS.medium, haggle.STEPS.large], [1.4, 0.04, 0.09, 0.16]);
-  // the win is the sale that follows the last step's haggle, and the pitch event's mult is the Close's (js/deal.js dealFrom): 10% over fair is what opening at fair can never do
+  // the win is the sale itself, and the pitch event's mult is the Close's (js/deal.js dealFrom): 10% over fair is what opening at fair can never do. The last step is that very sale (a haggle
+  // would come after the pitch, and no step waits for one), so a Close that stops short of 10% does not finish the step: the player is still on the careful deal, with the barter goods and the busker to try
   assert.deepEqual(m.win, { event: 'pitch', match: { mult: { gte: 1.1 } } }, 'the win is selling 10% over fair');
-  assert.deepEqual(m.steps.map((x) => [x.id, x.wait.event, JSON.stringify(x.wait.match || {})]), [['market', undefined, '{}'], ['careless', 'pitch', '{"seg":"collector"}'], ['careful', 'haggle', '{"role":"sell"}']], 'the first deal ends on its pitch, the last waits for the haggle that comes first in the same finish');
+  assert.deepEqual(m.steps.map((x) => [x.id, x.wait.event, JSON.stringify(x.wait.match || {})]), [['market', undefined, '{}'], ['careless', 'pitch', '{"seg":"collector"}'], ['careful', 'pitch', '{"mult":{"gte":1.1}}']], 'the first deal ends on its pitch, the last is the sale at 10% over fair');
 
   // over many hidden limits and seeds, with the real parameters the screen gives each buyer: patience pays, the anchor pays more, and the win is reachable
   const seeds = Array.from({ length: 400 }, (_, i) => i + 1);
@@ -970,7 +1009,7 @@ test('m04: the first number is worth money, patience more, and an alternative ma
   assert.ok(near(d1.run.plan.fair, fair, 1e-9) && d1.run.res.close.deal, 'the first sale is at the card\'s fair price');
   assert.ok(near(d1.run.res.close.mult, 1, 1e-3), 'a careless close with the real collector says "Fine. Done." at fair: x1.00, not the card\'s x0.70 (the card\'s buyer is made up)');
   const a2 = g1.s.assets[0], plan2 = sellRun(g1, a2.id, 'stall-dolores').plan;
-  assert.equal(ui(plan2.fair), '$14.54'); assert.equal(ui(plan2.alt), '$11.98');
+  assert.equal(ui(plan2.fair), '$13.37'); assert.equal(ui(plan2.alt), '$11.02');
   const tryClose = (how, pitch = 'quick') => { const { g1: gx } = first(), d = sellDeal(gx, gx.s.assets[0].id, 'stall-dolores', { pitch, close: how }); return { mult: d.run.res.close.mult, deal: d.run.res.close.deal, keen: d.run.res.pitch.mult }; };
   const won = (r) => r.deal && r.mult >= 1.1;
   assert.ok(!won(tryClose('quick')) && !won(tryClose('careless')) && !won(tryClose('patient')), 'Quick, taking the first answer, and holding at fair all stop at x1.00');
@@ -980,23 +1019,29 @@ test('m04: the first number is worth money, patience more, and an alternative ma
   const warm = pairs.filter((p) => p.mult >= 1.03);
   assert.ok(warm.length >= 4, 'at least four of the ten pairs are warm for Dolores');
   for (const p of pairs) { assert.ok(!won(tryClose('careless', p.angles)), `${p.angles}: a careless close never wins`); if (p.mult >= 1.03) assert.ok(won(tryClose('careful', p.angles)), `${p.angles} (x${p.mult.toFixed(2)}): careful play wins`); }
-  // ...and a cool Pitch can put 10% over fair out of reach for ANY play: the buyer's hidden limit scales with the Pitch's keenness (js/deal.js haggleParams), so for the
-  // two coolest pairs the best Close of all (every legal move sequence of the real Haggle game) stays under x1.10, and a retry with the same pair is the same deal.
-  // This is why the Dolores step says to use the stage's Quick for the Pitch (never Quick deal, which plays the Close at par) and its hint says "Weak Pitch? Leave and tap Dolores again".
+  // ...and the buyer's hidden limit scales with the Pitch's keenness (js/deal.js haggleParams), so a cool pair is the one place Assist-advised play stops short. Every pair can reach 10% over fair
+  // with the best Close of all (every legal move sequence of the real Haggle game), so no Pitch puts the win out of reach; the coach's routine (Aim high, Hold, Come down small, again and again)
+  // wins with every pair but the coolest, and the hint says what to do about a cool one: leave before the Close and tap Dolores again (the first move at a Close is final, `s.tried`).
   const exhaustive = (angles) => {
     const gx = first().g1, rx = sellRun(gx, gx.s.assets[0].id, 'stall-dolores'); rx.act({ type: 'pick', angles }); rx.next();
     let top = 0; const walk = (st) => { if (st.done) { const r = haggle.result(st); if (r.deal && r.mult > top) top = r.mult; return; } for (const a of haggle.legal(st)) { const r = haggle.act(st, a); if (r.say !== null) walk(r.state); } };
     walk(haggle.create({ ...rx.paramsFor('close'), assist: false })); return top;
   };
   const cool = pairs.filter((p) => !won(tryClose('careful', p.angles)));
-  assert.ok(cool.length >= 4 && cool.every((p) => p.mult < 1.03), `${cool.length} of the ten pairs cannot be won with Assist-advised play, and all of them are cool pitches (below x1.03)`);
-  for (const angles of [['prestige', 'scarcity'], ['prestige', 'price']]) assert.ok(exhaustive(angles) < 1.1, `${angles}: no sequence of moves reaches x1.10`);
+  assert.deepEqual(cool.map((p) => [...p.angles].sort().join('+')), ['prestige+price'], `Assist-advised play falls short of 10% over fair with the coolest pair only (x${n2(Math.min(...pairs.map((p) => p.mult)))})`);
+  assert.ok(cool.every((p) => p.mult < 0.95), 'and that is a cool pitch');
+  for (const p of pairs) assert.ok(exhaustive(p.angles) >= 1.1, `${p.angles}: some sequence of moves reaches x1.10`);
+  { // the routine the coach describes, played by hand: Aim high, Hold, Come down small until it ends
+    const byHand = (pair) => { const { g1: gx } = first(), rx = sellRun(gx, gx.s.assets[0].id, 'stall-dolores'); if (pair) rx.act({ type: 'pick', angles: pair }); else rx.quick(); rx.next();
+      rx.act({ type: 'anchor', level: 'high' }); rx.act({ type: 'hold' }); for (let i = 0; i < 12 && !rx.stageDone(); i++) if (!rx.act({ type: 'concede', size: 'small' }).ok) break; return rx.res.close; };
+    const r = byHand(); assert.ok(r.deal && r.mult >= 1.1, `the coach's routine with the Quick pitch closes at x${r.mult.toFixed(2)}`);
+    for (const p of pairs) if (p.mult >= 0.95) { const q = byHand(p.angles); assert.ok(q.deal && q.mult >= 1.1, `${p.angles} (x${p.mult.toFixed(2)}): the coach's routine closes at x${q.mult?.toFixed(2)}`); } }
   assert.ok(exhaustive(['scarcity', 'story']) >= 1.1 && won(tryClose('careful')), 'a warm pitch, and the Quick pitch the steps ask for (tryClose pitches with Quick), can');
   assert.deepEqual(tryClose('careful', ['prestige', 'scarcity']), tryClose('careful', ['prestige', 'scarcity']), 'the same pair at the same hour is the same deal');
   // the coach names the buttons by their words on the screen: the stage's long Quick label (the footer's Quick deal plays the Close too and cannot win), Fair, Aim high, Hold, Come down
   sayHas(m, 'market', 'Tariq', 'busker', 'fallback'); assert.ok(!/Abernathy, a hard bargainer, Dolores/.test(m.steps[0].say), 'the three buyers are not a comma pile-up');
   sayHas(m, 'careless', "'Quick: auto-play at average skill'", 'press Fair', 'first answer'); sayHas(m, 'careful', "stage's Quick", 'not Quick deal', 'Your read of their limit', 'Aim high', 'Hold', 'Come down');
-  has('m04 careful hint', M('m04').steps[2].hint, 'Quick deal skips the Close', 'Mention your other option');
+  has('m04 careful hint', M('m04').steps[2].hint, 'Mention your other option', 'Smallest step', 'again and again'); has('m04 careful say', M('m04').steps[2].say, 'not Quick deal');
   { // "Quick deal" at the Pitch stage plays the Close too, at average skill: it can never be the 10%-over-fair sale the win asks for
     const gq = first().g1, rq = sellRun(gq, gq.s.assets[0].id, 'stall-dolores'); rq.quickAll(); rq.finish();
     assert.ok(rq.res.close.deal && rq.res.close.mult < 1.1, `Quick deal on Dolores closes at x${rq.res.close.mult.toFixed(2)}, not x1.10`); }
@@ -1007,13 +1052,13 @@ test('m04: the first number is worth money, patience more, and an alternative ma
   // "Leave and tap Dolores again to retry": the same deal at the same hour is the same deal
   const again = sellRun(g1, a2.id, 'stall-dolores');
   assert.equal(again.plan.seed, plan2.seed); assert.deepEqual(again.paramsFor('close', undefined, { pitch: { mult: 1.1 } }), sellRun(g1, a2.id, 'stall-dolores').paramsFor('close', undefined, { pitch: { mult: 1.1 } }));
-  has('m04 final hint', M('m04').steps[2].hint, '1.10 × fair', 'Weak Pitch', 'Leave and tap Dolores again');
+  has('m04 final hint', M('m04').steps[2].hint, 'Sold too low? Sell the records you were paid in to Tariq, with Assist on'); has('m04 final say', M('m04').steps[2].say, 'Aim for 10% over fair');
   // the teach-back's wrong answer is the real finding made false by its wording: a buyer never pays past their limit (js/play/haggle.js: an offer over it is refused)
   teachHas(m, 'forces the buyer to pay more than their limit', 'walk away');
   assert.ok(!/believe the goods are worth more/.test(text(m.teachBack)), 'the real anchoring effect (the first number shifts what people think a thing is worth) is not the distractor');
   has('m04 why', m.why.body[0], 'Real anchors also shift what people think a thing is worth');
-  teachHas(m, ui(firstCounter), ui(limit), ui(patient - careless));
-  onlyEngineDollars(m, [fair, limit, alt, careless, patient, firstCounter, cf.log[0].yours, ...concessions.map((c) => Number(c.slice(1))), careful, patient - careless, careful - patient]);
+  teachHas(m, ui(firstCounter), ui(limit), ui(gap1));
+  onlyEngineDollars(m, [fair, limit, alt, careless, patient, firstCounter, cf.log[0].yours, ...concessions.map((c) => Number(c.slice(1))), careful, gap1, gap2]);
 });
 
 test('m05: the same repair is a loss at Ops 1 and a windfall at Ops 2, even with a bad marker', () => {
@@ -1061,7 +1106,7 @@ test('m05: the same repair is a loss at Ops 1 and a windfall at Ops 2, even with
   assert.ok(!qb.rejected && BUYERS.smelog.like.vehicle >= 0.8, 'Delgado Delivery takes a broken van');
   o2.g.repair(o2.a.id, CAREFUL);
   const qa = o2.g.quotePitch(o2.a.id, lead.id);
-  assert.equal(ui(qb.price), '$1,058'); assert.equal(ui(qa.price), '$2,203');
+  assert.equal(ui(qb.price), '$973'); assert.equal(ui(qa.price), '$2,027');
   assert.ok(!qa.capped && qa.price < lead.budget, 'the buyer can afford the repaired van');
   has('m05 example setup', m.why.example.setup, ui(w), ui(o2.before), '$1,050', '0.675', 'average Deal Room result', 'Careful setting', 'bill 30% over');
   stepHas(m, 0, 'Ops 1', `$1,050 × 0.675 × 1.30 = ${cents(o1.cost)}`, 'Quality 0.50', ui(o1.after), `Gain ${cents(o1.after - o1.before)} minus ${cents(o1.cost)} cost = ${cents(o1.net)}`, `ROI ${pc(o1.roi)}`, 'loses money');
@@ -1103,35 +1148,36 @@ test('m06: the fee and the fuel both come out of the wallet, a starved manager e
   assert.deepEqual([stu.hire, stu.cap, bro.hire, bro.cap], [120, 450, 600, 1000]);
   assert.equal(cash - bro.hire, 20); assert.ok(cash - bro.hire < bro.cap, 'the Broker leaves too little to work with: starved');
   assert.ok(cash - stu.hire >= stu.cap && cash - stu.hire === 500, 'the Student leaves enough to feed his full allocation');
-  assert.equal(stu.len, 41); assert.equal(bro.len, 32);
-  assert.equal(cents(stu.gross), '$16.43'); assert.equal(cents(stu.fee), '$10.96'); assert.equal(cents(stu.tax), '$0.82'); assert.equal(cents(stu.roy), '$0.49'); assert.equal(cents(stu.overhead), '$2.78'); assert.equal(cents(stu.net), '$1.37'); assert.equal(cents(stu.perDay), '$0.80');
-  assert.equal(cents(bro.net), '$8.28'); assert.equal(cents(bro.perDay), '$6.21');
+  assert.equal(stu.len, 68); assert.equal(bro.len, 52);
+  assert.equal(cents(stu.gross), '$47.23'); assert.equal(cents(stu.fee), '$11.69'); assert.equal(cents(stu.tax), '$2.36'); assert.equal(cents(stu.roy), '$1.42'); assert.equal(cents(stu.overhead), '$2.78'); assert.equal(cents(stu.net), '$28.99'); assert.equal(cents(stu.perDay), '$10.23');
+  assert.equal(cents(bro.net), '$82.27'); assert.equal(cents(bro.perDay), '$37.97');
   assert.ok(near(stu.gross - stu.fee - stu.tax - stu.roy - stu.overhead, stu.net, 1e-9), 'net = gross - fee - tax - royalty - overhead');
   assert.ok(stu.ci.S < 0.05 && stu.ci.cm > 2.5, 'the laptop lane to Brightpath is the quiet one');
-  // the lesson runs the clock at 16x, so a 41-hour cycle takes about 18 real seconds, and a payback of the fee at the forecast rate is 150 days
-  assert.equal(sess.clock.speed, 16); assert.equal(Math.round(stu.len * SEC_PER_HOUR / sess.clock.speed), 18);
-  assert.equal(Math.round(stu.hire / stu.perDay), 150);
-  // most lanes lose money after fees, which is why the coach names the lane and the card says "read the forecast first"
+  // the lesson runs the clock at 16x, so a 68-hour cycle takes about 30 real seconds, and the fee at the forecast rate is paid back in 12 days
+  assert.equal(sess.clock.speed, 16); assert.equal(Math.round(stu.len * SEC_PER_HOUR / sess.clock.speed), 30);
+  assert.equal(Math.round(stu.hire / stu.perDay), 12);
+  // some lanes lose money after fees, which is why the coach names the lane and the card says "read the forecast first" (about two in five for the Student, with the herd of the day)
   const lanes = [];
   for (const cls of Object.keys(ASSETS)) for (const buyer of Object.keys(BUYERS)) if (g.validLane(5, cls, buyer).ok) lanes.push(g.forecast({ kind: 'student', zone: 5, level: 1, cls, buyer, channel: 'dom', alloc: 450, cycles: 0 }).net);
-  assert.ok(lanes.filter((x) => x <= 0).length / lanes.length >= 0.7 && Math.max(...lanes) === stu.net, `a thin lane can lose money: ${lanes.filter((x) => x <= 0).length} of ${lanes.length} lanes do not pay the Student, and the coach's lane is the best`);
+  assert.ok(lanes.filter((x) => x <= 0).length / lanes.length >= 0.3 && Math.max(...lanes) === stu.net, `a thin lane can lose money: ${lanes.filter((x) => x <= 0).length} of ${lanes.length} lanes do not pay the Student, and the coach's lane is the best`);
   has('m06 example setup', m.why.example.setup, '$620', '$120', '$450', '$600', '$1,000', 'level 2', 'Capital Sourcing', 'at the moment you hire');
   stepHas(m, 0, `$620 - $600 = ${w$(cash - bro.hire)}`, '$1,000', 'Starved', '$600 fee has left your wallet');
   stepHas(m, 1, `$620 - $120 = ${w$(cash - stu.hire)}`, `$${stu.cap}`, `${stu.len} hours`);
   const fees = stu.fee + stu.tax + stu.roy + stu.overhead;
-  assert.ok(near(r2(stu.gross) - r2(fees), r2(stu.net), 0.005), 'the displayed gross, the fees and the net add up to the cent');
-  stepHas(m, 2, `gross ${ui(stu.gross)}`, `less ${ui(fees)} of costs`, `platform fee alone is ${ui(stu.fee)}`, `leaves ${ui(stu.net)}`, `${ui(stu.perDay)} a day`, 'more or less');
-  stepHas(m, 3, ui(bro.net), `${bro.len} hours`, `${ui(bro.perDay)} a day`, `${Math.round(bro.hire / bro.perDay)} days`, '$600 fee', '$0 a day');
+  // in whole dollars, because to the cent the rounded gross less the rounded costs ($47.23 - $18.25) is a cent short of the rounded net ($28.99): the card must add up for a reader who redoes it
+  assert.equal(Math.round(stu.gross) - Math.round(fees), Math.round(stu.net), 'the displayed gross, the costs and the net add up');
+  stepHas(m, 2, `gross ${w$(stu.gross)}`, `less ${w$(fees)} of costs`, `platform fee alone is ${w$(stu.fee)}`, `leaves ${w$(stu.net)}`, `${ui(stu.perDay)} a day`, 'more or less');
+  stepHas(m, 3, `net ${w$(bro.net)}`, `${bro.len} hours`, `${ui(bro.perDay)} a day`, `in ${Math.round(bro.hire / bro.perDay)} days`, '$600 fee', '$1,000 of capital', '$0 a day');
   exampleSteps(m, 4);
-  whyHas(m, 'Profit per day', 'the fee is already spent', 'wallet is $600 lighter', 'only 60%', 'about 150 days', `${ui(stu.perDay)} a day`, 'wallet $600 lighter');
+  whyHas(m, 'Profit per day', 'the fee is already spent', 'wallet is $600 lighter', 'only 60%', `${ui(stu.perDay)} a day`, 'wallet $600 lighter', 'in about 12 days');
   assert.ok(!/Return per day|exactly what idle cash earns/.test(text(m.why)), 'a starved manager is NOT the same as idle cash: its fee is spent');
-  sayHas(m, 'hire', '$450', 'lane is the goods and buyer a manager runs', 'The room opens on the Broker', 'pick the Student first'); sayHas(m, 'cash', '$620'); sayHas(m, 'clock', '16x', '18 seconds', '$450');
+  sayHas(m, 'hire', '$450', 'lane is the goods and buyer a manager runs', 'The room opens on the Broker', 'pick the Student first'); sayHas(m, 'cash', '$620'); sayHas(m, 'clock', '16x', '68-hour cycle', '30 seconds', '$450');
   has('m06 hire hint', m.steps.find((x) => x.id === 'hire').hint, 'The room opens on the Broker', 'click the Student');
   assert.ok(!/\b(he|him|his)\b/i.test(text({ steps: m.steps, why: { b: m.why.body, e: m.why.example } })), 'managers have no gender in the data; say the manager, it or they');
   // played: the fed Student runs cycles, the starved Broker never starts one and ends $600 poorer than idle cash
   const first = [];
-  const run = (kind) => { const g2 = sandbox(m); g2.onEvent = (e) => { if (e.type === 'cycle') first.push(e.net); }; assert.ok(g2.hirePipeline(kind, 5, lane).ok); assert.equal(g2.s.cash, kind === 'student' ? 500 : 20, 'the fee leaves the wallet at the hire; the working capital leaves when time runs'); g2.advanceTo(100); return { p: g2.s.pipes[0], cash: g2.s.cash, nw: g2.netWorth() }; };
-  const fed = run('student'), starved = run('broker'), idle = sandbox(m); idle.advanceTo(100);
+  const run = (kind) => { const g2 = sandbox(m); g2.onEvent = (e) => { if (e.type === 'cycle') first.push(e.net); }; assert.ok(g2.hirePipeline(kind, 5, lane).ok); assert.equal(g2.s.cash, kind === 'student' ? 500 : 20, 'the fee leaves the wallet at the hire; the working capital leaves when time runs'); g2.advanceTo(150); return { p: g2.s.pipes[0], cash: g2.s.cash, nw: g2.netWorth() }; };
+  const fed = run('student'), starved = run('broker'), idle = sandbox(m); idle.advanceTo(150);
   assert.ok(fed.p.cycles >= 2 && !fed.p.starved && fed.p.profit > 0, 'the fed Student finishes cycles and earns');
   assert.ok(first.length >= 2 && Math.abs(first[0] - stu.net) > 0.01, `the first cycle the player watches ($${first[0].toFixed(2)}) is not the hour-0 forecast to the cent: the card calls it a forecast and says later cycles move`);
   assert.equal(starved.p.cycles, 0); assert.ok(starved.p.starved && starved.p.profit === 0 && starved.cash === 20, 'the starved Broker never starts a cycle');
@@ -1140,18 +1186,19 @@ test('m06: the fee and the fuel both come out of the wallet, a starved manager e
   assert.equal(g3.s.cash, 20 + 0.6 * bro.hire, 'and releasing the manager brings back only 60% of what the hire cost');
   // capital is a cap the dialog lets you lower ("Use what I can afford"), so "starved" is true of the default (full) capital, and the lesson says what lowering it costs:
   // an expensive manager running on pennies earns next to nothing (here it even loses a little to the fee on its tiny cycle)
-  const small = sandbox(m); assert.ok(small.hirePipeline('broker', 5, { ...lane, alloc: 20 }).ok); small.advanceTo(100);
+  const small = sandbox(m); assert.ok(small.hirePipeline('broker', 5, { ...lane, alloc: 20 }).ok); small.advanceTo(150);
   assert.ok(small.s.pipes[0].alloc === 20 && small.s.pipes[0].profit < 1 && small.s.pipes[0].profit < fed.p.profit, `a Broker lowered to $20 earns ${small.s.pipes[0].profit.toFixed(2)} against the fed Student's ${fed.p.profit.toFixed(2)}`);
   whyHas(m, 'Lowering its capital to fit leaves you with an expensive manager earning next to nothing'); stepHas(m, 0, 'capital per cycle it is set to use');
   // the teach-back is a plan, not a premise: $700, put $500 behind A or $450 behind B, with their fees
   assert.deepEqual([700 - 300, 700 - 150, 700 - 300 - 150], [400, 550, 250]); assert.ok(400 < 500 && 550 >= 450 && 250 < 450, 'only B can start a cycle, and both together starve both');
   teachHas(m, '$500 per cycle', '$450 per cycle', 'Both', '$250', '$550');
   // the lesson tells the player up front that the payback is long and why they hire anyway
-  sayHas(m, 'crew', 'we hire only to watch the loop run'); sayHas(m, 'hire', 'Expect a long payback'); has('m06 result', m.why.example.result, 'training wheel', 'longer than a 90-day run', 'Divide the fee by the profit per day before you hire');
-  assert.ok(stu.hire / stu.perDay > TOTAL_DAYS, `the Student's payback (${Math.round(stu.hire / stu.perDay)} days) is longer than the 90-day run, as the card says`);
-  // The thesis is a PAYBACK test, not "idle cash is asleep": over the 90-day run the fed Student earns about $72 for a $120 fee, and even a funded Broker $559 for $600, so a card that said
-  // cash should be woken up would contradict its own numbers (the player who hired would end behind the one who did nothing). Cash at work can earn more, but only once the fee is paid back.
-  assert.ok(stu.perDay * TOTAL_DAYS < stu.hire && bro.perDay * TOTAL_DAYS < bro.hire && Math.round(bro.hire / bro.perDay) === 97, 'neither hire pays its fee back inside the 90-day run at this size');
+  sayHas(m, 'crew', 'Each costs a fee to hire and cash to work with'); sayHas(m, 'hire', 'Check the payback first'); has('m06 result', m.why.example.result, 'earns back its $120 fee in about 12 days', 'Divide the fee by the profit per day before you hire', 'capital is in the wallet too');
+  assert.ok(!/training wheel|thinly|longer than a 90-day run/.test(text(m)), 'a fed manager pays its fee back in days now (the engine\'s cycle and margin changed): no card calls the hire a loss or a training wheel');
+  assert.ok(stu.hire / stu.perDay < 20 && bro.hire / bro.perDay < 20, `both hires pay their fee back in under three weeks (Student ${Math.round(stu.hire / stu.perDay)} days, Broker ${Math.round(bro.hire / bro.perDay)})`);
+  // The thesis is a PAYBACK test, not "idle cash is asleep": the fee is spent the moment you hire, a starved manager never earns it back, and a fed one earns it back in days (the Student in 12, a funded Broker
+  // in 16), so a hire pays only when the capital is there too. Cash at work can earn more, but only once the fee is paid back.
+  assert.equal(Math.round(bro.hire / bro.perDay), 16); assert.ok(stu.perDay * TOTAL_DAYS > 5 * stu.hire, 'over the 90-day run a fed Student earns the fee back many times');
   assert.ok(!/asleep|wake it up|trophy/i.test(text(m)), 'no card says idle cash is asleep or must be woken: it earns nothing but costs nothing, and a hire has to pay its fee back first');
   sayHas(m, 'cash', 'Cash at work can earn more', 'costs a fee', 'price that trade'); has('m06 title', m.why.title, 'payback date');
   whyHas(m, 'pay back the fee you spent to start it before it beats idle cash', 'Payback in days = hire fee / profit per day');
@@ -1179,7 +1226,7 @@ test('m07: the same fall leaves one loan nowhere near a margin call and the othe
     g.advanceTo(7);
     return { ...r, nw1: g.netWorth(), de1: g.deRatio(), hold1: g.invValue(), call, g };
   };
-  const SMALL = ['bargain-b', 'bargain-c'], ALL = ['bargain-a', 'bargain-b', 'bargain-c', 'bargain-d'];
+  const SMALL = ['bargain-a', 'bargain-b'], ALL = ['bargain-a', 'bargain-b', 'bargain-c', 'bargain-d'];
   const small = go(180, SMALL), big = go(1200, ALL);
   const glut = small.hold1 / small.hold0 - 1;
   assert.ok(near(glut, -0.25, 0.005), `the glut cuts sneaker values by ${pc(-glut)}`);
@@ -1195,12 +1242,12 @@ test('m07: the same fall leaves one loan nowhere near a margin call and the othe
   assert.ok(!trips(go(1200, ALL), fb.total - 0.01) && trips(go(1200, ALL), fb.total + 0.01), 'the 39% line is where the engine really calls the loan');
   // the Deal Room's Quick buys at list or up to 9% over: even then, neither scenario trips the call at the glut (the lesson cannot dead-end in a forced sale)
   for (const mult of [1, 1.09]) for (const [L, lots] of [[180, SMALL], [1200, ALL]]) { const r = go(L, lots, mult); assert.ok(!r.call && r.de1 < DEBT.callDE - 0.8 && r.cash > -1, `loan ${L}, lots at x${mult}: D/E ${n2(r.de1)} after the glut, no forced sale`); }
-  // what Quick really pays for each lot through the real Deal Room: list for b, c and d; a little over for a, which is why the coach points at bargain-b
+  // what Quick really pays for each lot through the real Deal Room (the dice are fixed by the lot's id): the list for a, a little over for b, c and d, which is why the coach points at bargain-a
   const quick = Object.fromEntries(ALL.map((id) => { const g = sandbox(m); g.draw('micro', 1200); const { run } = quickBuy(g, 5, id); return [id, run.res.close.mult]; }));
-  assert.ok(near(quick['bargain-b'], 1, 1e-3) && near(quick['bargain-c'], 1, 1e-3) && near(quick['bargain-d'], 1, 1e-3), `Quick pays the list for b, c and d (${JSON.stringify(quick)})`);
-  assert.ok(quick['bargain-a'] > 1 && quick['bargain-a'] <= 1.1, 'and a little over for a');
-  assert.equal(M('m07').steps.find((s) => s.id === 'buy').anchor, 'world:lot:bargain-b', 'the buy step points at a lot Quick buys at the list price');
-  has('m07 example setup', m.why.example.setup, 'average Deal Room result', 'a few dollars either way');
+  assert.ok(near(quick['bargain-a'], 1, 1e-3), `Quick pays the list for a (${JSON.stringify(quick)})`);
+  assert.ok(['bargain-b', 'bargain-c', 'bargain-d'].every((id) => quick[id] > 1 && quick[id] <= 1.1), 'and a little over for b, c and d');
+  assert.equal(M('m07').steps.find((s) => s.id === 'buy').anchor, 'world:lot:bargain-a', 'the buy step points at a lot Quick buys at the list price');
+  has('m07 example setup', m.why.example.setup, 'average Deal Room result', 'yours may land a little off', '1.00 to 1.18 times the asking price');
   // the interest: the engine's rate at Capital Sourcing 2
   assert.equal(n2(g0.loanRate('micro')), '0.11'); assert.equal(n2(600 * g0.loanRate('micro') / 30), '2.23');
   has('m07 example setup', m.why.example.setup, '$400', `$${price}`, ui(f0), '25%');
@@ -1228,7 +1275,7 @@ test('m07: the same fall leaves one loan nowhere near a margin call and the othe
   onlyEngineDollars(m, [E, price, f0, 600 * g0.loanRate('micro') / 30, 600, 180, 1200, small.nw0, small.nw1, big.nw0, big.nw1, big.nw1 - small.nw1, 1000, 3000, 2000, 4000]);
 });
 
-test('m08: the same sneakers sell for $130 in the herd and $686 in the open', () => {
+test('m08: the same sneakers sell for $120 in the herd and $631 in the open', () => {
   const m = M('m08'), g = sandbox(m), a = g.s.assets[0];
   assert.ok(m.setup.perks.includes('grad') && g.P.radar && m.setup.cohort.ghosts >= 20);
   assert.equal(m.setup.assets.filter((x) => x.cls === 'sneakers').length, 2);
@@ -1236,23 +1283,23 @@ test('m08: the same sneakers sell for $130 in the herd and $686 in the open', ()
   const herd = g.quotePitch(a.id, 'trend-boutique'), open0 = g.quotePitch(a.id, 'popup-stall');
   assert.equal(herd.fit, 1); assert.equal(open0.fit, 1); assert.equal(herd.parts.term, 1.35, 'both buyers fit the sneakers at 1.00');
   assert.equal(n2(herd.parts.growth), '1.04', 'Growth 2 adds the 1.04 the card names');
-  const base = herd.fmv * 1.35 * 0.6 * herd.parts.growth;
-  assert.equal(ui(herd.fmv), '$364'); assert.equal(ui(base), '$307');
+  const base = herd.fmv * 1.35 * 0.6 * ECON.pitchK * herd.parts.growth;
+  assert.equal(ui(herd.fmv), '$364'); assert.equal(ui(base), '$282');
   assert.equal(n2(herd.ci.S), '0.57'); assert.equal(n2(herd.ci.cm), '0.42'); assert.ok(herd.ci.cm >= 0.4 && herd.ci.cm < 0.55, 'the herd is on the floor, in the herd-trap band');
   assert.equal(herd.ci.band.id, 'herd');
   const cmf = g.cmFor(5, 'sneakers', 'popup'); assert.ok(near(cmf.cm, open0.ci.cm, 1e-12) && cmf.vN < 1.5 && cmf.vT > 10, 'the stall is a quiet niche in a real herd (cmFor)');
-  assert.equal(ui(herd.price), '$130'); assert.equal(pc(herd.price / base), '42%');
+  assert.equal(ui(herd.price), '$120'); assert.equal(pc(herd.price / base), '42%');
   g.pitch(a.id, 'trend-boutique', { mult: 1 });
   const open = g.quotePitch(g.s.assets[0].id, 'popup-stall');
-  assert.equal(n2(open.ci.S), '0.07'); assert.equal(n2(open.ci.cm), '2.24'); assert.equal(ui(open.price), '$686'); assert.equal((open.price / base).toFixed(1), '2.2');
-  assert.equal(ui(open.price - herd.price), '$556'); assert.equal((open.price / herd.price).toFixed(1), '5.3');
+  assert.equal(n2(open.ci.S), '0.07'); assert.equal(n2(open.ci.cm), '2.24'); assert.equal(ui(open.price), '$631'); assert.equal((open.price / base).toFixed(1), '2.2');
+  assert.equal(ui(open.price - herd.price), '$511'); assert.equal((open.price / herd.price).toFixed(1), '5.3');
   for (const l of m.setup.leads) assert.ok(open.price < l.budget && herd.price < l.budget, `${l.id}: the budget never caps the lesson`);
   assert.ok(open.ci.cm > 2 && open.price / herd.price > 1.4 / 0.6, `the open niche beats the herd by x${(open.price / herd.price).toFixed(2)}, more than the worst a Deal Room multiplier can hide (x${(1.4 / 0.6).toFixed(2)})`);
   assert.ok(m.win.match.S.lt === 0.5 && open.ci.S < 0.5, 'win is a pitch into a niche that is not crowded');
   // what the player really gets by pressing Quick through the real Deal Room: the quotes, to the dollar
   const g2 = sandbox(m), s1 = sellDeal(g2, g2.s.assets[0].id, 'trend-boutique'), s2 = sellDeal(g2, g2.s.assets[0].id, 'popup-stall');
-  assert.equal(ui(s1.summary.numbers.you), '$130'); assert.equal(ui(s2.summary.numbers.you), '$686'); assert.equal(s1.summary.title, 'Sold into the herd');
-  has('m08 example setup', m.why.example.setup, `${ui(herd.fmv)} × 1.35 × 0.60 × 1.04 = ${ui(base)}`, 'Growth bonus', 'average Deal Room result');
+  assert.equal(ui(s1.summary.numbers.you), '$120'); assert.equal(ui(s2.summary.numbers.you), '$631'); assert.equal(s1.summary.title, 'Sold into the herd');
+  has('m08 example setup', m.why.example.setup, `${ui(herd.fmv)} × 1.35 × 0.60 × 0.92 × 1.04 = ${ui(base)}`, 'Growth bonus', 'average Deal Room result');
   stepHas(m, 0, 'S = 0.57', 'Cm = 0.42', '0.40 floor', ui(herd.price), '42%');
   stepHas(m, 1, 'S = 0.07', 'Cm = 2.24', ui(open.price), '2.2 times');
   stepHas(m, 2, '1.00', ui(open.price - herd.price), '5.3 times');
@@ -1351,9 +1398,14 @@ test('m10: every skill, then the score', () => {
   // what the lot is worth to the player once repaired (Ops 2) and sold to the dealer, after Estate Sales tax and the engine's fee
   const g2 = sandbox(m); assert.ok(g2.buyLot(6, lot.id, { mult: 1 }).ok);
   const a = g2.s.assets[0], rq = g2.repairQuote(a.id); g2.repair(a.id, {});
-  const sale = g2.quotePitch(a.id, 'antique-dealer'), ceiling = sale.received - rq.cost;
+  // The dealer checks what he buys: the Deal Room sells the crate at its REAL condition (js/deal.js finish: pitch() with the hidden truth, 90% here), not as described. A quote with no peek at the truth (what the
+  // Pitch stage shows as the fair price) says $865, the price of a perfect one; the sale pays $778, and that is the figure the lesson works with (it once quoted the blind one, so the result card said $778 under a lesson that said $865).
+  const perfect = g2.quotePitch(a.id, 'antique-dealer'), sale = g2.quotePitch(a.id, 'antique-dealer', undefined, { blind: false }), ceiling = sale.received - rq.cost;
   assert.ok(!sale.capped && !sale.rejected && sale.fit === 1);
-  assert.equal(ui(sale.price), '$846'); assert.equal(ui(sale.received), '$776'); assert.equal(ui(rq.cost), '$160'); assert.equal(ui(ceiling), '$616');
+  assert.equal(ui(perfect.price), '$865'); assert.equal(ui(sale.price), '$778'); assert.ok(near(sale.price, perfect.price * lot.truth.quality, 1e-6), 'a lot at 90% fetches 90% of a perfect one');
+  assert.equal(ui(sale.received), '$714'); assert.equal(ui(rq.cost), '$160'); assert.equal(ui(ceiling), '$554'); assert.equal(Math.round(sale.received) - Math.round(rq.cost), Math.round(ceiling), 'the printed sum adds up');
+  { const gq = sandbox(m); auctionDeal(gq, 6, 'estate-lot-d', { ceiling }); fixDeal(gq, idOf(gq, 'antiqueFurniture')); const sq = sellDeal(gq, idOf(gq, 'antiqueFurniture'), 'antique-dealer');
+    assert.ok(near(sq.run.res.close.mult, 1, 1e-3), 'Quick closes at fair'); assert.equal(ui(sq.summary.numbers.you), ui(sale.price), 'the Deal Room\'s Quick sale pays the dollars the lesson quotes'); }
   assert.ok(lot.price < ceiling, 'the opening price is under the all-in value, so the chain pays');
   // The lot "as it stands" is the figure the player can SEE: Stock lists the crate at $490 once it is theirs, and the repair quote's "before" is the same number. The Deal
   // Room has two others for the same lot, neither of them a good one to quote: the auction game's hidden worth ($534, the guide price over 0.8 times the real condition, which
@@ -1367,28 +1419,27 @@ test('m10: every skill, then the score', () => {
   assert.ok(stock < ceiling && lot.price < stock, 'the lot as it stands is worth less than the all-in value, so the repair is the edge');
   has('m10 why', m.why.body[2], ui(stock), 'the figure Stock shows', 'fix and resell', 'sale price is an estimate too', ui(ceiling));
   assert.ok(!/\$534|\$441/.test(text(m)), 'the card quotes neither of the Deal Room\'s other two numbers for the lot');
-  // at the sandbox's own seeds: bidding to the ceiling loses lot A to a rival at about the ceiling, and wins lot D well short of it, under what the lot is worth as it stands
-  const lostA = auctionDeal(sandbox(m), 6, 'estate-lot-a', { ceiling }), wonB = auctionDeal(sandbox(m), 6, 'estate-lot-d', { ceiling });
-  assert.equal(lostA.run.res.bid.won, false); assert.ok(lostA.run.res.bid.reveal.rivals.some((r) => r.limit >= ceiling - 1), 'a loud rival goes to about the ceiling on lot A');
-  assert.equal(wonB.run.res.bid.won, true); assert.equal(ui(wonB.run.res.bid.price), '$428'); assert.ok(wonB.run.res.bid.price < stock && stock < ceiling);
-  assert.match(wonB.run.res.bid.lesson.text, /Shading below your estimate paid/);
-  // and a player who ignores the ceiling and goes to the budget on lot A wins at a price above what the lot is worth and is told it is the winner's curse
-  const curse = auctionDeal(sandbox(m), 6, 'estate-lot-a', { ceiling: 665 });
-  assert.equal(curse.run.res.bid.won, true); assert.ok(curse.run.res.bid.price > stock && curse.run.res.bid.price < 640); assert.match(curse.run.res.bid.lesson.text, /winner's curse/);
-  // A cautious player is not locked out. What each lot clears at, whatever the ceiling (the clearing price is the opening bid plus whole increments of the rivals' limits):
-  // A $618, D $428, H $380, so a ceiling of $380 wins H, $430 wins H or D, $620 wins any, and under $380 loses all three. The hints name $450, which wins D or H and not A.
-  const cleared = (id, c) => { const r = auctionDeal(sandbox(m), 6, id, { ceiling: c }).run.res.bid; return r.won ? r.price : null; };
-  const IDS = m.setup.lots.map((l) => l.id);
-  assert.deepEqual(IDS.map((id) => Math.round(cleared(id, 700))), [618, 428, 380]);
-  for (let c = 380; c <= 700; c += 5) assert.ok(IDS.some((id) => cleared(id, c) != null), `a ceiling of $${c} wins one of the three lots`);
-  assert.ok(IDS.every((id) => cleared(id, 375) == null), 'and only a ceiling under $380 loses all three');
-  assert.deepEqual(IDS.map((id) => cleared(id, 450) != null), [false, true, true], '$450 loses the loud lot A and wins the other two');
-  has('m10 read hint', m.steps[0].hint, '$450', '$616', 'a read with no probe does not count', 'Look it over, not Quick buy');
+  // at the sandbox's own seeds an English auction is won at the runner-up's last bid, so bidding to the ceiling wins every lot, and the price paid is what the loudest rival stopped at: lot A $499, lot D $451,
+  // lot H $546. Lot D is the bargain, well under what the lot is worth as it stands; lot H clears above what the auction game says the lot is worth ($534), and the game says so.
+  const IDS = m.setup.lots.map((l) => l.id), cleared = (id, c) => { const r = auctionDeal(sandbox(m), 6, id, { ceiling: c }).run.res.bid; return r.won ? r.price : null; };
+  const wonD = auctionDeal(sandbox(m), 6, 'estate-lot-d', { ceiling }), curse = auctionDeal(sandbox(m), 6, 'estate-lot-h', { ceiling });
+  assert.deepEqual(IDS.map((id) => Math.round(cleared(id, ceiling))), [499, 451, 546]);
+  // what the ceiling is for: every clearing price is under it, so a win is never a loss at a neutral marker, but lot H leaves almost nothing ($8) and with the Careful bill (30% over the quote) it is a loss: that is the winner's curse in dollars
+  { const margin = (id) => ceiling - cleared(id, ceiling); assert.deepEqual(IDS.map((id) => Math.round(margin(id))), [55, 103, 8]); assert.ok(margin('estate-lot-h') - 0.3 * rq.cost < 0 && margin('estate-lot-d') - 0.3 * rq.cost > 0, 'lot H loses money after a Careful repair, lot D does not'); }
+  assert.equal(wonD.run.res.bid.won, true); assert.equal(ui(wonD.run.res.bid.price), '$451'); assert.ok(wonD.run.res.bid.price < stock && stock < ceiling);
+  assert.match(wonD.run.res.bid.lesson.text, /Shading below your estimate paid/);
+  assert.equal(curse.run.res.bid.won, true); assert.ok(curse.run.res.bid.price > params.trueValue && curse.run.res.bid.price < ceiling, `lot H clears at $${Math.round(curse.run.res.bid.price)}, above the $${Math.round(params.trueValue)} the game says it is worth`); assert.match(curse.run.res.bid.lesson.text, /winner's curse/);
+  // A cautious player is not locked out. The clearing price of each lot is the same whatever the ceiling (the opening bid plus whole increments of the rivals' limits), so a ceiling of $451 wins D,
+  // $499 wins D or A, $547 wins any, and under $451 loses all three. The hint names $500, which wins A or D and not H.
+  for (let c = 455; c <= 700; c += 5) assert.ok(IDS.some((id) => cleared(id, c) != null), `a ceiling of $${c} wins one of the three lots`);
+  assert.ok(IDS.every((id) => cleared(id, 449) == null), 'and only a ceiling under $451 loses all three');
+  assert.deepEqual(IDS.map((id) => cleared(id, 500) != null), [true, true, false], '$500 wins lot A or D and loses H');
+  has('m10 read hint', m.steps[0].hint, '$500', ui(ceiling), 'a read with no probe does not count', 'Look it over, not Quick buy');
   // a read with no probe records no inspect event (js/deal.js finish: "reading nothing earns nothing"), so the step that asks for the read says a probe is needed, and the
   // auction that comes with it is not lost: the 'auction' step still hears the other lot's
-  { const gn = sandbox(m), evs = []; gn.onEvent = (e) => evs.push(e.type); const rn = buyRun(gn, 6, 'estate-lot-d'); readBy(rn, []); rn.next(); bidUpTo(rn, 616); rn.finish();
-    assert.deepEqual(evs.filter((t) => ['inspect', 'auction', 'buy'].includes(t)), ['auction', 'buy'], 'no probe, no inspect'); }
-  has('m10 example setup', m.why.example.setup, ui(sale.price), ui(sale.received), ui(rq.cost), '$20,000', 'floored to $1,000');
+  { const gn = sandbox(m), evs = []; gn.onEvent = (e) => evs.push(e.type); const rn = buyRun(gn, 6, 'estate-lot-d'); readBy(rn, []); rn.next(); bidUpTo(rn, 634); rn.finish();
+    assert.deepEqual(evs.filter((t) => ['inspect', 'auction', 'buy'].includes(t)), ['buy', 'auction'], 'no probe, no inspect (the buy and then the auction, as the engine sends them)'); }
+  has('m10 example setup', m.why.example.setup, ui(perfect.price), ui(sale.price), ui(sale.received), ui(rq.cost), 'reads 90%', '$20,000', 'floored to $1,000');
   stepHas(m, 0, `${ui(sale.received)} from the sale - ${ui(rq.cost)} repair = ${ui(ceiling)}`, ui(stock), 'Stock shows the lot', 'repair is your edge');
   sayHas(m, 'read', ui(ceiling), 'READ', 'AUCTION', 'stop well short');
   // the score is something the player does: the 'score' step has them open their net worth, the one place the sandbox shows what EEI is made of. Their stake was $1,000
@@ -1427,7 +1478,7 @@ test('m10: every skill, then the score', () => {
   assert.equal(mia, 30); assert.equal(raj, 36); assert.ok(raj > mia, 'less money in half the days scores higher');
   teachHas(m, '$30,000', '$24,000', '$1,000 floor', '24 × 1.50 = 36', '30 × 1.00 = 30.0', '36.0');
   assert.equal(M('m10').concept, 'eei-score'); assert.ok(/EEI/.test(m.teachBack.q), 'the graded question tests the mission\'s concept');
-  onlyEngineDollars(m, [ceiling, stock, 450, EEI_FLOOR_DEFAULT, 20000, sale.price, sale.received, rq.cost, need, before, 30000, 24000]);
+  onlyEngineDollars(m, [ceiling, stock, 500, EEI_FLOOR_DEFAULT, 20000, perfect.price, sale.price, sale.received, rq.cost, need, before, 30000, 24000]);
 });
 
 // ---------------------------------------------------------------------------------------------------------------------------------------
@@ -1452,7 +1503,8 @@ function stillPossible(m, g, from) {
     const mt = w.match || {};
     switch (w.event) {
       case 'pitch': return sells(mt);
-      case 'buy': case 'inspect': return lots.some((l) => (mt.fake == null || l.truth.fake === mt.fake) && (mt.cls == null || l.cls === mt.cls));
+      case 'buy': return lots.some((l) => (mt.fake == null || l.truth.fake === mt.fake) && (mt.cls == null || l.cls === mt.cls));
+      case 'inspect': return lots.some((l) => (mt.fake == null || l.truth.fake === mt.fake) && (mt.cls == null || l.cls === mt.cls) && !(s.paid || {})['inspect:' + l.id]); // a lot's first read is the only one the engine reports (recordInspect, once per key)
       case 'auction': return lots.some((l) => l.mode === 'auction');
       case 'haggle': return mt.role === 'buy' ? lots.some((l) => l.mode !== 'auction') : mt.role === 'sell' ? sells() : sells() || lots.length > 0;
       case 'repair': return assets.some((a) => a.cond === 'broken') || lots.some((l) => l.cond === 'broken');
@@ -1477,7 +1529,7 @@ const PLAYS = {
   },
   m03: {
     bree: (c) => { sellDeal(c.g, c.g.s.assets[0].id, 'thrift-flipper', { pitch: 'best', close: 'quick' }); },
-    delphine: (c) => { sellDeal(c.g, c.g.s.assets[0].id, 'bookstore-buyer', { pitch: 'best', close: 'quick' }); },
+    delphine: (c) => { sellDeal(c.g, c.g.s.assets[0].id, 'pageturner', { pitch: 'best', close: 'quick' }); },
   },
   m04: {
     careless: (c) => { const d = sellDeal(c.g, c.g.s.assets[0].id, 'stall-collector', { pitch: 'quick', close: 'careless' }); assert.ok(d.run.res.close.deal); },
@@ -1493,7 +1545,7 @@ const PLAYS = {
   },
   m07: {
     draw: (c) => assert.ok(c.g.draw('micro', 180).ok),
-    buy: (c) => { quickBuy(c.g, 5, 'bargain-b'); quickBuy(c.g, 5, 'bargain-c'); },
+    buy: (c) => { quickBuy(c.g, 5, 'bargain-a'); quickBuy(c.g, 5, 'bargain-b'); },
     shock: (c) => { c.g.advanceTo(7); assert.ok(c.g.deRatio() < 2, 'the small loan is nowhere near the call'); },
     win: (c) => assert.ok(c.g.repay(c.g.s.loans[0].id, 100).ok),
   },
@@ -1505,8 +1557,8 @@ const PLAYS = {
     shock: (c) => c.g.advanceTo(24),
     win: (c) => assert.ok(c.g.sellPool(c.g.s.assets.filter((a) => a.cls === 'gadgets').map((a) => a.id)).ok),
   },
-  m10: { // lot A goes to a rival at the ceiling (dropping out costs nothing), lot D is won well short of it
-    read: (c) => { const d = auctionDeal(c.g, 6, 'estate-lot-a'); assert.equal(d.run.res.bid.won, false); },
+  m10: { // lot A is read and left on the shelf (an inspect and nothing else), lot D is read and won well short of the ceiling (inspect, buy, auction: the auction step is done by that deal)
+    read: (c) => { const run = buyRun(c.g, 6, 'estate-lot-a'); readBy(run, ['serial', 'papers']); run.next(); run.walkAway(); },
     auction: (c) => { const d = auctionDeal(c.g, 6, 'estate-lot-d'); assert.equal(d.run.res.bid.won, true); c.paid = d.run.res.bid.price; },
     fix: (c) => { fixDeal(c.g, idOf(c.g, 'antiqueFurniture')); },
     close: (c) => { sellDeal(c.g, idOf(c.g, 'antiqueFurniture'), 'antique-dealer', { pitch: 'best', close: 'careful' }); },
@@ -1553,16 +1605,21 @@ test('the other ways to finish a deal: Quick or by hand, Pass or See the result,
   { const m = M('m02'), c = play(m, [(c) => ui0(c, 'codex'), (c) => ui0(c, 'market')]);
     const r1 = buyRun(c.g, 4, 'first-watch'); readBy(r1, ['serial']); r1.next(); r1.walkAway();
     const r2 = buyRun(c.g, 4, 'second-watch'); readBy(r2, ['serial', 'power']); r2.next(); r2.quick(); r2.finish();
-    assert.ok(c.won && c.seen.map((e) => e.type).join() .includes('inspect,inspect,haggle,buy'), 'm02 B: the read, the haggle and the buy arrive together and finish the lesson'); }
+    assert.ok(c.won && c.seen.map((e) => e.type).join().includes('inspect,inspect,buy,haggle'), 'm02 B: the read, the buy and the haggle arrive together and finish the lesson'); }
   // m02 C: Quick deal on everything, the fake included: the lesson still ends, the player is just poorer
   { const m = M('m02'), c = play(m, [(c) => ui0(c, 'codex'), (c) => ui0(c, 'market')]);
     quickBuy(c.g, 4, 'first-watch'); quickBuy(c.g, 4, 'second-watch');
     assert.ok(c.won, 'm02 C'); assert.ok(c.g.s.cash > 0, 'still solvent after buying the fake blind'); }
-  // m02 D: the genuine watch read before the fake: the early inspect is not lost, the lesson goes on
+  // m02 D: the genuine watch read before the fake. The engine reports a lot's first read only (recordInspect, once per key), so that early inspect is spent: reading the second watch again sends nothing and
+  // the step "second-watch" would wait for ever on it. The signed baseball, genuine too, has its read unspent, and the step's hint says to read it instead: the lesson goes on, and the buy finishes it.
   { const m = M('m02'), c = play(m, [(c) => ui0(c, 'codex'), (c) => ui0(c, 'market')]);
     const r0 = buyRun(c.g, 4, 'second-watch'); readBy(r0, ['serial']); r0.next(); r0.walkAway();
     assert.equal(c.i, 2, 'the genuine read is ignored by the step that asks for the fake');
     const r1 = buyRun(c.g, 4, 'first-watch'); readBy(r1, ['serial']); r1.next(); r1.walkAway(); assert.equal(c.i, 3);
+    const again = buyRun(c.g, 4, 'second-watch'); assert.ok(again.act({ type: 'conclude' }).ok); again.next(); again.walkAway(); assert.equal(c.i, 3, 'reading the second watch again sends no inspect: the step does not move');
+    assert.ok(stillPossible(m, c.g, c.i), 'the baseball\'s read is still unspent');
+    has('m02 second-watch hint', m.steps.find((x) => x.id === 'second-watch').hint, 'Read it already? Read the signed baseball', 'a lot counts once');
+    const rb = buyRun(c.g, 4, 'signed-ball'); readBy(rb, ['serial']); rb.next(); rb.walkAway(); assert.equal(c.i, 4, 'the baseball\'s read finishes the step');
     quickBuy(c.g, 4, 'second-watch'); assert.ok(c.won, 'm02 D'); }
   // m02 E: the second watch bought at once, before the fake was read: the signed baseball, genuine too, finishes the lesson
   { const m = M('m02'), c = play(m, [(c) => ui0(c, 'codex'), (c) => ui0(c, 'market')]);
@@ -1570,11 +1627,11 @@ test('the other ways to finish a deal: Quick or by hand, Pass or See the result,
     const r1 = buyRun(c.g, 4, 'first-watch'); readBy(r1, ['serial']); r1.next(); r1.walkAway();
     assert.ok(stillPossible(M('m02'), c.g, c.i), 'a genuine lot is still on the shelf');
     quickBuy(c.g, 4, 'signed-ball'); assert.ok(c.won, 'm02 E'); }
-  // m03 and m08: Quick for everything wins, by the card (which picks the crate) or by hand: the first sale ends on its pitch, the second on its haggle, then the pitch is the win
+  // m03 and m08: Quick for everything wins, by the card (which picks the crate) or by hand: the first sale ends on its pitch, the second sale's pitch is the last step and the win together
   { const m = M('m03'), c = play(m, [(c) => ui0(c, 'market')]);
     sellDeal(c.g, card(c, 3, 'thrift-flipper'), 'thrift-flipper'); assert.equal(c.i, 2, 'the first sale finishes its step');
     click(c, 'deal-room'); assert.equal(c.i, 2, 'the Continue press on its result screen is a click in the Deal Room and moves nothing');
-    sellDeal(c.g, card(c, 3, 'bookstore-buyer'), 'bookstore-buyer'); assert.ok(c.won, 'm03 Quick'); }
+    sellDeal(c.g, card(c, 3, 'pageturner'), 'pageturner'); assert.ok(c.won, 'm03 Quick'); }
   { const m = M('m08'), c = play(m, [(c) => ui0(c, 'market')]);
     sellDeal(c.g, card(c, 5, 'trend-boutique'), 'trend-boutique'); assert.equal(c.i, 2); click(c, 'deal-room'); assert.equal(c.i, 2);
     sellDeal(c.g, card(c, 5, 'popup-stall'), 'popup-stall', { pitch: 'best', close: 'careless' }); assert.ok(c.won, 'm08 by hand on the stall'); }
@@ -1584,22 +1641,26 @@ test('the other ways to finish a deal: Quick or by hand, Pass or See the result,
     assert.equal(c.g.s.assets.find((a) => a.id === card(c, 2, 'stall-dolores')).cls, 'radio', 'the card sells the radio, not the barter records');
     click(c, 'deal-room'); assert.equal(c.i, 2, 'Continue on the result screen moves nothing');
     sellDeal(c.g, card(c, 2, 'stall-dolores'), 'stall-dolores', { pitch: 'best', close: 'careful' }); assert.ok(c.won, 'm04 by hand'); }
-  // m04 a cool Pitch with the best Close there is does not win, and the step is done anyway (the haggle came), so the retry is just another sale: Dolores is gone, the
-  // barter records and the busker are what is left, as the stranded test below says
+  // m04 a cool Pitch with the Assist-advised Close does not reach 10% over fair: that sale is a sale, the radio is gone, and the step (which is the sale at 10% over fair) is still open. Dolores
+  // is gone; the barter records and the busker are what is left, and the retry with them can still win (the stranded test below says a sale is on offer)
   { const m = M('m04'), c = play(m, [(c) => ui0(c, 'market')]);
     sellDeal(c.g, c.g.s.assets[0].id, 'stall-collector', { pitch: 'quick', close: 'careless' });
-    sellDeal(c.g, c.g.s.assets[0].id, 'stall-dolores', { pitch: ['prestige', 'price'], close: 'careful' });
-    assert.equal(c.i, 3); assert.equal(c.won, false, 'x0.94 keen: not 10% over fair'); assert.ok(stillPossible(m, c.g, c.i), 'a sale of the records to the busker is still on offer'); }
+    const d = sellDeal(c.g, c.g.s.assets[0].id, 'stall-dolores', { pitch: ['prestige', 'price'], close: 'careful' });
+    assert.ok(d.run.res.close.mult < 1.1, 'x0.94 keen: not 10% over fair'); assert.equal(c.i, 2, 'the step is the sale at 10% over fair, so it is still the careful deal'); assert.equal(c.won, false); assert.ok(stillPossible(m, c.g, c.i), 'a sale of the records to the busker is still on offer');
+    // the hint's way out: the records Dolores and the collector paid in, offered to Tariq with Assist on (the hand routine of the step does not suit an impulsive buyer, Assist does)
+    const rec = c.g.s.assets.find((a) => a.cls === 'fleaRecords'), again = sellDeal(c.g, rec.id, 'stall-tariq', { pitch: 'quick', close: 'careful' });
+    assert.ok(again.run.res.close.mult >= 1.1 && c.won, `the records the buyers paid in, sold to Tariq with Assist close at x${again.run.res.close.mult.toFixed(2)} and win the lesson`); }
   // m05: Fix by hand (from Stock's Repair button, or from the van's own row) then sell by hand
   { const m = M('m05'), c = play(m, [(c) => ui0(c, 'quests'), (c) => ui0(c, 'stock')]);
     fixDeal(c.g, idOf(c.g, 'van')); assert.equal(c.i, 3); ui0(c, 'market'); sellDeal(c.g, idOf(c.g, 'van'), 'fleet-buyer', { pitch: 'best', close: 'careful' }); assert.ok(c.won, 'm05 by hand'); }
   // m06: hiring through the Crew drawer's button or by tapping the plot is the same hire
   { const m = M('m06'), c = play(m, [(c) => click(c, 'hud-cash'), (c) => ui0(c, 'crew')]);
     assert.ok(c.g.hirePipeline('student', 5, { cls: 'laptops', buyer: 'trainer' }).ok); assert.equal(c.i, 3); click(c, 'hud-clock'); for (let i = 0; i < 80 && !c.won; i++) c.g.stepHour(); assert.ok(c.won, 'm06'); }
-  // m10: Quick all the way through (the Bid stage, the Fix stage and the dealer): lot A goes to a rival, lot D to Quick's cautious bid, and no step is skipped
+  // m10: Quick all the way through (the Bid stage, the Fix stage and the dealer): Quick reads lot D and wins it in one deal, which finishes the read step and the auction step together (inspect, buy,
+  // auction), and no step is skipped
   { const m = M('m10'), c = lesson(m);
-    for (const id of ['estate-lot-a', 'estate-lot-d']) { const run = buyRun(c.g, 6, id); run.quickAll(); run.finish(); }
-    assert.equal(c.g.s.assets.length, 1, 'Quick loses lot A to the loud rival and wins lot D'); assert.equal(c.i, 2, 'the read and the auction both count');
+    { const run = buyRun(c.g, 6, 'estate-lot-d'); run.quickAll(); run.finish(); }
+    assert.equal(c.g.s.assets.length, 1, 'Quick wins lot D'); assert.equal(c.i, 2, 'the read and the auction both count');
     const f = fixRun(c.g, idOf(c.g, 'antiqueFurniture')); f.quickAll(); f.finish(); assert.equal(c.i, 3, 'the Fix step is done after Quick');
     click(c, 'hud-networth'); assert.equal(c.i, 4, 'looking at the net worth is the score step');
     click(c, 'deal-room'); assert.equal(c.i, 4, 'a stray click in a Deal Room is not the sale');
@@ -1639,7 +1700,7 @@ test('mistakes no data can undo are caught by the reference check a runner needs
   // m03: a pin set sold to the wrong buyer leaves nothing for the bookstore buyer; selling to Delphine first leaves Bree's step without a win to finish on
   assert.equal(stuck('m03', at('m03', 'delphine'), (g) => { sellDeal(g, g.s.assets[0].id, 'dorm-ra'); sellDeal(g, g.s.assets[0].id, 'thrift-flipper'); }), false, 'm03: both pin sets gone');
   assert.equal(stuck('m03', at('m03', 'delphine'), (g) => sellDeal(g, g.s.assets[0].id, 'thrift-flipper')), true, 'm03: one set sold to Bree is the plan');
-  assert.equal(stuck('m03', at('m03', 'bree'), (g) => sellDeal(g, g.s.assets[0].id, 'bookstore-buyer')), false, 'm03: Delphine first leaves the win with no buyer');
+  assert.equal(stuck('m03', at('m03', 'bree'), (g) => sellDeal(g, g.s.assets[0].id, 'pageturner')), false, 'm03: Delphine first leaves the win with no buyer');
   // m04: both radios sold is NOT the end: the buyers paid part in goods (the barter ladder), and the busker still buys those, so a haggle is still on offer
   assert.equal(stuck('m04', at('m04', 'careful'), (g) => { sellDeal(g, g.s.assets[0].id, 'stall-collector'); sellDeal(g, g.s.assets[0].id, 'stall-dolores'); }), true, 'm04: the barter goods are still to sell');
   // m05: the broken van sold before the fix, or fixed before its step

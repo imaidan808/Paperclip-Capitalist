@@ -25,7 +25,7 @@ export function pos(t, n = 0, seed = 0) {
 export const zoneHalf = (ops, difficulty = 1, assist = false) => clamp((0.045 + 0.011 * clamp(num(ops, 1), 1, 10)) * (assist ? 1.6 : 1) / Math.max(0.25, num(difficulty, 1)), 0.03, 0.45);
 const accuracy = (x, half) => clamp(1 - Math.abs(x - 0.5) / half, 0, 1);
 
-const LINES = [[0.9, 'Dead centre. That part seats like it came from the factory.'], [0.65, 'Good. A hair off, but it will hold.'], [0.35, 'Acceptable. It works, but you can feel the slack.'],
+const LINES = [[0.9, 'Dead center. That part seats like it came from the factory.'], [0.65, 'Good. A hair off, but it will hold.'], [0.35, 'Acceptable. It works, but you can feel the slack.'],
   [0.001, 'Barely in the zone. That is going to rattle.'], [0, 'Missed the zone completely. That step is rework.']];
 
 export function create(p = {}) {
@@ -40,7 +40,7 @@ export const markerAt = (s, t) => pos(t, s.step, s.seed);
 
 const summary = (s) => {
   const r = result(s);
-  return `Repair done at ${Math.round(r.precision * 100)}% precision: parts and labour ran x${r.costMult.toFixed(2)} of the quote `
+  return `Repair done at ${Math.round(r.precision * 100)}% precision: parts and labor ran x${r.costMult.toFixed(2)} of the quote `
     + `and the item came back at x${r.qualityMult.toFixed(2)} quality. Repair pays when the value it adds beats the bill.`;
 };
 
@@ -78,7 +78,7 @@ export function view(s) {
     zone: { lo: 0.5 - s.half, hi: 0.5 + s.half, half: s.half }, results: s.steps.map((x) => ({ ...x })) };
 }
 
-// The heuristic player: wait a moment, then stop when the marker crosses where it thinks the centre is. Its aim error (in dial units)
+// The heuristic player: wait a moment, then stop when the marker crosses where it thinks the center is. Its aim error (in dial units)
 // is what skill changes, so the same player does better with a wider zone (more Ops, assist) and worse with a narrower one.
 const aimSd = (k) => 0.008 + 0.292 * (1 - k) ** 2.5;
 function stopTime(n, seed, target, from) {

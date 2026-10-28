@@ -62,7 +62,7 @@ test('perfect timing beats missing', () => {
   let s = create({ ops: 5, seed: 3 });
   const hit = act(s, { type: 'stop', t: findT(0, 3, 0.5) });
   assert.ok(hit.state.steps[0].acc > 0.97);
-  assert.match(hit.say, /Dead centre/);
+  assert.match(hit.say, /Dead center/);
   const low = act(s, { type: 'stop', t: findT(0, 3, 0.05) }), high = act(s, { type: 'stop', t: findT(0, 3, 0.95) });
   assert.match(low.say, /Missed the zone/);
   assert.match(low.say, /low side/);

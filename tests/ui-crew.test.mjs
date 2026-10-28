@@ -77,7 +77,7 @@ test('crew: every manager card shows lane, status, level, per cycle and per day,
     assert.ok(card.includes(PIPE[p.kind].name) && card.includes(`Lv ${p.level} of 8`));
     assert.match(card, /(Running|Idle|Paused|Waiting for cash|On compliance duty|Needs a lane)/);
     assert.match(card, /Per cycle/); assert.match(card, /Per day/);
-    assert.match(card, /(Linear herd trap|Crowded|Balanced|Pioneer vector) \d\.\d\dx/);
+    assert.match(card, /(Linear herd trap|Crowded|Open|Balanced|Pioneer vector) \d\.\d\dx/);
     assert.match(card, / to /, 'a lane line');
   }
 });

@@ -17,7 +17,7 @@ This repository is a **static web app plus an optional message relay**. It is bu
 |---|---|---|
 | LTI 1.3 Advantage, grade passback | Not implemented | A hosted backend with a registered tool and JWKS endpoint (for example `ltijs`), then map the gradebook export to Assignment and Grade Services. For now: **export CSV and import it into the LMS gradebook.** |
 | SAML 2.0 / OIDC SSO | Not implemented | Delegate to the LMS launch (LTI) or an identity proxy; never store credentials. |
-| SOC 2 Type II, ISO 27001 hosting | Not applicable to this repo | An organisational attestation for whoever operates the hosted service, plus a cloud account with the matching reports. |
+| SOC 2 Type II, ISO 27001 hosting | Not applicable to this repo | An organizational attestation for whoever operates the hosted service, plus a cloud account with the matching reports. |
 | AES-256 at rest, HSM key management | Not applicable yet | No server-side database exists. A hosted version should use managed disk encryption and a KMS. |
 | 15-minute snapshots, RPO 15 min, RTO 2 h | Not applicable yet | Needs a database. A Postgres host with point-in-time recovery meets this. |
 | Retention schedule (30/90 days, 24 h breach notification) | Process, not code | Write into the contract and the ops runbook. The server-side data model in `docs/ARCHITECTURE.md` is designed so each element can be purged on that schedule. |

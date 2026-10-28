@@ -13,7 +13,7 @@ globalThis.localStorage = { getItem: (k) => (store.has(k) ? store.get(k) : null)
 const { Game, closedWhy } = await import('../js/engine.js');
 const { ASSETS, BUYERS, ZONES, CLIENTS, ECON, SWAPS, TOTAL_HOURS, SKILL_MAX, FMV_BAND } = await import('../js/config.js');
 const { assetFMV, demandOf } = await import('../js/market.js');
-const { Session, kv } = await import('../js/session.js');
+const { Session, kv, LOCK_MS } = await import('../js/session.js');
 const C = await import('../js/cohort.js');
 const { Progress } = await import('../js/meta/progress.js');
 const { makeGame, run } = await import('./bot.mjs');
@@ -32,7 +32,7 @@ const put = (g, cls, zone, o = {}) => {
 const sum = (rows) => rows.reduce((a, r) => a + r.amt, 0);
 const rowsOf = (g, type) => g.s.ledger.filter((e) => e.type === type);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-const until = async (fn, ms = 5000) => { const t = Date.now(); while (Date.now() - t < ms) { const v = fn(); if (v) return v; await sleep(20); } throw new Error('timed out: ' + fn); };
+const until = async (fn, ms = 10000) => { const t = Date.now(); while (Date.now() - t < ms) { const v = fn(); if (v) return v; await sleep(20); } throw new Error('timed out: ' + fn); };
 
 // ------------------------------------------------------------------------------------------------------------------------- the ledger [L5, DT-07, L7, L8]
 test('L5, DT-07, L7: client income, SLA penalties and overdraft interest are rows, and a window of only those reconciles with cash to the cent', () => {
@@ -175,9 +175,9 @@ test('The addressee can not pin the proposer\'s escrow by repeating accept (low)
   A._onMsg(msg); A._onMsg(msg);
   assert.equal(e.locks, 1, 'said again while it is held, it changes nothing'); assert.equal(e.lockedAt, at); assert.equal(e.at, hourAt, 'and the 72 hours are not given a fresh start');
   assert.equal(A.withdraw(id).ok, false, 'they are taking it');
-  A.tick(Date.now() + 61000); assert.equal(e.lockLapsed, true);
+  A.tick(Date.now() + LOCK_MS + 1000); assert.equal(e.lockLapsed, true);
   A._onMsg(msg); assert.equal(e.locks, 2); assert.equal(e.lockLapsed, undefined, 'a second try is held again');
-  A.tick(Date.now() + 130000); assert.equal(e.lockLapsed, true);
+  A.tick(Date.now() + LOCK_MS + 1000); assert.equal(e.lockLapsed, true);
   A._onMsg(msg); assert.equal(e.locks, 2, 'but no third');
   assert.ok(A.withdraw(id).ok, 'and the owner has it back');
 });
@@ -235,7 +235,7 @@ test('Royalty promises are debts: arrears when cash is short, a liability in net
   const sent = A.out.filter((m) => m.t === 'royalty');
   assert.ok(sent.length >= 3 && sent.every((m) => m.amount <= 30 + 1e-9), 'the arrears go in messages of a day\'s rate: ' + sent.map((m) => m.amount));
   near(sent.reduce((a, m) => a + m.amount, 0), 90, 1e-6);
-  for (const m of sent) assert.ok(B.receiveRoyalty(m.amount, off.offer.id, 'AAA').ok);
+  for (const m of sent) assert.ok(B.receiveRoyalty(m.amount, off.offer.id, 'AAA', A.s.hour).ok); // (a stream is paced by the class's hour, which a room tells the engine and this test has to say)
   assert.ok(rowsOf(A, 'p2p').some((r) => r.text === 'Royalty paid' && r.amt < 0), 'and each payment is a row');
   // the exit's proceeds are less what the promise still owes
   const C2 = mk([], 3, 'CCC'); rich(C2, 400000); C2.s.auditFirst = true; C2.s.auditNext = null;
@@ -322,6 +322,13 @@ async function startRelay(env = {}) {
   child.on('exit', (c) => { st.exited = c; }); child.stderr.on('data', (d) => { st.err += d; });
   const port = await new Promise((res, rej) => { const to = setTimeout(() => rej(new Error('relay did not start')), 8000); child.stdout.on('data', (d) => { const m = /listening on :(\d+)/.exec(String(d)); if (m) { clearTimeout(to); res(+m[1]); } }); child.on('exit', () => rej(new Error('relay exited early'))); });
   return { child, port, st, url: `ws://localhost:${port}`, stop: () => child.kill() };
+}
+/** The relay in this process, on a clock the test holds (createRelay's `now`): what the relay calls "too fresh to forget" and "old enough" are readings of that clock, not a race against the load of the machine. `logs`: what it would have printed. */
+async function startLocalRelay(env = {}, clock = null) {
+  const { createRelay } = await import('../server/relay.mjs');
+  const logs = [], r = createRelay({ env, now: clock ? () => clock.t : Date.now, log: (...a) => logs.push(a.join(' ')) });
+  const port = await r.listen(0);
+  return { ...r, port, url: `ws://localhost:${port}`, logs, stop: () => r.close() };
 }
 function sock(relay, room, pid, role = 'student', key = keyFor(pid)) {
   const ws = new WebSocket(`${relay.url}/?room=${room}&pid=${pid}${key === null ? '' : '&key=' + key}&role=${role}`);
@@ -512,7 +519,7 @@ test('Balance: the late game does not run away: on a sample of the 66 pairs few 
 function hubOf(code = 'HUB') {
   const members = new Map(), queue = [];
   const hub = {
-    queue, members, dropped: [],
+    code, queue, members, dropped: [],
     join(S) {
       members.set(S.pid, S);
       S.room = { kind: 'local', send: (m) => queue.push({ ...m, from: S.pid, role: 'student', handle: S.handle, ts: Date.now() }), close() {}, on() {} };
@@ -528,9 +535,11 @@ function hubOf(code = 'HUB') {
   };
   return hub;
 }
-function sessionIn(hub, pid, perks = ['trades', 'pro']) {
+function sessionIn(hub, pid, perks = ['trades', 'pro'], hour = 0) {
   store.clear();
-  const S = new Session(); S.pid = pid; S.handle = pid; S.startGame({ perks, handle: pid }); S.mode = 'student'; S.clockAdopted = true; S.clock.set({ paused: true });
+  // Founders in one room are in one world, as in a real room: the room's code is its seed, so a crowd, and so a price, is the same at both ends of a swap. (A solo start rolls a seed of its own.)
+  const S = new Session(); S.pid = pid; S.handle = pid; S.mode = 'student'; S.worldSeed = hub.code; S.startGame({ perks, handle: pid }); S.clockAdopted = true; S.clock.set({ paused: true });
+  if (hour) { S.game.advanceTo(hour); S.clock.set({ hour, paused: true }); }
   S.game.s.mil = { m1: true, m2: true, m3: true }; S.game.s.auditNext = null; S.game.s.auditFirst = true; S.game.s.events.length = 0;
   for (const z of [2, 3, 4]) S.game._openZone(z);
   S.game.s.assets.length = 0;
@@ -547,7 +556,7 @@ const settleAll = (hub, ses) => { hub.drain(); for (const S of ses) for (const e
 test('Swap, last step (high): the acceptor commits only to what the proposer must take, so a hidden counterfeit asked for with cash, or a crate moved to another district, mints and destroys nothing', () => {
   // (1) the counterfeit: B asks for A's pen (a counterfeit nobody has told A about) and as much of A's cash as the guardrail lets through, giving a good crate
   {
-    const hub = hubOf('S1'), A = sessionIn(hub, 'PC-AAAA'), B = sessionIn(hub, 'PC-BBBB');
+    const hub = hubOf('S1'), A = sessionIn(hub, 'PC-AAAA', undefined, 24 * 30), B = sessionIn(hub, 'PC-BBBB', undefined, 24 * 30); // (day 30: a founder on day 0 cannot hold a crate worth this much)
     A.game.s.cash = 1000; B.game.s.cash = 0;
     const Y = B.game._mk(B.game.s, 'infusionPumps', { zone: 2, basis: 1 }); B.game.s.assets.push(Y);
     const X = A.game._mk(A.game.s, 'pen', { zone: 3, basis: 3 }); X.truth = { q: 1, fake: true }; X.known = false; A.game.s.assets.push(X);
@@ -577,7 +586,8 @@ test('Swap, last step (high): the acceptor commits only to what the proposer mus
     for (const S of [A, B]) S._sendSnap(true); hub.drain();
     const wantX = B.roster().find((q) => q.pid === A.pid).inventory.find((i) => i.id === X.id);
     const res = B.propose({ to: A.pid, giveIds: [Yc.id], want: { assets: [wantX], cash: 0 } }); assert.ok(res.ok, res.msg); hub.drain();
-    assert.ok(A.game.ship([X.id], pick.z2).ok); A.game.advanceTo(A.game.s.hour + 14); A.clock.hour = A.game.s.hour;
+    assert.ok(A.game.ship([X.id], pick.z2).ok); for (const f of A.game.s.freight) f.risk = 0; // (a truck damages its crates now and then, -20% quality, and a crate worth a fifth less puts the swap outside the band: in one run in twenty this test failed on that roll, which is not what it is about)
+    A.game.advanceTo(A.game.s.hour + 14); A.clock.hour = A.game.s.hour;
     const here = A.game.s.assets.find((a) => a.id === X.id); assert.equal(here.zone, pick.z2, 'it is back on the shelf, in the other district');
     const before = totals(A, B); // (freight was paid)
     assert.ok(A.acceptIncoming(res.offer.id).ok); hub.drain();
@@ -691,7 +701,7 @@ test('Swap, a lost delivery (low): the acceptor says it again until the proposer
   assert.equal(JSON.stringify(A.game.s.assets), snapA, 'a second copy is not taken'); assert.equal(B.delivering.size, 0, 'but it is acknowledged again');
   // never acknowledged: a few tries, then a note, then nothing more
   const C = sessionIn(hub, 'PC-CCCC'); C.delivering.set('Ox', { to: 'PC-AAAA', payload: { offerId: 'Ox', deliver: { cash: 0, assets: [] } }, at: 0, tries: 1, name: 'Ada' });
-  for (let t = 1; t <= 6; t++) C.tick(t * 200000);
+  for (let t = 1; t <= 10; t++) C.tick(t * 200000);                        // (every 30 seconds for half an hour since the commit, then it says so and stops)
   assert.equal(C.delivering.size, 0); assert.ok(C.game.s.news.some((n) => /has not said the swap arrived/.test(n.text)));
 });
 
@@ -987,7 +997,8 @@ test('Relay seat (medium): the instructor\'s seat belongs to the first to take i
 });
 
 test('Relay (low): names that only greet cannot fill the room\'s table or keep a student out, the others hear when a connection closes, an acknowledgement is passed on, and a frame nested thousands deep does not harm its sender', { skip: !haveRelay && 'run npm install in server/' }, async () => {
-  const relay = await startRelay({ MAX_ROOM: '5', GHOST_MS: '150' });
+  const clock = { t: 1e12 }; // (the relay's own clock, held by the test: it ran on the machine's, GHOST_MS was 150 ms of it, and nine connections took longer than that whenever the machine was busy)
+  const relay = await startLocalRelay({ MAX_ROOM: '5', GHOST_MS: '150' }, clock);
   try {
     const watcher = sock(relay, 'FLOOD', 'PC-WATCH'); await watcher.ready;
     // nine greeters, and the watcher is the tenth pid (the table holds ten): they connect, say hello and leave
@@ -996,7 +1007,7 @@ test('Relay (low): names that only greet cannot fill the room\'s table or keep a
     assert.ok(watcher.got.filter((m) => m.t === 'bye').every((m) => /^GH\d$/.test(m.from)), 'the room is told each one left, though none said goodbye');
     const refused = sock(relay, 'FLOOD', 'PC-REAL1'); await until(() => refused.closed != null);
     assert.equal(refused.closed, 1013, 'right after the flood the table is full of names too fresh to forget');
-    await sleep(300);
+    clock.t += 300; // the greeters are now older than GHOST_MS
     const real = sock(relay, 'FLOOD', 'PC-REAL2'); await real.ready; real.send({ t: 'snap', snap: { pid: 'PC-REAL2', nw: 5 } }); await sleep(100);
     assert.equal(real.closed, null, 'a real student gets in once the greeters are old enough to forget');
     assert.ok(watcher.got.some((m) => m.t === 'snap' && m.from === 'PC-REAL2'));
@@ -1008,8 +1019,8 @@ test('Relay (low): names that only greet cannot fill the room\'s table or keep a
     a.ws.send('{"t":"hello","x":' + deep + '}'); a.ws.send('{"t":"hello","x":' + '{"a":'.repeat(4000) + '1' + '}'.repeat(4000) + '}');
     await sleep(150); b.got.length = 0; a.send({ t: 'hello', handle: 'still here' });
     await until(() => b.got.some((m) => m.t === 'hello' && m.handle === 'still here')); assert.equal(a.closed, null);
-    assert.equal(relay.st.exited, null); assert.ok(!/uncaught/.test(relay.st.err), 'nothing reached the last-resort handler: ' + relay.st.err.slice(0, 200));
-  } finally { relay.stop(); }
+    assert.equal(relay.http.listening, true); assert.deepEqual(relay.logs, [], 'no frame was refused with a fault, and nothing reached the last-resort handler: ' + relay.logs.join(' | ').slice(0, 200));
+  } finally { await relay.stop(); }
 });
 
 test('Relay (low): a full relay forgets the room that has been empty longest before it refuses a class, and refuses only when every room has someone in it', { skip: !haveRelay && 'run npm install in server/' }, async () => {
@@ -1079,7 +1090,7 @@ test('Snapshot door (medium): what a classmate says they are worth is cut to wha
   // what the best honest play reached stays under it: the bot deciding every two hours, on days 10, 30, 50, 70 and 90 (measured 938, 300k, 1.5M, 5.0M, 11.9M)
   for (const [day, best] of [[10, 938], [30, 300136], [50, 1487581], [70, 5041219], [90, 11852032]]) assert.ok(C.nwCeiling(day * 24) > best * 2, `day ${day}: ${Math.round(C.nwCeiling(day * 24))} against ${best}`);
   store.clear();
-  const T = new Session(); T.pid = 'TEACH'; T.mode = 'instructor'; T.clock.set({ hour: 24 * 40 });
+  const T = new Session(); T.pid = 'TEACH'; T.mode = 'instructor'; T.clock.set({ hour: 24 * 40, paused: true }); // (paused: a clock that runs reads a few milliseconds past hour 960, and the day-39 ceiling the test compares with is the ceiling at hour 912 to the digit)
   const snap = (nw, hour, extra = {}) => ({ handle: 'H', nw, cash: 0, debt: 0, hour, trades: 5, p2p: 400, flags: {}, skills: { ops: 1, growth: 1, fintech: 1 }, perks: [], shockLog: [], ...extra });
   const add = (pid, sn, away = false) => T.peers.set(pid, { pid, handle: pid, role: 'student', snap: C.cleanSnap(sn, pid), clean: true, seen: away ? 0 : Date.now() });
   add('HON1', snap(40000, 24 * 40)); add('HON2', snap(60000, 24 * 40)); add('HON3', snap(90000, 24 * 40));
@@ -1108,8 +1119,9 @@ test('Gradebook (low): 450 hostile peers with a dozen unique shock ids each cost
     const shockLog = Array.from({ length: 12 }, (_, k) => ({ id: `s${i}-${k}`, nw: 1000, nwAfter: 1000 + k * 50, pivots: k % 3, de: 1 }));
     s.peers.set('P' + i, { pid: 'P' + i, handle: 'p' + i, role: 'student', snap: C.cleanSnap({ handle: 'p' + i, nw: 1000 + i, hour: 24 * 60, flags: {}, shockLog }, 'P' + i), clean: true, seen: Date.now() });
   }
-  s.peers.set('SHARED1', { pid: 'SHARED1', handle: 'a', role: 'student', clean: true, seen: Date.now(), snap: C.cleanSnap({ handle: 'a', nw: 2000, hour: 1440, flags: {}, shockLog: [{ id: 'tariff', nw: 1000, nwAfter: 1500, pivots: 1 }, { id: 'tariff', nw: 1, nwAfter: 99999, pivots: 9 }] }, 'SHARED1') });
-  s.peers.set('SHARED2', { pid: 'SHARED2', handle: 'b', role: 'student', clean: true, seen: Date.now(), snap: C.cleanSnap({ handle: 'b', nw: 2000, hour: 1440, flags: {}, shockLog: [{ id: 'tariff', nw: 1000, nwAfter: 500, pivots: 0 }] }, 'SHARED2') });
+  s.peers.set('SHARED1', { pid: 'SHARED1', handle: 'a', role: 'student', clean: true, seen: Date.now(), snap: C.cleanSnap({ handle: 'a', nw: 2000, hour: 1440, flags: {}, shockLog: [{ id: 'fed@1056', nw: 1000, nwAfter: 1500, pivots: 1 }, { id: 'fed@1056', nw: 1, nwAfter: 99999, pivots: 9 }] }, 'SHARED1') });
+  s.peers.set('SHARED2', { pid: 'SHARED2', handle: 'b', role: 'student', clean: true, seen: Date.now(), snap: C.cleanSnap({ handle: 'b', nw: 2000, hour: 1440, flags: {}, shockLog: [{ id: 'fed@1056', nw: 1000, nwAfter: 500, pivots: 0 }] }, 'SHARED2') });
+  s.peers.set('SHARED3', { pid: 'SHARED3', handle: 'c', role: 'student', clean: true, seen: Date.now(), snap: C.cleanSnap({ handle: 'c', nw: 2000, hour: 1440, flags: {}, shockLog: [{ id: 'fed@1056', nw: 1000, nwAfter: 900, pivots: 0 }] }, 'SHARED3') }); // (a shock is graded when three founders logged it)
   s.gradebook(); const t0 = process.hrtime.bigint(); const gb = s.gradebook(); const ms = Number(process.hrtime.bigint() - t0) / 1e6;
   assert.ok(ms < 60, `gradebook of 451 rows took ${ms.toFixed(1)} ms`);
   const a = gb.find((r) => r.pid === 'SHARED1'), b = gb.find((r) => r.pid === 'SHARED2');

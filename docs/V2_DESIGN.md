@@ -7,7 +7,7 @@ This is the single source of truth for the v2 redesign. Parallel work (data, min
 1. **Unequal starts.** Three profiles began with $0.05, $5,000 and $50,000 in three different places. That made the loop incomparable between starts.
 2. **It is a business sim, not a game.** Seven tabs, tables, forms. Nothing to *do* with your hands. The tutorial shows the outcome but not the *why*.
 3. **Three zones are not a world.** The loop never changes character. Trades are one button: Pitch, Confirm.
-4. **No skill expression.** Stats decide outcomes. A player's judgement, reading and timing change nothing.
+4. **No skill expression.** Stats decide outcomes. A player's judgment, reading and timing change nothing.
 
 ## 2. Principles
 
@@ -17,7 +17,7 @@ This is the single source of truth for the v2 redesign. Parallel work (data, min
 - **Sixteen districts, one loop.** Every district runs the same core loop (source, improve, sell, reinvest) at a different scale, with *one signature rule* that teaches *one concept*.
 - **Skill is a choice you make, not a reflex.** Every important interaction has a strategic skill layer (information, persuasion, negotiation, precision, bidding). Stats change the *difficulty*, never the *outcome*. Every game has a **Quick** option (auto-play at average skill) and an **Assist** mode, so nobody is excluded and time is never forced.
 - **Learn by doing, then by naming it.** Each mission ends with *why it worked*, a *teach-back* question and a *Codex* entry.
-- **Accessibility is not optional.** Nothing is timing-only. Everything is keyboard operable. Reduced motion is honoured.
+- **Accessibility is not optional.** Nothing is timing-only. Everything is keyboard operable. Reduced motion is honored.
 
 ## 3. Backgrounds (replace Profiles)
 
@@ -26,8 +26,8 @@ Pick **two** of twelve. All twelve are balanced against each other. The target i
 | id | Background | Real-world basis | Strength | Cost |
 |---|---|---|---|---|
 | `connected` | Well-Connected | Social capital: "my dad knows a guy" | Buyers arrive 30% faster and bring 15% bigger budgets | Family obligations: 8% of your cash goes to relatives every 7 days |
-| `grad` | Business-School Grad | Credentials and theory | Free Niche Radar and exact saturation on every preview; +1 Capital Sourcing; loan spreads 15% lower | Student loans: 5% of every profit is garnished until $3,000 is repaid; -1 Ops (theory over practice) |
-| `trades` | Licensed Tradesperson | Skilled labour | +2 Ops; repairs cost 50% less; broken goods are 20% cheaper to source | Not a salesperson: pitch prices -8%, haggling is harder (buyers have less patience) |
+| `grad` | Business-School Grad | Credentials and theory | Free Niche Radar and exact saturation on every preview; +1 Capital Sourcing; loan spreads 15% lower; an alumni network: buyers bring 12% bigger budgets | Student loans: 5% of every profit is garnished until $3,000 is repaid; -1 Ops (theory over practice) |
+| `trades` | Licensed Tradesperson | Skilled labor | +2 Ops; repairs cost 50% less; broken goods are 20% cheaper to source | Not a salesperson: pitch prices -8%, haggling is harder (buyers have less patience) |
 | `immigrant` | Immigrant Hustler | Diaspora networks and informal credit | International lanes +10 points of margin; freight 25% cheaper; a zero-interest Community Circle loan (up to 15% of net worth) | Credit-invisible: banks refuse you until net worth $5,000; paperwork means audits come 1.4x as often |
 | `veteran` | Veteran | Discipline and logistics | Overhead -25%; macro shocks hit 40% softer; freight 15% faster | Rigid: trend and viral goods sell 20% lower to you (you cannot read fads) |
 | `heir` | Legacy Heir | Inherited safety nets | Once per run the family clears 60% of your debt when you are margin-called; loan spreads 25% lower; the first audit fine is waived | Born on third base: you start with no skill edge (all skills 1, no specialty bonus) and learn 10% slower |
@@ -51,7 +51,7 @@ One avenue runs through all sixteen. Unlock is by **net worth** (`gate`). `scale
 | 3 | Campus Quad | 1 | $80 | $25 | **Semester waves**: paper, training and electronics demand swings on a 28-day cycle; trends spread fast | `saturation-herd` | none |
 | 4 | Pawn District | 1 | $250 | $90 | **Fakes and auctions**: 22% of the lots are counterfeit (shared out by each good's `fakeRisk`, so a watch is fake about a third of the time); appraisal is the game | `information-asymmetry` | none |
 | 5 | Metro Hub | 2 | $1,000 | $400 | **Managers and the Bank open**; client contracts | `working-capital` | Managers, Bank, clients |
-| 6 | Estate Sales | 2 | $2,500 | $900 | **Auctions** (50% of lots); hidden-value boxes | `winners-curse` | lots +1 slot |
+| 6 | Estate Sales | 2 | $2,500 | $900 | **Auctions** (55% of lots); hidden-value boxes | `winners-curse` | lots +1 slot |
 | 7 | Auto Row | 2 | $6,000 | $2,500 | **Repair bays**: 60% of lots are broken; repair costs 25% less here | `repair-roi` | repairs 10% cheaper everywhere |
 | 8 | Harbor Docks | 2 | $12,000 | $5,000 | **Customs**: freight arriving here may be inspected; tariff exposure | `supply-chain` | freight 30% cheaper |
 | 9 | Industrial Park | 3 | $25,000 | $9,000 | **Bulk contracts** and SLAs; compliance audits begin (Milestone 2) | `scale-compliance` | pipeline caps +25% |
@@ -142,7 +142,7 @@ A campaign of ten short missions in the real UI against the real engine in a scr
 
 ## 11. Balance targets (tested with the bot)
 
-Time to reach each district's gate for a competent bot, by zone: 1-4 within days 1-14; 5 (Bank) by day 14-22; 9 (audits) by day 30-40; 13 (Corporate) by day 55-70; 16 by day 85+ only for strong play. The target is that no Background pair deviates from the median milestone day by more than 35% (reported by `tests/balance.mjs`; docs/BALANCE.md lists the pairs that do). The late game is held too, for a bot that decides every four virtual hours (at every three it is about one run in five: docs/BALANCE.md): no more than about one run in six reaches district 16 by day 90, and the day-90 net worth of the 90th percentile is at most about three times the 10th's. Skill play must matter: Deal-Room-optimal play beats Quick play by 15-30% on profit per deal; random play loses to Quick.
+Time to reach each district's gate for a competent bot, by zone: 1-4 within days 1-14; 5 (Bank) by day 14-22; 9 (audits) by day 30-40; 13 (Corporate) by day 55-70; 16 by day 85+ only for strong play. The target is that no Background pair deviates from the median milestone day by more than 35% (reported by `tests/balance.mjs`; docs/BALANCE.md lists the pairs that do). The late game is held too, for a bot that decides every two, three or four virtual hours (docs/BALANCE.md has the table): no more than about one run in six reaches district 16 by day 90, the day-90 net worth of the 90th percentile is at most about three times the 10th's, and the median day-90 net worth stays near commit 816e7c4's (about 1.5M, 1.0M and 0.4M at a decision every 2, 4 and 8 hours). Managers are the passive route and, at the median of the 66 pairs, earn at least as much as the hand play they displace: the same bot with hiring forbidden must not end richer than the one with it at a decision every 2, 4 or 8 hours (it ends 0.69, 0.65 and 0.78 times as rich: docs/BALANCE.md). That held only at 4 and 8 hours until the wrecks of districts 13 to 16 were priced for what their sellers know a repaired crate fetches (a wreck 10% dearer for each district past 12, nothing below 13: `ECON.brokenTop`); before it, at every 2 hours the hand-play bot flipped wrecks in districts 15 and 16 and compounded them into 4.7 times the net worth of the bot with managers, in district 16 in 72% of its runs. The bot that never hires now stays inside the late-game bounds above as well, and even a pair whose Backgrounds are all hand play (Tradesperson with Seasoned Pro) ends 0.5 to 1.3 times as rich without managers (it was 2 to 12 times at every 4 hours), with a test that holds the ratio between 0.3 and 1.5 at every 2, 4 and 8 hours. The bounds of this section are for a decision every 2 to 4 hours, the pace of a class; at 8 hours only the median net worth, district 16 and a looser spread are held, and the once-a-day figures of docs/BALANCE.md are informational. Skill play must matter: Deal-Room-optimal play beats Quick play by 15-30% on profit per deal; random play loses to Quick.
 
 ## 4.1 District numbers and rule semantics (what the engine will do with your data)
 
@@ -204,6 +204,6 @@ Four authors write `tier1..4.js` in parallel and never see each other's files, s
 ## 14. Procedure for parallel authors
 
 1. Work only in your own git worktree and branch (instructions are in your brief); never touch `main` or the main checkout, and touch only the files you own (section 10).
-2. Read sections 1-6, the parts of 7-13 your brief names, `js/data/schema.js` (the vocabulary and validators) and, for engine-adjacent code, `js/rng.js`, `js/market.js` and `js/config.js` (v1 numbers and behaviours you must stay compatible with).
+2. Read sections 1-6, the parts of 7-13 your brief names, `js/data/schema.js` (the vocabulary and validators) and, for engine-adjacent code, `js/rng.js`, `js/market.js` and `js/config.js` (v1 numbers and behaviors you must stay compatible with).
 3. Run your tests (`node --test tests/<yours>.test.mjs`) until they pass; run `node --check` on every file. Do not run the whole suite (the engine is mid-refactor on main).
 4. Commit with a clear message, ending with the line `Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>`. Report: branch name, commit hash, files, anything in the contract you found ambiguous and how you read it, and anything you could not satisfy.

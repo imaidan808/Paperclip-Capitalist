@@ -9,7 +9,7 @@ const byId = (list) => Object.fromEntries(list.map((x) => [x.id, x]));
 export const CODEX_BY_ID = byId(CODEX), QUEST_BY_ID = byId(QUESTS), ACH_BY_ID = byId(ACHIEVEMENTS);
 
 /** A number in [0, 1) from a key. rng.hash (FNV-1a) barely moves when only a key's last character changes, so the three picks of one day, which
- *  differ only there, came out within half a percent of each other; the murmur finaliser spreads them out again. */
+ *  differ only there, came out within half a percent of each other; the murmur finalizer spreads them out again. */
 export function unit(key) {
   let h = hash(String(key));
   h ^= h >>> 16; h = Math.imul(h, 0x85ebca6b); h ^= h >>> 13; h = Math.imul(h, 0xc2b2ae35); h ^= h >>> 16;
