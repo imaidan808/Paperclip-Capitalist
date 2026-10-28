@@ -105,6 +105,8 @@
 .stk-fake { border-left-color: var(--red); color: var(--ink); }
 .stk-chips { gap: .3rem; }
 .stk-fix { margin: 0; }
+/* the bench will not open on the cash in hand: the reason stands beside the (disabled) Repair button, in the same gold the other warnings use */
+.stk-fixwhy { margin: 0; padding-left: .55rem; border-left: 3px solid var(--gold); color: var(--ink); overflow-wrap: anywhere; }
 .stk-crate .btn { justify-self: start; }
 .stk-crate.is-broken { border-top: 6px solid var(--red); background-image: repeating-linear-gradient(135deg, transparent 0 12px, rgba(255, 125, 117, .06) 12px 24px); }
 .stk-crate.is-fake { border-style: dashed; border-color: var(--red); }

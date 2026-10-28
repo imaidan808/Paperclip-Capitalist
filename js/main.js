@@ -7,7 +7,7 @@ import { $, esc, delegate, applySettings, initDialog, settingsDialog, dlg, toast
 import { mountDraft } from './ui/draft.js';
 import { mountAcademy, claimPendingRewards } from './ui/academy.js';
 import { mountGame } from './ui/shell.js';
-import { mountInstructor } from './ui/instructor.js';
+import { mountInstructor, FOLLOW_NOTE } from './ui/instructor.js';
 import { mountDebrief } from './ui/debrief.js';
 
 const S = new Session();
@@ -87,10 +87,12 @@ const screens = {
             <label for="ir">Relay URL (optional)</label><input id="ir" placeholder="wss://relay.example.edu" value="${esc(relay)}">
             <div class="row gap"><button class="btn" data-act="instr">Create a room</button>${instr ? `<button class="btn ghost" data-act="instr-resume">Reopen room ${esc(instr.code)}</button>` : ''}</div>
             ${instrKey ? `<details class="gap"><summary class="small">Recovery code for room ${esc(instr.code)}</summary><p class="small mute">Keep it somewhere safe. With the room code it lets you run this room from another device, or after this browser has forgotten it.</p><p class="mono" id="ik-show" tabindex="0">${esc(instrKey)}</p></details>` : ''}
-            <details class="gap"><summary class="small">Take back a room (another device, or this browser forgot it)</summary>
+            <details class="gap" id="ires"><summary class="small">Resume as instructor: take back a room (another device, or this browser forgot it)</summary>
+              <p class="small mute">A room runs from the browser that made it. To run it from here, enter its room code and the recovery code you saved. The Relay URL above must be the one your students joined with. This dashboard waits a few seconds to hear the class's clock, and starts paused if nobody answers.</p>
               <label for="ic" class="gap">Room code</label><input id="ic" maxlength="8" autocomplete="off" style="text-transform:uppercase" value="${esc(instr?.code || '')}">
               <label for="ik" class="gap">Recovery code</label><input id="ik" autocomplete="off" spellcheck="false" placeholder="xxxx-xxxx-xxxx-xxxx-xxxx-xxxx-xxxx-xxxx">
-              <button class="btn ghost gap" data-act="instr-recover">Take the room back</button></details></section>
+              <button class="btn ghost gap" data-act="instr-recover">Take the room back</button>
+              <p class="tiny mute" id="ires-note">${esc(FOLLOW_NOTE)}</p></details></section>
           <section class="panel"><h2>Accessible by design</h2><p class="small mute">Keyboard-only play, screen-reader announcements, high contrast, reduced motion and adjustable text. No account, no tracking, no personal data.</p><button class="btn ghost" data-act="a11y">Display and sound settings</button></section>
         </div>
       </div>`;
@@ -171,7 +173,9 @@ function enter() { go('game'); }
 
 /** `owner`: a recovery code pasted to take a running room back (another device, or storage that was cleared). That room's clock is the class's, not ours, so the session waits to hear it (Session.recovering). */
 function startInstructor(code, relay, fresh, saved, owner) {
+  const solo = kv.get('save'); // a solo run saved in this browser is not the instructor's to throw away: S.reset() deletes it, so it is put back (Resume your run is still on the title screen after the room closes)
   S.reset();
+  if (solo) kv.set('save', solo);
   S.mode = 'instructor';
   if (fresh) S.clock = new Clock({ hour: 0, paused: true, speed: 1 });
   else if (saved) { S.clock = new Clock(saved.clock); Object.assign(S.difficulty, saved.difficulty || {}); S.ghosts = saved.ghosts ?? 36; S.algo = saved.algo ?? true; }

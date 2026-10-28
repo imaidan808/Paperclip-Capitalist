@@ -38,9 +38,12 @@
 //  - The herd in missions 3, 6 and 8 is the cohort's ghosts at hour 0 with the seed 'academy-<mission id>'. The ghosts start in the first districts
 //    and walk outward (js/cohort.js zoneShare), so a herd exists only where the ghosts already are at day 1: that is why mission 8 lives in Metro Hub.
 //  - Districts that need their unlock bonus list at least two districts in `zones` (Game.B is cached by the number of open districts).
-//  - A lot is posted at 84% to 97% of its described value (docs/BALANCE.md, Hidden truth: ECON.lotDiscHi and lotDiscLo), a broken one lower, and the Deal Room's result card prices it against
-//    that value. So a lesson's lot is priced inside that band, or the card ("worth about $X") would contradict the lesson. Mission 7's sneakers are the one declared exception: the intro says
-//    they are priced a third under their value, which is the whole premise of borrowing to buy them.
+//  - A working lot is posted at 84% to 97% of its described value (docs/BALANCE.md, Hidden truth: ECON.lotDiscHi and lotDiscLo), and the Deal Room's result card prices it against that value. So a lesson's
+//    lot is priced inside that band, or the card ("worth about $X") would contradict the lesson. A BROKEN lot on the open market is posted the other way: sellers of wrecks know what a fixed crate fetches,
+//    so it is asked at 1.00 times its as-is value at Ops 1 and more with every level of Ops (x1.21 at Ops 2, x2.05 at Ops 6; ECON.brokenLo and ECON.brokenSlope). Two lessons keep a gift or a bargain on
+//    purpose and say so: mission 5's van is already in the yard (nothing is bought, and its card says what the market would ask), and mission 10's three estate lots are posted at 97% of their as-is
+//    value, a family clearing an attic (its intro says so). Mission 7's sneakers are the other declared exception: the intro says they are priced a third under their value, which is the whole premise
+//    of borrowing to buy them. tests/finish-ui.test.mjs builds the open-market numbers from the engine itself.
 //
 // What a runner must still do that no data can (the test file holds the reference check, `stillPossible`, and plays each mistake below): a lesson whose one scarce
 // thing (the paperclip, the broken van, the last pin set, the last lot, the only counterfeit, a manager's working capital) was spent on the wrong buyer or the wrong
@@ -276,7 +279,7 @@ export const ACADEMY = [
       body: [
         "A repair is an investment: you spend cash now to raise an asset's value. Repair ROI is the gain after cost divided by the cost. Do it only when the ROI beats what the same cash would earn elsewhere. That alternative return is your opportunity cost.",
         "Three things set the price of a fix. Ops makes it cheaper (each level multiplies the cost by 0.42) and better (quality climbs from 0.50 at Ops 1 to 1.00 at Ops 5). Auto Row takes 25% off the bill and unlocking it 10% more: 0.75 × 0.90 = 0.675 of the van's $1,050 base. Your timing on the marker nudges quality by up to 15% and cost by -10% to +30%.",
-        "So the same van can be a loss for one founder and a bargain for another. Stock's quote is the bill before the marker, and Careful, the steady setting, runs 30% over it. That is why a skill point on Ops is worth spending.",
+        "So the same van can be a loss for one founder and a bargain for another. Stock's quote is the bill before the marker, and Careful, the steady setting, runs 30% over it. That is why a skill point on Ops is worth spending. This van is already yours: bought on the open market, a wreck is asked at 1.00 times its as-is value at Ops 1 and 1.21 times at Ops 2.",
       ],
       formula: "ROI = (value after - value before - cost) / cost. Cost = base × 0.42^(Ops - 1) × district discounts. Quality = 0.50 + 0.50 × min(1, (Ops - 1) / 4).",
       example: {
@@ -288,7 +291,7 @@ export const ACADEMY = [
           "Careful is not the worst case. A poor marker at Ops 2 (quality -15%, cost +30%) still nets +$498, and a perfect one (quality +15%, cost -10%) nets +$1,335.",
           "Delgado pays $973 for the broken van and $2,027 for the repaired one, more than double, for a $387 repair.",
         ],
-        result: "One skill point on Ops turns a $156 loss into an $857 profit on the same van. Always read the quote before you pay.",
+        result: "One skill point on Ops turns a $156 loss into an $857 profit on the same van. Bought on the open market that van would cost $241 more at Ops 2, so the whole flip nets $616. Always read the quote before you pay.",
       },
     },
     teachBack: {
@@ -501,7 +504,7 @@ export const ACADEMY = [
   // ------------------------------------------------------------------------------------------------------------------ 10
   {
     id: 'm10', title: 'Deal Day', icon: '🎓', zone: 6, concept: 'eei-score', minutes: 2.5,
-    intro: "Graduation day at the Estate Sales. Three broken antique lots from one estate go to auction. Read one, bid for it, fix it, pitch it and haggle it, using every skill you have learned. Quick is fine for any stage you have mastered.",
+    intro: "Graduation day at the Estate Sales. A family is clearing three broken antiques at auction, priced low to sell fast. Read one, bid for it, fix it, pitch it and haggle it, using every skill you have learned. Quick is fine for any stage you have mastered.",
     setup: {
       clock: 'paused', cash: 1000, assets: [],
       leads: [{ id: 'antique-dealer', seg: 'antiqueDealer', budget: 1500 }],

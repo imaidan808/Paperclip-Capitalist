@@ -17,8 +17,13 @@ const plural = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
 // ---------------------------------------------------------------- what a build is good and bad at
 // Ten plain-language traits, each a weighted sum of the aggregated mods (perkMods). The weights say roughly how much a mod matters in play; they are
 // not balance numbers. A trait at +0.10 or more reads as a strength, at -0.10 or less as a weakness; mods that pull the same way net out.
+/** What a bigger buyer budget is worth next to faster buyers, per point. Buyers who come faster are all of the income they add, but a bigger budget only lifts a price that the budget was holding down (a pitch is
+ *  capped at it). Measured on the engine's own leads (tests/finish-ui.test.mjs): a budget 15% bigger lifts the best price to a lead by 70% to 80% of 15% in Auto Row and Metro Hub, so a point of budget is about 0.8 of a point of
+ *  arrival rate. Grad's alumni network (leadBudget 1.12) is then +0.096, a hair under a strength by itself, and Well-Connected's +30% arrivals and +15% budgets +0.42. (The first version added the budget at weight 1, which
+ *  put Grad's 12% over the line of a strength and Connected's 15% at a full 0.15.) */
+export const BUDGET_WEIGHT = 0.8;
 const TRAITS = [
-  { id: 'buyers', name: 'buyer flow', fn: (m) => (m.leadMult - 1) + (m.leadBudget - 1) + m.loyalty + 0.6 * m.trendBuyers + (m.digitalBuyers ? 0.25 : 0) - 0.6 * (1 - m.farLeadMult) },
+  { id: 'buyers', name: 'buyer flow', fn: (m) => (m.leadMult - 1) + BUDGET_WEIGHT * (m.leadBudget - 1) + m.loyalty + 0.6 * m.trendBuyers + (m.digitalBuyers ? 0.25 : 0) - 0.6 * (1 - m.farLeadMult) },
   { id: 'prices', name: 'selling prices', fn: (m) => (m.pitchMult - 1) + (m.trendMult - 1) + (m.digitalMult - 1) + 0.08 * m.haggleAssist - 0.08 * m.haggleHandicap },
   { id: 'sourcing', name: 'stock costs', fn: (m) => 0.12 * m.opsBonus + (1 - m.repairMult) + m.brokenDiscount + m.lotDiscount + 0.6 * m.lotDiscountGray + 0.8 * m.lotRefresh },
   { id: 'steady', name: 'steady demand', fn: (m) => -2 * m.volatility - 1.5 * m.scamRate - (m.burnout ? 0.1 : 0) - 0.005 * m.flopRep },
