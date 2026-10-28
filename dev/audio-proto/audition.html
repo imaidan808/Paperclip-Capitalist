@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Audio audition</title>
+<style>
+  :root { color-scheme: dark; } body { font: 15px/1.4 system-ui, sans-serif; margin: 0; padding: 16px; background: #0d1117; color: #e6edf3; max-width: 1100px; margin-inline: auto; }
+  h1 { font-size: 1.2rem; } h2 { font-size: 1rem; margin: 1.4rem 0 .4rem; } .row { display: flex; flex-wrap: wrap; gap: 6px; }
+  button { font: inherit; padding: 6px 10px; border: 1px solid #3d4757; background: #161b22; color: inherit; border-radius: 6px; cursor: pointer; min-height: 32px; }
+  button:hover { background: #21262d; } button:focus-visible { outline: 3px solid #ffc247; outline-offset: 2px; } button[data-tier=loud] { border-color: #ffc247; } button[data-tier=medium] { border-color: #5cd6ff; }
+  label { display: inline-flex; gap: 8px; align-items: center; margin-right: 16px; } .mute { color: #9aa7b4; }
+</style></head><body>
+<h1>Audio audition (prototype of docs/AUDIO.md)</h1>
+<p class="mute">Every recipe of the sound map, played through the real master chain (buses, glue compressor, soft clip at -3 dBFS). Border: yellow = loud, blue = medium, grey = tiny. Nothing plays until you press a button.</p>
+<p><label>Master <input id="vol" type="range" min="0" max="100" value="70" aria-label="Master volume"></label><label><input id="mute" type="checkbox"> Mute</label></p>
+<div id="app"></div>
+<script type="module">
+import { voice, master, dB } from './synth.js';
+import { SOUNDS } from './sounds.js';
+import { ONE_SHOTS, BEDS, bed } from './ambient.js';
+let ctx, M, trims = {}, n = 0;
+const flat = (x) => x.flat(Infinity).filter(Boolean);
+try { trims = await (await fetch('./trims.json')).json(); } catch { /* run.mjs writes it */ }
+function start() {
+  if (ctx) { ctx.resume?.(); return; }
+  ctx = new (window.AudioContext || window.webkitAudioContext)({ latencyHint: 'interactive' });
+  M = master(ctx, { makeup: 1 / (trims.makeup || 1.729) }); vol();
+}
+const vol = () => { if (M) M.master.gain.value = document.getElementById('mute').checked ? 0 : (document.getElementById('vol').value / 100) ** 2; };
+document.getElementById('vol').oninput = vol; document.getElementById('mute').onchange = vol;
+const play = (e, v) => { start(); voice(ctx, M.buses[e.bus], flat(e.build(e.variants[v])), ctx.currentTime + 0.02, { seed: ++n, trim: (trims.sounds || {})[e.id + '#' + v] || 0 }); };
+const app = document.getElementById('app');
+const groups = {};
+for (const e of SOUNDS) (groups[e.id.split('.')[0]] ||= []).push(e);
+for (const [g, list] of Object.entries(groups)) {
+  const h = document.createElement('h2'); h.textContent = g; app.append(h);
+  const row = document.createElement('div'); row.className = 'row'; app.append(row);
+  for (const e of list) for (const v of Object.keys(e.variants)) { const b = document.createElement('button'); b.textContent = e.id + (Object.keys(e.variants).length > 1 ? ' / ' + v : ''); b.dataset.tier = e.variants[v].tier || e.tier; b.onclick = () => play(e, v); row.append(b); }
+}
+const h = document.createElement('h2'); h.textContent = 'ambient one-shots and beds (a bed plays 8 s)'; app.append(h);
+const row = document.createElement('div'); row.className = 'row'; app.append(row);
+for (const o of ONE_SHOTS) { const b = document.createElement('button'); b.textContent = o.id; b.onclick = () => { start(); voice(ctx, M.buses.amb, flat(o.build()), ctx.currentTime + 0.02, { seed: ++n, trim: (trims.sounds || {})[o.id] || 0 }); }; row.append(b); }
+for (const id of Object.keys(BEDS)) for (const mods of [[], ['night'], ['rain']]) { const b = document.createElement('button'); b.textContent = 'bed ' + id + (mods.length ? ' + ' + mods : ''); b.onclick = () => { start(); const g = ctx.createGain(); g.gain.value = dB((trims.beds || {})[id] || 0); g.gain.setValueAtTime(0.0001, ctx.currentTime); g.gain.linearRampToValueAtTime(dB((trims.beds || {})[id] || 0), ctx.currentTime + 1); g.gain.setValueAtTime(dB((trims.beds || {})[id] || 0), ctx.currentTime + 7); g.gain.linearRampToValueAtTime(0.0001, ctx.currentTime + 8); g.connect(M.buses.amb); bed(ctx, g, id, ctx.currentTime, 8, mods); }; row.append(b); }
+</script></body></html>
