@@ -32,10 +32,11 @@ export function field({ trueValue = 100, rivals = 4, noise = 0.18, seed = 1, res
 }
 
 export function create(p = {}) {
+  // budget: only a missing one (null, undefined, NaN) means no cap. 0 is a real cap (a player with no cash bids nothing); negative counts as 0.
   const V = pos(p.trueValue, 100), seed = (num(p.seed) ? p.seed : 1) >>> 0, rng = new RNG(hash('auction' + seed));
   const s = {
     v: 1, seed, rs: rng.s, estimate: pos(p.estimate, V), trueValue: V, reserve: Math.max(0, num(p.reserve) ? p.reserve : 0.5 * V), inc: pos(p.increment, V / 25),
-    budget: num(p.budget) && p.budget > 0 ? p.budget : null, assist: !!p.assist, price: 0, high: null, youIn: true, round: 0, quiet: 0, done: false, winner: null, sold: null, events: [],
+    budget: num(p.budget) ? Math.max(0, p.budget) : null, assist: !!p.assist, price: 0, high: null, youIn: true, round: 0, quiet: 0, done: false, winner: null, sold: null, events: [],
     bots: (Array.isArray(p.bidders) ? p.bidders : []).slice(0, 8).map((b, i) => ({ id: i, name: NAMES[i], style: STYLES.includes(b && b.style) ? b.style : 'steady', limit: Math.max(0, num(b && b.limit) ? b.limit : 0), active: true, droppedAt: null, raises: 0 })),
   };
   s.price = s.reserve;
@@ -111,9 +112,9 @@ function pubOf(s) {
 export function ceiling(pub) { return pub.estimate * (1 - clamp(0.05 * (pub.rivals - 2), 0, 0.3)); }
 
 function advise(s) {
-  const p = pubOf(s), c = ceiling(p), ok = p.next <= c + 1e-9, curse = `With ${p.rivals} rival${p.rivals === 1 ? '' : 's'}, the winner is usually whoever guessed highest, and that guess is usually too high (the winner's curse).`;
+  const p = pubOf(s), c = ceiling(p), over = p.budget != null && p.next > p.budget + 1e-9, ok = p.next <= c + 1e-9 && !over, curse = `With ${p.rivals} rival${p.rivals === 1 ? '' : 's'}, the winner is usually whoever guessed highest, and that guess is usually too high (the winner's curse).`;
   const seen = p.drops.length ? ` ${p.drops.length} rival${p.drops.length === 1 ? '' : 's'} already dropped near ${money(Math.max(...p.drops))}; that is evidence.` : '';
-  return { action: { type: ok ? 'bid' : 'drop' }, ceiling: sig(c), concept: 'winners-curse', text: `${curse} Do not bid above your own estimate (${money(p.estimate)}) less a margin: stop near ${money(c)}.${seen} ${ok ? `The next bid, ${money(p.next)}, is still inside that.` : `The next bid, ${money(p.next)}, is past it: drop and keep your cash.`}` };
+  return { action: { type: ok ? 'bid' : 'drop' }, ceiling: sig(c), concept: 'winners-curse', text: `${curse} Do not bid above your own estimate (${money(p.estimate)}) less a margin: stop near ${money(c)}.${seen} ${ok ? `The next bid, ${money(p.next)}, is still inside that.` : over ? `The next bid, ${money(p.next)}, is past your budget (${money(p.budget)}): drop.` : `The next bid, ${money(p.next)}, is past it: drop and keep your cash.`}` };
 }
 
 export function view(s) { // never the rivals' limits, the true value or their styles, only moods and what they have done
