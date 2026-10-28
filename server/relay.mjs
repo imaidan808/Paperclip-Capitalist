@@ -21,7 +21,7 @@ import { createHash, timingSafeEqual } from 'node:crypto';
 import { realpathSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
-const TYPES = new Set(['hello', 'bye', 'snap', 'clock', 'inject', 'rewind', 'rewound', 'offer', 'accept', 'confirm', 'abort', 'reject', 'deliver', 'ack', 'decline', 'withdraw', 'royalty', 'flag']);
+const TYPES = new Set(['hello', 'bye', 'snap', 'clock', 'inject', 'rewind', 'rewound', 'offer', 'accept', 'confirm', 'abort', 'reject', 'deliver', 'ack', 'decline', 'withdraw', 'recall', 'holding', 'free', 'royalty', 'flag']);
 const INSTRUCTOR_ONLY = new Set(['clock', 'inject', 'rewind']);
 const PID = /^[A-Za-z0-9_.-]{1,24}$/;
 const KEY = /^[A-Za-z0-9_-]{16,64}$/;

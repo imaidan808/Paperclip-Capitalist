@@ -180,10 +180,11 @@ test('exactly ten missions m01..m10, in the order of section 9', () => {
 });
 
 const MISSION_KEYS = ['id', 'title', 'icon', 'zone', 'concept', 'minutes', 'intro', 'setup', 'steps', 'win', 'why', 'teachBack', 'reward'];
+const OPTIONAL_KEYS = ['finish']; // what the coach says after the last step when the win is a separate act (js/ui/academy-sandbox.js coachFor)
 const SETUP_KEYS = ['clock', 'assets', 'leads', 'lots', 'cash', 'zones', 'features', 'skills', 'perks', 'cohort', 'events'];
 test('mission fields, types and limits', () => {
   for (const m of ACADEMY) {
-    keysOf(m, MISSION_KEYS, m.id);
+    keysOf(m, [...MISSION_KEYS, ...OPTIONAL_KEYS], m.id);
     for (const k of MISSION_KEYS) assert.ok(k in m, `${m.id}: missing ${k}`);
     assert.ok(isStr(m.title) && m.title.length <= 40, `${m.id}: title`);
     assert.ok(isStr(m.icon) && [...m.icon].length <= 3, `${m.id}: icon is a single emoji`);
@@ -1049,7 +1050,7 @@ test('m04: the first number is worth money, patience more, and an alternative ma
   // "Leave and tap Dolores again to retry": the same deal at the same hour is the same deal
   const again = sellRun(g1, a2.id, 'stall-dolores');
   assert.equal(again.plan.seed, plan2.seed); assert.deepEqual(again.paramsFor('close', undefined, { pitch: { mult: 1.1 } }), sellRun(g1, a2.id, 'stall-dolores').paramsFor('close', undefined, { pitch: { mult: 1.1 } }));
-  has('m04 final hint', M('m04').steps[2].hint, 'Sold too low? Tick Assist and offer your trade-in records to Tariq'); has('m04 final say', M('m04').steps[2].say, 'Aim for 10% over fair');
+  has('m04 final hint', M('m04').steps[2].hint, 'Sold too low? Sell the records you were paid in to Tariq, with Assist on'); has('m04 final say', M('m04').steps[2].say, 'Aim for 10% over fair');
   // the teach-back's wrong answer is the real finding made false by its wording: a buyer never pays past their limit (js/play/haggle.js: an offer over it is refused)
   teachHas(m, 'forces the buyer to pay more than their limit', 'walk away');
   assert.ok(!/believe the goods are worth more/.test(text(m.teachBack)), 'the real anchoring effect (the first number shifts what people think a thing is worth) is not the distractor');
@@ -1244,7 +1245,7 @@ test('m07: the same fall leaves one loan nowhere near a margin call and the othe
   assert.ok(near(quick['bargain-a'], 1, 1e-3), `Quick pays the list for a (${JSON.stringify(quick)})`);
   assert.ok(['bargain-b', 'bargain-c', 'bargain-d'].every((id) => quick[id] > 1 && quick[id] <= 1.1), 'and a little over for b, c and d');
   assert.equal(M('m07').steps.find((s) => s.id === 'buy').anchor, 'world:lot:bargain-a', 'the buy step points at a lot Quick buys at the list price');
-  has('m07 example setup', m.why.example.setup, 'average Deal Room result', 'a few dollars either way');
+  has('m07 example setup', m.why.example.setup, 'average Deal Room result', 'yours may land a little off', '1.00 to 1.18 times the asking price');
   // the interest: the engine's rate at Capital Sourcing 2
   assert.equal(n2(g0.loanRate('micro')), '0.11'); assert.equal(n2(600 * g0.loanRate('micro') / 30), '2.23');
   has('m07 example setup', m.why.example.setup, '$400', `$${price}`, ui(f0), '25%');
@@ -1646,7 +1647,7 @@ test('the other ways to finish a deal: Quick or by hand, Pass or See the result,
     assert.ok(d.run.res.close.mult < 1.1, 'x0.94 keen: not 10% over fair'); assert.equal(c.i, 2, 'the step is the sale at 10% over fair, so it is still the careful deal'); assert.equal(c.won, false); assert.ok(stillPossible(m, c.g, c.i), 'a sale of the records to the busker is still on offer');
     // the hint's way out: the records Dolores and the collector paid in, offered to Tariq with Assist on (the hand routine of the step does not suit an impulsive buyer, Assist does)
     const rec = c.g.s.assets.find((a) => a.cls === 'fleaRecords'), again = sellDeal(c.g, rec.id, 'stall-tariq', { pitch: 'quick', close: 'careful' });
-    assert.ok(again.run.res.close.mult >= 1.1 && c.won, `the trade-in records sold to Tariq with Assist close at x${again.run.res.close.mult.toFixed(2)} and win the lesson`); }
+    assert.ok(again.run.res.close.mult >= 1.1 && c.won, `the records the buyers paid in, sold to Tariq with Assist close at x${again.run.res.close.mult.toFixed(2)} and win the lesson`); }
   // m05: Fix by hand (from Stock's Repair button, or from the van's own row) then sell by hand
   { const m = M('m05'), c = play(m, [(c) => ui0(c, 'quests'), (c) => ui0(c, 'stock')]);
     fixDeal(c.g, idOf(c.g, 'van')); assert.equal(c.i, 3); ui0(c, 'market'); sellDeal(c.g, idOf(c.g, 'van'), 'fleet-buyer', { pitch: 'best', close: 'careful' }); assert.ok(c.won, 'm05 by hand'); }

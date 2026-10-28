@@ -664,21 +664,11 @@ const BRITISH = new RegExp([
 const britishIn = (s) => (s.replace(/\bGrey\b(?=-market)/g, '').match(BRITISH) || []).map((w) => w.toLowerCase());
 
 /**
- * What is allowed to stay, and why. A word is listed here only because the file is not the content cluster's to edit (docs/V2_DESIGN.md section 10: the engine, config, perks,
- * the mini-games, the UI and the Academy have owners of their own) or because the spelling is deliberate. Each is a one-word change for its owner to make. Nothing else may
+ * What is allowed to stay, and why. A word is listed here only because the file is another branch's to edit (js/ui/deal.js is the presentation branch's) or because the spelling is deliberate. Each is a one-word change for its owner to make. Nothing else may
  * carry a British spelling: a new one anywhere fails, and a fixed one needs no change here (the diagnostic below lists what is still waiting).
  */
 const HANDED_OVER = {
-  'js/config.js': ['labour'], // AUDIT_THEMES: "the labour board"
-  'js/data/perks.js': ['labour'], // the Licensed Tradesperson's basis line
-  'js/data/schema.js': ['colours'], // the validator's own error message (nobody but an author reads it)
-  'js/deal.js': ['centre'], // FIX_ADVICE
-  'js/meta/academy.js': ['practise'], // lesson m08's hint (the Academy has its own owner)
-  'js/play/pitch.js': ['neighbours', 'maths'], // a buyer's quirk and a buyer's line
-  'js/play/repair.js': ['centre', 'labour'], // the dial's lines and the result
-  'js/ui/deal.js': ['offence'], // "They took offence at that number."
-  'js/ui/debrief.js': ['instalment'], // the workbook's garnishment line
-  'docs/BALANCE.md': ['normalise', 'centre'], // the balance track's document
+  'js/ui/deal.js': ['offence'], // "They took offence at that number." (the Deal Room's screen is the presentation branch's to edit: a one-word change for its owner, and the only word left)
 };
 const DELIBERATE = {
   'js/play/pitch.js': ['sceptic'], // a quirk id and the words that recognise the player's own typing (both spellings are accepted)
@@ -709,8 +699,7 @@ test('every player-facing string the game can show is spelled the American way (
   walk(AUDIT_THEMES, 'AUDIT_THEMES'); walk(EVENTS, 'EVENTS'); for (const [k, e] of Object.entries(ALGO_EVENTS)) walk({ name: e.name, ...e.mk('pen') }, 'ALGO_EVENTS.' + k);
   walk(QUESTS, 'QUESTS'); walk(ACHIEVEMENTS, 'ACHIEVEMENTS'); walk(DAILIES, 'DAILIES'); walk(CODEX, 'CODEX'); walk(ACADEMY, 'ACADEMY');
   // a table read from a file this cluster does not own may carry the words HANDED_OVER names for that file, and only those
-  const allowed = new Set(['js/config.js', 'js/data/perks.js', 'js/meta/academy.js'].flatMap((f) => HANDED_OVER[f]));
-  const stray = strings.filter(([, s]) => britishIn(s).some((w) => !allowed.has(w)));
+  const stray = strings.filter(([, s]) => britishIn(s).length);
   assert.deepEqual(stray.map(([w, s]) => `${w}: ${britishIn(s).join(', ')} | ${s.slice(0, 70)}`), [], 'tables');
 
   // every string literal of every source file (comments are not read: they are not shown)
@@ -724,6 +713,8 @@ test('every player-facing string the game can show is spelled the American way (
     }
   }
   assert.deepEqual(stray2, [], 'source literals');
+  // the one word left is in a file this round may not touch; nothing else is waiting for an owner any more
+  assert.deepEqual([...new Set(handedOver)], ['js/ui/deal.js: offence'], 'only the Deal Room screen\'s "offence" is still waiting for its owner');
   if (handedOver.length) t.diagnostic(`British spellings still waiting for their owners: ${[...new Set(handedOver)].join('; ')}`);
 });
 

@@ -23,6 +23,7 @@ const tone = (x) => (x >= 0 ? 'green' : 'red');
 const BANDS = {
   herd: { glyph: '⚠', tone: 'bad', note: 'The herd trap: too many pitches chase this buyer, so your margin shrinks.' },
   crowded: { glyph: '◐', tone: 'warn', note: 'Getting crowded: a quieter buyer would pay you more.' },
+  open: { glyph: '○', tone: 'info', note: 'An ordinary niche: nobody has crowded it.' },
   balanced: { glyph: '●', tone: 'info', note: 'A healthy niche, with room for you.' },
   pioneer: { glyph: '★', tone: 'good', note: 'Pioneer lane: few others are here, so your margin is boosted.' },
 };

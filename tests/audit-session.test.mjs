@@ -622,7 +622,11 @@ test('#21 #33 nobody but the classmate an offer was made to can take it, deliver
   const w = a.propose({ to: 'GRACE', giveIds: [], giveCash: 10, want: { assets: [], cash: 10 } });
   a._onMsg(J({ t: 'accept', from: 'GRACE', role: 'student', to: 'ADA', offerId: w.offer.id }));
   a.game.s.escrow.find((x) => x.offerId === w.offer.id).lockedAt -= LOCK_MS + 1000;
-  assert.equal(a.withdraw(w.offer.id).ok, true, 'once the acceptor has stopped trying (LOCK_MS) the proposer may withdraw');
+  // (the end of the hold is a question, not a guess: the acceptor is asked whether it committed, and says so, or says it is free; see tests/remaining-repair.test.mjs)
+  const asked = a.withdraw(w.offer.id);
+  assert.equal(asked.ok, false, 'a hold that has run out is asked about before the escrow is taken back'); assert.ok(out.some((m) => m.t === 'recall' && m.to === 'GRACE' && m.offerId === w.offer.id));
+  a._onMsg(J({ t: 'free', from: 'GRACE', role: 'student', to: 'ADA', offerId: w.offer.id }));
+  assert.equal(a.withdraw(w.offer.id).ok, true, 'once the acceptor has said it never committed the proposer may withdraw');
 });
 
 test('#21 a forged or malformed accept, decline, withdraw or reject cannot touch anyone else\'s swap', () => {

@@ -32,7 +32,7 @@ export const QUIRKS = [
   { id: 'fomo', phrase: 'cannot stand missing out', me: 'I hate missing out', fx: { scarcity: 0.45, utility: -0.1 }, words: ['missing out', 'fomo'] },
   { id: 'rushed', phrase: 'hates being rushed', me: 'I hate being rushed', fx: { scarcity: -0.55, utility: 0.15 }, words: ['rush'] },
   { id: 'specs', phrase: 'reads every spec sheet twice', me: 'I read every spec sheet twice', fx: { utility: 0.4, story: -0.3, prestige: -0.15 }, words: ['spec'] },
-  { id: 'neighbours', phrase: 'wants to impress the neighbours', me: 'I want to impress the neighbours', fx: { prestige: 0.4, price: -0.25 }, words: ['neighbo', 'impress'] },
+  { id: 'neighbors', phrase: 'wants to impress the neighbors', me: 'I want to impress the neighbors', fx: { prestige: 0.4, price: -0.25 }, words: ['neighbo', 'impress'] },
   { id: 'bargain', phrase: 'was stung by a bargain that fell apart', me: 'a bargain once fell apart on me', fx: { price: -0.5, utility: 0.2 }, words: ['bargain', 'stung'] },
   { id: 'sceptic', phrase: 'distrusts any sales story', me: 'I distrust sales stories', fx: { story: -0.55, utility: 0.2 }, words: ['distrust', 'sceptic', 'skeptic'] },
   { id: 'collector', phrase: 'chases rare things', me: 'I chase rare things', fx: { scarcity: 0.4, price: -0.15 }, words: ['rare', 'collect'] },
@@ -83,7 +83,7 @@ const SAY = { // per angle: [backed and wanted, wanted but not backed, not wante
   prestige: ['It has real standing; I would be proud to own it.', 'You are dressing it up as high-end, and it is not.', 'I do not care how it looks to other people.', 'The status angle is nice, but it does not move me.'],
   utility: ['It does the job, and you showed me it does.', 'You say it is practical, but nothing backs that up.', 'I am not buying it for what it does.', 'It works, sure, but that is not my main question.'],
   scarcity: ['Not many of these around, so I should move now.', '"Rare", you say? I have seen a dozen of these.', 'A deadline does not move me; I will wait for another.', 'Hard to find, maybe, but I am in no rush.'],
-  price: ['The numbers work; that is a fair deal.', 'You call it cheap, but I can do the maths.', 'I am not shopping on price.', 'The price is fine, but it does not decide it.'],
+  price: ['The numbers work; that is a fair deal.', 'You call it cheap, but I can do the math.', 'I am not shopping on price.', 'The price is fine, but it does not decide it.'],
   story: ['I love where it came from; that part sold me.', 'That backstory sounds made up.', 'Spare me the history; I just want the thing.', 'Nice tale, but it does not change my mind.'],
 };
 const TALK = { prestige: 'talk of status', utility: 'a list of features', scarcity: 'pressure to hurry', price: 'talk of discounts', story: 'a long story' };

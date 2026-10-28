@@ -94,7 +94,7 @@ export function reflectionMD(S, notes) {
     '## Evidence: your build'];
   for (const p of buildOf(s)) L.push(`- ${p.name} (${p.basis}) Strength: ${p.strength} Cost: ${p.cost}`);
   if (costs.family.n) L.push(`- Family obligations paid: ${money(costs.family.amt)} in ${costs.family.n} payment(s).`);
-  if (costs.garnish.n) L.push(`- Student-loan garnishment: ${money(costs.garnish.amt)} in ${costs.garnish.n} instalment(s).`);
+  if (costs.garnish.n) L.push(`- Student-loan garnishment: ${money(costs.garnish.amt)} in ${costs.garnish.n} installment(s).`);
   if (costs.subscription.n) L.push(`- Tool subscriptions: ${money(costs.subscription.amt)} in ${costs.subscription.n} charge(s).`);
   if (costs.bailout.n) L.push('- The family bailout was used once.');
   if (sk.rows.length) { L.push('', '## Evidence: Deal Room play'); for (const r of sk.rows) L.push(`- ${r.name} (${r.stage}): played ${r.plays} time(s)${r.avg != null ? `, average score ${scoreText(r.avg)}` : ''}.`); }

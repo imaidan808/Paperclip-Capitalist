@@ -142,7 +142,7 @@ test('a buyer card shows the fit and the Creativity band for the crate that woul
   const lead = addLead(ctx, 2, 'radio');
   const card = cardOf(market.html(ctx), `lead:${lead.id}`);
   assert.match(card, /(Perfect|Good|Weak) fit/);
-  assert.match(card, /(Linear herd trap|Crowded|Balanced|Pioneer vector) \d\.\d\dx/);
+  assert.match(card, /(Linear herd trap|Crowded|Open|Balanced|Pioneer vector) \d\.\d\dx/);
   assert.match(card, /Best of yours: <b>[^<]*Radio/);
   assert.match(card, /recent|Nobody has sold|Almost nobody|classmates|popular|Crowded|Packed/i, 'the saturation in words');
   // choosing a crate by hand changes the label

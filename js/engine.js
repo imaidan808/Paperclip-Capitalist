@@ -155,7 +155,7 @@ export class Game {
    */
   led(type, text, amt = 0, meta = {}) {
     const L = this.s.ledger;
-    L.push({ h: this.s.hour, type, text, amt: isNum(amt) ? amt : 0, ...meta });
+    L.push({ h: this.s.hour, type, text, amt: isNum(amt) ? amt + 0 : 0, ...meta }); // (+ 0: a row is recorded as 0 and never -0, which a number format would print as -$0.00)
     if (L.length > LEDGER_CAP) this._foldLedger();
   }
   /** Folds LEDGER_FOLD rows into the summary row. The bulk goes first and the evidence stays: a manager cycle with an ordinary creativity score, then any other manager cycle, then the oldest of the rest
@@ -1378,7 +1378,7 @@ export class Game {
     let fine = this.auditFine();
     if (s.ps.fineWaive > 0) { s.ps.fineWaive--; fine = 0; this.note('good', 'The family lawyer made the first audit fine disappear.'); this.emit('perk', { id: 'heir', effect: 'fine-waived' }); }
     s.cash -= fine; s.auditFail++; s.velPenalty *= AUDIT.velocityHit;
-    this.led('audit', ignored ? 'Ignored audit: automatic penalty' : 'Failed audit: fine and velocity penalty', -fine);
+    this.led('audit', ignored ? 'Ignored audit: automatic penalty' : 'Failed audit: fine and velocity penalty', fine ? -fine : 0); // (the Heir's family lawyer waives the first fine: 0, not -0)
     this.note('bad', `${ignored ? 'You ignored the audit. ' : 'You were caught. '}Fine ${money(fine)} and a permanent -15% on pipeline velocity. Repeat failures compound.`);
   }
   resolveAudit(choice, pipeId) {

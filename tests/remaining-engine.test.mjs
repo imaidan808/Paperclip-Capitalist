@@ -195,14 +195,16 @@ test('Swap lock (low): the proposer holds its escrow while the acceptor is still
   B.tick(Date.now() + 100000); hub.drain();
   assert.equal(A.game.s.escrow.length, 0, 'A took the delivery'); assert.equal(B.delivering.size, 0, 'and B heard it');
   assert.deepEqual(totals(A, B).cls, before.cls, 'every crate there was is still there once'); near(totals(A, B).cash, before.cash, 1e-6);
-  // the hold does end by itself, after the acceptor has stopped trying
+  // the hold does end by itself: the acceptor is asked, and one that never committed lets it go (and one that does not answer is out of reach after a minute)
   const C = sessionIn(hub, 'PC-CCCC'); C.game.s.cash = 100;
   for (const S of [B, C]) S._sendSnap(true); hub.drain();
   const o2 = C.propose({ to: B.pid, giveIds: [], giveCash: 10, want: { assets: [], cash: 10 } }); hub.drain();
   C._onMsg({ t: 'accept', from: B.pid, role: 'student', to: C.pid, offerId: o2.offer.id });
   const e = C.game.s.escrow[0]; assert.equal(e.lockedBy, B.pid);
-  C.tick(Date.now() + 10 * 60000); assert.equal(e.lockLapsed, true, 'ten minutes on it has lapsed');
-  assert.ok(C.withdraw(o2.offer.id).ok);
+  hub.drop = () => true;                                                   // nobody answers
+  const t0 = Date.now() + 10 * 60000;
+  C.tick(t0); assert.ok(e.recalling, 'ten minutes on, B is asked'); assert.equal(C.withdraw(o2.offer.id).ok, false, 'and until it answers the offer is still held');
+  C.tick(t0 + 61000); assert.equal(e.lockLapsed, true, 'a minute without an answer and the hold has lapsed'); assert.ok(C.withdraw(o2.offer.id).ok);
 });
 
 // =========================================================================================================================  experience

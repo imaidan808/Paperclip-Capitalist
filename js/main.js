@@ -1,7 +1,7 @@
 // Entry point: routes between screens and runs the tick loop. Everything runs in the browser; nothing is sent anywhere
 // unless the player joins a classroom room (and then only pseudonymous game numbers).
 // Screens: title -> setup (the Background draft) -> academy (first run only) -> game -> debrief; instructor is its own branch.
-import { Session, Clock, kv } from './session.js';
+import { Session, Clock, kv, cleanOwner } from './session.js';
 import { roomCode, cleanCode } from './net.js';
 import { $, esc, delegate, applySettings, initDialog, settingsDialog, dlg, toast } from './ui/common.js';
 import { mountDraft } from './ui/draft.js';
@@ -64,7 +64,7 @@ function openAcademy(after, only) { pending = { ...(after ? { after } : {}), ...
 
 const screens = {
   title() {
-    const saved = kv.get('save'), instr = kv.get('instr');
+    const saved = kv.get('save'), instr = kv.get('instr'), instrKey = instr ? S.recoveryCodeFor(instr.code) : null;
     const relay = params.get('relay') || kv.get('relay') || '';
     const room = cleanCode(params.get('room'));
     const academyDone = !!kv.get('academyDone');
@@ -85,7 +85,12 @@ const screens = {
             <button class="btn gap" data-act="join">Join</button></section>
           <section class="panel"><h2>Instructor</h2><p class="small mute">Create a room, set the pace, deploy shocks and export grades. Students on the same browser can join as extra tabs; add a relay for real classes.</p>
             <label for="ir">Relay URL (optional)</label><input id="ir" placeholder="wss://relay.example.edu" value="${esc(relay)}">
-            <div class="row gap"><button class="btn" data-act="instr">Create a room</button>${instr ? `<button class="btn ghost" data-act="instr-resume">Reopen room ${esc(instr.code)}</button>` : ''}</div></section>
+            <div class="row gap"><button class="btn" data-act="instr">Create a room</button>${instr ? `<button class="btn ghost" data-act="instr-resume">Reopen room ${esc(instr.code)}</button>` : ''}</div>
+            ${instrKey ? `<details class="gap"><summary class="small">Recovery code for room ${esc(instr.code)}</summary><p class="small mute">Keep it somewhere safe. With the room code it lets you run this room from another device, or after this browser has forgotten it.</p><p class="mono" id="ik-show" tabindex="0">${esc(instrKey)}</p></details>` : ''}
+            <details class="gap"><summary class="small">Take back a room (another device, or this browser forgot it)</summary>
+              <label for="ic" class="gap">Room code</label><input id="ic" maxlength="8" autocomplete="off" style="text-transform:uppercase" value="${esc(instr?.code || '')}">
+              <label for="ik" class="gap">Recovery code</label><input id="ik" autocomplete="off" spellcheck="false" placeholder="xxxx-xxxx-xxxx-xxxx-xxxx-xxxx-xxxx-xxxx">
+              <button class="btn ghost gap" data-act="instr-recover">Take the room back</button></details></section>
           <section class="panel"><h2>Accessible by design</h2><p class="small mute">Keyboard-only play, screen-reader announcements, high contrast, reduced motion and adjustable text. No account, no tracking, no personal data.</p><button class="btn ghost" data-act="a11y">Display and sound settings</button></section>
         </div>
       </div>`;
@@ -96,6 +101,13 @@ const screens = {
       join() { const code = cleanCode($('#jc').value); if (code.length < 3) { toast('Enter the room code from your instructor.', 'warn'); return; } const rl = $('#jr').value.trim(); kv.set('relay', rl); pending = { room: { code, relay: rl } }; go('setup'); },
       instr() { const rl = $('#ir').value.trim(); kv.set('relay', rl); startInstructor(roomCode(), rl, true); },
       'instr-resume'() { startInstructor(instr.code, instr.relay, false, instr); },
+      'instr-recover'() {
+        const code = cleanCode($('#ic').value), owner = cleanOwner($('#ik').value);
+        if (code.length < 3) { toast('Enter the room code.', 'warn'); return; }
+        if (!owner) { toast('The recovery code is 32 letters and digits, in groups of four. Check it and try again.', 'warn'); return; }
+        const rl = $('#ir').value.trim(); kv.set('relay', rl);
+        startInstructor(code, rl, false, null, owner);
+      },
       a11y() { settingsDialog(); },
     });
     $('h1', root).setAttribute('tabindex', '-1');
@@ -157,14 +169,28 @@ const screens = {
 
 function enter() { go('game'); }
 
-function startInstructor(code, relay, fresh, saved) {
+/** `owner`: a recovery code pasted to take a running room back (another device, or storage that was cleared). That room's clock is the class's, not ours, so the session waits to hear it (Session.recovering). */
+function startInstructor(code, relay, fresh, saved, owner) {
   S.reset();
   S.mode = 'instructor';
   if (fresh) S.clock = new Clock({ hour: 0, paused: true, speed: 1 });
   else if (saved) { S.clock = new Clock(saved.clock); Object.assign(S.difficulty, saved.difficulty || {}); S.ghosts = saved.ghosts ?? 36; S.algo = saved.algo ?? true; }
-  S.joinRoom({ code, relay, role: 'instructor', handle: 'Instructor' });
+  S.joinRoom({ code, relay, role: 'instructor', handle: 'Instructor', owner, recover: !!owner && !saved });
   kv.set('instr', { code, relay, clock: S.clock.toJSON(), difficulty: S.difficulty, ghosts: S.ghosts, algo: S.algo });
   go('instructor');
+  if (fresh) keepRecoveryCode(code);
+}
+/** A new room: its recovery code is shown once, where it can be copied, because it is the only way back into the room from another device. (The title screen shows it again beside "Reopen room".) */
+function keepRecoveryCode(code) {
+  const key = S.recoveryCodeFor(code);
+  if (!key) return;
+  dlg.open(`<h2>Keep your recovery code</h2>
+    <p>Room <b class="mono">${esc(code)}</b> belongs to this browser. If you lose this browser, or want to run the room from another device, you need the room code and this recovery code.</p>
+    <p class="mono" id="rk" tabindex="0" style="font-size:1.05em;word-break:break-all">${esc(key)}</p>
+    <div class="row gap"><button class="btn" data-copy autofocus>Copy it</button><button class="btn ghost" data-close>I have saved it</button></div>`, { label: 'Recovery code' });
+  const d = dlg.el;
+  d.querySelector('[data-copy]').onclick = () => { try { navigator.clipboard.writeText(key).then(() => toast('Copied.', 'good'), () => toast('Select the code and copy it.', 'warn')); } catch { toast('Select the code and copy it.', 'warn'); } };
+  d.querySelector('[data-close]').onclick = () => dlg.close();
 }
 
 // ---- the heartbeat

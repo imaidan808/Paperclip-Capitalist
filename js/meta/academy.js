@@ -119,9 +119,9 @@ export const ACADEMY = [
       zones: [4], features: ['stock', 'market', 'codex'], skills: { ops: 2, growth: 1, fintech: 1 }, cohort: { ghosts: 0 },
     },
     steps: [
-      { id: 'codex', say: "Your first swap unlocked Codex pages. Open the Codex and skim Urgency Premium. Every mission ends with a page like it, written for the next time you need it.", anchor: 'dock-codex', wait: { type: 'ui', ui: 'open-drawer', id: 'codex' }, hint: "Click the Codex icon in the dock." },
+      { id: 'codex', say: "Open the Codex and skim Urgency Premium. Every mission ends with a page like it, written for the next time you need it, and the pages fill in as you play.", anchor: 'dock-codex', wait: { type: 'ui', ui: 'open-drawer', id: 'codex' }, hint: "Click the Codex icon in the dock." },
       { id: 'market', say: "Open Market. Three lots, all priced near their value, and none says which one is honest. The seller knows. You do not. That gap is called information asymmetry.", anchor: 'dock-market', wait: { type: 'ui', ui: 'open-drawer', id: 'market' }, hint: "Click the Market icon in the dock." },
-      { id: 'first-watch', say: "The first watch looks perfect, and so does its price. Tap it and READ it before you pay (Look it over, not Quick buy): the serial number check costs one inspection point and is the best fake detector.", anchor: 'world:lot:first-watch', wait: { type: 'event', event: 'inspect', match: { fake: true } }, hint: "Use Look it over, not Quick buy: Quick buy pays at once and skips the check. Probe the serial number, then press Done reading, Continue and Pass on this lot." },
+      { id: 'first-watch', say: "The first watch looks perfect, and so does its price. Tap it and READ it before you pay (Look it over, not Quick buy): the serial number check costs one inspection point and is the best fake detector.", anchor: 'world:lot:first-watch', wait: { type: 'event', event: 'inspect', match: { fake: true } }, hint: "Use Look it over, not Quick buy: Quick buy pays at once and skips the check. Probe the serial number, then Done reading, Continue and Pass on this lot. Bought it already? Press Restart." },
       { id: 'second-watch', say: "That first watch was a fake, worth about 8% of a real one, and its price never warned you. Now READ the second watch the same way, power-on for condition too, before you pay.", anchor: 'world:lot:second-watch', wait: { type: 'event', event: 'inspect', match: { fake: false } }, hint: "Use Look it over: probe the serial and power, then Done reading, Continue and Pass on this lot. Quick deal also works but buys it. Read it already? Read the signed baseball: a lot counts once." },
       { id: 'buy', say: "Genuine and sound? Then buy it: tap the genuine watch and press Quick deal (the card's Quick buy works too). The haggle plays at average skill, so the price may land a little over the list.", anchor: 'world:lot:second-watch', wait: { type: 'event', event: 'buy', match: { fake: false } }, hint: "Tap the second watch again and press Quick deal. The signed baseball is genuine too, if you would rather buy that." },
     ],
@@ -173,7 +173,7 @@ export const ACADEMY = [
     steps: [
       { id: 'market', say: "Open Market. The Academy lends you a Niche Radar: each buyer's card now says how crowded that buyer is, and how many of the recent sales went there.", anchor: 'dock-market', wait: { type: 'ui', ui: 'open-drawer', id: 'market' }, hint: "Click the Market icon in the dock." },
       { id: 'bree', say: "Tap Bree's card; her line reads Crowded. In the Pitch stage lead with two angles, the selling points you stress: read the hint on how she buys, then pick two her pins can back.", anchor: 'deal-stage-pitch', wait: { type: 'event', event: 'pitch', match: { seg: 'bree' } }, hint: "Pick two angles that fit the hint and what the pins offer (scarcity is their strength), then finish the deal. Quick skips the practice. A toast about crates? Use Bree's card in Market." },
-      { id: 'delphine', say: "Sold. Now tap Delphine, whose card says almost nobody else sells to her, and Pitch again: new buyer, new hint. 'x as keen' is your angles; the price gap is mostly the crowd.", anchor: 'deal-stage-pitch', wait: { type: 'event', event: 'pitch', match: { seg: 'bookstore' } }, hint: "Tap Delphine's card in Market, choose two angles in the Pitch stage and finish the deal. Quick skips the angles, so you will not practise them. No pins left? Press Restart." },
+      { id: 'delphine', say: "Sold. Now tap Delphine, whose card says almost nobody else sells to her, and Pitch again: new buyer, new hint. 'x as keen' is your angles; the price gap is mostly the crowd.", anchor: 'deal-stage-pitch', wait: { type: 'event', event: 'pitch', match: { seg: 'bookstore' } }, hint: "Tap Delphine's card in Market, choose two angles in the Pitch stage and finish the deal. Quick skips the angles, so you will not practice them. No pins left? Press Restart." },
     ],
     win: { event: 'pitch', match: { seg: 'bookstore' } },
     why: {
@@ -221,7 +221,7 @@ export const ACADEMY = [
     steps: [
       { id: 'market', say: "Open Market. Three people circle your radios: Mr. Abernathy (a hard bargainer), Dolores (friendlier) and Tariq, a busker who would pay less but is your fallback.", anchor: 'dock-market', wait: { type: 'ui', ui: 'open-drawer', id: 'market' }, hint: "Click the Market icon in the dock." },
       { id: 'careless', say: "Deal 1, the careless way: tap Mr. Abernathy's card, press 'Quick: auto-play at average skill' for the Pitch, then in the Close press Fair and take his first answer. Compare the multiple of fair, not the dollars.", anchor: 'deal-room', wait: { type: 'event', event: 'pitch', match: { seg: 'collector' } }, hint: "Press Fair. If they counter, press Accept their offer. If they say yes at once, the deal is already done. Two crates? Use his card in Market, or tick one in Stock first." },
-      { id: 'careful', say: "Deal 2, the careful way: tap Dolores, press the stage's Quick for the Pitch (not Quick deal). In the Close read 'Your read of their limit', press Aim high, Hold, then Come down small. Aim for 10% over fair.", anchor: 'deal-room', wait: { type: 'event', event: 'pitch', match: { mult: { gte: 1.1 } } }, hint: "Smallest step: the Come down button with the smallest amount, again and again. If she stalls, Mention your other option once. Sold too low? Tick Assist and offer your trade-in records to Tariq." },
+      { id: 'careful', say: "Deal 2, the careful way: tap Dolores, press the stage's Quick for the Pitch (not Quick deal). In the Close read 'Your read of their limit', press Aim high, Hold, then Come down small. Aim for 10% over fair.", anchor: 'deal-room', wait: { type: 'event', event: 'pitch', match: { mult: { gte: 1.1 } } }, hint: "Smallest step: the Come down button with the smallest amount, again and again. If she stalls, Mention your other option once. Sold too low? Sell the records you were paid in to Tariq, with Assist on." },
     ],
     win: { event: 'pitch', match: { mult: { gte: 1.1 } } },
     why: {
@@ -317,6 +317,7 @@ export const ACADEMY = [
       { id: 'clock', say: "Your cash goes out to work as soon as time runs. Press the clock: it runs at 16x, so the 68-hour cycle takes about 30 seconds. Watch your $450 go out and come home.", anchor: 'hud-clock', wait: { type: 'click', anchor: 'hud-clock' }, hint: "Tap the clock to let time run. If the manager never starts a cycle it is starved of cash: press Restart on this card and hire the Student." },
     ],
     win: { event: 'cycle' },
+    finish: { say: "Let the clock run until the manager's first cycle comes home with its pay. Watch the Crew drawer. Almost there.", hint: "Leave the clock running: a cycle takes about 30 seconds at this speed. If the manager never starts a cycle it is starved of cash: press Restart and hire the Student." },
     why: {
       title: 'A manager is a bet with a payback date',
       body: [
@@ -372,6 +373,7 @@ export const ACADEMY = [
       { id: 'bank-again', say: "Reopen the Bank and look at the gauge. The margin call is at 4.5: how much further could prices fall before you got there? Then repay what you can.", anchor: 'dock-bank', wait: { type: 'ui', ui: 'open-drawer', id: 'bank' }, hint: "Open the Bank, then press Repay." },
     ],
     win: { event: 'repay' },
+    finish: { say: "In the Bank, press Repay to pay back what you can. Almost there.", hint: "Open the Bank if it is closed, then press Repay. Any amount counts." },
     why: {
       title: 'Borrowed money cuts both ways',
       body: [
@@ -381,7 +383,7 @@ export const ACADEMY = [
       ],
       formula: "D/E = debt / net worth. Net worth = cash + stock - debt. The loan fee is 3% upfront. Margin call when D/E > 4.5.",
       example: {
-        setup: "You have $400. Lots cost $250 and are worth $369 each. A glut cuts sneaker values by 25%. Numbers assume an average Deal Room result (a multiplier of exactly 1.00), so yours may land a few dollars either way.",
+        setup: "You have $400. Lots cost $250 and are worth $369 each. A glut cuts sneaker values by 25%. Numbers assume an average Deal Room result (a multiplier of exactly 1.00), so yours may land a little off: a Quick purchase pays 1.00 to 1.18 times the asking price, which costs a few dollars to a few tens more per lot.",
         steps: [
           "Borrow only what you will spend, $180, and buy 2 lots: net worth $632, D/E 0.28. After the glut: net worth $447, D/E 0.40.",
           "Borrow the maximum $1,200, buy 4 lots: net worth $838, D/E 1.43. After the glut: net worth $469, D/E 2.56.",
@@ -458,13 +460,14 @@ export const ACADEMY = [
       events: [{ kind: 'tiktok', atHour: 24 }],
     },
     steps: [
-      { id: 'stock', say: "Open Stock. Two gadget pallets tagged trend, and a pallet of textbooks. If trend demand moves, only the gadgets care. Not everything you own rides one trend: that is diversification.", anchor: 'dock-stock', wait: { type: 'ui', ui: 'open-drawer', id: 'stock' }, hint: "Click the Stock icon in the dock." },
+      { id: 'stock', say: "Open Stock. Two gadget pallets, both riding the same viral trend, and a pallet of textbooks. If trend demand moves, only the gadgets care. Not everything you own rides one trend: that is diversification.", anchor: 'dock-stock', wait: { type: 'ui', ui: 'open-drawer', id: 'stock' }, hint: "Click the Stock icon in the dock." },
       { id: 'travel', say: "Open Travel to see the map. This craze hits every district, so shipping the pallets away would not save them. Only owning something else, or selling in time, will.", anchor: 'dock-travel', wait: { type: 'ui', ui: 'open-drawer', id: 'travel' }, hint: "Click the Travel icon in the dock." },
       { id: 'clock', say: "Press the clock. It runs at 16x: in about 5 seconds the ticker warns you, and in about 10 the craze lands and lasts about 20. Leave the speed alone and do not pause yet.", anchor: 'hud-clock', wait: { type: 'click', anchor: 'hud-clock' }, hint: "Tap the clock in the top bar to let time run." },
       { id: 'shock', say: "Watch the ticker: first the warning, then the headline that the craze is now in effect. When it is live, pause the clock and think about your gadgets. Demand spikes for 48 hours, then fatigue sets in.", anchor: 'ticker', wait: { type: 'event', event: 'shock', match: { kind: 'tiktok' } }, hint: "Wait for the second headline, then press the clock to pause and sell. If you paused too soon, press the clock again and keep watching." },
       { id: 'sell', say: "Pause the clock if it still runs, then reopen Stock and sell the gadgets into the spike: tick both pallets and sell them to the pool. The textbooks stay: they are what spreading left you.", anchor: 'dock-stock', wait: { type: 'ui', ui: 'open-drawer', id: 'stock' }, hint: "Open Stock, tick the two gadget pallets and press Sell to the pool." },
     ],
     win: { event: 'sell-pool' },
+    finish: { say: "In Stock, tick both gadget pallets and press Sell to the pool. Keep the textbooks. Almost there.", hint: "Open Stock, tick the two gadget pallets and press Sell to the pool." },
     why: {
       title: 'Do not keep every egg in one trend',
       body: [
@@ -514,7 +517,7 @@ export const ACADEMY = [
       { id: 'auction', say: "AUCTION: bid or drop out each round. A win above the lot's worth is the winner's curse. Outbid? Other lots remain.", anchor: 'deal-room', wait: { type: 'event', event: 'auction', match: { won: true } }, hint: "Press Bid while the next price is well under your ceiling and Drop out when it is not. If a rival outbids you, tap another lot and read it too." },
       { id: 'fix', say: "Yours, but broken. Open Stock and FIX it. Read the quote first: repair only if the gain beats the cost.", anchor: 'dock-stock', wait: { type: 'event', event: 'repair' }, hint: "Press Repair on the lot's card in Stock, then stop the marker in the green band, or press Careful." },
       { id: 'score', say: "Your stake is $1,000. Tap your net worth, divide it by $1,000: one factor of your EEI. The time bonus multiplies it.", anchor: 'hud-networth', wait: { type: 'click', anchor: 'hud-networth' }, hint: "Click the net worth figure in the top bar, then divide it by $1,000. With all 90 days still ahead the time bonus is about x2." },
-      { id: 'close', say: "Now sell: tap the antique dealer's card, PITCH two angles, then CLOSE: anchor high, hold, concede small. Then you choose your two Backgrounds.", anchor: 'deal-room', wait: { type: 'event', event: 'pitch', match: { seg: 'antiqueDealer' } }, hint: "Tap the dealer's card in Market, choose two angles in the Pitch stage, then open high, hold, and split or accept at or above fair." },
+      { id: 'close', say: "Now sell: tap the antique dealer's card, PITCH two angles, then CLOSE: open high, hold, then split the difference or accept once the offer reaches fair. That finishes the Academy.", anchor: 'deal-room', wait: { type: 'event', event: 'pitch', match: { seg: 'antiqueDealer' } }, hint: "Tap the dealer's card in Market, choose two angles in the Pitch stage, then open high, hold, and split or accept at or above fair." },
     ],
     win: { event: 'pitch', match: { seg: 'antiqueDealer' } },
     why: {
@@ -522,7 +525,7 @@ export const ACADEMY = [
       body: [
         "You just used every skill. Read told you what the lot really was, your ceiling capped what you would pay, Repair added value for less than it cost, Pitch matched a buyer's bias and Close anchored the price. Each step protects the margin of the next.",
         "A run is scored by the Economic Efficiency Index: ending net worth divided by starting capital, times a time bonus of 1 plus days remaining over 90. A start worth pennies is floored at $1,000 so it is fair. Finishing early lifts the bonus, but only if net worth holds, and an early exit costs 12% brokerage.",
-        "The winner's curse: in an auction the highest bidder is usually the one who most overestimated the prize. As it stands the lot is worth about $490, the figure Stock shows (the result card prices its real condition, a little lower). You can pay more only because you can fix and resell it, and your sale price is an estimate too, so stop short of $554.",
+        "The winner's curse: in an auction the highest bidder is usually the one who most overestimated the prize. As it stands the lot is worth about $490, the figure Stock shows (the result cards print others for it: its real condition and the auction's own \"true value\"). You can pay more only because you can fix and resell it, and your sale price is an estimate too, so stop short of $554.",
       ],
       formula: "EEI = ending net worth / max(starting capital, $1,000) × (1 + days remaining / 90).",
       example: {

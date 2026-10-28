@@ -218,9 +218,10 @@ function advise(s) { // the textbook move and the reason, from public informatio
 //   floor (the worst price you may close at), alt, canLeverage, history: [{say, yours, theirs, action}], done, actions, advice? }
 export function view(s) { // everything the player may see; never the limit, the accept line or the temperament's numbers
   const R = (u) => real(s, u), p = pubOf(s), left = s.n - s.round;
+  const agreed = s.done && s.end === 'deal' && s.price != null ? R(s.price) : null; // a deal struck is struck at one number: both sides' figures read it (a buyer who said yes to the ask had a counter on the table before, which the panel kept showing)
   const v = {
     role: s.role, style: s.style, fair: s.fair, round: s.round, rounds: s.n, roundsLeft: left, final: !s.done && left === 1,
-    yours: s.ask == null ? null : R(s.ask), theirs: s.bid == null ? null : R(s.bid), tell: s.tell, flag: s.flag,
+    yours: agreed ?? (s.ask == null ? null : R(s.ask)), theirs: agreed ?? (s.bid == null ? null : R(s.bid)), tell: s.tell, flag: s.flag,
     read: { lo: R(s.role === 'sell' ? p.rl : p.rh), hi: R(s.role === 'sell' ? p.rh : p.rl) }, // a fuzzy estimate of their limit
     anchors: { high: R(ANCHORS[flip(s.role, 'high')]), fair: R(ANCHORS.fair), low: R(ANCHORS[flip(s.role, 'low')]) }, // by the number you would say
     steps: { small: sig(STEPS.small * s.fair), medium: sig(STEPS.medium * s.fair), large: sig(STEPS.large * s.fair) },

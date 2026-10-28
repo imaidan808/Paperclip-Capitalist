@@ -53,7 +53,7 @@ export function validateData(d, { partial = false } = {}) {
     if (!num(z.urgent) || z.urgent < 0 || z.urgent > 0.5) add(`${w}: urgent must be 0..0.5`);
     if (typeof z.auto !== 'boolean' || z.auto !== (id >= 5)) add(`${w}: auto (managers) must be ${id >= 5}`);
     if (!int(z.plots) || (z.auto ? z.plots < 3 || z.plots > 4 : z.plots !== 0)) add(`${w}: plots must be 0 when manual and 3..4 when managers are allowed`);
-    if (!Array.isArray(z.palette) || z.palette.length !== 2 || !z.palette.every((c) => HEX.test(c))) add(`${w}: palette must be two #rrggbb colours [ground, accent]`);
+    if (!Array.isArray(z.palette) || z.palette.length !== 2 || !z.palette.every((c) => HEX.test(c))) add(`${w}: palette must be two #rrggbb colors [ground, accent]`);
     for (const k of Object.keys(z.rules || {})) if (!RULE_KEYS.includes(k)) add(`${w}: unknown rule "${k}"`);
     for (const k of Object.keys(z.bonus || {})) if (!BONUS_KEYS.includes(k)) add(`${w}: unknown bonus "${k}"`);
     for (const [k, v] of Object.entries(z.bonus || {})) if (!num(v)) add(`${w}: bonus ${k} must be a number`);

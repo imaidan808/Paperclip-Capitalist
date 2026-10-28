@@ -28,7 +28,8 @@ export function creativity(vNiche, vTotal) {
 }
 export function creativityBand(cm) {
   if (cm <= 0.55) return { id: 'herd', label: 'Linear herd trap', tone: 'bad' };
-  if (cm < 1.3) return { id: 'crowded', label: 'Crowded', tone: 'warn' };
+  if (cm < 0.9) return { id: 'crowded', label: 'Crowded', tone: 'warn' };
+  if (cm < 1.3) return { id: 'open', label: 'Open', tone: 'info' }; // an ordinary factor: a niche nobody has pitched lately is 1.09, which is not a crowd
   if (cm < 2.4) return { id: 'balanced', label: 'Balanced', tone: 'ok' };
   return { id: 'pioneer', label: 'Pioneer vector', tone: 'good' };
 }

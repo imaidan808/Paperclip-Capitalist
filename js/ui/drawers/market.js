@@ -85,7 +85,7 @@ export function satWords(S, vT) {
   if (S < 0.75) return 'Crowded: most sellers pick this buyer.';
   return 'Packed: nearly everyone sells this to them.';
 }
-const BAND = { herd: { g: '⚠', tone: 'bad' }, crowded: { g: '◐', tone: 'warn' }, balanced: { g: '●', tone: 'info' }, pioneer: { g: '★', tone: 'good' } };
+const BAND = { herd: { g: '⚠', tone: 'bad' }, crowded: { g: '◐', tone: 'warn' }, open: { g: '○', tone: 'info' }, balanced: { g: '●', tone: 'info' }, pioneer: { g: '★', tone: 'good' } };
 const cmChip = (ci) => { const b = BAND[ci.band.id] || BAND.balanced; return `<span class="chip ${b.tone}" title="Creativity multiplier"><span aria-hidden="true">${b.g}</span> ${ci.band.label} ${ci.cm.toFixed(2)}x</span>`; };
 const fitTone = (f) => (f >= 0.85 ? 'good' : f >= 0.5 ? 'info' : 'warn');
 const an = (w) => (/^[aeiou]/i.test(w) ? 'an' : 'a');
@@ -297,7 +297,9 @@ function exchangeHTML(ctx) {
 }
 
 function tabOf(ctx) {
-  const g = ctx.g(), t = ctx.U.marketTab || 'buyers';
+  const g = ctx.g(), z = focusZone(ctx);
+  // nothing chosen yet: open on the side that has something in it (a lesson about lots, or a district with lots and no buyers, would open on "No buyers right now")
+  const t = ctx.U.marketTab || (!(g.s.leads[z] || []).length && (g.s.lots[z] || []).length ? 'lots' : 'buyers');
   if (!TABS.includes(t)) return 'buyers';
   if (t === 'radar' && !(g.P.radar || g.s.upg.research)) return 'buyers';
   return t;

@@ -701,7 +701,7 @@ test('Swap, a lost delivery (low): the acceptor says it again until the proposer
   assert.equal(JSON.stringify(A.game.s.assets), snapA, 'a second copy is not taken'); assert.equal(B.delivering.size, 0, 'but it is acknowledged again');
   // never acknowledged: a few tries, then a note, then nothing more
   const C = sessionIn(hub, 'PC-CCCC'); C.delivering.set('Ox', { to: 'PC-AAAA', payload: { offerId: 'Ox', deliver: { cash: 0, assets: [] } }, at: 0, tries: 1, name: 'Ada' });
-  for (let t = 1; t <= 6; t++) C.tick(t * 200000);
+  for (let t = 1; t <= 10; t++) C.tick(t * 200000);                        // (every 30 seconds for half an hour since the commit, then it says so and stops)
   assert.equal(C.delivering.size, 0); assert.ok(C.game.s.news.some((n) => /has not said the swap arrived/.test(n.text)));
 });
 
@@ -1121,6 +1121,7 @@ test('Gradebook (low): 450 hostile peers with a dozen unique shock ids each cost
   }
   s.peers.set('SHARED1', { pid: 'SHARED1', handle: 'a', role: 'student', clean: true, seen: Date.now(), snap: C.cleanSnap({ handle: 'a', nw: 2000, hour: 1440, flags: {}, shockLog: [{ id: 'fed@1056', nw: 1000, nwAfter: 1500, pivots: 1 }, { id: 'fed@1056', nw: 1, nwAfter: 99999, pivots: 9 }] }, 'SHARED1') });
   s.peers.set('SHARED2', { pid: 'SHARED2', handle: 'b', role: 'student', clean: true, seen: Date.now(), snap: C.cleanSnap({ handle: 'b', nw: 2000, hour: 1440, flags: {}, shockLog: [{ id: 'fed@1056', nw: 1000, nwAfter: 500, pivots: 0 }] }, 'SHARED2') });
+  s.peers.set('SHARED3', { pid: 'SHARED3', handle: 'c', role: 'student', clean: true, seen: Date.now(), snap: C.cleanSnap({ handle: 'c', nw: 2000, hour: 1440, flags: {}, shockLog: [{ id: 'fed@1056', nw: 1000, nwAfter: 900, pivots: 0 }] }, 'SHARED3') }); // (a shock is graded when three founders logged it)
   s.gradebook(); const t0 = process.hrtime.bigint(); const gb = s.gradebook(); const ms = Number(process.hrtime.bigint() - t0) / 1e6;
   assert.ok(ms < 60, `gradebook of 451 rows took ${ms.toFixed(1)} ms`);
   const a = gb.find((r) => r.pid === 'SHARED1'), b = gb.find((r) => r.pid === 'SHARED2');

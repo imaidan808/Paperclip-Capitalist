@@ -152,7 +152,7 @@ export function dealFrom(kind, res = {}) {
   return { mult: clamp(side && !side.skipped ? fin(side.mult, 1) : pm, 0.6, 1.4) };
 }
 
-const FIX_ADVICE = { text: 'Aim for the middle of the green zone: the nearer the centre, the more precise the step. Assist has widened the zone for you.' };
+const FIX_ADVICE = { text: 'Aim for the middle of the green zone: the nearer the center, the more precise the step. Assist has widened the zone for you.' };
 /** The angle/price pair a coach would suggest from what the player is allowed to see (Assist). */
 export function pitchAdvice(view) {
   if (!view || !Array.isArray(view.angles)) return null;
@@ -396,8 +396,10 @@ export class DealRun {
   /** Leave the table. What the player already learned is kept (a read that has probes in it is concluded and recorded). */
   walkAway() {
     if (this.key === 'read' && this.st.read && !this.res.read && this.st.read.used.length) this.act({ type: 'conclude' });
-    // Leaving a table that could be played is a move at it (the game's own walk is one): the next sitting is Quick's. Leaving one that never opened (the cash does not reach it) is not.
-    if (!this.over && HIDDEN_STAGES.has(this.key) && !this.plan.blocker && !this.stages[this.idx].auto) this.touch();
+    // Leaving a table that could be played is a move at it (the game's own walk is one): the next sitting is Quick's. Leaving one that never opened (the cash does not reach it) is not, and neither is leaving the
+    // repair bench: the Fix has no walk of its own, its dial is the same dial every time, and opening the bench to read the quote (the Stock drawer shows it too) must not cost the crate its hand-played repair.
+    // A stop, Careful or a finished repair marks it (act, quick); a Leave with no move does not.
+    if (!this.over && HIDDEN_STAGES.has(this.key) && this.key !== 'fix' && !this.plan.blocker && !this.stages[this.idx].auto) this.touch();
     this.walked = true;
     return this.finish();
   }
@@ -554,11 +556,15 @@ function summarize(run, { r, deal, noDeal, before, after, cmp, secret }) {
         if (cf) out.lesson = { concept: 'due-diligence', text: 'A counterfeit you bought without checking is still yours to sell, and every buyer can check it. The time to look is before you pay.' };
       } else {
         const good = r.outcome === 'win' || r.outcome === 'pioneer';
-        Object.assign(out, { tone: good ? 'good' : 'warn', title: { win: 'Sold at a gain', pioneer: 'Pioneer sale', herd: 'Sold into the herd', flat: 'Sold, no gain' }[r.outcome] || 'Sold',
+        // The verdict above compares the sale with the crate's market value now (a repaired van is worth the repaired price, which no buyer pays in a crowded niche), which reads "no gain" on a sale that paid for
+        // the repair twice over. What the player put into it (the price paid, and every repair) is the other half of the story, so it is told too: the profit or loss on the crate.
+        const had = r.asset && Number.isFinite(r.asset.basis) ? r.asset.basis : 0, owed = Number.isFinite(r.profit) && had >= 0.5 ? r.profit : 0;
+        Object.assign(out, { tone: good ? 'good' : 'warn', title: { win: 'Sold at a gain', pioneer: 'Pioneer sale', herd: 'Sold into the herd', flat: owed > 0.005 ? 'Sold below market' : 'Sold, no gain' }[r.outcome] || 'Sold',
           headline: `${plan.asset.name} sold to ${plan.buyer.name} for ${money(r.price)}.` });
         lines.push(`You received ${money(r.received)} after tax and fees${r.gotName ? `, including ${r.gotName} in trade` : ''}.`);
         if (r.capped) lines.push('The buyer paid their whole budget.');
         lines.push(r.gain >= 4 ? `${(1 + r.gain).toFixed(0)} times the crate's value.` : `${r.gain >= 0 ? '+' : ''}${Math.round(r.gain * 100)}% against the crate's value.`);
+        if (had >= 0.5 && Number.isFinite(r.profit)) lines.push(`You had ${money(had)} in it, the price and any repairs: ${r.profit >= 0 ? `a profit of ${money(r.profit)}` : `a loss of ${money(-r.profit)}`}.`);
         if (r.outcome === 'herd') out.lesson = { concept: 'saturation-herd', text: `When many players sell the same thing to the same buyer the Creativity multiplier falls to ${r.ci.cm.toFixed(2)}x. A different buyer with a decent fit pays more.` };
       }
       out.numbers = compare(r.outcome !== 'rejected' && r.outcome !== 'scam' ? r.price : null, 'sale price', 'high');
