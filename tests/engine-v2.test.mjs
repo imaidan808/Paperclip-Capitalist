@@ -738,7 +738,8 @@ test('a swap cannot push a district past its storage: roomIn counts held, in-tra
   // an asset from a district the founder cannot enter lands in the nearest open one, and that is where the room is counted
   const far = incoming('textbooks', 'z4'); far.zone = 5; g.s.cash = 1000;
   assert.equal(g.roomIn(1), 0);
-  const off = g.acceptOffer(offer([far], { assets: [], cash: Math.round(g.sideValue({ assets: [far] }) * 100) / 100 }));
+  // (priced where it would sit, in this founder's hands: the audit's S5 found a price in the district they cannot enter was a 427% overpay, see tests/audit-engine-swaps.test.mjs)
+  const off = g.acceptOffer(offer([far], { assets: [], cash: Math.round(g.sideValue({ assets: [far] }, { landing: true }) * 100) / 100 }));
   assert.equal(off.ok, false); assert.match(off.msg, new RegExp(ZONES[1].short));
 });
 
