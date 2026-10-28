@@ -26,6 +26,7 @@ export const FAR_ZOOM = 0.42;      // below this zoom the world draws plain bloc
 const PIP_ZOOM = 0.45;                 // below this zoom a building's own bar is dropped (it is a few pixels) and the district shows pips instead; the bar returns at and above it
 export const SLOW_MS = 22, FAST_MS = 16; // quality governor: a smoothed frame cost over SLOW_MS steps quality down, under FAST_MS steps it back up
 const GOV_WAIT = 10, GOV_DOWN = 3;         // frames of good cost before one step back up (it doubles while the picture keeps tipping over), frames of bad cost before one step down
+const SEA_STRIP = 256;                     // samples in the sea's strip: the gradient is smooth, so 256 stretched over the window match a full-size fill to within one level of colour
 const SOFT_DPR = 1.5;                      // the most pixel density a CPU-drawn canvas gets: every full-window layer is a pass over all its pixels, and 1.5 has 44% fewer of them than 2
 const CARS = 18;
 const BY_KEY = (a, b) => a.key - b.key;
@@ -74,6 +75,7 @@ export class World {
     // presentation layer: particles, lighting, label sprites, and the draw loop's reusable scratch (nothing here is game state)
     this.fx = new Fx(); this.light = new Lighting(); this.light.perFrame = 1; this.labels = new Labels(); this.rainOn = false;
     this.gov = { cost: 0, bad: 0, good: 0, wait: GOV_WAIT, upAt: -1e9, prev: 0 };            // the quality governor's smoothed state
+    this.waterGr = null; this.seaStrip = undefined; this.seaKey = -1;                          // the sea: its colours for the light step, and the one strip it is painted into (made on first use)
     this.gc = null; this.gcKey = new Float64Array(9); this.gcSeen = 0; this.gcValid = false; // the ground cache: an offscreen copy of the terrain for a still camera
     this.items = []; this.itemPool = []; this.vz = new Set(); this.carList = Array.from({ length: CARS }, () => ({ gx: 0, gy: 0, i: 0, key: 0, horiz: true, fade: 1 }));
     this.vis = true; this.dprDown = false; this.mm = null; this.mmFn = null; this.ledLast = undefined; this.tod = { night: 0, dusk: 0 }; this.unlockHash = 0; this.itemN = 0;                                                         // is the canvas on screen; the last ledger entry the world has seen
@@ -117,7 +119,7 @@ export class World {
    * makes what it needs again on demand, exactly as after a resize.
    */
   release() {
-    this.gc = null; this.gcValid = false; this.gcSeen = 0; this.waterGr = null;
+    this.gc = null; this.gcValid = false; this.gcSeen = 0; this.waterGr = null; this.seaStrip = undefined; this.seaKey = -1;
     this.light.release(); this.labels.release(); clearSprites();
   }
   start() { if (this.running) return; this.running = true; this.last = performance.now(); this.raf = requestAnimationFrame((t) => this.frame(t)); }
@@ -139,7 +141,7 @@ export class World {
     this.refreshInset(); setSpriteBudget(this.dpr);
     this.cv.width = Math.floor(this.W * this.dpr); this.cv.height = Math.floor(this.H * this.dpr);
     this.cv.style.width = this.W + 'px'; this.cv.style.height = this.H + 'px';
-    this.gc = null; this.gcValid = false; this.labels.setDpr(this.dpr); this.waterGr = null; // what was made for the old size is made again on demand
+    this.gc = null; this.gcValid = false; this.labels.setDpr(this.dpr); // what was made for the old size is made again on demand (the sea's strip is the same at any size: it is stretched, not remade)
     this.dirty = true;
     if (this.g && this.unlocked) this.draw(); // a resized canvas is blank until redrawn: never show that gap
   }
@@ -556,26 +558,29 @@ export class World {
   cacheOK() { return typeof OffscreenCanvas === 'function' && this.cv.width > 0; }
 
   /**
-   * The sea. Its colour follows the light (night, the golden hour) and is painted once per light step into a bitmap of the canvas's own pixels, so a frame
-   * stamps it one-to-one instead of filling the whole window with a gradient (about a tenth of the cost in software raster). On top of it go the slow wave
-   * lines, drawn as one stroke, and a scatter of glints that twinkle on the sun's side of the water by day and the moon's by night. Under reduced motion the
-   * waves and glints stand still.
+   * The sea. Its colour follows the light (night, the golden hour) and is a gradient from the top of the window to its foot, so it varies in one direction only: the world keeps
+   * it as ONE strip of SEA_STRIP samples, 1 px wide, that is repainted in place (never remade) whenever the light moves to a new step, and each frame stretches it over the
+   * whole canvas with a single drawImage (measured in a CPU-drawn canvas at 2160 x 1350: 1.2 ms, against 7.3 for filling the gradient and 8.9 for a new full-window layer at
+   * every step, which allocated a bitmap of tens of megabytes about every other frame of a dusk). On top of it go the slow wave lines, drawn as one stroke, and a scatter of
+   * glints that twinkle on the sun's side of the water by day and the moon's by night. Under reduced motion the waves and glints stand still.
    */
   drawWater(ctx) {
     const { W, H } = this, night = this.night, dusk = this.dusk, calm = this.reduced(), cw = this.cv.width, ch = this.cv.height;
     const nb = Math.round(night * 24), db = Math.round(dusk * 12), key = nb * 100 + db;
     let wg = this.waterGr;
-    if (!wg || wg.key !== key || wg.H !== H || wg.cw !== cw) { // the colour follows the light in 24 and 12 steps and is made once per step, not once per frame
+    if (!wg || wg.key !== key) { // the colour follows the light in 24 and 12 steps and is worked out once per step, not once per frame
       const n = nb / 24, d = db / 12;
-      wg = this.waterGr = { key, H, cw, top: mix(mix('#1b3b5c', '#08111f', n * 0.8), '#3b3550', d * 0.35), foot: mix(mix('#235a7a', '#0b1a2c', n * 0.8), '#6a5a6a', d * 0.22), layer: undefined };
+      wg = this.waterGr = { key, top: mix(mix('#1b3b5c', '#08111f', n * 0.8), '#3b3550', d * 0.35), foot: mix(mix('#235a7a', '#0b1a2c', n * 0.8), '#6a5a6a', d * 0.22) };
     }
-    if (wg.layer === undefined) {
-      const f = surface(cw, ch);
-      if (f) { f.g.setTransform(this.dpr, 0, 0, this.dpr, 0, 0); const gr = f.g.createLinearGradient(0, 0, 0, H); gr.addColorStop(0, wg.top); gr.addColorStop(1, wg.foot); f.g.fillStyle = gr; f.g.fillRect(0, 0, W, H); }
-      wg.layer = f ? f.c : null;
-    }
-    if (wg.layer) { ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.drawImage(wg.layer, 0, 0); ctx.restore(); }
-    else { const gr = ctx.createLinearGradient(0, 0, 0, H); gr.addColorStop(0, wg.top); gr.addColorStop(1, wg.foot); ctx.fillStyle = gr; ctx.fillRect(0, 0, W, H); } // no offscreen surfaces: as the world always drew it
+    if (this.seaStrip === undefined) { this.seaStrip = surface(1, SEA_STRIP); this.seaKey = -1; } // made once for the life of the world (null: no offscreen surfaces here)
+    const strip = this.seaStrip;
+    if (strip) {
+      if (this.seaKey !== key) { // a new light step: the same strip painted again, 256 pixels
+        const g = strip.g, gr = g.createLinearGradient(0, 0, 0, SEA_STRIP); gr.addColorStop(0, wg.top); gr.addColorStop(1, wg.foot);
+        g.fillStyle = gr; g.fillRect(0, 0, 1, SEA_STRIP); this.seaKey = key; // opaque, so it covers the step before
+      }
+      ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.imageSmoothingEnabled = true; ctx.drawImage(strip.c, 0, 0, 1, SEA_STRIP, 0, 0, cw, ch); ctx.restore(); // the canvas's own pixels, top to foot
+    } else { const gr = ctx.createLinearGradient(0, 0, 0, H); gr.addColorStop(0, wg.top); gr.addColorStop(1, wg.foot); ctx.fillStyle = gr; ctx.fillRect(0, 0, W, H); } // no offscreen surfaces: as the world always drew it
     ctx.strokeStyle = `rgba(190,230,255,${0.1 + 0.05 * (1 - night)})`; ctx.lineWidth = 1; ctx.beginPath();
     for (let i = 0; i < 26; i++) {
       const y = (i / 26) * H + 8, ph = calm ? 0 : this.vt / 1400 + i, x0 = ((i * 137) % W); let prev = -1e9;

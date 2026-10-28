@@ -8,6 +8,7 @@
 /* ---- frame */
 dialog.deal { width: min(68rem, 96vw); padding: .9rem 1.1rem 1rem; scroll-padding: .5rem .5rem 8rem; /* a control scrolled into view rests inside the edge, ring and all; the foot is the dock's height */ animation: deal-in .24s cubic-bezier(.2, .9, .3, 1) both; }
 dialog.deal::backdrop { background: rgba(3, 6, 12, .78); }
+dialog.deal:focus-visible { outline-offset: -4px; } /* the sheet fills a phone's screen: a ring drawn outside it is off the screen, so it is drawn inside */
 @keyframes deal-in { from { opacity: 0; transform: translateY(14px) scale(.985); } to { opacity: 1; transform: none; } }
 .deal { display: grid; gap: .75rem; font-variant-numeric: tabular-nums; }
 .deal-top { display: flex; align-items: center; gap: .6rem .8rem; flex-wrap: wrap; padding: .1rem 0 .1rem .75rem; border-left: 6px solid var(--za, var(--gold)); }
@@ -201,7 +202,7 @@ dialog.deal::backdrop { background: rgba(3, 6, 12, .78); }
 .lesson { margin: 0; padding: .6rem .8rem; border-left: 4px solid var(--violet); background: var(--panel); font-size: .9rem; animation: rise .4s .95s ease-out both; }
 /* The result's Continue rides the foot of the sheet, as the other stages' buttons do: on a tablet or a phone the result is taller than the window, and the one thing to do next
    must not be below the fold. It stands on the panel's colour, so the lines scrolling under it are covered; in the panel's side gutters there is nothing to cover. */
-.deal-result > .row:last-child { position: sticky; bottom: 0; z-index: 1; padding: .5rem 0 .1rem; background: var(--panel2); border-top: 1px dashed var(--line); }
+.deal-result > .row:last-child { position: sticky; bottom: 0; z-index: 1; padding: .5rem 0 .5rem; background: var(--panel2); border-top: 1px dashed var(--line); } /* the row sits flush with the edge of the scrolling sheet, and a button's ring reaches 5px past the button (3px line, 2px out): the bottom padding is the ring's room, or the sheet clips it */
 /* a result that has been staged once (js/ui/deal.js: .revealed) is drawn at rest when the sheet is painted again */
 .deal-result.revealed :is(.rtitle, .rhead, .rlines, .rver, .vbar i, .xp, .lesson) { animation: none; }
 
@@ -254,6 +255,7 @@ dialog.deal::backdrop { background: rgba(3, 6, 12, .78); }
   .deal-score div { flex: 1 1 28%; padding: .25rem .5rem; } .deal-score dd { font-size: .92rem; } .deal-score .hot dd { font-size: 1rem; }
   .deal-dock { display: contents; } /* on a phone only the buttons stay in view: the scoreboard scrolls with the stage */
   .deal-foot { position: sticky; bottom: 0; z-index: 1; margin: 0 -.8rem 0; padding: .5rem .8rem calc(.5rem + env(safe-area-inset-bottom, 0px)); gap: .4rem; justify-content: stretch; background: var(--panel); border-top: 1px dashed var(--line); }
+  .deal-result > .row:last-child { padding-bottom: calc(.5rem + env(safe-area-inset-bottom, 0px)); } /* clear of the home indicator, as the foot is */
   .deal-foot .btn { flex: 1 1 auto; font-size: .78rem; padding: .35rem .6rem; min-height: 2.6rem; white-space: nowrap; }
   .deal-foot [data-deal="quick-stage"] { flex: 1 1 0; white-space: normal; line-height: 1.25; } .deal-foot [data-deal="quick-all"] { flex: 0 0 auto; }
   .angles { grid-template-columns: repeat(2, minmax(0, 1fr)); }

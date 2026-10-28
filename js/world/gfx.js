@@ -5,7 +5,11 @@
 /** True when this browser can make offscreen canvases. */
 export const hasOffscreen = () => typeof OffscreenCanvas === 'function';
 
-/** An offscreen 2D surface of w x h device pixels as { c, g } (canvas, context), or null when there is no OffscreenCanvas. */
+/**
+ * An offscreen 2D surface of w x h device pixels as { c, g } (canvas, context), or null when there is no OffscreenCanvas.
+ * A surface is a bitmap in memory (tens of megabytes at window size): make one for a thing that lasts and paint it again in place when it changes. Never one per frame or per
+ * step of the light (the sea did that: about 22 full-window bitmaps a day/night turn, each 8 to 10 ms to fill on a CPU-drawn canvas; it is one 1 x 256 strip now, see World.drawWater).
+ */
 export function surface(w, h) {
   if (!hasOffscreen()) return null;
   try {

@@ -353,7 +353,7 @@ test('the falloff toward the edge is part of the day and night layers: the centr
   delete globalThis.OffscreenCanvas;
 });
 
-test('the sea\'s colour is painted once per light step into a bitmap of the canvas\'s own size and stamped; the waves are one stroke and never streak across the window', async () => {
+test('the sea is one strip of 256 samples, painted again in place at each light step and stretched over the canvas; the waves are one stroke and never streak across the window', async () => {
   const g = newGame(3); openTo(g, 3);
   const log = stubDom(1000, 640); installRecording(log);
   const { World } = await import('../js/world/world.js');
@@ -361,12 +361,17 @@ test('the sea\'s colour is painted once per light step into a bitmap of the canv
   const w = new World({ session, ui: { zone: 1, sel: new Set() }, activate: noop, hover: noop });
   w.host = { getBoundingClientRect: () => ({ width: 1000, height: 640 }) }; w.resize(); w.sync(); w.placePlayer();
   const main = recorder('main'); w.night = 0; w.dusk = 0; const s0 = log.surfaces;
-  w.drawWater(main); assert.equal(log.surfaces, s0 + 1, 'the sea layer was made'); assert.equal(main.imgs[0].n, 3, 'and stamped one-to-one'); assert.equal(main.imgs[0].img.width, w.cv.width);
-  for (let i = 0; i < 3; i++) w.drawWater(main); assert.equal(log.surfaces, s0 + 1, 'not made again while the light stays in its step'); assert.equal(main.imgs.length, 4);
-  w.night = 0.5; w.drawWater(main); assert.equal(log.surfaces, s0 + 2, 'a new light step makes it again');
-  assert.equal(main.calls.stroke, 5, 'the 26 wave lines are one stroke a frame');
+  w.drawWater(main); assert.equal(log.surfaces, s0 + 1, 'the sea\'s strip was made'); const strip = log.made[log.made.length - 1];
+  assert.equal(strip.width, 1); assert.equal(strip.height, 256, 'one pixel wide: the sea only changes from the top of the window to its foot');
+  assert.equal(main.imgs[0].n, 9, 'and stamped stretched'); assert.deepEqual(main.imgs[0].a.slice(1, 5), [0, 0, 1, 256], 'the whole strip'); assert.deepEqual(main.imgs[0].a.slice(5), [0, 0, w.cv.width, w.cv.height], 'over the canvas\'s own pixels');
+  const painted = () => strip.g.calls.fillRect || 0, p0 = painted();
+  for (let i = 0; i < 3; i++) w.drawWater(main); assert.equal(log.surfaces, s0 + 1); assert.equal(painted(), p0, 'not painted again while the light stays in its step'); assert.equal(main.imgs.length, 4);
+  w.night = 0.5; w.drawWater(main); assert.equal(log.surfaces, s0 + 1, 'a new light step makes no new bitmap'); assert.equal(painted(), p0 + 1, 'it paints the same strip again, once');
+  w.dusk = 0.5; w.drawWater(main); w.drawWater(main); assert.equal(log.surfaces, s0 + 1); assert.equal(painted(), p0 + 2, 'the dusk steps likewise');
+  assert.equal(main.calls.stroke, 7, 'the 26 wave lines are one stroke a frame');
   for (const t of [0, 5000, 90000]) { w.vt = t; main.pts.length = 0; w.drawWater(main); let prev = null; for (const [k, x] of main.pts) { if (k === 'lineTo') assert.ok(Math.abs(x - prev) < 80, `a wave line does not leap across the window (${prev} to ${x})`); prev = x; } }
-  w.resize(); w.drawWater(main); assert.equal(log.surfaces >= s0 + 3, true, 'a resize makes it at the new size');
+  w.resize(); w.drawWater(main); assert.equal(log.made.filter((c) => c.width === 1 && c.height === 256).length, 1, 'a resize needs no new strip: it is stretched to whatever size the canvas has');
+  assert.deepEqual(main.imgs[main.imgs.length - 1].a.slice(5), [0, 0, w.cv.width, w.cv.height]);
   delete globalThis.OffscreenCanvas;
 });
 

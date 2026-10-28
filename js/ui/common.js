@@ -72,6 +72,11 @@ export const dlg = {
 };
 export function initDialog() {
   const d = D();
+  // The dialog is where the cursor lives, never a stop on the way. Chrome gives every scrolling element a Tab stop of its own, and a scrolling dialog is one: a stop that does
+  // nothing, whose ring (3px, 2px out) lies outside the screen when the dialog fills it (the Deal Room on a phone, a laptop at 200%). tabindex -1 takes it out of the Tab order
+  // and keeps it focusable by script (`dlg.open` falls back to it), and every control inside is still reached by Tab, which scrolls it into view; arrow keys and Page Down scroll
+  // the dialog from any of them. Escape and the focus handed back on close are untouched.
+  d.tabIndex = -1;
   d.addEventListener('close', () => { d._onClose?.(); d._onClose = null; try { returnFocus?.focus({ preventScroll: true }); } catch { /* element gone */ } });
   d.addEventListener('click', (e) => { if (e.target === d) d.close(); });
 }

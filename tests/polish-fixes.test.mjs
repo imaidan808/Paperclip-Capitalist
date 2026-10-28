@@ -112,6 +112,35 @@ test('the light layers are made one a frame at a dusk, and every frame still sta
   delete globalThis.OffscreenCanvas;
 });
 
+// ---------------------------------------------------------------- a day and a night allocate nothing new
+/** Count every OffscreenCanvas the page makes, with its size; each answers a context that does nothing. */
+function countCanvases() {
+  const made = [];
+  globalThis.OffscreenCanvas = class { constructor(w, h) { this.width = w; this.height = h; made.push([w, h]); this.g = fakeCtx({ n: 0, by: {} }); } getContext() { return this.g; } transferToImageBitmap() { return { width: this.width, height: this.height, close() {} }; } };
+  return made;
+}
+test('a whole day and night turn makes no bitmap of the sea: one strip for the life of the world, and no full-window layer beyond the light\'s own four', async () => {
+  const made = countCanvases();
+  const { w } = await makeWorld([1440, 900], { dom: { dpr: 2 } }); // 1.5 or 2 by what an earlier test taught the module about the GPU: either way a canvas of millions of pixels
+  assert.ok(w.dpr >= 1.5 && w.cv.width >= 2160);
+  const { dayTargets } = await import('../js/world/lighting.js');
+  w.focusZone(1, false); w.light.perFrame = 1;
+  const FULL = [w.cv.width, w.cv.height], isFull = (c) => c[0] === FULL[0] && c[1] === FULL[1], strips = () => made.filter((c) => c[0] === 1 && c[1] === 256).length;
+  const T = { night: 0, dusk: 0 }, steps = new Set();
+  // one frame at every tenth of a virtual hour through 24 hours, the way the clock would walk the light, then the same again: two turns
+  const turn = (t0) => { for (let h = 0; h < 24; h += 0.1) { dayTargets(h, 1, false, T); w.night = T.night; w.dusk = T.dusk; steps.add(Math.round(T.night * 24) * 100 + Math.round(T.dusk * 12)); w.t = t0 + h * 800; w.draw(); } };
+  turn(0); const afterFirst = made.length;
+  assert.ok(steps.size >= 25, `the walk crosses many light steps (${steps.size}): the old build made a full-window bitmap for each`);
+  turn(30000);
+  const full = made.filter(isFull).length;
+  assert.ok(full <= 8, `at most the ground cache and the light's day, night, crossfade and shafts, once each (${full} full-window bitmaps in two turns; the old build made 132)`);
+  assert.ok(made.length - afterFirst <= 2, `a second turn makes next to nothing new (${made.length - afterFirst}; the old build made 63)`);
+  assert.ok(made.length <= 40, `and the whole of two turns stays a small constant (the sprites and glows of the first look: 31), not a count that grows with the steps of the light (${made.length}; the old build made 157)`);
+  assert.equal(strips(), 1, 'the sea is one strip, made once and painted again at each step');
+  w.release(); assert.equal(w.seaStrip, undefined, 'release gives the strip back too'); w.draw(); assert.equal(strips(), 2, 'and a world drawn again makes it again, once');
+  delete globalThis.OffscreenCanvas;
+});
+
 // ---------------------------------------------------------------- the sprite cache in a zoom
 const prop = (o = {}) => ({ t: 'bldg', gx: 10, gy: 10, w: 3, d: 2, h: 30, z: 5, bb: [-96, 300, 96, 420], ...o });
 function rec(a = 1, calls = []) {
@@ -151,9 +180,9 @@ test('a big sprite is built only once the scale has rested; the sprite budget gr
 // ---------------------------------------------------------------- the world lets go of its bitmaps
 test('detach gives back the ground cache, the sea, the light layers, the label sprites and the scenery sprites', async () => {
   const { w } = await makeWorld([800, 520]);
-  w.gc = { c: {}, g: {} }; w.gcValid = true; w.waterGr = { layer: {} }; w.light.big.day = {}; w.light.big.mix = {}; w.light.src.day = {}; w.labels.cache.set('x', { c: {} });
+  w.gc = { c: {}, g: {} }; w.gcValid = true; w.waterGr = { key: 1 }; w.seaStrip = { c: {}, g: {} }; w.seaKey = 1; w.light.big.day = {}; w.light.big.mix = {}; w.light.src.day = {}; w.labels.cache.set('x', { c: {} });
   w.detach();
-  assert.equal(w.gc, null); assert.equal(w.waterGr, null); assert.deepEqual(Object.values(w.light.big), [null, null, null, null]); assert.equal(w.light.src.day, null); assert.equal(w.labels.cache.size, 0);
+  assert.equal(w.gc, null); assert.equal(w.waterGr, null); assert.equal(w.seaStrip, undefined, 'the sea\'s strip'); assert.deepEqual(Object.values(w.light.big), [null, null, null, null]); assert.equal(w.light.src.day, null); assert.equal(w.labels.cache.size, 0);
   assert.equal(sprites.stats.pixels, 0, 'the scenery sprites are gone too');
 });
 
@@ -179,6 +208,28 @@ test('Deal Room: the result\'s Continue rides the foot of the sheet, and every s
   assert.match(shell, /\.db \{[^}]*scroll-padding: var\(--sp-2\)/, 'nor by a drawer\'s');
   assert.match(shell, /\.db:has\(\.qs-nav\) \{ scroll-padding-top: 4\.4rem; \}/, 'and a drawer\'s sticky bar never stands over the control Shift+Tab lands on');
   assert.match(shell, /\.db:has\(\.tv-shiprow\) \{ scroll-padding-bottom: /);
+});
+test('Deal Room: the sticky Continue row leaves room for the focus ring at the foot of the sheet, and the phone clears the home indicator', () => {
+  const css = read('css/ui-deal.css'), base = read('css/styles.css');
+  const ring = base.match(/:focus-visible \{ outline: (\d+)px solid var\(--focus\); outline-offset: (\d+)px; \}/), reach = +ring[1] + +ring[2];
+  assert.equal(reach, 5, 'a ring reaches 5px past its control: 3px line, 2px out');
+  const row = css.match(/\.deal-result > \.row:last-child \{ position: sticky; bottom: 0; z-index: 1; padding: ([\d.]+)rem 0 ([\d.]+)rem;/);
+  assert.ok(row, 'the sticky row keeps its place at the foot of the sheet');
+  assert.ok(+row[2] * 16 > reach, `its bottom padding (${+row[2] * 16}px) is more than the ring's reach (${reach}px): the row is flush with the sheet's edge when it sticks, and the sheet clips what passes it`);
+  assert.ok(+row[1] * 16 > reach, 'and so is its top padding');
+  const phone = css.slice(css.indexOf('@media (max-width: 760px)'));
+  assert.match(phone, /\.deal-result > \.row:last-child \{ padding-bottom: calc\(\.5rem \+ env\(safe-area-inset-bottom, 0px\)\); \}/, 'on a phone the row clears the home indicator, as the foot does');
+});
+test('the shared dialog is never a Tab stop of its own: tabindex -1 from the first start, still focused by script, and the cursor goes back to the opener on close', async () => {
+  const on = {}; let focused = null; const opener = { focus: () => { focused = 'opener'; } };
+  const d = { open: false, tabIndex: 0, scrollTop: 5, className: '', innerHTML: '', setAttribute() {}, addEventListener: (k, f) => { on[k] = f; }, showModal() { this.open = true; }, close() { this.open = false; on.close?.(); }, querySelector: () => null, focus: () => { focused = 'dialog'; } };
+  globalThis.document = { querySelector: (q) => (q === '#dlg' ? d : null), activeElement: opener, documentElement: { dataset: {} } };
+  const { initDialog, dlg } = await import('../js/ui/common.js');
+  initDialog(); assert.equal(d.tabIndex, -1, 'a scrolling dialog would otherwise get a Tab stop of its own in Chrome, whose ring lies off the screen when the dialog fills it');
+  dlg.open('<p>plain</p>', { label: 'x' }); assert.equal(d.open, true); assert.equal(d.tabIndex, -1, 'opening leaves it so'); assert.equal(focused, 'dialog', 'with nothing to focus, the dialog itself takes the cursor: tabindex -1 still allows that');
+  d.close(); assert.equal(focused, 'opener', 'and closing hands the cursor back to what opened it');
+  const css = read('css/ui-deal.css'); assert.match(css, /dialog\.deal:focus-visible \{ outline-offset: -4px; \}/, 'should script ever give the Deal Room the cursor, its ring is drawn inside the sheet');
+  delete globalThis.document;
 });
 test('toasts: when there is no room beside a side drawer the stack is the newest one, and every toast is still announced', () => {
   const css = read('css/shell.css'), src = read('js/ui/shell.js');
