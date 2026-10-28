@@ -157,17 +157,19 @@ test('grad: Niche Radar and +1 Capital Sourcing, loan spreads 15% lower; costs -
   // the cost: -1 Ops, which is a 2.38x dearer repair (0.42 per level)
   assert.equal(g.lvl('ops'), plain.lvl('ops') - 1);
   rel(repairCostFor(ASSETS.bike.repair, g.lvl('ops')) / repairCostFor(ASSETS.bike.repair, plain.lvl('ops')), 1 / 0.42, 1e-12);
-  // the garnishment
+  // the garnishment: 5% of a profit, out of money that is really there (audit: it used to take it from an empty purse and leave cash negative)
   g.s.cash = 0;
-  assert.equal(g.garnish(1000), 50); assert.equal(g.s.cash, -50);
+  assert.equal(g.garnish(1000), 0, 'nothing to take from an empty purse'); assert.equal(g.s.cash, 0); near(g.s.ps.garnishDue, 50, 1e-9);
+  g.s.cash = 1e6;
+  near(g.garnish(1000), 100, 1e-9); // this profit's 50 and the 50 that could not be taken before
   assert.equal(g.garnish(-500), 0, 'no garnishment on a loss'); assert.equal(g.garnish(0), 0);
-  let total = 50, safety = 0;
+  let total = 100, safety = 0;
   while (g.s.ps.garnished < 3000 && safety++ < 1000) total += g.garnish(5000);
   near(g.s.ps.garnished, 3000, 1e-9); near(total, 3000, 1e-9);
   assert.equal(g.garnish(5000), 0, 'paid off: garnishment stops at $3,000');
   const rows = g.s.ledger.filter((e) => e.type === 'garnish'); near(rows.reduce((a, e) => a - e.amt, 0), 3000, 1e-9);
   // the last instalment is cut to what is left
-  const h = mk(['grad']); h.s.ps.garnished = 2990; near(h.garnish(1000), 10, 1e-9);
+  const h = mk(['grad']); h.s.ps.garnished = 2990; h.s.cash = 100; near(h.garnish(1000), 10, 1e-9);
   assert.equal(plain.garnish(1000), 0, 'other Backgrounds have no student loans');
 });
 
@@ -420,7 +422,8 @@ test('second: counterfeits come flagged, 12% cheaper lots in gray-market distric
     assert.equal('warn' in lotP, false);
     if (lotS.truth.fake) { fakes++; if (lotS.warn === true) flagged++; } else if (lotS.warn) honestWarned++;
   }
-  assert.ok(fakes > 20); assert.equal(flagged, fakes, 'every counterfeit is flagged'); assert.equal(honestWarned, 0, 'and no honest lot is');
+  assert.ok(fakes > 20); assert.equal(honestWarned, 0, 'no honest lot is ever flagged');
+  assert.ok(flagged / fakes > 0.8 && flagged < fakes + 1, `a strong signal, not a perfect one: ${flagged} of ${fakes} counterfeits flagged (the street sense misses about ${ECON.warnMiss * 100}%)`);
   // gray markets: district 4 and 16 take 12% off; district 3 does not
   const ratio = (zone) => lotPairs(zone, [], ['second'], 150).filter(([p, s]) => p.cls === s.cls && p.price >= 5).map(([p, s]) => s.price / p.price);
   const gray = ratio(4), plain = ratio(3);

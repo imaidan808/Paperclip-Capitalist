@@ -285,15 +285,14 @@ test('rule auction: the share of auction lots follows the district\'s number, an
   }
 });
 
-test('rule fakes: counterfeits appear at the district rate times the asset\'s own fake risk, only in lots that look fine, and nowhere else', () => {
+test('rule fakes: the district rate is the share of ITS LOTS that are counterfeit (shared out by the asset\'s own fake risk), only in lots that look fine, and nowhere else', () => {
+  // (the rate used to be multiplied by the class's risk with no regard to the mix, so the Pawn District's 22% measured 14%: audit D4)
   for (const z of ZONE_IDS) {
     const lots = lotsIn(z, 400), rule = ZONES[z].rules.fakes || 0;
     const fakes = lots.filter((l) => l.truth.fake);
     if (!rule) { assert.equal(fakes.length, 0, `district ${z} has no counterfeits`); continue; }
     assert.ok(fakes.every((l) => l.cond === 'ok'), 'a broken lot is never also a fake');
-    const ps = lots.map((l) => (l.cond === 'ok' ? rule * (ASSETS[l.cls].fakeRisk ?? 1) : 0));
-    const expected = ps.reduce((a, b) => a + b, 0), sigma = Math.sqrt(ps.reduce((a, p) => a + p * (1 - p), 0));
-    assert.ok(Math.abs(fakes.length - expected) < 4.5 * sigma + 1, `district ${z}: ${fakes.length} fakes vs ${expected.toFixed(1)} +- ${sigma.toFixed(1)}`);
+    assert.ok(Math.abs(fakes.length / lots.length - rule) < 0.03, `district ${z}: ${(100 * fakes.length / lots.length).toFixed(1)}% of ${lots.length} lots are counterfeit against the rule's ${rule * 100}%`);
   }
   // the Pawn District is the place to learn appraisal: a fifth of its lots, by far the highest rate
   const rate = (z) => { const l = lotsIn(z, 300); return l.filter((x) => x.truth.fake).length / l.length; };
@@ -342,14 +341,14 @@ test('rule customs: freight arriving at Harbor Docks is inspected one time in fo
   assert.equal(ZONES[8].rules.customs, 0.25); assert.equal(ZONES[16].rules.customs, 0.15);
 });
 
-test('rule repair: repairs at Auto Row cost 25% less, and 60% of its repairable lots are broken against 40% elsewhere', () => {
+test('rule repair: repairs at Auto Row cost 25% less, and 60% of ITS LOTS are broken (audit D4: it measured 49%); elsewhere 40% of the repairable ones are', () => {
   const g = rich(mk(), 7000);
   const a6 = putAsset(g, 'bike', 6, { cond: 'broken' }), a7 = putAsset(g, 'bike', 7, { cond: 'broken' });
   rel(g.repairQuote(a7.id).cost / g.repairQuote(a6.id).cost, 0.75);
-  const frac = (z) => { const l = lotsIn(z, 400).filter((x) => ASSETS[x.cls].repair); return { f: l.filter((x) => x.cond === 'broken').length / l.length, n: l.length }; };
-  const f7 = frac(7), f5 = frac(5);
-  assert.ok(Math.abs(f7.f - 0.6) < 4.5 * sd(0.6, f7.n) / f7.n, 'Auto Row: ' + f7.f);
-  assert.ok(Math.abs(f5.f - 0.4) < 4.5 * sd(0.4, f5.n) / f5.n, 'Metro Hub: ' + f5.f);
+  const all7 = lotsIn(7, 400);
+  assert.ok(Math.abs(all7.filter((x) => x.cond === 'broken').length / all7.length - 0.6) < 0.03, 'Auto Row: a broken lot is 60% of its lots');
+  const l5 = lotsIn(5, 400).filter((x) => ASSETS[x.cls].repair), f5 = l5.filter((x) => x.cond === 'broken').length / l5.length;
+  assert.ok(Math.abs(f5 - 0.4) < 4.5 * sd(0.4, l5.length) / l5.length, 'Metro Hub: ' + f5);
 });
 
 test('rule perish: perishables spoil every day by 80% / their shelf life (on top of ordinary wear); others only wear', () => {
@@ -432,18 +431,20 @@ test('truthMult: a fake is worth 8% of the real thing, a genuine lot its conditi
 });
 
 const withTruth = (g, cls, zone, truth) => putAsset(g, cls, zone, { truth: { defects: [], ...truth } });
+const REAL = { blind: false }; // quotes are blind unless asked otherwise (audit D2/F4); these tests are about what the engine really decides
 
 test('a counterfeit is rejected by every buyer in the district, whatever they like, and the first rejection reveals it', () => {
   const g = rich(mk(), 3000); g.s.assets = [];
   const fake = withTruth(g, 'textbooks', 5, { q: 1, fake: true });
   for (const seg of Object.keys(BUYERS).filter((b) => BUYERS[b].zone === 5)) {
     const lead = { id: 'L-' + seg, zone: 5, seg, budget: 1e6, need: null, born: 0, exp: 999 }; g.s.leads[5].push(lead);
-    const q = g.quotePitch(fake.id, lead.id);
+    const q = g.quotePitch(fake.id, lead.id, undefined, REAL);
     assert.equal(q.rejected, true, seg); assert.equal(q.price, 0); assert.equal(q.reason, 'counterfeit', seg);
+    assert.notEqual(g.quotePitch(fake.id, lead.id).reason, 'counterfeit', seg + ': an ordinary (blind) quote has not been told');
   }
-  assert.equal(g.quotePitch(putAsset(g, 'textbooks', 5).id, 'L-trainer').rejected, false, 'the same buyer takes a genuine copy');
+  assert.equal(g.quotePitch(putAsset(g, 'textbooks', 5).id, 'L-trainer', undefined, REAL).rejected, false, 'the same buyer takes a genuine copy');
   const urgent = { id: 'LU', zone: 5, seg: 'trainer', budget: 5000, need: 'paper', born: 0, exp: 999 }; g.s.leads[5].push(urgent);
-  assert.equal(g.quotePitch(fake.id, 'LU').rejected, true, 'even an urgent buyer who needs exactly this');
+  assert.equal(g.quotePitch(fake.id, 'LU', undefined, REAL).rejected, true, 'even an urgent buyer who needs exactly this');
   const ev = log(g);
   assert.equal(fake.known, false, 'quoting reveals nothing to the asset');
   const cash = g.s.cash, rep = g.s.rep;
@@ -473,13 +474,18 @@ test('the pool pays for what is really there: an unknown fake or a flawed lot is
   const g = rich(mk(), 3000); g.s.assets = [];
   const twin = putAsset(g, 'textbooks', 5), fake = withTruth(g, 'textbooks', 5, { q: 1, fake: true }), flaw = withTruth(g, 'textbooks', 5, { q: 0.7, fake: false });
   const fric = ZONES[5].friction + g.instFee('pool'), described = g.val(twin);
-  rel(g.poolQuote([twin.id]).total, described * (1 - fric));
-  rel(g.poolQuote([flaw.id]).total, described * (1 - fric) * 0.7);
-  const unknown = g.poolQuote([fake.id]).total;
+  const real = (id) => g.poolQuote([id], false, REAL).total;
+  rel(real(twin.id), described * (1 - fric));
+  rel(real(flaw.id), described * (1 - fric) * 0.7);
+  const unknown = real(fake.id);
   rel(unknown, described * (1 - fric) * 0.08);
   fake.known = true;
-  rel(g.poolQuote([fake.id]).total, unknown, 1e-12); // revealing it does not pay a second haircut
-  assert.ok(unknown < g.poolQuote([twin.id]).total * 0.1);
+  rel(real(fake.id), unknown, 1e-12); // revealing it does not pay a second haircut
+  assert.ok(unknown < real(twin.id) * 0.1);
+  fake.known = false;
+  for (const a of [twin, fake, flaw]) rel(g.poolQuote([a.id]).total, described * (1 - fric), 1e-12); // what the player is shown is the as-described figure for all three
+  const cash = g.s.cash; assert.ok(g.sellPool([fake.id]).ok);
+  rel(g.s.cash - cash, unknown, 1e-12); // ...and what the pool really pays is the truth
 });
 
 test('buying keeps the hidden truth with the crate; the posted price describes the lot as it looks, whatever it is', () => {
@@ -816,7 +822,9 @@ test('blind quotes show what a player may see: no hidden truth and no undisclose
   const fake = putAsset(g, 'textbooks', 5, { truth: { q: 1, fake: true, defects: [] } }), flawed = putAsset(g, 'textbooks', 5, { truth: { q: 0.7, fake: false, defects: [] } });
   g.s.leads[5].push({ id: 'Lg', zone: 5, seg: 'trainer', budget: 1e12, need: null, born: 0, exp: 999 }, { id: 'Ls', zone: 5, seg: 'trainer', budget: 1e12, need: null, born: 0, exp: 999, scam: true });
   const before = JSON.stringify(g.s);
-  const blind = (a, l) => g.quotePitch(a.id, l, undefined, { blind: true }), full = (a, l) => g.quotePitch(a.id, l);
+  const blind = (a, l) => g.quotePitch(a.id, l, undefined, { blind: true }), full = (a, l) => g.quotePitch(a.id, l, undefined, REAL);
+  // quotes are blind by default: the plain call is the blind one
+  assert.equal(g.quotePitch(fake.id, 'Lg').rejected, false); assert.equal(g.quotePitch(fake.id, 'Lg').price, blind(fake, 'Lg').price); assert.equal(g.quotePitch(twin.id, 'Ls').scam, false);
   // a fake looks like its twin to a blind quote, and to nobody else
   assert.equal(blind(fake, 'Lg').rejected, false); assert.equal(blind(fake, 'Lg').reason, null); assert.equal(blind(fake, 'Lg').price, blind(twin, 'Lg').price);
   assert.equal(full(fake, 'Lg').rejected, true); assert.equal(full(fake, 'Lg').reason, 'counterfeit');
@@ -824,6 +832,7 @@ test('blind quotes show what a player may see: no hidden truth and no undisclose
   assert.equal(blind(flawed, 'Lg').price, blind(twin, 'Lg').price); rel(full(flawed, 'Lg').price / full(twin, 'Lg').price, 0.7, 1e-12);
   // an unverified fraud does not announce itself
   assert.equal(blind(twin, 'Ls').scam, false); assert.equal(full(twin, 'Ls').scam, true);
+  assert.equal('scam' in blind(twin, 'Ls').lead, false, 'the buyer handed back is not marked either'); assert.equal(full(twin, 'Ls').lead.scam, true);
   assert.equal(JSON.stringify(g.s), before, 'quoting changes nothing');
   assert.equal(fake.known, false);
   // the real thing is not blind
@@ -838,15 +847,17 @@ test('blind quotes show what a player may see: no hidden truth and no undisclose
   g.s.leads[5].push({ id: 'Lg3', zone: 5, seg: 'trainer', budget: 1e12, need: null, born: 0, exp: 999 });
   assert.equal(blind(flawed, 'Lg3').ok, true);
   // the options argument is optional and ignored when not an object of the right kind
-  assert.equal(g.quotePitch(flawed.id, 'Lg3', undefined, {}).price, full(flawed, 'Lg3').price);
+  assert.equal(g.quotePitch(flawed.id, 'Lg3', undefined, {}).price, blind(flawed, 'Lg3').price);
+  assert.equal(g.quotePitch(flawed.id, 'Lg3', undefined, { blind: false }).price, full(flawed, 'Lg3').price);
 });
 
 // ---------------------------------------------------------------------------------------------------- scams
 test('Digital Native: about 18% of buyers are fraudulent; every other Background meets none', () => {
-  const count = (perks) => { let n = 0, s = 0; for (let seed = 1; seed <= 60; seed++) { const g = mk(perks, seed); for (let i = 0; i < 40; i++) { g.s.leads[1] = []; g._spawnLead(1); n++; if (g.s.leads[1][0].scam) s++; } } return { n, s }; };
+  const count = (perks, trades = 3) => { let n = 0, s = 0; for (let seed = 1; seed <= 60; seed++) { const g = mk(perks, seed); g.s.trades = trades; for (let i = 0; i < 40; i++) { g.s.leads[1] = []; g._spawnLead(1); n++; if (g.s.leads[1][0].scam) s++; } } return { n, s }; };
   const nat = count(['native', 'pro']), other = count(['trades', 'pro']);
   assert.ok(Math.abs(nat.s / nat.n - 0.18) < 4.5 * sd(0.18, nat.n) / nat.n, `${nat.s} of ${nat.n}`);
   assert.equal(other.s, 0);
+  assert.equal(count(['native', 'pro'], 2).s, 0, 'no fraud before the third trade (audit F3: a first sale to a fraud ended the run at $0)');
 });
 
 test('an unverified fraudulent buyer takes the goods and never pays; a verified genuine buyer pays as usual', () => {
@@ -855,7 +866,7 @@ test('an unverified fraudulent buyer takes the goods and never pays; a verified 
   const a = g.s.assets[0];
   const lead = (id, scam) => { const l = { id, zone: 1, seg: 'student', budget: 8, need: null, born: 0, exp: 999, ...(scam ? { scam: true } : {}) }; g.s.leads[1].push(l); return l; };
   lead('Lscam', true); lead('Lgood', false);
-  const q = g.quotePitch(a.id, 'Lscam');
+  const q = g.quotePitch(a.id, 'Lscam', undefined, REAL);
   assert.equal(q.scam, true, 'the quote warns the engine\'s caller');
   const cash = g.s.cash, rep = g.s.rep;
   const r = g.pitch(a.id, 'Lscam');
@@ -875,7 +886,10 @@ test('verifyLead costs 1% of the buyer\'s budget (at least a cent), says what it
   const b = g.verifyLead('Lb'); assert.equal(b.scam, false); assert.equal(b.cost, 0.01); assert.match(b.msg, /genuine/);
   assert.equal(g.verifyLead('nobody').ok, false);
   g.s.cash = 0.001; g.s.leads[1].push({ id: 'Lc', zone: 1, seg: 'student', budget: 50, need: null, born: 0, exp: 999 });
+  putAsset(g, 'pen', 1);
   assert.equal(g.verifyLead('Lc').ok, false, 'no cash, no check');
+  g.s.assets = g.s.assets.slice(0, 1); // ...unless the buyer is about to take the founder's last crate: then there is nothing to protect with the cash, and the check is free
+  const free = g.verifyLead('Lc'); assert.equal(free.ok, true); assert.equal(free.cost, 0); assert.equal(g.s.cash, 0.001);
   assert.ok(g.s.ledger.some((e) => e.type === 'verify'));
 });
 
