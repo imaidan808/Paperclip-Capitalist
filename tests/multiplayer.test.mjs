@@ -26,10 +26,10 @@ test('same-browser transport delivers to other founders but not to self', async 
 const relayPath = new URL('../server/relay.mjs', import.meta.url).pathname;
 const haveRelay = existsSync(new URL('../server/node_modules/ws', import.meta.url));
 test('WebSocket relay forwards, isolates rooms, and replays the last snapshot and clock to late joiners', { skip: !haveRelay && 'run npm install in server/' }, async () => {
-  const port = 8800 + Math.floor(Math.random() * 90);
-  const child = spawn('node', [relayPath], { env: { ...process.env, PORT: String(port) }, stdio: ['ignore', 'pipe', 'inherit'] });
+  // PORT=0 lets the system pick a free port; the relay says which one it got (a fixed or random port in a range fails whenever something else holds it)
+  const child = spawn('node', [relayPath], { env: { ...process.env, PORT: '0' }, stdio: ['ignore', 'pipe', 'inherit'] });
   try {
-    await new Promise((res, rej) => { const to = setTimeout(() => rej(new Error('relay did not start')), 8000); child.stdout.on('data', (d) => { if (String(d).includes('listening')) { clearTimeout(to); res(); } }); child.on('exit', () => rej(new Error('relay exited early'))); });
+    const port = await new Promise((res, rej) => { const to = setTimeout(() => rej(new Error('relay did not start')), 8000); child.stdout.on('data', (d) => { const m = /listening on :(\d+)/.exec(String(d)); if (m) { clearTimeout(to); res(+m[1]); } }); child.on('exit', () => rej(new Error('relay exited early'))); });
     const url = `ws://localhost:${port}`;
     const teacher = track(new Room({ code: 'CLASS', pid: 'T', handle: 'teacher', role: 'instructor', relay: url }));
     const s1 = track(new Room({ code: 'CLASS', pid: 'S1', handle: 's1', role: 'student', relay: url }));
