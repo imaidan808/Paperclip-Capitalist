@@ -141,7 +141,7 @@ export const assets = {
   },
   copperCargo: {
     // Warehouse-receipt fraud is a real copper story, so the receipts get a fakeRisk.
-    name: 'Copper Cathode Cargo (100 Tonnes)', icon: '🛳️',
+    name: 'Copper Cathode Cargo (100 Metric Tons)', icon: '🛳️',
     base: 780000, sc: 5, dep: 1, dem: { 16: 8, 13: 3 }, tags: ['industrial', 'bulk', 'energy'], fakeRisk: 0.5,
   },
 };

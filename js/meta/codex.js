@@ -78,7 +78,7 @@ export const CODEX = [
     id: 'information-asymmetry', title: 'Information Asymmetry', icon: '🕵️', category: 'Risk', zone: 4,
     summary: "One side knows more than the other. In the Pawn District the seller knows what is real, and you pay for what you cannot check.",
     body: [
-      "The Pawn District has a 22% fake rate: about one lot in five on the counter is a fake, piled on the goods easiest to fake. A vintage watch is fake about a third of the time (32% at the start, a little more later), a fountain pen a third as often as that. The person behind it knows which crate holds the fake. You do not. That gap in what each side knows is information asymmetry, and it decides who wins most trades.",
+      "The Pawn District has a 22% fake rate: about one lot in five on the counter is a fake, piled on the goods easiest to fake. A vintage watch is fake about a third of the time (32% at the start, a little more later), a road bike about one time in ten. The person behind it knows which crate holds the fake. You do not. That gap in what each side knows is information asymmetry, and it decides who wins most trades.",
       "When you cannot tell good from fake, the honest price for a blind lot is the weighted average of what it might be worth, not the price of the genuine thing. Pay more than that and you hand money to the seller on average. Information is worth buying whenever it avoids more loss than it costs.",
       "The Read stage (Inspect) shrinks the gap. Each probe tells you something, noisily, about condition and authenticity, and your Ops skill decides how many probes you get and how accurate they are.",
     ],
@@ -124,7 +124,7 @@ export const CODEX = [
     id: 'winners-curse', title: "The Winner's Curse", icon: '🔨', category: 'Risk', zone: 6,
     summary: "In an auction the winner is usually the bidder who overestimated the prize the most. Bid below your estimate.",
     body: [
-      "Estate Sales sells half its lots at auction, and many hold boxes whose real value nobody knows for certain. Every bidder makes a private guess. Some guess high, some low. The highest guess wins, which means the winner is the person whose guess was most likely too high.",
+      "Estate Sales sends 55% of its lots to auction, and many hold boxes whose real value nobody knows for certain. Every bidder makes a private guess. Some guess high, some low. The highest guess wins, which means the winner is the person whose guess was most likely too high.",
       "That is the winner's curse: winning is itself bad news about your estimate. With five bidders whose guesses scatter evenly within 20% of the truth, the top guess averages 13% above the real value. Bid your estimate and you pay full price for something worth less. The cure is to shade your bid by about that much, and more when there are more bidders.",
       "Your Fintech skill sharpens your estimate, so you can shade less. A bidder who knows nothing shades the most.",
     ],
@@ -170,7 +170,7 @@ export const CODEX = [
     id: 'supply-chain', title: 'Supply Chains', icon: '🚢', category: 'Operations', zone: 8,
     summary: "Moving goods from where they are cheap to where they are wanted costs time, money and breakage. Customs can add more.",
     body: [
-      "A supply chain is every step between the place something is cheap and the place someone will pay for it. At Harbor Docks that includes the dock itself. Freight takes six hours, costs a slice of the cargo's value, and carries a chance of damage that falls as your Ops rises.",
+      "A supply chain is every step between the place something is cheap and the place someone will pay for it. At Harbor Docks that includes the dock itself. Freight to the next district takes six hours (a little longer for each district further on), costs a slice of the cargo's value, and carries a chance of damage that falls as your Ops rises.",
       "Customs adds a second layer. Crates arriving at Harbor Docks may be pulled for inspection, which means a 12-hour delay and a 2% fee. Once you unlock the district, freight is 30% cheaper everywhere, so learning the docks pays you back.",
       "Think in landed cost: price paid, plus freight, plus expected breakage, plus expected customs. A trade is only good if the gap in selling price beats all of it.",
     ],
@@ -186,7 +186,7 @@ export const CODEX = [
       result: "The destination must pay at least 6.65% more or the trip loses money. Before the Harbor Docks discount the same trip cost $160 and the bar was 8.0%, which is why learning the docks pays you back.",
     },
     mistakes: ["Counting freight but not breakage.", "Forgetting the time: six hours in a truck is six hours not earning.", "Assuming a big price gap always beats the costs."],
-    tryIt: "Open the Travel drawer, pick a crate and compare the destination's price with the freight quote before you ship.",
+    tryIt: "Pick a crate in your Stock, then open the Travel drawer and compare the destination's price with the freight quote before you ship.",
     related: ['tariffs', 'arbitrage-at-scale', 'hedging', 'economies-of-scale'],
     unlock: { event: 'zone', match: { id: 8 } },
   },
@@ -194,7 +194,7 @@ export const CODEX = [
     id: 'scale-compliance', title: 'Scale and Compliance', icon: '📋', category: 'Operations', zone: 9,
     summary: "As a business grows, rules arrive with it. Compliance is a fixed cost that stings small firms and gets cheaper per dollar at scale.",
     body: [
-      "Industrial Park is where size starts to attract attention. At $25,000 net worth (Milestone 2) audits begin, bulk lots come in multiples, and big clients write service levels into their deals. None of this is optional, and none of it scales down for a smaller company.",
+      "Industrial Park is where size starts to attract attention. At $25,000 net worth (Milestone 2) audits begin, corporate clients open up, and their service levels are written into the deals. None of this is optional, and none of it scales down for a smaller company.",
       "That makes compliance mostly a fixed cost: the same $1,200 consultant fee whether you earn $500 a day or $5,000. Measured as a share of income, it is heavy for the small and light for the large. The risk runs the other way. Penalties grow with each failure, so a larger firm has more to lose by skipping it.",
       "Plan for compliance as a line in your budget, the way you plan for freight.",
     ],
@@ -426,7 +426,7 @@ export const CODEX = [
     body: [
       "When you pitch an asset, the game looks at the last 48 hours of sales across your class. V_total counts every pitch of that asset in that district. V_niche counts the ones that went to the same type of buyer you are about to pitch. The more of the crowd sits in your niche, the less your pitch is worth.",
       "The Creativity Multiplier turns that into a price factor between 0.40 (the herd trap) and 3.14 (a pioneer). Your pitch price is the asset's fair value, times the fit multiplier, times 0.60, times 0.92 (buyers shave a little), times this multiplier. At 1.68, the reference for a balanced niche, they nearly cancel and you land just under fair value (93%). Anything above is a reward for thinking where others did not.",
-      "A low number is not a failure. It is information about where the crowd went.",
+      "A low number is not a failure. It is information about where the crowd went. And whatever the arithmetic says, a buyer never pays more than their stated budget.",
     ],
     formula: "Cm = [0.40 + ln((V_total + 2) / (V_niche + 1))] x (1 - S), clamped to [0.40, 3.14], with S = V_niche / V_total",
     example: {
@@ -493,7 +493,7 @@ export const CODEX = [
     summary: "A buyer in a hurry pays for the need, not for your cost. Urgent leads quote the price they will pay.",
     body: [
       "Some buyers arrive with a problem. A student's SIM tray jams. A mechanic needs one bolt before closing. They tell you what they would pay. For these urgent leads the game uses their stated budget as the reference price instead of your asset's fair value, because what matters to them is the fix, not the object.",
-      "That is the urgency premium: the extra a person pays to solve a pressing need now. It can dwarf your cost. It only works if the asset truly answers the need (the lead names a tag and your asset must carry it) and if you reach them before they leave. Leads last a day or two.",
+      "That is the urgency premium: the extra a person pays to solve a pressing need now. It can dwarf your cost. It only works if the asset truly answers the need (the lead names a tag and your asset must carry it) and if you reach them before they leave. Leads last only 18 to 36 virtual hours.",
       "Premium pricing is value-based pricing. Cost-plus asks what the thing cost you. Value-based asks what it is worth to this person, today.",
     ],
     formula: "urgent price = stated budget x (0.55 + 0.45 x fit) x 0.60 x 0.92 x Cm, never above the budget",
@@ -530,7 +530,7 @@ export const CODEX = [
       result: "A 25% margin became 22.5% once the fee came out. Each cost you forget is margin you only thought you had.",
     },
     mistakes: ["Mixing up markup and margin when comparing two deals.", "Quoting gross margin as if it were what you keep.", "Judging a deal on margin alone without asking how long your cash is tied up."],
-    tryIt: "After your next sale, open the receipt, find the lines that came off the price and work out your net margin.",
+    tryIt: "After your next sale, compare the price you agreed with what the result card says you received after tax and fees, and work out your net margin.",
     related: ['cash-flow-velocity', 'economies-of-scale', 'compounding'],
     unlock: 'start',
   },
@@ -608,7 +608,7 @@ export const CODEX = [
     summary: "Profit you reinvest earns profit of its own. Over many cycles the curve bends upward and outruns anything linear.",
     body: [
       "Each cycle you can pocket the profit or put it back in. Reinvested profit joins the stake, and next cycle's return is earned on a bigger base. That is compounding. For a long while it looks dull. Then the curve bends, because each step adds more than the one before.",
-      "A quick check is the rule of 72: divide 72 by the percentage return per cycle to estimate how many cycles it takes to double. At 3% per cycle that is 24 cycles. How much profit you plough back matters as much as the rate. Reinvest half and your growth rate halves, and the result after many cycles falls by far more than half.",
+      "A quick check is the rule of 72: divide 72 by the percentage return per cycle to estimate how many cycles it takes to double. At 3% per cycle that is 24 cycles. How much profit you plow back matters as much as the rate. Reinvest half and your growth rate halves, and the result after many cycles falls by far more than half.",
       "Compounding works against you too. Debt that grows at a rate does the same thing in reverse.",
     ],
     formula: "stake after n cycles = start x (1 + r)^n; doubling time = ln 2 / ln(1 + r)",
@@ -768,8 +768,8 @@ export const CODEX = [
     id: 'audit-compliance', title: 'Audits and Compliance', icon: '🔍', category: 'Risk',
     summary: "At $25,000 net worth you start getting audited. Filing costs a little. Dodging costs a lot, and more each time.",
     body: [
-      "Milestone 2 brings the regulators. Every 15 days an audit event asks for something specific: a filing, a list, some paperwork. You have 72 virtual hours to answer, and three paths: hire a compliance consultant ($1,200), put a manager on compliance for five days, or ignore it and hope.",
-      "Hoping works 15% of the time. The other 85% brings a $5,000 fine, a permanent 15% slow-down on your pipelines, and a record that costs you later: each failure multiplies the next fine by 1.5 and trims your exit value. An ignored audit counts as a failure.",
+      "Milestone 2 brings the regulators. Every 15 days an audit event asks for something specific: a filing, a list, some paperwork. You have 72 virtual hours to answer, and three paths: hire a compliance consultant ($1,200), put a manager on compliance for five days, or skip the filing and hope.",
+      "Hoping works 15% of the time. The other 85% brings a $5,000 fine, a permanent 15% slow-down on your pipelines, and a record that costs you later: each failure multiplies the next fine by 1.5 and trims your exit value. An audit left unanswered counts as a failure too.",
       "That makes compliance a straight expected-value choice.",
     ],
     formula: "expected cost of dodging = 0.85 x fine (plus the lasting slow-down)",
@@ -957,13 +957,13 @@ export const CODEX = [
     ],
     formula: "P(fake | deep discount) = P(discount | fake) x P(fake) / P(discount)",
     example: {
-      setup: "Out of 100 vintage watches in the Pawn District, 22 are fake (the district's 22% rate, at full risk for a watch). Suppose deep discounts (40% below fair) appear on 50% of the fakes but only 10% of the genuine ones.",
+      setup: "Out of 100 vintage watches in the Pawn District, about 32 are fake (the counter's 22% rate, weighted toward the goods that are easiest to fake). Suppose deep discounts (40% below fair) appear on 50% of the fakes but only 10% of the genuine ones.",
       steps: [
-        "Fakes at a deep discount: 22 x 0.50 = 11.",
-        "Genuine watches at a deep discount: 78 x 0.10 = 7.8.",
-        "Chance that a deep-discount watch is fake: 11 / (11 + 7.8) = 58.5%.",
+        "Fakes at a deep discount: 32 x 0.50 = 16.",
+        "Genuine watches at a deep discount: 68 x 0.10 = 6.8.",
+        "Chance that a deep-discount watch is fake: 16 / (16 + 6.8) = 70.2%.",
       ],
-      result: "A watch you would call a 22% risk on average becomes a 58% risk once you see the discount. The bargain was information, and it pointed the wrong way.",
+      result: "A watch you would call a 32% risk on average becomes a 70% risk once you see the discount. The bargain was information, and it pointed the wrong way.",
     },
     mistakes: ["Treating a low price as proof of a good deal.", "Assuming the seller is unlucky rather than informed.", "Skipping the probe because the price is already low."],
     tryIt: "Next time a lot looks too cheap, spend your best probe on it first and see what the evidence says.",
@@ -980,7 +980,7 @@ export const CODEX = [
     ],
     formula: "value of a check = expected result with the check - expected result without it",
     example: {
-      setup: "Say a lot costs $90. Genuine, it is worth $100. Fake, $10. Say 22% of this kind of lot are fake, as with a watch in the Pawn District, and the serial check catches 80% of fakes and never flags a genuine one.",
+      setup: "Say a lot costs $90. Genuine, it is worth $100. Fake, $10. Say 22% of the lots are fake, as across the Pawn District's counter, and the serial check catches 80% of fakes and never flags a genuine one.",
       steps: [
         "Buy blind: 0.78 x ($100 - $90) + 0.22 x ($10 - $90) = $7.80 - $17.60 = -$9.80 per lot.",
         "Buy only if the serial check passes. Genuine lots pass (0.78) and earn $10. A fake slips by 20% of the time (0.044) and loses $80. Result: $7.80 - $3.52 = +$4.28.",

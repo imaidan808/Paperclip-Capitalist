@@ -36,16 +36,16 @@ The dashboard pre-fills the 60 automated points. The **Export gradebook CSV** bu
 | Criterion | Mastery 90-100% | Proficiency 75-89% | Developing 60-74% | Deficient <60% |
 |---|---|---|---|---|
 | Arbitrage logic and asset utility | Explains value creation through the Asset Utility Score; shows how scarcity and local demand shifts were used | Identifies winning swaps; misses depreciation or persona alignment | Describes swaps as luck; no link to drivers | Cannot explain valuation shifts |
-| Working capital and pipeline velocity | Justifies reinvestment tempo; contrasts static stock with high-velocity pipelines | Understands automation; over-invested in stock at key moments | Upgrades randomly, no runway maths | Insolvency from unmanaged overhead |
+| Working capital and pipeline velocity | Justifies reinvestment tempo; contrasts static stock with high-velocity pipelines | Understands automation; over-invested in stock at key moments | Upgrades randomly, no runway math | Insolvency from unmanaged overhead |
 | Risk mitigation and black swans | Evaluates responses to Days 15, 45 and 75 and what changed in the capital structure | Survived the shocks reactively | Overwhelmed; no change of strategy | Ignored the signals |
-| Market saturation and innovation | Uses Creativity Engine maths; shows how segments were pivoted to avoid the herd | Knows crowding cuts margins; adjusted late | Blames luck rather than copycat strategy | Followed an online meta guide blindly |
+| Market saturation and innovation | Uses Creativity Engine math; shows how segments were pivoted to avoid the herd | Knows crowding cuts margins; adjusted late | Blames luck rather than copycat strategy | Followed an online meta guide blindly |
 
 ## Reflection paper (1,000-1,500 words)
 The **Debrief** screen assembles each student's own evidence (ledger rows, Day 45 capital structure, crowded-niche table) and exports a Markdown workbook. Ask for the three prompts:
 
 - **A, the asymmetric trade.** Identify a swap with a classmate whose specialty differed from yours. State the asset before and after, and explain with margin data how it created value neither of you could create alone.
 - **B, the Day 45 credit crunch.** Detail your capital structure when the shock went live. If leveraged, explain what you did to prevent margin compression; if holding cash, how you exploited the drop in asset values.
-- **C, decoding the creativity penalty.** Pick a phase where the Creativity Engine compressed your margins. Using the formula, analyse how cohort volume drove your returns and which niche you pivoted to.
+- **C, decoding the creativity penalty.** Pick a phase where the Creativity Engine compressed your margins. Using the formula, analyze how cohort volume drove your returns and which niche you pivoted to.
 
 ## Tuning for your course
 Instructor sliders: transaction friction, audit frequency, synthetic-classmate count, algorithmic events, EEI floor. Everything else is in `js/config.js` (rates, fees, shocks, the economy's knobs) and `js/data/` (districts, assets, buyers, Backgrounds).
