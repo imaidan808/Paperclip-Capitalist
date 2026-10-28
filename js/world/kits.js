@@ -216,15 +216,15 @@ kit('farm', {
 });
 
 kit('creative', {
-  hq: { col: '#7a3a8a', roof: 'flat', win: [3, 2], neon: '#9b6dff', sign: 'SKILLS' }, depot: '#5a2a66', lamp: '#ff9bf0', tree: '#8a4aa0',
+  hq: { col: '#7a3a8a', roof: 'flat', win: [3, 2], neon: '#9b6dff', sign: 'SKILLS', mat: 'metal' }, depot: '#5a2a66', lamp: '#ff9bf0', tree: '#8a4aa0',
   place(A) {
     const R = A.rest, v = A.pal[1];
-    if (R) { A.add('bldg', R[0], R[1] + 0.3, Math.min(R[2], 6.4), 3.8, 40, { col: '#5a2a66', trim: v, roof: 'flat', win: [4, 2], sign: 'ON AIR', neon: '#ff4fa3', studio: 1 }); }
+    if (R) { A.add('bldg', R[0], R[1] + 0.3, Math.min(R[2], 6.4), 3.8, 40, { col: '#5a2a66', trim: v, roof: 'flat', win: [4, 2], sign: 'ON AIR', neon: '#ff4fa3', studio: 1, mat: 'metal', band: v }); }
     A.add('billboard', 14.2, 5.7, 3.8, 0.3, 46, { col: v, text: 'NEW', ext: 14, anim: 1 });
     A.add('spot', 20.2, 13.0, 0.6, 0.6, 40, { col: v });
     A.add('spot', 13.6, 13.0, 0.6, 0.6, 40, { col: '#ff4fa3' });
     A.add('gantry', 15.6, 13.1, 3.4, 0.9, 40, { col: v, ext: 20, label: 'Camera crane' });
-    if (A.NW) { A.add('bldg', 0.9, 0.8, 5.0, 3.4, 36, { col: '#7a3a8a', trim: v, win: [3, 2], sign: 'STUDIO', neon: '#9b6dff' }); A.add('billboard', 1.4, 5.2, 3.8, 0.3, 40, { col: '#ff4fa3', text: 'LIVE', ext: 12, anim: 1 }); }
+    if (A.NW) { A.add('bldg', 0.9, 0.8, 5.0, 3.4, 36, { col: '#7a3a8a', trim: v, win: [3, 2], sign: 'STUDIO', neon: '#9b6dff', mat: 'metal', band: v }); A.add('billboard', 1.4, 5.2, 3.8, 0.3, 40, { col: '#ff4fa3', text: 'LIVE', ext: 12, anim: 1 }); }
   },
   decals(A) {
     for (const q of [[0.5, 0.5], [13, 0.5], [0.5, 11], [13, 11]]) A.decal({ k: 'checker', x: q[0], y: q[1], w: 8.5, d: 6.5, step: 1.25, c1: mix(A.cols.ground, '#ff4fa3', 0.14), c2: mix(A.cols.ground, '#9b6dff', 0.14), min: 0.55 });

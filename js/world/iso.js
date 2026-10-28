@@ -99,7 +99,8 @@ export const facePoint = (f, u, v) => {
 /**
  * Grid of windows on a face (bottom-left, bottom-right, top-right, top-left). Each window is lit or dark by a fixed pattern (so a building never shimmers);
  * `lit` (0..1+) is how much of the pattern is on, and windows just under the threshold glow half way, so evening comes on window by window.
- * All windows of a kind go into ONE path (a tower is four fills, not eighty). o = { fine: false skips the glass glints and sills (small or far views), seed: shifts the lit pattern }.
+ * All windows of a kind go into ONE path (a tower is four fills, not eighty). o = { fine: false skips the glass glints and sills (small or far views),
+ * skipDark: true draws only the lit panes (the dark ones are already in a cached body underneath: a rack's blinking lights) }.
  */
 export function windows(ctx, f, cols, rows, fill, lit = 0, pad = 0.12, litCol = '#ffd98a', phase = 0, o) {
   const cw = (1 - pad * 2) / cols, rh = (1 - pad * 2) / rows, fine = !o || o.fine !== false;
@@ -116,7 +117,8 @@ export function windows(ctx, f, cols, rows, fill, lit = 0, pad = 0.12, litCol = 
     }
     return any;
   };
-  if (pass(0)) { ctx.fillStyle = fill; ctx.fill(); dark = true; }
+  const skipDark = !!(o && o.skipDark);
+  if (!skipDark && pass(0)) { ctx.fillStyle = fill; ctx.fill(); dark = true; }
   if (lit > 0) {
     if (pass(1)) { ctx.fillStyle = mix(fill, litCol, 0.55); ctx.fill(); half = true; }
     if (pass(2)) { ctx.fillStyle = litCol; ctx.fill(); full = true; }

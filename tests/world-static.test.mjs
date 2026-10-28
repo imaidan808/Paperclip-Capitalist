@@ -5,16 +5,23 @@ import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { rgb, hex, shade, mix, tone, fogged, gray, shadow, windows, P, sx, sy, HW, box } from '../js/world/iso.js';
 import { SCENERY, LAYOUT } from '../js/world/layout.js';
-import { DRAW, drawProp } from '../js/world/props.js';
+import { DRAW, drawProp, layerOf } from '../js/world/props.js';
 import { solid, hazeAt } from '../js/world/shading.js';
 import * as sprites from '../js/world/sprites.js';
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 /** A recording 2D context: calls and fill styles are logged; getTransform answers a plain scale a. */
-function rec(a = 1, log = { n: 0, calls: [] }) {
+function rec(a = 1, log = { n: 0, calls: [], depth: 0 }) {
   const t = { getTransform: () => ({ a, b: 0, c: 0, d: a, e: 0, f: 0 }), createLinearGradient: () => ({ addColorStop() {} }), createRadialGradient: () => ({ addColorStop() {} }), measureText: (s) => ({ width: s.length * 6 }) };
   const ctx = new Proxy(t, {
-    get(o, k) { if (k in o) return o[k]; if (typeof k === 'symbol') return undefined; return (...args) => { log.n++; log.calls.push([k, ...args]); }; },
+    get(o, k) {
+      if (k in o) return o[k]; if (typeof k === 'symbol') return undefined;
+      return (...args) => {
+        log.n++; log.calls.push([k, ...args]);
+        if (k === 'save') log.depth++; else if (k === 'restore') log.depth--;
+        if (k === 'drawImage' && args[0] && args[0].closed) throw Object.assign(new Error("Failed to execute 'drawImage' on 'CanvasRenderingContext2D': The image source is detached"), { name: 'InvalidStateError' }); // what a browser does
+      };
+    },
     set(o, k, v) { o[k] = v; return true; },
   });
   return { ctx, log };
@@ -74,7 +81,7 @@ test('windows: a face of any size is a handful of fills, and the lit pattern is 
 globalThis.OffscreenCanvas = class { constructor(w, h) { this.width = w; this.height = h; this.log = { n: 0, calls: [] }; } getContext() { return (this.ctx ||= rec(1, this.log).ctx); } transferToImageBitmap() { const b = { width: this.width, height: this.height, closed: false, close() { this.closed = true; } }; return b; } };
 const prop = (o = {}) => ({ t: 'bldg', gx: 10, gy: 10, w: 3, d: 2, h: 30, z: 5, bb: [-96, 300, 96, 420], ...o });
 test('sprites: nothing is built while the zoom is moving; once it rests the body is drawn once and then only blitted', async () => {
-  sprites.clearSprites(); Object.assign(sprites.stats, { builds: 0, hits: 0, direct: 0 });
+  sprites.setBuildBudget(Infinity); sprites.clearSprites(); Object.assign(sprites.stats, { builds: 0, hits: 0, direct: 0 });
   let bodies = 0; const layer = { body: (g) => { bodies++; g.fillRect(0, 0, 5, 5); return [[[0, 0], [1, 1]]]; } };
   const p = prop(), { ctx, log } = rec(1.7);
   assert.equal(sprites.drawSprite(ctx, p, env(), layer), undefined, 'first sight of a new scale: draw directly'); assert.equal(bodies, 0);
@@ -88,7 +95,7 @@ test('sprites: nothing is built while the zoom is moving; once it rests the body
   assert.ok(log.calls.some((c) => c[0] === 'setTransform' && c[1] === 1 && c[2] === 0 && c[3] === 0 && c[4] === 1 && c[5] === 0));
 });
 test('sprites: fog and night are buckets of their own; the same bucket is shared; a prop keeps at most three variants', async () => {
-  sprites.clearSprites(); let bodies = 0; const layer = { body: () => { bodies++; return null; } }, p = prop({ t: 'depot' }), { ctx } = rec(1.2);
+  sprites.setBuildBudget(Infinity); sprites.clearSprites(); let bodies = 0; const layer = { body: () => { bodies++; return null; } }, p = prop({ t: 'depot' }), { ctx } = rec(1.2);
   sprites.drawSprite(ctx, p, env(), layer); await sleep(120);
   sprites.drawSprite(ctx, p, env({ night: 0.02 }), layer); sprites.drawSprite(ctx, p, env({ night: 0.04 }), layer); assert.equal(bodies, 1, 'night 0.02 and 0.04 are the same eighth');
   sprites.drawSprite(ctx, p, env({ night: 0.5 }), layer); assert.equal(bodies, 2);
@@ -98,7 +105,7 @@ test('sprites: fog and night are buckets of their own; the same bucket is shared
   assert.equal(sprites.drawSprite(ctx, p, env({ lite: true }), layer) === undefined, false);
 });
 test('sprites: a body sees a still world (no clock, no lights) and the memory budget is kept', async () => {
-  sprites.clearSprites(); let seen = null; const layer = { body: (g, p, e) => { seen = e; return null; } }, { ctx } = rec(2);
+  sprites.setBuildBudget(Infinity); sprites.clearSprites(); let seen = null; const layer = { body: (g, p, e) => { seen = e; return null; } }, { ctx } = rec(2);
   const p = prop({ bb: [0, 0, 400, 400] }); sprites.drawSprite(ctx, p, env({ night: 0.5, dim: 0.5 }), layer); await sleep(120); sprites.drawSprite(ctx, p, env({ night: 0.5, dim: 0.5 }), layer);
   assert.equal(seen.t, 0); assert.equal(seen.wind, 0); assert.equal(seen.lights, null); assert.equal(seen.far, false); assert.equal(seen.night, 0.5); assert.equal(seen.dim, 0.5);
   // five sprites of about 7 million pixels each cannot all stay under a 22 million budget
@@ -108,7 +115,7 @@ test('sprites: a body sees a still world (no clock, no lights) and the memory bu
   assert.ok(sprites.stats.pixels <= sprites.SPRITE_BUDGET, 'pixels held ' + sprites.stats.pixels); assert.ok(sprites.stats.evicted > 0);
 });
 test('sprites: a body that throws leaves nothing cached and the error goes to the caller; the cache can be switched off', async () => {
-  sprites.clearSprites(); const { ctx } = rec(1.4), p = prop({ t: 'office' }), bad = { body: () => { throw new Error('boom'); } };
+  sprites.setBuildBudget(Infinity); sprites.clearSprites(); const { ctx } = rec(1.4), p = prop({ t: 'office' }), bad = { body: () => { throw new Error('boom'); } };
   sprites.drawSprite(ctx, p, env(), bad); await sleep(120);
   assert.throws(() => sprites.drawSprite(ctx, p, env(), bad), /boom/); assert.equal(sprites.stats.pixels, 0);
   const good = { body: () => null }; assert.equal(sprites.drawSprite(ctx, p, env(), good), null, 'built after the failure, polys null');
@@ -116,17 +123,106 @@ test('sprites: a body that throws leaves nothing cached and the error goes to th
   const noCanvas = { ...rec(1).ctx, getTransform: undefined }; void noCanvas;
 });
 
+test('sprites: crossing the memory budget never evicts the sprite just built, never throws, and leaves the canvas as it found it', async () => {
+  sprites.setBuildBudget(Infinity); sprites.clearSprites(); Object.assign(sprites.stats, { builds: 0, hits: 0, direct: 0, evicted: 0, stale: 0, deferred: 0, lost: 0 });
+  const big = { body: () => [[[1, 1], [2, 2]]] }, props = Array.from({ length: 7 }, (_, i) => prop({ gx: i, bb: [0, 0, 2600, 2600], h: 0 })), c = rec(1);
+  sprites.drawSprite(c.ctx, props[0], env(), big); await sleep(120); // the scale rests
+  const seen = [];
+  for (const q of props) { const r = sprites.drawSprite(c.ctx, q, env(), big); seen.push(r); assert.equal(c.log.depth, 0, 'every save is restored'); }
+  assert.ok(sprites.stats.evicted > 0, 'the budget was crossed'); assert.ok(sprites.stats.pixels <= sprites.SPRITE_BUDGET, 'and kept');
+  for (const r of seen) assert.deepEqual(r, [[[1, 1], [2, 2]]], 'a draw that built a sprite is served by it, never left to draw directly');
+  assert.equal(sprites.stats.lost, 0, 'no blit hit a closed bitmap');
+  // the newest sprite is the one that stays; the oldest were the ones to go
+  const before = sprites.stats.builds; assert.deepEqual(sprites.drawSprite(c.ctx, props.at(-1), env(), big), [[[1, 1], [2, 2]]]); assert.equal(sprites.stats.builds, before, 'the last one built is still cached');
+});
+test('sprites: a bitmap the browser took back costs one direct draw, not a thrown error or a leaked save', async () => {
+  sprites.setBuildBudget(Infinity); sprites.clearSprites(); Object.assign(sprites.stats, { lost: 0 });
+  const p = prop({ t: 'depot' }), c = rec(1.9), layer = { body: () => [[[3, 3]]] };
+  sprites.drawSprite(c.ctx, p, env(), layer); await sleep(120);
+  assert.deepEqual(sprites.drawSprite(c.ctx, p, env(), layer), [[[3, 3]]]);
+  // a context lost under us closes every bitmap
+  const arr = []; c.log.calls.filter((x) => x[0] === 'drawImage').forEach((x) => arr.push(x[1])); arr.forEach((b) => b.close());
+  assert.equal(sprites.drawSprite(c.ctx, p, env(), layer), undefined, 'the caller is told to draw this prop directly'); assert.equal(sprites.stats.lost, 1); assert.equal(c.log.depth, 0);
+  assert.deepEqual(sprites.drawSprite(c.ctx, p, env(), layer), [[[3, 3]]], 'and the next frame builds it again'); assert.equal(c.log.depth, 0);
+});
+test('sprites: a frame builds only what its time allows; the rest shows a neighbouring evening, or is drawn directly, and catches up', async () => {
+  sprites.setBuildBudget(Infinity); sprites.clearSprites(); Object.assign(sprites.stats, { builds: 0, stale: 0, deferred: 0, direct: 0 });
+  let bodies = 0; const layer = { body: () => { bodies++; return [[[0, 0]]]; } }, a = prop({ gx: 1 }), b = prop({ gx: 2 }), c = rec(1.6);
+  sprites.drawSprite(c.ctx, a, env(), layer); await sleep(120);
+  sprites.drawSprite(c.ctx, a, env({ night: 0.4 }), layer); assert.equal(bodies, 1); // a is built for the evening at 3/8
+  sprites.setBuildBudget(1e-9, 1e12, 1e12); // a frame that allows one build and then no more, however long it lasts
+  sprites.drawSprite(c.ctx, b, env(), layer); assert.equal(bodies, 2, 'the first build of a window goes ahead');
+  const blits = () => c.log.calls.filter((x) => x[0] === 'drawImage').length, n0 = blits();
+  assert.deepEqual(sprites.drawSprite(c.ctx, a, env({ night: 0.5 }), layer), [[[0, 0]]], 'a quarter-hour of evening later: the sprite of the step before is shown'); assert.equal(bodies, 2); assert.equal(blits(), n0 + 1); assert.equal(sprites.stats.stale, 1);
+  assert.equal(sprites.drawSprite(c.ctx, a, env({ night: 0.9 }), layer), undefined, 'three steps off is too far to pass for the same evening: direct'); assert.equal(sprites.stats.deferred, 1); assert.equal(bodies, 2);
+  assert.equal(sprites.drawSprite(c.ctx, prop({ gx: 3 }), env(), layer), undefined, 'a prop with no sprite at all is drawn directly');
+  sprites.setBuildBudget(Infinity); // the next frame has time
+  assert.deepEqual(sprites.drawSprite(c.ctx, a, env({ night: 0.9 }), layer), [[[0, 0]]]); assert.equal(bodies, 3, 'and builds what was waiting');
+  sprites.setBuildBudget();
+});
+test('sprites: a sprite is built at the scale it is shown at, so the blit is a straight copy; a different scale is a different sprite', async () => {
+  sprites.setBuildBudget(Infinity); sprites.clearSprites(); let bodies = 0; const layer = { body: () => { bodies++; return null; } }, p = prop({ gx: 4 });
+  for (const sc of [1.3, 1.3002]) { const c = rec(sc); sprites.drawSprite(c.ctx, p, env(), layer); await sleep(110); sprites.drawSprite(c.ctx, p, env(), layer); const di = c.log.calls.filter((x) => x[0] === 'drawImage'); assert.ok(di.length >= 1); assert.equal(di.at(-1).length, 4, 'drawImage(image, x, y): no resize'); }
+  assert.equal(bodies, 1, 'a hair of difference in the scale is the same sprite');
+  const c = rec(1.6); sprites.drawSprite(c.ctx, p, env(), layer); await sleep(110); sprites.drawSprite(c.ctx, p, env(), layer); assert.equal(bodies, 2, 'a real change of zoom builds again');
+});
+
+// ---------------------------------------------------------------- the sprite box holds the whole body
+/** Every point a body draws, in the coordinates it draws in: a small transform tracker over a recording context. */
+function inkBounds(body, p, env) {
+  let m = [1, 0, 0, 1, 0, 0]; const stack = []; let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9, lw = 1;
+  const pt = (x, y, r = 0) => { const X = m[0] * x + m[2] * y + m[4], Y = m[1] * x + m[3] * y + m[5]; x0 = Math.min(x0, X - r); x1 = Math.max(x1, X + r); y0 = Math.min(y0, Y - r); y1 = Math.max(y1, Y + r); };
+  const mul = (a, b, c, d, e, f) => { m = [m[0] * a + m[2] * b, m[1] * a + m[3] * b, m[0] * c + m[2] * d, m[1] * c + m[3] * d, m[0] * e + m[2] * f + m[4], m[1] * e + m[3] * f + m[5]]; };
+  const api = {
+    getTransform: () => ({ a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 }), createLinearGradient: () => ({ addColorStop() {} }), createRadialGradient: () => ({ addColorStop() {} }), measureText: (s) => ({ width: s.length * 6 }),
+    save() { stack.push(m.slice()); }, restore() { m = stack.pop() || m; }, translate(x, y) { mul(1, 0, 0, 1, x, y); }, scale(x, y) { mul(x, 0, 0, y, 0, 0); }, transform(a, b, c, d, e, f) { mul(a, b, c, d, e, f); }, setTransform(a, b, c, d, e, f) { m = [a, b, c, d, e, f]; },
+    moveTo: pt, lineTo: pt, quadraticCurveTo(cx, cy, x, y) { pt(cx, cy); pt(x, y); }, rect(x, y, w, h) { pt(x, y); pt(x + w, y + h); }, fillRect(x, y, w, h) { pt(x, y); pt(x + w, y + h); },
+    arc(x, y, r) { pt(x, y, r); }, ellipse(x, y, rx, ry) { pt(x, y, Math.max(rx, ry)); }, arcTo(x1_, y1_, x2, y2) { pt(x1_, y1_); pt(x2, y2); },
+  };
+  const ctx = new Proxy(api, { get(o, k) { if (k in o) return o[k]; if (typeof k === 'symbol') return undefined; return () => {}; }, set(o, k, v) { if (k === 'lineWidth') lw = v; o[k] = v; return true; } });
+  body(ctx, p, env); void lw;
+  return { x0, y0, x1, y1 };
+}
+test('sprites: the box of every layered prop holds everything its body draws, so a sprite never has a corner cut off', () => {
+  const seen = new Set(), bad = [];
+  for (const p of SCENERY) {
+    const L = layerOf(p.t); if (!L) continue;
+    const key = [p.t, p.w, p.d, p.h, p.z].join('|'); if (seen.has(key)) continue; seen.add(key);
+    for (const lite of [false, true]) {
+      const e = { t: 0, wind: 0, lights: null, zoff: 0, locked: false, far: false, lite, crunch: false, dim: 0, night: 0.5, hz: 0, boardText: null, surge: false, alertAudit: false };
+      const ink = inkBounds(L.body, p, e), B = sprites.spriteBounds(p, L);
+      // two pixels of play: the faintest antialiasing at an edge is not a missing corner
+      const over = { left: B.x0 - ink.x0, top: B.y0 - ink.y0, right: ink.x1 - B.x1, bottom: ink.y1 - B.y1 };
+      if (Math.max(over.left, over.top, over.right, over.bottom) > 2) bad.push(`${p.t} ${p.w}x${p.d}x${p.h} lite=${lite} ${JSON.stringify(over)}`);
+    }
+  }
+  assert.ok(seen.size >= 30, 'layered props found: ' + seen.size); assert.deepEqual(bad, []);
+});
+test('a server rack is a sprite of its cabinet with the blinking lights drawn live over it, and the hour does not rebuild it', async () => {
+  sprites.setBuildBudget(Infinity); sprites.clearSprites(); Object.assign(sprites.stats, { builds: 0 });
+  const p = SCENERY.find((q) => q.t === 'rack'), c = rec(1.45); assert.ok(p && layerOf('rack') && layerOf('rack').night === false);
+  drawProp(c.ctx, p, env()); await sleep(110); const before = c.log.n;
+  drawProp(c.ctx, p, env()); const dayCalls = c.log.n - before;
+  drawProp(c.ctx, p, env({ night: 0.9 })); assert.equal(sprites.stats.builds, 1, 'one sprite for every hour of the day');
+  const direct = rec(1.45); DRAW.rack(direct.ctx, p, env());
+  assert.ok(dayCalls < direct.log.n * 0.7, `a frame of a cached rack (${dayCalls} calls) is cheaper than drawing it all (${direct.log.n})`);
+  // lit panes only: the dark panes are already in the sprite, so the live part never fills the pane colour
+  const w = rec(); windows(w.ctx, [[0, 40], [60, 70], [60, 30], [0, 0]], 6, 6, '#0b1a22', 0.6, 0.07, '#7be3ff', 0, { fine: false, skipDark: true });
+  assert.ok(!w.log.calls.some((x) => x[0] === 'fillStyle' && x[1] === '#0b1a22') && w.log.calls.filter((x) => x[0] === 'fill').length >= 1);
+});
+
 // ---------------------------------------------------------------- the layered props
 test('every prop type draws, in every light, and a layered prop answers the same hit polygons through its sprite as straight onto the scene', async () => {
-  const types = new Set(SCENERY.map((p) => p.t)); sprites.clearSprites(); sprites.enableSprites(true);
+  const types = new Set(SCENERY.map((p) => p.t)); sprites.setBuildBudget(Infinity); sprites.clearSprites(); sprites.enableSprites(true);
   let layered = 0;
   for (const t of types) {
     const p = SCENERY.find((q) => q.t === t && q.hot) || SCENERY.find((q) => q.t === t), { ctx } = rec(1.3);
     for (const e of [env(), env({ night: 1, dim: 0.5 }), env({ lite: true }), env({ far: true, night: 0.3 })]) { const r = drawProp(ctx, p, e); assert.ok(r === null || Array.isArray(r) || r === undefined, t); assert.equal(e.hz, undefined, 'haze is only held for the length of the call'); }
-    sprites.drawSprite(ctx, p, env(), { body: () => null }); // prime the scale
+    sprites.drawSprite(ctx, { ...p }, env(), { body: () => null }); // prime the scale on a throwaway copy: a prop of the scenery itself must not get a sprite of nothing
   }
   await sleep(120);
-  for (const t of ['bldg', 'tower', 'depot', 'hall', 'bank', 'ipo', 'office', 'rentrow']) {
+  sprites.clearSprites(); // and whatever the loop above built is forgotten, however long it took
+  for (const t of ['bldg', 'tower', 'depot', 'hall', 'bank', 'ipo', 'office', 'rentrow', 'rack']) {
     const p = SCENERY.find((q) => q.t === t && q.hot) || SCENERY.find((q) => q.t === t); if (!p) continue; layered++;
     const direct = DRAW[t](rec(1.3).ctx, p, env()), c = rec(1.3);
     drawProp(c.ctx, p, env()); const viaSprite = drawProp(c.ctx, p, env());

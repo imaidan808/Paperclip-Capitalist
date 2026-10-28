@@ -53,12 +53,10 @@ export function sheen(ctx, f, u, wd, alpha, v0 = 0.04, v1 = 0.96) {
   const a = facePoint(f, u, v0), b = facePoint(f, u + wd, v0), c = facePoint(f, u + wd, v1), d = facePoint(f, u, v1);
   quadN(ctx, a[0], a[1], b[0], b[1], c[0], c[1], d[0], d[1], snowA(alpha));
 }
-/** Two diagonal reflections across a glass face, clipped to it. */
+/** Two diagonal reflections across a glass face. Both lie inside the face (u + 0.5 stays under 1), so no clip is needed: a clip costs more than the reflections. */
 export function glassSheen(ctx, f, alpha = 0.1) {
-  ctx.save(); facePath(ctx, f); ctx.clip();
   const q = (u0, u1) => { const a = facePoint(f, u0, 0), b = facePoint(f, u1, 0), c = facePoint(f, u1 + 0.5, 1), d = facePoint(f, u0 + 0.5, 1); quadN(ctx, a[0], a[1], b[0], b[1], c[0], c[1], d[0], d[1], snowA(alpha)); };
   q(0.05, 0.2); q(0.34, 0.4);
-  ctx.restore();
 }
 /** Faint rain streaks running down a plaster wall, placed by hash so a building always weathers the same way. */
 export function weather(ctx, f, seed, alpha = 0.05) {

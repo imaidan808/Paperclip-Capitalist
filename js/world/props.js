@@ -22,17 +22,22 @@ const hexRgb = (h) => { const n = parseInt(h.slice(1), 16); return `${(n >> 16) 
 const seedOf = (p) => (h2((p.gx * 13) | 0, (p.gy * 13) | 0) * 1e6) | 0;
 /** The left (sun-lit) wall of a prop standing at its own elevation, as bottom-left, bottom-right, top-right, top-left points. */
 const leftFace = (p, h = p.h, z = 0) => [P(p.gx, p.gy + p.d, z), P(p.gx + p.w, p.gy + p.d, z), P(p.gx + p.w, p.gy + p.d, z + h), P(p.gx, p.gy + p.d, z + h)];
+/** The right (shaded) wall, same order of points. */
+const rightFace = (p, h = p.h, z = 0) => [P(p.gx + p.w, p.gy + p.d, z), P(p.gx + p.w, p.gy, z), P(p.gx + p.w, p.gy, z + h), P(p.gx + p.w, p.gy + p.d, z + h)];
 const stroke = (ctx, col, lw) => { ctx.strokeStyle = col; ctx.lineWidth = lw; ctx.stroke(); };
 
 function strip(ctx, f, side, u0, u1, v0, v1, col) {
   const F = side === 'R' ? f.right : f.left, a = fp(F, u0, v0), b = fp(F, u1, v0), c = fp(F, u1, v1), d = fp(F, u0, v1);
   quadN(ctx, a[0], a[1], b[0], b[1], c[0], c[1], d[0], d[1], col);
 }
-/** Warm light spilling from lit windows: one soft light on the wall at night, as strong as the evening is deep. */
+/**
+ * Warm light spilling from lit windows: one soft light on the wall at night, as strong as the evening is deep. The light pass fills a square of side 2r with a gradient
+ * for every light, so the pool is small and a little stronger rather than wide and faint: a third of the pixels for the same warmth where the wall stands.
+ */
 function windowGlow(env, p, face, scale = 1) {
   if (!env.lights || env.night < 0.3 || lite(env)) return;
   const [x, y] = fp(face, 0.5, 0.5);
-  env.lights.push({ wx: x, wy: y - env.zoff, r: clamp((p.w * 20 + 20) * scale, 34, 90), c: '255,208,130', a: 0.16 * env.night });
+  env.lights.push({ wx: x, wy: y - env.zoff, r: clamp((p.w * 14 + 16) * scale, 28, 62), c: '255,208,130', a: 0.2 * env.night });
 }
 
 function smoke(ctx, x, y, t, n = 4, col = '255,255,255') {
@@ -399,15 +404,6 @@ export const DRAW = {
   bollard(ctx, p, env) { cyl(ctx, p.gx + 0.15, p.gy + 0.15, 0.12, p.h, body(p.col, env)); const [x, y] = P(p.gx + 0.15, p.gy + 0.15, p.h); ellipse(ctx, x, y, 3.2, 1.6, shade(p.col, 1.25)); return null; },
 
   // ---------------------------------------------------------------- tech, creative, farm
-  rack(ctx, p, env) {
-    const fine = !lite(env);
-    shadow(ctx, p.gx, p.gy, p.w, p.d, p.h); contact(ctx, p.gx, p.gy, p.w, p.d, 0.16);
-    const f = solid(ctx, p.gx, p.gy, p.w, p.d, p.h, body(p.col, env), { mat: 'metal', lite: !fine }), ph = env.t ? Math.floor(env.t / 450) : 0, on = 0.55 + 0.25 * glow(env), rows = Math.round(p.h / 6);
-    windows(ctx, f.left, 6, rows, '#0b1a22', on, 0.07, p.acc, ph + (p.seed | 0), { fine: false }); windows(ctx, f.right, 4, rows, '#0b1a22', on * 0.8, 0.07, p.acc, ph + 3, { fine: false });
-    solid(ctx, p.gx + 0.15, p.gy + 0.15, p.w - 0.3, p.d - 0.3, 3, body('#10161e', env), { z: p.h, lite: true });
-    if (!lite(env)) { const [x, y] = P(p.gx + p.w / 2, p.gy + p.d, p.h * 0.5); env.lights?.push({ wx: x, wy: y - env.zoff, r: 46, c: hexRgb(p.acc), a: 0.3 }); }
-    return null;
-  },
   dome(ctx, p, env) {
     const [x, y] = P(p.gx + p.w / 2, p.gy + p.d / 2), r = p.w * 30;
     blob(ctx, x + 4, y + 3, r + 6, r * 0.5 + 3, 0.26); ellipse(ctx, x, y, r, r * 0.5, tint('#1c2a38', env));
@@ -481,8 +477,35 @@ function layer(type, def) {
   DRAW[type] = def.draw = (ctx, p, env) => { const r = def.body(ctx, p, env); if (def.live) def.live(ctx, p, env); return r; };
 }
 
+// A server rack: the cabinet is the sprite (its panes drawn dark); the blinking lights are the live part, painted over the panes the way the lit ones always were.
+layer('rack', {
+  night: false, // nothing in the cabinet depends on the hour: the lights are live
+  body(ctx, p, env) {
+    const fine = !lite(env), rows = Math.round(p.h / 6);
+    shadow(ctx, p.gx, p.gy, p.w, p.d, p.h); contact(ctx, p.gx, p.gy, p.w, p.d, 0.16);
+    const f = solid(ctx, p.gx, p.gy, p.w, p.d, p.h, body(p.col, env), { mat: 'metal', lite: !fine });
+    if (fine) { // the cabinet's frame: end rails and a door seam on the lit wall, a vented kick plate, slits on the shaded wall, an accent line along the top edge
+      const edge = `rgba(${hexRgb(tint(p.acc || '#35e0ff', env))},.6)`;
+      strip(ctx, f, 'L', 0.015, 0.05, 0.05, 0.95, 'rgba(0,0,0,.5)'); strip(ctx, f, 'L', 0.95, 0.985, 0.05, 0.95, 'rgba(0,0,0,.5)'); strip(ctx, f, 'L', 0.05, 0.057, 0.05, 0.95, snowA(0.13));
+      strip(ctx, f, 'L', 0.497, 0.503, 0.07, 0.93, 'rgba(0,0,0,.55)'); strip(ctx, f, 'L', 0, 1, 0, 0.045, 'rgba(0,0,0,.5)'); strip(ctx, f, 'L', 0, 1, 0.962, 0.99, edge);
+      strip(ctx, f, 'R', 0, 1, 0, 0.045, 'rgba(0,0,0,.5)'); strip(ctx, f, 'R', 0, 1, 0.962, 0.99, edge);
+      ctx.beginPath(); for (let i = 0; i < 9; i++) { const v = 0.12 + i * 0.045, a = fp(f.right, 0.22, v), b = fp(f.right, 0.78, v); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); } stroke(ctx, 'rgba(0,0,0,.4)', 1.4);
+    }
+    windows(ctx, f.left, 6, rows, '#0b1a22', 0, 0.07, p.acc, 0, { fine: false }); windows(ctx, f.right, 4, rows, '#0b1a22', 0, 0.07, p.acc, 0, { fine: false });
+    solid(ctx, p.gx + 0.15, p.gy + 0.15, p.w - 0.3, p.d - 0.3, 3, body('#10161e', env), { z: p.h, lite: true });
+    return null;
+  },
+  live(ctx, p, env) {
+    const ph = env.t ? Math.floor(env.t / 450) : 0, on = 0.55 + 0.25 * glow(env), rows = Math.round(p.h / 6);
+    windows(ctx, leftFace(p), 6, rows, '#0b1a22', on, 0.07, p.acc, ph + (p.seed | 0), { fine: false, skipDark: true });
+    windows(ctx, rightFace(p), 4, rows, '#0b1a22', on * 0.8, 0.07, p.acc, ph + 3, { fine: false, skipDark: true });
+    if (!lite(env)) { const [x, y] = P(p.gx + p.w / 2, p.gy + p.d, p.h * 0.5); env.lights?.push({ wx: x, wy: y - env.zoff, r: 46, c: hexRgb(p.acc), a: 0.3 }); }
+  },
+});
+
+const PLINTH = [6, 0, 0, 0]; // sprite room on the left for a plinth that runs 0.3 tile past the footprint
 layer('bldg', { body: bldgBody, live: bldgLive });
-layer('hall', { body: hallBody, live: (ctx, p, env) => windowGlow(env, p, leftFace(p, p.h, 4), 0.8) });
+layer('hall', { pad: PLINTH, body: hallBody, live: (ctx, p, env) => windowGlow(env, p, leftFace(p, p.h, 4), 0.8) });
 const exchangeBody = (ctx, p, env) => hallBody(ctx, { ...p, col: '#d8c98a', roofCol: '#2a2410', sign: 'EXCHANGE', hot: 1 }, env);
 const exchangeLive = (ctx, p, env) => {
   const [x, y] = P(p.gx + p.w / 2, p.gy + p.d / 2, p.h + 24);
@@ -490,7 +513,7 @@ const exchangeLive = (ctx, p, env) => {
   globeAt(ctx, x, y - 2, 17, env, tint(p.acc, env), env.t);
   if (!lite(env)) env.lights?.push({ wx: x, wy: y - env.zoff, r: 80, c: '245,211,106', a: 0.35 });
 };
-layer('exchange', { body: exchangeBody, live: exchangeLive }); // the hall is the sprite; the turning globe over it is drawn live
+layer('exchange', { pad: PLINTH, body: exchangeBody, live: exchangeLive }); // the hall is the sprite; the turning globe over it is drawn live
 
 layer('shack', {
   body(ctx, p, env) {
@@ -541,6 +564,7 @@ layer('tower', {
   },
 });
 layer('ipo', {
+  pad: PLINTH,
   body(ctx, p, env) {
     const fine = !lite(env), o = { fine };
     shadow(ctx, p.gx, p.gy, p.w, p.d, p.h, 0.34); contact(ctx, p.gx - 0.3, p.gy - 0.3, p.w + 0.6, p.d + 0.6);
@@ -575,6 +599,8 @@ layer('office', {
   },
 });
 layer('bank', {
+  night: false,
+  pad: [12, 0, 0, 0], // the plinth runs 0.4 tile past the footprint on every side: its left tip is further out than the box's default margin
   body(ctx, p, env) {
     const fine = !lite(env);
     shadow(ctx, p.gx, p.gy, p.w, p.d, p.h); contact(ctx, p.gx - 0.4, p.gy - 0.4, p.w + 0.8, p.d + 0.8);
@@ -635,6 +661,7 @@ layer('factory', {
   live(ctx, p, env) { if (!env.far) for (let i = 0; i < p.stacks; i++) { const [x, y] = P(p.gx + p.w * (0.6 + i * 0.15), p.gy + p.d * 0.3, p.h + 34); smoke(ctx, x, y, env.t + i * 600, 4, '210,215,225'); } },
 });
 layer('stall', {
+  night: false,
   body(ctx, p, env) {
     shadow(ctx, p.gx, p.gy, p.w, p.d, 22, 0.2);
     solid(ctx, p.gx, p.gy + p.d * 0.35, p.w, p.d * 0.65, 8, body(p.col, env), { mat: 'boards', lite: lite(env) });
@@ -650,9 +677,11 @@ layer('stall', {
   },
 });
 layer('kiosk', {
+  night: false,
   body(ctx, p, env) { shadow(ctx, p.gx, p.gy, p.w, p.d, p.h, 0.2); const f = solid(ctx, p.gx, p.gy, p.w, p.d, p.h, body(p.col, env), { lite: lite(env) }); solid(ctx, p.gx - 0.1, p.gy - 0.1, p.w + 0.2, p.d + 0.2, 2, body('#e8eef6', env), { z: p.h, lite: true }); signLeft(ctx, f.left, p.sign, '#fff', 11, 0.55); return null; },
 });
 layer('podium', {
+  night: false,
   body(ctx, p, env) {
     solid(ctx, p.gx - 0.2, p.gy - 0.2, p.w + 0.4, p.d + 0.4, 3, body('#8a7a9a', env), { mat: 'stone', lite: lite(env) });
     const f = solid(ctx, p.gx + p.w * 0.3, p.gy + p.d * 0.25, p.w * 0.4, p.d * 0.5, 14, body(p.col, env), { z: 3, lite: lite(env) });
@@ -662,6 +691,7 @@ layer('podium', {
   },
 });
 layer('autos', {
+  night: false,
   body(ctx, p, env) {
     const n = p.n, cw = p.w / n, cols = ['#c0392b', '#2f80ed', '#f2c94c', '#e8eef6', '#27ae60', '#5b6573'];
     for (let i = 0; i < n; i++) {
@@ -675,6 +705,7 @@ layer('autos', {
   },
 });
 layer('containers', {
+  night: false,
   body(ctx, p, env) {
     const cols = ['#c0392b', '#2f80ed', '#f2994a', '#27ae60', '#8e44ad', '#16a085'], cw = p.w / p.nx, fine = !env.far;
     for (let k = 0; k < p.stack; k++) for (let i = 0; i < p.nx; i++) {
@@ -727,4 +758,6 @@ export function drawProp(ctx, p, env) {
     return f ? f(ctx, p, env) : farDraw(ctx, p, env);
   } finally { env.hz = prev; }
 }
+/** A layer's definition (body, live, pad, night) by prop type: for tests and tools that need to know a sprite's box. */
+export const layerOf = (t) => LAYER[t];
 export const BUILDING = { body, smoke, sign, signLeft, roof, bldg: DRAW.bldg, hall: DRAW.hall };
