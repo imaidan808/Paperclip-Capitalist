@@ -9,6 +9,15 @@
 //   pendingRewards() / claimPendingRewards(game): for main.js, to hand lesson rewards to a run that starts after the Academy.
 //
 // The sandbox is mounted in the real game shell (mountGame) with U.features limiting the dock and U.tracker showing the lesson goal.
+//
+// Two things the lesson data cannot do and the runner does:
+//  - A lesson can be spent. Its one paperclip sold to the wrong buyer, the only counterfeit bought blind, a manager the wallet cannot feed, a scripted shock used up before its
+//    step: nothing refills in a sandbox, so the lesson can only be restarted. After every game event, whenever a step begins and once a second the runner asks stillPossible()
+//    (./academy-sandbox.js) and, the moment the answer is no, swaps the coach card for a "closed early" card with Restart (it does not wait for the 20-second hint). The sandbox
+//    is rebuilt from the lesson's setup; the real run is never touched.
+//  - A lesson can send the player into a dialog. The hire dialog is a modal over the Crew drawer, so a coach card behind it could never be read: while it is open, a step that
+//    waits for the hire is pointed at the dialog's own controls (data-anchor hire-<manager> and hire-go, drawers/crew.js) and the card hops into the dialog, as it does into the
+//    Deal Room. Any step may also name one of those anchors itself.
 import { $, esc, delegate, dlg, toast, announce, sfx, burst, reduced } from './common.js';
 import { countUp } from './polish.js';
 import { kv } from '../session.js';
@@ -18,6 +27,7 @@ import {
   parseAnchor, resolveAnchor, hitMatches, placeCard, coverOf, pointInRect, startRun, feedRun, coachFor, satisfiedNow, shortSay, hintDue,
   newTeach, pickTeach, revealTeach, teachDone, teachFirstTry, readAcademy, markMission, nextIndex, rewardPlan, applyRewards,
   readPending, addPending, claimPending, codexSeed, emptyMeta, makeSandboxSession, featuresFor, KEYS,
+  newLookout, hireSnapshot, hireCoach,
 } from './academy-sandbox.js';
 
 let MISSIONS = [];
@@ -64,6 +74,14 @@ export function coachHTML(c, o = {}) {
     ${o.showMe ? '<p class="ac-look" role="note">It is the control with the gold frame.</p>' : ''}
     ${o.hint ? `<p class="ac-hint" role="note"><b>Hint:</b> ${esc(c.hint)}</p>` : ''}
     <div class="ac-btns">${o.manual ? '<button class="btn sm" data-act="ac-continue">Continue</button>' : ''}<button class="btn sm ghost" data-act="ac-showme" aria-pressed="${!!o.showMe}">Show me</button><button class="btn sm ghost" data-act="ac-skip">Skip lesson</button>${o.hint ? '<button class="btn sm ghost" data-act="ac-restart">Restart</button>' : ''}</div>`;
+}
+
+/** The coach card when the lesson can no longer be finished (c = { say, hint } from strandedFor): what happened, then Restart as the one primary button. */
+export function strandedHTML(c, o = {}) {
+  return `<div class="ac-head"><small class="ac-eyebrow mono">${esc(o.title || 'Lesson')} &middot; Closed early</small></div>
+    <p class="ac-say" id="ac-say">${esc(c.say)}</p>
+    <p class="ac-lost">${esc(c.hint)}</p>
+    <div class="ac-btns"><button class="btn sm" data-act="ac-restart" data-fid="ac-restart">Restart</button><button class="btn sm ghost" data-act="ac-skip">Skip lesson</button></div>`;
 }
 
 export function whyHTML(m, { skipped, index, total } = {}) {
@@ -169,9 +187,11 @@ export function mountAcademy(root, S, { onDone, onSkip, only, missions, store = 
     U.zone = sb.game.sandbox.zone;
     let run = startRun(m), stepAt = performance.now(), hintOn = false, showMe = false, confirm = false, manual = null, gone = false;
     let sheet = null, teach = newTeach(), skipped = false, winPending = false, lastKey = '', inerted = [];
+    let stranded = null, checkQ = false; // stranded: { say, hint } once the lesson cannot be finished
+    const lookout = newLookout(m, sb.game);
     let layer = null, ringEl = null, cardEl = null, bodyEl = null; // the card is a frame with a caret on its edge; its text scrolls in bodyEl, so the caret is never clipped
 
-    U.tracker = () => { const c = coachFor(m, run); return { title: m.title, desc: shortSay(c.say), icon: m.icon, p: Math.min(run.i, steps.length), n: steps.length, drawer: null }; };
+    U.tracker = () => { const c = stranded || coachFor(m, run); return { title: m.title, desc: shortSay(c.say), icon: m.icon, p: Math.min(run.i, steps.length), n: steps.length, drawer: null }; };
     sb.game.onEvent = (evt) => ctx.emit(evt);  // the sandbox feeds the steps, never quests, achievements or the Codex
     const emit0 = sb.emit.bind(sb);
     sb.emit = (type, data) => { if (type === 'note' && typeof data?.level === 'number') return; emit0(type, data); }; // a pretend level-up is not news
@@ -185,6 +205,17 @@ export function mountAcademy(root, S, { onDone, onSkip, only, missions, store = 
     };
     const resolve = (anchor) => resolveAnchor(anchor, provider);
 
+    // What the coach says now: the step's own words, or, inside the hire dialog, the dialog's controls, or, when the lesson cannot be finished, how to start it again.
+    const hireSnap = () => {
+      const d = dlg.el, on = d.open && d.querySelector?.('[data-anchor^="hire-"][aria-pressed="true"]');
+      return on ? hireSnapshot(sb.game, sb.game.sandbox.zone, on.getAttribute('data-anchor').slice(5)) : null;
+    };
+    function coachNow() {
+      const c = coachFor(m, run);
+      if (stranded) return { ...c, id: 'stranded', say: stranded.say, hint: stranded.hint, anchor: null, stranded: true };
+      const w = steps[run.i]?.wait, h = w && w.type === 'event' && w.event === 'hire' ? hireCoach(steps[run.i], hireSnap()) : null;
+      return h ? { ...c, id: `${c.id}/${h.id}`, say: h.say, anchor: h.anchor, inDialog: true } : c;
+    }
     function ensureLayer() {
       if (layer && layer.isConnected) return;
       layer = document.createElement('div');
@@ -199,14 +230,17 @@ export function mountAcademy(root, S, { onDone, onSkip, only, missions, store = 
     function paintCoach(force) {
       if (dead || gone || sheet || winPending || run.won) return;
       ensureLayer();
-      const c = coachFor(m, run), res = resolve(c.anchor), host = hostFor(res);
+      const c = coachNow(), res = c.stranded ? null : resolve(c.anchor), host = hostFor(res);
       if (layer.parentNode !== host) host.appendChild(layer);
-      const key = [c.id, hintOn, showMe, confirm, !!manual].join('|');
+      const key = [c.id, c.stranded || c.inDialog ? c.say : '', hintOn, showMe, confirm, !!manual].join('|');
       if (force || key !== lastKey) {
+        const news = key !== lastKey && c.inDialog; // the dialog's words are spoken once, when they change
         lastKey = key;
         const had = cardEl.contains(document.activeElement) ? document.activeElement.dataset.act : null;
-        bodyEl.innerHTML = coachHTML(c, { showMe, hint: hintOn, confirm, manual: !!manual, title: m.title });
+        bodyEl.innerHTML = c.stranded && !confirm ? strandedHTML(c, { title: m.title }) : coachHTML(c, { showMe, hint: hintOn, confirm, manual: !!manual, title: m.title });
+        cardEl.classList.toggle('stranded', !!c.stranded);
         if (had) cardEl.querySelector(`[data-act="${had}"]`)?.focus({ preventScroll: true });
+        if (news) announce(c.say);
       }
       const view = { w: window.innerWidth, h: window.innerHeight };
       const spot = res && res.via !== 'fallback' && coverOf(res.rect, view) < 0.6 ? res.rect : null, pad = 6;
@@ -227,7 +261,21 @@ export function mountAcademy(root, S, { onDone, onSkip, only, missions, store = 
       paintCoach(true);
       announce(c.finishing ? c.say : `Step ${c.index + 1} of ${c.total}. ${c.say}`);
       setTimeout(() => { if (!dead && !gone) ctx.render(); }, 0); // after the click that caused it has been handled
+      soon();
     }
+
+    // ---- a lesson that can no longer be finished: asked after every game event (once the action that sent it is over: a Deal Room sends several in a row, and the engine has not
+    // finished its change when the first one arrives), whenever a step begins and once a second. The first no swaps the coach card for Restart, a later yes puts the coach back.
+    function check() {
+      if (dead || gone || sheet || winPending || run.won) return;
+      const seen = lookout.look(run);
+      if (!seen.changed) return;
+      stranded = seen.stranded;
+      if (stranded) announce(`${stranded.say} Press Restart to try it again.`, true);
+      hintOn = false; showMe = false; confirm = false; lastKey = '';
+      ctx.render(); paintCoach(true);
+    }
+    function soon() { if (checkQ) return; checkQ = true; Promise.resolve().then(() => { checkQ = false; check(); }); }
 
     // ---- feeding the resolver
     function feed(evt) {
@@ -238,6 +286,7 @@ export function mountAcademy(root, S, { onDone, onSkip, only, missions, store = 
       if (r.won) win();
     }
     off.push(ctx.on(feed));
+    off.push(ctx.on((evt) => { lookout.note(evt); soon(); }));
     // What the world has under a click: the World's own hit test, so a step that says "tap the van" hears the tap whether or not the world can place a rect.
     const worldHit = (e) => {
       const w = ctx.world?.()?.world, cv = w?.cv;
@@ -273,6 +322,7 @@ export function mountAcademy(root, S, { onDone, onSkip, only, missions, store = 
     let raf = 0;
     const mo = new MutationObserver(() => { if (!raf) raf = requestAnimationFrame(() => { raf = 0; paintCoach(); }); });
     for (const e of [ctx.el.hud, ctx.el.tracker, ctx.el.ticker, ctx.el.dock, ctx.el.drawer, ctx.el.world]) mo.observe(e, { childList: true, subtree: true, attributes: true, attributeFilter: ['hidden', 'class'] });
+    mo.observe(dlg.el, { childList: true, subtree: true, attributes: true, attributeFilter: ['open', 'aria-pressed'] }); // the hire dialog: a manager picked, the dialog opened or shut
 
     // ---- the sheets that follow the win
     const stageKids = () => [...ctx.el.stage.children].filter((c) => c !== ctx.el.overlay);
@@ -338,7 +388,7 @@ export function mountAcademy(root, S, { onDone, onSkip, only, missions, store = 
 
     // ---- actions (added to the shell's own table, so they work in the page and in the dialog)
     Object.assign(ctx.acts, {
-      'ac-showme'() { showMe = !showMe; paintCoach(true); const c = coachFor(m, run), a = parseAnchor(c.anchor); if (showMe && a?.kind === 'dom') domEls(a.name)[0]?.focus?.({ preventScroll: true }); },
+      'ac-showme'() { showMe = !showMe; paintCoach(true); const c = coachNow(), a = parseAnchor(c.anchor); if (showMe && a?.kind === 'dom') domEls(a.name)[0]?.focus?.({ preventScroll: true }); },
       'ac-skip'() { confirm = true; paintCoach(true); cardEl.querySelector('[data-act="ac-skip-no"]')?.focus(); },
       'ac-skip-no'() { confirm = false; paintCoach(true); cardEl.querySelector('[data-act="ac-skip"]')?.focus(); },
       'ac-skip-yes'() { dlg.close(); skipNow(); },
@@ -359,9 +409,11 @@ export function mountAcademy(root, S, { onDone, onSkip, only, missions, store = 
     });
 
     // ---- the heartbeat: the sandbox clock, the hint, a card waiting for a dialog to close
+    let beats = 0;
     const beat = setInterval(() => {
       if (dead || gone) return;
       try { sb.tick(); } catch (e) { console.error(e); }
+      if (++beats % 5 === 0) check();
       if (winPending && !dlg.el.open && !U.queue.length) { showWhy(); return; }
       if (!sheet && !winPending && !run.won) {
         if (!hintOn && hintDue(stepAt, performance.now())) { hintOn = true; announce('Hint: ' + coachFor(m, run).hint); }

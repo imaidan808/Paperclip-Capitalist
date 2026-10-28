@@ -4,6 +4,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { fakeCtx, checkHTML } from './helpers/ctx.mjs';
 import market, { ruleText, bonusText, teachName, satWords } from '../js/ui/drawers/market.js';
+import { openDeal } from '../js/ui/deal.js';
 import stock from '../js/ui/drawers/stock.js';
 import { readFileSync } from 'node:fs';
 import { ASSETS, BUYERS, ZONES, ZONE_IDS } from '../js/config.js';
@@ -285,40 +286,71 @@ test('the free counterfeit warning and the player\'s own read are shown, nothing
   assert.match(cardOf(html, `data-lot="${c.id}"`), /Likely a fake/);
 });
 
-test('Look it over opens the Deal Room; Quick buy buys through the engine', () => {
+// The shell's own ctx.deal: the real Deal Room, drawn into the fake dialog (it records what it paints), over the real engine.
+const withRoom = (ctx) => { ctx.deal = (spec) => { ctx.calls.push(['deal', spec]); return openDeal(ctx, spec); }; return ctx; };
+const heard = (g) => { const seen = []; g.onEvent = (e) => seen.push(e.type); return seen; };
+
+test('Look it over opens the Deal Room; Quick buy opens it too and plays it with the room\'s own Quick deal', () => {
   const ctx = fakeCtx({ days: 10, perks: PAIRS[0] }), g = ctx.g(), acts = market.acts(ctx);
   ctx.U.zone = 2; ctx.U.marketTab = 'lots';
   g.s.cash = 1e6;
   const lot = g.s.lots[2][0], crates = g.s.assets.length;
   acts['market-look']({ dataset: { lot: lot.id } });
   assert.deepEqual(ctx.calls.at(-1), ['deal', { kind: 'buy', zone: 2, lotId: lot.id }]);
+  // with a stand-in room that only records the spec, Quick buy asks for the same deal and buys nothing by itself
+  acts['market-buy']({ dataset: { lot: lot.id } });
+  assert.deepEqual(ctx.calls.at(-1), ['deal', { kind: 'buy', zone: 2, lotId: lot.id }], 'Quick buy opens the same deal as Look it over');
+  assert.equal(g.s.assets.length, crates, 'the card no longer calls the engine\'s buyLot behind the room\'s back');
+  assert.ok(g.s.lots[2].some((l) => l.id === lot.id), 'the lot is still on the shelf until the room has played');
+  // with the real room: the deal is played at average skill, the crate arrives, and the engine hears what a hand-played purchase sends (a read, a haggle or an auction, then the buy)
+  withRoom(ctx); const seen = heard(g), cash = g.s.cash;
   acts['market-buy']({ dataset: { lot: lot.id } });
   assert.equal(g.s.assets.length, crates + 1, 'the crate arrived');
   assert.ok(!g.s.lots[2].some((l) => l.id === lot.id), 'the lot is gone');
-  assert.ok(g.s.cash < 1e6);
-  assert.ok(ctx.toasts.some(([m, l]) => l === 'good' && /Bought/.test(m) && m.includes(ASSETS[lot.cls].name)));
-  // a lot that has gone is said, not crashed on
-  ctx.calls.length = 0;
-  acts['market-look']({ dataset: { lot: lot.id } });
-  assert.ok(!ctx.calls.some((c) => c[0] === 'deal'));
-  assert.ok(ctx.toasts.some(([m]) => /lot is gone/.test(m)));
+  assert.ok(g.s.cash < cash);
+  assert.equal(seen.at(-1), 'buy', 'the buy is the last thing the engine hears');
+  assert.ok(seen.includes('inspect') && seen.some((t) => t === 'haggle' || t === 'auction'), `a Quick buy is read and haggled or bid for like any other: ${seen.join(', ')}`);
+  assert.match(ctx.calls.filter((c) => c[0] === 'dlg').at(-1)[1], /deal-result/, 'and the room shows its result');
+  // a lot that has gone is said, not crashed on, by both buttons
+  for (const act of ['market-look', 'market-buy']) {
+    ctx.calls.length = 0; ctx.toasts.length = 0;
+    acts[act]({ dataset: { lot: lot.id } });
+    assert.ok(!ctx.calls.some((c) => c[0] === 'deal'), act);
+    assert.ok(ctx.toasts.some(([m]) => /lot is gone/.test(m)), act);
+  }
 });
 
-test('Quick buy says why it cannot: not enough cash, or storage full', () => {
-  const ctx = fakeCtx({ days: 10, perks: PAIRS[0] }), g = ctx.g(), acts = market.acts(ctx);
+test('Quick buy on a lot you cannot afford opens the room, which says why, and plays nothing', () => {
+  const ctx = withRoom(fakeCtx({ days: 10, perks: PAIRS[0] })), g = ctx.g(), acts = market.acts(ctx);
   ctx.U.zone = 2; ctx.U.marketTab = 'lots';
   g.s.cash = 0;
   const lot = g.s.lots[2][0];
   let html = market.html(ctx);
   assert.match(cardOf(html, `data-lot="${lot.id}"`), /data-act="market-buy"[^>]*aria-disabled="true"/);
   assert.match(cardOf(html, `data-lot="${lot.id}"`), /You need \$/);
+  const seen = heard(g), crates = g.s.assets.length;
   acts['market-buy']({ dataset: { lot: lot.id } });
-  assert.ok(ctx.toasts.some(([m, l]) => l === 'bad' && /Need \$/.test(m)), 'the engine\'s refusal is shown');
+  assert.equal(g.s.assets.length, crates); assert.equal(g.s.cash, 0); assert.deepEqual(seen, [], 'nothing was played, so the engine heard nothing');
+  assert.match(ctx.calls.filter((c) => c[0] === 'dlg').at(-1)[1], /You need at least/, 'the room says why');
   g.s.cash = 1e6;
   while (g.s.assets.filter((a) => a.zone === 2).length < g.storeCap(2)) addCrate(ctx, 'radio', 2);
   html = market.html(ctx);
   assert.match(html, /Storage is full here/);
   assert.match(html, /Storage here: \d+ of \d+ <span class="badge red">Full/);
+  const before = g.s.assets.length; seen.length = 0;
+  acts['market-buy']({ dataset: { lot: lot.id } });
+  assert.equal(g.s.assets.length, before); assert.deepEqual(seen, []);
+  assert.match(ctx.calls.filter((c) => c[0] === 'dlg').at(-1)[1], /Storage is full here/, 'a full yard is said by the room too');
+});
+
+test('an auction lot says what Quick buy does now: it bids at average skill, and a rival may win', () => {
+  const ctx = fakeCtx({ days: 10, perks: PAIRS[0] }), g = ctx.g();
+  ctx.U.zone = 2; ctx.U.marketTab = 'lots';
+  g.s.lots[2][0].mode = 'auction';
+  const html = market.html(ctx);
+  assert.match(html, /Quick buy bids for you at average skill, and a rival may outbid you/);
+  assert.ok(!/skips the bidding|pays the guide price/.test(html), 'the card no longer promises a purchase at the guide price');
+  assert.ok(!/\.buyLot\(/.test(readFileSync(new URL('../js/ui/drawers/market.js', import.meta.url), 'utf8')), 'the Market drawer never buys a lot itself: every purchase is a deal');
 });
 
 test('the Exchange lists invitations, sent offers and a proposal form, and every action goes through the session', () => {
