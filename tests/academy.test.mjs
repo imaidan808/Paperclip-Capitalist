@@ -49,6 +49,8 @@ test('anchors: dom names and world references parse, junk does not', () => {
   assert.deepEqual(A.parseAnchor('world:plot:5:0'), { kind: 'world', type: 'plot', id: '5:0' });
   for (const bad of ['', null, undefined, 'world:', 'world:lead', 'world:cow:1', 'Dock Market', 'dock_market', '<b>']) assert.equal(A.parseAnchor(bad), null, String(bad));
   for (const a of A.DOM_ANCHORS) assert.equal(A.parseAnchor(a).kind, 'dom', a);
+  for (const k of Object.keys(PIPE)) assert.ok(A.DOM_ANCHORS.includes('hire-' + k), `the ${k} card in the hire dialog is a listed anchor`);
+  assert.ok(A.DOM_ANCHORS.includes('hire-go'), 'and so is its Hire button');
 });
 
 test('anchors: any rect shape becomes { x, y, w, h }; rects with no area are nothing', () => {
@@ -315,6 +317,7 @@ test('the cards are clean HTML: intro, coach, why, teach-back (before, after a m
     intro, introReplay: D.introHTML(m, { index: 0, total: 8, st, concept: null, replay: true, missions: LESSONS }),
     coach: D.coachHTML(A.coachFor(m, A.startRun(m)), { title: m.title }), coachHint: D.coachHTML(A.coachFor(m, A.startRun(m)), { title: m.title, hint: true, showMe: true, manual: true }),
     coachConfirm: D.coachHTML(A.coachFor(m, A.startRun(m)), { title: m.title, confirm: true }), coachFinish: D.coachHTML(A.coachFor(m, { i: 2, n: 2 }), { title: m.title }),
+    stranded: D.strandedHTML(A.strandedFor([{ type: 'pitch' }]), { title: m.title }),
     why: D.whyHTML(m, { index: 0, total: 8 }), whySkipped: D.whyHTML(m, { skipped: true, index: 0, total: 8 }),
     teach0: D.teachHTML(m, A.newTeach()), teachMiss: D.teachHTML(m, A.pickTeach(m.teachBack, A.newTeach(), 0).state),
     teachOk: D.teachHTML(m, A.pickTeach(m.teachBack, A.pickTeach(m.teachBack, A.newTeach(), 0).state, 1).state), teachShown: D.teachHTML(m, A.revealTeach(A.pickTeach(m.teachBack, A.newTeach(), 2).state)),
@@ -330,6 +333,7 @@ test('the cards are clean HTML: intro, coach, why, teach-back (before, after a m
   assert.match(cards.coach, /Step 1 of 2/); assert.match(cards.coach, /Show me/); assert.match(cards.coach, /Skip lesson/); assert.ok(!/Hint:/.test(cards.coach));
   assert.match(cards.coachHint, /Hint:/); assert.match(cards.coachHint, /gold frame/); assert.match(cards.coachHint, /ac-continue/); assert.match(cards.coachHint, /aria-pressed="true"/); assert.match(cards.coachHint, /Restart/);
   assert.match(cards.coachConfirm, /ac-skip-yes/); assert.match(cards.coachFinish, /Last step/);
+  assert.match(cards.stranded, /Closed early/); assert.match(cards.stranded, /That sale closed the lesson early/); assert.match(cards.stranded, /data-act="ac-restart"/);
   assert.match(cards.why, /fit = min\(1/); assert.match(cards.why, /<ol><li>Strongest like is 1\.0\./); assert.match(cards.why, /Result:/); assert.match(cards.whySkipped, /skipped the hands-on part/); assert.match(cards.why, /Test myself/);
   assert.equal((cards.teach0.match(/data-act="ac-pick"/g) || []).length, 3, 'three large options'); assert.ok(!/ac-why/.test(cards.teach0), 'no reasons before a pick');
   assert.match(cards.teachMiss, /Not quite/); assert.match(cards.teachMiss, /tempting idea 0/); assert.match(cards.teachMiss, /Show me the answer/); assert.ok(!/need and fit set/.test(cards.teachMiss), 'a wrong pick does not give the answer away');
