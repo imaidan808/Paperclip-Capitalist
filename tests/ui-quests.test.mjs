@@ -2,6 +2,7 @@
 // for fresh, day 10, day 25 and day 60 states and two Background pairs; spending a point, the badge on the dock icon and the quest and badge views.
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { fakeCtx, checkHTML } from './helpers/ctx.mjs';
 import { run } from './bot.mjs';
 import quests from '../js/ui/drawers/quests.js';
@@ -231,13 +232,36 @@ test('badge filters and the long list: earned first, only twelve until Show all'
 
 test('the jump bar scrolls to a section and moves focus to its heading', () => {
   const ctx = mk(), a = quests.acts(ctx), log = [];
-  const h3 = { focus: (o) => log.push(['focus', o.preventScroll]) }, sec = { scrollIntoView: (o) => log.push(['scroll', o.block]), querySelector: () => h3 };
+  const h3 = { focus: (o) => log.push(['focus', o.preventScroll]) }, sec = { scrollIntoView: (o) => log.push(['scroll', o.block, o.behavior]), querySelector: () => h3 };
   ctx.$ = (sel, root) => { log.push(['find', sel, root]); return sec; }; ctx.el = { drawer: 'DRAWER' }; ctx.reduced = () => true;
   a['quests-jump'](el({ to: 'badges' }));
-  assert.deepEqual(log, [['find', '[data-qsect="badges"]', 'DRAWER'], ['scroll', 'start'], ['focus', true]]);
+  assert.deepEqual(log, [['find', '[data-qsect="badges"]', 'DRAWER'], ['scroll', 'start', 'auto'], ['focus', true]]);
   ctx.$ = () => null; a['quests-jump'](el({ to: 'nowhere' }));             // nothing there: nothing breaks
   const h = quests.html(ctx); assert.equal((h.match(/data-act="quests-jump"/g) || []).length, 4);
   const bare = mk({ progress: false }); assert.equal((quests.html(bare).match(/data-act="quests-jump"/g) || []).length, 1, 'only Skills without a tracker');
+});
+
+test('the jump is instant whatever the motion setting: the shell writes the list\'s scrollTop back on every redraw, which cancels a smooth scroll and strands it part way', () => {
+  const ctx = mk(), a = quests.acts(ctx), calls = [], cls = new Set(), heard = [];
+  const h3 = { focus() {}, offsetWidth: 1, classList: { add: (c) => cls.add(c), remove: (c) => cls.delete(c) }, addEventListener: (type, f, o) => heard.push([type, o && o.once]) };
+  const db = { scrollTop: 100, dataset: { drawer: 'quests' }, getBoundingClientRect: () => ({ top: 20 }), scrollTo: (o) => { calls.push(o); db.scrollTop = o.top; } };
+  const sec = { closest: (s) => (s === '.db' ? db : null), getBoundingClientRect: () => ({ top: 520 }), querySelector: () => h3 };
+  const drawer = { _keep: { top: 100, id: 'quests' }, querySelector: () => db };
+  ctx.$ = () => sec; ctx.el = { drawer };
+  globalThis.getComputedStyle = () => ({ scrollMarginTop: '62px' });
+  try {
+    for (const reduced of [false, true]) {
+      ctx.reduced = () => reduced; calls.length = 0; cls.clear(); heard.length = 0; db.scrollTop = 100; drawer._keep.top = 100;
+      a['quests-jump'](el({ to: 'badges' }));
+      assert.equal(calls.length, 1, 'one scroll, on the drawer\'s own list');
+      assert.equal(calls[0].behavior, 'auto', `instant with reduced motion ${reduced ? 'on' : 'off'}: nothing in flight for a redraw to cancel`);
+      assert.equal(calls[0].top, 520 - 20 + 100 - 62, 'the section lands under the sticky jump bar (its scroll margin)');
+      assert.equal(drawer._keep.top, db.scrollTop, 'the new place is the remembered one, so a rebuild in the same frame cannot put the old one back');
+      assert.ok(cls.has('landed'), 'the heading takes its wash'); assert.deepEqual(heard, [['animationend', true]], 'and gives it up when it has played, once');
+    }
+  } finally { delete globalThis.getComputedStyle; }
+  const css = readFileSync(new URL('../css/ui-quests.css', import.meta.url), 'utf8');
+  assert.match(css, /\.qs h3\.landed \{ animation: qs-landed [.0-9]+s ease-out; \}/); assert.match(css, /@keyframes qs-landed \{ from \{ background: color-mix\(in srgb, var\(--gold\) 30%, transparent\); \} \}/);
 });
 
 test('with no progress tracker the drawer still shows the hero and the skills', () => {

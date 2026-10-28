@@ -330,7 +330,9 @@ function consume(ctx) {
     if (todo.hire) openHire(ctx, { zone: +todo.hire });
     if (todo.focus) {
       const el = ctx.el?.drawer?.querySelector?.(`[data-pipe="${todo.focus}"]`);
-      el?.scrollIntoView?.({ block: 'center' });
+      const db = el?.closest?.('.db');
+      if (db && typeof db.scrollTo === 'function') db.scrollTo({ top: Math.max(0, el.getBoundingClientRect().top - db.getBoundingClientRect().top + db.scrollTop - (db.clientHeight - el.offsetHeight) / 2) }); // the drawer's own list only: scrollIntoView would slide the whole stage
+      else el?.scrollIntoView?.({ block: 'center' });
       if (!todo.hire) el?.focus?.({ preventScroll: true });
       later(() => ctx.render(), 3300);
     }

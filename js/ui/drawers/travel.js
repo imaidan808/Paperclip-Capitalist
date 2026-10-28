@@ -333,6 +333,8 @@ export function keepScroll(ctx, ids) {
 }
 /** Forget the remembered place, so the next rebuild starts at the top (a change of tab, not of detail). */
 export const scrollToTop = (ctx) => { if (ctx.el?.drawer?._keep) ctx.el.drawer._keep.top = 0; };
+/** Take the list's place as it is now as the remembered one: for a jump that moved it by script, so a rebuild in the same frame cannot put the old place back. */
+export const rememberScroll = (ctx) => { const k = ctx.el?.drawer?._keep, db = ctx.el?.drawer?.querySelector?.('.db'); if (k && db) { k.top = db.scrollTop; k.id = db.dataset.drawer; } };
 
 function acts(ctx) {
   const set = (patch) => { ctx.U.travel = { ...(ctx.U.travel || {}), ...patch }; };

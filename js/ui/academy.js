@@ -9,7 +9,8 @@
 //   pendingRewards() / claimPendingRewards(game): for main.js, to hand lesson rewards to a run that starts after the Academy.
 //
 // The sandbox is mounted in the real game shell (mountGame) with U.features limiting the dock and U.tracker showing the lesson goal.
-import { $, esc, delegate, dlg, toast, announce, sfx, burst } from './common.js';
+import { $, esc, delegate, dlg, toast, announce, sfx, burst, reduced } from './common.js';
+import { countUp } from './polish.js';
 import { kv } from '../session.js';
 import { ZONES } from '../config.js';
 import { Progress, CODEX_BY_ID } from '../meta/progress.js';
@@ -53,7 +54,8 @@ export function introHTML(m, { index, total, st, concept, replay, missions = [] 
 
 /** The coach card's inside. o = { showMe, hint (bool), confirm (bool), manual (bool), title }. */
 export function coachHTML(c, o = {}) {
-  const head = `<small class="ac-eyebrow mono">${esc(o.title || 'Lesson')} &middot; ${c.finishing ? 'Last step' : `Step ${c.index + 1} of ${c.total}`}</small>`;
+  const dots = Array.from({ length: Math.min(12, Math.max(0, c.total | 0)) }, (_, i) => `<i${c.finishing || i <= c.index ? ' class="on"' : ''}></i>`).join('');
+  const head = `<div class="ac-head"><small class="ac-eyebrow mono">${esc(o.title || 'Lesson')} &middot; ${c.finishing ? 'Last step' : `Step ${c.index + 1} of ${c.total}`}</small>${dots ? `<span class="ac-dots" aria-hidden="true">${dots}</span>` : ''}</div>`;
   if (o.confirm) {
     return `${head}<p class="ac-say" id="ac-say">Skip this lesson? You will still see why it works and answer one question.</p>
       <div class="ac-btns"><button class="btn sm" data-act="ac-skip-yes">Yes, skip it</button><button class="btn sm ghost" data-act="ac-skip-no">Keep going</button></div>`;
@@ -99,7 +101,7 @@ export function teachHTML(m, state) {
 /** paid = { xp, points, newCodex, knownCodex, pending } from applyRewards (or the plan, when the run has not started yet). */
 export function rewardHTML(m, paid, lookup, { last, skipped, replay, index, total, only } = {}) {
   const ids = [...(paid.newCodex || []), ...(paid.knownCodex || [])];
-  const chips = [paid.xp ? `<li class="chip good">+${paid.xp} XP</li>` : '', paid.points ? `<li class="chip good">+${paid.points} skill point</li>` : ''].join('');
+  const chips = [paid.xp ? `<li class="chip good" data-count="${+paid.xp || 0}" data-fmt="int" data-pre="+" data-post=" XP">+${paid.xp} XP</li>` : '', paid.points ? `<li class="chip good">+${paid.points} skill point</li>` : ''].join('');
   const cards = ids.map((id) => { const e = entryOf(id, lookup), fresh = (paid.newCodex || []).includes(id); return `<li class="ac-cxcard"><span class="ac-cxi" aria-hidden="true">${esc(e.icon || '')}</span><div><b>${esc(e.title)}</b>${fresh ? ' <span class="chip info">New</span>' : ''}<p class="small mute">${esc(e.summary || '')}</p></div></li>`; }).join('');
   const note = replay ? 'A replay pays nothing new, but the pages stay in your Codex.' : skipped ? 'Play this lesson hands-on from the Codex to earn its XP and skill point.' : paid.pending ? 'These are held for you and arrive when your run begins.' : 'Added to your run.';
   return `<p class="ac-eyebrow mono">Lesson ${(index ?? 0) + 1} of ${total ?? ''} &middot; Complete</p>
@@ -167,7 +169,7 @@ export function mountAcademy(root, S, { onDone, onSkip, only, missions, store = 
     U.zone = sb.game.sandbox.zone;
     let run = startRun(m), stepAt = performance.now(), hintOn = false, showMe = false, confirm = false, manual = null, gone = false;
     let sheet = null, teach = newTeach(), skipped = false, winPending = false, lastKey = '', inerted = [];
-    let layer = null, ringEl = null, cardEl = null;
+    let layer = null, ringEl = null, cardEl = null, bodyEl = null; // the card is a frame with a caret on its edge; its text scrolls in bodyEl, so the caret is never clipped
 
     U.tracker = () => { const c = coachFor(m, run); return { title: m.title, desc: shortSay(c.say), icon: m.icon, p: Math.min(run.i, steps.length), n: steps.length, drawer: null }; };
     sb.game.onEvent = (evt) => ctx.emit(evt);  // the sandbox feeds the steps, never quests, achievements or the Codex
@@ -187,8 +189,8 @@ export function mountAcademy(root, S, { onDone, onSkip, only, missions, store = 
       if (layer && layer.isConnected) return;
       layer = document.createElement('div');
       layer.className = 'ac-layer'; layer.dataset.academy = '';
-      layer.innerHTML = '<div class="ac-ring" aria-hidden="true" hidden></div><section class="ac-coach" role="dialog" aria-modal="false" aria-labelledby="ac-say" tabindex="-1"></section>';
-      ringEl = layer.firstChild; cardEl = layer.lastChild;
+      layer.innerHTML = '<div class="ac-ring" aria-hidden="true" hidden></div><section class="ac-coach" role="dialog" aria-modal="false" aria-labelledby="ac-say" tabindex="-1"><div class="ac-coach-in"></div></section>';
+      ringEl = layer.firstChild; cardEl = layer.lastChild; bodyEl = cardEl.firstChild;
       ctx.el.overlay.appendChild(layer);
       lastKey = '';
     }
@@ -203,7 +205,7 @@ export function mountAcademy(root, S, { onDone, onSkip, only, missions, store = 
       if (force || key !== lastKey) {
         lastKey = key;
         const had = cardEl.contains(document.activeElement) ? document.activeElement.dataset.act : null;
-        cardEl.innerHTML = coachHTML(c, { showMe, hint: hintOn, confirm, manual: !!manual, title: m.title });
+        bodyEl.innerHTML = coachHTML(c, { showMe, hint: hintOn, confirm, manual: !!manual, title: m.title });
         if (had) cardEl.querySelector(`[data-act="${had}"]`)?.focus({ preventScroll: true });
       }
       const view = { w: window.innerWidth, h: window.innerHeight };
@@ -214,6 +216,7 @@ export function mountAcademy(root, S, { onDone, onSkip, only, missions, store = 
       const keep = [ctx.el.drawer.hidden ? null : ctx.el.drawer, ctx.el.dock].filter(Boolean).map((e) => e.getBoundingClientRect()).filter((r) => r.width > 0 && r.height > 0).map((r) => ({ x: r.x, y: r.y, w: r.width, h: r.height }));
       const box = cardEl.getBoundingClientRect(), at = placeCard(spot, { w: box.width || 320, h: box.height || 150 }, view, 14, 8, keep); // never over the open drawer or the dock icons
       cardEl.dataset.side = at.side;
+      if (spot && cardEl.style.setProperty) { cardEl.style.setProperty('--ac-ax', `${Math.round(spot.x + spot.w / 2 - at.x)}px`); cardEl.style.setProperty('--ac-ay', `${Math.round(spot.y + spot.h / 2 - at.y)}px`); } // where the caret on the card's edge points
       cardEl.style.transform = `translate(${Math.round(at.x)}px, ${Math.round(at.y)}px)`;
       cardEl.classList.toggle('lift', true);
     }
@@ -293,6 +296,7 @@ export function mountAcademy(root, S, { onDone, onSkip, only, missions, store = 
       const inner = sheet.firstChild;
       inner.setAttribute('aria-label', label);
       inner.innerHTML = html;
+      countUp(inner, { reduced: reduced() }); // presentation only: the reward's numbers tick up
       $('#ac-sh', inner)?.focus({ preventScroll: true });
       sheet.scrollTop = 0; inner.scrollTop = 0;
     }
