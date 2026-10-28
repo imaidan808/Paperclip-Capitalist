@@ -259,3 +259,92 @@ test('the frame loop makes the same objects every frame: the depth list and the 
   assert.equal(w.itemPool.length, n, 'the pool did not grow with the frames');
   const keys = w.items.map((it) => it.key); assert.deepEqual(keys, [...keys].sort((a, b) => a - b), 'still sorted back to front');
 });
+
+// ---------------------------------------------------------------- baked layers at the canvas's own size, the sea, the pips
+/** A recording stand-in for OffscreenCanvas: each surface keeps its own list of drawImage calls and path points, so a test can ask what was stamped where. */
+function installRecording(log) {
+  log.surfaces = 0; log.made = [];
+  globalThis.OffscreenCanvas = class { constructor(w, h) { this.width = w; this.height = h; log.surfaces++; log.made.push(this); this.g = recorder(this); } getContext() { return this.g; } };
+}
+function recorder(owner) {
+  const rec = { owner, imgs: [], pts: [], calls: {}, measureText: (s) => ({ width: String(s).length * 6 }), getTransform: () => ({}) };
+  for (const k of ['createLinearGradient', 'createRadialGradient']) rec[k] = () => { rec.calls[k] = (rec.calls[k] || 0) + 1; return grad; };
+  return new Proxy(rec, {
+    get(o, k) {
+      if (k in o) return o[k]; if (typeof k === 'symbol') return undefined;
+      return (...a) => { o.calls[k] = (o.calls[k] || 0) + 1; if (k === 'drawImage') o.imgs.push({ img: a[0], n: a.length, a }); if (k === 'moveTo' || k === 'lineTo') o.pts.push([k, a[0], a[1]]); if (k === 'setTransform') o.lastT = a; };
+    },
+    set(o, k, v) { o[k] = v; return true; },
+  });
+}
+const light = (over = {}) => ({ W: 800, H: 520, dpr: 2, cv: { width: 1600, height: 1040 }, night: 0, dusk: 0, lite: false, t: 0, env: { crunch: false }, reduced: () => false, ...over });
+
+test('the air is stamped one-to-one from bitmaps of the canvas\'s own size, made once; a dusk crossfades day and night in one stamp, remade only when the mix steps', () => {
+  const log = stubDom(); installRecording(log); const lit = new Lighting(), main = recorder('main');
+  const frame = (w) => { main.imgs.length = 0; lit.ambient(main, w); return main.imgs; };
+  let s = frame(light());
+  assert.equal(s.length, 1, 'a daylit frame is one stamp'); assert.equal(s[0].n, 3, 'a straight copy (image, x, y): no stretch'); assert.equal(s[0].img.width, 1600); assert.equal(s[0].img.height, 1040, 'the canvas\'s own pixels, not the window\'s');
+  assert.deepEqual(main.lastT, [1, 0, 0, 1, 0, 0], 'drawn in device pixels (the identity transform; restore() gives the window transform back)');
+  const made = log.surfaces; frame(light()); frame(light()); assert.equal(log.surfaces, made, 'later frames make no bitmap');
+  s = frame(light({ night: 1 })); assert.equal(s.length, 1, 'a night is one stamp too'); assert.equal(s[0].img.width, 1600);
+  const dusk = (n) => light({ night: n, dusk: 1 });
+  s = frame(dusk(0.3)); assert.equal(s.length, 2, 'dusk: the crossfade of day and night, and the shafts: two stamps, not three');
+  const mix = s[0].img, into = (o) => o.g.imgs.length; const remade = into(mix); frame(dusk(0.3)); frame(dusk(0.3)); assert.equal(into(mix), remade, 'the same step is not made again');
+  frame(dusk(0.302)); assert.equal(into(mix), remade, 'a hair of change stays in the same step (a twenty-fourth)');
+  frame(dusk(0.45)); assert.equal(into(mix), remade + 2, 'a new step is the two airs drawn into it again, once');
+  frame(light({ lite: true, dusk: 1, night: 0.3 })); assert.equal(main.imgs.length, 1, 'the quiet tier: one stamp, no shafts');
+  s = frame(light({ dusk: 1, reduced: () => true })); assert.equal(s.length, 1, 'reduced motion leaves out the shafts');
+  const nightLayer = lit.big.night; assert.ok(nightLayer, 'the night\'s layer was made when it was wanted');
+  frame(light({ t: 30000 })); assert.equal(lit.big.night, null, 'a layer nobody has stamped for twenty seconds is let go'); assert.equal(lit.big.mix, null); assert.ok(lit.big.day, 'the one in use stays');
+  frame(light({ cv: { width: 1200, height: 780 } })); assert.equal(lit.big.day.width, 1200, 'a different canvas size makes the layers again at that size');
+  delete globalThis.OffscreenCanvas;
+  const log2 = stubDom(); const lit2 = new Lighting(), c2 = recorder('c2'); lit2.ambient(c2, light());
+  assert.equal(c2.calls.drawImage, undefined, 'without surfaces there is no stamp'); assert.equal(c2.calls.fillRect, 1, 'one gradient fill, as the world always drew'); void log2;
+});
+
+test('the falloff toward the edge is part of the day and night layers: the centre is clear and the corners carry the air\'s colour', () => {
+  const log = stubDom(); installRecording(log); const lit = new Lighting(); lit.bake(800, 520);
+  assert.ok(lit.src.day && lit.src.night && lit.src.shafts, 'three small bakes');
+  assert.equal(lit.src.day.width, 200); assert.equal(lit.src.day.height, 130, 'a quarter of the window');
+  assert.ok(lit.src.day.g.calls.createRadialGradient >= 2, 'the day layer holds the falloff and the vignette: two radial gradients'); assert.ok(lit.src.night.g.calls.createRadialGradient >= 2);
+  delete globalThis.OffscreenCanvas;
+});
+
+test('the sea\'s colour is painted once per light step into a bitmap of the canvas\'s own size and stamped; the waves are one stroke and never streak across the window', async () => {
+  const g = newGame(3); openTo(g, 3);
+  const log = stubDom(1000, 640); installRecording(log);
+  const { World } = await import('../js/world/world.js');
+  const session = { game: g, clock: { now: () => g.s.hour, paused: true, speed: 1 } };
+  const w = new World({ session, ui: { zone: 1, sel: new Set() }, activate: noop, hover: noop });
+  w.host = { getBoundingClientRect: () => ({ width: 1000, height: 640 }) }; w.resize(); w.sync(); w.placePlayer();
+  const main = recorder('main'); w.night = 0; w.dusk = 0; const s0 = log.surfaces;
+  w.drawWater(main); assert.equal(log.surfaces, s0 + 1, 'the sea layer was made'); assert.equal(main.imgs[0].n, 3, 'and stamped one-to-one'); assert.equal(main.imgs[0].img.width, w.cv.width);
+  for (let i = 0; i < 3; i++) w.drawWater(main); assert.equal(log.surfaces, s0 + 1, 'not made again while the light stays in its step'); assert.equal(main.imgs.length, 4);
+  w.night = 0.5; w.drawWater(main); assert.equal(log.surfaces, s0 + 2, 'a new light step makes it again');
+  assert.equal(main.calls.stroke, 5, 'the 26 wave lines are one stroke a frame');
+  for (const t of [0, 5000, 90000]) { w.vt = t; main.pts.length = 0; w.drawWater(main); let prev = null; for (const [k, x] of main.pts) { if (k === 'lineTo') assert.ok(Math.abs(x - prev) < 80, `a wave line does not leap across the window (${prev} to ${x})`); prev = x; } }
+  w.resize(); w.drawWater(main); assert.equal(log.surfaces >= s0 + 3, true, 'a resize makes it at the new size');
+  delete globalThis.OffscreenCanvas;
+});
+
+test('at the whole-island zoom each district shows one pip per pipeline under its name; the building\'s own bar comes back when zoomed in', async () => {
+  const g = newGame(8); openTo(g, 9); g.s.cash = 5e6;
+  const log = stubDom(1440, 900); installRecording(log);
+  const { World } = await import('../js/world/world.js');
+  const session = { game: g, clock: { now: () => g.s.hour, paused: true, speed: 1 } };
+  const w = new World({ session, ui: { zone: 5, sel: new Set() }, activate: noop, hover: noop });
+  w.host = { getBoundingClientRect: () => ({ width: 1440, height: 900 }) }; w.resize();
+  const lane = g.radar(5, 1)[0], cls = lane.cls, buyer = lane.seg;
+  const a = g.hirePipeline('broker', 5, { cls, buyer }).pipe, b = g.hirePipeline('student', 5, { cls, buyer }).pipe, c = g.hirePipeline('logistics', 5, { cls, buyer }).pipe;
+  b.status = 'paused'; c.starved = true; w.sync(); w.placePlayer(); void a;
+  w.zonePips(); const k = 5 * 3; assert.deepEqual([w.zpip[k], w.zpip[k + 1], w.zpip[k + 2]], [1, 1, 1], 'one running, one paused, one starved');
+  assert.equal([...w.zpip].reduce((x, y) => x + y, 0), 3, 'no other district has any');
+  const sp = w.labels.pips(1, 1, 1); assert.strictEqual(w.labels.pips(1, 1, 1), sp, 'the row is a cached sprite'); assert.ok(sp.w > 20 && sp.h < 14, 'three short bars on a small plate');
+  assert.notStrictEqual(w.labels.pips(2, 0, 0), sp); assert.equal(w.labels.pips(9, 9, 9).w, w.labels.pips(6, 0, 0).w, 'never more than six');
+  w.fit(false); assert.ok(w.cam.z < 0.45, 'the whole island is zoomed out past the bar\'s zoom: ' + w.cam.z);
+  const stamped = []; const blit = w.labels.blit.bind(w.labels); w.labels.blit = (c, spr, x, y, ...r) => { stamped.push(spr); blit(c, spr, x, y, ...r); };
+  w.draw(); assert.ok(stamped.includes(sp), 'the district\'s name tag carries its pips'); assert.deepEqual(w.overlay.filter((o) => o.k === 'bar'), [], 'and no building bar is pushed at this zoom');
+  stamped.length = 0; w.mode = 'map'; w.fit(false); w.draw(); assert.ok(stamped.includes(sp), 'on the map the card carries them');
+  w.mode = 'world'; w.focusZone(5, false); w.draw(); assert.equal(w.overlay.filter((o) => o.k === 'bar').length, 3, 'zoomed in, each building has its bar again');
+  assert.deepEqual(faults(w), []); delete globalThis.OffscreenCanvas;
+});

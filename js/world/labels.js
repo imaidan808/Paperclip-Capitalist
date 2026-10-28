@@ -98,6 +98,21 @@ export class Labels {
     });
   }
 
+  /**
+   * A district's pipeline pips for the whole-island view, where a building's own bar is too small to read: one short bar per pipeline on a small dark plate,
+   * amber while it runs (`a`), red when it is starved (`r`), grey when it is paused or under audit (`o`). The anchor is the plate's centre.
+   */
+  pips(a, o, r) {
+    a = Math.min(a, 6); r = Math.min(r, 6 - a); o = Math.min(o, 6 - a - r);
+    return this.sprite(`p|${a}|${r}|${o}|${this.dpr}`, () => {
+      const n = a + r + o, sw = 8, sh = 3, gap = 2, w = n * sw + (n - 1) * gap + 6, h = sh + 6;
+      return this.make(w, h, (g) => {
+        roundRect(g, 0, 0, w, h, 3); g.fillStyle = 'rgba(16,20,28,.92)'; g.fill();
+        let x = 3; for (const [c, k] of [['#ffc247', a], ['#ff7d75', r], ['#7a7f88', o]]) for (let i = 0; i < k; i++) { g.fillStyle = c; g.fillRect(x, 3, sw, sh); x += sw + gap; }
+      }, 2);
+    });
+  }
+
   /** One district's card on the map: icon, "n  Name", and a second line (buyers and crates, or what opens it). Returns the sprite and its card size. */
   card(D, l1, l2, compact, open, cur, hov) {
     const pal = readable(D.pal[1]);

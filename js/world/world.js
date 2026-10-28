@@ -22,6 +22,7 @@ const lookOf = (id) => { const h = strHash(String(id)); return { shirt: SHIRTS[h
 const compact = (v) => (v >= 1e6 ? (v / 1e6).toFixed(1) + 'M' : v >= 1e4 ? Math.round(v / 1e3) + 'k' : v >= 1e3 ? (v / 1e3).toFixed(1) + 'k' : v >= 100 ? String(Math.round(v)) : v.toFixed(v < 10 ? 2 : 0));
 const money = (v) => '$' + compact(v);
 export const FAR_ZOOM = 0.42;      // below this zoom the world draws plain blocks and dots
+const PIP_ZOOM = 0.45;                 // below this zoom a building's own bar is dropped (it is a few pixels) and the district shows pips instead; the bar returns at and above it
 export const SLOW_MS = 22, FAST_MS = 16; // quality governor: a smoothed frame cost over SLOW_MS steps quality down, under FAST_MS steps it back up
 const GOV_WAIT = 10, GOV_DOWN = 3;         // frames of good cost before one step back up (it doubles while the picture keeps tipping over), frames of bad cost before one step down
 const CARS = 18;
@@ -57,6 +58,7 @@ export class World {
     this.vis = true; this.ledLast = undefined; this.tod = { night: 0, dusk: 0 }; this.unlockHash = 0; this.itemN = 0;                                                         // is the canvas on screen; the last ledger entry the world has seen
     this.decals = new Map();                                                                      // per district: its animated decals (water, pulses) drawn live over the cached ground
     this.player = { x: 0, y: 0, path: [], zone: 1, moving: false, dir: 1, speed: 16, placed: false };
+    this.zpip = new Uint8Array(3 * (Math.max(...LAYOUT.ids) + 1));                                // per district: pipelines running, paused, starved (for the whole-island pips)
     this.env = { t: 0, night: 0, wind: 1, dim: 0, surge: false, crunch: false, tariff: false, far: false, lite: false, locked: false, zoff: 0, lights: this.lights };
     this.reveal = {}; this.far = false;
     this.running = false; this.dirty = true; this.pointers = new Map(); this.drag = null; this.hitsLabel = {};
@@ -501,23 +503,32 @@ export class World {
   cacheOK() { return typeof OffscreenCanvas === 'function' && this.cv.width > 0; }
 
   /**
-   * The sea. Its gradient follows the light (night, the golden hour) and is made once per light step; on top of it go the slow wave lines, and a
-   * scatter of glints that twinkle on the sun's side of the water by day and the moon's by night. Under reduced motion the waves and glints stand still.
+   * The sea. Its colour follows the light (night, the golden hour) and is painted once per light step into a bitmap of the canvas's own pixels, so a frame
+   * stamps it one-to-one instead of filling the whole window with a gradient (about a tenth of the cost in software raster). On top of it go the slow wave
+   * lines, drawn as one stroke, and a scatter of glints that twinkle on the sun's side of the water by day and the moon's by night. Under reduced motion the
+   * waves and glints stand still.
    */
   drawWater(ctx) {
-    const { W, H } = this, night = this.night, dusk = this.dusk, calm = this.reduced();
+    const { W, H } = this, night = this.night, dusk = this.dusk, calm = this.reduced(), cw = this.cv.width, ch = this.cv.height;
     const nb = Math.round(night * 24), db = Math.round(dusk * 12), key = nb * 100 + db;
-    if (!this.waterGr || this.waterGr.key !== key || this.waterGr.H !== H) { // the gradient follows the light in 24 and 12 steps and is made once per step, not once per frame
-      const n = nb / 24, d = db / 12, gr = ctx.createLinearGradient(0, 0, 0, H);
-      gr.addColorStop(0, mix(mix('#1b3b5c', '#08111f', n * 0.8), '#3b3550', d * 0.35)); gr.addColorStop(1, mix(mix('#235a7a', '#0b1a2c', n * 0.8), '#6a5a6a', d * 0.22));
-      this.waterGr = { key, H, gr };
+    let wg = this.waterGr;
+    if (!wg || wg.key !== key || wg.H !== H || wg.cw !== cw) { // the colour follows the light in 24 and 12 steps and is made once per step, not once per frame
+      const n = nb / 24, d = db / 12;
+      wg = this.waterGr = { key, H, cw, top: mix(mix('#1b3b5c', '#08111f', n * 0.8), '#3b3550', d * 0.35), foot: mix(mix('#235a7a', '#0b1a2c', n * 0.8), '#6a5a6a', d * 0.22), layer: undefined };
     }
-    ctx.fillStyle = this.waterGr.gr; ctx.fillRect(0, 0, W, H);
-    ctx.strokeStyle = `rgba(190,230,255,${0.1 + 0.05 * (1 - night)})`; ctx.lineWidth = 1;
+    if (wg.layer === undefined) {
+      const f = surface(cw, ch);
+      if (f) { f.g.setTransform(this.dpr, 0, 0, this.dpr, 0, 0); const gr = f.g.createLinearGradient(0, 0, 0, H); gr.addColorStop(0, wg.top); gr.addColorStop(1, wg.foot); f.g.fillStyle = gr; f.g.fillRect(0, 0, W, H); }
+      wg.layer = f ? f.c : null;
+    }
+    if (wg.layer) { ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.drawImage(wg.layer, 0, 0); ctx.restore(); }
+    else { const gr = ctx.createLinearGradient(0, 0, 0, H); gr.addColorStop(0, wg.top); gr.addColorStop(1, wg.foot); ctx.fillStyle = gr; ctx.fillRect(0, 0, W, H); } // no offscreen surfaces: as the world always drew it
+    ctx.strokeStyle = `rgba(190,230,255,${0.1 + 0.05 * (1 - night)})`; ctx.lineWidth = 1; ctx.beginPath();
     for (let i = 0; i < 26; i++) {
-      const y = (i / 26) * H + 8, ph = calm ? 0 : this.vt / 1400 + i, x0 = ((i * 137) % W);
-      ctx.beginPath(); for (let x = -20; x < 90; x += 6) { const px = (x0 + x * 2.2) % (W + 60) - 30, py = y + Math.sin(ph + x * 0.1) * 1.6; x === -20 ? ctx.moveTo(px, py) : ctx.lineTo(px, py); } ctx.stroke();
+      const y = (i / 26) * H + 8, ph = calm ? 0 : this.vt / 1400 + i, x0 = ((i * 137) % W); let prev = -1e9;
+      for (let x = -20; x < 90; x += 6) { const px = (x0 + x * 2.2) % (W + 60) - 30, py = y + Math.sin(ph + x * 0.1) * 1.6; if (x === -20 || px < prev) ctx.moveTo(px, py); else ctx.lineTo(px, py); prev = px; } // a line that runs off the right edge starts again at the left: it never streaks across the window
     }
+    ctx.stroke();
     // glints: 44 small bright dashes at fixed places, each twinkling on its own clock (a steady dim glint under reduced motion)
     ctx.fillStyle = night > 0.5 ? '#cfe0ff' : '#ffffff';
     for (let i = 0; i < 44; i++) {
@@ -799,7 +810,7 @@ export class World {
     const [x, y] = P(pl[0] + 1.5, pl[1] + 1.5, z);
     this.hits.push({ eid: e.id, kind: 'pipe', id: p.id, zone: e.zone, label: `${K.name}, level ${p.level}`, polys: [f.left, f.right, f.top].map((q) => q.map(([a, b]) => [a, b - z - e.drop])), pipe: p });
     const frac = p.inflight ? clamp((p.prog + (this.hourF() - this.g.s.hour)) / Math.max(1, p.len), 0, 1) : 0;
-    if (this.cam.z >= 0.45) this.overlay.push({ k: 'bar', n: 0, wx: x, wy: y - h - 14 - e.drop, draw: (g, px, py, s) => this.progress(g, px, py, s, frac, p, off) });
+    if (this.cam.z >= PIP_ZOOM) this.overlay.push({ k: 'bar', n: 0, wx: x, wy: y - h - 14 - e.drop, draw: (g, px, py, s) => this.progress(g, px, py, s, frac, p, off) });
   }
   /** Where a freight truck is now: it leaves its depot door, drives the avenue's right-hand lane and arrives at the other district's door. */
   truckPos(e) {
@@ -911,15 +922,30 @@ export class World {
   }
   /** Name tags over each visible district while zoomed out, so you always know where you are (a tag is left out where another label already stands). */
   drawZoneTags(ctx) {
-    const R = this.ovRects, nr = this.ovN || 0;
+    const R = this.ovRects, nr = this.ovN || 0, pips = this.cam.z < PIP_ZOOM; if (pips) this.zonePips();
     for (const id of LAYOUT.ids) {
       const D = DIST[id], [x, y] = this.w2s(sx(D.cx, D.cy), sy(D.cx, D.cy, D.z) - 70);
       if (x < -120 || x > this.W + 120 || y < -30 || y > this.H + 30) continue;
       const open = this.unlocked?.has(id) ?? true, text = `${open ? '' : '\u{1F512} '}${id}  ${D.short}`, wd = text.length * 6.7 + 14;
       let at = -1; // the first of a few places (as drawn, then above, then below) where no label stands
       for (let k = 0; k < TAG_SHIFT.length && at < 0; k++) { const yy = y + TAG_SHIFT[k]; let free = true; for (let r = 0; r < nr; r++) if (x - wd / 2 < R[r * 4 + 2] && x + wd / 2 > R[r * 4] && yy - 9 < R[r * 4 + 3] && yy + 9 > R[r * 4 + 1]) { free = false; break; } if (free) at = yy; }
-      if (at >= 0) this.chip(ctx, x, at, text, open ? D.pal[1] : '#a3b3c9', 1);
+      if (at >= 0) { this.chip(ctx, x, at, text, open ? D.pal[1] : '#a3b3c9', 1); if (pips) this.pips(ctx, id, x, at + 15); }
     }
+  }
+  /** Count each district's pipelines by what they are doing (running, paused or under audit, starved) into `zpip`; read-only, the same states the building bars show. */
+  zonePips() {
+    const n = this.zpip; n.fill(0);
+    for (const e of this.ents.values()) { if (e.type !== 'pipe' || e.gone || !e.pipe) continue; const p = e.pipe, k = e.zone * 3 + (p.status === 'paused' || p.status === 'audit' ? 1 : p.starved ? 2 : 0); if (k < n.length) n[k]++; }
+  }
+  /**
+   * The whole-island view's pipeline pips: at this zoom a building's bar is a few pixels, so each district shows one small mark per pipeline under its own name
+   * (amber while it runs, red when starved, grey when paused), where it can never lie on another label. `x, y` is the centre of the row.
+   */
+  pips(g, id, x, y) {
+    const n = this.zpip, k = id * 3, run = n[k], off = n[k + 1], starved = n[k + 2]; if (!(run | off | starved)) return;
+    const sp = this.labels.pips(run, off, starved); if (sp) { this.labels.blit(g, sp, x, y); return; }
+    let px = x - ((run + off + starved) * 10 - 2) / 2; // no sprites here: the same row drawn directly
+    for (const [c, m] of [['#ffc247', run], ['#ff7d75', starved], ['#7a7f88', off]]) for (let i = 0; i < m; i++) { g.fillStyle = c; g.fillRect(px, y - 1.5, 8, 3); px += 10; }
   }
   chip(g, x, y, text, color = '#ffd36e', s = 1) {
     const sp = this.labels.chip(text, color, qs(s)); if (sp) { this.labels.blit(g, sp, x, y); return; } // a crisp sprite where there are offscreen surfaces; the direct drawing below otherwise
@@ -1034,6 +1060,15 @@ export class World {
       ctx.font = '800 12px ui-monospace, Menlo, monospace'; ctx.fillStyle = open ? '#ffd36e' : '#a3b3c9'; ctx.fillText(l1, x + 30, y + (compact ? h / 2 + 1 : 13));
       if (!compact) { ctx.font = '600 10px ui-monospace, Menlo, monospace'; ctx.fillStyle = open ? '#e8eef6' : '#a3b3c9'; ctx.fillText(l2, x + 30, y + 27); }
       ctx.textBaseline = 'alphabetic'; ctx.globalAlpha = 1;
+    }
+    if (this.cam.z < PIP_ZOOM) { // the pipeline pips go under their card, but only where no other card stands (on a phone the cards are packed, and a pip peeping out from under a neighbour reads as a stray mark)
+      this.zonePips();
+      for (const c of cards) {
+        const n = this.zpip[c.D.id * 3] + this.zpip[c.D.id * 3 + 1] + this.zpip[c.D.id * 3 + 2]; if (!n) continue;
+        const x0 = c.x + c.w / 2 - (n * 10 + 8) / 2, x1 = x0 + n * 10 + 8, y0 = c.y + c.h, y1 = y0 + 12; let free = true;
+        for (const o of cards) if (o !== c && x0 < o.x + o.w && x1 > o.x && y0 < o.y + o.h && y1 > o.y) { free = false; break; }
+        if (free) this.pips(ctx, c.D.id, c.x + c.w / 2, c.y + c.h + 6);
+      }
     }
   }
   /** Cards that would overlap are pushed apart in a few passes (mostly sideways-neutral, preferring up and down), so a small screen still shows every district's name. */
