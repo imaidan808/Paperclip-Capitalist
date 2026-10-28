@@ -18,7 +18,7 @@
 //  - A lesson can send the player into a dialog. The hire dialog is a modal over the Crew drawer, so a coach card behind it could never be read: while it is open, a step that
 //    waits for the hire is pointed at the dialog's own controls (data-anchor hire-<manager> and hire-go, drawers/crew.js) and the card hops into the dialog, as it does into the
 //    Deal Room. Any step may also name one of those anchors itself.
-import { $, esc, delegate, dlg, toast, announce, sfx, burst, reduced } from './common.js';
+import { $, esc, delegate, dlg, toast, announce, burst, reduced } from './common.js';
 import { countUp } from './polish.js';
 import { kv } from '../session.js';
 import { ZONES } from '../config.js';
@@ -29,6 +29,8 @@ import {
   readPending, addPending, claimPending, codexSeed, emptyMeta, makeSandboxSession, featuresFor, KEYS,
   newLookout, hireSnapshot, hireCoach,
 } from './academy-sandbox.js';
+import { academySounds } from './academy-sandbox.js';
+import { audio as engine } from '../audio/index.js';
 
 let MISSIONS = [];
 try { ({ ACADEMY: MISSIONS } = await import('../meta/academy.js')); } catch { /* TEMPORARY: academy.js merges from its own branch; this guard goes at the merge */ }
@@ -189,6 +191,8 @@ export function mountAcademy(root, S, { onDone, onSkip, only, missions, store = 
     let sheet = null, teach = newTeach(), skipped = false, winPending = false, lastKey = '', inerted = [];
     let stranded = null, checkQ = false; // stranded: { say, hint } once the lesson cannot be finished
     const lookout = newLookout(m, sb.game);
+    // Sound (docs/AUDIO.md 4.3): what each moment plays is academySounds (./academy-sandbox.js, pure). The engine is the drawer context's when the shell gives one, else the page's. Guarded: a lesson never breaks for sound.
+    const hear = (what, d) => { try { const a = ctx.audio && typeof ctx.audio.play === 'function' ? ctx.audio : engine; for (const [id, o] of academySounds(what, d)) { if (id === 'countUp') a.countUp?.(o.xp); else a.play(id, o); } } catch { /* sound is optional */ } };
     let layer = null, ringEl = null, cardEl = null, bodyEl = null; // the card is a frame with a caret on its edge; its text scrolls in bodyEl, so the caret is never clipped
 
     U.tracker = () => { const c = stranded || coachFor(m, run); return { title: m.title, desc: shortSay(c.say), icon: m.icon, p: Math.min(run.i, steps.length), n: steps.length, drawer: null }; };
@@ -320,7 +324,7 @@ export function mountAcademy(root, S, { onDone, onSkip, only, missions, store = 
       const seen = lookout.look(run);
       if (!seen.changed) return;
       stranded = seen.stranded;
-      if (stranded) announce(`${stranded.say} Press Restart to try it again.`, true);
+      if (stranded) { announce(`${stranded.say} Press Restart to try it again.`, true); hear('stranded'); }
       hintOn = false; showMe = false; confirm = false; lastKey = '';
       ctx.render(); paintCoach(true);
     }
@@ -331,7 +335,7 @@ export function mountAcademy(root, S, { onDone, onSkip, only, missions, store = 
       if (dead || gone || sheet || winPending || run.won) return;
       const r = feedRun(m, run, evt);
       run = r.run;
-      if (r.advanced) stepChanged();
+      if (r.advanced) { stepChanged(); if (!r.won) hear('step', { i: run.i }); } // the goal has its own sound
       if (r.won) win();
     }
     off.push(ctx.on(feed));
@@ -401,9 +405,10 @@ export function mountAcademy(root, S, { onDone, onSkip, only, missions, store = 
       const inner = sheet.firstChild;
       inner.setAttribute('aria-label', label);
       inner.innerHTML = html;
-      countUp(inner, { reduced: reduced() }); // presentation only: the reward's numbers tick up
+      const counted = countUp(inner, { reduced: reduced() }); // presentation only: the reward's numbers tick up
       $('#ac-sh', inner)?.focus({ preventScroll: true });
       sheet.scrollTop = 0; inner.scrollTop = 0;
+      return counted;
     }
     function closeSheet() { for (const k of inerted) k.inert = false; inerted = []; sheet?.remove(); sheet = null; }
 
@@ -411,18 +416,18 @@ export function mountAcademy(root, S, { onDone, onSkip, only, missions, store = 
       winPending = true;
       try { sb.setPaused(true); } catch { /* clock fixed */ }
       layer?.remove();
-      try { sfx.level(); burst({ power: 1.2 }); } catch { /* effects are optional */ }
+      hear('win'); try { burst({ power: 1.2 }); } catch { /* effects are optional */ }
       announce('Lesson goal reached.');
       ctx.render();
     }
     function showWhy() {
       winPending = false;
-      openSheet(whyHTML(m, { skipped, index: idx, total: list.length }), 'Why it worked');
+      openSheet(whyHTML(m, { skipped, index: idx, total: list.length }), 'Why it worked'); hear('page', { late: true }); // after the window that won the lesson has been put away
       announce('Why it worked.');
     }
     function showTeach() {
       if (!m.teachBack?.options?.length) { showReward(); return; }
-      openSheet(teachHTML(m, teach), 'Teach-back question');
+      openSheet(teachHTML(m, teach), 'Teach-back question'); hear('page');
     }
     function showReward() {
       const st = readAcademy(store), replay = st.done.includes(m.id), plan = rewardPlan(m, { done: replay, skipped });
@@ -435,8 +440,10 @@ export function mountAcademy(root, S, { onDone, onSkip, only, missions, store = 
       markMission(store, list, m.id, { skipped });
       const t = store.get(KEYS.teach) || {};
       store.set(KEYS.teach, { ...t, [m.id]: { tries: teach.picks.length, firstTry: teachFirstTry(teach), revealed: teach.revealed } });
-      openSheet(rewardHTML(m, paid, lookup, { last: !!only || idx + 1 >= list.length, only: !!only, skipped, replay, index: idx, total: list.length }), 'Lesson reward');
-      if (!replay && !skipped) { try { sfx.level(); burst({ power: 1.4 }); } catch { /* optional */ } }
+      const counted = openSheet(rewardHTML(m, paid, lookup, { last: !!only || idx + 1 >= list.length, only: !!only, skipped, replay, index: idx, total: list.length }), 'Lesson reward');
+      hear('reward', { first: !replay && !skipped, graduate: !only && idx + 1 >= list.length, newCodex: (paid.newCodex || []).length }); // the last lesson of a run through the Academy is the graduation
+      if (counted) hear('count', { xp: paid.xp }); // the numbers are counting up (the engine keeps ui.count-up for a quiet moment)
+      if (!replay && !skipped) { try { burst({ power: 1.4 }); } catch { /* optional */ } }
       announce(`Lesson complete.${paid.xp ? ` Plus ${paid.xp} XP.` : ''}`);
     }
     function skipNow() { skipped = true; winPending = false; try { sb.setPaused(true); } catch { /* fixed */ } layer?.remove(); showWhy(); }
@@ -451,8 +458,8 @@ export function mountAcademy(root, S, { onDone, onSkip, only, missions, store = 
       'ac-restart'() { dlg.close(); play(idx); },
       'ac-leave'() { dlg.close(); leave(); },
       'ac-why-next'() { showTeach(); },
-      'ac-pick'(el) { const r = pickTeach(m.teachBack, teach, +el.dataset.i); if (!r.result) return; teach = r.state; openSheet(teachHTML(m, teach), 'Teach-back question'); sheet.querySelector('[data-act="ac-teach-next"], .ac-opt:not([aria-disabled="true"])')?.focus(); announce((r.result.correct ? 'Correct. ' : 'Not quite. ') + r.result.why); },
-      'ac-reveal'() { teach = revealTeach(teach); openSheet(teachHTML(m, teach), 'Teach-back question'); },
+      'ac-pick'(el) { const r = pickTeach(m.teachBack, teach, +el.dataset.i); if (!r.result) return; teach = r.state; openSheet(teachHTML(m, teach), 'Teach-back question'); hear(r.result.correct ? 'right' : 'wrong'); sheet.querySelector('[data-act="ac-teach-next"], .ac-opt:not([aria-disabled="true"])')?.focus(); announce((r.result.correct ? 'Correct. ' : 'Not quite. ') + r.result.why); },
+      'ac-reveal'() { teach = revealTeach(teach); openSheet(teachHTML(m, teach), 'Teach-back question'); hear('reveal'); },
       'ac-teach-next'() { showReward(); },
       'ac-reward-next'() { closeSheet(); advance(idx); },
       menu() {
@@ -471,11 +478,12 @@ export function mountAcademy(root, S, { onDone, onSkip, only, missions, store = 
       if (++beats % 5 === 0) check();
       if (winPending && !dlg.el.open && !U.queue.length) { showWhy(); return; }
       if (!sheet && !winPending && !run.won) {
-        if (!hintOn && hintDue(stepAt, performance.now())) { hintOn = true; announce('Hint: ' + coachFor(m, run).hint); }
+        if (!hintOn && hintDue(stepAt, performance.now())) { hintOn = true; announce('Hint: ' + coachFor(m, run).hint); if (!stranded) hear('hint'); /* the Restart card has its words already */ }
         paintCoach();
       }
     }, 200);
 
+    hear('start'); // the coach card appears
     stepChanged();
     return {
       destroy() {

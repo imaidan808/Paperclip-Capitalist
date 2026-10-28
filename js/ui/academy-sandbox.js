@@ -506,3 +506,37 @@ export function featuresFor(mission) {
   }
   return [...set];
 }
+
+// ------------------------------------------------------------------ sound (docs/AUDIO.md 4.3)
+/**
+ * What each moment of a lesson sounds like, as the [[id, opts], ...] the runner hands to audio.play (js/ui/academy.js). Pure, so a test can read every one without a browser.
+ * The Academy is a classroom: nothing here is a buzzer, a wrong answer is a soft "mm", and the card, the sheets and the pick buttons keep the tick the page gives any button.
+ *   start     the coach card appears: the first note of the climb          step    a step was done: the nth step is the nth note, D5 up to D6
+ *   win       the goal is reached, a beat after the action that reached it (its own sale or purchase is heard first)
+ *   page      a sheet is put in front of you (why it worked, the teach-back, a replayed reward): the paper of ui.dialog-open; { late } when a window has only just been put away (the Deal Room that won the lesson)
+ *   right, wrong, reveal   the teach-back: bright, soft, and the page flip of the answer; heard a beat after the click's own tick
+ *   hint      the 20-second hint appears                                   stranded   the lesson cannot be finished any more: the Restart card
+ *   reward    { first, graduate, newCodex }: the lesson's fanfare (the longest one for the last lesson), and a Codex page that is new, a beat after it; a replay or a skipped lesson pays nothing and only turns the page
+ *   count     { xp }: the reward's numbers counted up (the engine plays ui.count-up for 25 XP or more, and only in a quiet moment)
+ */
+export function academySounds(what, d = {}) {
+  switch (what) {
+    case 'start': return [['acad.step', { variant: 's0', params: { i: 0 } }]];
+    case 'step': { const i = clamp(Math.round(num(d.i, 0)), 0, 5); return [['acad.step', { variant: i >= 3 ? 's5' : 's0', params: { i } }]]; }
+    case 'win': return [['acad.win', { variant: 'goal', delay: 0.35 }]];
+    case 'page': return [['ui.dialog-open', d.late ? { delay: 0.18 } : {}]];
+    case 'right': return [['acad.teach', { variant: 'right', delay: 0.08 }]];
+    case 'wrong': return [['acad.teach', { variant: 'wrong', delay: 0.08 }]];
+    case 'reveal': return [['acad.teach', { variant: 'reveal', delay: 0.08 }]];
+    case 'hint': return [['ui.nudge', {}]];
+    case 'stranded': return [['ui.refuse', {}]];
+    case 'reward': {
+      if (!d.first) return [['ui.dialog-open', {}]];
+      const out = [d.graduate ? ['acad.graduate', {}] : ['acad.win', { variant: 'reward' }]];
+      if (!d.graduate && num(d.newCodex, 0) > 0) out.push(['codex.unlock', { delay: 0.9 }]);
+      return out;
+    }
+    case 'count': return num(d.xp, 0) > 0 ? [['countUp', { xp: num(d.xp, 0) }]] : [];
+    default: return [];
+  }
+}
