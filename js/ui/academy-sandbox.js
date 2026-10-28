@@ -72,27 +72,63 @@ export function resolveAnchor(anchor, provider = {}) {
   return f ? { rect: f, via: 'fallback', anchor: a } : null;
 }
 
+const overlapArea = (a, b) => Math.max(0, Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x)) * Math.max(0, Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y));
+/**
+ * How much a card at p covers of what must stay clear, in square pixels (0 = nothing). The target counts six times over, and each rect in `avoid` by its own weight (`wt`,
+ * 1 when it has none: the open drawer and the dock carry a middling one, a button in a dialog the plain one).
+ */
+export function coverScore(p, rect, avoid = []) {
+  let s = rect ? overlapArea(p, rect) * 6 : 0;
+  for (const r of avoid) if (r) s += overlapArea(p, r) * (Number.isFinite(r.wt) ? r.wt : 1);
+  return s;
+}
+
+/**
+ * What the coach card must not hide, as the `avoid` list placeCard takes: the open drawer and the dock (weight 3 each) and, when the card stands in a dialog (the Deal Room), every
+ * button, field and link of that dialog (weight 1), the ones a step names included (the Close stage is a row of buttons, and a hint that says "press Fair" must not stand on it).
+ * Each argument is a rect { x, y, w, h } or null (nothing open); `controls` is a list of rects. A rect with no area is left out.
+ */
+export function keepClear({ drawer = null, dock = null, controls = [] } = {}) {
+  const out = [], add = (r, wt) => { if (r && num(r.w, 0) > 0 && num(r.h, 0) > 0) out.push({ x: num(r.x, 0), y: num(r.y, 0), w: r.w, h: r.h, wt }); };
+  add(drawer, 3); add(dock, 3);
+  for (const r of ownList(controls)) add(r, 1);
+  return out;
+}
+
 /**
  * Where the coach card goes: below the target, else above, else beside it, else floating above the dock; never over the target or over anything in `avoid`
- * (the open drawer), always inside the view. rect may be null (centred above the dock). Returns { x, y, side } for a card of size { w, h } in a view { w, h }.
+ * (the open drawer, the dock, the controls of an open dialog: the Deal Room's buttons), always inside the view. rect may be null (centred above the dock). When no place
+ * is clear of all of it (a phone, a dialog that is all controls) the card goes where it covers the least (`coverScore`: the target and the heavier rects first, ties to the
+ * places named above), so the card is never put on a button when any place is free of one. Returns { x, y, side } for a card of size { w, h } in a view { w, h }.
  */
 export function placeCard(rect, card, view, gap = 14, margin = 8, avoid = []) {
   const cw = Math.min(card.w, view.w - 2 * margin), ch = Math.min(card.h, view.h - 2 * margin);
   const cx = (x) => clamp(x, margin, Math.max(margin, view.w - cw - margin)), cy = (y) => clamp(y, margin, Math.max(margin, view.h - ch - margin));
   const free = (p) => (!rect || !rectsOverlap(p, rect)) && !avoid.some((r) => r && rectsOverlap(p, r));
   const floats = [[(view.w - cw) / 2, view.h - ch - 90], [margin, view.h - ch - 90], [(view.w - cw) / 2, 80]].map(([x, y]) => ({ x: cx(x), y: cy(y), w: cw, h: ch }));
-  const float = () => { const p = floats.find(free) || floats[0]; return { x: p.x, y: p.y, side: rect ? 'float' : 'center' }; };
-  if (!rect) return float();
+  const floatSide = rect ? 'float' : 'center';
+  // the last resort: every place worth naming, then a grid over the view, scored; the first of the lowest scores wins, and the grid is walked from the dock's end up
+  const leastCovered = (tries) => {
+    const cands = tries.map((t) => ({ ...t, side: rect && rectsOverlap({ x: t.x, y: t.y, w: cw, h: ch }, rect) ? floatSide : t.side })).concat(floats.map((p) => ({ x: p.x, y: p.y, side: floatSide }))); // a caret points at the target only from a place that is beside it
+    const NX = 8, NY = 10, spanX = Math.max(0, view.w - cw - 2 * margin), spanY = Math.max(0, view.h - ch - 2 * margin);
+    for (let j = NY; j >= 0; j--) for (let i = 0; i <= NX; i++) cands.push({ x: cx(margin + (spanX * i) / NX), y: cy(margin + (spanY * j) / NY), side: floatSide });
+    let best = null;
+    for (const c of cands) {
+      const sc = coverScore({ x: c.x, y: c.y, w: cw, h: ch }, rect, avoid);
+      if (!best || sc < best.sc - 1e-6) best = { c, sc };
+      if (sc === 0) break; // nothing covered: no later place can beat it
+    }
+    return { x: best.c.x, y: best.c.y, side: best.c.side };
+  };
+  const float = () => { const p = floats.find(free); return p ? { x: p.x, y: p.y, side: floatSide } : null; };
+  if (!rect) return float() || leastCovered([]);
   const mid = { x: rect.x + rect.w / 2, y: rect.y + rect.h / 2 };
   const tries = [
     ['below', mid.x - cw / 2, rect.y + rect.h + gap], ['above', mid.x - cw / 2, rect.y - ch - gap],
     ['right', rect.x + rect.w + gap, mid.y - ch / 2], ['left', rect.x - cw - gap, mid.y - ch / 2],
-  ];
-  for (const [side, x, y] of tries) {
-    const p = { x: cx(x), y: cy(y), w: cw, h: ch };
-    if (free(p)) return { x: p.x, y: p.y, side };
-  }
-  return float();
+  ].map(([side, x, y]) => ({ side, x: cx(x), y: cy(y) }));
+  for (const t of tries) if (free({ x: t.x, y: t.y, w: cw, h: ch })) return t;
+  return float() || leastCovered(tries);
 }
 
 // ------------------------------------------------------------------ the step resolver

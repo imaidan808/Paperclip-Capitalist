@@ -14,7 +14,7 @@ import { kv } from '../session.js';
 import { ZONES } from '../config.js';
 import { Progress, CODEX_BY_ID } from '../meta/progress.js';
 import {
-  parseAnchor, resolveAnchor, hitMatches, placeCard, coverOf, pointInRect, startRun, feedRun, coachFor, satisfiedNow, shortSay, hintDue,
+  parseAnchor, resolveAnchor, hitMatches, placeCard, keepClear, coverOf, pointInRect, startRun, feedRun, coachFor, satisfiedNow, shortSay, hintDue,
   newTeach, pickTeach, revealTeach, teachDone, teachFirstTry, readAcademy, markMission, nextIndex, rewardPlan, applyRewards,
   readPending, addPending, claimPending, codexSeed, emptyMeta, makeSandboxSession, featuresFor, KEYS,
 } from './academy-sandbox.js';
@@ -194,6 +194,16 @@ export function mountAcademy(root, S, { onDone, onSkip, only, missions, store = 
     }
     function hostFor(res) { const el = res?.anchor?.kind === 'dom' ? domEls(res.anchor.name)[0] : null; return el && dlg.el.open && dlg.el.contains(el) ? dlg.el : ctx.el.overlay; }
 
+    // What the card must not hide (keepClear): the open drawer and the dock and, when the card stands in a dialog (the Deal Room), every control of it, the ones the step names included.
+    // The dialog's own box is not kept clear: the card has to stand somewhere in it when the dialog fills the window.
+    const CONTROLS = 'button, input, select, textarea, summary, a[href], [role="button"]';
+    function keepRects(host) {
+      const box = (e) => { if (!e || e === cardEl || cardEl?.contains(e)) return null; const r = e.getBoundingClientRect(); return { x: r.x, y: r.y, w: r.width, h: r.height }; };
+      return keepClear({
+        drawer: ctx.el.drawer.hidden ? null : box(ctx.el.drawer), dock: box(ctx.el.dock),
+        controls: host === dlg.el ? [...host.querySelectorAll(CONTROLS)].map(box) : [],
+      });
+    }
     function paintCoach(force) {
       if (dead || gone || sheet || winPending || run.won) return;
       ensureLayer();
@@ -211,8 +221,8 @@ export function mountAcademy(root, S, { onDone, onSkip, only, missions, store = 
       ringEl.hidden = !spot;
       ringEl.classList.toggle('show', !!spot && showMe);
       if (spot) { ringEl.style.width = spot.w + pad * 2 + 'px'; ringEl.style.height = spot.h + pad * 2 + 'px'; ringEl.style.transform = `translate(${Math.round(spot.x - pad)}px, ${Math.round(spot.y - pad)}px)`; }
-      const keep = [ctx.el.drawer.hidden ? null : ctx.el.drawer, ctx.el.dock].filter(Boolean).map((e) => e.getBoundingClientRect()).filter((r) => r.width > 0 && r.height > 0).map((r) => ({ x: r.x, y: r.y, w: r.width, h: r.height }));
-      const box = cardEl.getBoundingClientRect(), at = placeCard(spot, { w: box.width || 320, h: box.height || 150 }, view, 14, 8, keep); // never over the open drawer or the dock icons
+      const keep = keepRects(host);
+      const box = cardEl.getBoundingClientRect(), at = placeCard(spot, { w: box.width || 320, h: box.height || 150 }, view, 14, 8, keep); // never over the open drawer, the dock icons or, in a dialog, its buttons
       cardEl.dataset.side = at.side;
       cardEl.style.transform = `translate(${Math.round(at.x)}px, ${Math.round(at.y)}px)`;
       cardEl.classList.toggle('lift', true);

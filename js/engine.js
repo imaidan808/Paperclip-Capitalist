@@ -541,7 +541,7 @@ export class Game {
     const asIs = assetFMV(asset, z, this.mods(), this.crowd(cls, z));
     const ops = this.lvl('ops');
     let disc = cond === 'ok' ? Math.max(ECON.lotDiscLo, ECON.lotDiscHi - 0.025 * (ops - 1)) : Math.max(ECON.brokenLo, 1 - ECON.brokenSlope * (ops - 1));
-    if (cond === 'broken') disc *= 1 - this.P.brokenDiscount;
+    if (cond === 'broken') disc *= (1 - this.P.brokenDiscount) * (1 + ECON.brokenTop * Math.max(0, z - ECON.brokenFrom)); // and the sellers of wrecks in the top districts know what a repaired crate fetches
     if (asIs < Z.scale * 0.6) disc *= 1 - (this.P.lotDiscount || 0); // small lots (the Side-Hustler)
     if (Z.rules.gray) disc *= 1 - (this.P.lotDiscountGray || 0); // gray markets (the Second-Chance Hustler)
     // What the seller does not say: the real condition, and whether it is genuine. Posted prices describe the lot "as described".

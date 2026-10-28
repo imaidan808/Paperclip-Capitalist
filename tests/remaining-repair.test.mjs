@@ -361,21 +361,21 @@ test('Result card (S15): a sale that paid for the repair says so: what you had i
 
 // =========================================================================================================================  managers against the strongest hand pair
 const doc = (f) => readFileSync(new URL('../' + f, import.meta.url), 'utf8');
-test('Managers and hand play (item-4, B1, B2): the strongest hand pair (Tradesperson with Seasoned Pro) still beats its own managers at a decision every 4 hours by a bounded amount, and the docs say the bound is the median of the pairs', () => {
-  // Measured on 31ddccf, specialty Operations: without managers 7.6x, 3.5x, 2.1x and 12.1x as rich at every 4 hours (seeds 7, 11, 23, 31); 0.77x to 0.80x at every 8 hours on three seeds. Two seeds here.
+test('Managers and hand play (item-4, B1, B2, M1): even the strongest hand pair (Tradesperson with Seasoned Pro) ends no richer than its own managers would make it at a decision every 2 or 4 hours, and hand play is not worthless either; the docs say so', () => {
+  // Measured on f747048 (before ECON.brokenTop), specialty Operations, seeds 7, 11, 23, 31: without managers 8.1x, 10.5x, 3.6x and 10.4x as rich at every 2 hours, 7.6x, 3.5x, 2.1x and 12.1x at every 4,
+  // 0.77x to 0.80x and 2.1x at every 8. With the premium on the wrecks of districts 13 to 16: 0.51x, 0.70x, 1.00x and 0.80x at every 2 hours, 0.80x, 0.83x, 0.57x and 0.87x at every 4, 0.84x, 1.29x, 0.56x and 0.60x at every 8.
   const ratio = (every, seed) => {
     const a = makeGame(['trades', 'pro'], 'ops', seed); run(a, { every });
     const b = makeGame(['trades', 'pro'], 'ops', seed); b.hirePipeline = () => ({ ok: false, msg: 'managers are forbidden in this run' }); run(b, { every });
     return b.netWorth() / a.netWorth();
   };
-  for (const seed of [7, 23]) {
-    const r4 = ratio(4, seed);
-    assert.ok(r4 >= 1.5 && r4 <= 14, `seed ${seed}, every 4 hours: ${r4.toFixed(2)}x as rich without managers (it was ${seed === 7 ? '7.6' : '2.1'}x; the bound is 1.5 to 14: skilled hand play is the reward for these Backgrounds, and it must neither vanish nor run away)`);
+  for (const [every, seed] of [[2, 7], [2, 23], [4, 7], [4, 23], [8, 7]]) {
+    const r = ratio(every, seed);
+    assert.ok(r >= 0.3 && r <= 1.5, `seed ${seed}, every ${every} hours: ${r.toFixed(2)}x as rich without managers (the bound is 0.3 to 1.5: it was 2.1x to 12.1x before the premium on the wrecks of the top districts, and hand play must not vanish)`);
   }
-  assert.ok(ratio(8, 7) <= 1.2, 'at every 8 hours the managers keep up with the hand play they displace');
   const B = doc('docs/BALANCE.md'), V = doc('docs/V2_DESIGN.md');
-  assert.match(B, /The strongest hand pair/); assert.match(B, /2\.1 to 12\.1 times richer/); assert.match(B, /not about every pair/);
-  assert.match(V, /at the median of the 66 pairs, earn at least as much/); assert.match(V, /bounds of this section are for a decision every 2 to 4 hours/);
+  assert.match(B, /The strongest hand pair/); assert.match(B, /8\.1x, 10\.5x, 3\.6x and 10\.4x/); assert.match(B, /0\.51x, 0\.70x, 1\.00x and 0\.80x/); assert.match(B, /at every 2, 4 and 8 hours/);
+  assert.match(V, /at the median of the 66 pairs, earn at least as much/); assert.match(V, /at every 2, 4 and 8 hours/); assert.match(V, /bounds of this section are for a decision every 2 to 4 hours/);
 });
 
 test('Close panel (S14): once a deal is struck both sides\' figures read the agreed price, not the counter that was on the table before the buyer said yes', () => {
@@ -394,4 +394,48 @@ test('Close panel (S14): once a deal is struck both sides\' figures read the agr
   assert.ok(seen >= 1, 'a struck deal was seen');
   const live = H.create({ role: 'sell', fair: 100, reserve: 130, style: 'friendly', patience: 6, insight: 3, seed: 5 });
   assert.equal(H.view(live).theirs, null, 'and nothing changes while the talk is on');
+});
+
+// =========================================================================================================================  the coach card in the Deal Room
+// Rects measured in headless Chrome at 1440 x 900 on lesson m04 (Haggle 101): [x, y, w, h, label] for every button, field and link of the open Deal Room, at its Pitch stage (step 2), at its
+// Close stage (step 3, Dolores) and after the first counter. On 977ef85 the card was put at the middle of the foot of the window whatever the dialog held (the keep-clear list was the drawer and the
+// dock), so it stood on "Pick 2 more angles" and the stage's Quick button, and, with the hint on, over "Fair" and over "Come down $0.53" and "Mention your other option" that the hint names.
+const DEAL_VIEW = { w: 1440, h: 900 }, DEAL_DOCK = { x: 616, y: 821, w: 207, h: 69 };
+const DEAL_ROOM = {
+  pitch: { dialog: [192, 95, 1056, 709], controls: [[1079, 119, 18, 18, 'Assist'], [1167, 113, 62, 30, 'Leave'], [481, 459, 141, 150, 'Prestige'], [629, 459, 141, 150, 'Utility'], [777, 459, 141, 150, 'Scarcity'], [925, 459, 141, 150, 'Price'], [1072, 459, 141, 150, 'Story'], [481, 619, 194, 38, 'Pick 2 more angles'], [769, 755, 330, 38, 'Quick: auto-play'], [1107, 755, 122, 38, 'Quick deal']] },
+  close: { dialog: [192, 138, 1056, 623], controls: [[1079, 162, 18, 18, 'Assist'], [1167, 156, 62, 30, 'Leave'], [481, 514, 239, 60, 'Aim high'], [728, 514, 239, 60, 'Fair'], [974, 514, 239, 60, 'Quick sale'], [481, 584, 94, 30, 'Walk away'], [899, 712, 330, 38, 'Quick: auto-play']] },
+  counter: { dialog: [192, 125, 1056, 651], controls: [[1079, 148, 18, 18, 'Assist'], [1167, 142, 62, 30, 'Leave'], [224, 528, 216, 18, 'Talk so far'], [481, 500, 178, 60, 'Hold'], [666, 500, 178, 60, 'Come down $0.53'], [851, 500, 178, 60, 'Come down $1.20'], [1035, 500, 178, 60, 'Come down $2.14'], [481, 568, 178, 60, 'Split the difference'], [666, 568, 178, 60, 'Mention your other option'], [851, 568, 178, 60, 'Accept their offer'], [1035, 568, 178, 60, 'Walk away'], [899, 725, 330, 38, 'Quick: auto-play']] },
+};
+const asRect = ([x, y, w, h]) => ({ x, y, w, h });
+const overlapOf = (a, b) => Math.max(0, Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x)) * Math.max(0, Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y));
+const coveredBy = (card, controls) => controls.map((c) => ({ label: c[4], share: overlapOf(card, asRect(c)) / (c[2] * c[3]), centre: card.x <= c[0] + c[2] / 2 && c[0] + c[2] / 2 <= card.x + card.w && card.y <= c[1] + c[3] / 2 && c[1] + c[3] / 2 <= card.y + card.h })).filter((c) => c.share > 0);
+
+test('Coach card (A1): in an open Deal Room the card stands clear of every button of it, with the hint or without, so the buttons a hint names can be pressed', () => {
+  for (const [stage, L] of Object.entries(DEAL_ROOM)) {
+    const keep = Sandbox.keepClear({ dock: DEAL_DOCK, controls: L.controls.map(asRect) });
+    assert.equal(keep.length, L.controls.length + 1, `${stage}: the dock and every control are kept clear`);
+    for (const size of [{ w: 336, h: 203 }, { w: 336, h: 301 }, { w: 336, h: 320 }]) { // without the hint, with it, and with a longer one
+      const at = Sandbox.placeCard(asRect(L.dialog), size, DEAL_VIEW, 14, 8, keep), card = { ...at, ...size };
+      assert.deepEqual(coveredBy(card, L.controls), [], `${stage}, a card ${size.h} high at ${at.x},${at.y}: it stands on a button`);
+      assert.ok(at.x >= 8 && at.y >= 8 && at.x + size.w <= DEAL_VIEW.w - 8 && at.y + size.h <= DEAL_VIEW.h - 8, `${stage}: inside the window`);
+      assert.equal(overlapOf(card, DEAL_DOCK), 0, `${stage}: and off the dock`);
+    }
+  }
+  // the card as 977ef85 placed it (the middle of the foot of the window: 336 x 203 at 552,607, and with the hint on a card that grows upward from the same foot) stood on exactly what the lessons name
+  const old = (h) => ({ x: 552, y: 810 - h, w: 336, h }), shares = (stage, h) => Object.fromEntries(coveredBy(old(h), DEAL_ROOM[stage].controls).map((c) => [c.label, Math.round(c.share * 100)]));
+  assert.ok(shares('pitch', 203)['Pick 2 more angles'] >= 60 && shares('pitch', 203)['Quick: auto-play'] >= 30, JSON.stringify(shares('pitch', 203)));
+  assert.ok(shares('counter', 301)['Mention your other option'] >= 90 && shares('counter', 301)['Come down $0.53'] >= 80, JSON.stringify(shares('counter', 301)));
+});
+
+test('Coach card (A1): the keep-clear list is the drawer, the dock and the dialog\'s controls, empty rects and missing ones left out; where nothing is clear the card covers the least', () => {
+  const keep = Sandbox.keepClear({ drawer: { x: 610, y: 70, w: 480, h: 606 }, dock: null, controls: [{ x: 1, y: 2, w: 3, h: 4 }, null, { x: 5, y: 5, w: 0, h: 9 }, undefined, { x: 9, y: 9, w: 20, h: 10 }] });
+  assert.deepEqual(keep.map((r) => r.wt), [3, 1, 1], 'the drawer weighs more than a button, and a rect with no area or none is dropped');
+  assert.deepEqual(Sandbox.keepClear(), []); assert.deepEqual(Sandbox.keepClear({ controls: 'nothing' }), []);
+  // a phone with a dialog that is all buttons: no place is clear, so the card goes where it hides the least, and never outside the window
+  const view = { w: 390, h: 844 }, card = { w: 344, h: 200 };
+  const rows = Array.from({ length: 10 }, (_, i) => ({ x: 20, y: 90 + i * 70, w: 350, h: 56 })), many = Sandbox.keepClear({ controls: rows });
+  const at = Sandbox.placeCard(asRect([0, 0, 390, 844]), card, view, 14, 8, many), where = { x: at.x, y: at.y, w: card.w, h: card.h };
+  const covered = (p) => Sandbox.coverScore(p, null, many), floor0 = { x: (view.w - card.w) / 2, y: view.h - card.h - 90, w: card.w, h: card.h }; // where 977ef85 would have put it
+  assert.ok(at.x >= 8 && at.y >= 8 && at.x + card.w <= 382 && at.y + card.h <= 836, 'inside the window: ' + JSON.stringify(at));
+  assert.ok(covered(where) <= covered(floor0), `it hides no more than the middle of the foot would (${covered(where)} against ${covered(floor0)} square pixels)`);
 });

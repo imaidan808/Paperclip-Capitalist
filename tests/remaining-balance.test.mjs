@@ -27,11 +27,11 @@ const NW_816 = { 2: 1494012, 4: 994045, 8: 405602 };
 test('a broken lot is priced for what it can become: dearer as your Ops grows, so a repair flip still pays but is no longer the whole game [open items 30, 31]', () => {
   // On commit 0d66995 a wreck cost 0.985 down to 0.9 of its as-is value, so a restored crate (about 3.3 times the as-is price from Ops 5) returned about +200% to a bot with Ops 4 and the same bot
   // with managers forbidden ended 5 to 27 times richer than with them. The posted price now follows ECON.brokenLo and ECON.brokenSlope (see js/config.js).
-  const ratio = (ops, perks = []) => {
+  const ratio = (ops, perks = [], z = 7) => {
     const out = [];
     for (let seed = 1; seed <= 120 && out.length < 12; seed++) {
       const g = new Game({ perks, seed, handle: 'T', pid: 'T-' + seed }); g.env.algo = false; g.s.skills.ops = ops;
-      const z = 7; g._openZone(z); g.s.lots[z] = [];
+      g._openZone(z); g.s.lots[z] = [];
       for (let i = 0; i < 40 && !(g.s.lots[z][0] && g.s.lots[z][0].cond === 'broken'); i++) { g.s.lots[z] = []; g._spawnLot(z); }
       const lot = g.s.lots[z][0];
       if (!lot || lot.cond !== 'broken' || lot.price < 20) continue;
@@ -47,6 +47,36 @@ test('a broken lot is priced for what it can become: dearer as your Ops grows, s
   for (const x of ratio(5, ['trades'])) assert.ok(Math.abs(x.x / Math.max(ECON.brokenLo, 1 - ECON.brokenSlope * (x.lvl - 1)) - 0.8) < 0.012, 'the Tradesperson still pays 20% less for a wreck');
   assert.ok(flip(4) > 1.5 && flip(4) < 2.0, `a flip at Ops 4 returns ${((flip(4) - 1) * 100).toFixed(0)}% before costs (it was +205%)`);
   assert.ok(flip(8) > 1.2 && flip(8) < 1.5, `a flip at Ops 8 returns ${((flip(8) - 1) * 100).toFixed(0)}% before costs, so mastery still pays`);
+});
+
+test('the sellers of wrecks in the top districts know what a repaired crate fetches: from district 13 a wreck is posted brokenTop dearer for each district past 12, and nothing below changes [open items 30, 31, M1]', () => {
+  // Without the premium the same bot with hiring forbidden flipped wrecks in districts 15 and 16 (+60% to +100% a flip, five a day) and ended 4.7 times richer than with managers at a decision every 2 hours,
+  // in district 16 in 72% of its runs; with it 0.70 times, 2% (docs/BALANCE.md, Managers and hand play). The premium is on the posted price of a broken lot and on nothing else.
+  assert.equal(ECON.brokenFrom, 12); assert.ok(ECON.brokenTop > 0 && ECON.brokenTop <= 0.2, `brokenTop ${ECON.brokenTop}`);
+  const sample = (z, ops = 4) => {
+    const out = [];
+    for (let seed = 1; seed <= 150 && out.length < 8; seed++) {
+      const g = new Game({ perks: [], seed, handle: 'T', pid: 'T-' + seed }); g.env.algo = false; g.s.skills.ops = ops; g._openZone(z); g.s.lots[z] = [];
+      for (let i = 0; i < 40 && !(g.s.lots[z][0] && g.s.lots[z][0].cond === 'broken'); i++) { g.s.lots[z] = []; g._spawnLot(z); }
+      const lot = g.s.lots[z][0];
+      if (!lot || lot.cond !== 'broken' || lot.price < 20) continue;
+      out.push(lot.price / assetFMV({ cls: lot.cls, cond: 'broken', quality: 1, wear: 1 }, z, g.mods(), g.crowd(lot.cls, z)) / Math.max(ECON.brokenLo, 1 - ECON.brokenSlope * (g.lvl('ops') - 1)));
+    }
+    assert.ok(out.length >= 5, `${out.length} broken lots found in district ${z}`);
+    return out;
+  };
+  for (const z of [9, 12, 13, 14, 15, 16]) {
+    const want = 1 + ECON.brokenTop * Math.max(0, z - ECON.brokenFrom);
+    for (const x of sample(z)) assert.ok(Math.abs(x / want - 1) < 0.012, `district ${z}: a wreck is posted at ${x.toFixed(3)} times the price Ops alone gives, not ${want.toFixed(2)}`);
+  }
+  const flipAt = (ops, z) => restoreQuality(ops) / (BROKEN_FACTOR * Math.max(ECON.brokenLo, 1 - ECON.brokenSlope * (ops - 1)) * (1 + ECON.brokenTop * Math.max(0, z - ECON.brokenFrom)));
+  assert.ok(flipAt(6, 13) > 1.35 && flipAt(6, 13) < 1.6 && flipAt(6, 16) > 1.05 && flipAt(6, 16) < 1.3, `a flip at Ops 6 returns ${((flipAt(6, 13) - 1) * 100).toFixed(0)}% in district 13 and ${((flipAt(6, 16) - 1) * 100).toFixed(0)}% in 16 before costs`);
+  assert.ok(flipAt(8, 16) < 1.05, 'at Ops 8 a wreck in the Global Exchange is bought for about what it fetches: that is what the premium is');
+  // the sound lots are untouched
+  const g = new Game({ perks: [], seed: 3, handle: 'T', pid: 'T-3' }); g.env.algo = false; g._openZone(16); g.s.lots[16] = [];
+  for (let i = 0; i < 60 && !(g.s.lots[16][0] && g.s.lots[16][0].cond === 'ok'); i++) { g.s.lots[16] = []; g._spawnLot(16); }
+  const sound = g.s.lots[16][0]; assert.equal(sound.cond, 'ok');
+  assert.ok(Math.abs(sound.price / assetFMV({ cls: sound.cls, cond: 'ok', quality: 1, wear: 1 }, 16, g.mods(), g.crowd(sound.cls, 16)) - Math.max(ECON.lotDiscLo, ECON.lotDiscHi - 0.025 * (g.lvl('ops') - 1))) < 0.012, 'a sound lot is posted as before');
 });
 
 test('the milestones of the default rhythm are the design\'s: districts 5, 9 and 13 around days 16, 30 and 55, and the pairs stay within the band [open items 29, 32, 34]', () => {
@@ -82,13 +112,18 @@ test('the slow rhythm gets its early weeks back: a player who acts every 8 hours
   assert.ok(r.base[2] >= 62, `district 13 on day ${r.base[2]}: a slow player is not early either`);
 });
 
-test('managers earn at least as much as the hand play they displace, at a decision every 4 and every 8 hours; at every 2 hours the gap is smaller than it was and held at a ceiling [open items 6, 30]', () => {
-  // The same bot with hiring forbidden (balance({ managers: false })), on the first seed alone (12 runs) against the 24 runs with managers. 0d66995 on this sample: without managers 6.9x as much at every 4,
-  // 0.94x at every 8 and 9.4x at every 2; on the full table (66 pairs, 5 seeds) 5.4x, 0.8x and 8.5x, and on commit 816e7c4 27x, 2.4x and 26x.
+test('managers earn at least as much as the hand play they displace, at a decision every 2, 4 and 8 hours, and the same bot with hiring forbidden stays inside the late-game bounds too [open items 6, 30, M1]', () => {
+  // The same bot with hiring forbidden (balance({ managers: false })), on the first seed alone (12 runs) against the 24 runs with managers. This sample before ECON.brokenTop: without managers 9.4x as much at every 2
+  // hours, 6.9x at every 4 and 0.94x at every 8; on the full table (66 pairs, 5 seeds) 8.5x, 5.4x and 0.8x on 0d66995, 4.7x, 0.85x and 0.84x on f747048, and 27x, 27x and 2.4x on commit 816e7c4.
   const ratio = (every) => lateGame(cut(every, false, 1).rows).nwP50 / lateGame(cut(every).rows).nwP50;
-  assert.ok(ratio(4) <= 1.2, `every 4 hours: without managers ${ratio(4).toFixed(2)}x as rich`);
-  assert.ok(ratio(8) <= 1.2, `every 8 hours: without managers ${ratio(8).toFixed(2)}x as rich`);
-  assert.ok(ratio(2) <= 6.5, `every 2 hours: without managers ${ratio(2).toFixed(2)}x as rich (the gap that is still open, BALANCE.md; it must not widen)`);
+  for (const every of [2, 4, 8]) assert.ok(ratio(every) <= 1.2, `every ${every} hours: without managers ${ratio(every).toFixed(2)}x as rich (the design: no richer; the district 13 to 16 wreck premium, ECON.brokenTop, is what holds it at every 2)`);
+  assert.ok(ratio(4) >= 0.3, `every 4 hours: hand play is not worthless either (${ratio(4).toFixed(2)}x)`);
+  // ...and the bot that never hires does not run away to district 16 either (f747048: 72% of its runs at every 2 hours, 23% at every 4, and a net worth 11 to 12 times apart from its 10th to its 90th percentile)
+  for (const every of [2, 4]) {
+    const L = lateGame(cut(every, false, 1).rows);
+    assert.ok(L.d16Share <= 1 / 6, `every ${every} hours, managers forbidden: district 16 in ${(L.d16Share * 100).toFixed(0)}% of ${L.runs} runs`);
+    assert.ok(L.spread <= 4.5, `every ${every} hours, managers forbidden: the 90th percentile is ${L.spread.toFixed(2)}x the 10th`);
+  }
   assert.equal(cut(4, false, 1).wipedRuns, 0);
 });
 

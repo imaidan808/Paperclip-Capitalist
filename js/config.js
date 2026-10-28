@@ -17,6 +17,10 @@ export const FEES = { base: 0.025, crunch: 0.12, digitalRouting: 0.12, exitBroke
 //                           sellers of wrecks ask for the repair upside, so the better your Ops, the more a wreck costs: x1.00 at Ops 1, x1.42 at Ops 3, x1.63 at Ops 4, x2.05 at Ops 6 (the Tradesperson
 //                           then pays 20% less). A restored crate sells at about x3.3 of the as-is price at Ops 5 and above, so a flip returns about +80% at Ops 4 and +35% at Ops 8 before repair, friction and fees.
 //                           Before, a wreck cost 0.985 down to 0.9 of its as-is value and a flip returned +200%; the same bot with managers forbidden then ended 5.4 times richer than with them at a decision every 4 hours (27 times on commit 816e7c4).
+//   brokenTop / brokenFrom  from the district after brokenFrom (13, Corporate Valley) a wreck costs brokenTop more for each district further out, on top of the price above: x1.10 in district 13, x1.20 in 14,
+//                           x1.30 in 15 and x1.40 in 16. Wrecks there are worth tens or hundreds of thousands, and their sellers know what a repaired crate fetches. Without it a bot that decides every two hours and
+//                           never hires a manager flipped one wreck after another in districts 15 and 16 (+60% to +100% each, five a day) and ended 4.7 times richer than the same bot with managers (72% of its runs in
+//                           district 16, a net worth 10.8 times apart from its 10th to its 90th percentile); with it 0.70 times, 2% and 2.3 (docs/BALANCE.md, Managers and hand play). Nothing below district 13 changes.
 //   lotSlots / lotEvery     lots open at once in a district, and how much slower than a district's own lotEvery they come (1.1 = every 1.1 x lotEvery hours). leadEvery is the same for buyers.
 //   urgentK / urgentFade    an urgent buyer's budget = fair value x (1 + (0.4 to 2.6) x urgentK x (1 - urgentFade x how far past district 4, over eight districts)): need pays well in the first
 //                           districts and nothing at all from district 12 (urgentFade 1). This is what carries the first two weeks now that wrecks are dearer.
@@ -24,7 +28,7 @@ export const FEES = { base: 0.025, crunch: 0.12, digitalRouting: 0.12, exitBroke
 //   pointXp / warnMiss      what a skill point is worth in XP once every skill is at mastery; the share of counterfeits the Second-Chance street sense misses.
 export const ECON = {
   lotDiscHi: 0.97, lotDiscLo: 0.84, lotSlots: 4, lotEvery: 1.1, leadEvery: 0.8, cycleBase: 132, pitchK: 0.92, margin: 1,
-  brokenLo: 1, brokenSlope: -0.21,
+  brokenLo: 1, brokenSlope: -0.21, brokenTop: 0.1, brokenFrom: 12,
   urgentK: 3, urgentFade: 1,
   pointXp: 120, warnMiss: 0.1,
 }; // retuned on 2026-10-28 against commit 816e7c4 (docs/BALANCE.md has the table); change one knob at a time and run tests/balance.mjs at a decision every 2, 4 and 8 hours
@@ -69,7 +73,7 @@ export const PIPE = {
 // One number for every district: cycles are shorter and stakes larger further out, but the return per cycle is meant to be the same everywhere (docs/V2_DESIGN.md section 4, tests/audit-engine-core.test.mjs holds
 // marginSlope at 0). That makes a manager's return per DAY grow with the district (a cycle is 2.5 times shorter in the Global Exchange than in Metro Hub), on stakes 20 to 130 times larger, so ECON.cycleBase is the
 // lever on it: 132 is a cycle 65% longer than the 80 it was, with the return per cycle unchanged. What decides how many runs reach district 16 and how far apart the net worths end is hand play, not the managers:
-// see ECON.brokenLo above. scaleExp and overheadExp were swept (0.4 to 1.0 and 0 to 0.6) with no effect on the day-90 net worth beyond noise, so they stay.
+// see ECON.brokenLo and ECON.brokenTop above (hand play at the top, where a wreck is worth tens of thousands). scaleExp and overheadExp were swept (0.4 to 1.0 and 0 to 0.6) with no effect on the day-90 net worth beyond noise, so they stay.
 export const PIPE_RULES = { cycleBase: 48, maxLevel: 8, hireGrowth: 1.7, levelGrowth: 2.5, scaleExp: 0.62, overheadExp: 0.5, marginBase: 1.15, marginSlope: 0 };
 export const pipeScale = (zone) => Math.max(1, Math.pow(zone.gate / 1000, PIPE_RULES.scaleExp));
 export const pipeMargin = (zone) => Math.max(0.5, PIPE_RULES.marginBase + PIPE_RULES.marginSlope * (zone.id - 5));
