@@ -3,7 +3,7 @@
 //   1 The Scrap Yard     scale $1    barter ladder; urgent buyers pay for need, not cost      (utility-fit)
 //   2 Flea Market Row    scale $6    every deal can be haggled; sealed boxes are a gamble      (negotiation)
 //   3 Campus Quad        scale $25   a 28-day semester wave; cheap trends herd                 (saturation-herd)
-//   4 Pawn District      scale $90   about one lot in seven is fake; appraisal is the game     (information-asymmetry)
+//   4 Pawn District      scale $90   about one lot in five is fake; appraisal is the game      (information-asymmetry)
 //
 // Everyone starts with one paperclip (fair value about five cents) and no cash. Two ways up:
 //   * sell it to someone who needs it right now (Wen the stressed student) and take the first dollars, or
@@ -34,7 +34,7 @@ export const zones = {
   },
   4: {
     id: 4, name: 'Pawn District', short: 'Pawn', icon: '💍', theme: 'pawn', tier: 1,
-    blurb: 'About one lot in seven is a fake and a third of the stock goes to auction. Inspect before you bid: the seller always knows more than you do.',
+    blurb: 'About one lot in five is a fake and a third of the stock goes to auction. Inspect before you bid: the seller always knows more than you do.',
     teaches: 'information-asymmetry', gate: 250, scale: 90, tax: 0.03, friction: 0.112, pool: 5000, speed: 1.9, store: 15, leadEvery: 3, lotEvery: 5, urgent: 0.2,
     auto: false, plots: 0, palette: ['#0e6f6b', '#e3b341'], rules: { fakes: 0.22, auction: 0.35, gray: true }, bonus: {},
   },

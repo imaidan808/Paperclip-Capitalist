@@ -4,7 +4,7 @@ import { makeGame, run } from '../bot.mjs';
 import { esc } from '../../js/ui/common.js';
 import { fmtMoney, fmtPct } from '../../js/market.js';
 
-export function fakeCtx({ days = 0, perks = ['trades', 'pro'], seed = 9, zone } = {}) { // seed 9: these tests need the bot to be past Industrial Park with a loan open by day 25, which is a matter of the world (seed 7 got there on day 30 once the economy was retuned)
+export function fakeCtx({ days = 0, perks = ['trades', 'pro'], seed = 10, zone } = {}) { // seed 10: these tests need the bot at day 25 with Metro Hub and the districts past it open, a loan drawn and the second milestone reached (the audit tests), and a day-10 player well clear of a level boundary (training pays 10 XP). Which seed does that is a matter of the economy: seed 7 stalls at 4 districts after the core retune, and seed 9 sat 3 XP short of a level and had 6 managers at day 25 once the asset yields were corrected. If the economy moves again, sweep the seeds (8, 10, 11, 13, 14 and 15 held on 2026-10-27) rather than weakening the tests
   const game = makeGame(perks, 'ops', seed);
   if (days) run(game, { days });
   const S = {

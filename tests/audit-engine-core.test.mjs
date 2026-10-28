@@ -58,7 +58,7 @@ test('the facility fee starts a month after the first draw, stops when the line 
   assert.equal(g.s.ledger.filter((e) => e.text === 'Unused-commitment fee').length, 1);
   for (const l of [...g.s.loans]) g.repay(l.id, 1e9);
   assert.equal(g.s.loans.length, 0);
-  g.advanceTo(first + 24 + 1500);
+  g.advanceTo(first + 24 + 1300); // past the next fee date (hour 1440) and still before the day-90 bell: the run is over at 2160 and a draw after it is refused
   assert.equal(g.s.ledger.filter((e) => e.text === 'Unused-commitment fee').length, 1, 'no loan, no fee');
   const now = g.s.hour; assert.ok(g.draw('enterprise', 1000).ok); assert.equal(g.s.entFeeNext, now + 720);
 });

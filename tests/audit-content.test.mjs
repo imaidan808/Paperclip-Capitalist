@@ -272,12 +272,12 @@ function lotShares(zone, cash, n = 12000) {
 
 test('district blurbs promise only what the rules do', () => {
   const pawn = lotShares(4, 1000), estate = lotShares(6, 3000), auto = lotShares(7, 8000), row = lotShares(15, 1.1e6), flea = lotShares(2, 100);
-  assert.ok(pawn.fake / pawn.n > 0.11 && pawn.fake / pawn.n < 0.17, `Pawn District: ${pct(pawn.fake / pawn.n)} of lots are fakes (the blurb says about one in seven)`);
-  assert.match(ZONES[4].blurb, /one lot in seven/);
+  assert.ok(pawn.fake / pawn.n > 0.19 && pawn.fake / pawn.n < 0.25, `Pawn District: ${pct(pawn.fake / pawn.n)} of lots are fakes (the rule is 22%, the blurb says about one lot in five)`);
+  assert.match(ZONES[4].blurb, /one lot in five/);
   assert.ok(Math.abs(pawn.auction / pawn.n - 1 / 3) < 0.04, 'a third of the Pawn District goes to auction');
   assert.match(ZONES[4].blurb, /a third of the stock goes to auction/);
   assert.ok(Math.abs(estate.auction / estate.n - 0.5) < 0.08, 'Estate Sales: about half at auction');
-  assert.ok(Math.abs(auto.repairableBroken / auto.repairable - 0.6) < 0.05, 'Auto Row: six in ten repairable lots arrive broken');
+  assert.ok(Math.abs(auto.broken / auto.n - 0.6) < 0.04, `Auto Row: ${pct(auto.broken / auto.n)} of all lots arrive broken (the rule is 60%)`);
   assert.match(ZONES[7].blurb, /Six in ten cars/);
   assert.ok(Math.abs(row.auction / row.n - 0.25) < 0.05, 'Real Estate Row: a quarter of the lots are foreclosure auctions');
   assert.match(ZONES[15].blurb, /a quarter of the lots are foreclosure auctions/);
@@ -297,10 +297,10 @@ test('no blurb or quest calls cycles long where managers get faster', () => {
 });
 
 test('quest and achievement words that quote a rate or a rule are the rate and the rule', () => {
-  assert.match(quest('q04a').desc, /1 in 7/);
-  assert.match(quest('q07a').desc, /about half the lots here are broken/);
+  assert.match(quest('q04a').desc, /1 in 5/);
+  assert.match(quest('q07a').desc, /6 in 10 lots here are broken/);
   const auto = lotShares(7, 8000);
-  assert.ok(auto.broken / auto.n > 0.42 && auto.broken / auto.n < 0.55, `Auto Row: ${pct(auto.broken / auto.n)} of all lots are broken`);
+  assert.ok(auto.broken / auto.n > 0.56 && auto.broken / auto.n < 0.64, `Auto Row: ${pct(auto.broken / auto.n)} of all lots are broken`);
   assert.match(quest('q06a').desc, /About half/);
   assert.match(quest('q08b').desc, /2% fee/);
   assert.ok(text('js/engine.js').includes('(f.book || 0) * 0.02'), 'customs charge 2% of the crates\' value');
@@ -344,16 +344,20 @@ test('Codex: the pitch price examples are what quotePitch returns (Creativity Mu
   const t = prose('creativity-multiplier');
   const pioneer = quote('pen', 'marguerite', cell(0, 0, 40)), light = quote('pen', 'marguerite', cell(0, 10, 100)), herd = quote('pen', 'marguerite', cell(0, 60, 100));
   assert.equal(pioneer.fit, 0.7);
-  for (const [q, price] of [[pioneer, '$5.71'], [light, '$4.30'], [herd, '$0.73']]) { assert.equal(usd(q.price), price); assert.ok(t.includes(price)); }
+  for (const [q, price] of [[pioneer, '$5.09'], [light, '$3.64'], [herd, '$0.61']]) { assert.equal(usd(q.price), price); assert.ok(t.includes(price)); }
   assert.ok(Math.abs(pioneer.ci.cm - 3.14) < 1e-9 && Math.abs(light.ci.cm - creativity(10, 100)) < 1e-9 && herd.ci.cm === 0.4);
-  assert.ok(t.includes('$1.82') && t.includes('$2.85'));
-  assert.equal(usd(pioneer.parts.ref * pioneer.parts.term * 0.6), '$1.82', 'the base pitch price before the multiplier');
+  assert.equal(ECON.pitchK, 0.92); assert.ok(t.includes('0.92'), 'the pitch factor is on the page');
+  // recent pitches press the pen's own price (the crowd factor counts them, yours included): $2.85 with nobody about (the fair-value test below), $2.75 with 40 pitches, $2.62 with 100
+  for (const x of ['$2.85', '$2.75', '$2.62', '$1.62', '$1.54']) assert.ok(t.includes(x), x);
+  assert.equal(usd(pioneer.parts.ref), '$2.75'); assert.equal(usd(light.parts.ref), '$2.62'); assert.equal(usd(herd.parts.ref), '$2.62');
+  assert.equal(usd(pioneer.parts.ref * pioneer.parts.term * 0.6 * ECON.pitchK), '$1.62', 'the base pitch price before the multiplier');
+  assert.equal(usd(light.parts.ref * light.parts.term * 0.6 * ECON.pitchK), '$1.54');
   // urgency premium: the lead names a budget of $6 and a need
   const u = prose('urgency-premium');
   const withTag = quote('paperclip', 'student', [], { budget: 6, need: 'tool' }), without = quote('paperclip', 'student', [], { budget: 6, need: 'prestige' });
-  assert.equal(usd(withTag.price), '$3.94'); assert.ok(u.includes('$3.94'));
-  assert.equal(without.fit, 0.5); assert.equal(usd(without.price), '$3.05'); assert.ok(u.includes('$3.05') && u.includes('0.775'));
-  assert.equal(Math.round(Number(usd(withTag.price).slice(1)) / 0.05), 79, 'the markup over the clip\'s five cents, as the numbers on the page read'); assert.ok(u.includes('79x'));
+  assert.equal(usd(withTag.price), '$3.62'); assert.ok(u.includes('$3.62') && u.includes('1.093'));
+  assert.equal(without.fit, 0.5); assert.equal(usd(without.price), '$2.81'); assert.ok(u.includes('$2.81') && u.includes('0.775'));
+  assert.equal(Math.round(Number(usd(withTag.price).slice(1)) / 0.05), 72, 'the markup over the clip\'s five cents, as the numbers on the page read'); assert.ok(u.includes('72x'));
   assert.ok(withTag.price <= 6, 'never above the stated budget');
 });
 
@@ -382,10 +386,12 @@ test('Codex: the Pawn District watch example (fake value, posted price) comes fr
   }
   assert.ok(watches >= 500);
   assert.deepEqual([...prices], [305.16], 'posted at 97% of the described value at Ops 1');
-  assert.ok(Math.abs(fakes / watches - 0.22) < 0.04, `a watch is fake ${pct(fakes / watches)} of the time (rule 0.22 x fakeRisk 1)`);
-  for (const x of [usd(fair), usd(fair * FAKE_VALUE), '$250.92', '$305.16', '$54.24', '$251']) assert.ok(t.includes(x), x);
-  assert.equal(usd(0.78 * fair + 0.22 * fair * FAKE_VALUE), '$250.92');
-  assert.ok(t.includes('22% fake rate') && t.includes('one lot in seven'));
+  // the district's 22% is a share of ALL its lots, so each good's chance is the rule x its fakeRisk over the district's mean fakeRisk and the working share: 0.22 x 1 / (0.87 x 0.8) = 31.6% for a watch
+  assert.ok(Math.abs(fakes / watches - 0.316) < 0.04, `a watch is fake ${pct(fakes / watches)} of the time (expected 31.6%)`);
+  for (const x of [usd(fair), usd(fair * FAKE_VALUE), '$221.98', '$305.16', '$83.18', '$222']) assert.ok(t.includes(x), x);
+  assert.equal(usd(0.68 * fair + 0.32 * fair * FAKE_VALUE), '$221.98', 'the example works with the rate rounded to 32%');
+  assert.equal(usd(305.16 - (0.68 * fair + 0.32 * fair * FAKE_VALUE)), '$83.18');
+  assert.ok(t.includes('22% fake rate') && t.includes('one lot in five') && t.includes('32%'));
 });
 
 test('Codex: the repair examples are the engine\'s repair quote on a broken Barn-Find Classic Roadster in Auto Row', () => {
@@ -427,32 +433,42 @@ test('Codex: manager cycles, margins and overhead are the forecast of a real bro
   const f = (kind, extra = {}, alloc = 1000) => { const p = { kind, zone: 5, alloc, level: 1, cycles: 0, ...extra }; return { len: g.cycleLen(p), ...g.forecast(p) }; };
   const b = f('broker'), l = f('logistics'), s = f('student');
   assert.deepEqual([b.len, l.len, s.len], [36, 29, 47]);
-  assert.deepEqual([b, l, s].map((x) => (x.margin * 100).toFixed(2)), ['2.72', '2.20', '2.08']);
-  assert.deepEqual([b.margin * 24 / b.len, l.margin * 24 / l.len, s.margin * 24 / s.len].map((x) => (x * 100).toFixed(2)), ['1.81', '1.82', '1.06']);
+  assert.deepEqual([b, l, s].map((x) => (x.margin * 100).toFixed(2)), ['7.82', '6.33', '5.98'], '6.8%, 5.5% and 5.2% a cycle x the 1.15 every district shares');
+  assert.deepEqual([b.margin * 24 / b.len, l.margin * 24 / l.len, s.margin * 24 / s.len].map((x) => (x * 100).toFixed(2)), ['5.21', '5.23', '3.05']);
   const v = prose('cash-flow-velocity');
-  for (const x of ['36 hours', '29 hours', '47 hours', '2.72%', '2.20%', '2.08%', '1.81%', '1.82%', '1.06%', '42%']) assert.ok(v.includes(x), x);
+  for (const x of ['36 hours', '29 hours', '47 hours', '7.82%', '6.33%', '5.98%', '5.21%', '5.23%', '3.05%', '1.65x', '1.66x', '1.35x', '42%']) assert.ok(v.includes(x), x);
+  for (const [m, h, grown] of [[0.0782, 36, 1.65], [0.0633, 29, 1.66], [0.0598, 47, 1.35]]) assert.equal(Math.pow(1 + m, 240 / h).toFixed(2), grown.toFixed(2), 'ten days of reinvesting');
+  assert.equal(Math.round((1 - (s.margin * 24 / s.len) / (l.margin * 24 / l.len)) * 100), 42, 'the Student earns 42% less a day than the Logistics Agent');
   // economies of scale
   const e = prose('economies-of-scale');
-  for (const [alloc, over, left] of [[100, 6.2, -3.48], [500, 7, 6.6], [1000, 8, 19.2]]) {
+  for (const [alloc, over, left] of [[100, 6.2, 1.62], [500, 7, 32.1], [1000, 8, 70.2]]) {
     const x = f('broker', {}, alloc);
     assert.ok(Math.abs(x.overhead - over) < 1e-9, `overhead at ${alloc}`);
     assert.ok(Math.abs(x.gross - x.overhead - left) < 1e-9, `left at ${alloc}`);
   }
-  for (const x of ['$2.72', '$6.20', '-$3.48', '$13.60', '$7.00', '$6.60', '$27.20', '$8.00', '$19.20', '2.4%', '0.3%']) assert.ok(e.includes(x), x);
+  for (const x of ['$7.82', '$6.20', '$1.62', '$39.10', '$7.00', '$32.10', '$78.20', '$8.00', '$70.20', '7.5%', '0.3%']) assert.ok(e.includes(x), x);
+  const big = f('broker', {}, 5000); assert.equal(((big.gross - big.overhead) / big.alloc * 100).toFixed(1), '7.0', 'the manager\'s own cap stops a level-1 Broker at $1,000, so the $5,000 line is the formula, not a forecast');
+  assert.equal((((0.068 * 1.15 * 5000) - (6 + 0.002 * 5000)) / 5000 * 100).toFixed(1), '7.5');
   // the game's own cycle base is 80 hours, not the 48 of PIPE_RULES that nothing reads
   assert.equal(ECON.cycleBase, 80);
   assert.ok(codex('opportunity-cost').example.setup.includes('80 / 2.2 = 36 hours'));
+  // the example's manager nets what a real Broker nets on $1,000 per cycle, after fee, tax, royalty and overhead
+  assert.equal(usd(b.net), '$31.52'); assert.ok(codex('opportunity-cost').example.setup.includes('$31.50'));
+  assert.ok(prose('opportunity-cost').includes('earns $63') && prose('opportunity-cost').includes('-$43') && prose('opportunity-cost').includes('lost $43'));
+  assert.equal(Math.round(2 * b.net), 63);
 });
 
 test('Codex: the tariff lock slows international lanes, which is all the example claims', () => {
   const g = new Game({ perks: [], seed: 1 });
   const domestic = { kind: 'broker', zone: 5, alloc: 1000, level: 1 }, intl = { ...domestic, channel: 'intl' };
-  assert.equal(Math.round(g.forecast(intl).margin * 1e4), 354);
+  assert.equal(Math.round(g.forecast(intl).margin * 1e4), 1017, '7.82% x 1.3');
   assert.equal(g.cycleLen(intl), 36, 'before the lock');
   g.s.hour = 74 * 24 + 1; g._m = null; // day 75, the lock is on
   assert.equal(g.cycleLen(intl), 132); assert.equal(g.cycleLen(domestic), 36);
   const t = prose('tariffs');
-  for (const x of ['3.54%', '2.36%', '1.81%', '132 hours', '0.64%', '30%', '65%', '96 hours']) assert.ok(t.includes(x), x);
+  for (const x of ['7.82%', '10.17%', '6.78%', '5.21%', '132 hours', '1.85%', '30%', '65%', '96 hours']) assert.ok(t.includes(x), x);
+  const day = (p) => g.forecast(p).margin * 24 / g.cycleLen(p);
+  assert.equal((day(domestic) * 100).toFixed(2), '5.21'); assert.equal((day(intl) * 100).toFixed(2), '1.85'); assert.equal(Math.round((day(intl) / day(domestic) - 1) * 100), -65, 'from 30% ahead to 65% behind');
   assert.equal(g.mods().repair, 1.45, 'repairs cost 45% more'); assert.ok(codex('tariffs').body[0].includes('outside the four starter districts'));
   const gg = rich(); const a = crate(gg, 'sedan', 3, { cond: 'broken' }); gg.s.hour = 74 * 24 + 1; gg._m = null; const inStarter = gg.repairMultFor(3); assert.equal(inStarter, (1 - (ZONES[3].rules.repair || 0)) * gg.P.repairMult * gg.B.repairMult, 'the lock does not touch the starter districts');
   void a;

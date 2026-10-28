@@ -535,7 +535,7 @@ test('#33 an accepted swap is confirmed by the proposer before the acceptor give
   assert.ok(r.ok, r.msg);
   await until(() => b.incoming.length === 1);
   const before = holdings(a, b);
-  const sent = []; const real = b.room.send.bind(b.room); b.room.send = (m) => { sent.push(m.t); return real(m); };
+  const sent = []; const real = b.room.send.bind(b.room); b.room.send = (m) => { if (m.t !== 'snap') sent.push(m.t); return real(m); }; // the public snapshot goes out on its own jittered timer (0 to 400 ms) and can land anywhere in the wait: it is not a step of the swap
   const acc = b.acceptIncoming(b.incoming[0].offer.id);
   assert.ok(acc.ok, acc.msg);
   assert.equal(b.game.s.cash, 2000, 'step one moves nothing');

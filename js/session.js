@@ -537,7 +537,7 @@ export class Session {
     for (const a of asked) need[a.zone] = (need[a.zone] || 0) + 1;
     for (const a of offer.give.assets) free[a.zone] = (free[a.zone] || 0) + 1;
     for (const z of Object.keys(need)) if (need[z] - (free[z] || 0) > g.roomIn(+z)) return no(`you would have no room in ${ZONES[z].short}.`);
-    return { ok: true, delivery: { assets: asked.map((a) => ({ cls: a.cls, cond: a.cond, quality: a.quality, wear: a.wear, zone: a.zone, known: true })), cash }, paid: { day: g.day, cash: paid + cash } };
+    return { ok: true, delivery: { assets: asked.map((a) => ({ id: a.id, cls: a.cls, cond: a.cond, quality: a.quality, wear: a.wear, zone: a.zone, known: true })), cash }, paid: { day: g.day, cash: paid + cash } };
   }
   _npcRespond(offer) {
     const g = this.game, id = offer?.id;
@@ -674,8 +674,7 @@ export class Session {
     const total = r.cap ?? r.perDay * (Math.ceil(Math.max(0, r.until - g.s.hour) / 24) + 1);
     const amount = Math.min(m.amount, r.perDay, total - (r.got || 0)); // a day's rate, and never more in all than was agreed
     if (!(amount > 0)) return;
-    r.got = (r.got || 0) + amount;
-    g.receiveRoyalty(amount, id);
+    g.receiveRoyalty(amount, id, from); // the engine books what it takes into r.got itself: counting it here as well made every payment count twice against the total
   }
   _onFlag(m, from) {
     if (this.mode !== 'instructor' || m.role !== 'student' || !isObj(m.offer)) return;

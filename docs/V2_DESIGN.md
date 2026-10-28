@@ -49,7 +49,7 @@ One avenue runs through all sixteen. Unlock is by **net worth** (`gate`). `scale
 | 1 | The Scrap Yard | 1 | $0 | $1 | Barter ladder. Urgent buyers pay for need, not cost | `utility-fit` | none |
 | 2 | Flea Market Row | 1 | $20 | $6 | **Haggle stalls**: every deal can be bargained; sealed boxes are a gamble on condition | `negotiation` | none |
 | 3 | Campus Quad | 1 | $80 | $25 | **Semester waves**: paper, training and electronics demand swings on a 28-day cycle; trends spread fast | `saturation-herd` | none |
-| 4 | Pawn District | 1 | $250 | $90 | **Fakes and auctions**: the fake rate is 22% (scaled by each good's `fakeRisk`; about one lot in seven turns out fake); appraisal is the game | `information-asymmetry` | none |
+| 4 | Pawn District | 1 | $250 | $90 | **Fakes and auctions**: 22% of the lots are counterfeit (shared out by each good's `fakeRisk`, so a watch is fake about a third of the time); appraisal is the game | `information-asymmetry` | none |
 | 5 | Metro Hub | 2 | $1,000 | $400 | **Managers and the Bank open**; client contracts | `working-capital` | Managers, Bank, clients |
 | 6 | Estate Sales | 2 | $2,500 | $900 | **Auctions** (50% of lots); hidden-value boxes | `winners-curse` | lots +1 slot |
 | 7 | Auto Row | 2 | $6,000 | $2,500 | **Repair bays**: 60% of lots are broken; repair costs 25% less here | `repair-roi` | repairs 10% cheaper everywhere |

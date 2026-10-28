@@ -333,8 +333,10 @@ export function cleanOffer(o, from, to) {
     want.assets.push({ id: wid, cls: isObj(w) && own(ASSETS, w.cls) ? w.cls : undefined });
   }
   const sk = isObj(o.skills) ? o.skills : {};
+  // the promiser's net worth as they report it: the engine values a promised royalty by it (and at nothing when it is absent), so it must get through the door, as a real clamped number or not at all
+  const nw = typeof o.nw === 'number' && Number.isFinite(o.nw) ? { nw: num(o.nw, -NW_LIMIT, NW_LIMIT, 0) } : {};
   return {
-    id, from, fromHandle: text(o.fromHandle), to, at: num(o.at, 0, TOTAL_HOURS, 0), note: text(o.note, 140), give, want,
+    id, from, fromHandle: text(o.fromHandle), to, at: num(o.at, 0, TOTAL_HOURS, 0), note: text(o.note, 140), give, want, ...nw,
     skills: { ops: int(sk.ops, 0, 12, 1), growth: int(sk.growth, 0, 12, 1), fintech: int(sk.fintech, 0, 12, 1) },
   };
 }
