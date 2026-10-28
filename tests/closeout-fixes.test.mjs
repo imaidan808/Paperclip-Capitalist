@@ -70,7 +70,7 @@ test('the Academy card: the layer is marked to be kept, the runner keeps clear o
   assert.match(src, /const hostFor = \(\) => \(dlg\.el\.open \? dlg\.el : ctx\.el\.overlay\)/);
   assert.match(src, /host === dlg\.el && !inDialog\(found\) \? null : found/, 'a step whose thing is not in the sheet gets no ring there');
   assert.match(src, /document\.addEventListener\('focusin', onFocus\)/); assert.match(src, /document\.removeEventListener\('focusin', onFocus\)/, 'and lets the listener go with the lesson');
-  assert.match(src, /compact: 'compact', min: 'compact min'/, 'and where no place is clear of it, the card shrinks (to its words, then to its head and buttons, then to its head and two buttons: tests/finish-repair.test.mjs)'); assert.match(src, /for \(const t of \['slim', 'compact', 'min'\]\)/); assert.match(read('css/ui-academy.css'), /\.ac-coach\.compact :is\(\.ac-say, \.ac-hint, \.ac-look, \.ac-lost\) \{ display: none; \}/);
+  assert.match(src, /compact: 'compact', min: 'compact min'/, 'and where no place is clear of it, the card shrinks (to its words, then to its head and buttons, then to its head and two buttons: tests/finish-repair.test.mjs)'); assert.match(src, /const pick = chooseSize\(fit\);/, 'the size is chosen by one pure rule (chooseSize in js/ui/academy-sandbox.js: slim, compact, then min)'); assert.match(read('css/ui-academy.css'), /\.ac-coach\.compact :is\(\.ac-say, \.ac-hint, \.ac-look, \.ac-lost\) \{ display: none; \}/);
   assert.match(src, /add\(f, 1000, 7, true\)/, 'the focused control outweighs everything else together, with room for its ring');
 });
 

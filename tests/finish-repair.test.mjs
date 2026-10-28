@@ -4,6 +4,8 @@
 //           does not exist, words the card never prints, a last step that frames the goal and not the control, a card over a button
 //   B1-B2   the keyboard: a card over the Bid and Drop out buttons at 200% zoom, a focus ring cut by the window's edge
 //   C1, V1-V6  the recovery wait, the privacy line, the licence, the grading link, the staged folder, the two guards of the Academy, the local server's icon
+//   Round 2 (the browser reviewer's A1 and A2, tests named "round 2"): a coach card over the dock button it tells the player to press (at 200% zoom), and a sale that is paid 10% under the price the Close stage
+//           agreed with nothing on screen to say why
 // The browser half (real keys and real clicks in headless Chrome) is the last test; it is skipped without Chrome or with PC_NO_BROWSER=1. Run: node --test tests/finish-repair.test.mjs
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -310,7 +312,8 @@ test('A7: the card is placed again when the drawer scrolls, stays off the drawer
   assert.match(src, /ctx\.el\.drawer\.addEventListener\('scroll', later, true\)/); assert.match(src, /ctx\.el\.drawer\.removeEventListener\('scroll', later, true\)/, 'and lets go of it');
   assert.match(src, /for \(const e of body\.querySelectorAll\(CONTROLS\)\) add\(e, 2, 0, false, clip, true\)/, 'the drawer\'s visible controls count, clipped to the body they scroll in');
   assert.match(src, /const TIERS = \{ full: '', slim: 'slim', compact: 'compact', min: 'compact min' \}/);
-  assert.match(src, /for \(const t of \['slim', 'compact', 'min'\]\)/, 'the slim card is tried first: it keeps the step\'s words');
+  assert.deepEqual(A.CARD_SIZES, ['full', 'slim', 'compact', 'min'], 'the slim card is tried first: it keeps the step\'s words');
+  assert.match(src, /const pick = chooseSize\(fit\);/, 'and the runner asks for the size by one pure rule');
   assert.match(css, /\.ac-coach\.slim :is\(\.ac-hint, \.ac-look, \.ac-where\) \{ display: none; \}/); assert.doesNotMatch(css, /\.ac-coach\.slim[^{]*\.ac-say/, 'the words stay');
 });
 
@@ -321,8 +324,10 @@ test('A7: the card is placed again when the drawer scrolls, stays off the drawer
 test('B1: the smallest card is its head and two buttons, so at 200% zoom it can stand clear of the Bid and Drop out buttons', () => {
   const src = read('js/ui/academy.js'), css = read('css/ui-academy.css');
   assert.match(css, /\.ac-coach\.min :is\(\.ac-say, \.ac-hint, \.ac-look, \.ac-lost, \.ac-where\), \.ac-coach\.min \[data-act="ac-restart"\] \{ display: none; \}/);
-  assert.match(src, /if \(pick\.cursor\) pick = fit\('full'\); \/\/ every size covers the cursor: the full card, as before/);
-  assert.match(src, /for \(const t of \['slim', 'compact', 'min'\]\) \{\s*const f = fit\(t\);\s*if \(!f\.cursor && \(pick\.cursor \|\| f\.n < pick\.n\)\) pick = f;/, 'a size is taken when it clears the cursor');
+  const sizes = (table) => A.chooseSize((t) => ({ t, ...table[t] }));
+  assert.equal(sizes({ full: { cursor: true, n: 0 }, slim: { cursor: true, n: 0 }, compact: { cursor: false, n: 0 }, min: { cursor: false, n: 0 } }).t, 'compact', 'a size is taken when it clears the cursor');
+  assert.equal(sizes({ full: { cursor: true, n: 0 }, slim: { cursor: true, n: 0 }, compact: { cursor: true, n: 0 }, min: { cursor: true, n: 0 } }).t, 'full', 'every size covers the cursor: the full card, as before');
+  assert.equal(sizes({ full: { cursor: true, n: 0 }, slim: { cursor: true, n: 0 }, compact: { cursor: false, n: 2 }, min: { cursor: false, n: 1 } }).t, 'min', 'of the sizes that clear it, the one over the fewest buttons');
   assert.match(css, /\.ac-coach\.compact :is\(\.ac-say, \.ac-hint, \.ac-look, \.ac-lost\) \{ display: none; \}/, 'the compact card is still the one finish-flow holds');
 });
 
@@ -409,6 +414,157 @@ test('V6: the local server serves the page\'s icon, and still never the scenes i
   for (const no of ['/assets/src/share.html', '/assets/src/render.mjs', '/assets/src/icon.html', '/assets/', '/assets']) assert.ok(route(no).status === 404, no);
   assert.equal(route('/assets/%2e%2e/package.json').status, 404); assert.equal(route('/assets/.hidden.png').status, 404);
   assert.match(read('server/static.mjs'), /assets\/ \(the page's icons; not assets\/src\//, 'the header says so');
+});
+
+// ====================================================================================================================================
+// Round 2 of the finish review. A1: the card over the control it names. A2: the price agreed against the price paid.
+// ====================================================================================================================================
+
+const overlaps = (a, b) => a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+const DOCK_ORDER = ['stock', 'market', 'crew', 'bank', 'travel', 'codex', 'quests'];
+/**
+ * What the runner's keepRects sees on the lesson-1 page with a drawer open, at a window of w x h CSS pixels, from the page measured in headless Chrome at 200% zoom (640x360 and 640x400, DPR 2): the HUD across the top,
+ * the camera buttons down the left, the drawer on the right down to the dock, and the dock's buttons (47 apart, 43 by 38.4, centred, 52.4 above the foot). `n` buttons in the dock; the keyboard is on the one just pressed.
+ */
+function pageModel(w, h, n = 2, pressedBtn = 'stock') {
+  const dockW = 47 * n + 8, dock = { x: (w - dockW) / 2, y: h - 58.4, w: dockW, h: 50.4 };
+  const btn = (i) => ({ x: dock.x + 6 + 47 * i, y: h - 52.4, w: 43, h: 38.4 });
+  const buttons = Object.fromEntries(DOCK_ORDER.slice(0, n).map((name, i) => [name, btn(i)]));
+  const hud = [[12, 8, 54, 54], [96, 12, 87, 46], [191, 12, 96, 46], [412, 16, 38, 38], [458, 16, 77, 38], [543, 16, 39, 38], [590, 16, 38, 38]].map(([x, y, bw, bh]) => ({ x, y, w: bw, h: bh, wt: 2 }));
+  const cam = [[12, 139.6], [55.4, 139.6], [12, 182.6], [55.4, 182.6]].map(([x, y]) => ({ x, y, w: 37.4, h: 37.4, wt: 2 }));
+  const pad = 7, f = buttons[pressedBtn];
+  const keep = [{ ...{ x: 212, y: 66, w: w - 224, h: h - 128 }, wt: 3 }, { ...dock, wt: 3 }, ...Object.values(buttons).map((b) => ({ ...b, wt: 2, ctl: true })), ...hud, ...cam,
+    ...(f ? [{ x: f.x - pad, y: f.y - pad, w: f.w + 2 * pad, h: f.h + 2 * pad, wt: 1000, focus: true }] : [])];
+  return { view: { w, h }, keep, buttons };
+}
+/** The card's four sizes at a window 640 wide (the page measured: 624 wide, full and slim 158.5 tall when the words run to three lines, compact and min 69.5). */
+const SIZES = { full: { w: 624, h: 158.5 }, slim: { w: 624, h: 158.5 }, compact: { w: 624, h: 69.5 }, min: { w: 624, h: 69.5 } };
+
+test('round 2 A1: placeCard never puts the card over the target while any place in the view is clear of it', () => {
+  // a drawer that fills the view above the target, and a strip under it that is clear of everything but the target: the old weights (the target six times over, the drawer three times over a big area) took the strip
+  const view = { w: 200, h: 200 }, card = { w: 150, h: 150 }, target = { x: 60, y: 170, w: 80, h: 25 };
+  const avoid = [{ x: 0, y: 0, w: 200, h: 168, wt: 3 }];
+  const p = A.placeCard(target, card, view, 14, 8, avoid);
+  assert.ok(!overlaps({ x: p.x, y: p.y, w: 150, h: 150 }, target), `the card at ${p.x},${p.y} is off the target`);
+  // when the target is everything (no place is clear of it) the card still goes somewhere
+  const all = A.placeCard({ x: 0, y: 0, w: 200, h: 200 }, card, view, 14, 8, []);
+  assert.ok(Number.isFinite(all.x) && Number.isFinite(all.y));
+  // the order of harm among the places that are clear of the target: not over the keyboard's cursor, then the fewest buttons, then the least area
+  const wide = { w: 300, h: 100 }, c2 = { w: 100, h: 100 };
+  const btns = [{ x: 0, y: 0, w: 100, h: 100, wt: 2, ctl: true }, { x: 100, y: 0, w: 100, h: 100, wt: 2, ctl: true }, { x: 200, y: 0, w: 100, h: 100, wt: 1, ctl: true }]; // a row of buttons filling the view: any place touches one
+  const big = [{ x: 0, y: 0, w: 100, h: 100, wt: 1 }, { x: 100, y: 0, w: 100, h: 100, wt: 1 }, { x: 200, y: 0, w: 100, h: 100, wt: 1 }];
+  const q = A.placeCard(null, c2, wide, 14, 0, btns);
+  assert.ok(q.x >= 200 - 1e-6, `a card that must stand over a button picks the one the least is made of (the lightest, at x=${q.x}), which is the area rule among equals`);
+  const focus = { x: 0, y: 0, w: 100, h: 100, wt: 1000, focus: true };
+  const r = A.placeCard(null, c2, wide, 14, 0, [focus, { x: 100, y: 0, w: 200, h: 100, wt: 1, ctl: true }]);
+  assert.ok(r.x >= 100 - 1e-6, `the keyboard's cursor outranks the buttons: the card is not over it (x=${r.x})`);
+  assert.ok(A.placeCard(null, c2, wide, 14, 0, big), 'a view of covered ground still gets a card');
+});
+
+test('round 2 A1: chooseSize takes a smaller card before one that hides the control the step names, and weighs the cursor above the target above the buttons', () => {
+  const pick = (table) => A.chooseSize((t) => ({ t, cursor: false, target: false, n: 0, ...table[t] })).t;
+  assert.equal(pick({}), 'full', 'a clear card stays full');
+  assert.equal(pick({ full: { target: true }, slim: { target: true }, compact: { target: false } }), 'compact', 'over the target at full size: a smaller card that is clear of it');
+  assert.equal(pick({ full: { target: true, n: 0 }, slim: { target: true, n: 0 }, compact: { target: false, n: 3 }, min: { target: false, n: 2 } }), 'min', 'the target outranks the buttons, and among the clear sizes the fewest buttons wins');
+  assert.equal(pick({ full: { target: true }, slim: { cursor: true }, compact: { cursor: true }, min: { cursor: true } }), 'full', 'the cursor outranks the target: a card that hides the keyboard is wrong wherever else it lands');
+  assert.equal(pick({ full: { n: 2 }, slim: { n: 2 }, compact: { n: 2 }, min: { n: 2 } }), 'full', 'a tie goes to the larger card: more of the words');
+  assert.equal(pick({ full: { target: true }, slim: { target: true }, compact: { target: true }, min: { target: true } }), 'full', 'no size is clear: the full card, as it was');
+});
+
+test('round 2 A1: on the lesson-1 page at 640x360 and 640x400 the card stands clear of every dock button a step can name, with the drawer open and the keyboard on the button just pressed', () => {
+  let n = 0;
+  for (const [w, h] of [[640, 360], [640, 400], [640, 600]]) {
+    for (const count of [2, 4, 7]) {
+      for (const target of DOCK_ORDER.slice(0, count)) {
+        for (const pressedBtn of [DOCK_ORDER[0], null]) { // the keyboard is on the first dock button (the last one pressed), or nowhere
+          const L = pageModel(w, h, count, pressedBtn), spot = L.buttons[target];
+          const sized = (t) => SIZES[t];
+          const fit = (t) => { const s = sized(t), p = A.placeCard(spot, s, L.view, 14, 8, L.keep), box = { x: p.x, y: p.y, w: s.w, h: s.h }, cur = L.keep.find((r) => r.focus);
+            return { t, s, p, cursor: !!cur && overlaps(box, cur), target: overlaps(box, spot), n: L.keep.filter((r) => r.ctl && overlaps(box, r)).length }; };
+          const got = A.chooseSize(fit), box = { x: got.p.x, y: got.p.y, w: got.s.w, h: got.s.h };
+          assert.ok(!got.target, `${w}x${h}, ${count} dock buttons, the step names ${target}: the ${got.t} card at ${Math.round(got.p.x)},${Math.round(got.p.y)} is over it`);
+          assert.ok(!got.cursor, `${w}x${h}, ${target}: the card is over the keyboard's button`);
+          assert.ok(box.x >= 0 && box.y >= 0 && box.x + box.w <= w + 1e-6 && box.y + box.h <= h + 1e-6, `${w}x${h}: the card is inside the window`);
+          n++;
+        }
+      }
+    }
+  }
+  assert.ok(n >= 60, `${n} placements held`);
+  // the runner asks for the size by this rule, and counts the dock's buttons among the controls it keeps clear
+  const src = read('js/ui/academy.js');
+  assert.match(src, /const fit = \(t\) => \{ setTier\(t\);[^}]*target: !!spot && rectsOverlap\(\{ x: p\.x, y: p\.y, w: s\.w, h: s\.h \}, spot\)/, 'fit says whether the card is over the target');
+  assert.match(src, /for \(const e of ctx\.el\.dock\.querySelectorAll\(CONTROLS\)\) add\(e, 2, 0, false, null, true\)/, 'the dock\'s buttons are controls the card keeps off');
+});
+
+/** The deals of the lessons, played with the real Deal Room glue in a lesson's sandbox. */
+const sandboxOf = (id) => { const m = M(id); return A.makeSandboxSession({ ...m.setup }, { id: m.id, zone: m.zone }).game; };
+const assetOf = (g, cls) => g.s.assets.find((a) => a.cls === cls);
+const $ = (x) => (Math.abs(x) < 100 ? `${x < 0 ? '-' : ''}$${Math.abs(x).toFixed(2)}` : `${x < 0 ? '-' : ''}$${Math.round(Math.abs(x)).toLocaleString('en-US')}`); // the Deal Room's own money
+/** Lesson 10 as far as the dealer: the lot bought, read and won, then repaired (the lot is really 90% of its description). */
+function dealDay() {
+  const g = sandboxOf('m10');
+  { const r = D.startRun(g, { kind: 'buy', zone: 6, lotId: 'estate-lot-d' }); r.quickAll(); r.finish(); }
+  { const f = D.startRun(g, { kind: 'repair', assetId: assetOf(g, 'antiqueFurniture').id }); f.act({ type: 'careful' }); f.finish(); }
+  return g;
+}
+/** The Close stage by hand: open high, hold once, then accept their offer. */
+function closeByHand(run) {
+  run.quick(); assert.ok(run.next()); assert.ok(run.act({ type: 'anchor', level: 'high' }).ok); assert.ok(run.act({ type: 'hold' }).ok); assert.ok(run.act({ type: 'accept' }).ok); assert.ok(run.stageDone(), 'the Close is done');
+}
+
+test('round 2 A2: the sale that is paid at the crate\'s real condition says what the talk closed at, what the buyer found, and what was paid', () => {
+  const lot = M('m10').setup.lots[0].truth.quality; assert.equal(lot, 0.9);
+  for (const how of ['quick', 'hand']) {
+    const g = dealDay(), run = D.startRun(g, { kind: 'sell', assetId: assetOf(g, 'antiqueFurniture').id, leadId: 'antique-dealer' });
+    if (how === 'quick') run.quickAll(); else closeByHand(run);
+    const said = run.res.close.price, sm = run.finish();
+    assert.equal(sm.ok, true, how);
+    const line = sm.lines[0], paid = sm.numbers.you;
+    assert.ok(Math.abs(paid / said - lot) < 0.01, `${how}: the price paid ${paid} is ${lot} of the price the Close agreed, ${said} (the lot's real condition)`);
+    assert.equal(line, `The talk closed at ${$(said)}. The buyer then checked the crate and found it at 90% of the condition it was described at, so the sale closed at ${$(paid)}.`, `${how}: the card says both prices and why`);
+    assert.ok(sm.headline.includes($(paid)), `${how}: and the headline's price is the second one`);
+    const cond = sm.reasons.find((r) => r.label === 'Condition'); assert.ok(cond, `${how}: the Why list has the reason`); assert.match(cond.text, /really 90% of the condition it was described at, so the buyer paid x0\.90 of the price the talk closed at\./);
+    assert.ok(sm.reasons.findIndex((r) => r.label === 'Haggle') + 1 === sm.reasons.indexOf(cond), `${how}: right after the Haggle reason`);
+  }
+});
+
+test('round 2 A2: a crate that is as it was described, or whose condition is already known, gets no such line, and the Close stage says nothing of a check', () => {
+  // lesson 3: a crate bought on the open market with no hidden condition
+  const g3 = sandboxOf('m03'), r3 = D.startRun(g3, { kind: 'sell', assetId: g3.s.assets[0].id, leadId: 'thrift-flipper' });
+  assert.equal(r3.plan.asset.unchecked, false, 'nothing hidden about it');
+  r3.quickAll(); const s3 = r3.finish();
+  assert.ok(!s3.lines.some((l) => /The talk closed at/.test(l)) && !s3.reasons.some((r) => r.label === 'Condition'), 'no condition line');
+  assert.doesNotMatch(UI.sheetHTML({ ...D.modelOf(r3, {}), pick: [], slider: 0.2 }), /checks the crate before paying/);
+  // a crate a classmate disclosed (known) is quoted at its real condition already: the price agreed is the price paid
+  const g = dealDay(), a = assetOf(g, 'antiqueFurniture'); const plan = D.planFor(g, { kind: 'sell', assetId: a.id, leadId: 'antique-dealer' });
+  assert.equal(plan.asset.unchecked, true, 'bought from a lot and never sold: the buyer will check it');
+  a.quality = (a.quality ?? 1) * 0.9; delete a.truth; a.known = true;
+  const run = D.startRun(g, { kind: 'sell', assetId: a.id, leadId: 'antique-dealer' }); assert.equal(run.plan.asset.unchecked, false);
+  run.quickAll(); const sm = run.finish();
+  assert.ok(!sm.lines.some((l) => /The talk closed at/.test(l)), 'its condition was never hidden from the figures');
+});
+
+test('round 2 A2: the Close stage tells a lot-bought crate\'s seller, once the price is agreed, that the buyer checks the crate before paying', () => {
+  const g = dealDay(), run = D.startRun(g, { kind: 'sell', assetId: assetOf(g, 'antiqueFurniture').id, leadId: 'antique-dealer' });
+  const html = () => UI.sheetHTML({ ...D.modelOf(run, {}), pick: [], slider: 0.2 });
+  run.quick(); assert.ok(run.next());
+  assert.doesNotMatch(html(), /checks the crate before paying/, 'not before there is a price');
+  run.act({ type: 'anchor', level: 'high' }); run.act({ type: 'hold' }); run.act({ type: 'accept' });
+  const callout = /<div class="callout good">(Agreed at [^<]*)<\/div>/.exec(html());
+  assert.ok(callout, 'the stage\'s callout');
+  assert.match(callout[1], new RegExp(`^Agreed at ${$(run.res.close.price).replace(/\$/g, '\\$')}\\. The buyer checks the crate before paying, so the price you are paid follows its real condition and can come out below this\\.$`));
+  const walk = D.startRun(dealDay(), { kind: 'sell', assetId: undefined, leadId: 'antique-dealer' }); assert.equal(walk.ok, false, 'a deal with no crate does not start');
+});
+
+test('round 2 A2: the sale card says what "the crate\'s value" is: the market value Stock shows, in dollars', () => {
+  for (const [id, cls, lead, prep] of [['m10', 'antiqueFurniture', 'antique-dealer', dealDay], ['m05', 'van', 'fleet-buyer', () => { const g = sandboxOf('m05'); const f = D.startRun(g, { kind: 'repair', assetId: assetOf(g, 'van').id }); f.act({ type: 'careful' }); f.finish(); return g; }]]) {
+    const g = prep(), a = assetOf(g, cls), market = g.val(a);
+    const run = D.startRun(g, { kind: 'sell', assetId: a.id, leadId: lead }); run.quickAll(); const sm = run.finish();
+    const vs = sm.lines.find((l) => /against the crate's value|times the crate's value/.test(l));
+    assert.ok(vs, `${id}: the comparison stays`); assert.ok(vs.includes(`of ${$(market)}, what the market values it at now`), `${id}: "${vs}" names the market value ${$(market)}`);
+    assert.equal(sm.title, 'Sold below market', `${id}: the verdict is the same, and now it is explained`);
+  }
 });
 
 // ====================================================================================================================================
@@ -562,4 +718,30 @@ test('browser A3, A4, A7: a tap lands on the Market\'s Sell button at 360x640 wh
     const over = await p.eval(`(()=>{const c=document.querySelector('.ac-coach').getBoundingClientRect(); return [...document.querySelectorAll('.deal .bubble, .deal-stage .callout, .deal-score > div')].map(e=>{const r=e.getBoundingClientRect(); return Math.max(0,Math.min(r.right,c.right)-Math.max(r.left,c.left))*Math.max(0,Math.min(r.bottom,c.bottom)-Math.max(r.top,c.top))}).reduce((a,x)=>a+x,0)})()`);
     assert.equal(over, 0, 'no pixel of the result line, the seller\'s reply or the footer\'s cells is under the card');
   } finally { await p.close(); }
+});
+
+/** How much of each dock button the card covers, and whether a tap at the middle of the button lands on it. */
+const DOCK_COVER = `(()=>{ const c=document.querySelector('.ac-coach').getBoundingClientRect(), out={card:[c.x,c.y,c.right,c.bottom].map(Math.round)};
+  for (const n of ['dock-stock','dock-market']) { const e=document.querySelector('[data-anchor="'+n+'"]'); if(!e) continue; const b=e.getBoundingClientRect();
+    const ox=Math.max(0,Math.min(b.right,c.right)-Math.max(b.left,c.left)), oy=Math.max(0,Math.min(b.bottom,c.bottom)-Math.max(b.top,c.top)), h=document.elementFromPoint(b.x+b.width/2,b.y+b.height/2);
+    out[n]={ cover:+(ox*oy/(b.width*b.height)).toFixed(3), tap:!!(h&&h.closest('[data-anchor="'+n+'"]')) }; }
+  return out })()`;
+const settled = (p) => until(p, `(()=>{const c=document.querySelector('.ac-coach'); if(!c) return false; const r=c.getBoundingClientRect(), k=[r.x,r.y,r.width,r.height].map(Math.round).join(), same=window.__r2k===k; window.__r2k=k; return same})()`, 'the card at rest');
+
+test('browser round 2 A1: at 200% zoom (640x360, 640x400) and on a phone on its side the card stands clear of the dock, and a tap lands on the Market button the step names', { skip: !BROWSER, timeout: 240000 }, async () => {
+  const b = await browser();
+  for (const [w, h, dsf, mobile] of [[640, 360, 2, false], [640, 400, 2, false], [844, 390, 3, true]]) {
+    const p = await lessonPage(b, 'r2a1', { w, h, dsf, mobile }), at = `${w}x${h}`;
+    try {
+      await pressed(p, '[data-anchor="hud-cash"]'); await p.sleep(400); await p.key('Escape', { wait: 300 });
+      await pressed(p, '[data-anchor="dock-stock"]'); await atStep(p, 3, 4); await settled(p); // Stock is open, and the step says: now open Market
+      let m = await p.eval(DOCK_COVER);
+      assert.equal(m['dock-market'].cover, 0, `${at}, step 3: the card ${m.card} is not over the Market button the step names`);
+      assert.equal(m['dock-market'].tap, true, `${at}, step 3: a tap on the Market button lands on it`);
+      assert.equal(m['dock-stock'].cover, 0, `${at}, step 3: and not over Stock`); assert.equal(m['dock-stock'].tap, true);
+      await pressed(p, '[data-anchor="dock-market"]'); await atStep(p, 4, 4); await settled(p); // Market is open: the next thing is in the Deal Room, which is not open yet
+      m = await p.eval(DOCK_COVER);
+      for (const n of ['dock-stock', 'dock-market']) { assert.equal(m[n].cover, 0, `${at}, step 4: the card ${m.card} is not over ${n}`); assert.equal(m[n].tap, true, `${at}, step 4: a tap on ${n} lands on it`); }
+    } finally { await p.close(); }
+  }
 });

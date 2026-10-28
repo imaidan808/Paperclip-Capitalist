@@ -156,7 +156,9 @@ export function closeHTML(m) {
   }
   const last = v.history.length ? '' : '';
   const status = v.tell && !m.stageDone ? `<p class="small">They are <b>${TELL[v.tell]}</b>. ${v.final ? '<b>Final round.</b>' : ''}</p>` : '';
-  const end = m.stageDone ? `<div class="callout ${m.res && m.res.deal ? 'good' : 'warn'}">${esc(m.res && m.res.deal ? `Agreed at ${money(m.res.price)}.` : 'No deal was struck.')}</div>` : '';
+  // A buyer checks what is sold, so the price paid follows the crate's real condition, which a quote cannot show: said once the price is agreed, and only for a crate that came from a lot, whose condition is not in the figures
+  const checks = m.stageDone && m.res && m.res.deal && !buy && p.asset && p.asset.unchecked ? ' The buyer checks the crate before paying, so the price you are paid follows its real condition and can come out below this.' : '';
+  const end = m.stageDone ? `<div class="callout ${m.res && m.res.deal ? 'good' : 'warn'}">${esc(m.res && m.res.deal ? `Agreed at ${money(m.res.price)}.${checks}` : 'No deal was struck.')}</div>` : '';
   return panel(m, 'close', 'Close', buy ? 'Haggle with the seller. The listed price is the fair price; sellers open higher, and they have a minimum you cannot see.' : 'Haggle with the buyer. They have a limit you cannot see; your read narrows it.',
     `<div class="negrow"><span class="small mute">Rounds</span>${pips}</div>${track}${read}${status}${flag}${m.stageDone ? '' : advice(m)}${moves}${quickNote(m)}${end}`);
 }

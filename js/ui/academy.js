@@ -28,7 +28,7 @@ import { ZONES } from '../config.js';
 import { Progress, CODEX_BY_ID } from '../meta/progress.js';
 import { ACADEMY as MISSIONS } from '../meta/academy.js';
 import {
-  parseAnchor, resolveAnchor, hitMatches, placeCard, coverScore, rectsOverlap, coverOf, pointInRect, startRun, feedRun, coachFor, satisfiedNow, shortSay, hintDue,
+  parseAnchor, resolveAnchor, hitMatches, placeCard, chooseSize, coverScore, rectsOverlap, coverOf, pointInRect, startRun, feedRun, coachFor, satisfiedNow, shortSay, hintDue,
   newTeach, pickTeach, revealTeach, teachDone, teachFirstTry, readAcademy, markMission, nextIndex, rewardPlan, applyRewards,
   readPending, addPending, claimPending, codexSeed, emptyMeta, makeSandboxSession, featuresFor, KEYS,
   newLookout, hireSnapshot, hireCoach, unseenNote,
@@ -276,6 +276,7 @@ export function mountAcademy(root, S, { onDone, onSkip, only, missions, store = 
           if (body) { const clip = body.getBoundingClientRect(); for (const e of body.querySelectorAll(CONTROLS)) add(e, 2, 0, false, clip, true); }
         }
         add(ctx.el.dock, 3);
+        if (ctx.el.dock) for (const e of ctx.el.dock.querySelectorAll(CONTROLS)) add(e, 2, 0, false, null, true); // the dock's buttons are how the player moves between panels: a card over one is a tap lost, so a smaller card is tried before one stands over them
         for (const part of [ctx.el.tracker, ctx.el.ticker, ctx.el.hud, ctx.el.world.querySelector('.wvctl'), ctx.el.world.querySelector('.wvlist')]) {
           if (part) for (const e of part.querySelectorAll(CONTROLS)) add(e, 2);
         }
@@ -337,26 +338,19 @@ export function mountAcademy(root, S, { onDone, onSkip, only, missions, store = 
       const setTier = (t) => { for (const k of ['slim', 'compact', 'min']) cardEl.classList.toggle(k, TIERS[t].split(' ').includes(k)); };
       // The card is placed at its full size first, then at each smaller size while the place it would take is over the control the keyboard is on (a phone on its side, a dialog of wide cards, a window at 200% zoom that
       // is 640 by 360 CSS pixels with the Bid and Drop out buttons in the middle of it: compact, then min) or over a button of the drawer (a tap that lands on the card is lost, and a drawer on a phone leaves the card
-      // nowhere else to stand: slim, which keeps the step's words). The first size that is clear wins; when none is, the one that hides the cursor least, and the full card when every one hides it. What a smaller card
+      // nowhere else to stand: slim, which keeps the step's words). The first size that is clear wins; when none is, the one that hides the cursor least, then the control the step names, then the fewest buttons (`chooseSize`), and the full card when every one hides the cursor. What a smaller card
       // drops was read out when it arrived and is there again, in full, the moment nothing is under the card.
       const touches = (p, s) => keep.filter((r) => r.ctl && rectsOverlap({ x: p.x, y: p.y, w: s.w, h: s.h }, r)).length;
-      const fit = (t) => { setTier(t); const s = sizeOf(), p = placeCard(spot, s, view, 14, 8, keep); return { t, s, p, cursor: over(p, s), n: touches(p, s) }; };
-      let pick = fit('full');
-      if (pick.cursor || pick.n) {
-        for (const t of ['slim', 'compact', 'min']) {
-          const f = fit(t);
-          if (!f.cursor && (pick.cursor || f.n < pick.n)) pick = f;
-          if (!pick.cursor && !pick.n) break;
-        }
-        if (pick.cursor) pick = fit('full'); // every size covers the cursor: the full card, as before
-      }
+      const fit = (t) => { setTier(t); const s = sizeOf(), p = placeCard(spot, s, view, 14, 8, keep); return { t, s, p, cursor: over(p, s), target: !!spot && rectsOverlap({ x: p.x, y: p.y, w: s.w, h: s.h }, spot), n: touches(p, s) }; };
+      const pick = chooseSize(fit);
       setTier(pick.t);
       let size = pick.s, at = pick.p;
       if (tier() !== was) snap = true;
       const here = `${c.id}|${host === dlg.el ? 'dlg' : 'page'}|${Math.round(size.w)}x${Math.round(size.h)}`;
       if (placed && placed.key === here && !snap) { // a crowded place (nothing is clear) does not follow every scroll of the sheet: the old place stays while it covers about what a new one would
         const mine = { x: placed.x, y: placed.y, w: size.w, h: size.h }, now = coverScore({ x: at.x, y: at.y, w: size.w, h: size.h }, spot, keep), was = coverScore(mine, spot, keep);
-        if (now > 0 && was <= now * 1.25 + 400) at = { ...at, x: placed.x, y: placed.y };
+        const staysOff = !spot || !rectsOverlap(mine, spot) || rectsOverlap({ x: at.x, y: at.y, w: size.w, h: size.h }, spot); // the old place is not kept when it is over the target and the new one is not
+        if (now > 0 && was <= now * 1.25 + 400 && staysOff) at = { ...at, x: placed.x, y: placed.y };
       }
       placed = { x: at.x, y: at.y, key: here };
       cardEl.dataset.side = at.side;

@@ -210,7 +210,7 @@ function planSell(g, spec) {
   if (GAMES.haggle) stages.push(capped ? { key: 'close', auto: 'Their budget is nearly spent at the fair price, so there is nothing to haggle over.' } : { key: 'close' });
   return {
     ok: true, kind: 'sell', seed, zone: lead.zone, zoneFace: zoneFace(lead.zone), stages, blocker, fair, raw, capped, budget: lead.budget, alt: alt || null,
-    asset: { id: a.id, cls: a.cls, name: aName(a), icon: ASSETS[a.cls].icon, cond: a.cond },
+    asset: { id: a.id, cls: a.cls, name: aName(a), icon: ASSETS[a.cls].icon, cond: a.cond, unchecked: !!(a.truth && !a.known) }, // unchecked: bought from a lot and never sold, so its real condition is not in the figures on the screen: the buyer checks it at the sale and the price follows it
     lead: { id: lead.id, seg: lead.seg, budget: lead.budget, need: lead.need || null, verified: !!lead.verified, ...(lead.verified ? { scam: !!lead.scam } : {}), exp: lead.exp },
     cast: { icon: B.icon, name: B.name, hello: lead.need ? `${B.hello} (Right now they need something ${lead.need}.)` : B.hello, style: B.style, role: 'buyer' },
     buyer: { id: lead.seg, name: B.name, style: B.style, patience: B.patience, bias: B.bias },
@@ -561,9 +561,19 @@ function summarize(run, { r, deal, noDeal, before, after, cmp, secret }) {
         const had = r.asset && Number.isFinite(r.asset.basis) ? r.asset.basis : 0, owed = Number.isFinite(r.profit) && had >= 0.5 ? r.profit : 0;
         Object.assign(out, { tone: good ? 'good' : 'warn', title: { win: 'Sold at a gain', pioneer: 'Pioneer sale', herd: 'Sold into the herd', flat: owed > 0.005 ? 'Sold below market' : 'Sold, no gain' }[r.outcome] || 'Sold',
           headline: `${plan.asset.name} sold to ${plan.buyer.name} for ${money(r.price)}.` });
+        // The Pitch and Close stages quote the crate as it was described; the buyer checks what is sold, and a crate that is not as described is paid for as it is. The price the player agreed and the price paid then differ
+        // by exactly the crate's real condition, and the card says so with both numbers (the lot's real condition was told when it was bought; a crate never read tells it here, once it is gone).
+        const cond = r.parts && Number.isFinite(r.parts.quality) ? r.parts.quality : 1, said = hag && hag.deal && Number.isFinite(hag.price) ? hag.price : null;
+        if (!r.capped && Math.abs(cond - 1) >= 0.005 && said != null && said > 0 && Math.abs(r.price / said - cond) <= 0.03) {
+          lines.push(`The talk closed at ${money(said)}. The buyer then checked the crate and found it at ${pctOf(cond)} of the condition it was described at, so the sale closed at ${money(r.price)}.`);
+          reasons.splice(reasons.findIndex((x) => x.label === 'Haggle') + 1, 0, { label: 'Condition', text: `The crate is really ${pctOf(cond)} of the condition it was described at, so the buyer paid x${cond.toFixed(2)} of the price the talk closed at.` });
+        } else if (!r.capped && Math.abs(cond - 1) >= 0.005 && said == null) {
+          reasons.push({ label: 'Condition', text: `The crate is really ${pctOf(cond)} of the condition it was described at, so the buyer paid x${cond.toFixed(2)} of the fair price shown.` });
+        }
         lines.push(`You received ${money(r.received)} after tax and fees${r.gotName ? `, including ${r.gotName} in trade` : ''}.`);
         if (r.capped) lines.push('The buyer paid their whole budget.');
-        lines.push(r.gain >= 4 ? `${(1 + r.gain).toFixed(0)} times the crate's value.` : `${r.gain >= 0 ? '+' : ''}${Math.round(r.gain * 100)}% against the crate's value.`);
+        const worth = Number.isFinite(r.fmv) && r.fmv > 0 ? ` of ${money(r.fmv)}, what the market values it at now` : ''; // the figure Stock shows: the Close stage's "fair" is what THIS buyer pays, which is not that
+        lines.push(r.gain >= 4 ? `${(1 + r.gain).toFixed(0)} times the crate's value${worth}.` : `${r.gain >= 0 ? '+' : ''}${Math.round(r.gain * 100)}% against the crate's value${worth}.`);
         if (had >= 0.5 && Number.isFinite(r.profit)) lines.push(`You had ${money(had)} in it, the price and any repairs: ${r.profit >= 0 ? `a profit of ${money(r.profit)}` : `a loss of ${money(-r.profit)}`}.`);
         if (r.outcome === 'herd') out.lesson = { concept: 'saturation-herd', text: `When many players sell the same thing to the same buyer the Creativity multiplier falls to ${r.ci.cm.toFixed(2)}x. A different buyer with a decent fit pays more.` };
       }

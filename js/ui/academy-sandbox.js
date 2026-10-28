@@ -99,9 +99,11 @@ export function keepClear({ drawer = null, dock = null, controls = [] } = {}) {
 /**
  * Where the coach card goes: below the target, else above, else beside it, else floating above the dock; never over the target or over anything in `avoid`
  * (the open drawer, the dock, the camera buttons, the control the keyboard is on, the controls of an open dialog), always inside the view. rect may be null (centred
- * above the dock). When no place is clear of all of it (a phone, a dialog that is all controls) the card goes where it covers the least (`coverScore`: the target and the
- * heavier rects first, ties to the places named above), so the card is never put on the one thing it must not hide. Returns { x, y, side } for a card of size { w, h }
- * in a view { w, h }.
+ * above the dock). When no place is clear of all of it (a phone, a dialog that is all controls) the card goes where it does the least harm, in this order: not over the control the keyboard is
+ * on (`focus`), not over the target, over the fewest buttons (`ctl`: a tap that lands on the card is lost), then over the least area (`coverScore`: the heavier rects first, ties to the
+ * places named above). So the target is never covered while any place in the view is clear of it, however much more of the rest the others cover; the caller then tries a smaller card
+ * before it accepts a crowded one (`chooseSize`).
+ * Returns { x, y, side } for a card of size { w, h } in a view { w, h }.
  */
 export function placeCard(rect, card, view, gap = 14, margin = 8, avoid = []) {
   const cw = Math.min(card.w, view.w - 2 * margin), ch = Math.min(card.h, view.h - 2 * margin);
@@ -114,11 +116,21 @@ export function placeCard(rect, card, view, gap = 14, margin = 8, avoid = []) {
     const cands = tries.map((t) => ({ ...t, side: rect && rectsOverlap({ x: t.x, y: t.y, w: cw, h: ch }, rect) ? floatSide : t.side })).concat(floats.map((p) => ({ x: p.x, y: p.y, side: floatSide }))); // a caret points at the target only from a place that is beside it
     const NX = 8, NY = 10, spanX = Math.max(0, view.w - cw - 2 * margin), spanY = Math.max(0, view.h - ch - 2 * margin);
     for (let j = NY; j >= 0; j--) for (let i = 0; i <= NX; i++) cands.push({ x: cx(margin + (spanX * i) / NX), y: cy(margin + (spanY * j) / NY), side: floatSide });
+    // and the places that stand flush against each rect to keep clear of (just above it, below it, left and right): the grid steps over a gap between two rects that is only a few pixels
+    // wider than the card (the strip between a drawer's last button and the dock), and a place a pixel inside a button is a button lost
+    const flush = Math.min(gap, 4);
+    for (const r of avoid) {
+      if (!r) continue;
+      for (const [x, y] of [[r.x + r.w / 2 - cw / 2, r.y - ch - flush], [r.x + r.w / 2 - cw / 2, r.y + r.h + flush], [r.x - cw - flush, r.y + r.h / 2 - ch / 2], [r.x + r.w + flush, r.y + r.h / 2 - ch / 2]]) cands.push({ x: cx(x), y: cy(y), side: floatSide });
+    }
+    // the order of harm: the control the keyboard is on, then the target, then the buttons (`ctl` rects: the drawer's and the dock's), then the covered area, which weighs everything
+    const harm = (c) => { const box = { x: c.x, y: c.y, w: cw, h: ch }; return { cur: avoid.some((r) => r && r.focus && rectsOverlap(box, r)) ? 1 : 0, hit: rect && rectsOverlap(box, rect) ? 1 : 0, n: avoid.filter((r) => r && r.ctl && rectsOverlap(box, r)).length, sc: coverScore(box, rect, avoid) }; };
+    const worse = (a, b) => a.cur !== b.cur ? a.cur > b.cur : a.hit !== b.hit ? a.hit > b.hit : a.n !== b.n ? a.n > b.n : a.sc > b.sc + 1e-6;
     let best = null;
     for (const c of cands) {
-      const sc = coverScore({ x: c.x, y: c.y, w: cw, h: ch }, rect, avoid);
-      if (!best || sc < best.sc - 1e-6) best = { c, sc };
-      if (sc === 0) break; // nothing covered: no later place can beat it
+      const h = harm(c);
+      if (!best || worse(best.h, h)) best = { c, h }; // the first of the least harmful wins
+      if (h.sc === 0) break; // nothing covered: no later place can beat it
     }
     return { x: best.c.x, y: best.c.y, side: best.c.side };
   };
@@ -131,6 +143,27 @@ export function placeCard(rect, card, view, gap = 14, margin = 8, avoid = []) {
   ].map(([side, x, y]) => ({ side, x: cx(x), y: cy(y) }));
   for (const t of tries) if (free({ x: t.x, y: t.y, w: cw, h: ch })) return t;
   return float() || leastCovered(tries);
+}
+
+/** The card's four sizes, largest first (css/ui-academy.css: full, then `slim`, `compact` and `compact min`). */
+export const CARD_SIZES = ['full', 'slim', 'compact', 'min'];
+/**
+ * Which size of card to show. `fit(size)` places a card of that size (placeCard) and says what it would hide: { cursor, target, n } (the control the keyboard is on, the control the step
+ * names, and how many buttons of the drawer). The full card is kept while the place it gets is clear of all three; otherwise each smaller size is tried and the first that is clear wins.
+ * When none is, the least harm wins in this order: never over the keyboard's cursor (a card that hides it is wrong wherever else it lands), then never over the control the step names (a
+ * card that says "open Market" over Market cannot be obeyed with a mouse or a finger), then the fewest drawer buttons, a tie going to the larger card (more of the words). A card every
+ * size of which hides the cursor is the full one, as it always was. Returns what `fit` returned for the size chosen.
+ */
+export function chooseSize(fit) {
+  const clean = (f) => !f.cursor && !f.target && !f.n;
+  let pick = fit('full');
+  if (clean(pick)) return pick;
+  for (const t of CARD_SIZES.slice(1)) {
+    const f = fit(t);
+    if (!f.cursor && (pick.cursor || (f.target ? 1 : 0) < (pick.target ? 1 : 0) || ((f.target ? 1 : 0) === (pick.target ? 1 : 0) && f.n < pick.n))) pick = f;
+    if (clean(pick)) break;
+  }
+  return pick.cursor ? fit('full') : pick;
 }
 
 // ------------------------------------------------------------------ the step resolver
