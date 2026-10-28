@@ -1,7 +1,8 @@
-// node tests/balance.mjs [seeds=5] [every=4]  -> plays all 66 pairs of Backgrounds with the heuristic bot and reports the day each pair reaches districts 5, 9 and 13
+// node tests/balance.mjs [seeds=5] [every=4] [--no-managers]  -> plays all 66 pairs of Backgrounds with the heuristic bot and reports the day each pair reaches districts 5, 9 and 13
+// (--no-managers plays the same bot with hiring forbidden: the hand-play side of the managers-versus-hand comparison in docs/BALANCE.md)
 // (docs/V2_DESIGN.md section 11: the target is that no pair deviates from the median milestone day by more than 35%; this script REPORTS the pairs that do, it is not a CI gate).
 // It also reports where the whole table ends up: how many runs reach district 16, the day-90 net worth percentiles, and how far apart the pairs' net worths are. The milestone days alone cannot see a late game
-// that runs away (59% of runs in district 16 and a 6x spread of net worth passed it unnoticed): `lateGame()` is what tests/audit-repair.test.mjs holds to bounds on a sample of the pairs.
+// that runs away (most runs in district 16 and a spread of net worth far past three passed it unnoticed once): `lateGame()` is what tests/audit-repair.test.mjs and tests/remaining-balance.test.mjs hold to bounds on a sample of the pairs.
 // Five seeds is the least that tells a slow pair from a bad draw: with two, the median is the mean of two runs and one wipe-out reads as "200% slow".
 // A run that ends with no cash, no stock and no managers is a wipe-out. It is counted in its own column and left out of the days, because it did not run slowly, it stopped.
 import { fileURLToPath } from 'node:url';
@@ -15,7 +16,7 @@ const med = (a) => { const s = [...a].sort((x, y) => x - y), m = s.length >> 1; 
 export const wipedOut = (g) => g.s.cash < 1 && !g.s.assets.length && !g.s.pipes.length;
 
 /** Plays `pairs` (default: all 66) and returns the rows, sorted worst deviation first, plus the totals the last line prints. */
-export function balance({ seeds = DEFAULT_SEEDS, every = DEFAULT_EVERY, pairs = PERK_PAIRS } = {}) {
+export function balance({ seeds = DEFAULT_SEEDS, every = DEFAULT_EVERY, pairs = PERK_PAIRS, managers = true } = {}) {
   const rows = [];
   for (const [a, b] of pairs) {
     const days = GATES.map(() => []);
@@ -23,6 +24,7 @@ export function balance({ seeds = DEFAULT_SEEDS, every = DEFAULT_EVERY, pairs = 
     const ends = [];
     for (let k = 0; k < seeds; k++) {
       const g = makeGame([a, b], ['ops', 'growth', 'fintech'][k % 3], 100 + k * 17);
+      if (!managers) g.hirePipeline = () => ({ ok: false, msg: 'managers are forbidden in this run' }); // an own property shadows the method for this game only
       const m = run(g, { every });
       if (wipedOut(g)) { wiped++; continue; }
       GATES.forEach((z, i) => days[i].push(m[z] ?? 91)); // 91: never got there in 90 days
@@ -50,9 +52,10 @@ export function lateGame(rows) {
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  const seeds = +(process.argv[2] || DEFAULT_SEEDS), every = +(process.argv[3] || DEFAULT_EVERY);
-  const r = balance({ seeds, every });
-  console.log(`${seeds} seeds, a decision every ${every} hours. Median day to districts 5 / 9 / 13:`, r.base.join(' / '));
+  const nums = process.argv.slice(2).filter((x) => !x.startsWith('--'));
+  const seeds = +(nums[0] || DEFAULT_SEEDS), every = +(nums[1] || DEFAULT_EVERY), managers = !process.argv.includes('--no-managers');
+  const r = balance({ seeds, every, managers });
+  console.log(`${seeds} seeds, a decision every ${every} hours${managers ? '' : ', managers forbidden'}. Median day to districts 5 / 9 / 13:`, r.base.join(' / '));
   console.log('pair'.padEnd(22), 'day d5 / d9 / d13', '  deviation from the median'.padEnd(34), ' mean NW'.padEnd(12), 'wipe-outs');
   for (const x of r.rows.slice(0, 14)) console.log(x.pair.padEnd(22), x.d.map((d) => (d == null ? '  -' : String(d).padStart(3))).join(' / '), ' dev', x.dev.map((d) => (d * 100).toFixed(0).padStart(4) + '%').join(' '), ' NW', Math.round(x.nw).toLocaleString().padStart(10), ' ', x.wiped ? `${x.wiped} of ${seeds}` : '0');
   console.log(`${r.bad.length} of ${r.rows.length} pairs deviate more than 35% from the median on some milestone`);

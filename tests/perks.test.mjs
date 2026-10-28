@@ -341,7 +341,9 @@ test('creator: trend goods +30% and trend buyers for anything you hold; costs wh
 test('gigger: small lots 8% cheaper, +25% XP, pipeline cycles 10% shorter; costs: no bank until $2,500 and a burnout day every 20 days', () => {
   // small lots (worth under 60% of the district's scale) only
   const pairs = lotPairs(3, [], ['gigger']).filter(([p, g]) => p.cls === g.cls && p.cond === g.cond);
-  const small = pairs.filter(([p]) => p.price >= 3 && p.price < 11), big = pairs.filter(([p]) => p.price > 17);
+  // a lot is small by its as-is value; a broken lot is posted at a multiple of it that grows with Ops (ECON.brokenLo, ECON.brokenSlope), so take the posted price back to the as-is value first
+  const brokenX = Math.max(ECON.brokenLo, 1 - ECON.brokenSlope * (mk([]).lvl('ops') - 1)), asIs = ([p]) => (p.cond === 'broken' ? p.price / brokenX : p.price);
+  const small = pairs.filter((x) => asIs(x) >= 3 && asIs(x) < 11), big = pairs.filter((x) => asIs(x) > 17);
   assert.ok(small.length > 20 && big.length > 20, `${small.length} small, ${big.length} big`);
   for (const [p, g] of small) assert.ok(Math.abs(g.price / p.price - 0.92) < 0.012, `${p.cls}: ${p.price} -> ${g.price}`);
   for (const [p, g] of big) assert.ok(Math.abs(g.price / p.price - 1) < 0.002, `${p.cls}: ${p.price} -> ${g.price}`);
