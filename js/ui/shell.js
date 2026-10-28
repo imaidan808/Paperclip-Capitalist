@@ -7,9 +7,9 @@
 // ctx: S (session), g() (the Game), U (UI state), progress (quests/Codex), render(), toast(msg, level), say(result), queue(html, opts), confirmBox(...),
 //      openDrawer(id), closeDrawer(), deal(spec) (the Deal Room), on(fn) (game-event bus), dlg, plus the helpers re-exported by common.js.
 //
-// Layout is css/shell.css; the layers and anchors are written up in docs/UI_LAYERS.md. This file's part of it: it measures the HUD, the dock and the ticker and publishes
-// their heights as --hud-h, --dock-h and --tick-h on <html> (so everything anchored to them follows when they wrap), lets a phone's bottom sheet be dragged shut, and keeps the
-// render path cheap (attributes written only when they change, bars listed once per render and painted only when they move, no work for a hidden tab).
+// Layout is css/shell.css (its header draws the layers, the anchors and the layouts). This file's part of it: it measures the HUD, the dock, the ticker and the goal tracker and
+// publishes their heights as --hud-h, --dock-h, --tick-h and --trk-b on <html> (so everything anchored to them follows when they wrap), lets a phone's bottom sheet be dragged
+// shut, and keeps the render path cheap (attributes written only when they change, bars listed once per render and painted only when they move, no work for a hidden tab).
 import { ZONES, TOTAL_HOURS, CLIENTS } from '../config.js';
 import { $, $$, esc, setHTML, delegate, dlg, toast, announce, sfx, burst, reduced, settingsDialog } from './common.js';
 import { kv } from '../session.js';
@@ -103,18 +103,22 @@ export function mountGame(root, S, hooks) {
     pumpQueue();
   }
 
-  // ---- anchors: the stylesheet places the tracker, ticker, drawer, list and toasts against the HUD above and the dock below (css/shell.css, "How it is anchored").
-  // These can change height (the HUD wraps to two rows, the dock compacts, the news is one line or two, the text size changes), so their real size is measured
-  // and written on <html> as --hud-h, --dock-h (the dock's top, measured from the bottom) and --tick-h.
+  // ---- anchors: the stylesheet places the tracker, ticker, drawer, camera, list and toasts against the HUD above and the dock below (css/shell.css, "How it is anchored").
+  // These can change height (the HUD wraps to two rows, the dock compacts, the news is one line or two, the goal is longer, the text size changes), so their real size is
+  // measured and written on <html>: --hud-h, --dock-h (the dock's top, measured from the bottom), --tick-h, and --trk-b, the line under the HUD and the goal tracker (the camera
+  // buttons start below it, so a tall tracker never covers them). The tracker's share is capped so a goal squeezed into a sliver cannot push the camera off the screen.
   const docEl = root.ownerDocument.documentElement;
+  const anchors = {};
+  const put = (k, v) => { v = Math.round(v); if (v !== anchors[k]) { anchors[k] = v; docEl.style.setProperty('--' + k, v + 'px'); } };
   function measure() {
     if (!el.stage.clientHeight) return; // not laid out (a hidden mount): leave the stylesheet's fallbacks
-    const next = { 'hud-h': Math.round(el.hud.offsetHeight), 'dock-h': Math.round(el.stage.clientHeight - el.dock.offsetTop), 'tick-h': Math.round(el.ticker.offsetHeight) };
-    for (const k in next) if (next[k] !== anchors[k]) { anchors[k] = next[k]; docEl.style.setProperty('--' + k, next[k] + 'px'); }
+    put('hud-h', el.hud.offsetHeight); put('dock-h', el.stage.clientHeight - el.dock.offsetTop); put('tick-h', el.ticker.offsetHeight);
+    // The tracker hangs from the HUD's foot, so it is read after --hud-h is written (a HUD that wrapped has moved it without changing its size).
+    const trk = el.tracker.offsetHeight;
+    put('trk-b', Math.min(trk ? el.tracker.offsetTop + trk : el.hud.offsetHeight, el.stage.clientHeight * 0.6));
   }
-  const anchors = {};
   const sizer = typeof ResizeObserver === 'function' ? new ResizeObserver(measure) : null;
-  sizer?.observe(el.hud); sizer?.observe(el.dock); sizer?.observe(el.ticker);
+  sizer?.observe(el.hud); sizer?.observe(el.dock); sizer?.observe(el.ticker); sizer?.observe(el.tracker);
 
   // A phone's bottom sheet closes the way a native one does: drag its header down. Only the header takes the gesture (touch-action: none there); the close button and Escape stay.
   const SHEET = '(max-width: 820px) and (min-height: 521px)';

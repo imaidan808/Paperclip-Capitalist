@@ -12,13 +12,8 @@
 :root[data-size="s"] { --fs: 14px; } :root[data-size="l"] { --fs: 18px; } :root[data-size="xl"] { --fs: 21px; }
 
 /* ---- Layout tokens. Not colours: tests/a11y.test.mjs reads the first :root block above, so every colour stays there. ---------------------------------
-   Z-INDEX SCALE. One ladder for everything that stacks; never write a bare number in a sheet you own, use a token. The stage (.stage) is its own stacking
-   context, so 0-9 are relative to it; 60 and up are page level, above the whole stage. A <dialog> is in the browser's top layer and beats every number here.
-      0  --z-world     the canvas and its host                      6  --z-tip      the tooltip (kept off the HUD and the dock by geometry)
-      2  --z-world-ui  camera buttons, the accessibility list       7  --z-dock     the dock
-      3  --z-scrim     soft gradients that seat the HUD and dock    8  --z-drawer   the drawer, or the bottom sheet on a phone
-      4  --z-aux       goal tracker, news ticker                    9  --z-overlay  coach marks and sheets the Academy lays over the stage
-      5  --z-hud       the HUD bar (an open list view sits here)   60  --z-toast    toasts      80  --z-fx  the burst canvas      99  --z-skip  skip link
+   Z-INDEX SCALE. One ladder for everything that stacks; never write a bare number in a sheet you own, use a token (the ladder is drawn in css/shell.css). The stage (.stage)
+   is its own stacking context, so 0-9 are relative to it; 60 and up are page level, above the whole stage. A <dialog> is in the browser's top layer and beats every number.
    ui-academy.css still writes 30 and 40 inside the overlay; they only order those two layers among themselves.
    TYPE SCALE in rem, so Settings > Text size scales all of it; the 11px floor keeps the smallest labels readable at Small. SPACING SCALE on a 4px grid.
    SAFE AREA: --edge-* are the gutters every anchored thing keeps from the screen edge, never less than the device's notch or home bar. */
@@ -36,14 +31,17 @@
   --plate: linear-gradient(180deg, var(--panel2), var(--panel));
   --elev-1: inset 0 1px 0 var(--hi), 0 2px 0 rgba(0, 0, 0, .45), 0 6px 14px rgba(0, 0, 0, .32);
   --elev-2: inset 0 1px 0 var(--hi), 4px 4px 0 rgba(0, 0, 0, .55), 0 14px 30px rgba(0, 0, 0, .38);
-  /* Where the HUD ends, the dock begins and how tall the ticker is. These are the CSS fallbacks; shell.js measures the real bars and writes the exact values on <html>,
-     so the tracker, ticker, drawer and toasts stay clear of the HUD and the dock whatever wraps. */
-  --hud-h: 4.85rem; --dock-h: 4.55rem; --tick-h: 0px;
+  /* Where the HUD ends, the dock begins, how tall the ticker is and where the HUD and the goal tracker end together. These are the CSS fallbacks; shell.js measures the real
+     pieces and writes the exact values on <html>, so the tracker, ticker, camera, list, drawer and toasts stay clear of each other whatever wraps. */
+  --hud-h: 4.85rem; --dock-h: 4.55rem; --tick-h: 0px; --trk-b: calc(var(--hud-h) + 6.5rem);
+  /* The side drawer's width, and the camera column (a column of four buttons; two by two on a phone on its side): other pieces keep clear of both by these. */
+  --drawer-w: min(30rem, calc(100vw - var(--edge-l) - var(--edge-r)));
+  --cam-w: var(--target); --cam-h: calc(4 * var(--target) + 3 * var(--sp-2));
 }
 :root[data-contrast="high"] { --hi: transparent; --scrim: 0, 0, 0; --plate: var(--panel); --elev-1: none; --elev-2: none; }
 @media (pointer: coarse) { :root { --target: 44px; } }
-@media (max-width: 900px) { :root { --hud-h: 8.9rem; --dock-h: 4rem; } }  /* the HUD wraps to two rows */
-@media (max-height: 520px) { :root { --hud-h: 4.1rem; --dock-h: 4rem; } } /* a phone on its side */
+@media (max-width: 900px) { :root { --hud-h: 8.9rem; --dock-h: 4rem; } }  /* first-frame fallback for a HUD that wraps to two rows (shell.js measures the real one) */
+@media (max-height: 520px) { :root { --hud-h: 4.1rem; --dock-h: 4rem; --trk-b: calc(var(--hud-h) + 3rem); --drawer-w: min(26rem, calc(100vw - var(--edge-l) - var(--edge-r))); --cam-w: calc(2 * var(--target) + var(--sp-1)); --cam-h: calc(2 * var(--target) + var(--sp-1)); } } /* a phone on its side */
 /* A very large screen reads small at the same rem: one step up for 1440p and beyond (Settings > Text size still stacks on top). */
 @media (min-width: 2200px) and (min-height: 1200px) { :root { --ui-scale: 1.2; } }
 
@@ -138,9 +136,9 @@ label { display: block; font-size: .82rem; color: var(--mute); margin-bottom: .2
 @keyframes dash { to { stroke-dashoffset: -24; } } .route { stroke-dasharray: 8 6; animation: dash 1s linear infinite; }
 
 /* toasts, dialog, fx */
-/* Toasts stack up from the bottom-right on the plain screens. Over the game they move to where nothing lives (css/shell.css: above the dock, left of the drawer),
-   so a toast never covers the dock and never leaves the screen. They are aria-hidden: the same words go to the live region. */
-#toasts { position: fixed; right: var(--edge-r); bottom: var(--edge-b); display: grid; gap: .5rem; justify-items: start; z-index: var(--z-toast); width: min(26rem, calc(100vw - var(--edge-l) - var(--edge-r))); pointer-events: none; }
+/* Toasts stack up from the bottom-right on the plain screens. Over the game they stand above the dock and the ticker and step clear of the drawer and the camera buttons
+   (css/shell.css), so a toast never covers a control and never leaves the screen. They are aria-hidden: the same words go to the live region. */
+#toasts { position: fixed; right: var(--edge-r); bottom: var(--edge-b); display: grid; gap: .5rem; justify-items: end; z-index: var(--z-toast); width: min(26rem, calc(100vw - var(--edge-l) - var(--edge-r))); pointer-events: none; }
 .toast { background: var(--plate); border: var(--bw) solid var(--line); border-left-width: 6px; padding: .55rem .8rem; box-shadow: var(--elev-2); animation: slidein .25s ease-out; font-size: var(--t-md); line-height: var(--lh-tight); max-width: 100%; overflow-wrap: anywhere; }
 .toast.good { border-color: var(--green); } .toast.bad { border-color: var(--red); } .toast.warn { border-color: var(--gold); }
 .toast { transition: opacity .2s, transform .2s; } .toast.out { opacity: 0; transform: translateY(6px); } /* common.js adds .out, then removes the toast */

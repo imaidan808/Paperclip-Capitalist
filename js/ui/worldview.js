@@ -1,4 +1,5 @@
-// The DOM around the 2.5D canvas: camera buttons, tooltip and the keyboard/screen-reader list of everything in view.
+// The DOM around the 2.5D canvas: camera buttons, tooltip and the keyboard/screen-reader list of everything in view. The list's button stands under the camera column
+// (a bulleted-list glyph, so it is not taken for the HUD's menu); css/shell.css says where its panel opens.
 // Clicks on the world open the same Deal Room and drawers as the dock does (through ctx), so there is exactly one rulebook.
 import { World } from '../world/world.js';
 import { ZONES, ASSETS, BUYERS, PIPE } from '../config.js';
@@ -121,7 +122,7 @@ export function createWorldView(ctx) {
       el.innerHTML = `<div class="wvcv"></div>
         <div class="wvctl" role="group" aria-label="Camera"><button class="ibtn" data-wv="zin" aria-label="Zoom in">+</button><button class="ibtn" data-wv="zout" aria-label="Zoom out">−</button><button class="ibtn" data-wv="fit" aria-label="Show the whole island">◎</button><button class="ibtn" data-wv="me" aria-label="Back to my district">⌂</button></div>
         <div class="wvtip" hidden></div>
-        <details class="wvlist"><summary><svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false"><path d="M2 4h12M2 8h12M2 12h12" fill="none" stroke="currentColor" stroke-width="2"/></svg><span class="wvl-t">List of everything in this district <span class="wvl-x">(for keyboard and screen readers)</span></span></summary><ul class="wvul"></ul></details>`;
+        <details class="wvlist"><summary><svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false"><path d="M6.5 4H14M6.5 8H14M6.5 12H14" fill="none" stroke="currentColor" stroke-width="2"/><path d="M2 4h1.6M2 8h1.6M2 12h1.6" fill="none" stroke="currentColor" stroke-width="2.4"/></svg><span class="wvl-t">List of everything in this district <span class="wvl-x">(for keyboard and screen readers)</span></span></summary><ul class="wvul"></ul></details>`;
       world = new World({ session: S, ui: U, activate, hover, reveal: () => {} });
       if (window.pc) window.pc.world = world;
       world.attach(el.querySelector('.wvcv'));
