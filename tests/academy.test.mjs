@@ -492,12 +492,13 @@ for (const m of REAL) {
     assert.ok(r.ok, `${m.id} step "${r.failedStep}": ${r.why}`);
   });
 }
-test('the real lessons use goods that sell in their own district', { skip: !REAL.length && 'js/meta/academy.js is not in this tree yet' }, (t) => {
+test('the real lessons use goods that sell in their own district (a tradeable class, demand 4 or more) and buyers who live there', { skip: !REAL.length && 'js/meta/academy.js is not in this tree yet' }, () => {
+  // a good with no demand in a district is priced at 15% of its base, so every worked example would be wrong; this is an assertion, not a diagnostic (the audit's item: "the CI-only change is not a fix")
   const odd = [];
   for (const m of REAL) {
     const classes = new Set([...(m.setup.assets || []), ...(m.setup.lots || [])].map((x) => x.cls));
-    for (const cls of classes) if ((ASSETS[cls]?.dem?.[m.zone] || 0) < 3) odd.push(`${m.id}: ${cls} has demand ${ASSETS[cls]?.dem?.[m.zone] || 0} in district ${m.zone}`);
+    for (const cls of classes) if ((ASSETS[cls]?.dem?.[m.zone] || 0) < 4) odd.push(`${m.id}: ${cls} has demand ${ASSETS[cls]?.dem?.[m.zone] || 0} in district ${m.zone}`);
     for (const l of m.setup.leads || []) if (BUYERS[l.seg] && BUYERS[l.seg].zone !== m.zone) odd.push(`${m.id}: buyer ${l.seg} lives in district ${BUYERS[l.seg].zone}`);
   }
-  if (odd.length) t.diagnostic('lessons whose numbers will not match their worked examples (the engine prices a good with no demand at 15% of base): ' + odd.join('; '));
+  assert.deepEqual(odd, [], 'lessons whose numbers would not match their worked examples: ' + odd.join('; '));
 });
