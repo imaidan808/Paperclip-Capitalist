@@ -10,7 +10,7 @@ export function playerCard(ctx) {
   const g = ctx.g(), s = g.s, lv = g.level(), lo = lvlBase(lv), hi = lvlBase(lv + 1), p = Math.max(0, Math.min(1, (s.xp - lo) / (hi - lo)));
   const icons = s.perks.map((id) => `<i title="${esc(PERKS[id].name)}">${PERKS[id].icon}</i>`).join('') || '<i>📎</i>';
   return `<button class="pcard" data-anchor="player-card" data-act="dock" data-d="quests" aria-label="${esc(s.handle)}, level ${lv}, ${s.points} skill point${s.points === 1 ? '' : 's'}. Open quests and skills.">
-    <span class="ring" style="--p:${(p * 100).toFixed(1)}%"><span class="av">${icons}</span><b class="lv">${lv}</b></span>
+    <span class="ring" style="--p:${(p * 100).toFixed(1)}%"><span class="av">${icons}</span><b class="lv">${lv}</b>${s.points ? '<i class="pip" aria-hidden="true"></i>' : ''}</span>
     <span class="who"><b>${esc(s.handle)}</b><small>${s.xp - lo} / ${hi - lo} XP${s.points ? ` <span class="pt">${s.points} point${s.points === 1 ? '' : 's'} to spend</span>` : ''}</small></span></button>`;
 }
 
@@ -37,12 +37,13 @@ export function trackerHTML(ctx) {
   const t = ctx.U.tracker?.(ctx) ?? (() => { const q = ctx.progress?.current(); return q ? { title: q.def.title, desc: q.def.desc, icon: q.def.icon, p: q.p, n: q.n, drawer: 'quests' } : null; })();
   if (!t) return '';
   const f = t.n ? Math.max(0, Math.min(1, t.p / t.n)) : 0;
-  return `<button class="tracker" data-anchor="tracker" data-act="dock" data-d="${t.drawer || 'quests'}"><small>Goal</small><b>${t.icon || '🎯'} ${esc(t.title)}</b><span>${esc(t.desc || '')}</span>${t.n ? `<span class="bar green" role="progressbar" aria-valuemin="0" aria-valuemax="${t.n}" aria-valuenow="${Math.min(t.p, t.n)}" aria-label="Goal progress"><i style="width:${f * 100}%"></i></span><small class="mono">${Math.min(+t.p.toFixed(1), t.n)} / ${t.n}</small>` : ''}</button>`;
+  // Reading order is Goal, title, words, count; the stylesheet lays the count at the top right and, on a small screen, shows only title and bar (the rest is read out).
+  return `<button class="tracker" data-anchor="tracker" data-act="dock" data-d="${t.drawer || 'quests'}"><small class="tk-lb">Goal</small><b>${t.icon || '🎯'} ${esc(t.title)}</b><span class="tk-ds">${esc(t.desc || '')}</span>${t.n ? `<span class="bar green" role="progressbar" aria-valuemin="0" aria-valuemax="${t.n}" aria-valuenow="${Math.min(t.p, t.n)}" aria-label="Goal progress"><i style="width:${f * 100}%"></i></span><small class="mono tk-ct">${Math.min(+t.p.toFixed(1), t.n)} / ${t.n}</small>` : ''}</button>`;
 }
 
 export function tickerHTML(ctx) {
   const n = ctx.g().s.news.find((x) => x.level !== 'info' || x.milestone) || ctx.g().s.news[0];
   if (!n) return '';
   const idx = ctx.g().s.news.indexOf(n);
-  return `<button class="tick ${n.level}" data-anchor="ticker" data-act="${n.alert ? 'alert' : 'dock'}" data-i="${idx}" data-d="quests"><small>Day ${Math.floor(n.h / 24) + 1}</small> ${esc(n.text)}</button>`;
+  return `<button class="tick ${n.level}" data-anchor="ticker" data-act="${n.alert ? 'alert' : 'dock'}" data-i="${idx}" data-d="quests"><small>Day ${Math.floor(n.h / 24) + 1}</small> <span class="tk-t">${esc(n.text)}</span></button>`;
 }
