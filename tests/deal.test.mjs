@@ -41,11 +41,12 @@ test('the Haggle and Auction games are present (their branch is merged)', () => 
   assert.ok(HAS_HAGGLE && HAS_AUCTION, 'js/play/haggle.js and js/play/auction.js must be on this branch');
 });
 
-test('seedFor is deterministic and moves with the hour, the ids and the game seed', () => {
+test('seedFor is deterministic and moves with the ids and the game seed, but NOT with the hour (waiting must not re-roll a deal)', () => {
   const g = world(), spec = sells(g, 1)[0];
   assert.equal(D.seedFor(g, spec), D.seedFor(g, { ...spec }));
   const a = D.seedFor(g, spec); g.s.hour += 1;
-  assert.notEqual(a, D.seedFor(g, spec));
+  assert.equal(a, D.seedFor(g, spec), 'the clock is not part of the seed');
+  assert.notEqual(a, D.seedFor(g, { ...spec, leadId: spec.leadId + 'x' }));
   assert.notEqual(D.seedFor(world(['grad', 'native'], 8), spec), D.seedFor(world(['grad', 'native'], 7), spec));
   assert.ok(Number.isInteger(a) && a >= 0 && a < 2 ** 32);
   assert.notEqual(D.stageSeed(a, 'read'), D.stageSeed(a, 'close'));
@@ -202,7 +203,7 @@ test('random play loses to Quick', { skip: !HAS_HAGGLE }, () => {
   assert.ok(n > 60 && quick > rand, `quick ${quick / n} vs random ${rand / n}`);
 });
 
-test('a replay is identical: the same deal in the same hour plays out the same, bit for bit', { skip: !HAS_HAGGLE || !HAS_AUCTION }, () => {
+test('a replay is identical: the same deal plays out the same, bit for bit', { skip: !HAS_HAGGLE || !HAS_AUCTION }, () => {
   const g = world(['veteran', 'gigger'], 21, { growth: 3 });
   for (const spec of [...sells(g, 3), ...lots(g).slice(0, 6)]) {
     const a = run(g, spec).compare(), b = run(g, { ...spec }).compare();
@@ -249,7 +250,7 @@ test('SELL by hand: the pitch picks the keenness, the haggle splits it, and the 
 test('SELL: a haggle that ends without a deal sells nothing and leaves the crate and the buyer alone', { skip: !HAS_HAGGLE }, () => {
   const g = world(['grad', 'roots'], 47, { growth: 2 });
   const spec = sells(g).find((s) => !run(g, s).plan.stages[1].auto), r = run(g, spec), asset = r.plan.asset.id;
-  r.quick(); r.next(); r.act({ type: 'anchor', level: 'fair' }); r.act({ type: 'walk' });
+  r.quick(); r.next(); r.act({ type: 'anchor', level: 'high' }); r.act({ type: 'walk' }); // a high first ask is never taken on the spot, so there is a talk to walk out of
   assert.ok(r.stageDone()); const sm = r.finish();
   assert.equal(sm.title, 'No deal'); assert.ok(g.s.assets.some((a) => a.id === asset)); assert.equal(sm.numbers.you, null);
 });
