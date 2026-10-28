@@ -264,7 +264,7 @@ export function matrixHTML(ctx) {
     <tr><th scope="row">Fair value</th><td class="mono">${m(chk.va)}</td><td class="mono">${m(chk.vb)}</td></tr>
     <tr><th scope="row">Worth in the new owner's hands</th><td class="mono">${m(myP)} <span class="tiny mute">to you</span></td><td class="mono">${m(theirP)} <span class="tiny mute">to them</span></td></tr>
     <tr><th scope="row">Fair-value check</th><td colspan="2"><span class="chip ${chk.ok ? 'good' : 'bad'}"><span aria-hidden="true">${chk.ok ? '✓' : '✕'}</span> ${(chk.variance * 100).toFixed(1)}% apart, ${chk.ok ? 'inside' : 'outside'} the safe limit of ${FMV_BAND * 100}%</span>
-      ${chk.ok ? '' : '<p class="small red"><b>Extreme Asymmetric Premium Warning:</b> a deal this lopsided is blocked and flagged to your instructor. Balance it with cash or another crate.</p>'}</td></tr></tbody></table>`;
+      ${chk.ok ? '' : chk.flagged ? '<p class="small red"><b>Extreme Asymmetric Premium Warning:</b> a deal this lopsided is blocked and flagged to your instructor. Balance it with cash or another crate.</p>' : '<p class="small red"><b>Cannot be sent:</b> a crate you ask for sits in a district you have not opened, so it would not be worth to you what its owner values it at. Ask for something else.</p>'}</td></tr></tbody></table>`;
 }
 function exchangeHTML(ctx) {
   const g = ctx.g(), S = ctx.S, U = ctx.U, e = ctx.esc, m = ctx.money, x = exState(ctx);

@@ -33,10 +33,13 @@ const own = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
 /** Deterministic from the game seed and the ids, and NOT from the clock: a deal replays exactly however long ago it was opened. The hour used to
  *  be in the seed, so a Quick preview of a Fix or a Close could be read, left, and re-rolled by letting the clock tick (a class clock ticks anyway)
  *  until the dial or the haggle came out well. A lot or a crate is one deal; what a stage returns for it is fixed. */
+const idsOf = (spec) => (spec.kind === 'sell' ? `${spec.assetId}>${spec.leadId}` : spec.kind === 'buy' ? `${spec.zone}:${spec.lotId}` : `${spec.assetId}`);
 export function seedFor(g, spec) {
-  const ids = spec.kind === 'sell' ? `${spec.assetId}>${spec.leadId}` : spec.kind === 'buy' ? `${spec.zone}:${spec.lotId}` : `${spec.assetId}`;
-  return hash(`${g.s.seed}|deal|${spec.kind}|${ids}`) >>> 0;
+  return hash(`${g.s.seed}|deal|${spec.kind}|${idsOf(spec)}`) >>> 0;
 }
+/** The stages whose talk hides something the player is there to find out (the seller's floor, the rivals' limits) and whose replies are fixed by the deal, so a second sitting would be a replay with the answers in hand.
+ *  The first move in one is the point of no return: the deal is marked (`s.tried`), and a table sat at before is played at Quick the next time (the talk goes the way an average dealer would take it). */
+const HIDDEN_STAGES = new Set(['close', 'bid']);
 export const stageSeed = (seed, key) => hash(`${seed}|${key}`) >>> 0;
 
 /** The probes already paid for on a lot, in order. A lot remembers them (the Read stage is not a fresh roll each visit): coming back after a walk
@@ -256,7 +259,7 @@ function planRepair(g, spec) {
 // ------------------------------------------------------------------ a deal in progress
 export class DealRun {
   constructor(g, spec, plan, { assist = false } = {}) {
-    Object.assign(this, { ok: true, g, spec, plan, assist: !!assist, stages: plan.stages, idx: 0, st: {}, res: {}, says: [], over: false, summary: null, cmp: null, acted: false, walked: false });
+    Object.assign(this, { ok: true, g, spec, plan, assist: !!assist, stages: plan.stages, idx: 0, st: {}, res: {}, says: [], over: false, summary: null, cmp: null, acted: false, walked: false, dkey: `${spec.kind}|${idsOf(spec)}` });
     this.probes0 = probedOn(this.lot()).length; // what the lot had already been read with when this run opened
     this.enter();
   }
@@ -284,6 +287,11 @@ export class DealRun {
     if (this.res[key] || this.st[key] || this.plan.blocker) return;
     if (stage.auto) { this.res[key] = { done: true, skipped: true, deal: true, mult: 1, score: 1, note: stage.auto }; return; }
     const G = this.gameOf(key);
+    if (HIDDEN_STAGES.has(key) && own(this.g.s.tried || {}, this.dkey)) { // sat at before: the talk goes the way an average dealer would take it, however the first sitting went
+      this.res[key] = this.tag(key, { ...G.autoplay(this.paramsFor(key), QUICK), quick: true });
+      this.say('You have sat at this table before, and the talk went on without you the way an average dealer would take it.', key);
+      return;
+    }
     let st = G.create(this.paramsFor(key));
     if (key === 'read') for (const id of probedOn(this.lot())) { const r = G.act(st, { type: 'probe', id }); if (r.say !== null) st = r.state; } // pick the lot's reading up where it stopped
     this.st[key] = st;
@@ -320,10 +328,13 @@ export class DealRun {
     const G = this.gameOf(key), r = G.act(st, action);
     if (r.say === null) return { ok: false };
     this.st[key] = r.state; this.acted = true; this.say(r.say, key);
+    if (HIDDEN_STAGES.has(key)) this.touch();
     if (key === 'read' && action.type === 'probe') this.remember(action.id);
     if (r.done) this.res[key] = this.tag(key, G.result(r.state));
     return { ok: true, say: r.say, done: !!r.done };
   }
+  /** The first move at a hidden-information table is made for good (see HIDDEN_STAGES). */
+  touch() { (this.g.s.tried ||= {})[this.dkey] = 1; }
   stageDone(key = this.key) { return !!this.res[key]; }
   /** Play the current stage at `skill` from its start, with the same parameters and seed. */
   quick(skill = QUICK) {
@@ -333,6 +344,7 @@ export class DealRun {
     const out = this.gameOf(key).autoplay(this.paramsFor(key), skill, key === 'read' ? this.st.read : undefined); // a Read carries on from the probes already paid for
     if (key === 'read') for (const l of out.log || []) if (l.action && l.action.type === 'probe') this.remember(l.action.id);
     this.res[key] = this.tag(key, { ...out, quick: true }); this.st[key] = null;
+    if (HIDDEN_STAGES.has(key)) this.touch();
     const last = out.log && out.log.length ? out.log[out.log.length - 1].say : '';
     this.say(last, key);
     return true;
@@ -364,24 +376,26 @@ export class DealRun {
   }
 
   // ---- the comparison: the same deal played at average skill and at expert skill, never touching the engine
-  simulate(skill) {
+  simulate(skill, truth = false) {
     const { g, plan } = this, res = {};
     for (const stage of this.stages) {
       const key = stage.key;
       if (stage.auto) { res[key] = { skipped: true, deal: true, mult: 1 }; continue; }
       res[key] = this.tag(key, this.gameOf(key).autoplay(this.paramsFor(key, res.read, res), skill));
     }
-    return { res, ...this.outcomeOf(res, skill >= 0.75) };
+    return { res, ...this.outcomeOf(res, skill >= 0.75, truth) };
   }
-  /** Money terms of a set of stage results, read from the engine's own quotes. */
-  outcomeOf(res, discerning = false) {
+  /** Money terms of a set of stage results, read from the engine's own quotes. `truth`: a sale is priced as the buyer will really see the crate (the real quote, hidden quality and counterfeit included) instead of as it is
+   *  described. Asked only when this deal goes to a buyer, so that Quick and Expert are priced on the same footing as the sale itself (pitch() is the real thing) and the comparison on the result card is like for like;
+   *  a deal not struck (a walk, talks that failed) is compared blind, since a real quote would tell the player what the crate in their hands is worth. */
+  outcomeOf(res, discerning = false, truth = false) {
     const { g, plan } = this, deal = dealFrom(plan.kind, res);
     if (plan.kind === 'sell') {
       if (!deal) { // walking to a real alternative is a sale elsewhere
         const c = res.close;
         return c && c.walkedToAlt && c.altPrice ? { done: true, price: c.altPrice, mult: c.altPrice / plan.fair, net: c.altPrice, viaAlt: true } : { done: false, price: 0, mult: null, net: 0 };
       }
-      const q = g.quotePitch(plan.asset.id, plan.lead.id, deal), sold = q.ok && !q.rejected;
+      const q = g.quotePitch(plan.asset.id, plan.lead.id, deal, { blind: !truth }), sold = q.ok && !q.rejected && !q.scam; // (a buyer who is a fraud pays nobody)
       return { done: sold, price: sold ? q.price : 0, mult: deal.mult, net: sold ? q.received : 0 };
     }
     if (plan.kind === 'repair') {
@@ -401,16 +415,18 @@ export class DealRun {
   }
   secret() { return this.plan.kind === 'buy' ? this.g.lotTruth(this.plan.zone, this.plan.lot.id) : null; }
   worth(t) { const lot = this.lot(), p = this.plan; return this.g.val({ cls: p.lot.cls, cond: lot ? lot.cond : p.lot.cond, quality: 1, wear: 1, zone: p.zone, known: true, truth: { q: t.q ?? t.quality ?? 1, fake: !!t.fake } }); }
-  compare() { return this.cmp ||= { quick: this.simulate(QUICK), expert: this.simulate(EXPERT) }; }
+  compare(truth = false) { return this.cmp ||= { quick: this.simulate(QUICK, truth), expert: this.simulate(EXPERT, truth) }; }
 
   // ---- the end: the only place a run calls the engine
   finish() {
     if (this.over) return this.summary;
     const { g, plan } = this, s = g.s, before = { xp: s.xp, cash: s.cash, streak: s.streak };
-    const cmp = this.compare(), secret = this.secret(), res = this.res;
+    const secret = this.secret(), res = this.res;
     // A repair whose Fix stage was not played to its end repairs nothing and charges nothing (dealFrom would hand it the neutral terms, which beat both Quick and Careful, and the summary would then read a stage that is not there).
     const unplayed = plan.kind === 'repair' && !res.fix;
     let r = null, deal = this.walked || unplayed ? null : dealFrom(plan.kind, res), noDeal = !deal;
+    // The comparison is made before the sale (the crate leaves with it), and on the sale's own footing: a deal that goes to a buyer is compared with what Quick and Expert would have got from that buyer for this very crate.
+    const cmp = this.compare(plan.kind === 'sell' && !!deal);
     // Every game the player finishes is recorded (XP, the debrief's per-game stats and the quest events); `quick` says whether Quick played it.
     // `key` names the thing played for (the lot, the lead, the crate): the engine pays a key once, so opening the same lot again and again pays
     // nothing more. A run that was walked away from buys, sells and repairs nothing, so only the Read (a lesson of its own) is recorded: a haggle
@@ -426,9 +442,12 @@ export class DealRun {
       if (bought && played && done('close') && res.close.rounds > 0) g.recordPlay('haggle', { ...res.close, role: 'buy', quick: q('close'), key: plan.lot.id });
       if (bought && played && done('bid') && res.bid.rounds > 0) g.recordPlay('auction', { ...res.bid, quick: q('bid'), key: plan.lot.id });
     } else if (plan.kind === 'sell') {
-      if (played && done('pitch')) g.recordPlay('pitch', { score: res.pitch.score, quick: q('pitch'), key: plan.lead.id });
-      if (played && done('close') && res.close.rounds > 0) g.recordPlay('haggle', { ...res.close, role: 'sell', quick: q('close'), key: plan.lead.id });
       if (deal) r = g.pitch(plan.asset.id, plan.lead.id, deal);
+      // As on the buy side, a pitch and a haggle count as played once the sale they led to has gone through (or they led to none): a buyer who checked the crate and found a counterfeit, a fraud who vanished and a buyer who
+      // had left were no deal closed, and must not pay XP or tick a quest that asks for a deal.
+      const sold = !!(r && r.ok && r.outcome !== 'rejected' && r.outcome !== 'scam');
+      if (played && (!deal || sold) && done('pitch')) g.recordPlay('pitch', { score: res.pitch.score, quick: q('pitch'), key: plan.lead.id });
+      if (played && (!deal || sold) && done('close') && res.close.rounds > 0) g.recordPlay('haggle', { ...res.close, role: 'sell', quick: q('close'), key: plan.lead.id });
     } else if (deal) { // a walk from the bench repairs nothing and charges nothing (no deal is no neutral-terms repair)
       r = g.repair(plan.asset.id, deal);
       if (r.ok && done('fix')) g.recordPlay('repair', { score: res.fix.score, quick: q('fix'), key: plan.asset.id });

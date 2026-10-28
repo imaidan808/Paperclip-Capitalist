@@ -20,8 +20,9 @@ export const FMV_BAND = 0.4; // peer-to-peer guardrail: +/-40%
 // What a completed swap with a real classmate pays the run. It was a flat 120 XP and a counted swap for any swap at all, so two tabs trading paperclips back and forth maxed every skill in minutes.
 // A swap counts (swap total, trade total, experience, quests and the gradebook's engagement) only when it moves at least `minValue` of real value, at most `perDay` a day, once per partner a day;
 // its experience is `xpBase` + `xpScale` x log10(1 + the value that came in), at most `xpMax`. The snapshot door (cohort.js) holds a classmate's reported swaps to the same daily bound.
-export const SWAPS = { perDay: 3, minValue: 0.5, xpBase: 10, xpScale: 30, xpMax: 120 };
-// A delivered crate is credited as the proposer described it and no better; one that is worth less than this share of its description cannot have come through both ends' +/-40% guardrails (1 / 1.4^2 = 0.51).
+// `appraisal`: what a swap refused on a crate's hidden worth costs, as a share of the value it was refused at (engine _appraisal).
+export const SWAPS = { perDay: 3, minValue: 0.5, xpBase: 10, xpScale: 30, xpMax: 120, appraisal: 0.03 };
+// A delivered reply is credited as the proposer described it and no better; crates and cash that together are worth less than this share of the description cannot have come through both ends' +/-40% guardrails (1 / 1.4^2 = 0.51).
 export const DELIVERY_FLOOR = 0.45;
 export const EEI_FLOOR_DEFAULT = 1000; // = Milestone 1. See docs/BALANCE.md: a $0.05 start would otherwise score ~1,000,000x the others
 export const BASE_RATE = 0.025; // monthly index; +600 bps in the credit crunch

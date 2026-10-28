@@ -4,15 +4,16 @@
 //   hello / bye / snap     presence and the public snapshot (rebuilt from a whitelist on arrival)
 //   clock / inject / rewind  the instructor's: a student obeys only the instructor (or, with none, the lowest Founder ID for the clock)
 //   offer                  a swap invitation; the proposer's side is already in escrow
-//   accept -> confirm -> deliver   two steps: the acceptor ASKS, the proposer confirms it still holds the escrow (and locks it), only then does the
-//                          acceptor hand over its side. A stale, withdrawn, rewound or forged accept changes nothing on either side.
+//   accept -> confirm -> deliver -> ack   two steps: the acceptor ASKS, the proposer confirms it still holds the escrow (and locks it), only then does the
+//                          acceptor hand over its side. A stale, withdrawn, rewound or forged accept changes nothing on either side. The acceptor has committed when it delivers, so it sends the delivery again,
+//                          a few times, until the proposer says (`ack`) that it was taken: a delivery lost on the way (the proposer's connection dropped between its confirmation and the reply) is not the end of the swap.
 //   decline / withdraw / reject / abort   the ways out
 //   royalty                one daily payment on a stream both sides really hold, never more in total than was agreed
 //   rewound                a student telling the instructor how far its rewind could go
 import { Game } from './engine.js';
-import { Cohort, makeSynth, synthSnapshot, synthFlags, median, cleanSnap, cleanClock, cleanInject, cleanOffer, cleanAsset, cleanDifficulty, cleanId, DEFAULT_DIFFICULTY, num, text } from './cohort.js';
+import { Cohort, makeSynth, synthSnapshot, synthFlags, median, cleanSnap, cleanClock, cleanInject, cleanOffer, cleanAsset, cleanDifficulty, cleanId, DEFAULT_DIFFICULTY, num, text, nwCeiling } from './cohort.js';
 import { Room, cleanCode } from './net.js';
-import { SEC_PER_HOUR, TOTAL_HOURS, TOTAL_DAYS, EEI_FLOOR_DEFAULT, ASSETS, ZONES } from './config.js';
+import { SEC_PER_HOUR, TOTAL_HOURS, TOTAL_DAYS, EEI_FLOOR_DEFAULT, ASSETS, ZONES, SWAPS } from './config.js';
 import { eei as eeiCalc, clamp, demandOf, fmvVariance } from './market.js';
 
 const slot = new URLSearchParams(typeof location !== 'undefined' ? location.search : '').get('slot') || 'main';
@@ -30,13 +31,16 @@ export const SPEEDS = [0.25, 1, 4, 16, 64];
 /** How long a student in a room waits for the class clock before it runs its own (no instructor and no lowest-ID student has spoken). */
 export const CLOCK_WAIT_MS = 6000;
 
-const MAX_PEERS = 450;                 // a relay room holds 400 (server/relay.mjs) plus the instructor and some slack
+const MAX_PEERS = 450;                 // founders with a snapshot: a relay room holds 400 (server/relay.mjs) plus the instructor and some slack
+const MAX_GHOSTS = 100;                // names that said hello and sent nothing else: a flood of them must never crowd out a student who has data
 const MAX_FLAGS = 500;
 const MAX_INCOMING = 24, MAX_INCOMING_PER = 6;
 const ONLINE_MS = 20000;               // heard from in this long: online
 const COHORT_MS = 2000;                // the market's view of the class is rebuilt at most this often, however many snapshots arrive
 const ACCEPT_WAIT_MS = 30000;          // an acceptor waits this long for the proposer to confirm
 const LOCK_MS = 60000;                 // a proposer holds its escrow for an acceptor this long
+const DELIVER_RETRY_MS = 5000, DELIVER_TRIES = 5; // an acceptor sends its delivery again after this long (then twice, three times as long...), this many times in all, until it is acknowledged
+const MAX_SETTLED = 200;               // swaps remembered as settled (to acknowledge a repeated delivery)
 const MAX_LOCKS = 2;                   // ...and holds one offer for a classmate at most this many times
 const CKPT_KEEP = 9, CKPT_BUDGET = 2e6; // daily checkpoints kept across a reload: how many, and about how many characters in all
 const RESERVED = /^(NPC|SYN)-/;
@@ -79,12 +83,15 @@ export class Session {
     this.room = null; this.roomInfo = null;
     this.peers = new Map();          // pid -> { pid, handle, role, snap, clean, seen }; kept for the life of the room, so a student who left is "away", not gone
     this.incoming = []; this.sent = new Map(); this.accepting = new Map();
+    this.delivering = new Map();     // acceptor: offer id -> { to, payload, at, tries } for a swap it has committed to and not yet heard acknowledged
+    this.settled = new Map();        // proposer: offer id -> who it was settled with, to acknowledge a delivery that comes again
     this.flags = [];                 // peer-to-peer deals blocked by the +/-40% guardrail
     this.demo = 0; this.synth = [];
     this.difficulty = DEFAULT_DIFFICULTY();
     this.ghosts = 36; this.algo = true;
     this.instructorSeen = 0; this.instructorPid = null; this.listeners = new Set();
-    this.clockAdopted = true;        // a student in a room is false until the class clock has been heard
+    this.clockAdopted = true;        // a student in a room is false until the class clock has been heard, or none has come for CLOCK_WAIT_MS and the run goes on by itself
+    this.clockHeard = true;          // ...and this one stays false until the class clock REALLY has been heard, however late: the first one rebases a run nobody has played yet
     this.joinedAt = 0;
     this.rewindReport = new Map();   // instructor: pid -> how far that student's rewind went
     this.lastError = null;           // the last message that threw (the room carries on)
@@ -111,7 +118,7 @@ export class Session {
     // In a room the clock is the class's: until it has been heard the game stands at the clock's hour (0), and rebases onto the room's hour when it arrives (_rebase).
     const startHour = Math.floor(this.clock.now());
     this._clearCkpt();
-    this.sent.clear(); this.accepting.clear(); this.incoming = [];
+    this.sent.clear(); this.accepting.clear(); this.delivering.clear(); this.settled.clear(); this.incoming = [];
     this.game = new Game({ perks, specialty, handle: this.handle, pid: this.pid, startHour, worldSeed: this.worldSeed });
     if (this.room) this.room.handle = this.handle; // the room has been calling this founder by the placeholder it joined with
     this._wire();
@@ -125,7 +132,7 @@ export class Session {
     g.env.cohort = this.cohort; g.env.difficulty = this.difficulty; g.env.worldSeed = this.worldSeed; g.env.algo = this.algo;
     this.cohort.seed = this.worldSeed; this.cohort.ghosts = this.ghosts; this.cohort.refresh();
     g.onNote = (n) => this.emit('note', n);
-    g.env.peerClosed = (pid) => this.peers.get(pid)?.snap?.flags?.over === true; // a royalty is not sent to a founder whose run is over: they would refuse it and the money would be lost
+    g.env.peerClosed = (pid) => { const f = this.peers.get(pid)?.snap?.flags; return f?.over === true || f?.exiting === true; }; // a royalty is not sent to a founder whose run is over, or who is selling the business (48 hours in which nothing is taken): they would refuse it and the money would be lost
   }
   restore() {
     const d = kv.get('save');
@@ -158,7 +165,7 @@ export class Session {
   }
   reset() {
     kv.del('save'); this._clearCkpt(); this.leaveRoom(); this.game = null; this.mode = 'solo'; this.clock = new Clock({ speed: 1 });
-    this.peers.clear(); this.incoming = []; this.sent.clear(); this.accepting.clear(); this.flags = []; this.rewindReport.clear(); this.cohort.setPeers([]);
+    this.peers.clear(); this.incoming = []; this.sent.clear(); this.accepting.clear(); this.delivering.clear(); this.settled.clear(); this.flags = []; this.rewindReport.clear(); this.cohort.setPeers([]);
   }
 
   // ---- room
@@ -179,10 +186,10 @@ export class Session {
     if (role === 'student') {
       // The class clock has not been heard yet, and a clock that is not the class's must not run the game (a saved one would play out the whole absence):
       // it stands still at the game's hour until the instructor's arrives.
-      this.clockAdopted = false;
+      this.clockAdopted = false; this.clockHeard = false;
       this.clock = new Clock({ hour: this.game ? this.game.s.hour : 0, speed: 1, paused: true });
       if (this.game) this._wire();
-    } else { this.clockAdopted = true; this._loadRoster(code); }
+    } else { this.clockAdopted = true; this.clockHeard = true; this._loadRoster(code); }
     this.room.on((m) => this._onMsg(m));
     this.room.onstate = () => this.emit('room');
     this.room.send({ t: 'hello' });
@@ -193,7 +200,7 @@ export class Session {
     if (this.room) this.room.close();
     this.room = null; this.roomInfo = null; this.peers.clear(); this.cohort.setPeers([]);
     for (const k of Object.keys(this.timers)) { if (this.timers[k]) clearTimeout(this.timers[k]); this.timers[k] = 0; }
-    this.incoming = []; this.accepting.clear(); this.flags = []; this.rewindReport.clear(); this.cohortDirty = false;
+    this.incoming = []; this.accepting.clear(); this.delivering.clear(); this.settled.clear(); this.flags = []; this.rewindReport.clear(); this.cohortDirty = false;
   }
   /** What a classroom tunes belongs to the classroom: leaving it, or starting a new one, puts every dial back. */
   _resetRoomSettings() {
@@ -207,7 +214,7 @@ export class Session {
     if (closing) kv.del('roster');
     if (this.mode !== 'solo') this.mode = 'solo';
     if (!this.clockAdopted && this.game) this.clock.set({ hour: this.game.s.hour, paused: false, speed: 1 }); // the class clock never came: the solo run keeps running
-    this.clockAdopted = true;
+    this.clockAdopted = true; this.clockHeard = true;
     this._resetRoomSettings();
     if (this.game) { this.worldSeed = this.worldSeed.startsWith('solo') ? this.worldSeed : 'solo-' + Math.floor(Math.random() * 1e6); this.game.env.worldSeed = this.worldSeed; this.cohort.seed = this.worldSeed; }
   }
@@ -236,6 +243,7 @@ export class Session {
     const g = this.game;
     switch (m.t) {
       case 'hello': {
+        this._admit(from, false);
         if (!this._peer(from, m)) return;
         if (this.mode === 'instructor') this._clockSoon(); else if (g) this._snapSoon();
         break;
@@ -249,7 +257,7 @@ export class Session {
       case 'snap': {
         if (m.role !== 'student') return;
         const snap = cleanSnap(m.snap, from);
-        const p = snap && this._peer(from, m);
+        const p = snap && this._admit(from, true) && this._peer(from, m);
         if (!p) return;
         p.snap = snap; p.clean = true; this.rosterDirty = true;
         this._syncCohort();
@@ -278,6 +286,7 @@ export class Session {
       case 'accept': this._onAccept(m, from); break;
       case 'confirm': this._onConfirm(m, from); break;
       case 'deliver': this._onDeliver(m, from); break;
+      case 'ack': { const d = cleanId(m.offerId) && this.delivering.get(m.offerId); if (d && d.to === from && m.to === this.pid) this.delivering.delete(m.offerId); break; }
       case 'abort': this._onAbort(m, from); break;
       case 'reject': this._onReject(m, from); break;
       case 'decline': this._onDecline(m, from); break;
@@ -294,11 +303,24 @@ export class Session {
       default: break;
     }
   }
-  /** The record of a classmate, made on first sight (the room holds a few hundred, never more) and refreshed by every hello or snapshot. */
+  /** Room for a classmate in the table, before the record is made. Two kinds are counted apart: a founder with a snapshot (at most MAX_PEERS: only one silent for ten minutes is replaced) and a name that has only said hello
+   *  (at most MAX_GHOSTS: the stalest goes, so a flood of hellos, from a script that opens a connection, greets and leaves, can never fill the table and keep a real student out of the gradebook). */
+  _admit(from, withSnap) {
+    const have = this.peers.get(from);
+    if (have && (have.snap || !withSnap)) return true;                   // already here as what it is
+    const founders = [], ghosts = [];
+    for (const q of this.peers.values()) (q.snap ? founders : ghosts).push(q);
+    const stalest = (list) => list.reduce((w, q) => (!w || q.seen < w.seen ? q : w), null);
+    if (!withSnap) { if (ghosts.length >= MAX_GHOSTS) this.peers.delete(stalest(ghosts).pid); return true; }
+    if (founders.length < MAX_PEERS) return true;
+    const w = stalest(founders);
+    if (w && Date.now() - w.seen > 10 * 60000) { this.peers.delete(w.pid); return true; }
+    return false;
+  }
+  /** The record of a classmate, made on first sight (the table is bounded, see _admit) and refreshed by every hello or snapshot. */
   _peer(from, m) {
     let p = this.peers.get(from);
     if (!p) {
-      if (this.peers.size >= MAX_PEERS && !this._evictOne()) return null;
       p = { pid: from, handle: '', role: 'student', seen: 0 };
       this.peers.set(from, p);
     }
@@ -310,33 +332,34 @@ export class Session {
     p.seen = Date.now() - age;
     return p;
   }
-  _evictOne() {
-    let worst = null;
-    for (const p of this.peers.values()) if (!worst || p.seen < worst.seen) worst = p;
-    if (worst && Date.now() - worst.seen > 10 * 60000) { this.peers.delete(worst.pid); return true; }
-    return false;
-  }
   /** `fromInstructor`: only the instructor's clock may change the class's settings (difficulty, the herd, the algorithmic events); a student standing in for them carries the hour, the speed and the pause alone. */
   _adoptClock(c, fromInstructor = false) {
-    const first = !this.clockAdopted;
+    const first = !this.clockHeard;
     const lag = c.paused ? 0 : c.age / 1000 / SEC_PER_HOUR * c.speed; // the relay replays the last clock to a joiner: it is a moment old
     this.clock.hour = Math.min(TOTAL_HOURS, c.hour + lag); this.clock.wall = Date.now(); this.clock.speed = c.speed; this.clock.paused = c.paused;
-    this.clockAdopted = true;
+    this.clockAdopted = true; this.clockHeard = true;
     if (fromInstructor && c.difficulty) Object.assign(this.difficulty, c.difficulty);
     if (fromInstructor && c.ghosts != null) { this.ghosts = c.ghosts; this.cohort.ghosts = c.ghosts; this.cohort.refresh(); }
     if (fromInstructor && c.algo != null) { this.algo = c.algo; if (this.game) this.game.env.algo = c.algo; }
     if (first) this._rebase();
   }
-  /** A run that has not been touched, started before the class clock was heard, starts again at the class's hour (everyone starts identical, whenever they sit down). */
+  /** A run that has not been played, started before the class clock was heard, starts again at the class's hour (everyone starts identical, whenever they sit down). Not played means nothing bought, sold, swapped,
+   *  signed or borrowed and no skill point spent. Time that passed on its own (the clock came late and the game ran by itself meanwhile) and lessons played on the title screen (their XP, skill points and Codex pages
+   *  are paid into the run when it starts) do not make it a played one: the lessons' rewards are carried to the new run. A run that has lived a day or more under its own clock is the student's own (a restored run that
+   *  sat idle for days is not begun again). */
   _rebase() {
     const g = this.game;
     if (!g) return;
     const s = g.s, h = Math.floor(this.clock.hour);
-    const pristine = s.hour === s.startHour && s.ledger.length === 0 && s.xp === 0 && s.escrow.length === 0 && s.assets.length === 1;
-    if (!pristine || h <= s.startHour) return;
+    const idle = s.hour - s.startHour < 24 && s.ledger.length === 0 && s.escrow.length === 0 && s.assets.length === 1 && !s.pipes.length && !s.loans.length && !s.clients.length && !s.freight.length && !s.trades
+      && Object.values(s.skills).reduce((a, b) => a + b, 0) <= (s.specialty ? 5 : 3); // three skills at 1, and the specialty at 3: a point spent is a run begun
+    if (!idle || h <= s.startHour) return;
+    const keep = s.meta && (s.meta.cx || s.meta.mission) ? { cx: s.meta.cx || {}, mission: s.meta.mission || {} } : null;
     try {
-      const fresh = g._new({ perks: s.perks, handle: s.handle, pid: s.pid, seed: s.seed, specialty: s.specialty, startHour: h });
-      g.ckpt.clear(); g._checkpoint(); g.s = fresh;
+      const fresh = g._new({ perks: s.perks, handle: s.handle, pid: s.pid, seed: s.seed, specialty: s.specialty, startHour: h }); // (puts the new state in place)
+      Object.assign(fresh, { xp: s.xp, points: s.points, lvlPaid: s.lvlPaid });
+      if (keep) fresh.meta = keep;
+      g.ckpt.clear(); g._checkpoint();
     } catch { g.s = s; return; } // could not begin again: the run carries on from where it is and catches up
     g._m = null;
     this._clearCkpt(); this.sent.clear(); this.save(true);
@@ -388,7 +411,7 @@ export class Session {
     this._tell(from, 'rewound', { wanted, hour: reached, ok: got != null && reached <= wanted + 24 });
     if (got != null) {
       this.clock.set({ hour: got });
-      this.incoming = []; this.accepting.clear(); this._resync();      // invitations and escrows of a future that no longer happened
+      this.incoming = []; this.accepting.clear(); this.delivering.clear(); this.settled.clear(); this._resync();      // invitations and escrows of a future that no longer happened
       this.emit('rewound', got);
     } else g.note('warn', 'Your instructor rewound the class, but you have no saved checkpoint that old. Your run stays where it is until the class catches up.');
   }
@@ -470,6 +493,11 @@ export class Session {
     if (this.room) this._sendSnap(false);
     if (this.cohortDirty && wall - this.t.cohort >= COHORT_MS) this._flushCohort();
     for (const [id, p] of this.accepting) if (wall - p.at > ACCEPT_WAIT_MS) { this.accepting.delete(id); g.note('warn', `${p.name} did not confirm in time. Nothing changed hands.`); }
+    for (const [id, d] of this.delivering) { // committed, and no word yet that the proposer took the delivery: say it again (the proposer answers a repeat the same way), a few times
+      if (wall - d.at < DELIVER_RETRY_MS * d.tries * d.tries) continue;
+      if (d.tries >= DELIVER_TRIES) { this.delivering.delete(id); g.note('warn', `${d.name} has not said the swap arrived. If it did not, ask them to check the offer: what you gave is already with them.`); continue; }
+      d.tries++; this._tell(d.to, 'deliver', d.payload);
+    }
     if (this.mode === 'student') this._persistCkpt();
     if (wall - this.t.refresh > this.refreshMs) { this.t.refresh = wall; this.cohort.refresh(); this.emit('refresh'); }
     if (g.s.hour !== before) this.save();
@@ -592,11 +620,11 @@ export class Session {
     o.want.assets = want;
     // a royalty is a promise from the proposer, and it is worth what they are worth: the number they published to the room in their snapshot, not the one written in the offer (which is theirs to make up)
     const snapNw = this.peers.get(from)?.snap?.nw;
-    if (typeof snapNw === 'number' && Number.isFinite(snapNw)) o.nw = o.nw === undefined ? snapNw : Math.min(o.nw, snapNw); else delete o.nw;
+    if (typeof snapNw === 'number' && Number.isFinite(snapNw)) { const known = Math.min(snapNw, nwCeiling(this.hourNow())); o.nw = o.nw === undefined ? known : Math.min(o.nw, known); } else delete o.nw; // (and no founder is worth more than the best run of this day could be)
     const handle = text(m.handle) || o.fromHandle;
     this.incoming.push({ offer: o, at: Date.now(), handle, from });
     this.emit('offer', o);
-    g.note('info', `${handle || 'A classmate'} proposed a swap. Open the Syndicate to review it.`);
+    g.note('info', `${handle || 'A classmate'} proposed a swap. Open Market, then Exchange, to review it.`);
   }
   /** Step one, taken by the acceptor: nothing leaves its hands. It asks the proposer to confirm it still holds the escrow. */
   acceptIncoming(offerId) {
@@ -638,6 +666,14 @@ export class Session {
     const g = this.game, id = cleanId(m.offerId), p = id && this.accepting.get(id);
     if (!g || m.to !== this.pid || !p || p.from !== from) return;
     this.accepting.delete(id);
+    // The proposer holds its escrow for LOCK_MS; this side waits ACCEPT_WAIT_MS. A confirmation that arrives after the wait (a stalled link, a background tab that was throttled and whose sweep has not run) is stale:
+    // committing on it could outlive the proposer's hold, and the proposer, having withdrawn, would find nothing to settle. So the wait is enforced here, not only by the sweep.
+    if (Date.now() - p.at > ACCEPT_WAIT_MS) {
+      this._tell(from, 'abort', { offerId: id });
+      g.note('warn', `${p.name} did not confirm in time. Nothing changed hands.`);
+      this.emit('change');
+      return;
+    }
     const held = this._ownWant(p.offer), offer = held && { ...p.offer, want: { ...p.offer.want, assets: held } };
     const r = offer ? g.acceptOffer(offer) : { ok: false, msg: 'You no longer hold the asset they asked for.' };
     if (!r.ok) {
@@ -646,14 +682,17 @@ export class Session {
     } else {
       const stream = g.s.royalties.find((x) => x.dir === 'recv' && x.offer === id);
       if (stream && offer.give.royalty) { stream.cap = offer.give.royalty.perDay * offer.give.royalty.days; stream.got = 0; } // what was agreed is the most that can ever arrive
-      this._tell(from, 'deliver', { offerId: id, deliver: { cash: r.deliver.cash, assets: r.deliver.assets.map((a) => cleanAsset(a, { fold: true })).filter(Boolean) }, handle: this.handle });
+      const payload = { offerId: id, deliver: { cash: r.deliver.cash, assets: r.deliver.assets.map((a) => cleanAsset(a, { fold: true })).filter(Boolean) }, handle: this.handle };
+      this._tell(from, 'deliver', payload);
+      this.delivering.set(id, { to: from, payload, at: Date.now(), tries: 1, name: p.name });
       g.note('good', `Swap completed with ${p.name}.`);
     }
     this.emit('change');
   }
-  /** Step three, received by the proposer: only the classmate it held the escrow for, only once, and only as much as was asked. */
+  /** Step three, received by the proposer: only the classmate it held the escrow for, only once, and only as much as was asked. It answers `ack` to a delivery it took, and to one it took already (the acceptor sent it again). */
   _onDeliver(m, from) {
     const g = this.game, id = cleanId(m.offerId), s = id && this.sent.get(id), e = id && g?.s.escrow.find((x) => x.offerId === id);
+    if (g && id && m.to === this.pid && !s && !e && this.settled.get(id) === from) { this._tell(from, 'ack', { offerId: id }); return; } // a repeat of a delivery already taken
     if (!g || m.to !== this.pid || !s || !e || s.offer.to !== from || e.lockedBy !== from) return;
     const want = e.offer.want, d = isObj(m.deliver) ? m.deliver : {}, given = Array.isArray(d.assets) ? d.assets : [], assets = [];
     for (const w of want.assets) {
@@ -663,8 +702,11 @@ export class Session {
     const cash = typeof d.cash === 'number' && Number.isFinite(d.cash) ? Math.min(Math.max(d.cash, 0), want.cash) : 0;
     const name = text(m.handle) || from;
     const r = g.finalizeOffer(id, { assets, cash }, name);
-    if (r.ok) this.sent.delete(id);
-    else { delete e.lockedBy; delete e.lockedAt; delete e.lockLapsed; } // a reply that is not that swap changes nothing: the offer is open again, and the hold is let go
+    if (r.ok) {
+      this.sent.delete(id);
+      this.settled.set(id, from); if (this.settled.size > MAX_SETTLED) this.settled.delete(this.settled.keys().next().value);
+      this._tell(from, 'ack', { offerId: id });
+    } else { delete e.lockedBy; delete e.lockedAt; delete e.lockLapsed; } // a reply that is not that swap changes nothing: the offer is open again, and the hold is let go
     const short = assets.length < want.assets.length || cash < want.cash - 0.005;
     g.note(r.ok ? (short ? 'warn' : 'good') : 'bad', r.ok ? (short ? `${name} delivered less than the swap said. What arrived was added.` : `${name} accepted. Swap completed.`) : r.msg);
     this.emit('change');
@@ -757,11 +799,17 @@ export class Session {
     for (const p of this.peers.values()) {
       if (p.role !== 'student' || !p.snap) continue;
       if (!p.clean) { p.snap = cleanSnap(p.snap, p.pid); p.clean = true; if (!p.snap) continue; } // a snapshot placed here without passing the door
-      const sn = p.snap;
+      const sn = p.snap, online = now - p.seen < ONLINE_MS, closed = sn.flags?.exited === true || sn.flags?.over === true;
+      // WHEN this row is: a founder who is online and playing is at the class's hour (the clock is the class's), within a couple of days of lag, whatever hour they say they are at (a low one claims a bigger time bonus);
+      // one who left, or whose run is over, is where their last snapshot says, never ahead of the class. And what they are worth is cut to what the best run could be by then (cohort.nwCeiling), so a made-up
+      // figure is as good as the best honest one on that day and no better. (The server tally in docs/ARCHITECTURE.md is the real fix; this narrows the lie.)
+      const at = online && !closed ? clamp(sn.hour, hour - 48, hour + 48) : Math.min(sn.hour, hour + 48);
+      const nw = Math.min(sn.nw, nwCeiling(at));
+      const p2p = Math.min(sn.p2p || 0, SWAPS.perDay * (Math.floor(at / 24) + 1));
       // the score is recomputed from the numbers, never taken from the sender: not even for a run that has exited (the flag is the sender's too). An honest exit froze its hour and its net worth, so the same
-      // formula gives the score it locked; a made-up one can only be as good as the net worth it reports, which cohort.js bounds.
-      const eei = eeiCalc(sn.nw, sn.startCap, TOTAL_DAYS - sn.hour / 24, floor);
-      rows.push({ ...sn, eei, seen: p.seen, online: now - p.seen < ONLINE_MS, rewind: this.rewindReport.get(p.pid) || null });
+      // formula gives the score it locked; a made-up one can only be as good as the net worth it reports, which is bounded above.
+      const eei = eeiCalc(nw, sn.startCap, TOTAL_DAYS - at / 24, floor);
+      rows.push({ ...sn, nw, p2p, eei, seen: p.seen, online, rewind: this.rewindReport.get(p.pid) || null });
     }
     const mine = this.game && this.mode !== 'instructor' ? [{ ...this.game.publicSnapshot(), me: true, online: true }] : [];
     const syn = this.synth.map((s) => { const sn = synthSnapshot(s, hour); sn.eei = eeiCalc(sn.nw, sn.startCap, TOTAL_DAYS - hour / 24, floor); sn.online = true; return sn; });
@@ -778,20 +826,28 @@ export class Session {
   /** Pre-fills the LMS gradebook: 30% economic (percentile among all players: everyone starts with one paperclip, so no start is compared separately), 20% adaptability, 10% engagement. 40% reflection is the instructor's. */
   gradebook() {
     const rows = this.students();
-    const med = {};
+    const med = new Map(); // (a Map: an id is text a classmate chose)
     // a founder wiped out after a shock has a ratio of ~0 (or below): it scores zero adaptability, it does not make the log (and the grade) NaN
     const ratio = (s) => clamp(s.nwAfter / s.nw, 0.001, 20); // and a founder who "grew twenty-fold" is believed no further: an unbounded ratio let one made-up shock row set the whole class's median
     const logged = (r) => (Array.isArray(r.shockLog) ? r.shockLog : []);
-    for (const id of new Set(rows.flatMap((r) => logged(r).map((s) => s.id)))) {
-      const ratios = rows.map((r) => logged(r).find((s) => s.id === id)).filter((s) => s && s.nwAfter != null && s.nw > 0).map(ratio);
-      med[id] = median(ratios);
+    // one pass over every row (each shock id keeps the ratios of the rows that logged it, the first entry of a row for an id): the dashboard asks about once a second, and a table of unique ids
+    // used to be searched once per id and per row
+    const byId = new Map();
+    for (const r of rows) {
+      const seen = new Set();
+      for (const s of logged(r)) {
+        if (seen.has(s.id)) continue;
+        seen.add(s.id);
+        if (s.nwAfter != null && s.nw > 0) { const list = byId.get(s.id); if (list) list.push(ratio(s)); else byId.set(s.id, [ratio(s)]); }
+      }
     }
+    for (const [id, ratios] of byId) med.set(id, median(ratios));
     const flags = this.flagsAll();
     return rows.map((r) => {
       const below = rows.filter((x) => x.eei < r.eei).length;
       const econ = rows.length > 1 ? (below / (rows.length - 1)) * 100 : 50;
-      const shocks = logged(r).filter((s) => s.nwAfter != null && s.nw > 0 && med[s.id] > 0);
-      const adapt = shocks.length ? shocks.reduce((a, s) => a + clamp(50 + 50 * Math.tanh(Math.log(ratio(s) / med[s.id]) * 3) + (s.pivots > 0 ? 10 : 0), 0, 100), 0) / shocks.length : null;
+      const shocks = logged(r).filter((s) => s.nwAfter != null && s.nw > 0 && med.get(s.id) > 0);
+      const adapt = shocks.length ? shocks.reduce((a, s) => a + clamp(50 + 50 * Math.tanh(Math.log(ratio(s) / med.get(s.id)) * 3) + (s.pivots > 0 ? 10 : 0), 0, 100), 0) / shocks.length : null;
       const flagged = flags.filter((f) => f.from === r.pid).length;
       const engage = clamp((r.p2p || 0) * 25 - flagged * 10, 0, 100);
       const auto = econ * 0.3 + (adapt ?? 50) * 0.2 + engage * 0.1;

@@ -39,7 +39,7 @@ test('the Enterprise commitment fee is charged once per facility, however many d
     const g = desk([], 3);
     for (let i = 0; i < draws; i++) assert.ok(g.draw('enterprise', 100000 / draws).ok);
     for (let h = 0; h < 31 * 24; h++) g.stepHour();
-    const rows = g.s.ledger.filter((e) => e.text === 'Unused-commitment fee').map((e) => -e.amt);
+    const rows = g.s.ledger.filter((e) => e.text === 'Unused-commitment fee').map((e) => { assert.equal(e.amt, 0, 'a memo: no cash moved (the repayment holds the fee)'); return e.fee; });
     return { rows, debt: g.debt(), drawn: g.s.loans.length };
   };
   const one = month(1), five = month(5), ten = month(10);

@@ -1066,22 +1066,26 @@ test('after a rewind the same days replay the same way (the cohort no longer rem
 });
 
 // ---------------------------------------------------------------------------------------------------- pacing
-test('pacing: for ten different Background pairs a competent bot reaches district 5 between days 6 and 35 and ends day 90 solvent', (t) => {
+test('pacing: for ten different Background pairs and three world seeds a competent bot reaches district 5 between days 6 and 35, is never wiped out and ends day 90 solvent', (t) => {
   const PAIRS = [['connected', 'grad'], ['trades', 'immigrant'], ['veteran', 'heir'], ['creator', 'gigger'], ['roots', 'native'], ['second', 'pro'], ['grad', 'native'], ['heir', 'creator'], ['immigrant', 'second'], ['gigger', 'pro']];
   assert.deepEqual([...new Set(PAIRS.flat())].sort(), Object.keys(PERKS).sort(), 'the ten pairs cover all twelve Backgrounds');
-  const days = [];
-  for (const pair of PAIRS) {
-    const g = makeGame(pair, 'ops', 7);
-    const marks = run(g);
-    days.push(marks[5]);
-    assert.ok(marks[5] >= 6 && marks[5] <= 35, `${pair}: district 5 on day ${marks[5]}`);
-    assert.ok(marks[3] <= 14, `${pair}: districts 1-4 within two weeks (district 3 on day ${marks[3]})`);
-    assert.equal(g.s.over, true); assert.equal(g.s.insolvent, false, pair + ' ends solvent');
-    assert.ok(g.netWorth() > 0 && g.s.cash > -1000, `${pair}: nw ${Math.round(g.netWorth())}`);
-    assert.ok(g.eei() > 0 && Number.isFinite(g.eei()));
+  const days = [], seen = [];
+  for (const seed of [7, 100, 117]) { // (one seed is one draw of the dice: 100 was a wipe-out for Native before the first sale was made safe)
+    for (const pair of PAIRS) {
+      const g = makeGame(pair, 'ops', seed);
+      const marks = run(g);
+      if (seed === 7) days.push(marks[5]);
+      seen.push(marks[5]);
+      assert.ok(marks[5] >= 6 && marks[5] <= 35, `${pair} seed ${seed}: district 5 on day ${marks[5]}`);
+      assert.ok(marks[3] <= 14, `${pair} seed ${seed}: districts 1-4 within two weeks (district 3 on day ${marks[3]})`);
+      assert.equal(g.s.over, true); assert.equal(g.s.insolvent, false, `${pair} seed ${seed} ends solvent`);
+      assert.ok(!(g.s.cash < 1 && !g.s.assets.length && !g.s.pipes.length), `${pair} seed ${seed} was not wiped out`);
+      assert.ok(g.netWorth() > 0 && g.s.cash > -1000, `${pair} seed ${seed}: nw ${Math.round(g.netWorth())}`);
+      assert.ok(g.eei() > 0 && Number.isFinite(g.eei()));
+    }
   }
   const sorted = [...days].sort((a, b) => a - b), med = (sorted[4] + sorted[5]) / 2;
-  t.diagnostic(`district 5 on days ${days.join(', ')} (median ${med}); the contract asks every pair within 35% of the median: ${days.filter((d) => Math.abs(d - med) / med > 0.35).length} of ${days.length} are outside`);
+  t.diagnostic(`district 5 on days ${days.join(', ')} (median ${med}); the contract asks every pair within 35% of the median: ${days.filter((d) => Math.abs(d - med) / med > 0.35).length} of ${days.length} are outside; over three seeds the range is ${Math.min(...seen)} to ${Math.max(...seen)}`);
 });
 
 test('pacing: a bot plays the starter districts in order and gets richer day by day, never going backwards by more than a bad day', () => {

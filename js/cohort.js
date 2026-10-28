@@ -208,6 +208,11 @@ export const NICHE_CAP = 80;    // keys a classmate may publish
 export const NICHE_MAX = 12;    // one niche's 48-hour count
 export const NICHE_TOTAL = 150; // all of a classmate's counts together
 export const NW_LIMIT = 1e8;    // an honest strong run ends near $2e7 at the very most (docs/BALANCE.md: the 90th percentile is $2.3e6); nothing a classmate reports is believed beyond this
+// The most a founder can be worth on a given day: what the strongest honest play reached (the heuristic bot deciding every two hours, 44 runs over a spread of Backgrounds, 2026-10-28: $0.2k on day 5, $11k on day 15,
+// $300k on day 30, $1.5M on day 50, $2.6M on day 65, $9M on day 80, $11.9M on day 90; and a run with no managers, played every four hours, reached $25M) with room to spare. A snapshot's claim is cut to it at the
+// class's own hour, so a made-up net worth can only be as good as the best run could be by now: not a hundred million on the first day. The envelope narrows the lie, it does not remove it (the server tally in docs/ARCHITECTURE.md does).
+const NW_ENVELOPE = [[0, 100], [5, 1000], [10, 4000], [15, 40000], [20, 150000], [30, 1.2e6], [40, 3.5e6], [50, 6e6], [60, 9e6], [70, 2e7], [80, 3e7], [90, 4e7]];
+export const nwCeiling = (hour) => Math.min(NW_LIMIT, curve(NW_ENVELOPE, Math.max(0, num(hour, 0, TOTAL_HOURS, 0)) / 24));
 export const INV_CAP = 24;      // what publicSnapshot() shares
 export const SIDE_CAP = 12;     // crates on one side of a swap
 
@@ -270,7 +275,7 @@ export function cleanSnap(raw, from) {
     zones: int(raw.zones, 1, ZONE_IDS.length, 1), pipelines: int(raw.pipelines, 0, 999, 0), lastAutoHour: num(raw.lastAutoHour, 0, TOTAL_HOURS, 0), autoEligible: raw.autoEligible === true,
     niches: cleanNiches(raw.niches), cmAvg: num(raw.cmAvg, 0, 5, 0),
     trades, p2p: Math.min(int(raw.p2p, 0, 1e5, 0), trades, SWAPS.perDay * (Math.floor(num(raw.hour, 0, TOTAL_HOURS, 0) / 24) + 1)), // a swap is a trade, and the engine counts at most SWAPS.perDay a day: more is not possible
-    flags: { insolvent: fl.insolvent === true, exited: fl.exited === true, over: fl.over === true },
+    flags: { insolvent: fl.insolvent === true, exited: fl.exited === true, over: fl.over === true, exiting: fl.exiting === true },
     shockLog, hoursPlayed: num(raw.hoursPlayed, 0, TOTAL_DAYS, 0), auditFail: int(raw.auditFail, 0, 999, 0),
     inventory: (Array.isArray(raw.inventory) ? raw.inventory : []).slice(0, INV_CAP).map(cleanPub).filter(Boolean),
     mil: { m1: mil.m1 === true, m2: mil.m2 === true, m3: mil.m3 === true }, plays,

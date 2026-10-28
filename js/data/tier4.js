@@ -67,7 +67,7 @@ export const assets = {
   },
   erpBook: {
     name: 'ERP License and Maintenance Book', icon: '🗂️',
-    base: 85000, sc: 7, dep: 1, dem: { 13: 9, 14: 3 }, tags: ['digital', 'b2b'], yield: 0.0055,
+    base: 85000, sc: 7, dep: 1, dem: { 13: 9, 14: 3 }, tags: ['digital', 'b2b', 'industrial'], yield: 0.0055,
   },
   hospitalPurchasing: {
     name: 'Hospital Group Purchasing Contract', icon: '📋',

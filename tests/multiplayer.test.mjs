@@ -109,6 +109,7 @@ test('students trade through the room; a blocked extreme offer is flagged to the
 test('gradebook: the economic score is a percentile among ALL players (everyone starts with one paperclip); weights sum to 60 automated points', async () => {
   const { teacher, a, b } = pair();
   await until(() => teacher.students().length === 2);
+  teacher.clock.set({ hour: 24 * 25, paused: true }); // (a net worth of 100,000 is believed from about day 20: what a founder can be worth is bounded by the hour of the class, cohort.nwCeiling)
   a.game.s.cash += 100000; b._sendSnap(true); a._sendSnap(true);
   await until(() => teacher.students().find((s) => s.pid === 'ADA')?.nw > 100000);
   const rows = teacher.gradebook();

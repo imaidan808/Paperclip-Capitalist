@@ -636,9 +636,10 @@ test('npm run balance plays five seeds by default and counts a wipe-out apart fr
     assert.ok(row.wiped >= 0 && row.wiped <= 5);
     if (row.wiped < 5) assert.ok(row.d.every((d) => d == null || d <= 91), 'a wipe-out never shows up as a slow day');
   }
-  // seed 100 is a wipe-out for Native (every game of the pair): the old two-seed default folded that into a median of 91 and read it as "200% slow"
-  const g = makeGame(['native', 'pro'], 'ops', 100); for (let h = 0; h < 90 * 24 && !g.s.over; h++) { g.advanceTo(g.s.hour + 1); }
-  assert.equal(typeof wipedOut(g), 'boolean');
+  // world seed 100 was a wipe-out for Native (every game of the pair; seeds 117 and 134 too, with the ops specialty): the old two-seed default folded that into a median of 91 and read it as "200% slow". Mended since (a founder
+  // down to the last crate is vouched for), and held: a return of the fault is a wipe-out here, not only a column in a table
+  const native = balance({ seeds: 3, every: 4, pairs: [['native', 'pro'], ['native', 'trades'], ['native', 'grad']] });
+  assert.equal(native.wipedRuns, 0, 'no Native run is wiped out on seeds 100, 117 and 134: ' + native.rows.map((r) => r.pair + ' ' + r.wiped).join(', '));
   assert.ok(wipedOut({ s: { cash: 0, assets: [], pipes: [] } }) && !wipedOut({ s: { cash: 0, assets: [{}], pipes: [] } }) && !wipedOut({ s: { cash: 5, assets: [], pipes: [] } }));
 });
 

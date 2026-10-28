@@ -188,7 +188,7 @@ function clientBlock(v, id) {
   const { g, s, m } = v, C = CLIENTS[id];
   if (!s.zones.includes(C.zone)) return `Opens with ${ZONES[C.zone].name}.`;
   if (C.needs && !s.mil[C.needs]) { const z = ZONES[MIL_ZONE[C.needs]]; return `Opens at ${z.name} (${m(z.gate)} net worth).`; }
-  if (s.clients.filter((c) => c.tier === id).length >= C.max) return `You already hold all ${C.max} of these accounts.`;
+  if (g.liveClients(id).length >= C.max) return `You already hold all ${C.max} of these accounts.`;
   if (s.pipes.length < C.minRunning) return `Hire ${plural(C.minRunning - s.pipes.length, 'more manager')} first: this client needs ${C.minRunning} running every day.`;
   const q = g.clientQuote(id);
   if (!q.worthwhile) return `This contract could not earn back its ${m(q.cac)} before day 90: ${plural(q.payDays, 'paying day')} left, and it needs ${Math.ceil(q.payback)}.`; // the engine refuses it for this reason
@@ -196,7 +196,7 @@ function clientBlock(v, id) {
 }
 
 function clientCard(v, id) {
-  const { g, s, m } = v, C = CLIENTS[id], q = g.clientQuote(id), n = s.clients.filter((c) => c.tier === id).length, block = clientBlock(v, id);
+  const { g, s, m } = v, C = CLIENTS[id], q = g.clientQuote(id), n = g.liveClients(id).length, block = clientBlock(v, id);
   const run = g.runningPipes(), met = run >= C.minRunning, top = Math.max(q.cac, q.ltv, 1);
   const verdict = q.ratio >= 3 ? { t: 'good', g: '★', w: 'Strong' } : q.ratio >= 1.5 ? { t: 'warn', g: '◐', w: 'Thin' } : { t: 'bad', g: '⚠', w: 'Risky' };
   return `<article class="cr-client"><div class="row"><span class="cr-ic" aria-hidden="true">${C.icon}</span><div class="grow"><b>${esc(C.name)}</b><p class="small mute">${esc(C.blurb)}</p></div><span class="chip">${n} of ${C.max}</span></div>
@@ -209,8 +209,8 @@ function clientCard(v, id) {
 }
 
 function clientsTab(v) {
-  const { s, m } = v;
-  const live = s.clients.map((c) => { const C = CLIENTS[c.tier]; return `<article class="cr-active"><div class="row"><b class="grow">${C.icon} ${esc(C.name)}</b><span class="mono green">${sgn(v, c.earned)} earned</span></div><div class="bar green" aria-hidden="true"><i data-bar="client:${c.id}"></i></div>
+  const { s, m, g } = v;
+  const live = g.liveClients().map((c) => { const C = CLIENTS[c.tier]; return `<article class="cr-active"><div class="row"><b class="grow">${C.icon} ${esc(C.name)}</b><span class="mono green">${sgn(v, c.earned)} earned</span></div><div class="bar green" aria-hidden="true"><i data-bar="client:${c.id}"></i></div>
       <p class="small mute">${c.breaches ? `<span class="red">${c.breaches} of 2 SLA breaches.</span> ` : 'No SLA breaches. '}Ends in ${dur(c.until - s.hour)}. You paid ${m(c.cac)} to win them.</p></article>`; }).join('');
   return `<p class="small mute">Clients pay you every day while enough managers are running. Winning one costs money now (CAC); what they pay over the contract is their lifetime value (LTV). The deal is good when LTV beats CAC and you can keep the promise (the SLA).</p>
     <div class="cr-grid">${Object.keys(CLIENTS).map((id) => clientCard(v, id)).join('')}</div>

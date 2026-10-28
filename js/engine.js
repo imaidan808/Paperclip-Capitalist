@@ -25,6 +25,7 @@ const OFFER_MAX = 24; // crates in one swap: more than any district holds
 const SKILL_GAMES = ['inspect', 'pitch', 'haggle', 'auction', 'repair']; // the games whose play is tallied in s.meta
 const ROYALTY_MSGS = 12; // messages (each a day's rate) one stream may send in a day
 const UNTRADEABLE = 'This crate cannot be traded at that price.'; // the whole of what a refusal made on a crate's hidden truth may say
+const XP_CALL = 1e6, POINTS_CALL = 1000, XP_MAX = LEVEL_XP * 99 * 99; // what one grant may add (a corrupt or hostile amount), and the most XP a run can hold (level 100): the level loop below is bounded by it
 const ROYALTY_NW = 0.1; // a promised royalty is worth at most this share of what its promiser is worth
 
 export class Game {
@@ -37,6 +38,14 @@ export class Game {
     this.evq = [];
     this._m = null;
     this.s = opts.state || this._new(opts);
+    if (opts.state) this._mend();
+  }
+  /** A saved state is read back as it was written, and an older build wrote what a newer one does not: a shock logged with nothing left to divide by (a debt-to-equity of Infinity) was saved as null, which the debrief then
+   *  took for a number. Such a figure is the cap. Nothing else is touched. */
+  _mend() {
+    const s = this.s;
+    if (Array.isArray(s.shockLog)) for (const x of s.shockLog) if (x && typeof x === 'object' && !isNum(x.de)) x.de = DE_CAP;
+    return this;
   }
 
   // ------------------------------------------------------------------ construction
@@ -137,8 +146,9 @@ export class Game {
    *   exit: one row when the sale settles, the proceeds that landed (the locked score's net worth). summary: see below.
    *   client: one row a day for the money the accounts paid that day (`n` accounts), one row per SLA penalty (negative); the closing row of a contract is a MEMO (amt 0, `earned` and `cac` in the row):
    *     the acquisition cost is booked once, at signing, and the income day by day.   overdraft: the day's interest on a negative balance (negative).   p2p 'Royalty paid': a day's payment on a stream you owe (negative).
-   * Booked as cost, not as cash: the unused-commitment fee is a row (a cost) but not a cash movement: it is added to the loan and leaves with the repayment, and loan interest likewise accrues to the loan and leaves
-   * with the `repay` row. So the rows that are NOT cash are the pitch gains, the pool sale (booked when it is made, cash lands after the delay), the swap values and the commitment fee; every other cash movement has its row.
+   * The unused-commitment fee is a MEMO (amt 0, the fee in `fee`): it is added to the loan and leaves with the repayment, which is the row that holds it (counted here too it would be paid twice in the sum), and loan
+   * interest likewise accrues to the loan and leaves with the `repay` row. So the rows that are NOT cash are the pitch gains, the pool sale (booked when it is made, cash lands after the delay) and the swap values;
+   * every other cash movement has its row.
    * Size: at LEDGER_CAP rows the oldest LEDGER_FOLD are folded into ONE summary row at the head (their count, their total and a per-type breakdown, written out in its text and kept in `byType`), never silently
    * dropped; `s.ledgerDropped` counts the folded rows. The download therefore holds every row that is still a row, and one line for the rest.
    */
@@ -155,22 +165,25 @@ export class Game {
     const order = L.map((r, i) => i).sort((x, y) => rank(L[x]) - rank(L[y]) || x - y).slice(0, LEDGER_FOLD);
     const gone = new Set(order), cut = order.sort((x, y) => x - y).map((i) => L[i]);
     s.ledger = L.filter((r, i) => !gone.has(i));
-    const sum = head || { h: cut[0]?.h ?? s.hour, type: 'summary', text: '', amt: 0, n: 0, upto: 0, byType: {} };
+    const sum = head || { h: cut[0]?.h ?? s.hour, type: 'summary', text: '', amt: 0, n: 0, from: cut[0]?.h ?? s.hour, upto: 0, byType: {} };
+    sum.from ??= sum.h; // (a summary written before it said where it began)
     for (const r of cut) {
-      sum.n++; sum.amt += isNum(r.amt) ? r.amt : 0; sum.upto = Math.max(sum.upto, r.h);
+      sum.n++; sum.amt += isNum(r.amt) ? r.amt : 0; sum.upto = Math.max(sum.upto, r.h); sum.from = Math.min(sum.from, r.h);
       const t = (sum.byType[r.type] ||= { n: 0, amt: 0 });
       t.n++; t.amt += isNum(r.amt) ? r.amt : 0;
     }
     const by = Object.entries(sum.byType).sort((a, b) => Math.abs(b[1].amt) - Math.abs(a[1].amt)).slice(0, 6).map(([k, v]) => `${k} ${v.n} line${v.n === 1 ? '' : 's'}, ${v.amt < 0 ? '-' : '+'}${money(Math.abs(v.amt))}`).join('; ');
-    sum.text = `${sum.n} older lines up to day ${Math.floor(sum.upto / 24) + 1} folded into this one. By type: ${by}${Object.keys(sum.byType).length > 6 ? '; and others' : ''}.`;
+    sum.h = sum.from; // it stands where the oldest line it holds stood, and its text says how far it reaches
+    sum.text = `${sum.n} older lines from day ${Math.floor(sum.from / 24) + 1} to day ${Math.floor(sum.upto / 24) + 1} folded into this one. By type: ${by}${Object.keys(sum.byType).length > 6 ? '; and others' : ''}.`;
     s.ledger.unshift(sum);
     s.ledgerDropped = sum.n;
   }
-  xp(n) { this.s.xp += Math.round(n * this.P.xpMult); this._levelCheck(); }
+  xp(n) { this.s.xp += Math.round(clamp(fin(+n, 0), 0, XP_CALL) * this.P.xpMult); this._levelCheck(); }
   level() { return Math.floor(Math.sqrt(this.s.xp / LEVEL_XP)) + 1; }
   /** Each new level grants one skill point (spendPoint) while a skill can still use it; once all three are at mastery the level pays XP instead. */
   _levelCheck() {
     const s = this.s;
+    s.xp = isNum(s.xp) ? clamp(s.xp, 0, XP_MAX) : 0; // a save or a caller that put NaN, a negative or an absurd figure here must not make the loop below spin
     if (this._lvlBusy) return; // a level's own XP (a mastered founder's point) is picked up by the loop below, in order, not by a second loop inside it
     this._lvlBusy = true;
     try {
@@ -190,7 +203,7 @@ export class Game {
   /** Quests, achievements, Academy missions and levels grant skill points through here. Points no skill can use any more are paid as XP (ECON.pointXp each) rather than banked as dead weight. */
   grantPoints(n) {
     const s = this.s;
-    n = Math.max(0, Math.floor(fin(+n, 0)));
+    n = clamp(Math.floor(fin(+n, 0)), 0, POINTS_CALL);
     const points = Math.min(n, this.pointRoom()), spare = n - points, xp = Math.round(spare * ECON.pointXp);
     s.points += points;
     if (xp > 0) { s.xp += xp; this._levelCheck(); } // a spare point's XP is never multiplied again; a level it reaches pays like any other (and ends in XP too once skills are maxed)
@@ -906,7 +919,7 @@ export class Game {
         if (this.rand() < cu) {
           const fee = Math.min(Math.max(0, s.cash), (f.book || 0) * 0.02);
           s.cash -= fee; f.arrive = s.hour + 12;
-          this.led('customs', `Customs inspected freight bound for ${ZONES[f.to].short}`, -fee, { z: f.to });
+          this.led('customs', `Customs inspected freight bound for ${ZONES[f.to].short}`, fee ? -fee : 0, { z: f.to }); // (never -0: a broke founder's freight is inspected for nothing)
           this.note('warn', `Customs inspected your freight in ${ZONES[f.to].short}: 12 hours' delay and a ${money(fee)} fee.`);
           continue;
         }
@@ -1004,8 +1017,9 @@ export class Game {
     s.cash -= cost;
     const p = { id: 'P' + s.nid++, kind, zone, level: 1, cls: cfg.cls, buyer: cfg.buyer, channel: cfg.channel === 'intl' ? 'intl' : 'dom', alloc: 0, prog: 0, len: 0, inflight: 0, cycles: 0, profit: 0, basis: cost, status: 'idle', pausedUntil: 0, starved: false };
     p.alloc = clamp(isNum(cfg.alloc) ? cfg.alloc : this.pipeCap(p), 0, this.pipeCap(p)); // a negative, NaN or text allocation is the cap, not a manager that pays you to run
+    const plot = s.pipes.filter((x) => x.zone === zone).length; // which plot of the district this one fills
     s.pipes.push(p);
-    this.xp(120);
+    if (this._firstPlay('hire', `${kind}@${zone}#${plot}`)) this.xp(120); // paid once for each manager in each plot: hiring and releasing the same one again is a cash loss, not a way to buy levels
     this.led('hire', `Hired a ${PIPE[kind].name} in ${ZONES[zone].short}`, -cost, { z: zone });
     this.emit('hire', { kind, zone });
     this.note('good', `${PIPE[kind].name} hired. Pipeline lane: ${ASSETS[cfg.cls].name} to ${BUYERS[cfg.buyer].name}.`);
@@ -1031,7 +1045,8 @@ export class Game {
     if (p.level >= PIPE_RULES.maxLevel) return fail('Maximum level.');
     const c = this.pipeUpCost(p);
     if (s.cash < c) return fail(`Upgrading costs ${money(c)}.`);
-    s.cash -= c; p.level++; p.basis += c; this.xp(80);
+    s.cash -= c; p.level++; p.basis += c;
+    if (this._firstPlay('upgrade', `${p.kind}@${p.zone}#${s.pipes.filter((x) => x.zone === p.zone).indexOf(p)}@${p.level}`)) this.xp(80); // once for each level of each plot
     this.led('hire', `Upgraded ${PIPE[p.kind].name} to level ${p.level}`, -c, { z: p.zone });
     this.emit('pipe-level', { id: p.id, level: p.level });
     return ok('Upgraded.');
@@ -1116,7 +1131,7 @@ export class Game {
     if (!C) return fail('Unknown account type.');
     if (!s.zones.includes(C.zone)) return fail('Not available in your districts yet.');
     if (C.needs && !s.mil[C.needs]) return fail(`Unlocks at Milestone ${C.needs.slice(1)}.`);
-    if (s.clients.filter((c) => c.tier === tier && !c.done && s.hour < c.until).length >= C.max) return fail('You already hold the maximum of these accounts.');
+    if (this.liveClients(tier).length >= C.max) return fail('You already hold the maximum of these accounts.');
     if (s.pipes.length < C.minRunning) return fail(`This account's SLA needs ${C.minRunning} pipeline${C.minRunning > 1 ? 's' : ''} running. Build the capacity first, then sign the client.`);
     const q = this.clientQuote(tier);
     if (!q.worthwhile && !opts.force) return fail(`This contract could not earn back its ${money(q.cac)} before day 90: ${q.payDays} paying day${q.payDays === 1 ? '' : 's'} are left and it needs ${Math.ceil(q.payback)}.`, q);
@@ -1128,6 +1143,8 @@ export class Game {
     this.emit('client', { tier });
     return ok('Account signed.', q);
   }
+  /** The accounts that still pay: a contract past its last payment stays in `s.clients` until the next midnight closes it, and counts for nothing meanwhile (the slot is free the hour after the last payment). `tier`: only that kind. */
+  liveClients(tier) { const s = this.s; return s.clients.filter((c) => (tier == null || c.tier === tier) && !c.done && s.hour < c.until); }
   runningPipes() { return this.s.pipes.filter((p) => p.status === 'running').length; }
 
   // ------------------------------------------------------------------ bank
@@ -1160,7 +1177,9 @@ export class Game {
     if (block) return fail(block);
     const r = this.loanRoom(prod);
     amount = Math.min(+amount || 0, r.room);
-    if (!(amount >= 0.01)) return fail('Nothing available to draw. Your debt-to-equity ratio caps borrowing at 3.0.'); // less than a cent is no loan (and would only add an empty record)
+    if (!(amount >= 0.01)) { // less than a cent is no loan (and would only add an empty record); the reason is the limit that binds
+      return fail(r.limit - r.owed <= 0.01 ? `The ${L.name} is fully drawn (limit ${money(r.limit)}).` : 'Nothing available to draw. Your debt-to-equity ratio caps borrowing at 3.0.');
+    }
     const fee = amount * L.fee;
     s.cash += amount - fee;
     if (prod === 'enterprise' && !s.loans.some((l) => l.prod === 'enterprise')) s.entFeeNext = s.hour + L.every; // the facility's monthly fee starts with its first draw
@@ -1281,7 +1300,7 @@ export class Game {
         s.entFeeNext = s.hour + LOANS.enterprise.every;
         const drawn = ent.reduce((a, l) => a + l.principal + l.accr, 0);
         const fee = Math.max(0, LOANS.enterprise.limit * this.B.creditLimitMult - drawn) * LOANS.enterprise.commit;
-        if (fee > 0) { ent[0].principal += fee; this.led('loan', 'Unused-commitment fee', -fee); }
+        if (fee > 0) { ent[0].principal += fee; this.led('loan', 'Unused-commitment fee', 0, { fee, memo: true }); } // no cash moves: the fee is added to the loan and leaves with the repayment, which is the row that holds it
       }
     }
     if (s.cash < 0) { const od = -s.cash * 0.005; s.cash -= od; s.overdraft += od; this.led('overdraft', 'Overdraft interest', -od); if (day % 3 === 0) this.note('bad', `Cash is negative (${money(s.cash)}). Overdraft interest is accruing.`); }
@@ -1290,7 +1309,7 @@ export class Game {
     for (const r of s.royalties) {
       if (r.dir !== 'pay') continue;
       if (s.hour <= r.until) r.arrears = (r.arrears || 0) + r.perDay;
-      if (this.env.peerClosed?.(r.peer)) { if (r.arrears > 0) this.note('info', `A royalty stream you owed ended: the founder it was owed to has finished their run.`); r.arrears = 0; r.until = -1; continue; }
+      if (this.env.peerClosed?.(r.peer)) { if (r.arrears > 0) this.note('info', `A royalty stream you owed ended: the founder it was owed to has finished their run or is selling their business.`); r.arrears = 0; r.until = -1; continue; }
       let pay = Math.min(r.arrears || 0, Math.max(0, s.cash), r.perDay * ROYALTY_MSGS); // a dozen messages a day at most: a long arrears is paid down over several days, not in one burst the relay's rate limit would drop (and the money with it)
       if (pay < 0.005) continue;
       s.cash -= pay; r.arrears -= pay;
@@ -1420,6 +1439,15 @@ export class Game {
     const d = a.known ? this._disclosed(a) : a;
     return { id: a.id, cls: a.cls, cond: a.cond, quality: d.quality, wear: a.wear, zone: a.zone, fmv: this.val(a), basis: a.basis, ...(a.known ? { known: true } : {}) };
   }
+  /** A swap refused on what a crate is REALLY worth tells its owner (with no number) that something they hold is not what it looks like. That is an appraisal, and Read is what appraisals cost: the refusal charges
+   *  SWAPS.appraisal of the described value it was refused at (what the founder has, at least a cent), is a ledger row and is counted (`s.meta.appraisals`), so it cannot be asked for nothing, crate after crate,
+   *  to find the counterfeits in a lot. */
+  _appraisal(value) {
+    const s = this.s, fee = Math.min(Math.max(0, s.cash), Math.max(0.01, Math.round(fin(value, 0) * SWAPS.appraisal * 100) / 100));
+    const m = (s.meta ||= {});
+    m.appraisals = (m.appraisals || 0) + 1;
+    if (fee > 0) { s.cash -= fee; this.led('verify', 'Appraisal: a swap was refused on what a crate is worth', -fee, { fee }); }
+  }
   /** Fair value of one side of an offer. `landing`: the crates are valued where THIS founder would hold them (one from a district they cannot enter lands in the nearest open one and is worth what it is worth there).
    *  `nw`: the net worth of whoever promises the royalty. */
   sideValue(side, opts) {
@@ -1440,9 +1468,19 @@ export class Game {
   checkOffer(offer, as, { landing } = {}) {
     const mine = as ? as === 'offerer' : !offer.from || offer.from === this.s.pid;
     const nw = isNum(offer.nw) ? offer.nw : mine ? this.netWorth() : 0; // an offer from a classmate that does not say what they are worth promises no royalty that counts
-    const va = this.sideValue(offer.give, { landing: landing === false ? false : !mine, nw }), vb = this.sideValue(offer.want, { landing: landing === false ? false : mine });
-    const variance = fmvVariance(va, vb);
-    return { va, vb, variance, ok: variance <= FMV_BAND, flagged: variance > FMV_BAND };
+    const look = (lands) => {
+      const va = this.sideValue(offer.give, { landing: lands === false ? false : !mine, nw }), vb = this.sideValue(offer.want, { landing: lands === false ? false : mine });
+      const variance = fmvVariance(va, vb);
+      return { va, vb, variance, ok: variance <= FMV_BAND, flagged: variance > FMV_BAND };
+    };
+    // A proposal of mine, asked about without saying how, is asked as createOffer asks it: both ways a founder can read it (each crate where it sits; the crates asked for where they would land with me) and the stricter
+    // stands, so the preview and the proposal agree. It is `flagged` (extreme, and reported to the instructor) only when it is out of the band both ways: a bid for a crate from a district I have not opened that is fair
+    // by what the crate is worth to me is no misconduct, only an offer nobody holding the crate can take.
+    if (mine && landing === undefined) {
+      const sits = look(false), lands = look(true), w = sits.variance >= lands.variance ? sits : lands;
+      return { ...w, ok: sits.ok && lands.ok, flagged: !sits.ok && !lands.ok };
+    }
+    return look(landing);
   }
   /** What an asset would be worth in YOUR hands: Ops restores broken goods, Growth monetises digital ones. */
   projected(pubAsset, skills, mods = this.mods()) {
@@ -1584,13 +1622,15 @@ export class Game {
     const asked = { ...offer, give: { ...offer.give, assets: assets.map((a) => this._described(a)) } };
     const seen = this.checkOffer(asked, 'offerer', { landing: false });
     offer.check = seen;
+    const lands = this.checkOffer(asked, 'offerer', { landing: true });
     if (!seen.ok) {
+      // ...but a bid that is fair by what the crate is worth to this founder (it would land somewhere else) is not misconduct, however far it is from the price its owner sees: refused, and said so, with nobody told
+      if (lands.ok) return fail('Nobody can take that: a crate you asked for sits in a district you have not opened, where its owner values it far above what it would be worth to you. It was not sent.', { offer, chk: lands });
       this.out.push({ t: 'flag', offer: { id: offer.id, from: s.pid, to, variance: seen.variance, va: seen.va, vb: seen.vb } });
       return fail(`Extreme Asymmetric Premium Warning: this deal deviates ${(seen.variance * 100).toFixed(0)}% from fair market value (limit ${FMV_BAND * 100}%). It was blocked and flagged for your instructor.`, { offer, chk: seen });
     }
-    const lands = this.checkOffer(asked, 'offerer');
     if (!lands.ok) return fail(`This deal deviates ${(lands.variance * 100).toFixed(0)}% from fair market value once what you ask for lands in a district you can hold it in (limit ${FMV_BAND * 100}%). It was blocked.`, { offer, chk: lands });
-    if (!this.checkOffer(offer, 'offerer').ok) return fail(UNTRADEABLE);
+    if (!this.checkOffer(offer, 'offerer', { landing: true }).ok) { this._appraisal(seen.va); return fail(UNTRADEABLE); }
     if (giveCash > s.cash) return fail('You do not have that much cash.');
     const going = new Set(giveIds);
     s.assets = s.assets.filter((a) => !going.has(a.id));
@@ -1639,7 +1679,7 @@ export class Game {
     const seen = this.checkOffer({ ...o, want: { assets: held ? mine.map((a) => this._described(a)) : o.want.assets, cash: o.want.cash } }, 'acceptor');
     if (!seen.ok) return fail(`Blocked: ${(seen.variance * 100).toFixed(0)}% off fair market value.`, { chk: seen });
     const chk = this.checkOffer({ ...o, want: { assets: sending, cash: o.want.cash } }, 'acceptor');
-    if (!chk.ok) return fail(UNTRADEABLE);
+    if (!chk.ok) { this._appraisal(seen.vb); return fail(UNTRADEABLE); }
     if (!held) return fail('You no longer hold the asset they asked for.');
     if (o.want.cash > s.cash) return fail('You do not have the cash they asked for.');
     if (npc && o.give.royalty) return fail('The Practice Partner does not pay royalties.');
@@ -1658,7 +1698,11 @@ export class Game {
     this.led('p2p', `Swapped with ${o.fromHandle || o.from}`, chk.va - chk.vb, { offer: o.id, peer: o.from, peerSkills: o.skills, gave: mine.map((a) => a.cls), got: got.map((a) => a.cls), va: chk.va, vb: chk.vb, variance: chk.variance, ...(npc ? { npc: true } : {}) });
     return ok('Deal done.', { deliver: { assets: sending, cash: o.want.cash }, chk });
   }
-  /** The reply to an offer, if it is exactly what the offer asked for: the same crates (ids, classes, districts) and the same cash. Anything else is not that swap. */
+  /** The reply to an offer, if it is what the offer asked for: the same crates (ids and classes) and the same cash. Anything else is not that swap.
+   *  The acceptor has ALREADY committed when this runs (it changed hands on its side at the confirmation), so a reply an honest acceptor can send must never be refused here: that is how a crate was made
+   *  twice and the acceptor's cash and crate were destroyed. So the test is only what no honest reply fails: a crate keeps its id and class, but not its district (the acceptor may have moved it since the
+   *  offer was described; it is credited where it would be worth less to this founder, never better than described), and the floor looks at crates and cash together (a counterfeit sent with the cash
+   *  the deal also asked for is a fair deal the acceptor's own looks passed). */
   _delivered(o, delivery) {
     if (!delivery || typeof delivery !== 'object') return null;
     const list = this._wireList(delivery.assets), wanted = o.want?.assets || [];
@@ -1667,16 +1711,18 @@ export class Game {
     const assets = [];
     for (const w of wanted) {
       const a = by.get(w.id);
-      if (!a || a.cls !== w.cls || a.zone !== w.zone) return null;
-      // credited as the proposer described it and no better: what the reply says about a crate's quality, wear and condition is the replier's word, and a crate described as near-worthless (which the guardrail
-      // priced as near-worthless) must not come back as a perfect one
-      assets.push({ ...a, cond: a.cond === 'broken' || w.cond === 'broken' ? 'broken' : 'ok', quality: Math.min(a.quality, w.quality), wear: Math.min(a.wear, w.wear) });
+      if (!a || a.cls !== w.cls) return null;
+      // credited as the proposer described it and no better: what the reply says about a crate's quality, wear, condition and district is the replier's word, and a crate described as near-worthless (which the
+      // guardrail priced as near-worthless) must not come back as a perfect one
+      const c = { ...a, cond: a.cond === 'broken' || w.cond === 'broken' ? 'broken' : 'ok', quality: Math.min(a.quality, w.quality), wear: Math.min(a.wear, w.wear) };
+      if (c.zone !== w.zone && this.sideValue({ assets: [{ ...c, zone: w.zone }] }, { landing: true }) <= this.sideValue({ assets: [c] }, { landing: true })) c.zone = w.zone;
+      assets.push(c);
     }
-    // ...and a reply far worse than the description is not that swap: both ends' +/-40% checks could not have let it through, so nothing is credited and the escrow stays held
-    const asked = this.sideValue({ assets: wanted }, { landing: true }), came = this.sideValue({ assets }, { landing: true });
-    if (asked > 0 && came < asked * DELIVERY_FLOOR) return null;
     const want = o.want?.cash || 0, cash = delivery.cash == null ? 0 : delivery.cash;
     if (!isNum(cash) || Math.abs(cash - want) > 0.005) return null;
+    // ...and a reply far worse than the description is not that swap: both ends' +/-40% checks could not have let it through, so nothing is credited and the escrow stays held
+    const asked = this.sideValue({ assets: wanted, cash: want }, { landing: true }), came = this.sideValue({ assets, cash: want }, { landing: true });
+    if (asked > 0 && came < asked * DELIVERY_FLOOR) return null;
     return { assets, cash: want };
   }
   /** `opts.npc`: the reply is the Practice Partner's (no XP, not a counted swap). `opts.from`: who sent the reply, when the caller knows it (the room tells it); it must be the one the offer was made to. */
@@ -1754,7 +1800,7 @@ export class Game {
       pid: s.pid, handle: s.handle, perks: [...s.perks], specialty: s.specialty, skills: { ...s.skills }, level: this.level(), hour: s.hour,
       nw, cash: s.cash, debt: this.debt(), startCap: s.startCapital, eei: this.eei(), zones: Math.max(...s.zones),
       pipelines: s.pipes.length, lastAutoHour: s.lastAuto, autoEligible: s.mil.m1 && !s.over, niches: this.niches48(),
-      cmAvg: s.cm.n ? s.cm.sum / s.cm.n : 0, p2p: s.p2p, trades: s.trades, flags: { insolvent: s.insolvent, exited: !!s.exit, over: s.over },
+      cmAvg: s.cm.n ? s.cm.sum / s.cm.n : 0, p2p: s.p2p, trades: s.trades, flags: { insolvent: s.insolvent, exited: !!s.exit, over: s.over, exiting: !!s.exiting },
       shockLog: s.shockLog.map((x) => ({ id: x.id, nw: x.nw, nwAfter: x.nwAfter, pivots: x.pivots, de: x.de })),
       hoursPlayed: Math.round((s.hour - s.startHour) / 24 * 10) / 10, auditFail: s.auditFail,
       inventory: s.assets.slice(0, 24).map((a) => this.pub(a)), mil: s.mil,
@@ -1800,13 +1846,18 @@ const AFTER = {
   pitch: (g, r) => { if (r?.ok) g.s.acc.profit += r.outcome === 'scam' ? -(r.asset?.basis || 0) : r.rejected || !isNum(r.profit) ? 0 : r.profit; },
   sellPool: (g, r) => { if (r?.ok && Array.isArray(r.per)) g.s.acc.profit += r.total - r.per.reduce((x, y) => x + (y.a.basis || 0), 0); },
 };
+/** Closed methods that still run in one case. finalizeOffer: the acceptor of a swap commits when the proposer CONFIRMS (Session._onConfirm), so a swap whose escrow is held for an acceptor is finished when their reply
+ *  comes even if the bell rang or an exit began in between; refused, the acceptor's crate and cash are gone and the proposer's side is made twice. The escrow is the proof (only a confirmed one has `lockedBy`). */
+const OPEN_WHEN = {
+  finalizeOffer: (g, a) => g.s.escrow.some((e) => e.offerId === a[0] && e.lockedBy),
+};
 (function install() {
   const P = Game.prototype, shut = new Set(CLOSED_METHODS);
   for (const name of new Set([...CLOSED_METHODS, ...Object.keys(ARGS), ...Object.keys(AFTER)])) {
     const f = P[name];
     if (typeof f !== 'function') continue;
     P[name] = function guarded(...a) {
-      if (shut.has(name)) { const why = closedWhy(this); if (why) return fail(why); }
+      if (shut.has(name)) { const why = closedWhy(this); if (why && !OPEN_WHEN[name]?.(this, a)) return fail(why); }
       const refused = ARGS[name]?.(this, a);
       if (refused !== undefined) return refused;
       const r = f.apply(this, a);

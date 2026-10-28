@@ -70,7 +70,7 @@ export const assets = {
   },
   fleet: {
     name: 'Delivery Fleet (6 vans)', icon: '🚚', base: 32000, sc: 6, dep: 3, repair: 7000, fakeRisk: 0.05,
-    dem: { 8: 3, 9: 7, 11: 8, 12: 3, 13: 3 }, tags: ['vehicle', 'b2b'],
+    dem: { 8: 3, 9: 7, 11: 8, 12: 3, 13: 3 }, tags: ['vehicle', 'b2b', 'tool'],
   },
   // ---- Tech Corridor (10): digital goods wear out fast
   saas: {
@@ -91,7 +91,7 @@ export const assets = {
   },
   gameCatalog: {
     name: 'Casual Game Back-Catalog (6 titles)', icon: '🕹️', base: 36000, sc: 8, dep: 1, yield: 0.006, fakeRisk: 0.3,
-    dem: { 10: 6, 12: 8, 13: 2 }, tags: ['ip', 'digital'],
+    dem: { 10: 6, 12: 8, 13: 2 }, tags: ['ip', 'digital', 'finance'],
   },
   // ---- Farmland Co-op (11): stock spoils
   produceReefer: {

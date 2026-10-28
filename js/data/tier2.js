@@ -63,7 +63,7 @@ export const assets = {
     dem: { 5: 9, 4: 3 }, repair: 130,
   },
   textbooks: {
-    name: 'Pallet: Exam-Prep Textbooks', icon: '📓', base: 540, sc: 4, dep: 3, tags: ['paper', 'training'],
+    name: 'Pallet: Exam-Prep Textbooks', icon: '📓', base: 540, sc: 4, dep: 3, tags: ['paper', 'training', 'tool'],
     dem: { 5: 8, 3: 3 },
   },
   laptops: {
@@ -85,7 +85,7 @@ export const assets = {
     dem: { 6: 10, 4: 3 }, fakeRisk: 0.2,
   },
   vinylRecords: {
-    name: 'Estate Vinyl Collection', icon: '💿', base: 700, sc: 8, dep: 1, tags: ['retro', 'collectible', 'media'],
+    name: 'Estate Vinyl Collection', icon: '💿', base: 700, sc: 8, dep: 1, tags: ['collectible', 'media', 'prestige'], // a collection with a provenance, not a crate of records
     dem: { 6: 8, 4: 3 }, fakeRisk: 0.3,
   },
   watches: {
@@ -111,7 +111,7 @@ export const assets = {
     dem: { 7: 8, 8: 6, 9: 3 }, repair: 1050,
   },
   domain: {
-    name: 'Premium Keyword Domain', icon: '🔗', base: 3500, sc: 8, dep: 1, tags: ['digital', 'b2b'],
+    name: 'Premium Keyword Domain', icon: '🔗', base: 3500, sc: 8, dep: 1, tags: ['digital', 'b2b', 'trend'],
     dem: { 7: 8, 10: 3 }, fakeRisk: 0.2,
   },
 

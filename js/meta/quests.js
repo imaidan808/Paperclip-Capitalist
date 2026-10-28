@@ -236,7 +236,7 @@ export const ACHIEVEMENTS = [
   // ---------------------------------------------------------------- audits
   ach('a-clean-books', 'rare', 'Clean Books', '📒', 'Pass 3 audits.',
     { event: 'audit', match: { ok: true }, count: 3 }, 260),
-  ach('a-audit-proof', 'epic', 'Audit-Proof', '🛡️', 'Pass 5 audits. Your paperwork could be framed.',
+  ach('a-audit-proof', 'epic', 'Audit-Proof', '🛡️', 'Pass 5 audits. Your paperwork could be framed. Audits come every 15 days once Industrial Park is open, so open it by about day 30.',
     { event: 'audit', match: { ok: true }, count: 5 }, 700),
   ach('a-lucky-bypass', 'rare', 'Not Today, Auditor', '🎲', 'Skip the paperwork and still pass an audit. Do not make a habit of it.',
     { event: 'audit', match: { choice: 'C', ok: true }, count: 1 }, 250, { hidden: true }),

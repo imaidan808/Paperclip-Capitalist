@@ -142,7 +142,7 @@ A campaign of ten short missions in the real UI against the real engine in a scr
 
 ## 11. Balance targets (tested with the bot)
 
-Time to reach each district's gate for a competent bot, by zone: 1-4 within days 1-14; 5 (Bank) by day 14-22; 9 (audits) by day 30-40; 13 (Corporate) by day 55-70; 16 by day 85+ only for strong play. The target is that no Background pair deviates from the median milestone day by more than 35% (reported by `tests/balance.mjs`; docs/BALANCE.md lists the pairs that do). The late game is held too: no more than about one run in six reaches district 16 by day 90, and the day-90 net worth of the 90th percentile is at most about three times the 10th's. Skill play must matter: Deal-Room-optimal play beats Quick play by 15-30% on profit per deal; random play loses to Quick.
+Time to reach each district's gate for a competent bot, by zone: 1-4 within days 1-14; 5 (Bank) by day 14-22; 9 (audits) by day 30-40; 13 (Corporate) by day 55-70; 16 by day 85+ only for strong play. The target is that no Background pair deviates from the median milestone day by more than 35% (reported by `tests/balance.mjs`; docs/BALANCE.md lists the pairs that do). The late game is held too, for a bot that decides every four virtual hours (at every three it is about one run in five: docs/BALANCE.md): no more than about one run in six reaches district 16 by day 90, and the day-90 net worth of the 90th percentile is at most about three times the 10th's. Skill play must matter: Deal-Room-optimal play beats Quick play by 15-30% on profit per deal; random play loses to Quick.
 
 ## 4.1 District numbers and rule semantics (what the engine will do with your data)
 

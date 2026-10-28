@@ -78,13 +78,13 @@ export const CODEX = [
     id: 'information-asymmetry', title: 'Information Asymmetry', icon: '🕵️', category: 'Risk', zone: 4,
     summary: "One side knows more than the other. In the Pawn District the seller knows what is real, and you pay for what you cannot check.",
     body: [
-      "The Pawn District has a 22% fake rate: about one lot in five on the counter is a fake, and they pile up on the goods that are easiest to fake. A vintage watch is fake about a third of the time (32%), a fountain pen a third as often as that. The person behind it knows which crate holds the fake. You do not. That gap in what each side knows is information asymmetry, and it decides who wins most trades.",
+      "The Pawn District has a 22% fake rate: about one lot in five on the counter is a fake, piled on the goods easiest to fake. A vintage watch is fake about a third of the time (32% at the start, a little more later), a fountain pen a third as often as that. The person behind it knows which crate holds the fake. You do not. That gap in what each side knows is information asymmetry, and it decides who wins most trades.",
       "When you cannot tell good from fake, the honest price for a blind lot is the weighted average of what it might be worth, not the price of the genuine thing. Pay more than that and you hand money to the seller on average. Information is worth buying whenever it avoids more loss than it costs.",
       "The Read stage (Inspect) shrinks the gap. Each probe tells you something, noisily, about condition and authenticity, and your Ops skill decides how many probes you get and how accurate they are.",
     ],
     formula: "blind value = P(genuine) x genuine value + P(fake) x fake value",
     example: {
-      setup: "A Pawn-Shop Wristwatch sits on the Pawn District counter. Genuine, it is worth $314.60. A fake is worth 8% of that, $25.17. A watch is fake about 32% of the time (the counter's 22%, weighted toward the goods that are easiest to fake). Lots are posted at 97% of the described value at Ops 1: the seller asks $305.16.",
+      setup: "A Pawn-Shop Wristwatch sits on the Pawn District counter. Genuine, it is worth $314.60. A fake is worth 8% of that, $25.17. A watch is fake about 32% of the time at the start (the counter's 22%, weighted toward the goods that are easiest to fake). Lots are posted at 97% of the described value at Ops 1: the seller asks $305.16.",
       steps: [
         "Weighted value of a blind lot: 0.68 x $314.60 + 0.32 x $25.17 = $221.98.",
         "At $305.16 you overpay by $83.18 on average, even though the genuine watch really is worth $314.60.",
