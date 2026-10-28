@@ -85,13 +85,17 @@ body:has(.stage) { background-image: none; overflow: hidden; overscroll-behavior
 .pcard .pt { color: var(--green); font-weight: 700; }
 
 .res { display: flex; flex-wrap: wrap; gap: var(--sp-2); justify-content: center; }
-.rs { display: block; min-width: 6.8rem; padding: .3rem var(--sp-3) .35rem; background: var(--plate); border: var(--bw) solid var(--line); border-radius: var(--r-2); box-shadow: var(--elev-1); color: var(--ink); font: inherit; text-align: left; cursor: pointer; }
+.rs { position: relative; isolation: isolate; display: block; min-width: 6.8rem; padding: .3rem var(--sp-3) .35rem; background: var(--plate); border: var(--bw) solid var(--line); border-radius: var(--r-2); box-shadow: var(--elev-1); color: var(--ink); font: inherit; text-align: left; cursor: pointer; }
 .rs small { display: block; font-size: var(--t-micro); line-height: var(--lh-tight); text-transform: uppercase; letter-spacing: var(--ls-caps); color: var(--mute); }
 .rs b { display: block; font-size: var(--t-lg); line-height: 1.2; white-space: nowrap; }
 .rs .bar { display: block; height: .3rem; margin-top: .15rem; }
-.rs.up { animation: rs-up .9s ease-out; } .rs.down { animation: rs-down .9s ease-out; } /* background-color only: the shorthand would flash the plate's gradient off */
-@keyframes rs-up { 0% { background-color: var(--good-bg); } 100% { background-color: var(--panel); } }
-@keyframes rs-down { 0% { background-color: var(--bad-bg); } 100% { background-color: var(--panel); } }
+/* A number going up or down tints its tile green or red, then fades. The tint is a layer of its own laid over the plate and under the words: the plate is an opaque gradient
+   (a background-image), so animating the tile's own background-color would be painted over and never show. z-index -1 inside the tile's own stacking context (isolation)
+   puts the layer above the plate's background and below the text; it fades by opacity alone, which the compositor runs. */
+.rs::before { content: ""; position: absolute; inset: 0; z-index: -1; border-radius: max(0px, calc(var(--r-2) - var(--bw))); opacity: 0; pointer-events: none; }
+.rs.up::before { background: var(--good-bg); animation: rs-flash .9s ease-out; }
+.rs.down::before { background: var(--bad-bg); animation: rs-flash .9s ease-out; }
+@keyframes rs-flash { 0% { opacity: 1; } 100% { opacity: 0; } }
 
 .ctl { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--sp-2); align-items: center; min-width: 0; }
 .ctl select { min-height: var(--target); padding: .1rem var(--sp-2); border-radius: var(--r-2); box-shadow: var(--elev-1); }
