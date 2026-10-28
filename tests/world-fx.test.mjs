@@ -143,6 +143,49 @@ test('price tags that pile up are nudged apart, nearest label first, and name ta
   assert.ok(seen[0].y < w.H / 2 - 20 - 5, 'the farthest was nudged up: ' + seen[0].y);
 });
 
+test('the whole-island view keeps every district\'s name tag, near its district and clear of the others; passing notes give way to the tags, and to every one on a phone', async () => {
+  const g = newGame(3); // day 0: one district open, fifteen locked, so every district has a "Opens at" note and the island is as crowded as it gets
+  for (const [W0, H0] of [[390, 844], [1024, 768], [1440, 900]]) {
+    const { w } = await world(g, { zone: 1, sel: new Set() }, [W0, H0]);
+    w.mode = 'world'; w.fit(false); w.draw(); assert.deepEqual(faults(w), []);
+    assert.ok(w.cam.z < 0.45, 'the island is zoomed out past the pips: ' + w.cam.z);
+    assert.equal(w.tagN, 16, `${W0}px: every district keeps its tag (none is left out)`);
+    const rects = []; for (let i = 0; i < w.tagN; i++) { const t = w.tagPlan[i], wd = t.text.length * 6.7 + 14; rects.push({ t, x0: t.x - wd / 2, x1: t.x + wd / 2, y0: t.y - 9, y1: t.y + 9 }); }
+    for (const a of rects) {
+      assert.ok(a.x0 >= 0 && a.x1 <= W0, `${W0}px: tag ${a.t.id} is whole on the screen`);
+      assert.ok(Math.abs(a.t.y - a.t.py) <= 38 && Math.abs(a.t.x - a.t.px) <= 68 + 70, `${W0}px: tag ${a.t.id} stays near its district`);
+      let covered = 0; for (const b of rects) if (b !== a) { const ow = Math.min(a.x1, b.x1) - Math.max(a.x0, b.x0), oh = Math.min(a.y1, b.y1) - Math.max(a.y0, b.y0); if (ow > 0 && oh > 0) covered += ow * oh; }
+      assert.ok(covered <= 0.1 * (a.x1 - a.x0) * 18, `${W0}px: tag ${a.t.id} is covered ${Math.round(100 * covered / ((a.x1 - a.x0) * 18))}% by the others`);
+    }
+    const here = w.tagPlan[0]; assert.equal(here.id, w.player.zone, 'the district you are in is placed first'); assert.equal(here.k, 0, 'and stands exactly over its district'); assert.ok(here.text.startsWith('●'), 'and carries the marker that says you are there');
+    const notes = w.overlay.filter((o) => o.lo); assert.ok(notes.length >= 10, 'the locked gates and the player each have a passing note: ' + notes.length);
+    for (const o of notes.filter((n) => n.on)) { // a note that is shown never lies on a name tag
+      const k = qs(Math.min(1.25, Math.max(0.75, w.cam.z))), wd = (o.n * 6.7 + 14) * k, x0 = o.px - wd / 2, x1 = o.px + wd / 2, y0 = o.py - 9 * k, y1 = o.py + 9 * k; // the size the placement works with
+      for (const a of rects) assert.ok(!(x0 < a.x1 && x1 > a.x0 && y0 < a.y1 && y1 > a.y0), `${W0}px: a passing note lies on tag ${a.t.id}`);
+    }
+    if (W0 < 500) assert.equal(notes.filter((o) => o.on).length, 0, 'on a phone\'s island no passing note is shown (the tags carry the locks and the marker says where you are)');
+    else assert.ok(notes.some((o) => o.on), `${W0}px: where there is room the notes that clear the tags stay`);
+    const [wx, wy] = w.s2w(W0 - 60, 60), probe = { k: 'chip', lo: 1, n: 14, wx, wy, draw: () => {} }; // a note in an empty corner, where no tag stands
+    w.overlay.push(probe); w.drawOverlay(w.ctx); assert.equal(probe.on, W0 >= 500, W0 < 500 ? 'on a phone\'s island even a note with room is left out' : 'with room, and clear of every tag, a note stays');
+  }
+});
+
+test('name tags that still touch are drawn shorter, never dropped, and the one placed first is on top; zoomed in, with room, each stands over its own district', async () => {
+  const g = newGame(3);
+  const { w } = await world(g, { zone: 1, sel: new Set() }, [390, 844]);
+  w.mode = 'world'; w.fit(false); w.draw();
+  assert.ok(w.tagPlan.slice(0, w.tagN).some((t) => !t.text.includes('  ')), 'on a phone some tags are drawn short (the lock and the number)');
+  const order = []; const chip = w.chip.bind(w); w.chip = (c, x, y, text, ...r) => { order.push(text); chip(c, x, y, text, ...r); };
+  w.draw(); const texts = order.filter((t) => /^(● |\u{1F512} )?\d+( |$)/u.test(t)); assert.equal(texts.length, 16, 'sixteen tags are drawn');
+  assert.ok(texts.at(-1).startsWith('●'), 'the tag placed first (where you are) is drawn last, on top of any that still touch it');
+  w.focusZone(1, false); w.draw(); assert.ok(w.tagN > 0 && w.tagN < 4, 'closed in on one district a phone has only a tag or two on it: ' + w.tagN);
+  const [px, py] = w.s2w(330, 120), note = { k: 'chip', lo: 1, n: 14, wx: px, wy: py, draw: () => {} }; w.overlay.push(note); w.drawOverlay(w.ctx);
+  assert.equal(note.on, true, 'with no crowd of tags a passing note shows again, even on a phone');
+  w.focusZone(5, false); w.cam.z = 0.7; w.clampCam(); w.draw(); assert.deepEqual(faults(w), []);
+  assert.ok(w.tagN > 0 && w.tagN < 16, 'zoomed in to one district only the tags near it are placed: ' + w.tagN);
+  for (let i = 0; i < w.tagN; i++) { const t = w.tagPlan[i]; assert.ok(t.text.includes('  '), 'zoomed in, with room, no tag is short'); assert.equal(t.k, 0, 'and each stands over its own district'); }
+});
+
 test('on the map, cards that would overlap are pushed apart and kept on the screen; region names find a free place', async () => {
   const g = newGame(3); openTo(g, 3);
   const { w } = await world(g, { zone: 1, sel: new Set() }, [390, 700]);
