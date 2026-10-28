@@ -234,7 +234,9 @@ test('rarities are valid and rewards are positive and scale with difficulty', ()
   assert.ok(mean(xp('epic')) > mean(xp('rare')) && mean(xp('rare')) > mean(xp('common')), 'epic > rare > common on average');
   assert.ok(Math.min(...xp('rare')) > Math.max(...xp('common')), 'every rare pays more than every common');
   assert.ok(Math.min(...xp('epic')) > Math.max(...xp('rare')), 'every epic pays more than every rare');
-  for (const a of ACHIEVEMENTS.filter((x) => x.rarity === 'epic')) assert.ok(a.reward.points >= 1, `${a.id}: epics pay a skill point`);
+  // Skill points are scarce (19 at most can ever be spent: tests/audit-content.test.mjs holds the total), so only some epics pay one.
+  for (const a of ACHIEVEMENTS.filter((x) => x.rarity === 'epic')) assert.ok(a.reward.points == null || a.reward.points >= 1, `${a.id}: an epic pays a skill point or none`);
+  assert.ok(ACHIEVEMENTS.filter((x) => x.reward.points).length >= 4, 'some epics still pay a skill point');
   for (const a of ACHIEVEMENTS.filter((x) => x.rarity !== 'epic')) assert.ok(!a.reward.points, `${a.id}: only epics pay skill points`);
 
   // quests: the mastery quest pays more than its arrival quest, and later tiers pay more

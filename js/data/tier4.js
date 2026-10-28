@@ -3,7 +3,7 @@
 //
 //   13 Corporate Valley    enterprise clients; M&A and IPO preparation        teaches enterprise-sales
 //   14 Financial District  credit markets: spreads fall, leverage cuts both   teaches leverage-risk
-//   15 Real Estate Row     rent yields, long cycles, appraisal disputes       teaches asset-cash-flow
+//   15 Real Estate Row     rent yields, foreclosure auctions                  teaches asset-cash-flow
 //   16 Global Exchange     world markets: price gaps are arbitrage            teaches arbitrage-at-scale
 //
 // Pure data, no imports, no randomness. Prices follow market.js: fair = base * (0.5 + (sc * dem - dep) / 100), so the same
@@ -13,7 +13,7 @@
 export const zones = {
   13: {
     id: 13, name: 'Corporate Valley', short: 'Corp. Valley', icon: '🏢',
-    blurb: 'Glass towers, buying committees and long sales cycles. Enterprise clients pay richly and slowly: learn to sell to a room, not a person.',
+    blurb: 'Glass towers, buying committees and big tickets. Enterprise clients pay richly under long contracts: learn to sell to a room, not a person.',
     teaches: 'enterprise-sales', theme: 'corporate', tier: 4,
     gate: 250000, scale: 90000, tax: 0.126, friction: 0.148, pool: 2500000, speed: 4.6, store: 30,
     leadEvery: 3, lotEvery: 4, urgent: 0.076, auto: true, plots: 4,
@@ -35,7 +35,7 @@ export const zones = {
   },
   15: {
     id: 15, name: 'Real Estate Row', short: 'Real Estate', icon: '🏘️',
-    blurb: 'Property pays rent every day you hold it. Cycles are long, appraisals get disputed, and patience is the whole strategy.',
+    blurb: 'Property pays rent every day you hold it. Tickets are big, a quarter of the lots are foreclosure auctions, and patience is the whole strategy.',
     teaches: 'asset-cash-flow', theme: 'realty', tier: 4,
     gate: 1000000, scale: 400000, tax: 0.145, friction: 0.156, pool: 10000000, speed: 5.2, store: 34,
     // Foreclosure sales are the appraisal dispute in game form: a quarter of lots are auctions. Fewer lots refresh (5) and
@@ -50,7 +50,7 @@ export const zones = {
     blurb: 'Gems, art and cargo trade on every continent at different prices. Spot the gap, pay the friction, and exit big.',
     teaches: 'arbitrage-at-scale', theme: 'exchange', tier: 4,
     gate: 2500000, scale: 1000000, tax: 0.1545, friction: 0.16, pool: 25000000, speed: 5.5, store: 36,
-    // Grey-market luxury is arbitrage by another name (parallel imports), so gray is on and counterfeits are common: a tenth of
+    // Gray-market luxury is arbitrage by another name (parallel imports), so gray is on and counterfeits are common: a tenth of
     // lots times the asset's fakeRisk. Customs makes the gap pay for its own freight. Auction houses take 30% of lots.
     leadEvery: 3, lotEvery: 5, urgent: 0.06, auto: true, plots: 3,
     palette: ['#c8a02c', '#14110a'],
@@ -63,11 +63,11 @@ export const assets = {
   // ------------------------------------------------------------------ 13 Corporate Valley (scale $90k)
   franchise: {
     name: 'Master Franchise License (Regional Territory)', icon: '🏷️',
-    base: 120000, sc: 8, dep: 1, dem: { 13: 9, 16: 3 }, tags: ['b2b', 'franchise'], yield: 0.0008,
+    base: 120000, sc: 8, dep: 1, dem: { 13: 9, 16: 3 }, tags: ['b2b', 'franchise'], yield: 0.0035,
   },
   erpBook: {
-    name: 'ERP Licence and Maintenance Book', icon: '🗂️',
-    base: 85000, sc: 7, dep: 2, dem: { 13: 9, 14: 3 }, tags: ['digital', 'b2b'], yield: 0.0006,
+    name: 'ERP License and Maintenance Book', icon: '🗂️',
+    base: 85000, sc: 7, dep: 1, dem: { 13: 9, 14: 3 }, tags: ['digital', 'b2b'], yield: 0.0055,
   },
   hospitalPurchasing: {
     name: 'Hospital Group Purchasing Contract', icon: '📋',
@@ -75,7 +75,7 @@ export const assets = {
   },
   carveOut: {
     // M&A in one lot: a division the parent wants gone. A broken one is a distressed unit; repair is the turnaround.
-    name: 'Corporate Carve-Out: Packaging Division', icon: '🏭',
+    name: 'Corporate Carve-Out: Packaging Division', icon: '📤',
     base: 260000, sc: 5, dep: 2, dem: { 13: 8, 14: 3 }, tags: ['industrial', 'b2b'], repair: 52000,
   },
 
@@ -86,42 +86,42 @@ export const assets = {
     base: 150000, sc: 5, dep: 2, dem: { 14: 9, 13: 5 }, tags: ['finance', 'b2b'], fakeRisk: 1,
   },
   loanBook: {
-    name: 'Consumer Instalment Loan Book', icon: '💳',
-    base: 240000, sc: 6, dep: 2, dem: { 14: 9, 5: 3 }, tags: ['finance', 'consumer'], yield: 0.001, fakeRisk: 0.5,
+    name: 'Consumer Installment Loan Book', icon: '💳',
+    base: 240000, sc: 6, dep: 1, dem: { 14: 9, 5: 3 }, tags: ['finance', 'consumer'], yield: 0.004, fakeRisk: 0.5,
   },
   muniBonds: {
     name: 'Municipal Infrastructure Bond Lot', icon: '📜',
-    base: 350000, sc: 4, dep: 1, dem: { 14: 9, 16: 5 }, tags: ['finance', 'infra'], yield: 0.0006, fakeRisk: 0.05,
+    base: 350000, sc: 4, dep: 1, dem: { 14: 9, 16: 5 }, tags: ['finance', 'infra'], yield: 0.0035, fakeRisk: 0.05,
   },
   royaltyNote: {
-    name: 'Music Catalogue Royalty Note', icon: '🎼',
-    base: 130000, sc: 7, dep: 2, dem: { 14: 7, 12: 3 }, tags: ['finance', 'ip', 'media'], yield: 0.0016, fakeRisk: 0.4,
+    name: 'Streaming Royalty Note', icon: '📀',
+    base: 130000, sc: 7, dep: 1, dem: { 14: 7, 12: 3 }, tags: ['finance', 'ip', 'media'], yield: 0.004, fakeRisk: 0.4,
   },
   insuranceBook: {
     name: 'Homeowners Insurance Book (Renewal Rights)', icon: '🛡️',
-    base: 420000, sc: 6, dep: 1, dem: { 14: 8, 15: 3 }, tags: ['finance', 'home'], yield: 0.0008, fakeRisk: 0.1,
+    base: 420000, sc: 6, dep: 1, dem: { 14: 8, 15: 3 }, tags: ['finance', 'home'], yield: 0.0035, fakeRisk: 0.1,
   },
 
   // ------------------------------------------------------------------ 15 Real Estate Row (scale $400k)
   logisticsWarehouse: {
     name: 'Logistics Warehouse (180,000 sq ft)', icon: '📦',
-    base: 320000, sc: 6, dep: 1, dem: { 15: 9, 13: 3 }, tags: ['realty', 'industrial'], yield: 0.0007, repair: 70000,
+    base: 320000, sc: 6, dep: 1, dem: { 15: 9, 13: 3 }, tags: ['realty', 'industrial'], yield: 0.0036, repair: 70000,
   },
   apartmentBlock: {
     name: 'Apartment Block (24 Units)', icon: '🏠',
-    base: 450000, sc: 7, dep: 1, dem: { 15: 9, 14: 3 }, tags: ['realty', 'home'], yield: 0.0008, repair: 112000,
+    base: 450000, sc: 7, dep: 1, dem: { 15: 9, 14: 3 }, tags: ['realty', 'home'], yield: 0.004, repair: 112000,
   },
   officeFloors: {
     name: 'Downtown Office Floors (Three Leased)', icon: '🏬',
-    base: 1200000, sc: 7, dep: 1, dem: { 15: 8, 14: 3 }, tags: ['realty', 'b2b', 'prestige'], yield: 0.0005, repair: 240000,
+    base: 800000, sc: 7, dep: 1, dem: { 15: 8, 14: 3 }, tags: ['realty', 'b2b', 'prestige'], yield: 0.0035, repair: 160000,
   },
   datacenter: {
     name: 'Server Rack Colocation Hall', icon: '🗄️',
-    base: 520000, sc: 7, dep: 2, dem: { 15: 9, 13: 3 }, tags: ['digital', 'b2b', 'infra'], yield: 0.0008, repair: 95000,
+    base: 520000, sc: 7, dep: 1, dem: { 15: 9, 13: 3 }, tags: ['digital', 'b2b', 'infra'], yield: 0.0055, repair: 95000,
   },
   cellTowers: {
     name: 'Cell-Tower Ground-Lease Portfolio (46 Sites)', icon: '📡',
-    base: 260000, sc: 7, dep: 1, dem: { 15: 8, 16: 3 }, tags: ['infra', 'realty'], yield: 0.0006, repair: 45000,
+    base: 260000, sc: 7, dep: 1, dem: { 15: 8, 16: 3 }, tags: ['infra', 'realty'], yield: 0.0036, repair: 45000,
   },
 
   // ------------------------------------------------------------------ 16 Global Exchange (scale $1M)
@@ -132,16 +132,16 @@ export const assets = {
   },
   watchVault: {
     // The hype market: limited steel sports watches move on trend as much as on craft, so Creators and Veterans feel it differently.
-    name: 'Swiss Watch Collection (12 Pieces)', icon: '⌚',
+    name: 'Swiss Watch Collection (12 Pieces)', icon: '💼',
     base: 380000, sc: 8, dep: 1, dem: { 16: 9, 15: 3 }, tags: ['luxury', 'collectible', 'trend'], fakeRisk: 0.9, repair: 57000,
   },
   postwarCanvas: {
     name: 'Post-War Canvas (Provenance on File)', icon: '🖼️',
-    base: 2600000, sc: 9, dep: 1, dem: { 16: 9, 13: 2 }, tags: ['luxury', 'collectible'], fakeRisk: 1, repair: 650000,
+    base: 1800000, sc: 9, dep: 1, dem: { 16: 9, 13: 2 }, tags: ['luxury', 'collectible'], fakeRisk: 1, repair: 450000,
   },
   copperCargo: {
     // Warehouse-receipt fraud is a real copper story, so the receipts get a fakeRisk.
-    name: 'Copper Cathode Cargo (100 Tonnes)', icon: '🚢',
+    name: 'Copper Cathode Cargo (100 Tonnes)', icon: '🛳️',
     base: 780000, sc: 5, dep: 1, dem: { 16: 8, 13: 3 }, tags: ['industrial', 'bulk', 'energy'], fakeRisk: 0.5,
   },
 };
@@ -161,16 +161,16 @@ export const buyers = {
     hello: 'Four hundred units, nine states, and a board hungry for a new territory. Pitch me.',
   },
   lakeshoreHealth: {
-    zone: 13, name: 'Lakeshore Health Network', icon: '🏥', pop: 0.65,
+    zone: 13, name: 'Evergreen Health Network', icon: '🏥', pop: 0.65,
     like: { medical: 1, b2b: 0.4, digital: 0.4 }, budget: [20000, 210000],
     style: 'analytical', patience: 7, bias: 'price',
     hello: 'The committee meets Thursday. Bring numbers it can read aloud, slowly.',
   },
   harbourlinePE: {
-    zone: 13, name: 'Priya Nair, Harbourline Capital', icon: '📊', pop: 0.45,
+    zone: 13, name: 'Rhea Nair, Harborline Capital', icon: '📊', pop: 0.45,
     like: { franchise: 0.8, digital: 0.6, industrial: 0.5, b2b: 0.45, finance: 0.4 }, budget: [30000, 450000],
     style: 'analytical', patience: 4, bias: 'story',
-    hello: "I've modelled this at three entry multiples already. Where's your floor?",
+    hello: "I've modeled this at three entry multiples already. Where's your floor?",
   },
   altitudeSI: {
     zone: 13, name: 'Altitude Systems Integrators', icon: '🖥️', pop: 0.75,
@@ -226,7 +226,7 @@ export const buyers = {
     zone: 14, name: 'Echo Rights Capital', icon: '🎧', pop: 0.25,
     like: { media: 1, ip: 0.9, finance: 0.4, collectible: 0.3 }, budget: [25000, 320000],
     style: 'friendly', patience: 5, bias: 'scarcity',
-    hello: "We fund the songs people hum in the shower. Tell me this catalogue's story.",
+    hello: "We fund the songs people hum in the shower. Tell me this catalog's story.",
   },
 
   // ------------------------------------------------------------------ 15 Real Estate Row: appraisal-minded, patient
@@ -237,7 +237,7 @@ export const buyers = {
     hello: 'We underwrite on cap rate and nothing else. What is the net operating income?',
   },
   okaforLandlord: {
-    zone: 15, name: 'Mrs. Okafor, 40 Doors', icon: '🔑', pop: 0.7,
+    zone: 15, name: 'Mrs. Adeyemi, 40 Doors', icon: '🔑', pop: 0.7,
     like: { home: 1, realty: 0.45, consumer: 0.3 }, budget: [60000, 700000],
     style: 'friendly', patience: 7, bias: 'story',
     hello: "Thirty years collecting rent on the first of the month. Don't rush me, dear.",
@@ -249,10 +249,10 @@ export const buyers = {
     hello: "Land is the one thing they aren't making more of. I'll take the good ones.",
   },
   nimbusCloud: {
-    zone: 15, name: 'Nimbus Cloud Site Team', icon: '☁️', pop: 0.3,
+    zone: 15, name: 'Stratus Cloud Site Team', icon: '☁️', pop: 0.3,
     like: { infra: 1, digital: 1, b2b: 0.4, energy: 0.4 }, budget: [200000, 2200000],
     style: 'analytical', patience: 5, bias: 'utility',
-    hello: 'Power, fibre, cooling. If your hall has all three, name your price.',
+    hello: 'Power, fiber, cooling. If your hall has all three, name your price.',
   },
   redlineFreight: {
     zone: 15, name: 'Redline Freight & Logistics', icon: '🚛', pop: 0.6,
@@ -275,7 +275,7 @@ export const buyers = {
     hello: 'Discretion is part of the price. Your paperwork first, then your number.',
   },
   sanghviMumbai: {
-    zone: 16, name: 'Sanghvi Jewellers, Mumbai', icon: '💍', pop: 0.65,
+    zone: 16, name: 'Sanghvi Jewelers, Mumbai', icon: '💍', pop: 0.65,
     like: { gem: 1, luxury: 0.6, collectible: 0.3 }, budget: [100000, 2000000],
     style: 'friendly', patience: 7, bias: 'story',
     hello: 'Sit, have chai. We will haggle properly, yes? It is only polite.',

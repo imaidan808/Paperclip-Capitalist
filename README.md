@@ -1,23 +1,26 @@
 # Paperclip Capitalist
 
-A gamified entrepreneurship simulation for higher education. Students turn **one paperclip** (or $5,000, or $50,000) into an automated business over a virtual **90-day** run, balancing idle-game progression against real curriculum: asset valuation and arbitrage, working capital, customer acquisition cost vs lifetime value, and macro risk. A class shares one economy, so the obvious deal gets crowded and the Creativity Engine punishes the herd.
+A gamified entrepreneurship simulation for higher education. Students turn **one paperclip** and no cash into an automated business over a virtual **90-day** run, balancing idle-game progression against real curriculum: asset valuation and arbitrage, working capital, customer acquisition cost vs lifetime value, and macro risk. A class shares one economy, so the obvious deal gets crowded and the Creativity Engine punishes the herd.
 
 Runs entirely in the browser. No build step, no dependencies, no accounts, no tracking.
 
-**The game is a living 2.5D world.** An isometric island with three elevated districts (Scrap Yard, Metro Hub, Corporate Valley) mirrors your run: buyers walk in with their offers over their heads, auction pallets and your stock are crates, every pipeline is a building that grows with its level, freight is a truck on the avenue, the virtual hour sets the light, and a credit crunch brings rain. Click things to play: a buyer to pitch, a pallet to buy, a plot to hire, the bank to borrow. The **Island map** tab pulls back to the whole economy. Everything in the world is also in a keyboard-accessible list below it.
+**The game is a living 2.5D world.** An isometric island of sixteen districts, from the Scrap Yard to the Global Exchange, joined by roads, bridges and a ferry, mirrors your run: buyers walk in with their offers over their heads, auction pallets and your stock are crates, every pipeline is a building that grows with its level, freight is a truck on the avenue, the virtual hour sets the light, and a credit crunch brings rain. Click things to play: a buyer to pitch, a pallet to buy, a plot to hire, the bank to borrow. A dock of seven icons opens the drawers (Stock, Market, Crew, Bank, Travel, Codex, Quests). Everything in the world is also in a keyboard-accessible list.
 
 ## Play
 ```bash
 npm start            # http://localhost:8080
-npm test             # 57 tests: formulas, engine, multiplayer (real relay), accessibility, the 2.5D world
-npm run calibrate    # pacing table for a heuristic player: npm run calibrate -- midtier ops 7
+npm test             # the whole suite: formulas, engine, Deal Room games, content, UI, multiplayer (real relay), accessibility, the 2.5D world
+npm run calibrate    # pacing table for a heuristic player: npm run calibrate -- trades,pro ops 7
+npm run balance      # plays all 66 pairs of Backgrounds (5 seeds each, about 3 minutes)
 ```
-Start with **Level 0** (90 seconds, ungraded), then pick a profile: Bootstrapper, Mid-Tier Commercial or Venture-Backed.
+Start with the **Academy** (short guided missions, ungraded), then draft two **Backgrounds** out of twelve. Everyone starts with one paperclip and $0; the Backgrounds are the only difference between founders.
+
+`npm run calibrate` and `npm run tune` take the two Background ids as `a,b` and stop with a message on an id the game does not know. The relay's own dependencies are installed with `npm install --prefix server`.
 
 ## Put it on GitHub Pages
 1. Create a repository and push this folder to `main`.
 2. In **Settings, Pages**, set the source to **GitHub Actions**.
-3. The workflow in `.github/workflows/pages.yml` runs the tests and deploys. Your site appears at `https://<user>.github.io/<repo>/`.
+3. The workflow in `.github/workflows/pages.yml` runs the tests and deploys only if they pass. Your site appears at `https://<user>.github.io/<repo>/`.
 
 ## Multiplayer
 | Mode | Setup | Good for |
@@ -32,9 +35,9 @@ The relay forwards messages and keeps the latest snapshot per student in memory;
 Create a room, pick a pace, press Start. The dashboard shows wealth Gini (alert above 0.65), a niche saturation heat map, stalled founders, flagged peer trades and a pre-filled gradebook; controls pause, speed, rewind (10 days), deploy shocks, and scale friction and audit frequency. See [docs/FACULTY_KIT.md](docs/FACULTY_KIT.md) for the syllabus, week map and rubrics.
 
 ## What is and is not here
-Built and tested: the 2.5D world and island map (Canvas 2D, no libraries), the full simulation, all three profiles, Level 0, three shocks plus algorithmic events, bank and margin calls, audits, client tiers, peer exchange with the +/-40% guardrail, instructor dashboard, debrief with reflection workbook, WCAG-checked themes.
+Built and tested: the 2.5D world and island map (Canvas 2D, no libraries), the full simulation across sixteen districts, all twelve Backgrounds, the Deal Room's skill games, the Codex, quests and achievements, the Academy, three shocks plus algorithmic events, bank and margin calls, audits, client tiers, peer exchange with the +/-40% guardrail, instructor dashboard, debrief with reflection workbook, WCAG-checked themes.
 
 **Not built** (see [docs/COMPLIANCE.md](docs/COMPLIANCE.md)): LTI 1.3 grade passback, SAML/OIDC SSO, SOC 2 / HECVAT attestations, server-side authoritative state. Those belong to a hosted service; [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) sketches the path. Where the design brief contradicted itself I made a call and recorded it in [docs/BALANCE.md](docs/BALANCE.md).
 
 ## Layout
-`js/config.js` holds every number and all content; `js/engine.js` is the DOM-free simulation; `js/ui/` the screens. MIT licensed.
+`js/config.js` holds the economy's numbers, `js/data/` the sixteen districts, the assets, the buyers and the twelve Backgrounds; `js/engine.js` is the DOM-free simulation; `js/ui/` the screens. [docs/V2_DESIGN.md](docs/V2_DESIGN.md) is the design contract. MIT licensed.

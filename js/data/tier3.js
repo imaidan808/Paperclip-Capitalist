@@ -8,11 +8,11 @@
 // and 12's rights but is penalised on digital; Second-Chance and Pro both get something from the small fakes rules.
 // The suggested numbers of section 4.1 are used as written (friction is the straight line .10 to .16; urgent the straight fall from .12 at
 // district 5 to .06 at 16, rounded). The one addition is a small `fakes` rule in 9, 10 and 12, which gives `fakeRisk` and the Inspect game
-// something to do at this scale (counterfeit chips and cloned licences, forged mill certificates, rights with a clouded title).
+// something to do at this scale (counterfeit chips and cloned licenses, forged mill certificates, rights with a clouded title).
 
 export const zones = {
   9: {
-    id: 9, name: 'Industrial Park', short: 'Industrial', icon: '🏭', theme: 'industrial', tier: 3, teaches: 'scale-compliance',
+    id: 9, name: 'Industrial Park', short: 'Industrial', icon: '⚙️', theme: 'industrial', tier: 3, teaches: 'scale-compliance',
     blurb: 'Machines, metal and medical gear sold under contract. Buyers expect paperwork and SLAs, and your first compliance audit lands here.',
     gate: 25000, scale: 9000, tax: 0.088, friction: 0.132, pool: 250000, speed: 3.4, store: 24,
     leadEvery: 3, lotEvery: 4, urgent: 0.10, auto: true, plots: 4,
@@ -40,7 +40,7 @@ export const zones = {
   },
   12: {
     id: 12, name: 'Creative Quarter', short: 'Creative', icon: '🎨', theme: 'creative', tier: 3, teaches: 'recurring-revenue',
-    blurb: 'Catalogues, rights and channels that pay you every day you hold them. Learn why recurring revenue beats a one-off flip.',
+    blurb: 'Catalogs, rights and channels that pay you every day you hold them. Steady income, no deals to chase: learn what recurring revenue is worth.',
     gate: 150000, scale: 50000, tax: 0.1165, friction: 0.144, pool: 1500000, speed: 4.3, store: 29,
     leadEvery: 3, lotEvery: 4, urgent: 0.08, auto: true, plots: 4,
     palette: ['#9d1c6b', '#8f5bff'],
@@ -53,7 +53,7 @@ export const zones = {
 export const assets = {
   // ---- Industrial Park (9)
   cncCenter: {
-    name: 'Refurbished CNC Machining Center', icon: '⚙️', base: 13000, sc: 6, dep: 2, repair: 3600, fakeRisk: 0.15,
+    name: 'Refurbished CNC Machining Center', icon: '🗜️', base: 13000, sc: 6, dep: 2, repair: 3600, fakeRisk: 0.15,
     dem: { 8: 2, 9: 9, 10: 2, 11: 2, 13: 3 }, tags: ['industrial', 'tool'],
   },
   steelCoil: {
@@ -82,7 +82,7 @@ export const assets = {
     dem: { 10: 9, 12: 3, 13: 2 }, tags: ['digital', 'trend'],
   },
   gpuServer: {
-    name: 'GPU Training Server (8 cards)', icon: '🖲️', base: 27000, sc: 7, dep: 9, repair: 6000, fakeRisk: 1,
+    name: 'GPU Training Server (8 cards)', icon: '🖥️', base: 27000, sc: 7, dep: 9, repair: 6000, fakeRisk: 1,
     dem: { 9: 3, 10: 9, 12: 3, 13: 3 }, tags: ['electronics', 'digital', 'infra'],
   },
   startupAssets: {
@@ -90,7 +90,7 @@ export const assets = {
     dem: { 10: 8, 12: 3, 13: 3 }, tags: ['digital', 'ip'],
   },
   gameCatalog: {
-    name: 'Casual Game Back-Catalogue (6 titles)', icon: '🕹️', base: 36000, sc: 8, dep: 4, yield: 0.004, fakeRisk: 0.3,
+    name: 'Casual Game Back-Catalog (6 titles)', icon: '🕹️', base: 36000, sc: 8, dep: 1, yield: 0.006, fakeRisk: 0.3,
     dem: { 10: 6, 12: 8, 13: 2 }, tags: ['ip', 'digital'],
   },
   // ---- Farmland Co-op (11): stock spoils
@@ -103,7 +103,7 @@ export const assets = {
     dem: { 8: 2, 11: 8, 12: 3 }, tags: ['food', 'consumer'],
   },
   winterWheat: {
-    name: 'Winter Wheat (100 t)', icon: '🌽', base: 36000, sc: 3, dep: 1, perish: 50,
+    name: 'Winter Wheat (100 t)', icon: '🍞', base: 36000, sc: 3, dep: 1, perish: 50,
     dem: { 8: 3, 11: 9, 13: 2 }, tags: ['farm', 'bulk'],
   },
   rowCropTractor: {
@@ -112,19 +112,19 @@ export const assets = {
   },
   // ---- Creative Quarter (12): rights that pay while you hold them
   filmCatalog: {
-    name: 'Indie Film Catalogue (40 titles)', icon: '🎞️', base: 115000, sc: 8, dep: 2, yield: 0.003, fakeRisk: 0.3,
+    name: 'Indie Film Catalog (40 titles)', icon: '🎞️', base: 115000, sc: 8, dep: 1, yield: 0.0045, fakeRisk: 0.3,
     dem: { 10: 3, 12: 8, 13: 3 }, tags: ['media', 'ip'],
   },
   musicRights: {
-    name: 'Back-Catalogue Music Rights (1990s)', icon: '🎼', base: 78000, sc: 9, dep: 1, yield: 0.0035, fakeRisk: 0.45,
+    name: 'Back-Catalog Music Rights (1990s)', icon: '🎼', base: 78000, sc: 9, dep: 1, yield: 0.004, fakeRisk: 0.45,
     dem: { 10: 2, 12: 8, 13: 3 }, tags: ['ip', 'retro'],
   },
   stockLibrary: {
-    name: 'Stock Photo and Footage Library', icon: '📷', base: 34000, sc: 6, dep: 4, yield: 0.005, fakeRisk: 0.2,
+    name: 'Stock Photo and Footage Library', icon: '📷', base: 34000, sc: 6, dep: 1, yield: 0.006, fakeRisk: 0.2,
     dem: { 10: 3, 12: 9, 13: 2 }, tags: ['media', 'digital'],
   },
   podcastNetwork: {
-    name: 'Podcast Network (12 shows)', icon: '🎙️', base: 62000, sc: 7, dep: 6, yield: 0.0045, fakeRisk: 0.4,
+    name: 'Podcast Network (12 shows)', icon: '🎙️', base: 62000, sc: 7, dep: 2, yield: 0.006, fakeRisk: 0.4,
     dem: { 10: 3, 12: 8, 13: 3 }, tags: ['media', 'trend'],
   },
 };
@@ -133,7 +133,7 @@ export const assets = {
 export const buyers = {
   // ---- Industrial Park (9): contracts, SLAs, compliance
   halvorsenParts: {
-    zone: 9, name: 'Halvorsen Precision Parts', icon: '🔩', pop: 0.9, style: 'analytical', patience: 6, bias: 'utility',
+    zone: 9, name: 'Kessler Precision Parts', icon: '🔩', pop: 0.9, style: 'analytical', patience: 6, bias: 'utility',
     like: { industrial: 1, b2b: 0.6, bulk: 0.5, tool: 0.5 }, budget: [2500, 38000],
     hello: 'Spec sheet, maintenance log and a delivery date we can hold you to. Then we sign.',
   },
@@ -153,7 +153,7 @@ export const buyers = {
     hello: 'Weigh it, assay it, then we talk price. My furnace is hot and my memory is long.',
   },
   reyesConstruction: {
-    zone: 9, name: 'Reyes and Daughters Construction', icon: '🚧', pop: 0.6, style: 'friendly', patience: 6, bias: 'scarcity',
+    zone: 9, name: 'Ramos and Daughters Construction', icon: '🚧', pop: 0.6, style: 'friendly', patience: 6, bias: 'scarcity',
     like: { energy: 0.7, vehicle: 0.8, industrial: 0.6, b2b: 0.4 }, budget: [1200, 26000],
     hello: 'Job starts Monday and my generator just died. Whatever runs, I will look at today.',
   },
@@ -196,7 +196,7 @@ export const buyers = {
   tallowGames: {
     zone: 10, name: 'Tallow Games', icon: '🎮', pop: 0.3, style: 'friendly', patience: 5, bias: 'prestige',
     like: { ip: 1, digital: 0.45, trend: 0.5, media: 0.5 }, budget: [2500, 44000],
-    hello: 'Three hits in the store and one flop paying the rent. Show me a catalogue that earns.',
+    hello: 'Three hits in the store and one flop paying the rent. Show me a catalog that earns.',
   },
   corvidMlLab: {
     zone: 10, name: 'Corvid Machine-Learning Lab', icon: '🧠', pop: 0.35, style: 'impulsive', patience: 3, bias: 'scarcity',
@@ -210,7 +210,7 @@ export const buyers = {
     hello: 'Shelf life is my whole business. Show me delivery dates before you show me prices.',
   },
   goldenValleyMill: {
-    zone: 11, name: 'Golden Valley Mill and Cannery', icon: '🥫', pop: 0.6, style: 'analytical', patience: 6, bias: 'utility',
+    zone: 11, name: 'Amber Valley Mill and Cannery', icon: '🥫', pop: 0.6, style: 'analytical', patience: 6, bias: 'utility',
     like: { bulk: 1, food: 0.9, farm: 0.6, industrial: 0.6, energy: 0.5 }, budget: [6000, 110000],
     hello: 'We take it by the tonne, on contract, and we test every load for moisture.',
   },
@@ -243,7 +243,7 @@ export const buyers = {
   lanternStream: {
     zone: 12, name: 'Lantern Stream', icon: '📺', pop: 0.9, style: 'analytical', patience: 6, bias: 'utility',
     like: { media: 1, digital: 0.7, trend: 0.6 }, budget: [6000, 200000],
-    hello: 'Our catalogue needs hours and our analysts need numbers. Bring both.',
+    hello: 'Our catalog needs hours and our analysts need numbers. Bring both.',
   },
   oldGoldRecords: {
     zone: 12, name: 'Old Gold Records', icon: '🎵', pop: 0.5, style: 'friendly', patience: 6, bias: 'story',
@@ -253,7 +253,7 @@ export const buyers = {
   brightleafLicensing: {
     zone: 12, name: 'Brightleaf Brand Licensing', icon: '🧸', pop: 0.45, style: 'impulsive', patience: 3, bias: 'scarcity',
     like: { ip: 1, consumer: 0.7, trend: 0.6 }, budget: [4000, 140000],
-    hello: 'Lunch boxes, pyjamas, theme parks. Give me an IP with legs and I will find the merch.',
+    hello: 'Lunch boxes, pajamas, theme parks. Give me an IP with legs and I will find the merch.',
   },
   northbridgeRoyalty: {
     zone: 12, name: 'Northbridge Royalty Partners', icon: '📈', pop: 0.15, style: 'analytical', patience: 7, bias: 'price',

@@ -3,16 +3,25 @@
 import { goalDelta, goalDone, matchEvent } from './match.js';
 import { QUESTS, ACHIEVEMENTS, DAILIES } from './quests.js';
 import { CODEX } from './codex.js';
-import { hash01 } from '../rng.js';
+import { hash } from '../rng.js';
 
 const byId = (list) => Object.fromEntries(list.map((x) => [x.id, x]));
 export const CODEX_BY_ID = byId(CODEX), QUEST_BY_ID = byId(QUESTS), ACH_BY_ID = byId(ACHIEVEMENTS);
+
+/** A number in [0, 1) from a key. rng.hash (FNV-1a) barely moves when only a key's last character changes, so the three picks of one day, which
+ *  differ only there, came out within half a percent of each other; the murmur finaliser spreads them out again. */
+export function unit(key) {
+  let h = hash(String(key));
+  h ^= h >>> 16; h = Math.imul(h, 0x85ebca6b); h ^= h >>> 13; h = Math.imul(h, 0xc2b2ae35); h ^= h >>> 16;
+  return (h >>> 0) / 4294967296;
+}
 
 export class Progress {
   /** hooks: { onComplete(kind, def), onCodex(entry) } so the UI can celebrate without this module touching the DOM. */
   constructor(game, hooks = {}) {
     this.g = game; this.hooks = hooks;
     for (const c of CODEX) if (c.unlock === 'start') this.m.cx[c.id] ??= 0;
+    this._rollDailies(this.g.day); // the first 'day' event only comes at hour 24, so day 1 would have no bounties
   }
   /** The engine also keeps skill-game stats in s.meta (inspect, pitch, haggle, repair, auction, quick, played), so every key is ensured one by one. */
   get m() {
@@ -26,7 +35,7 @@ export class Progress {
   _reward(kind, def) {
     const r = def.reward || {};
     if (r.xp) this.g.xp(r.xp);
-    if (r.points) this.g.s.points += r.points;
+    if (r.points) { if (typeof this.g.grantPoints === 'function') this.g.grantPoints(r.points); else this.g.s.points += r.points; } // the engine banks only what the skills can still absorb
     this.hooks.onComplete?.(kind, def);
   }
   onEvent(evt) {
@@ -65,7 +74,7 @@ export class Progress {
     if (m.d.day === day) return;
     const seed = this.g.s.seed, pool = [...DAILIES], list = [];
     for (let i = 0; i < 3 && pool.length; i++) {
-      const k = Math.floor(hash01(seed + ':d' + day + ':' + i) * pool.length);
+      const k = Math.floor(unit(seed + ':d' + day + ':' + i) * pool.length);
       const t = pool.splice(k, 1)[0];
       list.push({ id: t.id, title: t.title, desc: t.desc, icon: t.icon, goal: t.goal, reward: t.reward, p: 0, done: false });
     }
