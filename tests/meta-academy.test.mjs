@@ -33,7 +33,7 @@ import { matchEvent } from '../js/meta/match.js';
 import { ZONE_COUNT, TAGS } from '../js/data/schema.js';
 import { ASSETS, BUYERS, ZONES, PERKS, SKILLS, EVENTS, ALGO_EVENTS, EEI_FLOOR_DEFAULT, DEBT, TOTAL_DAYS, SEC_PER_HOUR, FEES, ECON } from '../js/config.js';
 import { Game } from '../js/engine.js';
-import { demandOf, eei as eeiCalc, FAKE_VALUE, fitOf, fitMult } from '../js/market.js';
+import { demandOf, eei as eeiCalc, FAKE_VALUE, fitOf, fitMult, assetFMV } from '../js/market.js';
 import * as D from '../js/deal.js';
 import * as haggle from '../js/play/haggle.js';
 import * as inspect from '../js/play/inspect.js';
@@ -1135,7 +1135,25 @@ test('m05: the same repair is a loss at Ops 1 and a windfall at Ops 2, even with
   const g5 = sandbox(m), fx = fixDeal(g5, g5.s.assets[0].id);
   assert.ok(fx.summary.title === 'Repaired, and it pays' && g5.s.assets[0].cond === 'ok', 'the Fix stage repairs the van');
   assert.ok(near(fx.run.res.fix.qualityMult, 1, 1e-9) && near(fx.run.res.fix.costMult, 1.3, 1e-9), 'pressing Careful in the real Fix stage is exactly the card\'s run');
-  onlyEngineDollars(m, [van.repair, w, o2.before, o1.cost, o1.after, o1.after - o1.before, o1.net, o2.cost, o2.after, o2.after - o2.before, o2.net, o3.cost, o3.after, o3.net, worst.net, best.net, qb.price, qa.price, 500, 600, 200, 300, 100]);
+  // The van is a gift in this lesson's yard, but the open market is not: sellers of wrecks know what a fixed crate fetches and ask MORE as Ops rises (ECON.brokenLo, ECON.brokenSlope: x1.00 at Ops 1, x1.21 at Ops 2).
+  // The card says so, and prices what the same van would cost bought there, from lots the engine itself posts in Auto Row (the finish-ui test reads the whole range again).
+  const posted = (ops) => {
+    for (let seed = 1; seed <= 60; seed++) {
+      const gm = new Game({ perks: [], seed, handle: 'T', pid: 'T-' + seed }); gm.env.algo = false; gm.s.skills.ops = ops; gm._openZone(7); gm.s.lots[7] = [];
+      for (let i = 0; i < 40 && !(gm.s.lots[7][0] && gm.s.lots[7][0].cond === 'broken'); i++) { gm.s.lots[7] = []; gm._spawnLot(7); }
+      const lot = gm.s.lots[7][0];
+      if (lot && lot.cond === 'broken' && lot.price >= 20) return lot.price / assetFMV({ cls: lot.cls, cond: 'broken', quality: 1, wear: 1 }, 7, gm.mods(), gm.crowd(lot.cls, 7));
+    }
+    throw new Error('no broken lot in Auto Row');
+  };
+  const ask1 = Math.max(ECON.brokenLo, 1 - ECON.brokenSlope * 0), ask2 = Math.max(ECON.brokenLo, 1 - ECON.brokenSlope * 1);
+  assert.ok(Math.abs(posted(1) - ask1) < 0.012 && Math.abs(posted(2) - ask2) < 0.012, 'the engine posts a wreck at the multiples the card quotes');
+  assert.deepEqual([n2(ask1), n2(ask2)], ['1.00', '1.21']);
+  const extra = (ask2 - ask1) * o2.before, flip = o2.net - extra;
+  assert.equal(ui(extra), '$241'); assert.equal(ui(flip), '$616'); assert.ok(flip > 0 && flip < o2.net && flip - o1.net > 500, 'bought on the market the van still pays at Ops 2, and by less than the repair alone');
+  whyHas(m, 'This van is already yours', 'bought on the open market', '1.00 times its as-is value at Ops 1 and 1.21 times at Ops 2');
+  has('m05 result', m.why.example.result, `${w$(-o1.net)} loss into an ${ui(o2.net)} profit`, `cost ${ui(extra)} more at Ops 2`, `the whole flip nets ${ui(flip)}`);
+  onlyEngineDollars(m, [van.repair, w, o2.before, o1.cost, o1.after, o1.after - o1.before, o1.net, o2.cost, o2.after, o2.after - o2.before, o2.net, o3.cost, o3.after, o3.net, worst.net, best.net, qb.price, qa.price, extra, flip, 500, 600, 200, 300, 100]);
 });
 
 test('m06: the fee and the fuel both come out of the wallet, a starved manager earns nothing, and a hire has a payback', () => {

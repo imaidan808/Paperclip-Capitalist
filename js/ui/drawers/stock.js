@@ -7,6 +7,7 @@
 // never the pool's exact offer; the toast after the sale tells the real number.
 import { ASSETS, ZONES } from '../../config.js';
 import { FAKE_VALUE } from '../../market.js';
+import { benchQuote } from '../../deal.js';
 
 const UP = '▲', DOWN = '▼', FLAT = '▬';
 
@@ -36,6 +37,8 @@ export function beliefLine(ctx, b) {
   return { fake: fp >= 0.6, text: `Your read: looks ${q} quality, ${Math.round(fp * 100)}% chance it is fake (${sure}).${fp >= 0.6 ? ' Likely a fake.' : ''}` };
 }
 const bar = (cls, now, max, label, w) => `<div class="bar ${cls}" role="progressbar" aria-label="${label}" aria-valuemin="0" aria-valuemax="${max}" aria-valuenow="${now}"><i style="width:${w}%"></i></div>`;
+/** What follows the bench's own reason when the cash does not reach it. */
+export const NEED_CASH = 'Sell a crate or wait for more cash, and the bench will open.';
 const pctOf = (x, y) => (y > 0 ? Math.max(0, Math.min(100, (x / y) * 100)) : 0);
 
 // ---- the header strip: storage in the focused district and what the stock adds to net worth
@@ -78,11 +81,14 @@ function crateHTML(ctx, a, sel) {
   if (Z.rules.fads && def.tags.includes('digital')) chips.push('<span class="chip warn">Fad risk: loses value twice as fast here</span>');
   let fix = '';
   if (broken) {
-    const rq = g.repairQuote(a.id);
-    if (rq.ok) {
-      const net = rq.after - rq.before - rq.cost;
-      fix = `<p class="stk-fix small">Repair costs about <b class="mono">${m(rq.cost)}</b> and restores it to about ${Math.round(rq.quality * 100)}% quality, worth <span class="mono">${m(rq.after)}</span> afterwards (now <span class="mono">${m(rq.before)}</span>). ${net >= 0 ? `<b class="green"><span aria-hidden="true">${UP}</span> Worth it: +${m(net)}</b>` : `<b class="red"><span aria-hidden="true">${DOWN}</span> Loses ${m(-net)}</b>`}</p>
-        <button class="btn sm" data-act="stock-repair" data-id="${a.id}" data-fid="st-fix-${a.id}">Repair ${e(def.name)}</button>`;
+    // The estimate is the repair bench's own (deal.js benchQuote): the Deal Room opens only when the cash reaches the most a bill can run to, so the drawer says that figure and does not offer a
+    // repair "for about $486" to a founder with $462 whom the bench then turns away.
+    const bq = benchQuote(g, a.id);
+    if (bq.ok) {
+      const net = bq.after - bq.before - bq.cost, why = bq.affordable ? '' : `<p class="stk-fixwhy small" id="st-fixwhy-${a.id}"><span aria-hidden="true">⚠</span> ${e(bq.blocker)} ${e(NEED_CASH)}</p>`;
+      fix = `<p class="stk-fix small">Repair costs about <b class="mono">${m(bq.cost)}</b>, up to <b class="mono">${m(bq.most)}</b> if the marker slips, and restores it to about ${Math.round(bq.quality * 100)}% quality, worth <span class="mono">${m(bq.after)}</span> afterwards (now <span class="mono">${m(bq.before)}</span>). ${net >= 0 ? `<b class="green"><span aria-hidden="true">${UP}</span> Worth it: +${m(net)}</b>` : `<b class="red"><span aria-hidden="true">${DOWN}</span> Loses ${m(-net)}</b>`}</p>
+        ${why}
+        <button class="btn sm" data-act="stock-repair" data-id="${a.id}" data-fid="st-fix-${a.id}"${bq.affordable ? '' : ` aria-disabled="true" aria-describedby="st-fixwhy-${a.id}"`}>Repair ${e(def.name)}</button>`;
     } else fix = '<p class="stk-fix small mute">This cannot be repaired. Sell it to a buyer who works with scrap and spares.</p>';
   }
   return `<li class="stk-crate ${fake ? 'is-fake' : broken ? 'is-broken' : 'is-ok'}${sel ? ' is-sel' : ''}">
@@ -116,17 +122,19 @@ function selBarHTML(ctx, sel) {
   const digital = sel.every((a) => ASSETS[a.cls].tags.includes('digital')) && s.zones.length > 1;
   const rq = digital ? g.poolQuote(ids, true) : null;
   const broken = sel.filter((a) => a.cond === 'broken' && ASSETS[a.cls].repair);
+  const bench = broken.length ? benchQuote(g, broken[0].id) : null, benchShut = !!bench && bench.ok && !bench.affordable; // the button repairs the first broken crate ticked, so it asks about that one
   const why = [];
   const btn = (act, label, ok, cls = 'ghost') => `<button class="btn sm ${cls}" data-act="${act}" data-fid="st-${act}"${ok ? '' : ' aria-disabled="true"'}>${label}</button>`;
   if (!oneDistrict) why.push('Pick crates from one district to sell or ship them together.');
   else if (pq && !pq.ok) why.push(pq.msg);
   if (oneDistrict && s.zones.length < 2) why.push('Shipping needs a second district. Net worth opens the next one.');
+  if (benchShut) why.push(`${bench.blocker} ${NEED_CASH}`);
   return `<div class="stk-selbar" role="region" aria-label="Actions for the ticked crates">
     <div class="row"><b>${plural(sel.length, 'crate')} ticked</b><span class="small">worth <span class="mono">${m(worth)}</span>, you paid <span class="mono">${m(paid)}</span></span><span class="grow"></span><button class="btn sm ghost" data-act="stock-clear" data-fid="st-clear">Clear</button></div>
     <div class="row stk-acts">
       ${btn('stock-sellpool', 'Sell to the pool', !!(pq && pq.ok), '')}
       ${rq && rq.ok ? btn('stock-route', 'Route digital', true) : ''}
-      ${broken.length ? btn('stock-repair', broken.length > 1 ? `Repair first of ${broken.length}` : 'Repair', true) : ''}
+      ${broken.length ? btn('stock-repair', broken.length > 1 ? `Repair first of ${broken.length}` : 'Repair', !benchShut) : ''}
       ${btn('stock-ship', 'Ship', oneDistrict && s.zones.length > 1)}
       ${btn('stock-offer', 'Offer to a classmate', true)}
     </div>
@@ -229,6 +237,8 @@ export default {
       'stock-repair'(el) {
         const a = (el.dataset?.id && g().s.assets.find((x) => x.id === el.dataset.id)) || chosen().find((x) => x.cond === 'broken' && ASSETS[x.cls].repair);
         if (!a) { ctx.toast('Tick a broken crate to repair.', 'warn'); return; }
+        const bq = benchQuote(g(), a.id);
+        if (bq.ok && !bq.affordable) { ctx.toast(`${bq.blocker} ${NEED_CASH}`, 'warn'); return; } // (the button is aria-disabled then; this holds for any other way in)
         ctx.deal({ kind: 'repair', assetId: a.id });
       },
       'stock-ship'() {

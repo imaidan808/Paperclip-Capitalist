@@ -103,7 +103,16 @@
 .sc-bg { white-space: nowrap; }
 .sc-plays dd { font-family: ui-monospace, Menlo, monospace; }
 
+/* ---- the title's three panels: a text field fills its panel, so a recovery code (39 characters) and a relay address read in full instead of being cut at the edge of a 20-character box */
+.choices :is(input:not([type="checkbox"]):not([type="radio"])) { width: 100%; }
+
 /* ---- instructor */
+.in-keep .in-code { margin-top: .4rem; }
+.in-keep .in-code > summary { cursor: pointer; padding: .2rem 0; }
+.in-keep .in-key { margin: .45rem 0; padding: .45rem .6rem; border: 1px dashed var(--line); background: var(--panel2); font-size: 1.05rem; letter-spacing: .04em; overflow-wrap: anywhere; user-select: all; }
+.in-keep .btn { margin-bottom: .3rem; }
+/* the recovery code is a secret: it never goes to paper */
+@media print { .in-keep .in-code { display: none; } }
 .in-dist { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(16, minmax(0, 1fr)); gap: 3px; align-items: end; height: 8.5rem; }
 .in-dist li { display: grid; grid-template-rows: auto 1fr auto; justify-items: center; height: 100%; min-width: 0; text-align: center; }
 .in-dist .bx { align-self: end; width: 100%; background: var(--cyan); min-height: 2px; }
