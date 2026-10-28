@@ -5,6 +5,7 @@
 import { ZONES, ASSETS, BUYERS, PIPE, PIPE_RULES, UPGRADES, CLIENTS, MIL_ZONE } from '../../config.js';
 import { fitOf, fitLabel } from '../../market.js';
 import { esc } from '../common.js';
+import { moneySize } from '../../audio/palette.js';
 
 // ---------------------------------------------------------------- small helpers
 const ST = (ctx) => {
@@ -419,7 +420,7 @@ export default {
       'crew-rel'(b) {
         const p = pipe(b.dataset.id); if (!p) return;
         if (p.inflight) { fail('Wait for the running cycle to finish before releasing.'); return; }
-        ctx.confirmBox('Release this manager?', `<p>${esc(PIPE[p.kind].name)} in ${esc(ZONES[p.zone].name)} leaves. You get back <b>${ctx.money(p.basis * 0.6)}</b>, which is 60% of the ${ctx.money(p.basis)} you put in (hire cost and upgrades). The rest is gone for good, and the plot opens up for someone new.</p>`, 'Release', () => { ctx.say(g().releasePipeline(p.id), 'info'); }, true);
+        ctx.confirmBox('Release this manager?', `<p>${esc(PIPE[p.kind].name)} in ${esc(ZONES[p.zone].name)} leaves. You get back <b>${ctx.money(p.basis * 0.6)}</b>, which is 60% of the ${ctx.money(p.basis)} you put in (hire cost and upgrades). The rest is gone for good, and the plot opens up for someone new.</p>`, 'Release', () => { const back = p.basis * 0.6, r = ctx.say(g().releasePipeline(p.id), 'info'); if (r.ok) ctx.audio?.request?.('cash.in', { size: moneySize(back, g().netWorth()), cause: 'money' }); /* the engine sends no event for a release: the cash that comes back is heard here */ }, true);
       },
       'crew-upg'(b) { const r = ctx.say(g().buyUpgrade(b.dataset.id)); if (r.ok) ctx.sfx.level(); ctx.render(); },
       'crew-client'(b) { const r = ctx.say(g().acquireClient(b.dataset.t)); if (r.ok) ctx.sfx.blip(); ctx.render(); },

@@ -107,8 +107,10 @@ export function noteCalls(n, st = newWireState(), hooks = {}) {
   if (k === 'scam') { st.scamAt = now; return []; }
   if (k === 'counterfeit') { st.counterfeitAt = now; return []; }
   if (k === 'settle') return calls(['request', 'cash.in', { variant: 'settle', clock: true, meta: { amount: amt } }]);
-  if (k === 'freight-arrive') return calls(['request', 'ship.arrive', { clock: true }]);
-  if (k === 'customs' || k === 'damage') return calls(['request', 'ship.trouble', { variant: k, state: 'trouble-' + k }]);
+  const zoneOf = () => { const t = String(n.text), id = Object.keys(ZONES).find((z) => t.includes(' in ' + ZONES[z].short + '.') || t.includes(' in ' + ZONES[z].short + ':')); return id ? Number(id) : undefined; }; // "Freight arrived in Harbor.": pan from that district
+  const where = () => { const z = zoneOf(), p = z != null && hooks.pan ? hooks.pan('zone', z) : undefined; return p === undefined ? {} : { pan: p }; };
+  if (k === 'freight-arrive') return calls(['request', 'ship.arrive', { clock: true, ...where() }]);
+  if (k === 'customs' || k === 'damage') return calls(['request', 'ship.trouble', { variant: k, state: 'trouble-' + k, ...(k === 'customs' ? where() : {}) }]);
   if (k === 'mentor') return calls(['request', 'mentor.tip', { clock: true }]);
   if (k === 'sla') return calls(['request', 'cash.out', { size: 'm', state: 'sla', meta: { amount: amt } }]);
   if (k === 'overdraft') return calls(['request', 'cash.out', { size: 's', state: 'overdraft', meta: { amount: amt } }]);
@@ -132,7 +134,7 @@ export function uiCalls(ev, st = newWireState(), hooks = {}) {
   if (!ev || ev.type !== 'ui') return [];
   const pan = (k, id) => (hooks.pan ? hooks.pan(k, id) : undefined);
   switch (ev.ui) {
-    case 'open-drawer': return calls(['play', 'ui.drawer-open', { variant: ['stock', 'market', 'crew', 'bank', 'travel', 'codex', 'quests'].includes(ev.id) ? ev.id : undefined }]);
+    case 'open-drawer': if (ev.again || ev.quiet) return []; return calls(['play', 'ui.drawer-open', { variant: DRAWER_IDS.includes(ev.id) ? ev.id : undefined }]);
     case 'close-drawer': return calls(['play', 'ui.drawer-close', {}]);
     case 'zone': { const tier = hooks.zoneTier ? hooks.zoneTier(ev.id) : (ZONES[ev.id]?.tier || 1); return calls(['request', 'zone.enter', { variant: tier >= 3 ? 't4' : 't1', params: { t: tier }, cause: 'money' }]); }
     case 'lead': return calls(['request', ev.urgent ? 'buyer.urgent' : 'buyer.arrive', { clock: true, pan: pan('lead', ev.ids?.[0]) }]); // never reads a buyer's `scam` or a lot's truth
@@ -165,26 +167,54 @@ const SELECT = new Set(L('market-tab market-zone market-xto crew-tab crew-hkind 
 const TOGGLE = new Set(L('market-want crew-pause quests-done quests-ach-all bank-ledger ac-showme'));
 const CRATE = new Set(L('stock-pick stock-pickzone stock-clear market-use travel-clear'));
 const SLIDER = new Set(L('crew-hamt bank-pct bank-amt'));
-const DIALOG = new Set(L('help menu settings breakdown crew-hire crew-edit'));
-const PRESS = new Set(L('debrief academy joinroom codex-replay ac-start ac-continue ac-why-next ac-teach-next ac-reward-next'));
-const OK = new Set(L('savefile crew-fill market-send bank-csv'));
+const DIALOG = new Set(L('help menu settings breakdown crew-hire crew-edit a11y'));
+const PRESS = new Set(L('debrief academy joinroom codex-replay ac-start ac-continue ac-why-next ac-teach-next ac-reward-next resume solo join instr instr-resume instr-recover')); // the last six are the title's (4.3)
+const OK = new Set(L('savefile crew-fill market-send bank-csv copylink gradecsv md'));
 const ASK = new Set(L('reset ac-skip-yes ac-leave'));
-const CLOSE = new Set(L('leave market-decline market-withdraw'));
+const CLOSE = new Set(L('leave market-decline market-withdraw close back'));
+const INST = { start: 'start', deploy: 'deploy', squeeze: 'deploy', rewind: 'rewind' }; // the instructor's ceremonies (4.3)
+/** Controls whose own code plays their sound (the Draft's cards, Remove, Clear and Reroll; the speaker button; a confirm sheet's Go): the table stays out of their way. */
+const OWN = new Set(L('confirm-go pick drop clear reroll sound'));
+/** Controls that always have a sound of their own from the outcome (an engine event); the click adds nothing, and a refusal is heard as its refusal (4.3: "from the event"). */
+const QUIET = new Set(L('crew-up crew-upg crew-client bank-draw bank-repay bank-audit travel-ship quests-spend market-accept'));
 const CAM = { zin: 'in', zout: 'out', fit: 'fit', me: 'home' };
+const DRAWER_IDS = ['stock', 'market', 'crew', 'bank', 'travel', 'codex', 'quests'];
 /** One control -> what it plays at the click. c: { act, kind ('click'|'change'|'input'), checked, pressed, count, drawerOpen, value, index, id }. */
+const PROBES = new Set(L('look serial power papers expert')), ANGLES = new Set(L('prestige utility scarcity price story'));
+/** The Deal Room's moves (4.3, Deal Room): what a button plays at the click. undefined: not one of the moves (the table goes on); null: no sound of its own. Nothing here reads the lot or the buyer. */
+function dealControl(act, c) {
+  switch (act) {
+    case 'quick-stage': case 'quick-all': return ['play', 'deal.quick', {}];
+    case 'probe': return ['play', 'read.probe', { variant: PROBES.has(c.id) ? c.id : 'look' }];
+    case 'angle': return ['play', 'pitch.angle', { variant: c.pressed ? 'drop' : ANGLES.has(c.angle) ? c.angle : 'story' }]; // aria-pressed is the state before the press: a pressed card is being dropped
+    case 'anchor': return ['play', 'haggle.anchor', { variant: ['high', 'fair', 'low'].includes(c.level) ? c.level : 'fair' }];
+    case 'hold': return ['play', 'haggle.move', { variant: 'hold' }];
+    case 'concede': return ['play', 'haggle.move', { variant: c.size === 'small' ? 'small' : 'large' }];
+    case 'split': return ['play', 'haggle.move', { variant: 'split' }];
+    case 'leverage': return ['play', 'haggle.leverage', {}];
+    case 'accept': return ['play', 'haggle.close', { variant: 'accept' }];
+    case 'walk': return c.move ? ['play', 'haggle.close', { variant: 'walk' }] : null; // before the first round it is a Pass: the result card's own sound follows
+    case 'bid': return ['play', 'bid.raise', { variant: 'r1', params: { n: Math.min(4, c.bids | 0) } }];
+    case 'drop': return ['play', 'bid.drop', {}];
+    default: return undefined;
+  }
+}
 export function controlFor(c) {
   const act = c.act || '';
+  if (c.deal && c.kind !== 'change') { const d = dealControl(act, c); if (d !== undefined) return d; }
+  if (OWN.has(act) || (QUIET.has(act) && c.kind !== 'change')) return null;
   if (c.kind === 'change') {
+    if (act === 'stock-pick') return c.count > 0 ? ['play', 'ui.crate', { variant: 'pick1', params: { n: Math.min(8, c.count | 0) } }] : ['play', 'ui.crate', { variant: 'clear' }]; // a crate's own box: how many are ticked now (its state is already the new one)
     if (act === 'speed') { const i = Math.max(0, SPEED_STEPS.indexOf(+c.value)); return ['play', 'clock', { variant: 'speed4', params: { i: Math.min(4, i) } }]; }
     if (c.checkbox) return ['play', 'ui.toggle', { variant: c.checked ? 'on' : 'off' }];
     return ['play', 'ui.select', { variant: 'i0', params: { i: Math.min(5, Math.max(0, c.index | 0)) } }];
   }
-  if (act === 'dock') return c.drawerOpen ? ['play', 'ui.drawer-close', {}] : ['play', 'ui.drawer-open', { variant: c.id }];
+  if (act === 'dock') return c.drawerOpen ? ['play', 'ui.drawer-close', {}] : ['play', 'ui.drawer-open', { variant: DRAWER_IDS.includes(c.id) ? c.id : undefined }];
   if (act === 'drawer-close') return ['play', 'ui.drawer-close', {}];
   if (act === 'pause') return ['play', 'clock', { variant: c.pressed ? 'resume' : 'pause' }]; // aria-pressed is the state before the press
   if (CAM[act]) return ['play', 'cam', { variant: CAM[act] }];
   if (SELECT.has(act)) return ['play', 'ui.select', { variant: 'i0', params: { i: Math.min(5, Math.max(0, c.index | 0)) } }];
-  if (TOGGLE.has(act)) return ['play', 'ui.toggle', { variant: c.pressed || c.checked ? 'off' : 'on' }];
+  if (TOGGLE.has(act)) return ['play', 'ui.toggle', { variant: act === 'crew-pause' ? (/^resume/.test(c.label || '') ? 'on' : 'off') : c.pressed || c.checked || c.expanded ? 'off' : 'on' }]; // a disclosure reads aria-expanded, Pause/Resume reads its own word: the state as it was before the press
   if (CRATE.has(act)) return act.endsWith('clear') ? ['play', 'ui.crate', { variant: 'clear' }] : ['play', 'ui.crate', { variant: 'pick1', params: { n: Math.min(8, Math.max(1, (c.count | 0) + 1)) } }];
   if (SLIDER.has(act)) return ['play', 'ui.slider', { variant: 'mid', params: { v: Math.min(10, Math.max(0, c.index | 0)) } }];
   if (DIALOG.has(act)) return ['play', 'ui.dialog-open', {}];
@@ -192,14 +222,14 @@ export function controlFor(c) {
   if (OK.has(act)) return ['play', 'ui.ok', {}];
   if (ASK.has(act)) return ['play', 'ui.ask', { variant: 'danger' }];
   if (CLOSE.has(act)) return ['play', 'ui.dialog-close', {}];
-  if (act === 'confirm-go') return null; // the confirmed action's own sound
+  if (INST[act]) return ['play', 'inst.cue', { variant: INST[act] }];
   return ['play', 'ui.tick', { variant: c.big ? 'full' : 'light' }];
 }
 
 // ================================================================================ the DOM
 const isField = (el) => !!el && (el.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName)) && !(el.tagName === 'INPUT' && /^(checkbox|radio|button|submit|range)$/.test(el.type));
 let installed = false, deps = null, gamesWired = 0;
-const pageState = { repayF: null };
+const pageState = { repayF: null, bids: 0 };
 /** Is a game's wiring installed? While it is, the five legacy names of common.js are no-ops (8.4): the events speak for themselves. Before any game is wired (the title, the draft) they still play. */
 export const wired = () => gamesWired > 0;
 /** A test hook: pretend a game is (or is not) wired. */
@@ -232,16 +262,24 @@ export function initAudio(d = {}) {
   const info = (el, kind, e) => {
     const t = el.type, sibs = el.parentElement ? [...el.parentElement.children].filter((c) => c.tagName === el.tagName) : [];
     const range = t === 'range' ? Math.round((+el.value - +(el.min || 0)) / ((+(el.max || 100) - +(el.min || 0)) || 1) * 10) : 0;
-    return { act: el.dataset.act || el.dataset.change || el.dataset.deal || el.dataset.wv || '', kind, checkbox: t === 'checkbox', checked: !!el.checked, pressed: el.getAttribute('aria-pressed') === 'true', value: el.value, index: t === 'range' ? range : sibs.indexOf(el), id: el.dataset.d || el.dataset.id, count: document.querySelectorAll('.crate.on, [data-crate].on, input[data-crate]:checked').length, drawerOpen: el.getAttribute('aria-pressed') === 'true', big: el.classList.contains('big') || (el.classList.contains('btn') && !el.classList.contains('ghost') && !el.classList.contains('sm')) };
+    return { act: el.dataset.act || el.dataset.change || el.dataset.deal || el.dataset.wv || (el.hasAttribute('data-close') ? 'close' : ''), kind, checkbox: t === 'checkbox', checked: !!el.checked, pressed: el.getAttribute('aria-pressed') === 'true', expanded: el.getAttribute('aria-expanded') === 'true', label: (el.textContent || '').trim().slice(0, 12).toLowerCase(), value: el.value, index: t === 'range' ? range : sibs.indexOf(el), id: el.dataset.d || el.dataset.id, count: ticked(), drawerOpen: el.getAttribute('aria-pressed') === 'true' || (el.dataset.act === 'dock' && document.getElementById('stage')?.dataset.drawer === el.dataset.d), deal: !!el.dataset.deal, angle: el.dataset.angle, level: el.dataset.level, size: el.dataset.size, move: el.classList.contains('move'), big: el.classList.contains('big') || (el.classList.contains('btn') && !el.classList.contains('ghost') && !el.classList.contains('sm')) };
   };
   const doCall = (c) => { if (!c) return; const [m, id, o] = c; if (m === 'play') audio.play(id, o); else if (m === 'request') audio.request(id, o); };
+  const ticked = () => document.querySelectorAll('.crate.on, [data-crate].on, input[data-crate]:checked, input[data-change="stock-pick"]:checked').length; // the crates ticked now (the Stock list's boxes, wherever they are drawn)
   document.addEventListener('click', guard((e) => {
     const el = e.target?.closest?.('button, [data-act], [data-deal], [data-wv], .btn, .ibtn, a[href], [role=button]');
-    if (!el || el.disabled || el.getAttribute('aria-disabled') === 'true' || el.closest('#dlg [data-snd], #s-sample')) return;
+    if (!el || el.disabled || el.getAttribute('aria-disabled') === 'true' || el.hasAttribute('data-snd') || el.closest('#dlg [data-snd], #s-sample')) return; // a control marked data-snd plays its own sound
     if (el.matches('input, select, textarea') || el.closest('label')?.querySelector('input')) return; // checkboxes, ranges and selects are heard on change and input
     audio.touch();
     if (el.dataset.act === 'bank-repay') pageState.repayF = el.dataset.f; // the repay event carries only the amount: the click records which button it was
-    doCall(controlFor(info(el, 'click', e)));
+    const c = info(el, 'click', e);
+    if (c.deal && c.act === 'bid') c.bids = pageState.bids++; // the nth raise of this auction climbs the nth step
+    if (c.act === 'stock-pickzone') { // Tick all / Untick all: the count only exists once the list has been drawn again, so the sound is chosen after the handlers have run
+      const before = c.count;
+      setTimeout(guard(() => { const n = ticked(); if (n !== before) doCall(controlFor({ act: 'stock-pick', kind: 'change', count: n })); }), 0);
+      return;
+    }
+    doCall(controlFor(c));
   }), opts);
   document.addEventListener('change', guard((e) => {
     const el = e.target; if (!el || el.matches('[data-snd], #s-preset') || el.closest('#dlg .snd')) return;
@@ -257,7 +295,13 @@ export function initAudio(d = {}) {
     audio.touch();
     if (audio.state === 'running' || audio.state === 'locked') audio.play('ui.slider', { variant: idx === 0 ? 'zero' : idx === 10 ? 'top' : 'mid', params: { v: idx } });
   }), opts);
-  document.addEventListener('submit', guard(() => { audio.touch(); audio.play('ui.tick', { variant: 'full' }); }), opts);
+  document.addEventListener('submit', guard((e) => { audio.touch(); if (e.target?.closest?.('[data-snd]')) return; audio.play('ui.tick', { variant: 'full' }); }), opts); // a form marked data-snd (the Draft) plays its own sound, begin or refusal
+  // a <details> opened or closed by the player (the title's relay and recovery-code disclosures, the district list): `toggle` does not bubble, so it is heard in the capture phase, and only within
+  // 600 ms of a press (a disclosure drawn open by a redraw is not a choice)
+  document.addEventListener('toggle', guard((e) => {
+    const d = e.target; if (!d || d.tagName !== 'DETAILS' || d.hasAttribute('data-snd') || performance.now() - audio.env.lastPress > 600) return;
+    audio.play('ui.toggle', { variant: d.open ? 'on' : 'off' });
+  }), opts);
   // 5. the dialog (open and close) and the toasts (the fallback sound of a toast with none of its own)
   const dlg = document.getElementById('dlg');
   if (dlg && typeof MutationObserver !== 'undefined') {
@@ -266,7 +310,8 @@ export function initAudio(d = {}) {
       const open = !!dlg.open, was = uiState.lastDlg; uiState.lastDlg = open;
       audio.hold(open); audio.setEnv({ busy: open });
       if (open) {
-        if (dlg.classList.contains('deal')) audio.play('deal.open', { variant: 'sell', cause: 'dialog' });
+        pageState.bids = 0;
+        if (dlg.classList.contains('deal')) audio.play('deal.open', { variant: { buy: 'buy', repair: 'fix' }[dlg.querySelector('[data-kind]')?.dataset.kind] || 'sell', cause: 'dialog' }); // the sheet says what it is for (data-kind: sell, buy or repair)
         else if (dlg.classList.contains('alert')) { /* the alert note plays alert.advance */ }
         else if (dlg.querySelector('[data-act="confirm-go"]')) audio.play('ui.ask', { variant: dlg.querySelector('.btn.danger') ? 'danger' : 'normal', cause: 'dialog' });
         else audio.play('ui.dialog-open', { cause: 'dialog' });
@@ -279,9 +324,12 @@ export function initAudio(d = {}) {
       for (const r of recs) for (const n of r.addedNodes) {
         if (!n.classList || !n.classList.contains('toast')) continue;
         const lvl = n.classList.contains('good') ? 'good' : n.classList.contains('warn') ? 'warn' : n.classList.contains('bad') ? 'bad' : 'info';
-        if (lvl === 'good') audio.play('ui.ok', { cause: 'toast' });
-        else if (lvl === 'warn') audio.play('ui.nudge', { cause: 'toast' });
-        else if (lvl === 'bad' && performance.now() - audio.env.lastPress < 1500) audio.play('ui.refuse', { cause: 'toast' }); // a refusal answers something the player just did; an SLA penalty is a state, not a refusal
+        const refusal = lvl === 'bad' && performance.now() - audio.env.lastPress < 1500; // a refusal answers something the player just did; an SLA penalty is a state, not a refusal
+        // A toast is the fallback of 3.4.6: it is heard only when nothing else spoke for the same cause. The cause's own sound is a request, which the collector plays one macrotask later, so the toast
+        // waits 40 ms and finds it already playing (otherwise the "Sold 3 crates" toast rang its own ok in front of the sale).
+        if (lvl === 'good') setTimeout(guard(() => audio.play('ui.ok', { cause: 'toast' })), 40);
+        else if (lvl === 'warn') setTimeout(guard(() => audio.play('ui.nudge', { cause: 'toast' })), 40);
+        else if (refusal) setTimeout(guard(() => audio.play('ui.refuse', { cause: 'toast' })), 40);
       }
     })).observe(toasts, { childList: true });
   }

@@ -11,12 +11,14 @@
 // publishes their heights as --hud-h, --dock-h, --tick-h and --trk-b on <html> (so everything anchored to them follows when they wrap), lets a phone's bottom sheet be dragged
 // shut, and keeps the render path cheap (attributes written only when they change, bars listed once per render and painted only when they move, no work for a hidden tab).
 import { ZONES, TOTAL_HOURS, CLIENTS } from '../config.js';
-import { $, $$, esc, setHTML, delegate, dlg, toast, announce, sfx, burst, reduced, settingsDialog } from './common.js';
+import { $, $$, esc, setHTML, delegate, dlg, toast, announce, sfx, burst, reduced, settingsDialog, settings, applySettings } from './common.js';
 import { kv } from '../session.js';
 import { hudHTML, trackerHTML, tickerHTML } from './hud.js';
 import { DRAWERS } from './drawers/index.js';
 import { openDeal } from './deal.js';
 import { createWorldView } from './worldview.js';
+import { audio, wireAudio } from '../audio/index.js';
+import { createCues } from './audiocues.js';
 import { Progress } from '../meta/progress.js';
 import { fmtMoney as money, fmtPct as pct } from '../market.js';
 
@@ -28,7 +30,7 @@ export function mountGame(root, S, hooks) {
   const g = () => S.game;
   const U = { zone: 1, drawer: null, sel: new Set(), queue: [], last: 0, prev: {}, features: null, tracker: null };
   const listeners = new Set();
-  let wv = null, dead = false, progress = null, wasOpen = false;
+  let wv = null, dead = false, progress = null, wasOpen = false, cues = null, unwire = null;
 
   root.innerHTML = `<div class="stage" id="stage">
       <div class="worldhost" id="worldhost" data-anchor="world"></div>
@@ -43,7 +45,7 @@ export function mountGame(root, S, hooks) {
 
   // ---- the context every drawer receives
   const ctx = {
-    S, U, g, hooks, dlg, el, esc, money, pct, $, $$, sfx, burst, reduced, announce, setHTML, delegate,
+    S, U, g, hooks, dlg, el, esc, money, pct, $, $$, sfx, audio, burst, reduced, announce, setHTML, delegate,
     get progress() { return progress; },
     render: () => render(),
     toast, queue, confirmBox, say,
@@ -76,14 +78,14 @@ export function mountGame(root, S, hooks) {
     if (!d) return '';
     return `<header class="dh"><h2 tabindex="-1" id="dh-title"><span aria-hidden="true">${d.icon}</span> ${esc(d.label)}</h2><button class="ibtn" data-act="drawer-close" aria-label="Close ${esc(d.label)}">✕</button></header><div class="db" data-drawer="${d.id}">${d.html(ctx)}</div>`;
   }
-  function openDrawer(id) {
+  function openDrawer(id, o = {}) {
     if (!drawerOf(id)) return;
     const was = U.drawer;
     U.drawer = id; render();
     if (was !== id) $('#dh-title', el.drawer)?.focus({ preventScroll: true });
-    ctx.emit({ type: 'ui', ui: 'open-drawer', id });
+    ctx.emit({ type: 'ui', ui: 'open-drawer', id, ...(was === id ? { again: true } : {}), ...(o.quiet ? { quiet: true } : {}) }); // a drawer that was already open, or one opened as the quiet result of something with its own sound (a crate clicked in the world), is not heard opening; the Academy still hears the event
   }
-  function closeDrawer() { if (!U.drawer) return; const d = U.drawer; U.drawer = null; render(); $(`[data-fid="dk-${d}"]`, el.dock)?.focus({ preventScroll: true }); }
+  function closeDrawer() { if (!U.drawer) return; const d = U.drawer; U.drawer = null; render(); $(`[data-fid="dk-${d}"]`, el.dock)?.focus({ preventScroll: true }); ctx.emit({ type: 'ui', ui: 'close-drawer', id: d }); }
 
   function render() {
     if (dead || !g()) return;
@@ -106,6 +108,7 @@ export function mountGame(root, S, hooks) {
     if (redrawn) collectBars();
     paintBars(redrawn);
     pumpQueue();
+    cues?.render(); // after the world has been brought up to date: a buyer's door bell is panned to where the buyer is
   }
 
   // ---- anchors: the stylesheet places the tracker, ticker, drawer, camera, list and toasts against the HUD above and the dock below (css/shell.css, "How it is anchored").
@@ -205,7 +208,7 @@ export function mountGame(root, S, hooks) {
     U.confirm = fn;
     dlg.open(`<h2 tabindex="-1" autofocus>${esc(title)}</h2>${body}<div class="row gap"><button class="btn ${danger ? 'danger' : ''}" data-act="confirm-go" autofocus>${esc(ok)}</button><button class="btn ghost" data-close>Cancel</button></div>`, { label: title });
   }
-  function say(r, good = 'good') { if (r.msg) toast(r.msg, r.ok ? good : 'bad'); if (!r.ok) sfx.buzz(); return r; }
+  function say(r, good = 'good') { if (r.msg) toast(r.msg, r.ok ? good : 'bad'); if (!r.ok && !r.msg) audio.play('ui.refuse'); return r; } // a refusal with words is heard as its bad toast (js/audio/wire.js); one with none has no toast to be heard through
 
   function breakdown(k) {
     const game = g(), s = game.s, row = (a, b, c = '') => `<dt>${a}</dt><dd class="${c}">${b}</dd>`;
@@ -234,8 +237,15 @@ export function mountGame(root, S, hooks) {
     dock(b) { const id = b.dataset.d; U.drawer === id ? closeDrawer() : openDrawer(id); },
     'drawer-close': closeDrawer,
     pause() { S.setPaused(!S.clock.paused); },
+    sound() { // the speaker button: the same switch as key M (js/audio/wire.js), whose sound it plays itself (muting is silent, unmuting is a small "ok")
+      const a = settings.audio; if (!a) return;
+      settings.audio = { ...a, mute: !a.mute, touched: true }; applySettings();
+      announce(settings.audio.mute ? 'Sound off.' : 'Sound on.');
+      if (!settings.audio.mute) { audio.unlock(); audio.play('ui.ok'); }
+      render();
+    },
     speed(b) { S.setSpeed(+b.value); },
-    help() { dlg.open(`<button class="btn ghost sm x" data-close>Close</button><h2 tabindex="-1" autofocus>How to play</h2><ol class="small"><li>Click a <b>buyer</b> in the world to sell something to them, or a <b>booth</b> to buy a lot. Every deal can be played (Read, Pitch, Close) or auto-played with <b>Quick</b>.</li><li>Your <b>Goal</b> card tells you what to do next. The <b>Codex</b> explains why things work.</li><li>Net worth opens new districts. Each one has a signature rule and teaches one idea.</li><li>Press <b>1</b> to <b>7</b> to open the panels, <b>Esc</b> to close them.</li></ol>`, { label: 'Help' }); },
+    help() { dlg.open(`<button class="btn ghost sm x" data-close>Close</button><h2 tabindex="-1" autofocus>How to play</h2><ol class="small"><li>Click a <b>buyer</b> in the world to sell something to them, or a <b>booth</b> to buy a lot. Every deal can be played (Read, Pitch, Close) or auto-played with <b>Quick</b>.</li><li>Your <b>Goal</b> card tells you what to do next. The <b>Codex</b> explains why things work.</li><li>Net worth opens new districts. Each one has a signature rule and teaches one idea.</li><li>Press <b>1</b> to <b>7</b> to open the panels, <b>Esc</b> to close them.</li><li>Press <b>M</b> to mute or unmute sound.</li></ol>`, { label: 'Help' }); },
     settings() { settingsDialog(() => render()); },
     menu,
     breakdown(b) { breakdown(b.dataset.k); },
@@ -278,11 +288,14 @@ export function mountGame(root, S, hooks) {
       onComplete(kind, def) {
         const msg = kind === 'quest' ? `Quest complete: ${def.title}` : kind === 'achievement' ? `Achievement: ${def.title}` : `Daily bounty done: ${def.title}`;
         toast(msg, 'good'); sfx.level(); burst({ power: kind === 'achievement' && def.rarity === 'epic' ? 1.6 : 1 }); announce(msg);
+        // the reward is one more request in the burst that caused it (a sale, a level): the collector (docs/AUDIO.md 3.4.2) picks what is heard
+        if (kind === 'quest') audio.request('quest.complete'); else if (kind === 'achievement') audio.request('achievement', { variant: ['common', 'rare', 'epic'].includes(def.rarity) ? def.rarity : 'common', meta: { rarity: def.rarity } }); else audio.request('daily.done');
       },
-      onCodex(entry) { toast(`Codex unlocked: ${entry.title}`, 'info'); sfx.blip(); },
+      onCodex(entry) { toast(`Codex unlocked: ${entry.title}`, 'info'); sfx.blip(); audio.request('codex.unlock'); },
     });
     g().onEvent = (evt) => {
       progress.onEvent(evt);
+      cues?.event(evt);
       ctx.emit(evt);
       if (evt.type === 'level') { sfx.level(); burst({ power: 1.2 }); } // the words are the engine's own note (Level N: a skill point, or the XP a mastered founder gets instead), which the news feed already toasts
     };
@@ -294,6 +307,8 @@ export function mountGame(root, S, hooks) {
   // ---- the world
   wv = createWorldView(ctx);
   wv.mount(el.world);
+  cues = createCues(ctx, { settings, save: applySettings, announce, toast, supported: () => audio.supported });
+  unwire = wireAudio(ctx, { settings, save: applySettings, announce, toast }); // the sound layer (js/audio/wire.js): the engine's events, the session's notes and this shell's `ui` events become sounds
 
   // ---- session events
   const off = S.on((type, data) => {
@@ -304,8 +319,10 @@ export function mountGame(root, S, hooks) {
       if (n.alert) queue(alertHTML(n.alert), { cls: 'alert', label: n.alert.name, sound: 'alarm' });
       if (n.milestone) { sfx.level(); burst({ power: 1.4 }); }
       else if (n.zone) { sfx.blip(); wv?.world?.flash?.(n.zone); } // a district opening
+      cues?.note(n);
     }
-    if (type === 'rewound') { attachGame(); toast('Your instructor rewound the simulation.', 'warn'); }
+    if (type === 'offer') cues?.session('offer', data);
+    if (type === 'rewound') { attachGame(); cues?.session('rewound'); toast('Your instructor rewound the simulation.', 'warn'); }
   });
   const over = setInterval(() => {
     const s = S.game?.s;
@@ -314,12 +331,14 @@ export function mountGame(root, S, hooks) {
 
   function destroy() {
     dead = true; off(); clearInterval(over); clearTimeout(barT); sizer?.disconnect();
+    try { unwire?.(); } catch { /* the sound layer is already gone */ } unwire = null; cues?.destroy(); cues = null;
     document.removeEventListener('keydown', keydown); document.removeEventListener('visibilitychange', wake);
     for (const k in anchors) docEl.style.removeProperty('--' + k); // the next screen falls back to the stylesheet's values
     if (dlg.el._acts === acts) dlg.el._acts = null; // the shared dialog's action table is this mount's until another screen swaps it: let go of it, it holds the whole mount
     wv?.destroy(); if (g()) g().onEvent = null;
   }
   render();
+  cues.hint(); // the one-time "sound is on" note (docs/AUDIO.md 7.4)
   return { render, destroy, ctx };
 }
 

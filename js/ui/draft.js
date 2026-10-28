@@ -6,6 +6,7 @@ import { PERKS, PERK_IDS, perkMods, SKILLS } from '../config.js';
 import { PERK_PAIRS } from '../data/perks.js';
 import { hash } from '../rng.js';
 import { $, $$, esc, setHTML, delegate, announce } from './common.js';
+import { audio } from '../audio/index.js';
 
 export const MAX_PICKS = 2;
 const own = (o, k) => typeof k === 'string' && Object.prototype.hasOwnProperty.call(o, k);
@@ -166,13 +167,13 @@ export function actionsHTML(st) {
     ${st.notice ? `<span class="small gold dr-notice">${esc(st.notice)}</span>` : ''}
     <span class="grow"></span>
     <button class="btn ghost" type="button" data-act="back" data-fid="dr-back">Back</button>
-    <button class="btn big" type="submit" id="dr-begin" data-fid="dr-begin" aria-disabled="${ok ? 'false' : 'true'}" aria-describedby="dr-need">Begin</button>`;
+    <button class="btn big" type="submit" id="dr-begin" data-snd data-fid="dr-begin" aria-disabled="${ok ? 'false' : 'true'}" aria-describedby="dr-need">Begin</button>`;
 }
 
 /** The whole screen as one string. Parts are rebuilt by mountDraft without touching the cards or the alias field (typing is never interrupted). */
 export function draftHTML(st) {
   const n = st.picks.length;
-  return `<form class="panel dr" id="sf" novalidate aria-labelledby="dr-h">
+  return `<form class="panel dr" id="sf" novalidate aria-labelledby="dr-h" data-snd>
     <header class="dr-head">
       <h1 id="dr-h" tabindex="-1">Draft your build</h1>
       <p class="dr-lede"><b class="gold">Everyone starts the same: one paperclip and $0.</b> The only difference between you and any other founder is the build you choose here, so draft the two Backgrounds that fit how you want to play. Each one has a real-world basis, a real strength and a real cost.</p>
@@ -219,13 +220,23 @@ export function mountDraft(root, S, { room = null, onBegin, onBack } = {}) {
     if (say) announce(st.notice || statusText(st), !!st.notice);
   }
 
+  // What the tray did, in sound (docs/AUDIO.md 4.3, Draft): the first card slides into a slot, the second completes the build, a card leaving steps back, a third is refused. The controls that
+  // have these sounds are in the control table's own-sound list, so nothing else plays on top of them (the form says so with data-snd).
+  const heard = (before) => {
+    const n = st.picks.length;
+    if (n > before) audio.play('draft.pick', { variant: n >= MAX_PICKS ? 'complete' : 'slot' + n });
+    else if (n < before) audio.play('draft.pick', { variant: 'drop' });
+    else if (st.notice) audio.play('ui.refuse');
+  };
+  const rattle = () => { audio.play('ui.tick', { variant: 'light' }); for (const ms of [50, 100]) setTimeout(() => { if (!begun) audio.play('ui.tick', { variant: 'light' }); }, ms); }; // three ticks 50 ms apart: the dice
+  const pickCard = (id) => { const before = st.picks.length; send({ type: 'toggle', id }); heard(before); };
   const acts = {
-    pick(el) { send({ type: 'toggle', id: el.value }); },
+    pick(el) { pickCard(el.value); },
     spec(el) { send({ type: 'specialty', id: el.value }, false); },
     handle(el) { st = draftReduce(st, { type: 'handle', value: el.value }); },
-    drop(el) { send({ type: 'drop', id: el.dataset.id }); $('[data-fid="dr-reroll"]', root)?.focus({ preventScroll: true }); },
-    clear() { send({ type: 'clear' }); $('[data-fid="dr-reroll"]', root)?.focus({ preventScroll: true }); },
-    reroll() { send({ type: 'reroll' }); },
+    drop(el) { const before = st.picks.length; send({ type: 'drop', id: el.dataset.id }); heard(before); $('[data-fid="dr-reroll"]', root)?.focus({ preventScroll: true }); },
+    clear() { const before = st.picks.length; send({ type: 'clear' }); heard(before); $('[data-fid="dr-reroll"]', root)?.focus({ preventScroll: true }); },
+    reroll() { send({ type: 'reroll' }); rattle(); },
     back() { onBack?.(); },
   };
   delegate(root, acts);
@@ -234,7 +245,7 @@ export function mountDraft(root, S, { room = null, onBegin, onBack } = {}) {
   form.addEventListener('keydown', (e) => {
     const t = e.target;
     if (!t?.matches?.('.dr-in')) return;
-    if (e.key === 'Enter') { e.preventDefault(); send({ type: 'toggle', id: t.value }); return; }
+    if (e.key === 'Enter') { e.preventDefault(); pickCard(t.value); return; }
     const cards = $$('.dr-in', grid), i = cards.indexOf(t);
     const cols = Math.max(1, cards.filter((c) => c.closest('.dr-card').offsetTop === cards[0].closest('.dr-card').offsetTop).length);
     const to = { ArrowRight: i + 1, ArrowDown: i + cols, ArrowLeft: i - 1, ArrowUp: i - cols, Home: 0, End: cards.length - 1 }[e.key];
@@ -246,10 +257,12 @@ export function mountDraft(root, S, { room = null, onBegin, onBack } = {}) {
     const c = draftChoice(st);
     if (!c.ok) {
       send({ type: 'submit' });
+      audio.play('ui.refuse');
       (grid.querySelector('.dr-in:not(:checked)') || grid.querySelector('.dr-in'))?.focus();
       return;
     }
     begun = true;
+    audio.request('draft.begin'); // the run starts: it is a request, so the collector orders it with whatever the next screen says
     $('#dr-begin', root)?.setAttribute('aria-busy', 'true');
     onBegin?.({ perks: c.perks, specialty: c.specialty, handle: c.handle });
   });

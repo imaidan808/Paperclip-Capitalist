@@ -26,5 +26,10 @@ lengths, brightness, the mid body, the ladders, the beds and the tier gaps throu
 - Pool members are calibrated one by one (`id#variant@k` in `trims.js`): the pitch of a pool member changes how loud it reads.
 - The body of the refusal and loss family uses a sine D4 (A3 is 220 Hz, under the 250 Hz line) and a knock at 440 Hz; every variant of the family measures at least 40% above 250 Hz.
 - The queued moment is played by scheduling it after the current one (never later than 500 ms), not by a timer.
-- Not wired here (other tracks): the shell's `wireGame` call, the HUD speaker button, the Deal Room's `ui:'deal'` emissions and Sound toggle, the engine's `kind`/`reason`/`delay`/`pid` fields, `world.rectOf`
-  for pan, the six counterpart announcements of section 9. Each degrades to the text of the note or to a centered sound until it lands.
+- Wired by `v2/audio-wire` (the shell's side): `shell.js` calls `wireAudio(ctx)` once per mounted game and takes it down in `destroy`; it emits the `ui` events `close-drawer`, `zone` and `lead`
+  (`js/ui/audiocues.js`: a baseline first, so a new district or a returning tab rings nothing), reports the Progress rewards as requests, and has the speaker button's act. `js/ui/worldsound.js`
+  turns the World's hover, activation, footsteps and camera into `ui` events and plays (`rectOf` gives the stereo pan; `night` the ambient). The HUD has the speaker button and the Draft plays
+  `draft.pick`, `ui.refuse` and `draft.begin` itself. The control table in `wire.js` gained the Deal Room's moves, the title's presses, the instructor's ceremonies, the sounds a control
+  has of its own (`OWN`) or always gets from its outcome (`QUIET`), the crate box, the disclosure sound and `data-close`; the toast fallback waits 40 ms so the collector's sound is heard first.
+- Still not wired (other tracks): the Deal Room's `ui:'deal'` emissions and its Sound toggle (`js/ui/deal.js`), the Academy's `acad.*` calls, and the engine's `kind`/`reason`/`delay`/`pid` fields
+  (the wiring matches the note text and treats a pool sale as immediate until they land); `repair.stop` by precision needs the room's own answer.

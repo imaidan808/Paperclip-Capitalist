@@ -5,10 +5,11 @@ import { World } from '../world/world.js';
 import { ZONES, ASSETS, BUYERS, PIPE } from '../config.js';
 import { fmtMoney as money, fitLabel } from '../market.js';
 import { esc, toast } from './common.js';
+import { createWorldSound } from './worldsound.js';
 
 export function createWorldView(ctx) {
   const { S, U } = ctx;
-  let world = null, host = null, lastZone = null, booted = false;
+  let world = null, host = null, lastZone = null, booted = false, sound = null;
   const g = () => S.game;
   const unlocked = (z) => g().s.zones.includes(z);
   const gate = (z) => `${ZONES[z].name} opens at ${money(ZONES[z].gate)} net worth.`;
@@ -41,9 +42,10 @@ export function createWorldView(ctx) {
 
   function activate(h, ev, ground) {
     const game = g(), s = game.s;
-    if (!h) { if (ground && unlocked(U.zone)) world.walkPlayerTo(ground.gx, ground.gy); return; }
-    if (h.kind === 'zone') { if (!unlocked(h.id)) { toast(gate(h.id), 'warn'); return; } U.zone = h.id; if (h.quick) world.quickTravel?.(h.id); ctx.render(); return; }
-    if (h.zone && h.zone > 0 && !unlocked(h.zone)) { toast(`${ZONES[h.zone].name} is locked. ${gate(h.zone)}`, 'warn'); return; }
+    if (!h) { if (ground && unlocked(U.zone)) { world.walkPlayerTo(ground.gx, ground.gy); sound?.ground(); } return; }
+    if (h.kind !== 'asset') sound?.clicked(h); // a click on a buyer, a lot or a truck is a tick; the outcome (the Deal Room, a drawer, a shut door) has the sound that says what happened
+    if (h.kind === 'zone') { if (!unlocked(h.id)) { sound?.locked(h); toast(gate(h.id), 'warn'); return; } U.zone = h.id; if (h.quick) world.quickTravel?.(h.id); ctx.render(); return; }
+    if (h.zone && h.zone > 0 && !unlocked(h.zone)) { sound?.locked(h); toast(`${ZONES[h.zone].name} is locked. ${gate(h.zone)}`, 'warn'); return; }
     if (h.zone && h.zone > 0 && h.zone !== U.zone) U.zone = h.zone;
     if (h.kind === 'lead') {
       const here = s.assets.filter((a) => a.zone === h.zone);
@@ -55,13 +57,13 @@ export function createWorldView(ctx) {
       ctx.deal({ kind: 'sell', assetId: sel.id, leadId: h.id }); return;
     }
     if (h.kind === 'lot') { ctx.deal({ kind: 'buy', zone: h.zone, lotId: h.id }); return; }
-    if (h.kind === 'asset') { U.sel.has(h.id) ? U.sel.delete(h.id) : U.sel.add(h.id); ctx.openDrawer('stock'); return; }
+    if (h.kind === 'asset') { U.sel.has(h.id) ? U.sel.delete(h.id) : U.sel.add(h.id); sound?.clicked(h, { ticked: U.sel.size }); ctx.openDrawer('stock', { quiet: true }); return; }
     if (h.kind === 'pipe') { U.focusPipe = h.id; ctx.openDrawer('crew'); return; }
-    if (h.kind === 'plot') { if (h.locked) { toast(game.autoLocked() ? 'Resolve your Regulatory Audit before expanding.' : 'Not open yet.', 'warn'); return; } U.hireAt = h.zone; ctx.openDrawer('crew'); return; }
+    if (h.kind === 'plot') { if (h.locked) { sound?.locked(h); toast(game.autoLocked() ? 'Resolve your Regulatory Audit before expanding.' : 'Not open yet.', 'warn'); return; } U.hireAt = h.zone; ctx.openDrawer('crew'); return; }
     if (h.kind === 'truck') { toast('That freight run is on its way.', 'info'); return; }
     if (h.kind === 'static') {
       const id = h.id;
-      if (id === 'bank' || id === 'audit' || id === 'ipo') { if (id === 'bank' && !s.mil.m1) { toast('The Commercial Bank opens in Metro Hub.', 'warn'); return; } if (id === 'audit' && !s.mil.m2) { toast('Audits begin in Industrial Park.', 'warn'); return; } ctx.openDrawer(id === 'ipo' ? 'crew' : 'bank'); return; }
+      if (id === 'bank' || id === 'audit' || id === 'ipo') { if (id === 'bank' && !s.mil.m1) { sound?.locked(h); toast('The Commercial Bank opens in Metro Hub.', 'warn'); return; } if (id === 'audit' && !s.mil.m2) { sound?.locked(h); toast('Audits begin in Industrial Park.', 'warn'); return; } ctx.openDrawer(id === 'ipo' ? 'crew' : 'bank'); return; }
       if (id === 'rent') { ctx.openDrawer('stock'); return; }
       if (id === 'exchange') { ctx.openDrawer('travel'); return; }
       if (id.startsWith('hq')) { ctx.openDrawer('quests'); return; }
@@ -87,6 +89,7 @@ export function createWorldView(ctx) {
   let tipEl = null, tipKey = '', tipW = 0, tipH = 0;
   const tip = () => (tipEl ||= host?.querySelector('.wvtip'));
   function hover(h, ev) {
+    sound?.hover(h, ev);
     const t = tip(); if (!t) return;
     if (!h) { tipKey = ''; if (!t.hidden) t.hidden = true; return; }
     const key = `${h.kind}|${h.id}|${h.zone ?? ''}|${g().s.hour}|${U.sel.size ? [...U.sel].join(',') : ''}`;
@@ -134,7 +137,9 @@ export function createWorldView(ctx) {
         <div class="wvctl" role="group" aria-label="Camera"><button class="ibtn" data-wv="zin" aria-label="Zoom in">+</button><button class="ibtn" data-wv="zout" aria-label="Zoom out">−</button><button class="ibtn" data-wv="fit" aria-label="Show the whole island">◎</button><button class="ibtn" data-wv="me" aria-label="Back to my district">⌂</button></div>
         <div class="wvtip" hidden></div>
         <details class="wvlist"><summary><svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false"><path d="M6.5 4H14M6.5 8H14M6.5 12H14" fill="none" stroke="currentColor" stroke-width="2"/><path d="M2 4h1.6M2 8h1.6M2 12h1.6" fill="none" stroke="currentColor" stroke-width="2.4"/></svg><span class="wvl-t">List of everything in this district <span class="wvl-x">(for keyboard and screen readers)</span></span></summary><ul class="wvul"></ul></details>`;
+      sound = createWorldSound(ctx, { world: () => world });
       world = new World({ session: S, ui: U, activate, hover, reveal: () => {}, insets });
+      sound.camera(world);
       if (window.pc) window.pc.world = world;
       world.attach(el.querySelector('.wvcv'));
       world.setMode?.('world');
@@ -146,9 +151,10 @@ export function createWorldView(ctx) {
         const b = e.target.closest('[data-wv],[data-hs]'); if (!b) return;
         if (b.dataset.hs) { const [kind, id] = b.dataset.hs.split('|'); const h = world.hotspots().find((x) => x.kind === kind && String(x.id) === id); if (h) activate(withData(h), null, null); return; }
         const a = b.dataset.wv;
+        sound?.button(); // the control table has played this button; the camera it moves stays quiet for a moment
         if (a === 'zin') world.zoomBy(1.25); else if (a === 'zout') world.zoomBy(0.8); else if (a === 'fit') world.fit(); else if (a === 'me') world.focusZone(U.zone, true);
       };
-      el.querySelector('.wvlist').addEventListener('toggle', (e) => { if (e.target.open) list(); }); // build the list the moment it is opened
+      el.querySelector('.wvlist').addEventListener('toggle', (e) => { if (e.target.open) list(); }); // build the list the moment it is opened (its sound is the page-wide disclosure sound of js/audio/wire.js)
       this.update();
     },
     update() {
@@ -156,8 +162,14 @@ export function createWorldView(ctx) {
       world.sync();
       if (U.zone !== lastZone) { lastZone = U.zone; world.focusZone(U.zone, true); }
       list();
+      sound?.poll(); // the player may have set out for another district: the footsteps listen for as long as the walk lasts
     },
+    /** Where a thing is on the screen (window pixels), for the sound's stereo pan: the World's kinds, 'thing' (a hit as "kind|id") and 'player'. */
+    rectOf(kind, id) { return sound ? sound.rectOf(kind, id) : null; },
+    /** How dark it is, 0 to 1 (the ambient bed follows the night). */
+    get night() { return world?.night ?? 0; },
     destroy() {
+      sound?.destroy(); sound = null;
       world?.stop(); world?.detach?.(); // detach lets go of the bitmaps; the debugging handle must not keep the whole world reachable either
       if (window.pc && window.pc.world === world) window.pc.world = null;
       host = null; world = null;
