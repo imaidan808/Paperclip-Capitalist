@@ -4,13 +4,17 @@ The contract for the sound layer: what plays, when, how loud, in what key, with 
 
 **Everything is generated in the browser** with the Web Audio API (oscillators, shared noise buffers, biquad filters, gains). There are no audio files to ship, so the site stays a static GitHub Pages folder with no build step.
 
-Contents: 0 what is verified; 1 principles; 2 the palette and the scale; 3 the mixer; 4 the sound map, with every event and every control; 5 what is silent; 6 the ambient bed; 7 settings and controls; 8 the engine API; 9 never the only cue; 10 the test plan; 11 hand-off; Appendix A levels and trims; Appendix B the prototype.
+**Revision 2 (2026-10-28)** answers a review of 39 findings (I1 to I17 from the first reviewer, G01 to G22 from the second). Appendix C says, for each, what was checked, what was found and where it is resolved. The three that changed the design most: the game's events arrive consequence before cause, so a **collector** now turns a burst of events into at most two audible sentences (3.4); the **wiring** is split into one page-wide `initAudio()` and one `wireGame(ctx)` per mounted game, and the sounds that the code cannot see today get a named, additive host (8.3, 8.5); and **hidden information** is closed for good, because `inspect{caught}` was a function of the lot's truth (4.1).
+
+How to read the numbers. A figure marked **rev 1** was measured on the prototype as committed (2d0cf0b). A figure marked **rev 2** is a decision of this revision that the prototype does not contain yet; section 11.4 lists what the prototype must be brought in line with. The measurements made for this revision are in the second table of section 0; each says where its method is, and `dev/audio-proto/chain.mjs` and `dev/audio-proto/events.mjs` repeat the chain, spectral, event-order, buyer and ambient-rate figures.
+
+Contents: 0 what is verified; 1 principles; 2 the palette and the scale; 3 the mixer; 4 the sound map, with every event and every control; 5 what is silent; 6 the ambient bed; 7 settings and controls; 8 the engine API; 9 never the only cue; 10 the test plan; 11 hand-off; Appendix A levels and trims; Appendix B the prototype; Appendix C the review log.
 
 ## 0. What is verified and what is not
 
 The recipes in this document are not prose only. `dev/audio-proto/` holds every one of them as data (`sounds.js`, `ambient.js`) and a small synth (`synth.js`). `node dev/audio-proto/run.mjs` renders all of them offline in headless Chrome and `node dev/audio-proto/audit.mjs` checks the data. Every number below that looks measured was measured that way, on this machine, at 48 kHz.
 
-| Checked by program (and held by the test plan, section 10) | |
+| Checked by program on the rev-1 prototype (and held by the test plan, section 10) | |
 |---|---|
 | Level | every sound is trimmed to its tier's level (K-weighted active level, section 3.2); all 189 variants land on target except 8 loud ones held up to 1.6 dB under it by the peak ceiling |
 | Peak | no single sound peaks above -5 dBFS before the buses; the worst pile-up measured (the 12 loudest sounds at once) peaks at -4.1 dBFS after the master chain, and the chain can never pass -3 dBFS |
@@ -18,17 +22,30 @@ The recipes in this document are not prose only. `dev/audio-proto/` holds every 
 | Direction | 50 sounds were checked to rise (28) or fall (22) by at least 1.5 semitones as intended, and in each of 14 gain and loss pairs the gain is brighter (higher spectral centroid) than its twin |
 | Size ladders | small to extra large cash, warning level 1 to 3, common to epic achievement, district tier 1 to 4: each step is longer than the one before |
 | Clean edges | no sound is still audible (above -50 dBFS) at its declared end, none has a step larger than 0.25 of full scale, no DC offset above 0.002, no NaN |
-| Gentle tops | the brightest sound has a spectral centroid of 5695 Hz; nothing has a partial above 6 kHz |
+| Gentle tops | the brightest sound of the map has a spectral centroid of 5695 Hz and no tone or bank in the map has a partial above 6 kHz. This is a limit of the **sound map**: the ambient set has its own (6.4: noise layers up to 9 kHz in four beds at -28 dB, two one-shots with centroids of 5.9 and 6.1 kHz) |
 | Cost | the median sound is 8 oscillators; the largest (`run.end` done) is 113 for about three seconds |
 | Distinct | no two sounds of different ids have a spectral fingerprint closer than 2.8 dB RMS (the closest pair, a crate tick and the haggle "hold" tap, differ by a thump). While this was being drawn the check found two identical sounds and a pair at 0.7 dB; they were redrawn |
 | Audition page | `dev/audio-proto/audition.html` plays all 255 buttons (189 variants, 18 ambient one-shots, 48 bed and weather cases) with no console error |
 
+| Measured for revision 2 (how each was made is in the section named) | |
+|---|---|
+| Tier gaps after the chain | medium to loud is 4.7 dB before the chain (not 6), 3.7 dB after it at master 100 and 4.3 at the default 70; with loud +2 dB and the glue threshold at -16 dB it is 5.9 and 6.5 (3.2) |
+| Compressor warm-up | a sound that starts within about 100 ms of an `AudioContext`'s creation loses up to 6 dB in the glue compressor (a first measurement of the row above that started sounds at 10 ms was wrong by that much). Offline renders through the chain must start voices at 0.6 s (3.7) |
+| Low "no" sounds | `ui.refuse` has 2.4% of its energy above 250 Hz; 14 more variants of the refusal and loss family have less than 40% (the list is in 2.2) |
+| Event order | in 3 bot runs of 90 days, 69%, 79% and 69% of the sale steps that carried a reward delivered the reward before the sale; the largest single step carried 11, 11 and 20 triggers (3.4.2) |
+| Reward density | per run: 116 to 133 daily bounties against 7 story quests, 17 common, 20 to 21 rare and 8 epic achievements, 36 Codex pages, 20 to 21 levels (3.4.4) |
+| Herd and flat | 30 of 31, 28 of 29 and 30 of 30 `herd` sales were wins by the engine's own test; 36 of 46, 36 of 40 and 26 of 34 `flat` sales were more than 2% below fair (4.1) |
+| Buyers | 2.3 arrive a minute at 1x in the starting district (89 to 91 in 336 virtual hours), about half with a need (3.4.5) |
+| Layer families | the stamp is in 13 ids, the sparkle in 13, the brass in 16, a bell in 25, a coin in 16, and the low thump in 39 (30 call it, 9 more through the stamp) (3.3) |
+| Ambient rate | read as one timer per one-shot, the table's windows give 3.0 to 6.6 a minute in ten beds (the other six 0 to 2.6) and 5.0 to 11.6 at night; read as one chain with one delay at a time they give 1.1 to 3.0 (6.4 now says which, and caps it) |
+
 | NOT verified: needs a person with headphones and with laptop speakers | |
 |---|---|
 | Taste | whether a recipe sounds like the thing it is named for (a coin, a gavel, a door bell). The layer balance of each sound was checked by program (no tone or bank layer sits more than 18 dB under its mix; 42 noise-texture layers sit 26 to 36 dB under theirs by RMS, which is normal for a click, and are listed in section 10), not by ear |
-| Fatigue | whether the frequent sounds stay pleasant over a 90-minute class; whether the ambient bed is welcome at 20 minutes |
-| Other engines | Safari and Firefox render the compressor and biquads slightly differently from Chrome. The soft clip at the end of the master chain makes the peak ceiling engine-independent; loudness may differ by a dB or two |
-| Speakers | laptop speakers cannot reproduce anything under about 150 Hz. The low thumps are felt on good speakers and merely absent on small ones; no sound depends on them to be understood |
+| Fatigue | whether the frequent sounds stay pleasant over a 90-minute class; whether the ambient bed is welcome at 20 minutes; whether the revised caps (3.4) leave enough sound |
+| Duration compensation | the +3, +1.5 and -2 dB of 3.2 follow from how loudness integrates over the first 200 ms, but the amounts are a first estimate to be set by ear (10.5) |
+| Other engines | Safari and Firefox render the compressor and biquads slightly differently from Chrome (the compressor's own makeup gain is one of the things that differs, and depends on its threshold: 1.729 at -22 dB and 1.321 at -16 dB here). The soft clip at the end of the master chain makes the peak ceiling engine-independent; loudness may differ by a dB or two |
+| Speakers | laptop speakers cannot reproduce anything under about 150 Hz, and at the default volume the ear needs 10 to 15 dB more level at 100 to 150 Hz. The low thumps are felt on good speakers and merely absent on small ones. Revision 1 let the refusal family depend on them; revision 2 does not (2.1, 2.2) |
 
 Use the audition page for the first listen: `npm start`, then open `/dev/audio-proto/audition.html`.
 
@@ -36,14 +53,14 @@ Use the audition page for the first listen: `npm start`, then open `/dev/audio-p
 
 | Principle | Built as |
 |---|---|
-| 1. Meaning before style | A grammar (2.2): gains rise and brighten, losses fall and darken, neutral is one soft tick, warnings are two-tone and escalate, money is coins sized on a log scale, a refusal is a short low "no" |
+| 1. Meaning before style | A grammar (2.2): gains rise and brighten, losses fall and darken, neutral is one soft tick, warnings are two-tone and escalate, money is coins sized on a log scale, a refusal is a short "no" with a body the ear can find (a laptop speaker has nothing under 150 Hz) |
 | 2. One family | One key (D major pentatonic) and one palette of materials: marimba, glass, bell, coin, wood, paper, stamp, brass, horn (2.1 to 2.3) |
-| 3. Hierarchy | Three tiers (tiny, medium, loud), 6 dB apart in level and several times apart in length and richness; per-sound cooldowns, global token buckets, a voice cap, jitter and pools, speed gating, a serial queue for the big moments (3.3 to 3.5) |
-| 4. Never the only cue | Every sound has a visual or screen-reader counterpart, named per sound in the map (column "Visual counterpart") and audited in section 9, with the 5 small gaps to close |
-| 5. Control | Master volume, mute, separate Interface, Game and Ambient switches (ambient off by default), a Classroom preset, all saved, labelled and keyboard accessible (section 7). The audio context starts on the first gesture, suspends in a hidden tab, and a missing Web Audio is a silent no-op |
+| 3. Hierarchy | Three tiers (tiny, medium, loud): tiny to medium 6 dB and medium to loud at least 5 dB after the master chain (loud +2 dB, glue threshold -16 dB, 3.2), several times apart in length and richness; a collector that turns a burst of events into at most two audible sentences, rank-aware per-sound cooldowns, global token buckets charged when a sound starts, a voice cap, jitter and pools, a reward budget, speed gating, a serial queue for the big moments (3.3 to 3.7) |
+| 4. Never the only cue | Every sound has a visual or screen-reader counterpart, named per sound in the map (column "Visual counterpart") and audited in section 9, with the 6 small gaps to close |
+| 5. Control | Master volume, mute (key M, in every dialog too, and a toggle inside the Deal Room), separate Interface, Game and Ambient switches (ambient and the repair tone off by default), a Classroom rule, all saved, labelled and keyboard accessible (section 7). One audio context for the page starts on the first gesture, suspends in a hidden tab, and a missing Web Audio is a silent no-op |
 | 6. Mix hygiene | Buses, glue compressor, makeup, a 4x oversampled soft clip at -3 dBFS; attack ramps of at least 0.4 ms and exponential releases on every voice; tier levels measured (3.7) |
-| 7. Cheap | At most 12 voices, shared noise buffers made once, nothing allocated per frame, no timer and no frame callback while idle, ambient is 3 to 6 looped layers and one timer for sparse one-shots (6.4) |
-| A rule of the game | **Sound never carries hidden information.** The engine knows things the player does not: `buy.fake`, whether an unverified buyer is a fraud, a lot's true quality, a rival's limit, an auction's `surplus` before the reveal, a haggle's reserve. No sound reads those fields (section 5 lists them). A counterfeit is announced only after the player has been told (`inspect` with `caught`, the "spotted a counterfeit" note, the result card) |
+| 7. Cheap | At most 12 voices, shared noise buffers made once, nothing allocated per frame, no timer and no frame callback while idle (the collector's timer exists for at most 24 ms after an event), ambient is 3 to 6 looped layers and one timer for sparse one-shots (6.4) |
+| A rule of the game | **Sound never carries hidden information.** The engine knows things the player does not: `buy.fake`, whether an unverified buyer is a fraud, a lot's true quality, a rival's limit, an auction's `surplus` before the reveal, a haggle's reserve. No sound reads those fields (section 5 lists them). A counterfeit is announced only after the player has been told (the "spotted a counterfeit" note, the result card), and the one suspicion cue reads the visible counterfeit-chance meter and nothing else. `inspect{caught}` is not read: it is the lot's truth AND the belief (4.1) |
 
 ## 2. The palette and the scale
 
@@ -60,12 +77,12 @@ One key for everything: **D major pentatonic, the notes D E F# A B** (the same f
 | 6 | 1174.7 | 1318.5 | 1480.0 | 1760.0 | 1975.5 |
 | 7 | 2349.3 | 2637.0 | | | |
 
-Rules, all checked by `audit.mjs`:
+Rules, checked by `audit.mjs` (except the last, a convention read from `sounds.js`):
 
 - Every fundamental, and both ends of every pitch glide, is a note name from this table. A recipe may not contain a raw frequency.
-- A bank (marimba, glass, bell, coin) generates a partial only if it lands on a note of the key (within 30 cents) **or** is quieter than -26 dB under the fundamental (the strike of a marimba bar). Partials are octaves, fifths and thirds of the root, stretched by at most 25 cents (glass 2.01, 3.02 and 4.05 beat gently, by design). The synth prunes the rest (273 of 1,884 partials in the set: those above 6 kHz and those out of key), so a glass note on F# has no C# in it. Nothing above 6 kHz is ever generated, so there is no harshness and no aliasing.
+- A bank (marimba, glass, bell, coin) generates a partial only if it lands on a note of the key (within 30 cents) **or** is quieter than -26 dB under the fundamental (the strike of a marimba bar). Partials are octaves, fifths and thirds of the root, stretched by at most 25 cents (glass 2.01, 3.02 and 4.05 beat gently, by design). The synth prunes the rest (273 of 1,884 partials in the set: those above 6 kHz and those out of key), so a glass note on F# has no C# in it. Nothing above 6 kHz is generated by a tone or a bank, so there is no harshness and no aliasing (the ambient set's noise beds are the exception, 6.4).
 - Nothing below D2 (73 Hz). The low thumps glide between D3 and D2 and are exempt from pitch rules because they are felt, not heard as notes.
-- Noise is unpitched: it is filtered into a band (paper, air, hiss, crowd) and never used for a note. The cricket and the chirp are the only places a narrow band sits above 4 kHz, and they are ambient.
+- Noise is unpitched: it is filtered into a band (paper, air, hiss, crowd) and never used for a note. In the sound map only two noise bands sit above 4 kHz, the pen scribble of `crew.client` (4.5 kHz, Q 1.4) and the confetti of `alert.shock` tiktok (high-passed at 5 kHz); the coin's tick and every other click are held at 3.4 kHz or lower. The rest of the high noise is ambient: the cricket, the farm bed's insects, the shutter and the flap, and nine beds with a layer at 4.5 kHz or higher, four of them at 6 to 9 kHz (6.4).
 
 ### 2.2 The grammar: what each kind of change sounds like
 
@@ -75,11 +92,19 @@ Rules, all checked by `audit.mjs`:
 | Loss, failure, close, off | Falls | Darker: triangle waves, lowpass at 0.8 to 2.2 kHz, muted coins; shorter; never louder than the gain it mirrors; never a buzzer and never an out-of-key note | `cash.out`, `sale.reject`, `sale.scam`, `ui.toggle` off, `clock` pause, `cam` zoom out, `pitch.fit` down, `audit.result` fail, `alert.insolvent` |
 | Neutral, "I heard you" | None | One soft wood or marimba tick | `ui.tick`, `ui.select`, `haggle.move` hold |
 | Warning | A falling minor third, A4 to F#4, on glass | Two-tone; severity adds repetition, then a drone, then a horn and a knock (`alert.advance` 1, 2, 3) | `alert.advance`, `audit.notice`, `deal.verify` bad, `ship.trouble` |
-| Refusal | Two low taps D3 then A2 | Triangle behind a 900 Hz lowpass over a dull knock; short; a "no", not a punishment | `ui.refuse`, `sale.reject`, `acad.teach` wrong |
+| Refusal | Two soft taps D3 then A2, with a mid body | Triangle behind a 900 Hz lowpass over a dull knock, plus a sine D4 or A3 at -10 dB and a knock bandpassed at 300 to 600 Hz so at least 40% of the energy is above 250 Hz; short; a "no", not a punishment | `ui.refuse`, `sale.reject`, `acad.teach` wrong |
 | Magnitude | More notes, higher notes | Log scale: each size step is about 100 times the money; more coins, more partials, a longer tail (2.4) | `cash.in` s, m, l, xl; `zone.open` tier 1 to 4 |
 | Rarity | Wider range | Common is two glass notes, rare three and a shimmer, epic a full arpeggio with brass and a shower | `achievement`, `milestone` |
 | Progress | One scale step up per item | Pitch counts: the nth crate, tab, step, raise or speed is the nth note | `ui.crate`, `ui.select`, `acad.step`, `bid.raise`, `clock` speed |
 | Closeness | The interval narrows, the tone opens | Far is a wide dull dyad, near is a unison that beats slowly | `haggle.tell` |
+
+#### The refusal and loss family has a body the ear can find
+
+Revision 1 drew the "no" low and ended there: `ui.refuse` is two triangle taps at D3 and A2 behind a 900 Hz lowpass, so its fundamentals are 147 and 110 Hz and its third and fifth harmonics are 19 and 28 dB down. Laptop speakers roll off under about 150 Hz, and at the default volume (around 40 phon) the ear needs 10 to 15 dB more level at 100 to 150 Hz than at 1 kHz, so the gains (880 to 2300 Hz) were heard and the refusals mostly were not. The sound was also tier medium on the interface bus, 6 dB above every click, so a mis-click was louder than a confirmation for the player who could hear it.
+
+Measured (`chain.mjs`, the energy of each rev-1 variant above 250 Hz, whole sound): `ui.refuse` 2.4%. Fourteen more variants of the family have under 40%: `world.locked` 8%, `sale.reject` nofit 3% and fake 15%, `acad.teach` wrong 2%, `bid.rival` out 2%, `deal.result` bad 2%, `pitch.fit` down 14%, `audit.result` fail 7%, `repair.stop` miss 6%, `repair.done` rough 2%, `ship.trouble` damage 6%, `haggle.close` walk 15%, `alert.insolvent` 32% and `bank.draw` 2%. (`world.hover` locked, 2%, is gone: the hover is one neutral tick now.) For comparison the small gains (coins, glass, marimba) are at 90 to 100%, cash out at 60 to 98% and `sale.scam` at 47%; the big fanfares and pads sit lower (`level.up` 55 and 68%, `zone.open` 23 and 33%) but they are loud and are not what the rule is for.
+
+**Rule (rev 2; `chain.mjs` reports it today and `audit.mjs` will hold it, 11.4):** every variant of the refusal and loss family (`ui.refuse`, `world.locked`, `sale.reject`, `sale.scam`, `sale.herd` h, `acad.teach` wrong, `bid.rival` out, `bid.hammer` lost, `deal.result` bad, `pitch.fit` down, `audit.result` fail, `repair.stop` miss, `repair.done` rough, `ship.trouble` damage, `haggle.close` walk, `alert.insolvent`, `bank.draw`, `cash.out`) has **at least 40% of its energy above 250 Hz**. The fix is the same for all of them: keep the low taps, which are what makes them read as a "no", and add a **mid body**: a sine D4 or A3 at -10 dB and a knock bandpassed at 300 to 600 Hz. Nothing in the game then depends on the lows to be understood. `ui.refuse` and `world.locked` also drop to the tiny tier with the trim raised by 3 dB, so a routine mis-click is no longer louder than a confirmation, and repeat with the escalation of 3.4.8.
 
 ### 2.3 The voices (the palette's instruments)
 
@@ -90,7 +115,7 @@ These are the building blocks the recipes are written with. Their names are the 
 | `mar` marimba | sine at f plus partials at 4x (25% of the decay time) and 10x (30 ms) | choices, small successes, counting steps, arpeggios |
 | `gls` glass | sine at f with partials 2.01, 3.02, 4.05 and decays 0.6, 0.4, 0.25 of the main | information, achievement, warnings, chimes |
 | `bellL` bell | partials 1, 2, 3, 4.01, 5.02 with long decays | door bells, the register, the gavel's chime, tolls |
-| `coin` | bank at f, 1.5f, 2f (a fifth and an octave) with a 5 kHz noise tick | all money; muted by a lowpass at 2.2 kHz for spending |
+| `coin` | bank at f, 1.5f, 2f (a fifth and an octave) with a noise tick (its band is held at 3.4 kHz) | **only cash that moves in the HUD**, never XP and never a reward; muted by a lowpass at 2.2 kHz for spending |
 | `wood` | sine at f for 50 ms plus a 2.4 kHz noise tick | your hands: crates, taps, buttons, hover |
 | `thump` | sine gliding D3 to D2 in about 60 ms | impacts: crates, drawers, stamps, doors |
 | `paper` | pink noise in a band sweeping 1.8 to 5.2 kHz, with a 29 Hz crinkle | documents, panels, text, bills |
@@ -121,28 +146,41 @@ export function moneySize(amount, netWorth) {
 | l | $1,780 to $75,000 | six coins and a register ding |
 | xl | $75,000 and up | ten coins, a bell chord, a soft brass stab and a glass shower |
 
-The bump means the very first sales (a pen for $3 when you own $3) already sound like a deal. Money out uses the same function with `xl` folded into `l`, and is never louder than the matching gain (at size m it is a whole tier quieter). Sales use `price` (what came in); a pool sale uses `total`; a loan, a repayment or a fee uses its own amount.
+The bump means the very first sales (a pen for $3 when you own $3) already sound like a deal. Money out uses the same function with `xl` folded into `l`, and is never louder than the matching gain (at size m it is a whole tier quieter). Sales use `price` (what came in); a pool sale uses `total` when it pays at once and the settled amount when the cash lands later; a repayment or a fee uses its own amount; a loan drawn has no coins. For repair, hire, upgrade, pipe-level and client, `cash.out` plays only at size l or larger (3.4.6).
 
 ### 2.5 Variation, so nothing repeats exactly
 
 - Every play gets a new seed: pitch jitter of up to 7 cents for the whole voice, gain jitter of up to 0.7 dB, and a random start inside the shared noise buffer. Intervals inside a sound never change (the jitter moves the whole voice).
-- The frequent sounds also carry a **pool** of three equivalent timbres or pitches, rotated so the same one never plays twice in a row: `ui.tick` (wood at D6, E6, F#6), `world.hover` (each kind has two notes), `world.step` (a, b, c), `manager.cycle` (coin at D7, A6, D6), `cash.in` s (A6, D7, E6), `bid.raise`, `haggle.move`.
-- A sound that is asked for again inside its cooldown is dropped, not stacked (3.4).
+- The frequent sounds also carry a **pool** of three equivalent timbres or pitches, rotated so the same one never plays twice in a row: `ui.tick` (wood at D6, E6, F#6), `world.hover` (two notes, the same for every kind), `world.step` (a, b, c), `manager.cycle` (coin at D7, A6, D6), `cash.in` s (A6, D7, E6), `bid.raise`, `haggle.move`.
+- A sound that is asked for again inside its cooldown is dropped, not stacked, unless it is a bigger variant of the same cause (3.4.3).
+- **Voices that overlap share their detune.** Voices that start within the same 120 ms share one jitter value, so unisons stay beat-free (7 cents on D7 is 19 Hz of beating between two independent voices); where two voices share a fundamental within 30 cents the later one is delayed 30 to 45 ms or drops that note. The layers that recur in many sounds (the stamp, the sparkle, brass, a bell chord, a coin, the low thump) are not stacked at all (3.3).
 
 ## 3. The mixer
 
 ### 3.1 The graph
 
 ```
+request (a press, a world move, an engine event, a note, a progress hook)
+  press and world classes -----------------------------------------------+
+  everything else -> collector (one macrotask, 24 ms at most)            |
+                     -> resolver: merge, rank, two sentences, budgets ---+
+                                                                         v
+ clock gates (speed, hold, catch-up) -> cooldown (rank-aware) -> bucket (charged when the sound starts)
+ -> causal group -> moment slot -> voice cap and stealing -> build, schedule
+
 voice (at most 12 live) -> voice gain (tier trim, jitter, ducking) -> [lowpass if far] -> stereo panner -> bus
       bus ui   -3 dB  \
-      bus game  0 dB   > duck gains -> master gain (volume^2, mute) -> glue compressor -> makeup (divides by 1.729) -> 4x oversampled soft clip at -3 dBFS -> speakers
+      bus game  0 dB   > duck gains (the deepest wins) -> master gain (volume^2, mute) -> glue compressor (-16 dB) -> makeup (measured at unlock) -> 4x oversampled soft clip at -3 dBFS -> speakers
       bus amb  -6 dB  /                (ambient level slider, the bed's own trim)
 ```
+
+The first three lines are new in revision 2 and are the answer to the review's central finding: the engine and the shell deliver a burst in the order things were computed, which is consequence before cause (a sale's XP levels you up before the sale is announced, and the shell runs the quest and achievement hooks before it passes the event on). Sound is not made in arrival order; it is made from what the burst contains (3.4.2).
 
 ### 3.2 Levels, in decibels
 
 Loudness is measured as the **K-weighted active level**: each sound is rendered mono at 48 kHz, filtered with the BS.1770 K-weighting, cut into 20 ms frames, and the mean square of the frames within 24 dB of the loudest frame is taken. It is a short-sound cousin of LUFS. Peak is the largest sample before the buses.
+
+**Rev 1, as measured** (before the chain):
 
 | Tier | Variants | Active level (dB) | Peak before the buses (dBFS) | Length ms (min / median / max) | Held under target by the peak ceiling |
 |---|---|---|---|---|---|
@@ -151,42 +189,140 @@ Loudness is measured as the **K-weighted active level**: each sound is rendered 
 | loud | 22 | -20.6 to -19.0 | -6.9 to -5.0 | 770 / 1290 / 2740 | 8 |
 | ambient one-shot | 18 | -32.0 to -32.0 | -22.0 to -12.0 | 80 / 340 / 1450 | 0 |
 
-- Tiers are 6 dB apart in level, and the hierarchy is carried as much by **length and richness** (a loud sound is 0.8 to 2.7 s and layers brass, bells and arpeggios) as by level.
-- The peak ceiling is -6 dBFS for tiny and medium and -5 dBFS for loud. The loud sounds held under their -19 dB target by it are `cash.in#xl` -19.1, `alert.insolvent#i` -19.5, `perk.bailout#bailout` -20.5, `achievement#epic` -19.8, `level.up#big` -20.3, `acad.graduate#g` -19.2, `run.end#horizon` -20.1, `run.end#done` -20.6. All stay within 2 dB of target, inside the 4 dB band.
+- Revision 1 said the tiers were 6 dB apart. They are not: tiny to medium is 6.0 dB, but medium to loud is 4.7 dB on average (3.4 dB for the loud sounds the peak ceiling held back), before the chain.
+- The peak ceiling was -6 dBFS for tiny and medium and -5 dBFS for loud. The loud sounds held under their -19 dB target by it are `cash.in#xl` -19.1, `alert.insolvent#i` -19.5, `perk.bailout#bailout` -20.5, `achievement#epic` -19.8, `level.up#big` -20.3, `acad.graduate#g` -19.2, `run.end#horizon` -20.1, `run.end#done` -20.6.
+
+**What the chain does to those levels** (measured for revision 2: every rev-1 variant with its trim, rendered through `master()` in headless Chrome 156 at 48 kHz, sounds started at 0.6 s, the active level read from the output; `dev/audio-proto/chain.mjs`). Mean level of the game-bus variants with the master gain taken out:
+
+| Chain | tiny | medium | loud | tiny to medium | medium to loud |
+|---|---|---|---|---|---|
+| none (rev 1 trims) | -30.0 | -24.0 | -19.3 | 6.0 | 4.7 |
+| rev 1 chain (threshold -22 dB), master 100 | -30.1 | -25.0 | -21.3 | 5.1 | 3.7 |
+| rev 1 chain, master 70 (the default) | -29.9 | -24.1 | -19.8 | 5.8 | 4.3 |
+| rev 2 chain (loud +2 dB, threshold -16 dB, makeup 1.321), master 100 | -29.9 | -24.1 | -18.2 | 5.8 | 5.9 |
+| rev 2 chain, master 70 | -29.9 | -24.0 | -17.5 | 5.9 | 6.5 |
+
+So the glue compressor does what the review said: at full volume it takes 2.0 dB (up to 2.9) off the loud sounds, 1.0 off the mediums and nothing off the tinies, and the gap that matters for hierarchy shrinks to 3.7 dB. With the two changes below it is 5.9 dB at full volume and 6.5 at the default.
+
+**Rev 2 targets:**
+
+| Tier | Variants (rev 2) | Active level | Peak ceiling before the buses |
+|---|---|---|---|
+| tiny | 102 | -30 dB plus the duration compensation below | -6 dBFS |
+| medium | 64 | -24 dB | -6 dBFS |
+| loud | 22 | **-17 dB** (was -19) | **-3 dBFS** (was -5; the soft clip at the end of the chain still guarantees -3) |
+| ambient one-shot | 18 | -32 dB | -6 dBFS |
+
+- **Glue threshold -16 dB** (was -22), knee 18, ratio 3, attack 5 ms, release 250 ms. The compressor's own makeup gain depends on its threshold (1.729 at -22 dB, 1.321 at -16 dB, measured), so the makeup stage must be measured **with the settings it will run with**, which the engine already does once at unlock (8.2).
+- **Duration compensation for the tiny tier.** Loudness rises with duration up to about 200 ms, and the frame-based level does not, so the most frequent cues (a 30 ms tick, a hover, a manager's coin) were the quietest to the ear and a 570 to 870 ms tiny sound the loudest. The trim of each tiny variant gets **+3 dB under 60 ms** (14 rev-1 variants: `ui.tick#light`, both `ui.crate`, `ui.slider#mid`, the five hovers, both steps, `haggle.move#hold` and `#small`, `repair.stop#ok`), **+1.5 dB under 120 ms** (22), nothing from 120 to 500 ms (60) and **-2 dB over 500 ms** (4: `ui.count-up`, `cash.in#settle`, `deal.quick`, `mentor.tip`). The amounts are a first estimate (10.5).
+- **Tiers, in short:** tiny to medium 6 dB, medium to loud at least 5 dB after the chain at both volumes. The hierarchy is also carried by **length and richness** (a loud sound is 0.8 to 2.7 s and layers brass, bells and arpeggios).
 - Bus trims: interface -3 dB, game 0 dB, ambient -6 dB (plus the ambient level slider, default 70%, which is -6 dB). Ambient beds are trimmed to -28 dB, one-shots to -32 dB, so at default settings a bed sits about 40 dB under full scale, 7 dB under the quietest interface tick and 16 dB under a medium game sound.
-- At the default master volume of 70% (gain 0.49, -6 dB) a tiny interface tick is about -39 dBFS, a medium game sound -30 and a loud fanfare -25. It is a quiet game by default; the slider goes up to 0 dB.
-- The per-sound trims are in Appendix A. They are all negative (the recipes were written with headroom), applied as a single gain on each voice, and they are the only thing calibration changes.
+- At the default master volume of 70% (gain 0.49, -6 dB) a tiny interface tick is about -39 dBFS, a tiny game cue -36, a medium game sound -30 and a loud fanfare -23 (rev 1: -25). It is a quiet game by default; the slider goes up to 0 dB.
+- **Classroom is a rule, not a slider position.** The master volume stays where the player put it. In Classroom the tiny game sounds are not played at all, medium and loud game sounds play 10 dB lower, interface sounds 6 dB lower than in Full, ambient and the dial tone are off and the clock sounds are off (7.1). At the default master that puts a tiny interface tick at -45 dBFS, a medium game sound at -40 and a loud one at -33: the interface is no longer louder than the game, which the old "master 40, game 6 dB lower" put the wrong way round (-49 for the interface against -52 for a tiny game cue).
+- The per-sound trims are in Appendix A (rev 1). They are all negative (the recipes were written with headroom), applied as a single gain on each voice, and they are the only thing calibration changes; revision 2 recalibrates the loud tier, the tiny tier and the changed variants (11.4).
 
 ### 3.3 Voices, priority and stealing
 
 - **12 live voices** (a voice is one play of one sound). The 13th request steals the oldest voice of the lowest tier that is not higher than the request; a tiny request that finds all 12 voices medium or loud is dropped. Loud sounds are never dropped for a voice; they steal.
-- A stolen voice is faded in 12 ms, never cut.
+- A stolen voice is faded in 12 ms, never cut. A voice stopped by a higher-ranked variant of its own id (3.4.3) or by a preempting alert (3.4.7) fades in 80 ms or 120 ms.
+- **The repair dial tone is not a voice of the 12.** It is protected from stealing, counted outside the cap, and ended only by Stop, Mute, the end of the stage or the tab being hidden (4.5).
 - An **oscillator budget of 160** guards the worst case: a request that would pass it plays without its flagged optional layers (the sparkle and shower layers carry `opt`), and a tiny request is dropped. The median sound is 8 oscillators, the heaviest is 113 (`run.end` done, 3 s), so the budget is reached only by several fanfares at once, which the moment queue forbids.
+- A **playMix is atomic**: its members (a sale and its coins and its streak rung) are admitted together or not at all, take the voice cap, the bucket and the moment slot of the heaviest member, and are counted once.
 - Priority: tiny 1, medium 2, loud 3.
+- **Layer families do not stack.** The same layers recur in many ids (the stamp is in 13, the sparkle in 13, the brass in 16, a bell in 25, a coin in 16, the low thump in 39), so two sounds close together used to double them. When a voice is built, the **later voice skips a layer** whose family started inside its window: coin 250 ms (the old money-group rule, now general), stamp 1200 ms, sparkle 800 ms, brass 1500 ms, bell chord 1500 ms, low thump 250 ms. The sound is never skipped for this, only the repeated layer.
+- A secondary voice of a burst (3.4.2) also loses its noise-texture (`ghost`) layers.
 
-### 3.4 Cooldowns and rate limits
+### 3.4 Bursts, cooldowns and rate limits
 
-1. **Per-sound cooldown** (the column in the map): a second request for the same id inside the window is dropped. Variants of one id share it.
-2. **Global token buckets**, refilled continuously: tiny 8 a second (burst 4), medium 3 a second (burst 3), loud one per 1.2 s. A request that finds its bucket empty is dropped. Player-caused sounds (a press the player just made) draw from a separate bucket of 6 a second so a busy game never swallows a click.
-3. **Speed gating.** The engine runs one virtual hour every 7 s at 1x. Clock-driven sounds are thinned as the clock speeds up, and never sound at the tick rate:
+#### 3.4.1 Classes, ranks and the player flag
 
-| Clock speed | `day.turn` | `buyer.arrive` | `manager.cycle` | ambient one-shots | everything the player caused, and all medium and loud events |
-|---|---|---|---|---|---|
-| 0.25x, 1x | yes | yes (one per 6 s) | yes (merged, one per 400 ms) | yes | yes |
-| 4x | yes (one per 2.5 s) | one per 12 s | one per 1.2 s | one per 40 s | yes |
-| 16x, 64x | no | no | one `cash.in` s per 2 s, standing for the sum | no | yes |
-| paused | no | no | no | no | yes |
+Every sound id has a **class** (the "Class" column of section 4). The class decides which road it takes.
 
-4. **Merging.** Several `cycle` events inside 250 ms become one sound; the number of managers (1, 2, 3 or more) is the number of coin notes in a short arpeggio. Several `pitch` events in one tick (a bot or a class clock catching up after a hidden tab) play only the last.
-5. **Catching up.** When a tab was hidden or a class clock jumped, the engine replays hours in a loop. Events arriving while `S.tick` is catching up (more than 3 hours in one step) are not played at all; their toasts and news stay.
-6. **Causal groups (no doubling).** One cause makes one sound.
-   - *Money group*: `sale.*`, `cash.*`, `buy.lot`, `pool.sell`, `bank.*`. If two arrive within 250 ms, the second plays without its coin layer (the accent only).
-   - *Result card*: `deal.result` is skipped when a `sale.*`, `buy.lot` or fanfare played in the last 900 ms. The sale already told the story; the card's stamp is a visual.
-   - *Toast fallback*: a toast with no sound of its own plays `ui.ok` (good), `ui.nudge` (warn) or `ui.refuse` (bad), but only if no sound of tier medium or above played in the last 400 ms. Info toasts are silent.
-   - *Legacy aliases* (`sfx.kaching` and its four siblings, 8.4) go through the same groups, so a call site that has not been migrated yet cannot double an event's sound.
-7. **The moment queue.** The big moments are serial: `level.up`, `quest.complete`, `achievement`, `milestone`, `zone.open`, `acad.win`, `acad.graduate`, `draft.begin`, `run.end`, `alert.margin-call`, `alert.insolvent`, `perk.bailout`, `cash.in` xl. At most one plays at a time. A second that arrives within the first's length waits, up to two in the queue, ordered by this priority: `run.end` and the two alerts, `milestone`, `zone.open`, `level.up`, `achievement` (epic, rare, common), `quest.complete`, the rest. A queued moment older than 3 s is dropped; its toast and dialog stay.
+| Class | What it is | Road | Player flag |
+|---|---|---|---|
+| `press` | the interface answering a control: every `ui.*`, `clock`, `cam`, the Deal Room's and the Academy's moves, `draft.pick`, `inst.cue` | straight through, no added latency | **P**: drawn from the player bucket |
+| `world` | the pointer or the walk in the world: `world.hover`, `world.locked`, `world.step` | straight through | **P** |
+| `cause` | the game answering an action: sales and money, buying, hiring, shipping, banking, audits, swaps, `zone.enter`, the Deal Room's results | collector | **P** when a press or a world activation happened in the last 1500 ms |
+| `state` | a standing condition or warning: alerts, the audit notice, trouble on the road, the rescue perk, a swap offer, `run.end` | collector | no |
+| `reward` | progress payoffs: levels, quests, daily bounties, achievements, Codex pages, milestones, new districts | collector, then the reward budget (3.4.4) | no |
+| `clock` | driven by the clock: the day, buyers arriving, managers' cycles, freight arriving, a mentor's tip, cash settling | the gates of 3.4.5, then the collector | no |
 
-Per-sound cooldowns, collected (the map's column, shortest first):
+The player flag is the answer to "which sounds draw from the 6 a second player bucket": a `P` in the table, stamped on a request only when the player did something in the last 1500 ms, so a busy game never swallows a click and a manager's coin never takes a click's place.
+
+**Rank.** Where two sounds of one burst or one id compete, the higher rank wins.
+
+- *Causes and states, highest first:* `run.end`, `alert.margin-call` and `alert.insolvent` (these three preempt, 3.4.7) > `perk.bailout` > `sale.*` > `buy.lot`, `pool.sell`, `repair.done`, `deal.result` > `hire.manager`, `crew.build`, `crew.client`, `ship.depart`, `bank.*`, `audit.result`, `swap.done`, `zone.enter` > `alert.*` (the rest), `audit.notice`, `ship.trouble` > `cash.in`, `cash.out` on their own. Ties go to the first to arrive.
+- *Rewards, highest first:* `milestone` > `zone.open` > `level.up` big > `achievement` epic > `level.up` > `achievement` rare > `quest.complete` > `daily.done` > `achievement` common > `codex.unlock`.
+- *Variants of one id:* `cash.in` s < m < l < xl; `cash.out` s < m < l; `achievement` common < rare < epic; `level.up` s < l < big; `zone.open` t1 < t4; `alert.advance` l1 < l2 < l3. (Variants that are different causes, such as the six `alert.shock` kinds, the two `ship.trouble` kinds or the three `haggle.tell` stances, have no rank: each has its own cooldown.)
+
+#### 3.4.2 The collector and the two sentences (stage 0)
+
+1. `press` and `world` requests go straight to the next stage. Every other request is **held for one macrotask**: the first request of a quiet moment arms a single `setTimeout(flush, 0)`, and the flush runs then, never more than 24 ms after the first request, so everything the engine computed in one synchronous step (a sale and the XP, level, quest, achievement and Codex it caused; a whole catch-up loop) is resolved together. A request that arrives after the flush begins the next burst. The timer exists only between a request and its flush; with sound idle there is none.
+2. **Merge.** Requests of one id collapse: several `level` events become the highest level, played once; several `zone.open` the highest tier; several `codex.unlock` one; several achievements the rarest; several `cycle` events one coin; and an `audit.result` fail that arrives with a waived fine loses its coin (4.1).
+3. **Sentence 1, the cause, at t0.** The highest-ranked cause or state (3.4.1) plays now, as one `playMix`: the `sale.*` sound, its coins (`cash.in`) and its streak rung together. With no cause in the burst, the highest-ranked reward is sentence 1.
+4. **Sentence 2, the reward, after the cause.** The single highest-ranked reward plays at `t0 + clamp(length of sentence 1, 350 ms, 500 ms)`, if the reward budget allows (3.4.4). It is a **secondary voice**: -4 dB and without its noise-texture layers.
+5. **Also ticks.** Every other reward of the burst collapses into an "also" tick (`reward.also`: a glass note each, rising, 70 ms apart, -6 dB), at most two, and at most one tick per 3 s over the whole run.
+6. Anything else in the burst is silent. Its toast, ledger row and announcement stay, which is where a player who wants everything reads it.
+7. A burst therefore has at most **two audible sentences**, however many things the engine computed. The shell's order of delivery no longer matters; only the rank does.
+
+An example from the engine. A sale that levels the player up and completes a quest arrives as `level`, `quest`, `pitch`, `streak`. Revision 1 played the level fanfare first, ducked and queued the sale behind it, and played the quest as a second fanfare. Revision 2 plays `sale.win` + `cash.in` + the streak rung at t0, `level.up` (the small variant, or the full one if it is the first in 90 s, or the big one on a fifth level) 440 ms later, and the quest as an "also" tick if the tick is not spent. The first five sales of one bot run arrived as `level quest ach:rare codex codex pitch:win ...` (13 triggers), `level pitch:win streak ...` and `pitch:pioneer daily streak`; they now play as one sale, then at most one reward, each.
+
+#### 3.4.3 Cooldowns that know rank
+
+A cooldown is per id, with the rank rule: **a request of higher rank inside the cooldown of a lower-rank variant of the same id plays, and the lower voice is stopped with an 80 ms fade; a request of equal or lower rank is dropped.** So a small `cash.in` from a manager 80 ms before an xl no longer silences the xl, a common achievement no longer silences the epic that follows, and `level.up` s no longer eats `level.up` big. The cooldown that then runs is that of the variant that played. Variants that are different causes (3.4.1) have a cooldown each, so a Fed announcement is not silenced by a viral one.
+
+#### 3.4.4 The reward budget
+
+The review measured that rewards are tied to game time and scale with the clock: at 1x a run pays 0.9 to 1.0 a minute (116 to 133 daily bounties, 7 story quests, 45 achievements, 36 Codex pages, 20 to 21 levels in 90 days), at 16x 14 to 15 and at 64x 57 to 61 (the review counted 1.0, 15 to 17 and 61 to 68). Hierarchy needs the big moments to be rare. So:
+
+- **One full reward sentence per 10 s of real time.** Anything inside the window plays as the "also" tick, and ticks are capped at one per 3 s. `milestone`, `acad.graduate`, `run.end`, `perk.bailout` and the `alert.*` ids are exempt.
+- **At 16x and above the window is 20 s,** and `daily.done`, common achievements and Codex pages are silent (their toasts stay).
+- `daily.done` (a daily bounty, about 160 ms: one glass A5 and a stamp tick, no coin; cooldown 4 s) is silent at 4x and above, and a second one within 60 s of the last plays as the "also" tick. `quest.complete` is **story quests only** (7 a run, not 130).
+- `achievement` common is a tiny sound (two glass notes, no sparkle; cooldown 3 s); rare stays medium and epic loud.
+- `level.up` has three voices: **s** (medium, a marimba run D5 A5 D6, about 450 ms) is the everyday level; **l** (the full brass fanfare) plays when 90 s or more have passed since the last full level sentence; **big** plays on every fifth level, whatever else. Several levels in one burst play the highest once.
+- `codex.unlock` coalesces a burst to one sound (the first sale alone unlocks four).
+
+#### 3.4.5 Clock-driven sounds: speed, holds, catch-up and state sounds
+
+The engine runs one virtual hour every 7 s at 1x, and a day lasts 168 s at 1x, 42 s at 4x, 10.5 s at 16x and 2.6 s at 64x. Sounds that the clock causes (class `clock`) are thinned as it speeds up and never sound at the tick rate:
+
+| Clock speed | `day.turn` | `buyer.arrive` | `buyer.urgent` | `manager.cycle` and the managers' coin | ambient one-shots | state sounds (below) |
+|---|---|---|---|---|---|---|
+| 0.25x, 1x | yes | one per 30 s; the first 3 of a run always | one per 20 s | yes (merged, one per 400 ms) | yes | on entering the state, then at most one per 45 s |
+| 4x | every third day | one per 45 s | one per 20 s | one per 3 s | one per 40 s | the same |
+| 16x, 64x | no | no | no | **no standing coin**: one `cash.in` sized from the sum since the last, at most every 8 s (jitter +-2 s) | no | the same |
+| paused | no | no | no | no | no | no |
+
+Everything the player caused, and every cause, reward and state outside this table, plays at any speed.
+
+- **Silent while the player is busy.** `buyer.arrive` and `buyer.urgent` are silent while the Market drawer is open, any dialog or the Deal Room is open, an Academy lesson is on, the speed is 16x or more, or the Classroom preset is on. A buyer arriving is already a bubble and a badge; at 2.3 a minute (measured) and 30 laptops it was 1.15 chimes a second in a room.
+- **Clock sounds** (`settings.audio.clockSounds`, default on, off in Classroom, 7.1) switch off together: `buyer.arrive`, `buyer.urgent`, `day.turn`, `manager.cycle`, `ship.arrive`, `cash.in` settle and `mentor.tip`.
+- **Hold.** The Deal Room pauses the clock in a solo run only (`deal.js`), so in a class every clock-driven sound used to land in the middle of a haggle. While the Deal Room, an Academy lesson or any dialog is open, clock-class requests are not played; the cycle nets they carry are summed, and **when the sheet closes one `cash.in` sized by the sum plays** (a negative sum, `cash.out`). Everything else held is dropped.
+- **State sounds.** Standing conditions (an SLA breach: `cash.out` m; an overdraft: `cash.out` s; burnout: `ui.nudge`; market fatigue: `alert.shock` glut) re-announce every virtual day while they last, which at 64x is every 2.6 s. A state sound plays **on entering the state, then at most once per 45 s of real time**; the ones in between are dropped (the toast and ledger row stay), and the next one that plays is sized by the sum of what was dropped since.
+- **Catch-up is lateness in real time, not virtual hours.** One heartbeat tick (250 ms) at 64x already covers 2.29 virtual hours, so a threshold in hours flips events between audible and silent at random. The wiring computes, when an event is delivered, `lagMs = (floor(S.clock.now()) - g.s.hour) * SEC_PER_HOUR * 1000 / speed`: how many real milliseconds of game the engine still has to replay (0 while the clock is paused). An on-time tick leaves at most about 330 ms (three hours at 64x); an event is **catching up when `lagMs` is more than 600**, or when the tab has just come back from hidden, or on `rewound`. A catching-up event plays nothing (its toast and news stay), unless a press happened in the last 1500 ms. This is decided at event time because `S.on('tick')` is emitted after `advanceTo` returns, when every sound has already played.
+
+#### 3.4.6 Causal groups (one cause, one sound)
+
+- **Money group.** `sale.*`, `cash.*`, `buy.lot`, `pool.sell`, `bank.*`, `hire.manager`, `crew.build`, `crew.client`, `repair.done`, `ship.depart`. If two arrive within 250 ms the second plays without its coin layer (the accent only). `hire`, `upgrade`, `pipe-level`, `client` and `repair` also play their `cash.out` **only at size l or larger**; the HUD's red flash carries the smaller ones, and a rising swell no longer has a falling coin cascade under it.
+- **The Deal Room: one click, at most two sentences.** `deal.quick` replaces `deal.open` and the `deal.stage-done` sounds when Quick or Quick deal plays the stages (they are not played); `haggle.move` becomes a single 40 ms tap when `haggle.tell` follows within 400 ms (the tell carries the information); `ui.slider` is silent on the repair slider while the dial tone is on; `ui.count-up` plays only for 25 XP or more, is shortened to 400 ms and is skipped when a medium or louder sound started in the last 1200 ms.
+- **Result card.** `deal.result` is skipped if **any game-bus sound of tier medium or above started in the last 1500 ms** (a rule, not a list: a sale, a purchase, a repair, a hammer, a fanfare). The event already told the story; the card's stamp is a visual.
+- **Dialogs and toasts yield.** `ui.dialog-open`, `ui.dialog-close`, `ui.ask` and the toast fallback below yield to any game-bus sound that started in the last 400 ms (an alert dialog is no longer announced over its own horn). The *toast fallback*: a toast with no sound of its own plays `ui.ok` (good), `ui.nudge` (warn) or `ui.refuse` (bad) only if nothing of the game bus played in the last 400 ms, and the `bad` fallback is restricted to refusals reported through `ctx.say`. Info toasts are silent.
+- **Legacy aliases** (`sfx.kaching` and its four siblings, 8.4) are **no-ops** while the wiring is installed, for every known call site; they play only when no wiring is installed (tests, a page without audio). A call site that has not been migrated therefore cannot double an event's sound or contradict it.
+- **Valence never contradicts itself.** `streak` is skipped when the sale sound it would ride on is a falling one.
+
+#### 3.4.7 The moment queue
+
+The big moments are serial: `level.up` (l, big), `quest.complete`, `achievement` (rare, epic), `milestone`, `zone.open`, `acad.win`, `acad.graduate`, `draft.begin`, `run.end`, `alert.margin-call`, `alert.insolvent`, `perk.bailout`, `cash.in` xl. At most one plays at a time (a `playMix` takes one slot, the heaviest member's).
+
+- A second moment that arrives while one plays waits in **one** slot. A **reward** waits at most **500 ms**; after that it degrades to its "also" tick and is never played later than its own toast (revision 1 held rewards up to 3 s). Charging of the buckets happens when a sound starts, so a queued moment does not pay twice.
+- **`alert.margin-call`, `alert.insolvent` and `run.end` preempt** any playing moment (it fades in 120 ms) and are never queued behind a level fanfare.
+- Order in the slot: `run.end` and the two alerts, `milestone`, `zone.open`, `level.up`, `achievement` (epic, rare), `quest.complete`, the rest.
+
+#### 3.4.8 Cooldowns, collected
+
+1. **Per-sound cooldown** (the column in the map): a second request for the same id inside the window is dropped, with the rank rule of 3.4.3.
+2. **Global token buckets**, refilled continuously and **charged when the sound starts**, once per `playMix`: tiny 8 a second (burst 4), medium 3 a second (burst 3), loud one per 1.2 s. A request that finds its bucket empty is dropped. Requests carrying the player flag draw only from a separate bucket of 6 a second (burst 6).
+3. **Escalation for the refusal family.** `ui.refuse` and `world.locked`: a repeat within 2 s plays at -4 dB, and a third is silent until 2 s of quiet.
 
 | Cooldown | Ids |
 |---|---|
@@ -196,263 +332,301 @@ Per-sound cooldowns, collected (the map's column, shortest first):
 | 80 ms | `ui.slider` |
 | 100 ms | `clock` |
 | 120 ms | `ui.drawer-open`, `ui.drawer-close`, `cash.in`, `cash.out`, `read.probe`, `bid.raise` |
-| 140 ms | `world.hover` |
 | 150 ms | `ui.dialog-open`, `ui.dialog-close`, `ui.ok`, `cam`, `repair.stop` |
 | 200 ms | `haggle.anchor`, `haggle.move`, `bid.rival` |
-| 250 ms | `ui.refuse` |
-| 280 ms | `world.step` |
 | 300 ms | `ui.ask`, `sale.win`, `sale.pioneer`, `sale.herd`, `sale.flat`, `sale.reject`, `buy.lot`, `haggle.tell`, `bid.drop` |
-| 400 ms | `ui.nudge`, `world.locked`, `streak`, `manager.cycle` |
+| 330 ms | `world.hover` (after a 120 ms dwell, never within 250 ms of a click) |
+| 360 ms | `world.step` (+-60 ms jitter; at most 8 in a row per walk) |
+| 400 ms | `ui.nudge`, `streak`, `manager.cycle` |
 | 500 ms | `deal.open` |
 | 600 ms | `ui.count-up`, `sale.scam`, `pool.sell`, `deal.stage-done`, `deal.quick`, `deal.verify`, `haggle.leverage`, `haggle.close`, `skill.up`, `acad.step`, `acad.teach` |
-| 800 ms | `deal.result`, `read.caught`, `pitch.fit`, `bid.hammer`, `repair.done`, `hire.manager`, `crew.build`, `crew.client`, `bank.draw`, `bank.repay` |
+| 700 ms | `ui.refuse` |
+| 800 ms | `deal.result`, `pitch.fit`, `bid.hammer`, `repair.done`, `hire.manager`, `crew.build`, `crew.client`, `bank.draw`, `bank.repay` |
+| 900 ms | `world.locked` |
 | 1000 ms | `ship.depart` |
-| 1500 ms | `zone.enter`, `ship.arrive`, `ship.trouble`, `quest.complete`, `achievement`, `codex.unlock`, `swap.done` |
+| 1500 ms | `zone.enter`, `ship.arrive`, `ship.trouble` (per kind), `quest.complete`, `achievement` rare and epic, `codex.unlock`, `swap.done`, `read.suspect` |
 | 2000 ms | `audit.notice`, `audit.result`, `level.up`, `acad.win`, `inst.cue` |
 | 2500 ms | `day.turn` |
-| 3000 ms | `buyer.urgent`, `alert.advance`, `alert.shock`, `mentor.tip`, `swap.offer-in` |
-| 4000 ms | `zone.open` |
+| 3000 ms | `alert.advance`, `alert.shock` (per kind), `mentor.tip`, `swap.offer-in`, `achievement` common, `reward.also` |
+| 4000 ms | `zone.open`, `daily.done` |
 | 5000 ms | `alert.margin-call`, `alert.insolvent`, `perk.bailout`, `milestone`, `acad.graduate`, `draft.begin` |
-| 6000 ms | `buyer.arrive` |
 | 8000 ms | `run.end` |
+| 20000 ms | `buyer.urgent` |
+| 30000 ms (45000 at 4x) | `buyer.arrive` |
+| 45000 ms | the state sounds (3.4.5) |
 
 ### 3.5 Ducking
 
-A loud sound ducks the other buses so it stands clear, by automating the bus duck gains (cheap: two setTargetAtTime calls).
+A loud sound ducks the other buses so it stands clear, by automating the bus duck gains (cheap: two setTargetAtTime calls). The duration is **the loud sound's own length plus 300 ms**, not a fixed 0.7 s, so the tail of a 2.7 s `run.end` is as clear as its start. Ducks are combined by **the deepest active one on each bus, not by sum**. A sound started by the same burst is never ducked by that burst.
 
-| When | Ambient | Game and interface tiny sounds | Attack / release |
-|---|---|---|---|
-| a loud sound starts | -9 dB for 1.2 s | -4 dB for 0.7 s | 40 ms / 600 ms |
-| a medium sound starts | -4 dB for 0.6 s | none | 40 ms / 400 ms |
-| a dialog or the Deal Room is open | -6 dB while open | none | 300 ms / 500 ms |
-| the clock is paused | -3 dB | none | 300 ms / 300 ms |
+| When | Ambient | Tiny sounds (game and interface) | Medium sounds | Attack / release |
+|---|---|---|---|---|
+| a loud sound starts | -9 dB for its length + 300 ms | -6 dB for its length + 300 ms | -3 dB for its length + 300 ms | 40 ms / 600 ms |
+| a medium sound starts | -4 dB for 0.6 s | none | none | 40 ms / 400 ms |
+| a dialog or the Deal Room is open | -6 dB while open | none | none | 300 ms / 500 ms |
+| the clock is paused | -3 dB | none | none | 300 ms / 300 ms |
 
 ### 3.6 Pan and distance
 
 - Interface sounds are centred.
-- World events pan from their place on screen: `pan = clamp((x - width / 2) / (width / 2), -1, 1) * 0.6` (never fully hard-panned, so one earbud is never the only one that hears it). The place comes from the object (`world.rectOf(kind, id)`): a buyer, a lot, a building, the player; or the centre of a district for an event that has only a zone (`DIST[z]`).
+- World events pan from their place on screen: `pan = clamp((x - width / 2) / (width / 2), -1, 1) * 0.6` (never fully hard-panned, so one earbud is never the only one that hears it). The place comes from the object (`world.rectOf(kind, id)`): a buyer, a lot, a building, the player; or the centre of a district for an event that has only a zone (`DIST[z]`). A manager's `cycle` event has no building id today; revision 2 adds `pid` to it (8.5), without which the pan is the district's.
 - **Distance.** An event in the district you are in plays at full level. An event in another district is 8 dB quieter behind a 2.5 kHz lowpass ("elsewhere"). An object off screen is 4 dB quieter behind 3.5 kHz at the screen's edge. Your own actions are never attenuated.
 - The auction's rivals alternate left and right at 0.5 so that two rivals are two places.
 - Pan is off in the "Mono" case (a setting could mirror this to the OS's mono audio; see section 11).
 
 ### 3.7 The master chain, measured
 
-- **Glue compressor** (threshold -22 dB, knee 18, ratio 3, attack 5 ms, release 250 ms): evens out a pile-up by about 2 to 3 dB. The compressor node adds its own automatic makeup gain (measured at 1.729 for a quiet signal, 4.8 dB); the **makeup stage multiplies by its inverse** so a lone sound passes unchanged. The engine measures this constant once on first unlock with a 100 ms offline render (fallback 1 / 1.729), because Safari and Firefox differ.
+- **Glue compressor** (rev 2: threshold -16 dB; rev 1: -22 dB; knee 18, ratio 3, attack 5 ms, release 250 ms): evens out a pile-up by about 2 to 3 dB. The compressor node adds its own automatic makeup gain, which depends on its settings (measured at 1.729 for a quiet signal at -22 dB, 4.8 dB, and 1.321 at -16 dB); the **makeup stage multiplies by its inverse** so a lone sound passes unchanged. The engine measures this constant once on first unlock with a 100 ms offline render **using the threshold it will run with** (fallback 1 / 1.321), because Safari and Firefox differ.
+- **Warm-up.** A fresh `AudioContext`'s compressor takes about 100 ms to settle: a 30 ms burst that starts 20 ms after the context is created comes out 6.4 dB quieter than the same burst 500 ms later, a 100 ms burst 3.3 dB, a 300 ms burst 1.0 dB, whatever its level. The engine's context is long-lived and has no such problem, but **any offline render through the chain (the audition page, `audio.render`, the tests) must start its voices at 0.6 s or later**; a first measurement of 3.2's table that started them at 10 ms came out 5 to 10 dB low for the short ones.
 - **Soft clip**: a 4x oversampled waveshaper that is linear to half scale and settles at 0.708 (-3 dBFS), so the ceiling is a fact of the chain and not of any one sound.
-- **Measured (master volume 1.0 unless stated)**: the 12 loudest sounds started at once peak at -4.1 dBFS (-3.9 before the clip); two loud fanfares together -6.7; the margin call with the insolvency toll -7.9; an ordinary busy moment (a level-up, a sale, coins, a click, a cycle, a result, a quest and a streak at once) -8.1. At the default volume of 70% (0.49): the pile-up peaks at -6.5 and the busy moment at -12.0.
+- **Measured, rev 1 (master volume 1.0 unless stated)**: the 12 loudest sounds started at once peak at -4.1 dBFS (-3.9 before the clip); two loud fanfares together -6.7; the margin call with the insolvency toll -7.9; an ordinary busy moment (a level-up, a sale, coins, a click, a cycle, a result, a quest and a streak at once) -8.1. At the default volume of 70% (0.49): the pile-up peaks at -6.5 and the busy moment at -12.0. These were measured with the rev-1 loud level; the +2 dB of rev 2 moves them up by at most 2 dB and the soft clip holds the ceiling, and the busy moment is now two sentences, not eight sounds (to be re-measured, 11.4).
 
 ## 4. The sound map
 
-**88 sound ids**, 189 rendered variants, and one continuous voice (the repair dial tone, 4.5): **89 sounds**. Around them are the ambient assets of section 6: 16 beds, 4 modifiers and 18 one-shots. A variant is the same id in a different size, kind or direction (a coin of size m, a warning of level 2, a probe called "serial"); each variant has its own measured trim (Appendix A). Where a variant changes only pitch (the nth tab, the nth crate) the row says so and one variant stands for the family in the measurements.
+**90 sound ids**, 188 rendered variants (revision 2; revision 1 measured 88 and 189), and one continuous voice (the repair dial tone, 4.5): **91 sounds**. Around them are the ambient assets of section 6: 16 beds, 4 modifiers and 18 one-shots. A variant is the same id in a different size, kind or direction (a coin of size m, a warning of level 2, a probe called "serial"); each variant has its own measured trim (Appendix A, rev 1). Where a variant changes only pitch (the nth tab, the nth crate) the row says so and one variant stands for the family in the measurements. `ui.press`, used in section 4.3, is not an id: it is the name of `ui.tick` variant `full`.
 
-How to read a row. **Trigger** is the exact event or interaction. **Recipe** is written in the palette's terms (2.3) with its pitches. **Tier; bus; length** gives the tier (or the range of tiers across variants), the bus (`ui` for the chrome the player operates, `game` for what the game or the world says and for moves inside the Deal Room) and the measured length of the variants. **Pan** says where it comes from; "centre" is the default. **Cooldown** is the per-id window of 3.4. **Visual counterpart** is what a deaf or hard-of-hearing player gets instead; section 9 audits it.
+What revision 2 changed in the map, in one place: two ids are new (`daily.done`, `reward.also`); `read.caught` is now `read.suspect` and no longer reads the lot's truth; `world.hover` is one tick instead of five; `quest.complete` lost its daily variant, `level.up` gained a small one and `sale.herd` a neutral one; `ui.refuse`, `world.locked`, `achievement` common and `read.suspect` are tiny; the coin is back to meaning cash that moves; the refusal and loss family has a mid body (2.2); every row has a **Class** (3.4.1); and four ambient one-shots were revoiced (6.4). Changed cells say "rev 1" for what they replaced.
 
+How to read a row. **Trigger** is the exact event or interaction. **Recipe** is written in the palette's terms (2.3) with its pitches. **Tier; bus; length** gives the tier (or the range of tiers across variants), the bus (`ui` for the chrome the player operates, `game` for what the game or the world says and for moves inside the Deal Room) and the measured length of the variants (rev 1; "about" marks a rev-2 figure not yet measured). **Pan** says where it comes from; "centre" is the default. **Cooldown** is the per-id window of 3.4.8. **Class** is the road the sound takes (press, world, cause, state, reward or clock) and **P** when it is a player-caused sound that draws from the 6 a second player bucket (3.4.1). **Visual counterpart** is what a deaf or hard-of-hearing player gets instead; section 9 audits it.
 ### Interface
 
-| # | id and variants | Trigger | Meaning | Recipe | Tier; bus; length | Pan | Cooldown | Visual counterpart |
-|---|---|---|---|---|---|---|---|---|
-| 1 | `ui.tick`<br>light, full | Any press of a button, tab or icon that has no sound of its own (capture-phase click on `.btn`, `.ibtn`, `[data-act]`). Variant `light` for ghost, small and icon buttons; `full` for primary and `.big` ones | Neutral: "I heard you" | light: wood D6 sine 28 ms + 3.2 kHz noise tick; full: marimba D5 120 ms + the tick | tiny; ui; 30 to 70 ms | centre | 30 ms | Pressed state, focus ring, the action's own result |
-| 2 | `ui.toggle`<br>on, off | A checkbox, switch or `aria-pressed` button changes: Assist, Interface/Game/Ambient switches, the "Show me" button, Ledger and badge-list disclosures | On rises, off falls | on: wood A4 then D5 (45 ms apart); off: D5 then A4, 20% softer | tiny; ui; 80 ms | centre | 60 ms | The control's checked or pressed state |
-| 3 | `ui.select`<br>i0, i5 | A tab, segmented control or option is chosen: dock-drawer tabs, Market sections, Crew tabs, Travel and Codex tabs, quest and badge filters, specialty cards | You moved to the nth item | marimba, one pentatonic step per index: D5 E5 F#5 A5 B5 D6 (90 ms) | tiny; ui; 60 ms | centre | 40 ms | The pressed tab and the new panel |
-| 4 | `ui.crate`<br>pick1, pick8, clear | A crate is ticked or unticked (Stock list, "Tick all", Clear, a crate clicked in the world); `n` is how many are ticked now | Stacking: each pick climbs a step, clearing steps down | pick: wood knock on the nth note of D4 E4 F#4 A4 B4 D5 E5 F#5; clear: two soft falling knocks A4 D4 | tiny; ui; 40 to 110 ms | centre | 40 ms | Checkbox, the "N crates ticked" bar, the crate's highlight in the world |
-| 5 | `ui.drawer-open`<br>stock, market, crew, bank, travel, codex, quests | A drawer opens: a dock button, keys 1 to 7, a building or board clicked in the world (`ctx.emit({type:"ui", ui:"open-drawer", id})`). Seven motifs, one per drawer | A panel slides out; each motif says which | paper slide (pink noise 900 to 2600 Hz, 160 ms) + motif. stock: wood knock D4; market: coin A6; crew: bell A5; bank: vault tone D3 + glass F#5; travel: glass E5 to A5; codex: page flip + glass D5; quests: brass-lite A4 | tiny; ui; 110 to 400 ms | centre | 120 ms | The drawer itself, the pressed dock icon |
-| 6 | `ui.drawer-close` | A drawer closes: its Close button, Escape, a phone sheet dragged shut, a dock button pressed again | The panel slides back; the mirror of open | paper slide 2600 to 900 Hz (120 ms) + soft falling tone A4 to D4 | tiny; ui; 90 ms | centre | 120 ms | The drawer leaves, focus returns to its dock button |
-| 7 | `ui.dialog-open` | The shared `<dialog>` opens with no sound of its own (Help, Menu, breakdowns, settings, confirm sheets). Seen by a MutationObserver on `#dlg[open]` | A page is put in front of you | paper rustle (hp 1.5 kHz, 120 ms) + marimba A4 soft | tiny; ui; 160 ms | centre | 150 ms | The dialog and its focus |
-| 8 | `ui.dialog-close` | The dialog closes without a result sound (Close, Cancel, Escape, a click on the backdrop) | The page is put away | short falling paper rustle + marimba D4 soft | tiny; ui; 120 ms | centre | 150 ms | The dialog leaves, focus returns |
-| 9 | `ui.ask`<br>normal, danger | A confirm sheet opens (`confirmBox`): normal for Sell to the pool, Release, Exit; `danger` for Delete and restart, Leave the Academy | A question that is yours to answer | normal: marimba A4 then D5, the last one held open; danger: glass F#4 then D4 (falling minor third) over a low knock | tiny; ui; 350 to 400 ms | centre | 300 ms | The sheet and its two buttons |
-| 10 | `ui.refuse` | The engine refuses an action (`say(r)` with `r.ok === false`: not enough cash, storage full, locked, blocked proposal, "That lot is gone") | A short low "no", never a buzzer | two soft low taps: triangle D3 then A2 (110 ms apart) over a dull wood knock | medium; ui; 230 ms | centre | 250 ms | A bad toast with the reason in words |
-| 11 | `ui.nudge` | A warn toast that is advice and not a failure ("Tick a crate first", "Pick one of your crates first", "Slide to an amount first"), an Academy hint, an Academy lesson that cannot be finished | Gentle "not yet": look again | glass E4 with a third partial, 180 ms, over a wood tick | tiny; ui; 100 ms | centre | 400 ms | The toast, or the hint card |
-| 12 | `ui.ok` | A small success with no richer sound: a good toast on its own ("Copied", "Now putting $x to work", proposal sent, pause or release confirmed), a save | Done, small | marimba A4 then D5 (70 ms apart) + a glass shimmer D6 at 10% | tiny; ui; 230 ms | centre | 150 ms | The good toast |
-| 13 | `ui.slider`<br>mid, top, zero | A range input (Bank amount, quick-pick percentages, Crew allocation, Deal Room dial slider, master volume) crosses a detent: every 10% of its travel, at most 12 a second, and the last one when the thumb is let go | Pitch follows value: low is less, high is more | wood tick on the nth of D4 E4 F#4 A4 B4 D5 E5 F#5 A5 B5 D6; at 0% a low thump D3, at 100% a glass ping D6 + A6 | tiny; ui; 30 to 190 ms | centre | 80 ms | The slider thumb, the value text |
-| 14 | `ui.count-up` | A number counts up (`countUp` in js/ui/polish.js: the Deal Room result's XP, the lesson reward): one sound for the whole count, 700 ms | Numbers are adding up | 12 ticks accelerating, each a marimba note climbing D5 to D6, ending on a glass D6 | tiny; ui; 870 ms | centre | 600 ms | The number ticking to its final value |
+| # | id and variants | Trigger | Meaning | Recipe | Tier; bus; length | Pan | Cooldown | Class | Visual counterpart |
+|---|---|---|---|---|---|---|---|---|---|
+| 1 | `ui.tick`<br>light, full<br>(`ui.press` is `full`) | Any press of a button, tab or icon that has no sound of its own (capture-phase click on `.btn`, `.ibtn`, `[data-act]`). Variant `light` for ghost, small and icon buttons; `full` for primary and `.big` ones | Neutral: "I heard you" | light: wood D6 sine 28 ms + 3.2 kHz noise tick; full: marimba D5 120 ms + the tick | tiny; ui; 30 to 70 ms | centre | 30 ms | press, P | Pressed state, focus ring, the action's own result |
+| 2 | `ui.toggle`<br>on, off | A checkbox, switch or `aria-pressed` button changes: Assist, Interface/Game/Ambient switches, the "Show me" button, Ledger and badge-list disclosures | On rises, off falls | on: wood A4 then D5 (45 ms apart); off: D5 then A4, 20% softer | tiny; ui; 80 ms | centre | 60 ms | press, P | The control's checked or pressed state |
+| 3 | `ui.select`<br>i0, i5 | A tab, segmented control or option is chosen: dock-drawer tabs, Market sections, Crew tabs, Travel and Codex tabs, quest and badge filters, specialty cards | You moved to the nth item | marimba, one pentatonic step per index: D5 E5 F#5 A5 B5 D6 (90 ms) | tiny; ui; 60 ms | centre | 40 ms | press, P | The pressed tab and the new panel |
+| 4 | `ui.crate`<br>pick1, pick8, clear | A crate is ticked or unticked (Stock list, "Tick all", Clear, a crate clicked in the world); `n` is how many are ticked now | Stacking: each pick climbs a step, clearing steps down | pick: wood knock on the nth note of D4 E4 F#4 A4 B4 D5 E5 F#5; clear: two soft falling knocks A4 D4 | tiny; ui; 40 to 110 ms | centre | 40 ms | press, P | Checkbox, the "N crates ticked" bar, the crate's highlight in the world |
+| 5 | `ui.drawer-open`<br>stock, market, crew, bank, travel, codex, quests | A drawer opens: a dock button, keys 1 to 7, a building or board clicked in the world (`ctx.emit({type:"ui", ui:"open-drawer", id})`). Seven motifs, one per drawer | A panel slides out; each motif says which | paper slide (pink noise 900 to 2600 Hz, 160 ms) + motif. stock: wood knock D4; market: marimba E5 + a paper tick (rev 1: a coin A6, which meant cash); crew: bell A5; bank: vault tone D3 + glass F#5; travel: glass E5 to A5; codex: page flip + glass D5; quests: brass-lite A4 | tiny; ui; 110 to 400 ms | centre | 120 ms | press, P | The drawer itself, the pressed dock icon |
+| 6 | `ui.drawer-close` | A drawer closes: its Close button, Escape, a phone sheet dragged shut, a dock button pressed again | The panel slides back; the mirror of open | paper slide 2600 to 900 Hz (120 ms) + soft falling tone A4 to D4 | tiny; ui; 90 ms | centre | 120 ms | press, P | The drawer leaves, focus returns to its dock button |
+| 7 | `ui.dialog-open` | The shared `<dialog>` opens with no sound of its own (Help, Menu, breakdowns, settings, confirm sheets). Seen by a MutationObserver on `#dlg[open]`; a close and a reopen in one task is one replacement; yields to any game-bus sound of the last 400 ms | A page is put in front of you | paper rustle (hp 1.5 kHz, 120 ms) + marimba A4 soft | tiny; ui; 160 ms | centre | 150 ms | press, P | The dialog and its focus |
+| 8 | `ui.dialog-close` | The dialog closes without a result sound (Close, Cancel, Escape, a click on the backdrop); yields to any game-bus sound of the last 400 ms | The page is put away | short falling paper rustle + marimba D4 soft | tiny; ui; 120 ms | centre | 150 ms | press, P | The dialog leaves, focus returns |
+| 9 | `ui.ask`<br>normal, danger | A confirm sheet opens (`confirmBox`): normal for Sell to the pool, Release, Exit; `danger` for Delete and restart, Leave the Academy; yields to any game-bus sound of the last 400 ms | A question that is yours to answer | normal: marimba A4 then D5, the last one held open; danger: glass F#4 then D4 (falling minor third) over a low knock | tiny; ui; 350 to 400 ms | centre | 300 ms | press, P | The sheet and its two buttons |
+| 10 | `ui.refuse` | The engine refuses an action (`say(r)` with `r.ok === false`: not enough cash, storage full, locked, blocked proposal, "That lot is gone") | A short "no", never a buzzer, and never louder than a confirmation | two soft taps: triangle D3 then A2 (110 ms apart) over a dull wood knock, **plus a mid body**: a sine D4 at -10 dB (120 ms) and a pink knock bandpassed 300 to 600 Hz, so at least 40% of the energy is above 250 Hz (rev 1: 2.4%) | tiny, trim +3 dB (rev 1: medium); ui; about 230 ms | centre | 700 ms; a repeat within 2 s at -4 dB, a third silent until 2 s of quiet | press, P | A bad toast with the reason in words |
+| 11 | `ui.nudge` | A warn toast that is advice and not a failure ("Tick a crate first", "Pick one of your crates first", "Slide to an amount first"), an Academy hint, an Academy lesson that cannot be finished | Gentle "not yet": look again | glass E4 with a third partial, 180 ms, over a wood tick | tiny; ui; 100 ms | centre | 400 ms | press, P | The toast, or the hint card |
+| 12 | `ui.ok` | A small success with no richer sound: a good toast on its own ("Copied", "Now putting $x to work", proposal sent, pause or release confirmed), a save | Done, small | marimba A4 then D5 (70 ms apart) + a glass shimmer D6 at 10% | tiny; ui; 230 ms | centre | 150 ms | press, P | The good toast |
+| 13 | `ui.slider`<br>mid, top, zero | A range input (Bank amount, quick-pick percentages, Crew allocation, Deal Room dial slider, master volume) crosses a detent: every 10% of its travel, at most 12 a second, and the last one when the thumb is let go; silent on the repair slider while the dial tone is on | Pitch follows value: low is less, high is more | wood tick on the nth of D4 E4 F#4 A4 B4 D5 E5 F#5 A5 B5 D6; at 0% a low thump D3, at 100% a glass ping D6 + A6 | tiny; ui; 30 to 190 ms | centre | 80 ms | press, P | The slider thumb, the value text |
+| 14 | `ui.count-up` | A number counts up (`countUp` in js/ui/polish.js: the Deal Room result's XP, the lesson reward): and the call started at least one number (so never under reduced motion): one sound for the whole count. Only for 25 XP or more, and skipped when a medium or louder sound started in the last 1200 ms | Numbers are adding up | 7 ticks accelerating, each a marimba note climbing D5 to D6, ending on a glass D6 (rev 1: 12 ticks) | tiny; ui; about 400 ms (rev 1: 870 ms) | centre | 600 ms | press | The number ticking to its final value |
 
 ### Clock, camera and world
 
-| # | id and variants | Trigger | Meaning | Recipe | Tier; bus; length | Pan | Cooldown | Visual counterpart |
-|---|---|---|---|---|---|---|---|---|
-| 15 | `clock`<br>pause, resume, speed4 | HUD clock: the play and pause button, the speed select (`#spd`, 0.25x to 64x) | Time stops, time runs, time gets faster | pause: marimba F#4 over a falling tone A3 to D3 (180 ms); resume: rising A3 to F#4; speed: n+1 ticks for the nth speed, quicker each step, on rising notes | tiny; ui; 120 to 240 ms | centre | 100 ms | The button's icon and `aria-pressed`, the speed value |
-| 16 | `cam`<br>in, out, fit, home | Camera buttons (+, -, show the whole island, back to my district) and a wheel or pinch zoom (once per 150 ms, never per frame) | In rises, out falls; fit opens wide; home comes back | in: air sweep 600 to 1800 Hz + sine D5 to A5; out: reverse; fit: sweep up then down; home: wood knock + glass A5 to D5 | tiny; ui; 90 to 300 ms | centre | 150 ms | The camera itself |
-| 17 | `world.hover`<br>buyer, lot, crate, building, locked | The pointer moves onto a different thing in the world (not from the keyboard list): buyer, lot, crate, building, district, locked thing. Once per new target, 140 ms apart, and not while dragging the camera | What kind of thing is it? A tiny pitch says so | buyer: marimba A5; lot: triangle D5 + a click; crate: wood F#4; building: stone knock E3 + tick; district: air puff; locked: dull sine D3 behind a lowpass at 400 Hz | tiny; game; 30 to 50 ms | object x | 140 ms | The tooltip (also read out by the list view) |
-| 18 | `world.locked` | A locked gate, plot, board or district is clicked ("... opens at $x net worth", "Not open yet", "Resolve your audit") | Shut. Not yet | chain rattle (4 noise bursts at 3.5 kHz, 35 ms apart) + two dull knocks D3 and A2 + a faint metal ting A5 | medium; game; 230 ms | object x | 400 ms | Warn toast with the gate's price in words |
-| 19 | `world.step`<br>a, b | Your character takes a step while walking between districts or to a ground click: one step every 0.3 s; never for NPCs | You are moving | soft step: a thump gliding from A3 or D3 down to D2 + gravel noise lowpassed at 1.2 kHz; two timbres in rotation | tiny; game; 50 ms | player x | 280 ms | The character walking, dust puffs |
-| 20 | `zone.enter`<br>t1, t4 | Your district changes (`U.zone`): travel, a quest link, the map. The note pair depends on the district's tier (1 to 4) | You have arrived somewhere | air glide 400 to 1600 Hz (300 ms) + a two-note marimba tag: tier 1 D4 A4, tier 2 E4 B4, tier 3 F#4 D5, tier 4 A4 E5 | tiny; game; 420 to 430 ms | centre | 1500 ms | The camera moves, the district name tag |
-| 21 | `buyer.arrive` | A new buyer appears in the district you are in (diff of `s.leads[U.zone]` ids at each render), at most one per 6 s and only at speed 4x or slower | The shop door bell: someone came in | two door-bell dings D6 then A5 (glass partials, 350 ms) | tiny; game; 340 ms | buyer x | 6000 ms | The buyer walking in with a bubble, the Market badge |
-| 22 | `buyer.urgent` | A new buyer with an urgent `need` that one of your sound crates can serve arrives in your district | Someone needs what you have, now | three rising door-bell dings A5 D6 F#6 over a wood tap | medium; game; 550 ms | buyer x | 3000 ms | The buyer's "urgent: needs" bubble, the Market badge count |
-| 23 | `day.turn` | The `day` event, only at speed 4x or slower and not while a dialog is open | A new day: bounties, royalties and rent have just landed | soft tower-clock chime: glass D4 + A4 (600 ms) + a paper flip | tiny; game; 460 ms | centre | 2500 ms | The HUD day counter |
+| # | id and variants | Trigger | Meaning | Recipe | Tier; bus; length | Pan | Cooldown | Class | Visual counterpart |
+|---|---|---|---|---|---|---|---|---|---|
+| 15 | `clock`<br>pause, resume, speed4 | HUD clock: the play and pause button, the speed select (`#spd`, 0.25x to 64x) | Time stops, time runs, time gets faster | pause: marimba F#4 over a falling tone A3 to D3 (180 ms); resume: rising A3 to F#4; speed: n+1 ticks for the nth speed, quicker each step, on rising notes | tiny; ui; 120 to 240 ms | centre | 100 ms | press, P | The button's icon and `aria-pressed`, the speed value |
+| 16 | `cam`<br>in, out, fit, home | Camera buttons (+, -, show the whole island, back to my district) and a wheel with Ctrl, Meta or Alt, or the keys + - 0 (the buttons are heard by the click table; the wheel and the keys through one hook in `World.zoomBy` and `World.fit`, once per 150 ms, never per frame; a pinch is silent) | In rises, out falls; fit opens wide; home comes back | in: air sweep 600 to 1800 Hz + sine D5 to A5; out: reverse; fit: sweep up then down; home: wood knock + glass A5 to D5 | tiny; ui; 90 to 300 ms | centre | 150 ms | press, P | The camera itself |
+| 17 | `world.hover`<br>t (one tick for every kind) | The pointer rests for 120 ms on a different thing in the world (not from the keyboard list): buyer, lot, crate, building, district, locked thing, truck. At most 3 a second, never within 250 ms of a click, and not while dragging the camera | There is something here; the tooltip says what | wood tick A5 or E6 (a pool of two), 25 ms, + the 2.4 kHz tick; the same for every kind (rev 1: nine pitches by kind and a dull D3 for a locked thing, which turned a sweep into a random melody and gave a "no" before any click) | tiny; game; 30 to 50 ms | object x | 330 ms | world, P | The tooltip (also read out by the list view) |
+| 18 | `world.locked` | A locked gate, plot, board or district is clicked, or the bank before milestone 1 or the audit office before milestone 2 refuses: played from the outcome of `activate`, not from the click ("... opens at $x net worth", "Not open yet", "Resolve your audit") | Shut. Not yet | chain rattle (4 noise bursts at 3.5 kHz, 35 ms apart) + two dull knocks D3 and A2 + a faint metal ting A5, **plus a mid body** (a wood knock D4 at -8 dB) | tiny, trim +3 dB (rev 1: medium); game; about 230 ms | object x | 900 ms; the escalation of `ui.refuse` | world, P | Warn toast with the gate's price in words |
+| 19 | `world.step`<br>a, b | Your character takes a step while walking between districts or to a ground click (`World.footstep`, the player only, and only while the world draws walking: never in Calm, where the player jumps): one step every 0.36 s (+-60 ms), at most 8 in a row for one walk and then silent for the rest of it, none while a dialog is open; never for NPCs | You are moving | soft step: a thump gliding from A3 or D3 down to D2 + gravel noise lowpassed at 1.2 kHz; two timbres in rotation | tiny; game; 50 ms | player x | 360 ms (+-60) | world, P | The character walking, dust puffs |
+| 20 | `zone.enter`<br>t1, t4 | Your district changes (the shell's render emits `{type:'ui', ui:'zone', id}` when `U.zone` changes, 8.5): travel, a quest link, the map. The note pair depends on the district's tier (1 to 4) | You have arrived somewhere | air glide 400 to 1600 Hz (300 ms) + a two-note marimba tag: tier 1 D4 A4, tier 2 E4 B4, tier 3 F#4 D5, tier 4 A4 E5 | tiny; game; 420 to 430 ms | centre | 1500 ms | cause, P | The camera moves, the district name tag |
+| 21 | `buyer.arrive` | A new buyer appears in the district you are in (the shell's render diffs `s.leads[U.zone]` and emits `{type:'ui', ui:'lead', ...}`, 8.5; the first render of a mount, a district change, a rewind and a resume only set the baseline). At most one per 30 s at 1x and 0.25x and one per 45 s at 4x; the first 3 of a run always play, to teach the cue. Silent at 16x and above, with the Market drawer or any dialog open, in the Deal Room, in an Academy lesson, in Classroom and with Clock sounds off. An urgent buyer plays `buyer.urgent` instead | The shop door bell: someone came in | two door-bell dings D6 then A5 (glass partials, 350 ms) | tiny; game; 340 ms | buyer x | 30000 ms (45000 at 4x) | clock | The buyer walking in with a bubble, the Market badge |
+| 22 | `buyer.urgent` | A new buyer with an urgent `need` that one of your sound crates can serve arrives in your district (the same `lead` event as `buyer.arrive`, which it replaces; never both). The same silences as `buyer.arrive`; never reads `scam` or the lot's truth | Someone needs what you have, now | three rising door-bell dings A5 D6 F#6 over a wood tap | medium; game; 550 ms | buyer x | 20000 ms | clock | The buyer's "urgent: needs" bubble, the Market badge count |
+| 23 | `day.turn` | The `day` event: every day at 1x and slower, every third day at 4x, never at 16x and above; silent while a dialog or the Deal Room is open, in Classroom, with Clock sounds off and while catching up | A new day: bounties, royalties and rent have just landed | soft tower-clock chime: glass D4 + A4 (600 ms) + a paper flip | tiny; game; 460 ms | centre | 2500 ms | clock | The HUD day counter |
 
 ### Money and trade
 
-| # | id and variants | Trigger | Meaning | Recipe | Tier; bus; length | Pan | Cooldown | Visual counterpart |
-|---|---|---|---|---|---|---|---|---|
-| 24 | `cash.in`<br>s, m, l, xl, settle | Money arrives (see "Sizing money"): pool and manager proceeds, loan drawn, royalties, a released manager, exits. Size s, m, l, xl by `moneySize(amount, netWorth)`; `settle` is the quiet version for cash that lands after a delay | Coins: bigger sums are brighter and longer | s: one coin A6; m: three coins A6 E7 D7; l: six coins + register ding D6; xl: ten coins + bell chord D6 A6 + soft brass stab D3 + glass shower; settle: four soft coins, lowpassed | tiny to medium to loud; game; 70 to 790 ms | source x, else centre | 120 ms | Cash in the HUD flashes green (`.rs.up`), a "+$" pop in the world |
-| 25 | `cash.out`<br>s, m, l | Money leaves: a lot bought, repair, hire, upgrade, freight, client acquisition, loan repaid, fines, SLA penalties. Sizes s, m, l | Muted coins that fall: spending is quieter and darker than earning | the coin cascade through a 2.2 kHz lowpass, each coin a step lower (D6 B5 A5 E5 D5), with a pouch thud; l ends on a vault latch D2 + click | tiny to medium; game; 70 to 400 ms | source x, else centre | 120 ms | Cash in the HUD flashes red (`.rs.down`) |
-| 26 | `sale.win` | `pitch` event with `outcome: "win"` (sold above fair value). Played together with `cash.in` sized by `price` | The cash register: a good sale | drawer thump A3 to D3 + register bell A5 with four partials (700 ms) + a short "ching" D7 | medium; game; 440 ms | buyer x | 300 ms | Coins thrown in the world, a good toast, the Deal Room result |
-| 27 | `sale.pioneer` | `pitch` event with `outcome: "pioneer"` (a win in a niche nobody else is selling into) | You found something new: the register plus a rising sparkle | sale.win + a glass arpeggio D6 A6 D7 E7 rising in 70 ms steps + a low brass swell D3 | medium; game; 640 ms | buyer x | 300 ms | Coins and sparks, "Pioneer sale" title, the Creativity Multiplier in the result |
-| 28 | `sale.herd` | `pitch` event with `outcome: "herd"` (sold into a crowded niche, whatever it paid) | Money, but a hollow one: the herd is crowded | drawer thump + a dull bell A4 (lowpass 2 kHz) then a soft falling pair B3 to A3 (triangle) over a low shuffle | medium; game; 590 ms | buyer x | 300 ms | "Sold into the herd" title and the saturation lesson |
-| 29 | `sale.flat` | `pitch` event with `outcome: "flat"` (sold at or below fair value) | A sale, no more: plain, no shine | drawer thump + a single bell D5, short (300 ms), no overtones above the third | medium; game; 220 ms | buyer x | 300 ms | "Sold, no gain" or "Sold below market" |
-| 30 | `sale.reject`<br>nofit, fake | `pitch` with `outcome: "rejected"` and no scam: the buyer had no use for it (`nofit`), or spotted a counterfeit (`fake`) | The buyer said no. A counterfeit is a coin that clunks and does not ring | nofit: paper shake + the refuse pair D3 A2; fake: a dull metal clunk (a thump + two short, non-ringing partials) with a rattle and a falling B3 to D3 | medium; game; 270 ms | buyer x | 300 ms | Buyer walks off, "No sale" or "Counterfeit spotted" title, bad toast |
-| 31 | `sale.scam` | `pitch` with `outcome: "rejected"` while a `scam` note has just been sent (or `reason: "scam"`): an unverified fraudster took the crate and paid nothing | You were swindled: coins drain away, a door slams | muted coins falling in pitch, a comic slide D4 to D3 (450 ms), a door thump and a low horn blip | medium; game; 780 ms | buyer x | 600 ms | "Scammed" title, bad toast, the crate vanishes |
-| 32 | `buy.lot`<br>ok, broken | `buy` event. Never reads `fake` or the condition truth (that would give the lot away); `cond: "broken"` is public and adds a rattle. Played with `cash.out` sized by `price` | A crate lands on your shelf and the purse gets lighter | crate thump A2 to D2 + wood knock + pallet slide (noise 900 Hz); broken adds three metal rattles and a glass clink | medium; game; 120 to 210 ms | lot x | 300 ms | The pallet drops in the world, a toast, cash falls |
-| 33 | `pool.sell` | `sell-pool` event. Played with `cash.in` sized by `total` (the cash lands after a delay: `cash.in settle` plays then) | Crates go down the chute for a lump sum | chute slide (noise sweeping 1800 to 600 Hz, 500 ms) + three thumps + a soft register ding D5 | medium; game; 750 ms | centre | 600 ms | Crates leave the shelf, a good toast |
-| 34 | `streak`<br>n2, n6 | `streak` event (a second win in a row or more), layered on the sale sound; `n` is the length (capped at 6 notes) | On a roll: each win climbs a step | n glass notes rising through the pentatonic from D6 in 35 ms steps, the last one held | tiny; game; 290 to 410 ms | centre | 400 ms | The "deal streak n" line in the result card |
-| 35 | `manager.cycle`<br>gain, loss | `cycle` event (a manager finished a run). Gains: a coin; losses: a muted tink. Many at once are merged into one sound; none above 16x speed except one a second | Your people earned (or lost) money while you were away | gain: one high coin D7 over a faint building thud (the pool rotates D7, A6, D6); loss: one muted tink D5, lowpassed at 1.8 kHz | tiny; game; 60 ms | building x | 400 ms | The "+$x" pop above the building |
+| # | id and variants | Trigger | Meaning | Recipe | Tier; bus; length | Pan | Cooldown | Class | Visual counterpart |
+|---|---|---|---|---|---|---|---|---|---|
+| 24 | `cash.in`<br>s, m, l, xl, settle | Money arrives (see "Sizing money"): pool proceeds (at the sale when the pool pays at once, at the settlement when it pays later), manager proceeds, royalties, a released manager, exits. Size s, m, l, xl by `moneySize(amount, netWorth)`. A loan drawn is not here: `bank.draw` has no extra coins. `settle` is the quiet voice for cash that lands after a delay, sized by the settled amount (`amt` of the note) | Coins: bigger sums are brighter and longer | s: one coin A6; m: three coins A6 E7 D7; l: six coins + register ding D6; xl: ten coins + bell chord D6 A6 + soft brass stab D3 + glass shower; settle: the same ladder (two, four, six, eight coins) lowpassed; the measured variant is the four. Option `dull`: lowpass 3.5 kHz, no register ding | tiny to medium to loud; game; 70 to 790 ms | source x, else centre | 120 ms; rank s < m < l < xl | cause, P<br>(a manager's coin: clock) | Cash in the HUD flashes green (`.rs.up`), a "+$" pop in the world |
+| 25 | `cash.out`<br>s, m, l | Money leaves: a lot bought, repair, hire, upgrade, freight, client acquisition, loan repaid, fines, SLA penalties. Sizes s, m, l; for repair, hire, upgrade, pipe-level and client only at size l or larger (the red flash carries the rest) | Muted coins that fall: spending is quieter and darker than earning | the coin cascade through a 2.2 kHz lowpass, each coin a step lower (D6 B5 A5 E5 D5), with a pouch thud; l ends on a vault latch D2 + click | tiny to medium; game; 70 to 400 ms | source x, else centre | 120 ms; rank s < m < l | cause, P | Cash in the HUD flashes red (`.rs.down`) |
+| 26 | `sale.win` | `pitch` event with `outcome: "win"` (sold above fair value). Played together with `cash.in` sized by `price` and the `streak` rung, as one `playMix` | The cash register: a good sale | drawer thump A3 to D3 + register bell A5 with four partials (700 ms) + a short "ching" D7 | medium; game; 440 ms | buyer x | 300 ms | cause, P | Coins thrown in the world, a good toast, the Deal Room result |
+| 27 | `sale.pioneer` | `pitch` event with `outcome: "pioneer"` (a win in a niche nobody else is selling into) | You found something new: the register plus a rising sparkle | sale.win + a glass arpeggio D6 A6 D7 E7 rising in 70 ms steps + a low brass swell D3 | medium; game; 640 ms | buyer x | 300 ms | cause, P | Coins and sparks, "Pioneer sale" title, the Creativity Multiplier in the result |
+| 28 | `sale.herd`<br>h, hw | `pitch` event with `outcome: "herd"` (sold into a crowded niche, whatever it paid). By `gain`: `hw` when it is above 0.02 (the engine's own win test: it paid, and the lesson is the crowd), `h` when it is not | Money, but a hollow one: the herd is crowded. `hw` is neutral, `h` is a loss | `h`: drawer thump + a dull bell A4 (lowpass 2 kHz) then a soft falling pair B3 to A3 (triangle) over a low shuffle. `hw`: the same thump and dull bell, **no falling pair**, the last note held; its coins are the size of a win (`h`: one size down) | medium; game; 590 ms (`h`), about 480 ms (`hw`) | buyer x | 300 ms | cause, P | "Sold into the herd" title and the saturation lesson |
+| 29 | `sale.flat` | `pitch` event with `outcome: "flat"` (sold at or below fair value). With `gain` below -0.02 its coins play `dull` | A sale, no more: plain, no shine | drawer thump + a single bell D5, short (300 ms), no overtones above the third | medium; game; 220 ms | buyer x | 300 ms | cause, P | "Sold, no gain" or "Sold below market" |
+| 30 | `sale.reject`<br>nofit, fake | `pitch` with `outcome: "rejected"` and no scam: the buyer had no use for it (`nofit`), or spotted a counterfeit (`fake`) | The buyer said no. A counterfeit is a coin that clunks and does not ring | nofit: paper shake + the refuse pair D3 A2 with the mid body of `ui.refuse`; fake: a dull metal clunk (a thump + two short, non-ringing partials) with a rattle and a falling B3 to D3, plus a knock at 300 to 600 Hz | medium; game; 270 ms | buyer x | 300 ms | cause, P | Buyer walks off, "No sale" or "Counterfeit spotted" title, bad toast |
+| 31 | `sale.scam` | `pitch` with `outcome: "rejected"` while a `scam` note has just been sent (or `reason: "scam"`): an unverified fraudster took the crate and paid nothing | You were swindled: coins drain away, a door slams | muted coins falling in pitch, a comic slide D4 to D3 (450 ms), a door thump and a low horn blip | medium; game; 780 ms | buyer x | 600 ms | cause, P | "Scammed" title, bad toast, the crate vanishes |
+| 32 | `buy.lot`<br>ok, broken | `buy` event. Never reads `fake` or the condition truth (that would give the lot away); `cond: "broken"` is public and adds a rattle. Played with `cash.out` sized by `price` | A crate lands on your shelf and the purse gets lighter | crate thump A2 to D2 + wood knock + pallet slide (noise 900 Hz); broken adds three metal rattles and a glass clink | medium; game; 120 to 210 ms | lot x | 300 ms | cause, P | The pallet drops in the world, a toast, cash falls |
+| 33 | `pool.sell` | `sell-pool` event. With no delay (districts 1 to 8): played with `cash.in` sized by `total`. With a delay (`delay` 24 h from district 9, 48 h from 13 and for digital routing): played alone, with no coins, because no cash has moved; `cash.in settle` plays at the settlement, sized by the settled amount | Crates go down the chute for a lump sum | chute slide (noise sweeping 1800 to 600 Hz, 500 ms) + three thumps + a soft register ding D5 | medium; game; 750 ms | centre | 600 ms | cause, P | Crates leave the shelf, a good toast |
+| 34 | `streak`<br>n2, n6 | `streak` event (a second win in a row or more), layered on the sale sound in its `playMix` (skipped under a falling one); `n` is the length (capped at 6 notes) | On a roll: each win climbs a step | n glass notes rising through the pentatonic from D6 in 35 ms steps, the last one held | tiny; game; 290 to 410 ms | centre | 400 ms | cause | The "deal streak n" line in the result card |
+| 35 | `manager.cycle`<br>gain, loss | `cycle` event (a manager finished a run; not the day tick's rent and royalties, which carry `src: 'rent'`). Gains: a coin; losses: a muted tink. Many at once are merged into one sound; one per 3 s at 4x; at 16x and above no standing coin (one summed `cash.in` every 8 s) | Your people earned (or lost) money while you were away | gain: one high coin D7 over a faint building thud (the pool rotates D7, A6, D6); loss: one muted tink D5, lowpassed at 1.8 kHz | tiny; game; 60 ms | building x | 400 ms | clock | The "+$x" pop above the building |
 
 ### The Deal Room
 
-| # | id and variants | Trigger | Meaning | Recipe | Tier; bus; length | Pan | Cooldown | Visual counterpart |
-|---|---|---|---|---|---|---|---|---|
-| 36 | `deal.open`<br>sell, buy, fix | The Deal Room sheet opens (`#dlg.deal`). `sell` for a buyer, `buy` for a lot, `fix` for a crate on the bench | You sat down at the table | sell: shop-door bell A5 + paper + marimba D5; buy: stall slide (noise 500 to 1500 Hz) + three purse ticks + marimba A4; fix: anvil ting A5 + two bench knocks | medium; game; 280 to 410 ms | centre | 500 ms | The sheet slides up, the buyer or lot appears with a line of dialogue |
-| 37 | `deal.stage-done` | A stage finishes and its Continue or See the result button appears (Read, Pitch, Close, Bid, Fix) | This part is done | glass E5 then A5, soft (350 ms) | tiny; game; 250 ms | centre | 600 ms | The stepper shows a tick, "Continue" appears |
-| 38 | `deal.quick` | Quick (auto-play the stage) or Quick deal is pressed | The rest is played for you, fast | eight ticks accelerating on rising notes, paper rustle, ending on glass D6 | tiny; game; 650 ms | centre | 600 ms | The stage is filled in, "Quick" note in the card |
-| 39 | `deal.verify`<br>ok, bad | Verify this buyer is pressed (a cost of 1% of their budget). `ok` for a clean buyer, `bad` for a fraudster found | A check mark, or a warning | ok: marimba D5 then A5; bad: two-tone glass A4 then F#4 with a low knock (medium level) | tiny to medium; game; 250 to 330 ms | centre | 600 ms | The callout ("verified" or "this buyer is a scam") |
-| 40 | `deal.result`<br>good, warn, bad, info | The result card is drawn (`result()` in the Deal Room). Skipped if a `sale.*`, `buy.lot` or fanfare sound played in the last 900 ms. tone good, warn, bad, info | How the whole deal went | good: glass arpeggio D5 F#5 A5 + soft stamp + sparkle; warn: glass A4 F#4 + stamp; bad: low D3 A2 + dull stamp; info: a stamp and a paper rustle only | tiny to medium; game; 90 to 560 ms | centre | 800 ms | The result card's coloured title and stamp |
-| 41 | `read.probe`<br>look, serial, power, papers, expert | A probe is bought in the Read stage (`[data-deal="probe"]`): look, serial, power, papers, expert | Each way of checking sounds like what it is | look: soft glance (paper hiss 3 kHz) + glass E6; serial: six typewriter ticks + a beep A6; power: relay click + sine D4 to D5 zap + a hum burst; papers: two paper rustles; expert: bell A5 + wood tap D4 | tiny; game; 90 to 290 ms | centre | 120 ms | The probe card is marked used, evidence appears |
-| 42 | `read.caught` | `inspect` event with `caught: true` (a counterfeit found). A fake that was not caught is silent: the sound never says what you missed | Gotcha: the fake is exposed | glass A5 then D6 (a magnifier ding), a low confirming knock F#3, and a sparkle | medium; game; 470 ms | centre | 800 ms | The Read stage's "chance it is a counterfeit" meter jumps, the evidence line |
-| 43 | `pitch.angle`<br>prestige, utility, scarcity, price, story, drop | A pitch angle is chosen or dropped (`[data-deal="angle"]`, read before the toggle). The angle sets the timbre: prestige glass, utility wood, scarcity ticking, price coin, story page. A pick rises, a drop falls | Each angle has its own voice | prestige: glass F#6; utility: two wood taps A3 D4 + a thump; scarcity: two clock ticks + glass A5; price: coin D6; story: page flip + marimba E5. Drop = the same, a step lower and softer | tiny; game; 70 to 240 ms | centre | 60 ms | The angle card lights with a number 1 or 2 |
-| 44 | `pitch.fit`<br>up, down | The Pitch stage reports its fit change (`+0.12 fit` callout): up when fitDelta >= 0.05, down when <= -0.03, silent between | Your angles matched the buyer, or missed | up: glass A4 to D5 rising with a sparkle; down: triangle B3 to F#3 falling over a soft thud | tiny; game; 160 to 390 ms | centre | 800 ms | The callout turns green or amber with the number |
-| 45 | `haggle.anchor`<br>high, fair, low | Your first number: Aim high (or Generous), Fair, Quick sale (or Lowball) (`[data-deal="anchor"]`) | The bolder the number, the bolder the note | high: brass-lite A4 (lowpass opening) + tap; fair: marimba D4 + tap; low: soft triangle F#3 | tiny; game; 140 to 170 ms | centre | 200 ms | Your marker appears on the price track |
-| 46 | `haggle.move`<br>hold, small, large, split | A move after the anchor: Hold; Raise your offer or Come down (small, medium, large); Split the difference | Hold is a still tap; concessions step down; a split brings two notes together | hold: one wood tap D4; concede: 1, 2 or 3 soft falling taps (D4 B3 A3) by size; split: two notes A3 and D4 converging to a glass unison D4 | tiny; game; 40 to 370 ms | centre | 200 ms | The track marker moves, the rounds counter drops |
-| 47 | `haggle.leverage` | Mention your other option is pressed (once per haggle) | You played your ace | card snap (noise, 40 ms) + a bright glass sting A5 D6 F#6 (60 ms apart) | medium; game; 460 ms | centre | 600 ms | The button is spent; their stance shifts |
-| 48 | `haggle.close`<br>accept, walk | Accept their offer or price is pressed (handshake); Walk away is pressed (tiny) | A deal is shaken on, or you left the table | accept: two soft thumps (the clasp) + a coin D6 + a stamp; walk: chair slide (noise sweep down) + a door thump and latch tick | tiny to medium; game; 290 to 310 ms | centre | 600 ms | "Agreed at $x" callout, or "no deal" |
-| 49 | `haggle.tell`<br>far, reach, near | After each counter, their stance changes ("far apart", "getting closer", "very close") | Warmer or colder: the interval shrinks and the tone opens as you close in | a two-note chord that narrows: far D3 + F#5 behind a 700 Hz lowpass; closer D4 + A4 behind 2 kHz; very close A4 + A4 (+7 cents, a slow beat) wide open | tiny; game; 180 to 190 ms | centre | 300 ms | The words "They are very close" |
-| 50 | `bid.raise`<br>r1, r5 | Bid (or Open the bidding) is pressed in an auction. `n` is the number of raises so far | Your paddle goes up; the climb rises with the price | paddle clack (noise 1.5 kHz + wood) then a marimba note one step higher each raise (D5 up to B5) | tiny; game; 140 ms | centre | 120 ms | The price on the ladder, "You bid $x" |
-| 51 | `bid.rival`<br>in, out | A rival bids (in) or drops out (out) in the auction log, each on its own side of the stereo field | Someone else is in the room: a lower bell for a bid, a falling note for a dropout | in: soft bell A3 (lowpass 2.5 kHz) + paddle tick; out: triangle E3 falling to D3 + a paper shuffle | tiny; game; 150 to 190 ms | rival, alternating left and right | 200 ms | The rival list ("in", "out at $x") and the event log |
-| 52 | `bid.drop` | Drop out is pressed | You stepped back (and kept your cash) | soft falling air sweep + a wood tap D4 | tiny; game; 210 ms | centre | 300 ms | "You dropped out" callout |
-| 53 | `bid.hammer`<br>won, lost | The auction ends (`sold` or `nosale` in the log). `won` if you hold the winning bid | Sold. The gavel falls; a chime rises if it is yours, a low note if it is not | gavel: hard wood hit (noise 800 Hz + thump D4 to A3 + knock); won: glass A5 D6 rising; lost: triangle D3 | medium; game; 340 to 540 ms | centre | 800 ms | The callout "You won at $x" or "You are out" |
-| 54 | `repair.stop`<br>perfect, good, ok, miss | Stop is pressed on the repair dial (or Space, or Stop here on the slider). By precision: perfect >= 90%, good >= 65%, ok > 0, miss | The better the stop, the cleaner the ring | perfect: anvil bell D6 A6 + hammer thud + sparkle; good: anvil ting A5 + thud; ok: wood thunk + dull tink; miss: clunk + three rattles and a falling B3 to D3 | tiny to medium; game; 50 to 460 ms | centre | 150 ms | The step turns green, amber or red with its precision |
-| 55 | `repair.done`<br>great, ok, rough | `repair` event: great when precision >= 0.8, ok >= 0.4, rough below. Careful (pay more, guaranteed) plays ok | The work is finished, and how well | great: three anvil hits rising A5 D6 F#6 + glass chime D6 A6 + stamp; ok: three wrench clicks + wood + a soft glass A4; rough: dull clank + a short falling triangle | medium; game; 240 to 830 ms | centre | 800 ms | "Repaired, and it pays" or "Repaired" title; quality shown as a percentage |
+| # | id and variants | Trigger | Meaning | Recipe | Tier; bus; length | Pan | Cooldown | Class | Visual counterpart |
+|---|---|---|---|---|---|---|---|---|---|
+| 36 | `deal.open`<br>sell, buy, fix | The Deal Room sheet opens (`#dlg.deal`). `sell` for a buyer, `buy` for a lot, `fix` for a crate on the bench. Not played when Quick plays the deal (`deal.quick` replaces it) | You sat down at the table | sell: shop-door bell A5 + paper + marimba D5; buy: stall slide (noise 500 to 1500 Hz) + three purse ticks + marimba A4; fix: anvil ting A5 + two bench knocks | medium; game; 280 to 410 ms | centre | 500 ms | press, P | The sheet slides up, the buyer or lot appears with a line of dialogue |
+| 37 | `deal.stage-done` | A stage finishes and its Continue or See the result button appears (Read, Pitch, Close, Bid, Fix); not played under Quick | This part is done | glass E5 then A5, soft (350 ms) | tiny; game; 250 ms | centre | 600 ms | cause, P | The stepper shows a tick, "Continue" appears |
+| 38 | `deal.quick` | Quick (auto-play the stage) or Quick deal is pressed, or Quick buy in the Market (which calls the room's `quick-all` act directly, so the sound is emitted by the act and not by a click). Replaces `deal.open` and the stage-dones | The rest is played for you, fast | eight ticks accelerating on rising notes, paper rustle, ending on glass D6 | tiny; game; 650 ms | centre | 600 ms | press, P | The stage is filled in, "Quick" note in the card |
+| 39 | `deal.verify`<br>ok, bad | Verify this buyer is pressed (a cost of 1% of their budget). `ok` for a clean buyer, `bad` for a fraudster found | A check mark, or a warning | ok: marimba D5 then A5; bad: two-tone glass A4 then F#4 with a low knock (medium level) | tiny to medium; game; 250 to 330 ms | centre | 600 ms | press, P | The callout ("verified" or "this buyer is a scam") |
+| 40 | `deal.result`<br>good, warn, bad, info | The result card is drawn (`result()` in the Deal Room), which includes Pass and Walk away before the first round (they show a card, tone info, and close nothing). Skipped if any game-bus sound of tier medium or above started in the last 1500 ms. tone good, warn, bad, info | How the whole deal went | good: glass arpeggio D5 F#5 A5 + soft stamp + sparkle; warn: glass A4 F#4 + stamp; bad: low D3 A2 + dull stamp; info: a stamp and a paper rustle only | tiny to medium; game; 90 to 560 ms | centre | 800 ms | cause, P | The result card's coloured title and stamp |
+| 41 | `read.probe`<br>look, serial, power, papers, expert | A probe is bought in the Read stage (`[data-deal="probe"]`): look, serial, power, papers, expert | Each way of checking sounds like what it is | look: soft glance (paper hiss 3 kHz) + glass E6; serial: six typewriter ticks + a beep A6; power: relay click + sine D4 to D5 zap + a hum burst; papers: two paper rustles; expert: bell A5 + wood tap D4 | tiny; game; 90 to 290 ms | centre | 120 ms | press, P | The probe card is marked used, evidence appears |
+| 42 | `read.suspect` | The Read stage's visible "Chance it is a counterfeit" meter rises through 60% after a probe, once per lot (the room emits `what:'suspect'` from the model's `belief.fakeProb`, which is what the meter draws). The sound reads nothing the player cannot see; the engine's `inspect{caught}` is not read (4.1; rev 1 played it) | The meter says be suspicious: a warning, not a verdict | glass A5 then F#5 (the warning interval, soft) over a low knock F#3; no sparkle (rev 1: a rising ding and a sparkle that confirmed the fake) | tiny (rev 1: medium); game; about 320 ms | centre | 1500 ms; once per lot | cause, P | The meter itself, which crosses 60%; the evidence line |
+| 43 | `pitch.angle`<br>prestige, utility, scarcity, price, story, drop | A pitch angle is chosen or dropped (`[data-deal="angle"]`, read before the toggle). The angle sets the timbre: prestige glass, utility wood, scarcity ticking, price coin, story page. A pick rises, a drop falls | Each angle has its own voice | prestige: glass F#6; utility: two wood taps A3 D4 + a thump; scarcity: two clock ticks + glass A5; price: wood tap D4 + glass F#5 (rev 1: a coin D6); story: page flip + marimba E5. Drop = the same, a step lower and softer | tiny; game; 70 to 240 ms | centre | 60 ms | press, P | The angle card lights with a number 1 or 2 |
+| 44 | `pitch.fit`<br>up, down | The Pitch stage reports its fit change (`+0.12 fit` callout; the room emits `what:'fit'`, 4.2): up when fitDelta >= 0.05, down when <= -0.03, silent between | Your angles matched the buyer, or missed | up: glass A4 to D5 rising with a sparkle; down: triangle B3 to F#3 falling over a soft thud | tiny; game; 160 to 390 ms | centre | 800 ms | cause, P | The callout turns green or amber with the number |
+| 45 | `haggle.anchor`<br>high, fair, low | Your first number: Aim high (or Generous), Fair, Quick sale (or Lowball) (`[data-deal="anchor"]`) | The bolder the number, the bolder the note | high: brass-lite A4 (lowpass opening) + tap; fair: marimba D4 + tap; low: soft triangle F#3 | tiny; game; 140 to 170 ms | centre | 200 ms | press, P | Your marker appears on the price track |
+| 46 | `haggle.move`<br>hold, small, large, split | A move after the anchor: Hold; Raise your offer or Come down (small, medium, large); Split the difference. A single 40 ms tap when `haggle.tell` follows within 400 ms | Hold is a still tap; concessions step down; a split brings two notes together | hold: one wood tap D4; concede: 1, 2 or 3 soft falling taps (D4 B3 A3) by size; split: two notes A3 and D4 converging to a glass unison D4 | tiny; game; 40 to 370 ms | centre | 200 ms | press, P | The track marker moves, the rounds counter drops |
+| 47 | `haggle.leverage` | Mention your other option is pressed (once per haggle) | You played your ace | card snap (noise, 40 ms) + a bright glass sting A5 D6 F#6 (60 ms apart) | medium; game; 460 ms | centre | 600 ms | press, P | The button is spent; their stance shifts |
+| 48 | `haggle.close`<br>accept, walk | Accept their offer or price is pressed (handshake); Walk away is pressed (tiny) | A deal is shaken on, or you left the table | accept: two soft thumps (the clasp) + a coin D6 + a stamp; walk: chair slide (noise sweep down) + a door thump and latch tick | tiny to medium; game; 290 to 310 ms | centre | 600 ms | press, P | "Agreed at $x" callout, or "no deal" |
+| 49 | `haggle.tell`<br>far, reach, near | After each counter, their stance changes ("far apart", "getting closer", "very close"; the room emits `what:'tell'`) | Warmer or colder: the interval shrinks and the tone opens as you close in | a two-note chord that narrows: far D3 + F#5 behind a 700 Hz lowpass; closer D4 + A4 behind 2 kHz; very close A4 + A4 (+7 cents, a slow beat) wide open | tiny; game; 180 to 190 ms | centre | 300 ms per stance | cause, P | The words "They are very close" |
+| 50 | `bid.raise`<br>r1, r5 | Bid (or Open the bidding) is pressed in an auction. `n` is the number of raises so far | Your paddle goes up; the climb rises with the price | paddle clack (noise 1.5 kHz + wood) then a marimba note one step higher each raise (D5 up to B5) | tiny; game; 140 ms | centre | 120 ms | press, P | The price on the ladder, "You bid $x" |
+| 51 | `bid.rival`<br>in, out | A rival bids (in) or drops out (out) in the auction log (the room emits `what:'rival'`), each on its own side of the stereo field | Someone else is in the room: a lower bell for a bid, a falling note for a dropout | in: soft bell A3 (lowpass 2.5 kHz) + paddle tick; out: triangle E3 falling to D3 with a sine D4 at -10 dB + a paper shuffle | tiny; game; 150 to 190 ms | rival, alternating left and right | 200 ms | cause, P | The rival list ("in", "out at $x") and the event log |
+| 52 | `bid.drop` | Drop out is pressed | You stepped back (and kept your cash) | soft falling air sweep + a wood tap D4 | tiny; game; 210 ms | centre | 300 ms | press, P | "You dropped out" callout |
+| 53 | `bid.hammer`<br>won, lost | The auction ends (`sold` or `nosale` in the log; the room emits `what:'hammer'`). `won` if you hold the winning bid | Sold. The gavel falls; a chime rises if it is yours, a low note if it is not | gavel: hard wood hit (noise 800 Hz + thump D4 to A3 + knock); won: glass A5 D6 rising; lost: triangle D3 | medium; game; 340 to 540 ms | centre | 800 ms | cause, P | The callout "You won at $x" or "You are out" |
+| 54 | `repair.stop`<br>perfect, good, ok, miss | Stop is pressed on the repair dial (or Space, or Stop here on the slider). By precision: perfect >= 90%, good >= 65%, ok > 0, miss | The better the stop, the cleaner the ring | perfect: anvil bell D6 A6 + hammer thud + sparkle; good: anvil ting A5 + thud; ok: wood thunk + dull tink; miss: clunk + three rattles and a falling B3 to D3, plus a knock at 300 to 600 Hz | tiny to medium; game; 50 to 460 ms | centre | 150 ms | press, P | The step turns green, amber or red with its precision |
+| 55 | `repair.done`<br>great, ok, rough | `repair` event: great when precision >= 0.8, ok >= 0.4, rough below. Careful (pay more, guaranteed) plays ok | The work is finished, and how well | great: three anvil hits rising A5 D6 F#6 + glass chime D6 A6 + stamp; ok: three wrench clicks + wood + a soft glass A4; rough: dull clank + a short falling triangle with a sine D4 at -10 dB | medium; game; 240 to 830 ms | centre | 800 ms | cause, P | "Repaired, and it pays" or "Repaired" title; quality shown as a percentage |
 
 ### Crew, freight, bank and audits
 
-| # | id and variants | Trigger | Meaning | Recipe | Tier; bus; length | Pan | Cooldown | Visual counterpart |
-|---|---|---|---|---|---|---|---|---|
-| 56 | `hire.manager`<br>student, broker, logistics | `hire` event (Hire in the Crew drawer). Flavour by kind: student, broker, logistics | Someone joins your team | door bell A5 + paper + two handshake thumps + a small brass swell D4 A4; student: marimba flourish; broker: coin plink; logistics: horn blip | medium; game; 640 to 740 ms | building x | 800 ms | A building rises on the plot, the Crew drawer lists them |
-| 57 | `crew.build`<br>level, upgrade | `pipe-level` event (a manager levelled up) or `upgrade` event (a company upgrade bought) | Your business got stronger | level: three hammer hits rising D4 A4 D5 on marimba + a brass-lite note; upgrade: a relay click, a rising machine whirr (noise 300 to 1500 Hz) and a glass ping A5 | medium; game; 580 to 780 ms | building x | 800 ms | The building grows a floor / the upgrade is marked bought, a good toast |
-| 58 | `crew.client`<br>smb, ent | `client` event (a contract signed): smb, corp, ent | A contract is signed | pen scribble (noise at 4.5 kHz with fast tremolo, 250 ms) + stamp + bell D6; corp adds a glass fifth; ent adds a brass chord D3 A3 | medium; game; 640 to 690 ms | centre | 800 ms | The client appears in the Crew drawer |
-| 59 | `ship.depart` | `ship` event (crates sent to another district) | A truck pulls out | engine rumble (brown noise lowpassed at 240 Hz and closing to 120) + a short air horn, D3 over D2 | medium; game; 680 ms | origin district x | 1000 ms | A truck drives along the road, a "Shipped" toast |
-| 60 | `ship.arrive` | Note kind `freight-arrive` ("Freight arrived in ...") | The truck is here | air-brake hiss (a noise band falling from 3 to 1.8 kHz, 300 ms) + a door-bell ding D6 + a crate knock | tiny; game; 490 ms | destination district x | 1500 ms | The truck vanishes, the crates appear; the news ticker (and a polite screen-reader line) |
-| 61 | `ship.trouble`<br>customs, damage | Note kind `customs` (inspected: a delay and a fee) or `damage` (crates damaged in transit) | Something went wrong on the road | customs: a stop whistle (two sine A5 pulses) + clipboard stamp; damage: crate crunch (noise bursts) + a glass shatter-lite + a falling sting | medium; game; 300 to 480 ms | destination district x | 1500 ms | A warn or bad toast with the cost |
-| 62 | `bank.draw` | `draw` event (a loan taken) | Cash in, but it is owed: coins that end on a low note | vault door (low sine D2 + a sweeping noise 400 Hz) + bills counted (six paper flutters) + a stamp, ending on a held triangle D3 | medium; game; 1130 ms | centre | 800 ms | Cash rises, Debt appears in the gauge, a "Liability added" toast |
-| 63 | `bank.repay`<br>half, full, free | `repay` event: half or full of one loan; `free` when the last loan is cleared (Debt-free) | Debt goes down: a stamp, coins out, relief rising | stamp + three muted coins + glass A4 (half) or F#5 to A5 (full); free: vault latch closing + a rising glass arpeggio D5 F#5 A5 D6 + a shower | medium to loud; game; 620 to 1040 ms | centre | 800 ms | The loan row shrinks, a toast; "Debt-free" toast for the last one |
-| 64 | `audit.notice` | Note with `audit: true` (an audit event with 72 virtual hours to answer) | An official letter has arrived | five typewriter ticks + a carriage bell A5 + the warning pair glass A4 F#4 | medium; game; 800 ms | centre | 2000 ms | Warn toast, the Bank drawer's audit panel, the Bank badge |
-| 65 | `audit.result`<br>pass, fail | `audit` event (you answered): `ok` true is a pass, false a fail | Approved, or fined | pass: stamp + glass D5 F#5 A5 rising; fail: stamp + a falling triangle A3 to D3 + a muted coin | medium; game; 410 to 670 ms | centre | 2000 ms | Toast and the audit panel clears (a fine appears in the ledger) |
+| # | id and variants | Trigger | Meaning | Recipe | Tier; bus; length | Pan | Cooldown | Class | Visual counterpart |
+|---|---|---|---|---|---|---|---|---|---|
+| 56 | `hire.manager`<br>student, broker, logistics | `hire` event (Hire in the Crew drawer). Flavour by kind: student, broker, logistics | Someone joins your team | door bell A5 + paper + two handshake thumps + a small brass swell D4 A4; student: marimba flourish; broker: glass plink A6 (rev 1: a coin); logistics: horn blip | medium; game; 640 to 740 ms | building x | 800 ms | cause, P | A building rises on the plot, the Crew drawer lists them |
+| 57 | `crew.build`<br>level, upgrade | `pipe-level` event (a manager levelled up) or `upgrade` event (a company upgrade bought) | Your business got stronger | level: three hammer hits rising D4 A4 D5 on marimba + a brass-lite note; upgrade: a relay click, a rising machine whirr (noise 300 to 1500 Hz) and a glass ping A5 | medium; game; 580 to 780 ms | building x | 800 ms | cause, P | The building grows a floor / the upgrade is marked bought, a good toast |
+| 58 | `crew.client`<br>smb, ent | `client` event (a contract signed): smb, corp, ent | A contract is signed | pen scribble (noise at 4.5 kHz with fast tremolo, 250 ms) + stamp + bell D6; corp adds a glass fifth; ent adds a brass chord D3 A3 | medium; game; 640 to 690 ms | centre | 800 ms | cause, P | The client appears in the Crew drawer |
+| 59 | `ship.depart` | `ship` event (crates sent to another district) | A truck pulls out | engine rumble (brown noise lowpassed at 240 Hz and closing to 120) + a short air horn, D3 over D2 | medium; game; 680 ms | origin district x | 1000 ms | cause, P | A truck drives along the road, a "Shipped" toast |
+| 60 | `ship.arrive` | Note kind `freight-arrive` ("Freight arrived in ..."); a clock sound (off in Classroom) | The truck is here | air-brake hiss (a noise band falling from 3 to 1.8 kHz, 300 ms) + a door-bell ding D6 + a crate knock | tiny; game; 490 ms | destination district x | 1500 ms | clock | The truck vanishes, the crates appear; the news ticker (and a polite screen-reader line) |
+| 61 | `ship.trouble`<br>customs, damage | Note kind `customs` (inspected: a delay and a fee) or `damage` (crates damaged in transit) | Something went wrong on the road | customs: a stop whistle (two sine A5 pulses) + clipboard stamp; damage: crate crunch (noise bursts) + a glass shatter-lite + a falling sting, plus a knock at 300 to 600 Hz | medium; game; 300 to 480 ms | destination district x | 1500 ms per kind | state | A warn or bad toast with the cost |
+| 62 | `bank.draw` | `draw` event (a loan taken) | Cash in, but it is owed: coins that end on a low note | vault door (low sine D2 + a sweeping noise 400 Hz) + bills counted (six paper flutters) + a stamp, ending on a held triangle D3 over a sine D4 at -10 dB | medium; game; 1130 ms | centre | 800 ms | cause, P | Cash rises, Debt appears in the gauge, a "Liability added" toast (the sound ends low although cash rises, by design: the green flash and the toast are the cue) |
+| 63 | `bank.repay`<br>half, full, free | `repay` event: half or full of one loan; `free` when the last loan is cleared (Debt-free) | Debt goes down: a stamp, coins out, relief rising | stamp + three muted coins + glass A4 (half) or F#5 to A5 (full); free: vault latch closing + a rising glass arpeggio D5 F#5 A5 D6 + a shower | medium to loud; game; 620 to 1040 ms | centre | 800 ms | cause, P | The loan row shrinks, a toast; "Debt-free" toast for the last one |
+| 64 | `audit.notice` | Note with `audit: true` (an audit event with 72 virtual hours to answer) | An official letter has arrived | five typewriter ticks + a carriage bell A5 + the warning pair glass A4 F#4 | medium; game; 800 ms | centre | 2000 ms | state | Warn toast, the Bank drawer's audit panel, the Bank badge |
+| 65 | `audit.result`<br>pass, fail | `audit` event (you answered): `ok` true is a pass, false a fail | Approved, or fined | pass: stamp + glass D5 F#5 A5 rising; fail: stamp + a falling triangle A3 to D3 + a muted coin, with the mid body of `ui.refuse`; when the fine was waived (`perk` fine-waived in the same burst) it plays without its coin, after the waiver's tink | medium; game; 410 to 670 ms | centre | 2000 ms | cause, P | Toast and the audit panel clears (a fine appears in the ledger) |
 
 ### Alerts and shocks
 
-| # | id and variants | Trigger | Meaning | Recipe | Tier; bus; length | Pan | Cooldown | Visual counterpart |
-|---|---|---|---|---|---|---|---|---|
-| 66 | `alert.advance`<br>l1, l2, l3 | A macro warning note (`alert` with `level` 1 to 3, "effective in N days"); also the alert dialog | Severity escalates: one pair, two pairs with a drone, three pairs with a horn | 1: the warning pair glass A4 F#4; 2: the pair twice (350 ms apart) over a saw drone D2; 3: the pair three times over a horn (D3 over D2) and a vault knock | medium to loud; game; 370 to 1170 ms | centre | 3000 ms | The alert dialog with its code and readout; the ticker |
-| 67 | `alert.shock`<br>tiktok, fed, tariff, viral, glut, scare | `shock` event (it is live now). By kind: tiktok, fed, tariff (scheduled), viral, glut, scare (surprise events, quieter) | tiktok: exciting; fed: ominous; tariff: heavy; viral: bright; glut: sinking; scare: nervous | tiktok: five-note bright arpeggio D5 to F#6 + confetti noise swell; fed: low brass A2 to D2 glide + rain-onset noise + rumble; tariff: gate slam + metal clang + horn A2; viral: glass D6 A6 D7; glut: marimba D5 A4 D4 falling; scare: the pair + a paper shake | medium to loud; game; 360 to 1420 ms | centre | 3000 ms | Breaking-news toast and dialog, rain or confetti in the world |
-| 68 | `alert.margin-call` | `margin-call` event (debt-to-equity passed 4.5: the bank liquidates) | The most serious sound in the game | siren pair A3 D4 three times (saw, lowpassed 1.4 kHz) + a vault slam thump + a low horn blast, D3 over D2 | loud; game; 1320 ms | centre | 5000 ms | The "Margin Liquidation Protocol" dialog, bad toast, assets sold off |
-| 69 | `alert.insolvent` | `insolvent` event (net worth fell to zero or below) | You are broke: a toll and a slow fall | two deep bell tolls D3 (1.5 s each) over a falling slide D4 to D2 | loud; game; 1970 ms | centre | 5000 ms | Bad toast; net worth turns red |
-| 70 | `perk.bailout`<br>bailout, waived | `perk` event: `bailout` (the Legacy Heir's family clears your debt) or `fine-waived` (the family lawyer, medium) | Rescue: relief that rises after a hard moment | bailout: rising brass swell A3 D4 A4 + a glass chord D5 F#5 A5 + an approved stamp + a long falling sigh (noise lowpassed); fine-waived: stamp + a glass tink | medium to loud; game; 550 to 1290 ms | centre | 5000 ms | Good toast ("The family stepped in") |
+| # | id and variants | Trigger | Meaning | Recipe | Tier; bus; length | Pan | Cooldown | Class | Visual counterpart |
+|---|---|---|---|---|---|---|---|---|---|
+| 66 | `alert.advance`<br>l1, l2, l3 | A macro warning note (`alert` with `level` 1 to 3, "effective in N days"); also the alert dialog | Severity escalates: one pair, two pairs with a drone, three pairs with a horn | 1: the warning pair glass A4 F#4; 2: the pair twice (350 ms apart) over a saw drone D2; 3: the pair three times over a horn (D3 over D2) and a vault knock | medium to loud; game; 370 to 1170 ms | centre | 3000 ms; rank l1 < l2 < l3 | state | The alert dialog with its code and readout; the ticker |
+| 67 | `alert.shock`<br>tiktok, fed, tariff, viral, glut, scare | `shock` event (it is live now). By kind: tiktok, fed, tariff (scheduled), viral, glut, scare (surprise events, quieter) | tiktok: exciting; fed: ominous; tariff: heavy; viral: bright; glut: sinking; scare: nervous | tiktok: five-note bright arpeggio D5 to F#6 + confetti noise swell; fed: low brass A2 to D2 glide + rain-onset noise + rumble; tariff: gate slam + metal clang + horn A2; viral: glass D6 A6 D7; glut: marimba D5 A4 D4 falling; scare: the pair + a paper shake | medium to loud; game; 360 to 1420 ms | centre | 3000 ms per kind | state | Breaking-news toast and dialog, rain or confetti in the world |
+| 68 | `alert.margin-call` | `margin-call` event (debt-to-equity passed 4.5: the bank liquidates) | The most serious sound in the game | siren pair A3 D4 three times (saw, lowpassed 1.4 kHz) + a vault slam thump + a low horn blast, D3 over D2 | loud; game; 1320 ms | centre | 5000 ms | state<br>(preempts) | The "Margin Liquidation Protocol" dialog, bad toast, assets sold off |
+| 69 | `alert.insolvent` | `insolvent` event (net worth fell to zero or below), with the bad note of `kind: insolvent` that the engine now writes beside it (8.5) | You are broke: a toll and a slow fall | two deep bell tolls D3 (1.5 s each) over a falling slide D4 to D2, with a sine D4 in the tolls | loud; game; 1970 ms | centre | 5000 ms | state<br>(preempts) | Bad toast (the new note) and a red net worth (`.neg`) while it lasts. Rev 1 listed both and the engine had neither |
+| 70 | `perk.bailout`<br>bailout, waived | `perk` event: `bailout` (the Legacy Heir's family clears your debt) or `fine-waived` (the family lawyer, medium) | Rescue: relief that rises after a hard moment | bailout: rising brass swell A3 D4 A4 + a glass chord D5 F#5 A5 + an approved stamp + a long falling sigh (noise lowpassed); fine-waived: stamp + a glass tink; when a failed audit follows in the same burst, its stamp plays after this and without a coin | medium to loud; game; 550 to 1290 ms | centre | 5000 ms | state | Good toast ("The family stepped in") |
 
 ### Progress and the class
 
-| # | id and variants | Trigger | Meaning | Recipe | Tier; bus; length | Pan | Cooldown | Visual counterpart |
-|---|---|---|---|---|---|---|---|---|
-| 71 | `quest.complete`<br>quest, daily | Progress `onComplete("quest")` or `("daily")` | A goal reached: a short rising run, with a coin for the reward | marimba arpeggio D5 F#5 A5 D6 (60 ms) + a glass sparkle + a coin A6; daily adds a stamp | medium; game; 520 ms | centre | 1500 ms | "Quest complete: ..." toast, confetti burst, XP |
-| 72 | `achievement`<br>common, rare, epic | Progress `onComplete("achievement")`, by `def.rarity`: common, rare, epic | Rarity is loudness and length | common: glass A5 D6 + sparkle; rare: three notes + a shimmer and a brass-lite swell; epic: full arpeggio D5 to D7 + brass D3 A3 + a shower of glass (1.6 s) | medium to loud; game; 470 to 1240 ms | centre | 1500 ms | Achievement toast, confetti (more for epic) |
-| 73 | `codex.unlock` | Progress `onCodex` (a new Codex page unlocked) | A new idea: a lightbulb on a page | page flip + glass E6 then A6, soft (450 ms) | tiny; game; 410 ms | centre | 1500 ms | "Codex unlocked: ..." toast, the Codex badge |
-| 74 | `mentor.tip` | Note kind `mentor` (the Seasoned Pro's weekly tip) | A hint from someone who has seen it before | glass A5, F#5, B5 (a gentle question) + a wood tap | tiny; game; 540 ms | centre | 3000 ms | The news ticker and a polite screen-reader line |
-| 75 | `level.up`<br>l, big | `level` event. `big` on every 5th level | The biggest everyday moment: brass, marimba and glass together | brass stab D3 A3 + marimba run D5 A5 D6 F#6 A6 (80 ms) + glass shimmer D7 + a low boom; big adds an octave doubling | loud; game; 870 to 1180 ms | centre | 2000 ms | Level toast, the HUD ring, confetti |
-| 76 | `skill.up` | A skill point is spent (Quests drawer: Spend) | Power-up: three notes climbing | marimba A4 D5 F#5 + a metallic click-in | medium; game; 430 ms | centre | 600 ms | The skill level bar fills, a toast |
-| 77 | `milestone`<br>m1, m2, m3 | `milestone` event, `n` 1 to 3 (1: managers and the bank open; 2: audits begin; 3: enterprise opens) | A door opens; milestone 2 carries a warning | 1: brass fanfare D3 A3 D4 + marimba run + a door-open swell; 2: the same but the last chord turns to the warning pair A4 F#4; 3: longer, adds a bell chord D6 A6 and a second brass voice | loud; game; 1310 to 1580 ms | centre | 5000 ms | Milestone toast, confetti, new dock icons |
-| 78 | `zone.open`<br>t1, t4 | `zone` event (a district opens as net worth passes its gate), `t` the tier 1 to 4; with `world.startReveal` | The fog lifts: a place opens to you | n+3 glass notes rising (n = tier) + a low pad swell D2 A2 + a rising air sweep and sparkle; tier 4 adds brass and a bell chord | medium to loud; game; 1270 to 1320 ms | district x | 4000 ms | Rings and sparks over the district, its fog lifts, a "... is open" toast |
-| 79 | `swap.offer-in` | Session event `offer` (a classmate or the Practice Partner proposes a swap) | A letter has been slipped under the door | soft door bell E5 B5 + an envelope flip (paper) | medium; game; 430 ms | centre | 3000 ms | The Market badge and the Invitations list (and a polite screen-reader line) |
-| 80 | `swap.done` | `p2p` event (a swap is finished) | Hands shaken: crates changed owners | two thumps (the clasp) + two coins swapping sides (pan sweep) + glass A6 | medium; game; 640 ms | centre | 1500 ms | The ledger row, a good toast |
+| # | id and variants | Trigger | Meaning | Recipe | Tier; bus; length | Pan | Cooldown | Class | Visual counterpart |
+|---|---|---|---|---|---|---|---|---|---|
+| 71 | `quest.complete`<br>quest | Progress `onComplete("quest")`: story quests only (7 in a 90-day run). A daily bounty is `daily.done` | A goal reached: a short rising run, with a bell for the reward | marimba arpeggio D5 F#5 A5 D6 (60 ms) + a glass sparkle + a glass bell A6 for the reward (rev 1: a coin, but XP is not cash; the daily variant is now `daily.done`) | medium; game; 520 ms | centre | 1500 ms | reward | "Quest complete: ..." toast, confetti burst, XP |
+| 72 | `achievement`<br>common, rare, epic | Progress `onComplete("achievement")`, by `def.rarity`: common, rare, epic | Rarity is loudness and length | common: glass A5 D6, no sparkle (tiny); rare: three notes + a shimmer and a brass-lite swell; epic: full arpeggio D5 to D7 + brass D3 A3 + a shower of glass (1.6 s) | tiny (common), medium (rare), loud (epic); game; 470 to 1240 ms | centre | 3000 ms (common), 1500 ms (rare, epic); rank common < rare < epic | reward | Achievement toast, confetti (more for epic) |
+| 73 | `codex.unlock` | Progress `onCodex` (a new Codex page unlocked); a burst of them coalesces to one sound (the first sale alone unlocks four) | A new idea: a lightbulb on a page | page flip + glass E6 then A6, soft (450 ms) | tiny; game; 410 ms | centre | 1500 ms | reward | "Codex unlocked: ..." toast, the Codex badge |
+| 74 | `mentor.tip` | Note kind `mentor` (the Seasoned Pro's weekly tip); a clock sound (off in Classroom) | A hint from someone who has seen it before | glass A5, F#5, B5 (a gentle question) + a wood tap | tiny; game; 540 ms | centre | 3000 ms | clock | The news ticker and a polite screen-reader line |
+| 75 | `level.up`<br>s, l, big | `level` event. `big` on every 5th level; `l` (the full brass fanfare) when 90 s or more have passed since the last full level sentence; `s` otherwise. Several levels in one burst play the highest once. Silent in an Academy lesson | The biggest everyday moment: brass, marimba and glass together | brass stab D3 A3 + marimba run D5 A5 D6 F#6 A6 (80 ms) + glass shimmer D7 + a low boom; big adds an octave doubling; `s`: a marimba run D5 A5 D6, no brass, about 450 ms | medium (`s`), loud (`l`, `big`); game; about 450 ms (`s`), 870 to 1180 ms (`l`, `big`) | centre | 2000 ms; rank s < l < big | reward | Level toast, the HUD ring, confetti |
+| 76 | `skill.up` | A skill point is spent (Quests drawer: Spend) | Power-up: three notes climbing | marimba A4 D5 F#5 + a metallic click-in | medium; game; 430 ms | centre | 600 ms | cause, P | The skill level bar fills, a toast |
+| 77 | `milestone`<br>m1, m2, m3 | `milestone` event, `n` 1 to 3 (1: managers and the bank open; 2: audits begin; 3: enterprise opens) | A door opens; milestone 2 carries a warning | 1: brass fanfare D3 A3 D4 + marimba run + a door-open swell; 2: the same but the last chord turns to the warning pair A4 F#4; 3: longer, adds a bell chord D6 A6 and a second brass voice | loud; game; 1310 to 1580 ms | centre | 5000 ms | reward | Milestone toast, confetti, new dock icons |
+| 78 | `zone.open`<br>t1, t4 | `zone` event (a district opens as net worth passes its gate), `t` the tier 1 to 4; with `world.startReveal` | The fog lifts: a place opens to you | n+3 glass notes rising (n = tier) + a low pad swell D2 A2 + a rising air sweep and sparkle; tier 4 adds brass and a bell chord | medium to loud; game; 1270 to 1320 ms | district x | 4000 ms; rank t1 < t4 | reward | Rings and sparks over the district, its fog lifts, a "... is open" toast |
+| 79 | `swap.offer-in` | Session event `offer` (a classmate or the Practice Partner proposes a swap) | A letter has been slipped under the door | soft door bell E5 B5 + an envelope flip (paper) | medium; game; 430 ms | centre | 3000 ms | state | The Market badge and the Invitations list (and a polite screen-reader line) |
+| 80 | `swap.done` | The good completion note of kind `swap` ("Swap completed with ..."). The `p2p` event is XP telemetry that the engine skips for swaps under the minimum, over the daily cap or with a repeat partner, which still say "Swap completed"; the Practice Partner's `p2p` plays `ui.ok` | Hands shaken: crates changed owners | two thumps (the clasp) + two coins swapping sides (pan sweep) + glass A6 | medium; game; 640 ms | centre | 1500 ms | cause, P | The ledger row, a good toast |
+| 89 | `daily.done` | Progress `onComplete("daily")` (a daily bounty done). Silent in an Academy lesson | A small tick: one more thing ticked off | glass A5 (about 160 ms) + a stamp tick; no coin, no arpeggio | tiny; game; about 160 ms | centre | 4000 ms; silent at 4x and above; a second within 60 s plays as `reward.also` | reward | "Daily bounty done: ..." toast, confetti burst, XP |
+| 90 | `reward.also` | A reward that lost its sentence to a better one in the same burst, or arrived inside the reward budget's window (3.4.2, 3.4.4); at most two a burst and one in 3 s | And something else was earned | one or two glass notes rising A5 then D6, 70 ms apart, -6 dB | tiny; game; about 120 ms | centre | 3000 ms | reward | The toast of whatever it stands for |
 
 ### Academy, draft and the run
 
-| # | id and variants | Trigger | Meaning | Recipe | Tier; bus; length | Pan | Cooldown | Visual counterpart |
-|---|---|---|---|---|---|---|---|---|
-| 81 | `acad.step`<br>s0, s5 | The coach card moves to the next step (a step was done). `i` is the step number, so the note climbs along the lesson | Progress through the lesson | glass note one pentatonic step higher than the last (D5 E5 F#5 A5 B5 D6), 300 ms | tiny; ui; 160 to 170 ms | centre | 600 ms | "Step n of m" on the card |
-| 82 | `acad.teach`<br>right, wrong, reveal | Teach-back: an option is picked (right or wrong), or the answer is revealed | Right is bright; wrong is a soft "mm", never a punishment | right: marimba A5 D6 + a coin D7 + a glass F#6 (medium); wrong: two soft low taps F#3 D3 behind a lowpass; reveal: page flip + glass E5 | tiny to medium; ui; 240 to 440 ms | centre | 600 ms | The option shows its reason in words |
-| 83 | `acad.win`<br>goal, reward | A lesson's goal is reached (`win()`); `reward` when the lesson-complete sheet opens | Lesson done; the reward sheet is a bigger fanfare | goal: marimba D5 A5 D6 + a brass blip; reward: the goal fanfare + glass F#6 A6 shimmer and a coin | medium to loud; game; 400 to 1010 ms | centre | 2000 ms | "Lesson goal reached", the sheet, confetti |
-| 84 | `acad.graduate` | The last lesson's reward sheet ("Finish the Academy") | Graduation: the longest fanfare in the game | three bell strikes D5 A5 D6, a brass chord D3 A3 D4 F#4, a marimba run up two octaves and a shower of glass (2.6 s) | loud; game; 2250 ms | centre | 5000 ms | Reward sheet, confetti |
-| 85 | `draft.pick`<br>slot1, slot2, complete, drop | A Background card is picked or dropped (Background draft); the second pick completes the build | A card is slid into a slot: first slot D5, second A5; complete is a chord | card flip snap + marimba D5 (slot 1) or A5 (slot 2); drop: the reverse a step lower; complete: glass chord D5 F#5 A5 + stamp | tiny to medium; ui; 100 to 440 ms | centre | 60 ms | The tray fills, the count "2 of 2" |
-| 86 | `draft.begin` | Begin is pressed with two Backgrounds chosen | The run starts | stamp + rising brass stab D3 A3 + a marimba run D5 to D6 + a door-opening sweep | loud; game; 770 ms | centre | 5000 ms | The screen changes to the Academy or the world |
-| 87 | `run.end`<br>horizon, start, done | Day 90 closes the run (`final` note); an exit launches (`exit` event: IPO or trade sale) and settles (note `final` with an exit) | The end of something big | horizon: three slow bell tolls D3; exit start: a trading-floor bell (eight fast strikes A5 decaying) + brass; exit done: the grand fanfare, brass D3 A3 D4 F#4 + bells + a glass shower (2.8 s) | loud; game; 880 to 2740 ms | centre | 8000 ms | The "simulation is complete" dialog with the EEI |
-| 88 | `inst.cue`<br>deploy, start, rewind | Instructor dashboard only: Deploy to cohort (deploy), Start simulation (start), Rewind (rewind). Off by default in a room | A ceremony for the teacher | deploy: warning pair x2 + a horn D3; start: horns D3 and A3 over D2 and A2 + bell D6; rewind: tape whir (noise sweeping down 3 kHz to 300 Hz) with ticks | tiny to medium; game; 440 to 930 ms | centre | 2000 ms | The dashboard's own toast |
+| # | id and variants | Trigger | Meaning | Recipe | Tier; bus; length | Pan | Cooldown | Class | Visual counterpart |
+|---|---|---|---|---|---|---|---|---|---|
+| 81 | `acad.step`<br>s0, s5 | The coach card moves to the next step (a step was done). `i` is the step number, so the note climbs along the lesson | Progress through the lesson | glass note one pentatonic step higher than the last (D5 E5 F#5 A5 B5 D6), 300 ms | tiny; ui; 160 to 170 ms | centre | 600 ms | press, P | "Step n of m" on the card |
+| 82 | `acad.teach`<br>right, wrong, reveal | Teach-back: an option is picked (right or wrong), or the answer is revealed | Right is bright; wrong is a soft "mm", never a punishment | right: marimba A5 D6 + a glass D7 + a glass F#6 (medium; rev 1: a coin D7); wrong: two soft low taps F#3 D3 behind a lowpass, plus a sine A3 at -10 dB and a knock at 300 to 600 Hz; reveal: page flip + glass E5 | tiny to medium; ui; 240 to 440 ms | centre | 600 ms | press, P | The option shows its reason in words |
+| 83 | `acad.win`<br>goal, reward | A lesson's goal is reached (`win()`); `reward` when the lesson-complete sheet opens | Lesson done; the reward sheet is a bigger fanfare | goal: marimba D5 A5 D6 + a brass blip; reward: the goal fanfare + glass F#6 A6 shimmer and a glass D7 (rev 1: a coin) | medium to loud; game; 400 to 1010 ms | centre | 2000 ms | reward | "Lesson goal reached", the sheet, confetti |
+| 84 | `acad.graduate` | The last lesson's reward sheet ("Finish the Academy") | Graduation: the longest fanfare in the game | three bell strikes D5 A5 D6, a brass chord D3 A3 D4 F#4, a marimba run up two octaves and a shower of glass (2.6 s) | loud; game; 2250 ms | centre | 5000 ms | reward | Reward sheet, confetti |
+| 85 | `draft.pick`<br>slot1, slot2, complete, drop | A Background card is picked or dropped (Background draft); the second pick completes the build | A card is slid into a slot: first slot D5, second A5; complete is a chord | card flip snap + marimba D5 (slot 1) or A5 (slot 2); drop: the reverse a step lower; complete: glass chord D5 F#5 A5 + stamp | tiny to medium; ui; 100 to 440 ms | centre | 60 ms | press, P | The tray fills, the count "2 of 2" |
+| 86 | `draft.begin` | Begin is pressed with two Backgrounds chosen | The run starts | stamp + rising brass stab D3 A3 + a marimba run D5 to D6 + a door-opening sweep | loud; game; 770 ms | centre | 5000 ms | cause, P | The screen changes to the Academy or the world |
+| 87 | `run.end`<br>horizon, start, done | Day 90 closes the run (`final` note); an exit launches (`exit` event: IPO or trade sale) and settles (note `final` with an exit) | The end of something big | horizon: three slow bell tolls D3; exit start: a trading-floor bell (eight fast strikes A5 decaying) + brass; exit done: the grand fanfare, brass D3 A3 D4 F#4 + bells + a glass shower (2.8 s) | loud; game; 880 to 2740 ms | centre | 8000 ms | state<br>(preempts) | The "simulation is complete" dialog with the EEI |
+| 88 | `inst.cue`<br>deploy, start, rewind | Instructor dashboard only: Deploy to cohort (deploy), Start simulation (start), Rewind (rewind). Off by default in a room | A ceremony for the teacher | deploy: a horn D3 + a rising bell A5 D6 (rev 1: the warning pair twice, which reads as an alarm for a launch); start: horns D3 and A3 over D2 and A2 + bell D6; rewind: tape whir (noise sweeping down 3 kHz to 300 Hz) with ticks | tiny to medium; game; 440 to 930 ms | centre | 2000 ms | press, P | The dashboard's own toast |
 
 ### 4.1 Every engine event, and what it plays
 
-`EVENT_TYPES` in `js/meta/ids.js` has 28 types; each one is either given a sound below or explicitly silent. The wiring (8.3) is a table-driven switch over this list, and a test (10.2) fails if a type is missing from it or a payload variant here has no row.
+`EVENT_TYPES` in `js/meta/ids.js` has 28 types; each one is either given a sound below or explicitly silent. The wiring (8.3) is a table-driven switch over this list, and a test (10.2) fails if a type is missing from it or a payload variant here has no row. **Events arrive in the order the engine computed them, which is consequence before cause (3.1).** The rows say what each event asks for; the collector (3.4.2) decides what plays, so no row depends on the order of its neighbours.
 
 | Event | Payload variants | Plays | Gate and notes |
 |---|---|---|---|
-| `pitch` | `outcome: win` | `sale.win` + `cash.in` sized by `price` | money group; pan from the buyer who is leaving |
+| `pitch` | `outcome: win` | `sale.win` + `cash.in` sized by `price` + the `streak` rung, one `playMix` | money group; pan from the buyer who is leaving |
 | | `outcome: pioneer` | `sale.pioneer` + `cash.in` sized by `price` | |
-| | `outcome: herd` | `sale.herd` + `cash.in` one size down | the herd's coins are thinner |
-| | `outcome: flat` | `sale.flat` + `cash.in` sized by `price` | |
+| | `outcome: herd`, `gain` > 0.02 | `sale.herd` `hw` (neutral: the dull bell, no falling pair) + `cash.in` sized by `price`, as for a win | 0.02 is the engine's own win test (`received > 1.02 x fair`). A sale into the crowded band is labelled `herd` **whatever it paid**, and the engine still emits `streak` and pays win XP when it won; in three 90-day bot runs 88 of 90 herd sales were wins, so revision 1 played a loss for almost all of them |
+| | `outcome: herd`, `gain` <= 0.02 | `sale.herd` `h` (the falling pair B3 to A3) + `cash.in` one size down | the sale that lost money in the crowd |
+| | `outcome: flat`, `gain` >= -0.02 | `sale.flat` + `cash.in` sized by `price` | at fair |
+| | `outcome: flat`, `gain` < -0.02 | `sale.flat` + `cash.in` sized by `price` through the `dull` voice (lowpass 3.5 kHz, no register ding) | well below fair: 98 of 120 flat sales in the bot runs; revision 1 gave them full-size bright coins |
 | | `outcome: rejected`, `reason: nofit` | `sale.reject` (nofit) | |
 | | `outcome: rejected` after a counterfeit note | `sale.reject` (fake) | the note `kind: counterfeit` arrives first, then the event |
 | | `outcome: rejected`, `gain: -1`, or after a `scam` note | `sale.scam` | an unverified fraud; announced by the note at the same moment |
-| `streak` | `n >= 2` | `streak` (n capped at 6 notes) | layered on the sale; `n: 1` is silent |
+| `streak` | `n >= 2` | `streak` (n capped at 6 notes) | rides in the sale's `playMix`; skipped under a falling sale sound; `n: 1` is silent |
 | `buy` | `cond: ok` or `broken`; `fake` is never read | `buy.lot` + `cash.out` sized by `price` | pan from the lot |
-| `sell-pool` | `total`, `count` | `pool.sell` + `cash.in` sized by `total` | the cash lands later: note `kind: settle` plays `cash.in` settle |
-| `repair` | `precision`, `quality`, `cost` | `repair.done`: great at precision >= 0.8, ok at >= 0.4, else rough; Careful (0.5) is ok | plus `cash.out` sized by `cost` |
-| `ship` | `from`, `to`, `count` | `ship.depart` | pan from the origin district |
-| `hire` | `kind` student, broker, logistics | `hire.manager` (the kind's flourish) + `cash.out` | pan from the new building |
-| `upgrade` | `id` | `crew.build` (upgrade) + `cash.out` | |
-| `pipe-level` | `id`, `level` | `crew.build` (level) + `cash.out` | |
-| `cycle` | `zone`, `net` | `manager.cycle` gain or loss | merged in 250 ms; speed gating (3.4); pan from the building; other districts are "elsewhere" |
-| `draw` | `prod`, `amount` | `bank.draw` | the recipe already counts the bills; no extra coins |
-| `repay` | `amount` | `bank.repay`: half when about half of the loan, full otherwise, `free` when no loan is left | |
-| `client` | `tier` smb, corp, ent | `crew.client`: smb; corp and ent use the ent variant | plus `cash.out` for the acquisition cost |
-| `audit` | `choice`, `ok` | `audit.result` pass when `ok`, else fail | |
-| `zone` | `id` | `zone.open`, tier from `ZONES[id].tier` | moment queue; pan from the district; with the world's own reveal |
-| `milestone` | `n` 1 to 3 | `milestone` n | moment queue; the loudest of the progress sounds |
+| `sell-pool` | `total`, `count`, `delay` (added, 8.5) | `delay` 0: `pool.sell` + `cash.in` sized by `total`. `delay` > 0 (24 h from district 9, 48 h from 13 and for digital routing): **`pool.sell` alone, no coins** | the engine adds the cash in `_settlements`, not at the sale, so a coin at the sale was a coin for money that had not moved and the settle sound then said it again |
+| `repair` | `precision`, `quality`, `cost` | `repair.done`: great at precision >= 0.8, ok at >= 0.4, else rough; Careful (0.5) is ok; plus `cash.out` sized by `cost` at size l or larger | |
+| `ship` | `from`, `to`, `count` | `ship.depart` | pan from the origin district; in the money group |
+| `hire` | `kind` student, broker, logistics | `hire.manager` (the kind's flourish) + `cash.out` at size l or larger | the amount is the newest ledger row (the engine writes it before it emits); `PIPE[kind].hire` otherwise |
+| `upgrade` | `id` | `crew.build` (upgrade) + `cash.out` at size l or larger | `UPGRADES[id].cost` |
+| `pipe-level` | `id`, `level` | `crew.build` (level) + `cash.out` at size l or larger | the ledger row |
+| `cycle` | `zone`, `net`, and `pid` or `src: 'rent'` (added, 8.5) | `manager.cycle` gain or loss; `src: 'rent'` (the day tick's rent and royalties) plays a `cash.in` s or nothing, never a `manager.cycle` beside `day.turn` | merged in 250 ms; speed gating 3.4.5; pan from the building (`pid`) |
+| `draw` | `prod`, `amount` | `bank.draw` | the recipe already counts the bills; no extra coins. It ends low although cash rises, by design: the green flash and the toast are the cue |
+| `repay` | `amount` | `bank.repay`: half when the clicked `data-f` was `half`, full when `all`, `free` when no loan is left | the event carries only the amount, so the capture-phase click listener records `data-f` (4.3) |
+| `client` | `tier` smb, corp, ent | `crew.client`: smb; corp and ent use the ent variant; plus `cash.out` at size l or larger | `CLIENTS[tier].cac` |
+| `audit` | `choice`, `ok` | `audit.result` pass when `ok`, else fail | when the first fine was waived, `perk` `fine-waived` arrived first (the engine emits it inside `_auditFail`): the burst plays the waiver, then the fail **without its coin** |
+| `zone` | `id` | `zone.open`, tier from `ZONES[id].tier` | reward; several in one burst play the highest; pan from the district; with the world's own reveal |
+| `milestone` | `n` 1 to 3 | `milestone` n | reward, exempt from the budget |
 | `shock` | `kind` tiktok, fed, tariff | `alert.shock` (that kind) | the advance warning is the note, below |
 | | `kind` viral, glut, scare (algorithmic) | `alert.shock` (that kind, medium) | |
-| `p2p` | `peer`, `variance`; `npc: true` for the Practice Partner | `swap.done`; with `npc` `ui.ok` | |
+| `p2p` | `peer`, `variance`; `npc: true` for the Practice Partner | `npc`: `ui.ok`. Otherwise silent: `swap.done` plays from the completion note (4.2) | `_swapDone` emits `p2p` only for swaps above the minimum value, under the daily cap and with a partner not used that day. The other completed swaps still say "Swap completed" and used to get only the fallback `ui.ok` |
 | `skill` | `skill`, `level` | `skill.up` | the only place the point being spent is heard |
-| `level` | `level` | `level.up`, the big variant when `level % 5 === 0` | moment queue |
-| `inspect` | `caught: true` | `read.caught` | |
-| | `fake` without `caught`, `repeat`, any `score` | silent | the sound never says what you missed or how well you read |
+| `level` | `level` | `level.up`: `big` when `level % 5 === 0`, `l` when 90 s or more have passed since the last full level sentence, else `s` | reward; several in one burst play the highest once |
+| `inspect` | any (`score`, `fake`, `caught`, `repeat`) | **silent** | `caught` is `truth.fake AND belief`, and it is emitted when the deal finishes (`finish()` in `js/deal.js`). After a Pass or a Walk away the result card deliberately withholds the truth, so the ding said "it was a fake" and the silence said "it was genuine". **No code of the wiring reads `caught`, `fake` or `score`.** The suspicion cue is `read.suspect`, driven by the visible meter (4.2) |
 | `haggle` | `role`, `mult`, `score`, `deal` | silent | the sale or purchase event carries the result |
 | `auction` | `won`, `price`, `surplus` | silent | the bid stage's `bid.hammer` has played; `surplus` is never read before the reveal |
-| `day` | `day` | `day.turn` | speed gating; silent in a dialog and while catching up |
-| `margin-call` | | `alert.margin-call` | moment queue |
-| `insolvent` | | `alert.insolvent` | moment queue |
-| `exit` | `kind` ipo, sale | `run.end` (start) | moment queue |
-| `perk` | `effect: bailout` | `perk.bailout` | moment queue |
+| `day` | `day` | `day.turn` | clock: 3.4.5; silent in a dialog and while catching up |
+| `margin-call` | | `alert.margin-call` | preempts |
+| `insolvent` | | `alert.insolvent` | preempts; the note added with it (4.2) gives it a toast. Revision 1 said it had one; the engine emitted only the bare event |
+| `exit` | `kind` ipo, sale | `run.end` (start) | preempts |
+| `perk` | `effect: bailout` | `perk.bailout` | exempt from the budget |
 | | `effect: fine-waived` | `perk.bailout` (waived) | |
 
-### 4.2 Notes, session events, progress and the shell
+**In an Academy lesson** (`ctx.g().sandbox`, 8.3) the game is a rehearsal whose levels, XP and rewards are pretend and saved nowhere. There, `level.up`, `quest.complete`, `daily.done`, `achievement`, `reward.also`, `milestone`, `zone.open`, `skill.up` and `codex.unlock` are silent, and so is the ambient bed. The money, the Deal Room and the `acad.*` sounds stay.
 
-The engine's `note(level, text, extra)` reaches the shell as the session event `note`. Today a note carries `level`, `text` and a few flags (`milestone`, `zone`, `level`, `alert`, `audit`, `final`). Sounds that depend on **what a note is about** need one more field, `kind` (8.5, a one-word additive change to eleven call sites in `js/engine.js`). The wiring falls back on matching the text when `kind` is missing, and a test pins the texts so a copy edit cannot silently mute a sound.
+### 4.2 Notes, session events, progress, the shell and the Deal Room
+
+The engine's `note(level, text, extra)` reaches the shell as the session event `note`. Today a note carries `level`, `text` and a few flags (`milestone`, `zone`, `level`, `alert`, `audit`, `final`). Sounds that depend on **what a note is about** need one more field, `kind` (8.5, a one-word additive change to twelve call sites in `js/engine.js` and two in `js/session.js`). The wiring falls back on matching the text when `kind` is missing, and a test pins the texts so a copy edit cannot silently mute a sound.
 
 | Source | Condition | Plays | Notes |
 |---|---|---|---|
 | note | `kind: scam` or `counterfeit` | handled with the `pitch` event that follows | not played twice |
-| note | `kind: settle` ("$x settled into cash") | `cash.in` settle | polite announcement added (section 9) |
-| note | `kind: freight-arrive` | `ship.arrive` | pan from the destination; polite announcement added |
-| note | `kind: customs` or `damage` | `ship.trouble` (that kind) | |
-| note | `kind: mentor` | `mentor.tip` | polite announcement added |
-| note | `kind: sla` ("SLA breach ... penalty") | `cash.out` m | |
-| note | `kind: overdraft` | `cash.out` s | at most once a day |
-| note | `kind: fatigue` ("Market fatigue") | `alert.shock` (glut) | |
-| note | `kind: burnout` | `ui.nudge` | |
+| note | `kind: settle` ("$x settled into cash", with `amt` added) | `cash.in` settle, sized by `amt` | clock class; one note per due item, so a burst of them is coalesced, announced once as "N payments settled" (at most one announcement per 700 ms) |
+| note | `kind: freight-arrive` | `ship.arrive` | clock class; pan from the destination; polite announcement added |
+| note | `kind: customs` or `damage` | `ship.trouble` (that kind) | state |
+| note | `kind: mentor` | `mentor.tip` | clock class; an info toast and a polite announcement added |
+| note | `kind: sla` ("SLA breach ... penalty") | `cash.out` m | a state sound: on entering, then at most one per 45 s (3.4.5) |
+| note | `kind: overdraft` | `cash.out` s | a state sound. The engine writes the note every third day while cash is negative (not daily, as revision 1 said); the interest accrues every day |
+| note | `kind: fatigue` ("Market fatigue") | `alert.shock` (glut) | a state sound |
+| note | `kind: burnout` | `ui.nudge` | a state sound |
+| note | `kind: insolvent` (added with the `insolvent` event: "Your net worth has fallen to zero or below.") | handled with the `insolvent` event | not played twice |
+| note | `kind: swap` (the two "Swap completed" notes in `js/session.js`) | `swap.done` | |
 | note | `audit: true` | `audit.notice` | |
 | note | `alert` with `level` 1 to 3 and `start` in the future | `alert.advance` at that level | the dialog opens with it; the queue's own `sound: 'alarm'` is suppressed |
-| note | `level: bad` with no `kind` and no other sound within 400 ms | `ui.refuse` | the toast fallback (3.4) |
+| note | `level: bad` with no `kind` and nothing of the game bus within 400 ms | `ui.refuse`, **only for a refusal reported through `ctx.say`** | the toast fallback (3.4.6); an SLA penalty or "Cash is negative" is a state, not a refusal |
 | note | `final: true` without an exit | `run.end` (horizon) | with "The simulation is complete" |
 | note | `final: true` with an exit | `run.end` (done) | |
 | session | `offer` (a swap proposed to you) | `swap.offer-in` | polite announcement added |
-| session | `rewound` | `ui.nudge` | |
-| session | `tick`, `change`, `refresh`, `room` | silent | |
-| shell | `{type:'ui', ui:'open-drawer'}` | `ui.drawer-open` with the drawer's motif | |
-| shell | `{type:'ui', ui:'close-drawer'}` (added, 8.5) | `ui.drawer-close` | |
-| Progress | `onComplete('quest')` or `('daily')` | `quest.complete` (daily adds a stamp) | moment queue |
-| Progress | `onComplete('achievement')` | `achievement`, by `def.rarity` | moment queue |
+| session | `rewound` | `ui.nudge`; everything the replay emits is a catch-up (3.4.5) | |
+| session | `tick`, `change`, `refresh`, `room` | silent | `tick` is only used to see that a heartbeat arrived |
+| shell | `{type:'ui', ui:'open-drawer', id}` | `ui.drawer-open` with the drawer's motif | |
+| shell | `{type:'ui', ui:'close-drawer', id}` (added, 8.5) | `ui.drawer-close` | |
+| shell | `{type:'ui', ui:'zone', id}` (added, 8.5: the shell's render sees `U.zone` change) | `zone.enter` | the lead baseline is reseeded silently at the same time, so a district change never rings a door bell for every buyer already there |
+| shell | `{type:'ui', ui:'lead', zone, ids, urgent}` (added, 8.5: the render diffs the district's leads after a baseline exists) | `buyer.arrive`; `buyer.urgent` instead when one of the new buyers has an urgent need that a sound crate of yours can serve | the first render of a mount, a district change, a rewind and a resume only set the baseline. **Never reads `scam` or the lot's truth** |
+| shell | `{type:'ui', ui:'step'}` (added, 8.5: `World.footstep`, the player only) | `world.step` | |
+| shell | `{type:'ui', ui:'locked', ...}` (added, 8.5: `activate` reports its outcome) | `world.locked` | the bank before milestone 1 and the audit office before milestone 2 refuse with a toast and are not `h.locked` |
+| shell | `{type:'ui', ui:'deal', what, ...}` (added, 8.5) | the Deal Room table below | |
+| Progress | `onComplete('quest')` | `quest.complete` | they call `audio.request`, not `play`: the collector orders them (3.4.2) |
+| Progress | `onComplete('daily')` | `daily.done` | |
+| Progress | `onComplete('achievement')` | `achievement`, by `def.rarity` | |
 | Progress | `onCodex` | `codex.unlock` | |
-| dialog | `#dlg` opens or closes (a MutationObserver on `open`) | `ui.dialog-open` / `ui.dialog-close`; the Deal Room (`.deal`) plays `deal.open` instead; the confirm sheet plays `ui.ask` | the observer reads the class, so nothing in `common.js` changes |
-| toast | a toast is added to `#toasts` | the fallback above | |
+| dialog | `#dlg` opens or closes (a MutationObserver on `open`; the kind is captured when it opens) | `ui.dialog-open` / `ui.dialog-close`; the Deal Room (`.deal`) plays `deal.open` instead; the confirm sheet plays `ui.ask` | `dlg.open` over an open dialog closes then reopens in one task: that is one replacement, and only the new open is heard. The Academy's reward and teach-back sheets are `div.ac-sheet`, not `<dialog>`: their sounds come from `acad.*` |
+| toast | a `.toast` node is added to `#toasts` (removals are ignored) | the fallback of 3.4.6 | |
+
+**The Deal Room.** `js/ui/deal.js` repaints in place with `ctx.setHTML`, so a stage change, a result card, a stance line or a rival's bid is a subtree mutation that no observer on `#dlg`'s attributes sees, and reading them back out of class names and copy would mute them the day a sentence is edited. Revision 2 gives the room a handful of additive lines that say what happened (8.5), each emitted from the code path that succeeded:
+
+| `what` | Emitted from | Payload | Plays |
+|---|---|---|---|
+| `stage` | `after1()`, when `run.stageDone()` becomes true | `key` | `deal.stage-done` (not under Quick) |
+| `quick` | the `quick-stage` and `quick-all` acts | `all` | `deal.quick` (replaces `deal.open` and the stage-dones) |
+| `result` | `result()` | `tone`, `xp` | `deal.result` (3.4.6 skips it after a bigger sound) |
+| `suspect` | `go()`, after a probe, when the model's `belief.fakeProb` (what the meter draws) crosses 0.6 upward, once per lot | `p` | `read.suspect` |
+| `fit` | `go()`, after the pitch | `delta` | `pitch.fit` up at >= 0.05, down at <= -0.03, silent between |
+| `tell` | `go()`, after a haggle move, when the stance changed | `tell` | `haggle.tell` |
+| `rival` | `go()`, after a bid or a drop, per new log entry | `kind` bid or drop, `side` | `bid.rival` in or out |
+| `hammer` | `go()`, when the log gains `sold` or `nosale` | `won` | `bid.hammer` |
+| `count` | `after()`, when `countUp` started at least one number | `xp` | `ui.count-up` (25 XP or more, 3.4.6) |
+
+The room's markup is still contract: the dial loop reads `.dial-mark` and the zone's inline `left` and `width`, and a test renders `fixHTML` and asserts them (10.2).
 
 ### 4.3 Every control, and what it plays
 
-Each `data-act`, `data-change` and `data-deal` in the app maps to an existing sound. The wiring installs one capture-phase listener on `document` that looks the control up in this table before the action runs (so it reads `aria-pressed` and the checkbox state as they were); the sound the action itself makes (a sale, a hire) comes later from the event.
+Each `data-act`, `data-change`, `data-deal`, `data-change-deal`, `data-deal-input` and `data-wv` in the app maps to an existing sound. `initAudio()` (8.3) installs capture-phase `click`, `change`, `input`, `submit` and `keydown` listeners on `document` and looks the control up in this table.
+
+**Two classes of control.** A control that cannot fail (a tab, a toggle, a slider, a disclosure, a panel that always opens) plays its sound at the click, before the action, reading `aria-pressed` and the checkbox state as they were. A control that **can refuse** (marked (R) below) plays only `ui.tick` at the click; its real sound comes from the outcome and never before it: an engine event, the result of `ctx.say`, or a `{type:'ui', ...}` event from the code path that succeeded (`openDrawer`, `goToDistrict`, `confirmBox`, the world's `activate`). Without this, "Tick a crate first" arrived on top of a drawer-open sound. Values that exist only after the action (the crates ticked after Tick all) are read in a `queueMicrotask` after the handlers. The keyboard has its own routes: Enter on a Draft card calls the Draft's reducer directly (the wiring listens for `keydown` Enter on `.dr-in` and reads the checkbox as it was), and Begin is a `type=submit` button with no `data-act` (the wiring listens for `submit`).
+
+`ui.press` in this table is the name for `ui.tick` variant `full`, used for the primary buttons that open, continue or begin something.
 
 | Area | Controls | Sound |
 |---|---|---|
@@ -465,20 +639,21 @@ Each `data-act`, `data-change` and `data-deal` in the app maps to an existing so
 | | `savefile`, `leave` | `ui.ok`, `ui.dialog-close` |
 | | `reset` | `ui.ask` (danger) |
 | | `debrief`, `academy`, `joinroom` | `ui.press` |
+| | key M | muting: nothing (it is muted); unmuting: `ui.ok`; both announced (7.3) |
 | HUD | cash, net worth, day buttons | `ui.dialog-open` |
-| | the speaker button (added, 7.4) | `ui.toggle` |
+| | the speaker button (added, 7.3) | `ui.toggle` |
 | | the news ticker, the player card, the goal tracker | `ui.tick` (they open a drawer or dialog, whose sound follows) |
-| Camera | `zin`, `zout`, `fit`, `me` | `cam` in, out, fit, home |
+| Camera | `zin`, `zout`, `fit`, `me`; a wheel with Ctrl, Meta or Alt and the keys + - 0 | `cam` in, out, fit, home (the buttons by this table; the wheel and the keys through one hook in `World.zoomBy` and `World.fit`, at most once per 150 ms; a pinch is silent) |
 | | the district list (`wvlist`) open, and its buttons | `ui.toggle`; each button as the same click in the world |
-| Stock | `stock-pick`, `stock-pickzone`, `stock-clear` | `ui.crate` (count of ticked) |
-| | `stock-sellpool`, `stock-route` | `ui.ask`; then `pool.sell` + `cash.in` |
-| | `stock-repair` | `deal.open` (fix) |
-| | `stock-ship`, `stock-offer`, `stock-gomarket` | `ui.drawer-open` |
+| Stock | `stock-pick`, `stock-pickzone`, `stock-clear` | `ui.crate` (count of ticked, read after the action) |
+| | `stock-sellpool` (R), `stock-route` (R) | `ui.tick`; `ui.ask` when the sheet opens (or the guard's `ui.nudge`); then `pool.sell` (+ `cash.in` when it pays at once) from the event |
+| | `stock-repair` (R) | `ui.tick`; `deal.open` (fix) when the room opens |
+| | `stock-ship` (R), `stock-offer`, `stock-gomarket` | `ui.tick`; `ui.drawer-open` when the drawer opens (`stock-ship` has three guards that toast and return first) |
 | Market | `market-tab`, `market-zone`, `market-xto` | `ui.select` (a district change adds `zone.enter`) |
 | | `market-use` | `ui.crate` |
-| | `market-sell`, `market-look` | `deal.open` (sell, buy) |
-| | `market-buy` (Quick buy) | `deal.open`, then `deal.quick` |
-| | `market-verify` | `deal.verify` ok or bad |
+| | `market-sell` (R), `market-look` (R) | `ui.tick`; `deal.open` (sell, buy) when the room opens ("That lot is gone" plays the toast's `ui.nudge`) |
+| | `market-buy` (R) (Quick buy) | `ui.tick`; `deal.quick`, emitted by the room's `quick-all` act, which this control calls directly, then the purchase from the events. `deal.open` is not played: the sheet is already at its result |
+| | `market-verify` | `deal.verify` ok or bad, from the result |
 | | `market-want` | `ui.toggle` |
 | | `market-send` | `ui.ok`; blocked: `ui.refuse` |
 | | `market-accept` | the swap's own `swap.done` |
@@ -488,20 +663,20 @@ Each `data-act`, `data-change` and `data-deal` in the app maps to an existing so
 | | `crew-hire`, `crew-edit` | `ui.dialog-open` |
 | | `crew-hamt` | `ui.slider` |
 | | `crew-hmax`, `crew-hafford`, `crew-hmore`, `crew-fill` | `ui.tick` (fill: `ui.ok`) |
-| | `crew-hgo` | the `hire` event's `hire.manager`; refused: `ui.refuse` |
+| | `crew-hgo` (R) | `ui.tick`; the `hire` event's `hire.manager`; refused: `ui.refuse` |
 | | `crew-up`, `crew-upg` | `crew.build` (from the event) |
 | | `crew-client` | `crew.client` |
 | | `crew-pause` | `ui.toggle` |
-| | `crew-rel` | `ui.ask` (danger), then `cash.in` s |
+| | `crew-rel` (R) | `ui.tick`; `ui.ask` (danger) when the sheet opens (the in-flight warning plays `ui.nudge`); then `cash.in` s |
 | Bank | `bank-pct`, `bank-amt` | `ui.slider` |
-| | `bank-draw`, `bank-repay` | `bank.draw`, `bank.repay` (from the events) |
+| | `bank-draw`, `bank-repay` | `bank.draw`, `bank.repay` (from the events; `bank-repay` records `data-f` at the click) |
 | | `bank-apipe`, `bank-logf` | `ui.select` |
 | | `bank-audit` | `audit.result` (from the event) |
-| | `bank-exit` | `ui.ask`; then `run.end` (start) |
+| | `bank-exit` (R) | `ui.tick`; `ui.ask` when the sheet opens (a bad toast plays `ui.refuse`); then `run.end` (start) |
 | | `bank-ledger` | `ui.toggle` |
 | | `bank-csv` | `ui.ok` |
 | Travel | `travel-tab`, `travel-pick` | `ui.select` |
-| | `travel-go` | `zone.enter` |
+| | `travel-go` (R) | `ui.tick`; `zone.enter` from the `ui:'zone'` event (a locked district: the toast's `ui.nudge`) |
 | | `travel-ship` | `ship.depart` (from the event) |
 | | `travel-clear` | `ui.crate` (clear) |
 | | `travel-codex`, `travel-stock` | `ui.drawer-open` |
@@ -510,25 +685,27 @@ Each `data-act`, `data-change` and `data-deal` in the app maps to an existing so
 | | `codex-replay` | `ui.press` |
 | | `codex-search` | silent (typing) |
 | Quests | `quests-spend` | `skill.up` (from the event) |
-| | `quests-go` | `zone.enter` |
+| | `quests-go` (R) | `ui.tick`; `zone.enter` from the `ui:'zone'` event |
 | | `quests-done`, `quests-ach-all` | `ui.toggle` |
 | | `quests-ach`, `quests-jump` | `ui.select` |
-| Deal Room | `quick-stage`, `quick-all` | `deal.quick` |
-| | `next`, `finish`, `pitch-go`, `read-done`, `careful`, `Continue` | `ui.press`; a finished stage plays `deal.stage-done` |
-| | `pass`, `walk` (before the first round), Leave, Close | `ui.dialog-close` |
-| | `probe` | `read.probe` (look, serial, power, papers, expert) |
+| Deal Room | `quick-stage`, `quick-all` | `deal.quick` (`what:'quick'`, emitted by the act, so Quick buy's direct call is heard too) |
+| | `next`, `finish`, `pitch-go`, `read-done`, `careful`, `Continue` | `ui.press`; a finished stage plays `deal.stage-done` (`what:'stage'`; not under Quick) |
+| | `pass`, `walk` (before the first round) | `deal.result` (tone info, from `result()`): they run `walkAway()` and `result()` and the sheet stays open on a card, so nothing closes. Leave and Close: `ui.dialog-close` |
+| | `probe` | `read.probe` (look, serial, power, papers, expert); the meter crossing 60%: `read.suspect` |
 | | `angle` | `pitch.angle` (that angle; a pick rises, a drop falls) |
 | | `verify` | `deal.verify` |
 | | `anchor` | `haggle.anchor` (high, fair, low) |
-| | `hold`, `concede`, `split` | `haggle.move` |
+| | `hold`, `concede`, `split` | `haggle.move` (a single 40 ms tap when `haggle.tell` follows within 400 ms) |
 | | `leverage` | `haggle.leverage` |
 | | `accept`, `walk` (in a round) | `haggle.close` |
-| | `bid`, `drop` | `bid.raise`, `bid.drop` |
+| | `bid`, `drop` | `bid.raise`, `bid.drop`; a rival's move: `bid.rival`; the end: `bid.hammer` |
 | | `stop` (and Space, Enter) | `repair.stop` by precision |
-| | the Assist checkbox | `ui.toggle` |
-| | the dial slider | `ui.slider` (and the dial tone, 4.5) |
-| | a new "stance" line (far, closer, close) | `haggle.tell` |
-| | the stage's result | `deal.result` (skipped after a sale) |
+| | the Assist checkbox (`data-change-deal`) | `ui.toggle` |
+| | the dial slider (`data-deal-input`) | `ui.slider`, silent while the dial tone is on (4.5) |
+| | the Sound toggle in the room's header (added, 8.5) | `ui.toggle` |
+| | a new stance line; a fit callout | `haggle.tell`; `pitch.fit` |
+| | the number counting up | `ui.count-up` (25 XP or more) |
+| | the stage's result | `deal.result` (skipped after any game-bus sound of tier medium or above in the last 1500 ms) |
 | Academy | `ac-start`, `ac-continue`, `ac-why-next`, `ac-teach-next`, `ac-reward-next` | `ui.press` |
 | | the coach card moves on | `acad.step` (step index) |
 | | `ac-pick` | `acad.teach` right or wrong (`result.correct`) |
@@ -538,65 +715,80 @@ Each `data-act`, `data-change` and `data-deal` in the app maps to an existing so
 | | `ac-restart` | `ui.tick` |
 | | the goal reached; the reward sheet; the last lesson | `acad.win` goal; `acad.win` reward; `acad.graduate` |
 | | the coach's hint after 20 s; a lesson that cannot be finished | `ui.nudge`; `ui.refuse` |
-| Draft | a Background card, `drop`, `clear` | `draft.pick` (slot 1, slot 2, drop; the second pick plays `complete`) |
+| Draft | a Background card by click, or Enter on it (`keydown` on `.dr-in`), `drop`, `clear` | `draft.pick` (slot 1, slot 2, drop; the second pick plays `complete`) |
 | | `spec` (specialty) | `ui.select` |
 | | `reroll` | `ui.tick` three times in a row, 50 ms apart (a rattle) |
 | | `back` | `ui.dialog-close` |
-| | Begin | `draft.begin`; with fewer than two Backgrounds: `ui.refuse` |
-| Title | Play solo, Resume, Academy, Join, Create a room, Reopen | `ui.press` (the title is otherwise silent) |
+| | Begin (a `submit`) | `draft.begin`; with fewer than two Backgrounds: `ui.refuse` |
+| Title | Play solo, Resume, Academy, Join, Create a room, Reopen, Take the room back | `ui.press` (the title is otherwise silent) |
 | | Display and sound, the recovery-code disclosure | `ui.dialog-open`, `ui.toggle` |
 | Instructor | Start simulation, Deploy, Inject Credit Crunch, Rewind | `inst.cue` start, deploy, deploy, rewind |
 | | pause, speeds, the pace preset | `clock` |
-| | sliders (friction, audit, herd, demo) | `ui.slider` |
+| | sliders (friction, audit, classmates, demo students) | `ui.slider` |
+| | the Scenario and When selects (`evsel`, `evwhen`) | `ui.select` |
 | | checkboxes (algorithmic events, replace) | `ui.toggle` |
+| | the EEI floor (`floor`, typed) | silent |
 | | Copy student link, gradebook CSV | `ui.ok` |
 | | the district select, the Background filter | `ui.select` |
+| | Close room | `ui.dialog-close` |
 | Debrief | download workbook | `ui.ok` |
+| | print; back | `ui.tick`; `ui.dialog-close` |
 | | the reflection textarea | silent (typing) |
-| World | the pointer moves onto a thing | `world.hover` (that kind) |
-| | click a buyer or a lot | `deal.open` |
+| World | the pointer rests (120 ms) on a thing | `world.hover` (one tick, whatever the thing) |
+| | click a buyer or a lot | `ui.tick`, then `deal.open` when the room opens |
 | | click one of your crates | `ui.crate` |
 | | click a pipeline building, a board, the bank, the depot, the exchange | `ui.drawer-open` (crew, market, bank, travel) |
-| | click a locked gate, plot, board or district | `world.locked` |
+| | click a locked gate, plot, board or district; the bank before milestone 1; the audit office before milestone 2 | `world.locked`, from the outcome of `activate` |
 | | click a district you can enter | `zone.enter` |
-| | click the ground (the player walks) | `world.step`, every 0.3 s while walking |
+| | click the ground (the player walks) | `world.step`, while walking |
 | | click a truck | `ui.tick` (the toast says it is on its way) |
+
+(R) can refuse: the click plays `ui.tick`, the sound in the row comes from the outcome.
 
 ### 4.4 Walking, arriving and the world's own moments
 
-- The player's footsteps (`world.step`) play only while `player.moving` and the player is on screen, at 3 a second, and stop the moment the path ends.
+- The player's footsteps (`world.step`) are called from `World.footstep` (8.5), which already runs only while the character walks and the world is drawing walking (never in Calm, where the character jumps to the target, and never for NPCs). The audio side adds its own limits: one step every 0.36 s (+-60 ms), at most 8 in a row for one walk and then silent for the rest of it, none while a dialog is open (the world keeps running under a modal sheet).
 - Buyers walking in and out, cars on the roads, crates and buildings landing, the dust and the coins thrown up by a sale: all visual. Their sounds are the events that caused them (a sale, a hire, a cycle) and the ambient bed. Nothing walks with a footstep except you.
 - `world.startReveal(z)` (a district's fog lifting) has the same cause as the `zone` event and plays no sound of its own.
 - Night falling, rain and a surge change the ambient (section 6) and play no one-shot.
+- Hover: a sweep over a crowded district is three ticks a second at most, and none the instant after a click, because a pointer crossing nine things used to play a random melody before it reached the one the player wanted.
 
 ### 4.5 The one continuous voice: the repair dial tone
 
 `repair.dial` is the only sound that is not a recipe; it follows a value, and it makes the timing game playable by ear.
 
-- **When**: the Fix stage is on screen with its dial (or its slider in reduced motion) and the setting "Repair dial tone" is on (default on). One `requestAnimationFrame` loop runs only then: it reads the marker's inline `left` and the zone's inline `left` and `width` from the DOM (no layout read), and stops with the stage.
+- **Default off** (revision 2; it was on). It is a continuous sound that would otherwise start by itself with the Fix stage and run until Stop, with no control for it inside the room. It is switched on in the Sound section (7.2), and the first Fix stage of a run shows one info toast: "A tone that follows the marker is available in Display and sound."
+- **When**: the Fix stage is on screen with its dial (or its slider in reduced motion) and the setting "Repair dial tone" is on. One `requestAnimationFrame` loop runs only then: it reads the marker's inline `left` and the zone's inline `left` and `width` from the DOM (no layout read), and stops with the stage.
 - **Pitch**: the marker's position 0 to 1 is quantized to the 11 notes D4 E4 F#4 A4 B4 D5 E5 F#5 A5 B5 D6, with a glide of 35 ms between them. Left is low, right is high.
 - **In the green zone** the tone gains an octave partial and a glass shimmer (A5) and rises 3 dB, so "now" is audible. Outside it is a plain sine.
 - **Level**: 6 dB under a tiny sound (-36 dB active level). **Stop**: a 15 ms release when Stop is pressed, and then `repair.stop` plays by precision.
-- The slider variant (reduced motion) uses the same tone, so a keyboard player hears where the slider is before pressing Stop.
+- **Controls inside the room** (WCAG 1.4.2): the Deal Room's header has a Sound toggle (`aria-pressed`, "Sound"), and key M mutes whatever a dialog is open (7.3). The tone also stops on Mute, on the tab being hidden and at the end of the stage. It is protected from voice stealing and is not one of the 12 (3.3).
+- The slider variant (reduced motion) uses the same tone, so a keyboard player hears where the slider is before pressing Stop; `ui.slider` is silent on that slider while the tone is on (the tone is its feedback).
+- Classroom turns it off (7.1).
 
 ## 5. What is deliberately silent, and why
 
 | Silent | Why |
 |---|---|
 | Typing in any field: the alias, the search box, the reflection, the Exchange amounts | The player is writing; a key click is noise and tells a screen reader nothing |
-| Hovering the dock, the HUD, drawer cards and any button | Hover is not intent. Only the world's hover (a tooltip with real information) has a tick |
+| Hovering the dock, the HUD, drawer cards and any button | Hover is not intent. Only the world's hover (a tooltip with real information) has a tick, and it says only that something is there |
 | Keyboard focus moving | The screen reader speaks it |
 | Scrolling a drawer, the Codex, the ledger | Nothing happened |
 | The hour passing, the progress bars growing, the clock ticking | A tick every 7 s would make a metronome of the game |
-| Lots appearing and leaving, buyers leaving, and buyers arriving at 16x and 64x (at slow speeds an arrival is one door bell at most every 6 s) | Frequent, low in value, and visible as a bubble and a badge |
+| Lots appearing and leaving, buyers leaving, and buyers arriving at 16x and 64x, in any dialog, with the Market drawer open, in an Academy lesson or in Classroom (otherwise one door bell at most every 30 s) | Frequent, low in value, and visible as a bubble and a badge; 30 laptops at 2.3 arrivals a minute is more than a chime a second in a room |
 | Info-level news, ledger rows, the Codex being read | The ticker carries them |
 | Buyers' and cars' footsteps, crates landing, dust | They are the ambient's job |
 | `haggle` and `auction` events | The sale or purchase they led to speaks |
-| `inspect` with `fake` and no `caught`; any `score` | It would tell the player what they missed |
-| `buy.fake`, an unverified buyer's `scam` flag, a lot's `truth`, rival limits, haggle reserve, `surplus` before the reveal | Hidden information (principle 6, section 1) |
+| Every `inspect` event: `caught`, `fake`, `score`, `repeat` | `caught` is the lot's truth AND the belief, and it arrives when the deal finishes; sounding it said "it was a fake" after a Pass and "it was genuine" by silence. The only suspicion cue is the visible meter's (`read.suspect`) |
+| `buy.fake`, an unverified buyer's `scam` flag, a lot's `truth`, rival limits, haggle reserve, `surplus` before the reveal | Hidden information (the rule of the game, section 1) |
 | A `streak` of 1 | One win is not a streak |
 | Every `announce()` | It is for the screen reader. Sound adds to the announcement and never replaces it |
-| `day`, `cycle`, `buyer.arrive` and ambient one-shots at 16x and 64x | They would play at the tick rate |
+| `day`, `cycle`, `buyer.arrive`, `buyer.urgent`, the managers' standing coin and ambient one-shots at 16x and 64x | They would play at the tick rate |
+| Clock sounds when Clock sounds is off or in Classroom: a buyer arriving, a new day, a manager's coin, freight arriving, cash settling, a mentor's tip | A room of laptops is not a lesson (7.1) |
+| Rewards beyond the budget (a second fanfare inside 10 s), daily bounties from 4x, common achievements and Codex pages from 16x | Rare big moments are the loudest; the toast and the Codex keep them (3.4.4) |
+| Pretend rewards, levels and the ambient bed in an Academy lesson | The lesson is a rehearsal whose XP and levels are hidden and saved nowhere |
+| A hover on a locked thing | Hover is not a "no"; the refusal comes when it is clicked |
+| Footsteps after the eighth in a walk, and any step in Calm | A metronome on a thump; in Calm the player jumps |
 | The title screen before the first gesture, and any screen until the player has clicked | Autoplay rules, and it is polite |
 | The instructor dashboard's game sounds | A lecture hall with a projector; the instructor's ceremonies (`inst.cue`) are the only game sounds and can be switched off |
 
@@ -657,25 +849,26 @@ Sparse sounds on top of the bed (birds, a buoy, a ship horn, a phone, a departur
 | `amb.clank` | scrap, industrial | 14 to 40 | distant metal tap: bank D4 with partials 3 and 5, lowpass 3 kHz | 210 | 395 |
 | `amb.bike-bell` | market, campus | 20 to 60 | two bright dings A6 | 380 | 3021 |
 | `amb.chirp` | campus, realty, farm (day) | 8 to 25 | three short bird chirps gliding D6 to A6 to F#6 with a fast vibrato | 220 | 1509 |
-| `amb.door-bell` | pawn, realty, estate | 25 to 80 | the shop bell D6 then A5, far and soft (lowpass 3 kHz) | 330 | 1709 |
+| `amb.door-bell` | pawn, realty, estate | 25 to 80 | **a single unpitched mechanical bell**, far and soft: a lowpassed (2 kHz) strike with a short ring, no D6 and A5 (rev 1: the two notes, voice and spacing of `buyer.arrive`) | to be measured | to be measured |
 | `amb.gull` | harbor (day) | 12 to 40 | a gull cry: A5 up to D6 and back over 400 ms with 6 Hz vibrato | 180 | 1627 |
 | `amb.buoy` | harbor | 15 to 45 | a slow buoy bell A3, long decay | 870 | 389 |
-| `amb.horn` | harbor | 60 to 140 | a far ship horn D2 and D3, 1.6 s, lowpassed | 1340 | 265 |
+| `amb.horn` | harbor | 60 to 140 | a far ship horn **E2 and B2** (a fifth) with an air layer, 1.6 s, lowpassed (rev 1: D2 and D3, the freight and alarm horn of `ship.depart`, `alert.advance` 3 and `alert.margin-call`) | to be measured | to be measured |
 | `amb.steam` | industrial, auto | 10 to 35 | a steam burst: noise above 2.5 kHz, 450 ms | 240 | 4279 |
 | `amb.blip` | tech | 10 to 30 | three quick sine blips D6 A6 F#6 | 180 | 1517 |
 | `amb.windchime` | farm, estate, creative | 12 to 40 | three or four glass notes from D6 E6 F#6 A6 B6, irregularly spaced, 1.2 s tails | 1450 | 1918 |
 | `amb.shutter` | creative | 20 to 60 | a camera shutter: two ticks 60 ms apart | 80 | 6075 |
-| `amb.phone` | corporate, finance | 25 to 70 | a distant two-tone ring A5 F#5 x4, lowpass 2.5 kHz | 390 | 818 |
+| `amb.phone` | corporate, finance | 25 to 70 | a distant two-tone ring **A5 and D5, rising,** x4, lowpass 2.5 kHz (rev 1: A5 and F#5, the warning pair an octave up) | to be measured | to be measured |
 | `amb.flap` | exchange, finance | 12 to 35 | a departures board: fourteen ticks 25 ms apart, fading | 340 | 5878 |
 | `amb.hammer` | realty, auto | 15 to 50 | three far knocks, 400 ms apart | 840 | 648 |
 | `amb.cricket` | any, at night | 6 to 18 | a burst of cricket chirps: 4.3 kHz noise band pulsing at 30 Hz, three bursts | 330 | 5721 |
 | `amb.thunder` | any, in a credit crunch | 40 to 90 | a rumble: brown noise below 160 Hz swelling over 400 ms and fading over 2 s | 1340 | 172 |
-| `amb.chime` | estate, campus | 30 to 90 | a far tower chime: glass D4 A4 | 1090 | 419 |
+| `amb.chime` | estate, campus | 30 to 90 | a far tower chime: **a single E4 or B4 with a long lowpassed tail** (rev 1: glass D4 and A4, the notes and the instrument of `day.turn`) | to be measured | to be measured |
 | `amb.pluck` | creative | 20 to 60 | a soft guitar-like pluck on a pentatonic note, fast decay | 270 | 351 |
 
-- **Scheduling.** One `setTimeout` chain, never an interval: the next one-shot is chosen from those allowed for the district, the time of day and the weather, at a random delay inside its "every" window (stretched by the speed gating of 3.4), at a random pan within 0.5, with a minimum of 4 s between any two. Idle and ambient-off cost nothing: no timer exists.
+- **Scheduling.** One `setTimeout` chain, never an interval, holding a due time for each one-shot allowed for the district, the time of day and the weather (each inside its own "every" window, stretched by the speed gating of 3.4.5) and sleeping until the earliest. Read this way the windows of the table give 3.0 to 6.6 a minute in ten beds (the other six 0 to 2.6, `metro` having no day one-shot) and 5.0 to 11.6 at night, computed from the table; read as a single chain that draws one delay at a time they would give 1.1 to 3.0. Revision 2 makes the rate a rule and not a consequence of the table: **at most 3 one-shots a minute overall**; a minimum of 4 s between any two; **none within 1.5 s after a game sound of tier medium or above, none within 6 s after a moment (3.4.7), none while a dialog or the Deal Room is open or an Academy lesson is on**; a random pan within 0.5. Idle and ambient-off cost nothing: no timer exists.
+- **Ambient is not a cue.** No ambient one-shot shares its note sequence, its voice or its spacing with a sound of the map, because a player who hears a door bell will look for a buyer and one who hears a chime will look for a new day. Revision 1 had four that did (`amb.door-bell`, `amb.chime`, `amb.phone` and `amb.horn`, revoiced in the table above: the door bell was `buyer.arrive`, the chime `day.turn`, the phone the warning pair an octave up and the horn the freight and alarm horn), and `audit.mjs` will compare every one-shot's pitch-class sequence and voice with every id of the map and fail on a match (10.1, 11.4). The 6 kHz limit of the sound map does not hold here: `amb.shutter` (6075 Hz) and `amb.flap` (5878 Hz) are ticks at -32 dB, and nine beds carry a noise layer at 4.5 kHz or higher, four of them at 6 to 9 kHz (`market`, `auto`, `corporate`, `tech`), at -28 dB; the ambient limits are the beds' own (centroid under 5 kHz) and 6.5 kHz for a one-shot.
 - **Crossfade.** When the district changes, the new bed fades in over 3 s while the old one fades out over 2 s and then stops its sources. At most two beds exist at once; a bed with every modifier is at most 10 layers (3 to 6 looped noise sources, the rest sine drones), each with one biquad and one LFO oscillator at most.
-- **State.** The wiring calls `audio.ambient(state)` with `{ zone, theme, tier, night, rain, surge, tariff, paused, speed, dialog, over }` from the existing render path at most once a second, and only when something in it changed (a signature string). The call is a no-op while ambient is off or the context is not running.
+- **State.** The wiring calls `audio.ambient(state)` with `{ zone, theme, tier, night, rain, surge, tariff, paused, speed, dialog, over, sandbox }` from the existing render path at most once a second, and only when something in it changed (a signature string). `audio.ambient` **always stores the latest state** and plays it when it can: it is applied at `unlock()`, on `resume`, in `setAmbient(true)` and on every `state` change, so a bed that was asked for before the first gesture (a reload with ambience already on) or switched on in Settings starts at once and not at the next change of night, district or weather. Only the *playing* is a no-op while ambient is off, the context is locked or an Academy lesson is on (`sandbox`); the remembering never is.
 - **Cost.** To be measured on a 2019 laptop in Chrome's Task Manager (test plan 10.5): the target is under 2% of one core with a bed and the one-shot chain running, and exactly zero timers and zero frame callbacks with the bed off.
 
 ## 7. Settings and controls
@@ -693,38 +886,43 @@ settings.audio = {
   game: true,        // the game and the world: sales, coins, the Deal Room's moves, alerts, progress
   ambient: false,    // the bed. Off until the player turns it on (it is unsolicited)
   ambientLevel: 70,  // 0 to 100, gain = (v / 100) ** 2 on top of the ambient bus
-  dial: true,        // the repair dial tone (4.5)
-  quiet: false,      // the Classroom preset: game sounds 6 dB lower, ambient forced off
-  touched: false,    // the player has changed a sound setting by hand (stops the automatic Classroom preset)
+  dial: false,       // the repair dial tone (4.5). Off until the player turns it on (rev 2; it was on)
+  clockSounds: true, // buyers arriving, the new day, managers' coins, freight arriving, cash settling, a mentor's tip (3.4.5). Off in Classroom
+  quiet: false,      // the Classroom rule (3.2): tiny game sounds off, medium and loud 10 dB lower, interface 6 dB lower, ambient, dial and clock sounds off
+  touched: false,    // the player has changed a sound setting by hand (stops the automatic Classroom preset), or a saved "sound off" was migrated
   hinted: false,     // the one-time "sound is on" note has been shown
 };
 ```
 
+Nothing has shipped, so `v` stays 1.
+
 | Key | Default | Range | Read by |
 |---|---|---|---|
 | `master` | 70 | 0 to 100 | master gain |
-| `mute` | false | boolean | master gain, the HUD speaker button, key M |
+| `mute` | false | boolean | master gain, the HUD speaker button, the Deal Room's Sound toggle, key M |
 | `ui`, `game` | true | boolean | `audio.play` drops a request whose bus is off |
 | `ambient` | false | boolean | the ambient controller (nothing is created while it is false) |
 | `ambientLevel` | 70 | 0 to 100 | the ambient bus |
-| `dial` | true | boolean | the dial tone loop |
+| `dial` | false | boolean | the dial tone loop |
+| `clockSounds` | true | boolean | the clock gates of 3.4.5 |
+| `quiet` | false | boolean | the Classroom rule: bus trims, tiny game sounds, and the three switches above forced off while it is on |
 
 **Migration** (`migrateAudio(settings, search)`, pure, tested):
 1. `settings.audio` is an object with `v === 1`: every field is clamped (numbers to their range and step, booleans only when `=== true`), unknown keys are dropped.
-2. Otherwise start from the defaults. If the old `settings.sound === false`, set `mute: true` (a player who turned sound off stays silent).
-3. With no saved `audio` and a `?sound=` in the address: `off` mutes, `quiet` applies the Classroom preset, `full` keeps the defaults. An instructor can put it in the student link.
+2. Otherwise start from the defaults. If the old `settings.sound === false`, set `mute: true` **and `touched: true`**: a player who turned sound off stays silent, and joining a room can never change that.
+3. With a `?sound=` in the address and `touched` false: `off` mutes, `quiet` applies Classroom, `full` keeps the defaults, and `touched` becomes true. It is read **before the first save**: `main.js` calls `applySettings()` at boot, and that saves the defaults, which used to make the link work once per browser. An instructor can put it in the student link.
 4. `applySettings()` writes `settings.sound = !settings.audio.mute` so old readers see the right thing, then saves and calls `audio.sync(settings.audio)`.
 
-**Presets** (derived, never stored; the select shows "Custom" when nothing matches):
+**Presets** (derived, never stored; the select shows "Custom" when nothing matches). A preset never **un**mutes: Full, Classroom and Interface only leave `mute` as it is; Off sets it.
 
-| Preset | master | ui | game | ambient | quiet |
-|---|---|---|---|---|---|
-| Full | 70 | on | on | off | off |
-| Classroom | 40 | on | on, 6 dB lower | off | on |
-| Interface only | 70 | on | off | off | off |
-| Off | 70 | n/a | n/a | off | `mute` on |
+| Preset | master | ui | game | ambient | dial | clock sounds | quiet |
+|---|---|---|---|---|---|---|---|
+| Full | 70 | on | on | off | off | on | off |
+| Classroom | 70 | on, 6 dB lower | medium and loud only, 10 dB lower | off | off | off | on |
+| Interface only | 70 | on | off | off | off | on | off |
+| Off | 70 | n/a | n/a | off | off | n/a | `mute` on |
 
-**Joining a room.** A student who joins a classroom and has never touched a sound setting (`touched` is false) gets the Classroom preset, with one toast: "Sound is set to Classroom (quieter) in this room. You can change it in Display and sound." Thirty laptops each saying "cha-ching" is not a lesson. The instructor dashboard plays only its own `inst.cue` sounds.
+**Joining a room.** A student who joins a classroom and has never touched a sound setting (`touched` is false) gets the Classroom rule, with one toast: "Sound is set to Classroom (quieter) in this room. You can change it in Display and sound." The previous values are kept (`kv` key `audioBeforeRoom`) and **put back when the student leaves the room**, unless a sound setting was changed meanwhile. While `quiet` is on the Ambient, Repair dial tone and Clock sounds controls are disabled with the reason "Off in Classroom". Thirty laptops each saying "cha-ching" is not a lesson. The instructor dashboard plays only its own `inst.cue` sounds.
 
 ### 7.2 The Sound section of "Display and sound"
 
@@ -734,43 +932,48 @@ The existing dialog (`settingsDialog`, titled "Accessibility and sound") keeps i
 |---|---|---|---|
 | Preset | `select` | Sound preset | Full, Classroom, Interface only, Off, Custom; choosing one sets the fields below and plays `ui.ok` |
 | Volume | `input[type=range]` 0 to 100 step 5 | Volume | `aria-valuetext="70 percent"`; plays a `ui.tick` (full) on release so you hear the level; `ui.slider` ticks while dragging |
-| Mute | checkbox | Mute all sound | the HUD speaker button and key M stay in step |
+| Mute | checkbox | Mute all sound | the HUD speaker button, the Deal Room's toggle and key M stay in step |
 | Interface | checkbox | Interface sounds (clicks, panels, dialogs) | |
 | Game | checkbox | Game sounds (sales, coins, alerts, the Deal Room) | |
-| Ambient | checkbox | Background ambience | hint under it: "Off by default. A quiet bed for each district." |
+| Clock sounds | checkbox | Clock sounds (a buyer arriving, a new day, your managers' coins) | disabled in Classroom |
+| Ambient | checkbox | Background ambience | hint under it: "Off by default. A quiet bed for each district." Disabled in Classroom |
 | Ambient level | range | Ambience level | disabled while ambient is off |
-| Dial | checkbox | Repair dial tone | hint: "Hear where the marker is while you time a repair." |
-| Sample | button | Play a sample | plays `ui.tick`, `cash.in` m and `alert.advance` 1 in turn, 600 ms apart |
+| Dial | checkbox | Repair dial tone | hint: "Hear where the marker is while you time a repair. Off by default." Disabled in Classroom |
+| Sample | button | Play a sample | plays `ui.tick`, `cash.in` m and `alert.advance` 1 in turn, 600 ms apart, and announces "Played a sample." |
 | Status | text, `role="status"` | | "Sound is on. Your browser started audio after your first click." / "Sound is off." / "This browser cannot play sound; everything in the game still works." (and all controls disabled) |
 
-Under the section: "Sound is made in your browser. Nothing is downloaded and nothing is recorded." The wording is plain and warm like the rest of the dialog; every setting is stored only in this browser, like the others.
+Under the section: "Sound is made in your browser. Nothing is downloaded and nothing is recorded. If you hear nothing, check your device's volume and its silent switch: the browser can be on while the device is silent." The wording is plain and warm like the rest of the dialog; every setting is stored only in this browser, like the others.
 
 ### 7.3 The speaker button and the M key
 
-- A new `ibtn` in the HUD's `.ctl` group (`js/ui/hud.js`), before Help: a speaker glyph (`aria-hidden`), `aria-pressed` for "muted", accessible name "Mute sound" / "Unmute sound". It toggles `mute`. It is hidden if Web Audio is unsupported.
-- Key **M** toggles mute whenever focus is not in a field and no modifier is held (next to the 1 to 7 shortcuts in `shell.js`'s keydown). The Help dialog gets one more line: "Press M to mute or unmute sound."
-- A mute is never silent about itself: muting plays nothing (it is muted), unmuting plays `ui.ok`; the button's state change is announced by its name.
+- A new `ibtn` in the HUD's `.ctl` group (`js/ui/hud.js`), before Help: a speaker glyph (`aria-hidden`), `data-fid="hud-sound"` (the HUD is re-rendered with `setHTML`, which restores focus only to elements that have one), a **stable** accessible name "Sound" and `aria-pressed` (pressed means sound is on), so a screen reader says "Sound, toggle button, pressed" and never a double negative. It toggles `mute`. It is hidden if Web Audio is unsupported.
+- The Deal Room's header has the same toggle (`data-fid="deal-sound"`), because the HUD is inert behind a modal sheet and the room is where a continuous tone can run.
+- Key **M** toggles mute whenever focus is not in a field and no modifier is held. It is handled by `initAudio()`'s own `keydown` listener, **not** in the shell's, whose first line returns while any dialog is open, so it works in every dialog, the Deal Room included. The Help dialog gets one more line: "Press M to mute or unmute sound."
+- A mute is never silent about itself: every change is announced politely ("Sound off." / "Sound on."), muting plays nothing (it is muted) and unmuting plays `ui.ok`.
 
 ### 7.4 The first minute
 
 - The title screen is silent and creates no audio context (browsers forbid it and some log a warning).
-- The first `pointerdown`, `keydown` or `touchend` anywhere creates or resumes the context (7.5); that same press plays its tick, which is why a first click can sound a few milliseconds late.
+- The first activating input anywhere (`pointerdown`, `touchend`, or a `keydown` that is not Escape or a bare modifier: Escape is not an activation) creates or resumes the context (7.5). That same press plays its tick as soon as `resume()` resolves, a few milliseconds late; a context that is `resuming` counts as playable, so the tick is not dropped.
 - When the first game screen mounts with sound on and `hinted` false, one info toast: "Sound effects are on. Press M or the speaker button to mute them." (read out by the live region), then `hinted: true`. It is not shown in an Academy lesson's sandbox or in a room.
 
 ### 7.5 Lifecycle, autoplay and failure
 
-- **Create on a gesture.** `audio.unlock()` is called by a capture listener on `document` for `pointerdown`, `keydown` and `touchend`; it creates the `AudioContext` the first time (with `latencyHint: 'interactive'`; `webkitAudioContext` as a fallback) and calls `resume()` otherwise. No context exists before that, so there is nothing to warn about. A play request before it is dropped, not queued.
+- **Two layers.** `initAudio()` lives for the page: it is called once from `initDialog()` in `common.js`, and installs the unlock listener, the control table's listeners (`click`, `change`, `input`, `submit`, `keydown`), the `#dlg` and `#toasts` observers, key M, the settings sync and the visibility handling. `wireGame(ctx)` lives for one mounted game (8.3). `main.js` routes the title, the draft, the Academy, the game, the instructor dashboard and the debrief, and only the game and each Academy lesson use `mountGame`; wiring everything there left the Title, Draft, Instructor and Debrief rows of 4.3 without a host, and rebuilt the audio on each of the ten lessons and each return from the debrief.
+- **Create on a gesture.** `audio.unlock()` is called by the capture listener for the activating inputs of 7.4; it creates the `AudioContext` the first time (with `latencyHint: 'interactive'`; `webkitAudioContext` as a fallback) and calls `resume()` otherwise. No context exists before that, so there is nothing to warn about. A play request before it is dropped, not queued. **There is one `AudioContext` for the page's life,** however many times a game is mounted.
 - **Never log.** Every `resume()`, `suspend()` and `start()` is inside a try/catch that swallows rejections silently. A context in `interrupted` (iOS) or `suspended` state is "locked" until the next gesture.
-- **Hidden tab.** `visibilitychange`: hidden suspends the context and stops the ambient timer; visible resumes it (the resume is allowed to fail quietly until the next gesture). No sound is played for events replayed while catching up.
+- **Hidden tab.** `visibilitychange`: hidden calls `stopAll()` with a short fade, then suspends the context and stops the ambient timer (so no half-played voice resumes in the middle on return). Visible resumes it **after** the shell's own `S.tick()` has run (the resume is scheduled with `setTimeout(0)` from the handler, and the catch-up rule of 3.4.5 treats events as catching up until the first tick whose lag is under 600 ms), and the resume is allowed to fail quietly until the next gesture. No sound is played for events replayed while catching up.
 - **Idle.** After 60 s with no voice and no ambient, the context is suspended (the audio hardware sleeps); the next play resumes it (a few ms).
+- **Ambient and the lock.** `audio.ambient(state)` always stores the latest state, whatever the context's state, and the stored state is applied at `unlock()`, on `resume`, in `setAmbient(true)` and on every `state` change (6.4). A reload with ambience already on, or ticking the switch in Settings, starts the bed at once instead of at the next change of night, district or weather.
 - **Missing Web Audio, or a failure anywhere.** `audio.state` is `'unsupported'`; every method returns at once; nothing throws; the settings section says so. A thrown error inside any recipe is caught per play and the voice is dropped.
-- **Cleanup.** `destroy()` stops every voice and disconnects the buses; the shell calls it with the rest of `mountGame`'s teardown. No listener survives the screen.
+- **Cleanup.** `release()` (not `destroy()`) is what an unmounted game calls: it stops every voice, the ambient timer and the dial, and removes `wireGame`'s listeners. The context is closed only on `pagehide`.
 
 ### 7.6 Accessibility notes
 
-- WCAG 2.2 1.4.2 (Audio Control): nothing plays automatically. The only audio that can run longer than 3 seconds without a press is the ambient bed, which is opt-in, has its own switch and volume, and is stopped by Mute or M.
+- WCAG 2.2 1.4.2 (Audio Control): nothing plays automatically. The only audio that can run longer than 3 seconds without a press is the ambient bed and the repair dial tone; **both are opt-in** and have a switch and, in Settings, a volume. Mute and key M stop them everywhere, in every dialog included, and the Deal Room, which is where the tone runs, has a Sound toggle of its own (4.5).
 - 2.3.1 and 2.2.2 are unaffected: no sound is tied to a flash, and nothing blinks to the beat.
-- The system's "reduce motion" does not mute sound (it is a different need); it does keep the repair dial as a slider, whose tone still plays.
+- The system's "reduce motion" does not mute sound (it is a different need); it does keep the repair dial as a slider, whose tone still plays when it is switched on. It also stops `countUp`, so `ui.count-up` does not play (it has nothing to accompany).
+- Every change of the sound state is announced: the mute, the preset and the sample (7.2, 7.3).
 - A player who cannot hear loses nothing: section 9.
 
 ## 8. The engine API
@@ -781,165 +984,188 @@ All new, under `js/audio/`, imported by the shell; none is imported by `js/engin
 
 | File | What |
 |---|---|
-| `js/audio/palette.js` | The key (`hz`, `inKey`), the shared noise buffers, the layer renderer and voice builders (`mar`, `gls`, `bellL`, `coin`, `wood`, `thump`, `paper`, `swoosh`, `stamp`, `brass`, `horn`, `click`, `sparkle`), `moneySize`, the soft-clip curve: lifted from `dev/audio-proto/synth.js` and `sounds.js` |
-| `js/audio/recipes.js` | The sound map as data: `RECIPES[id] = { bus, tier, cd, variants, build }`, with the calibrated trims baked in (Appendix A) |
+| `js/audio/palette.js` | The key (`hz`, `inKey`), the shared noise buffers, the layer renderer and voice builders (`mar`, `gls`, `bellL`, `coin`, `wood`, `thump`, `paper`, `swoosh`, `stamp`, `brass`, `horn`, `click`, `sparkle`), the layer families and their refractory windows (3.3), `moneySize`, the soft-clip curve: lifted from `dev/audio-proto/synth.js` and `sounds.js` |
+| `js/audio/recipes.js` | The sound map as data: `RECIPES[id] = { bus, tier, cd, class, player, rank, variants, build }`, with the calibrated trims baked in (Appendix A) |
 | `js/audio/ambient.js` | `BEDS`, `MODS`, `ONE_SHOTS` and the `Ambient` controller |
-| `js/audio/engine.js` | `createAudio()`: context lifecycle, buses, master chain, voice manager, limiter and queue, settings sync |
-| `js/audio/wire.js` | `wireAudio(ctx)`: the event table (4.1, 4.2) and the control table (4.3) |
+| `js/audio/resolve.js` | The collector and the resolver (merge, ranks, two sentences, reward budget, "also" ticks), the clock gates (speed, hold, catch-up), the state-sound class and the moment queue. Pure functions over a small state object, so a fake clock tests them without a context |
+| `js/audio/engine.js` | `createAudio()`: context lifecycle, buses, master chain, voice manager, rank-aware cooldowns, buckets, settings sync |
+| `js/audio/wire.js` | `initAudio()` (page-wide) and `wireGame(ctx)` (per mounted game): the event table (4.1, 4.2) and the control table (4.3) |
 | `js/audio/settings.js` | `audioDefaults`, `migrateAudio`, `presetOf`, `audioSettingsHTML`, `bindAudioSettings` |
-| `js/audio/index.js` | `export const audio = createAudio(...)`, `export { wireAudio }`, `export const legacySfx` |
+| `js/audio/index.js` | `export const audio = createAudio(...)`, `export { initAudio, wireGame }`, `export const legacySfx` |
 
 ### 8.2 The engine
 
 ```js
 const audio = createAudio({ get: () => settings.audio, now: () => performance.now() });
 
-audio.play(id, opts?)       // -> a voice handle, or null when dropped. opts:
+audio.play(id, opts?)       // the press and world classes, and the resolver's own output: straight to cooldown, bucket, voice.
+                            // -> a voice handle, or null when dropped. opts:
                             //   variant   'm', 'win', ... (default: the id's first)
                             //   params    {n: 3, i: 2, ...} for the families that take a number (ui.crate n, ui.select i, streak n, clock i, bid.raise n, acad.step i, ui.slider v)
                             //   size      's'|'m'|'l'|'xl' shortcut for cash.in and cash.out
+                            //   dull      true: lowpass 3.5 kHz, no register ding (coins of a sale below fair or a herd sale at a loss)
                             //   pan       -1..1 (already scaled to 0.6 by the caller's helper)
                             //   where     'here' (default) | 'elsewhere' (8 dB down, 2.5 kHz lowpass) | 'offscreen' (4 dB down, 3.5 kHz)
                             //   gainDb    extra trim (the accent under a coin layer plays -4)
-                            //   cause     'money' | 'result' | 'toast' | 'alias' | none: the causal group of 3.4
+                            //   player    true when a press or a world activation happened in the last 1500 ms (draws from the player bucket)
+                            //   cause     'money' | 'result' | 'toast' | 'alias' | none: the causal group of 3.4.6
                             //   delay     seconds from now
-audio.playMix([['sale.win', {...}], ['cash.in', {size:'m', gainDb:-4}]])   // sound and coins as one cause, counted once against the buckets
-audio.stop(handle); audio.stopAll()
+audio.request(id, opts?)    // every other class: into the collector (3.4.2), resolved within 24 ms. Same opts, plus
+                            //   meta      the public numbers the rules read: { gain, price, amount, level, tier, rarity, tone, ... }. Never fake, scam, truth or caught
+audio.playMix([['sale.win', {...}], ['cash.in', {size:'m', gainDb:-4}]])   // atomic: sound, coins and streak rung admitted together or not at all, counted once
+audio.stop(handle, fadeMs?); audio.stopAll(fadeMs?)
 
 audio.unlock()              // from a gesture
 audio.state                 // 'unsupported' | 'locked' | 'running' | 'suspended'
-audio.sync(settings.audio)  // apply master, mute, bus switches, ambient, dial, quiet
-audio.setMaster(v); audio.setMute(b); audio.setBus('ui'|'game', on); audio.setAmbient(on); audio.setAmbientLevel(v); audio.setDial(on); audio.applyPreset(name)
-audio.ambient(state)        // 6.4; cheap and idempotent
+audio.sync(settings.audio)  // apply master, mute, bus switches, ambient, dial, clock sounds, quiet
+audio.setMaster(v); audio.setMute(b); audio.setBus('ui'|'game', on); audio.setAmbient(on); audio.setAmbientLevel(v); audio.setDial(on); audio.setClockSounds(on); audio.applyPreset(name)
+audio.hold(on)              // the clock-sound hold of 3.4.5: true while a dialog, the Deal Room or a lesson is open; false plays the one summed cash.in
+audio.countUp(xp)           // the Deal Room and the Academy call it when countUp started at least one number
+audio.ambient(state)        // 6.4; cheap and idempotent; always stores the latest state, applies it when it can
 audio.dial                  // { start(), update(pos, lo, hi), stop() } the repair tone (4.5)
-audio.on(fn)                // 'state' | 'settings' | 'mute' changes, for the HUD button and the dialog
-audio.stats()               // { active, dropped: {cooldown, bucket, cap, bus, locked}, played: {id: n} } for tests and the console
+audio.on(fn)                // 'state' | 'settings' | 'mute' changes, for the HUD button, the Deal Room toggle and the dialog
+audio.stats()               // { active, dropped: {cooldown, bucket, cap, bus, locked, budget, hold, catchup, collector}, played: {id: n}, sentences } for tests and the console
 audio.ids(); audio.variants(id)
-audio.render(id, variant, offlineCtx, opts)   // the same voice into an OfflineAudioContext: the test plan's hook
-audio.destroy()
+audio.render(id, variant, offlineCtx, opts)   // the same voice into an OfflineAudioContext: the test plan's hook. Through the chain it starts at 0.6 s or later (3.7)
+audio.release()             // stops voices, the ambient timer and the dial; the context stays for the page (closed on pagehide)
 ```
 
-`audio.play` does, in order: bus switch then locked check then per-id cooldown then bucket then causal group then moment queue (for the serial list) then voice cap and stealing then build, schedule, connect then ducking then stats. Each stage is a pure function over a small state object so a fake clock can test it.
+A game-class request does, in order: bus switch, locked check, clock gates (speed, hold, catch-up, clock sounds), the collector and the resolver (merge, rank, two sentences, reward budget), per-id cooldown with the rank rule, bucket (charged here, once per `playMix`), causal group, moment slot (with preemption), voice cap and stealing, build, schedule, connect, ducking, stats. A press or world request starts at the cooldown. Each stage is a pure function over a small state object so a fake clock can test it.
 
-### 8.3 `wireAudio(ctx)`
+### 8.3 Wiring: `initAudio()` and `wireGame(ctx)`
 
-The one entry point, called from `mountGame` right after `attachGame()`:
+**`initAudio()`** is called once, from `initDialog()` in `js/ui/common.js`, which `main.js` runs before any screen. It lives for the page, so it covers the title, the draft, the Academy, the instructor dashboard and the debrief as well as the game. It installs:
 
-```js
-// js/ui/shell.js, in mountGame
-ctx.audio = audio;
-const unwire = wireAudio(ctx);        // returns a function that removes everything it installed
-// ... and in destroy(): unwire();
-```
+1. The unlock listener (7.4) and the visibility handling (7.5).
+2. One capture-phase `click`, `change`, `input`, `submit` and `keydown` listener on `document`, looking the control up in the 4.3 table by `data-act`, `data-deal`, `data-wv`, `data-change`, `data-change-deal` and `data-deal-input`, with the element's state as it was before the action, and the class rule of 4.3 (a control that can refuse plays only `ui.tick` at the click).
+3. A `MutationObserver` on `#dlg` (`open`, with the dialog's kind captured when it opens) and one on `#toasts` (added `.toast` nodes only). Both elements exist for the page's life. `audio.hold(true)` while a dialog, the Deal Room or an Academy lesson is open.
+4. Key M (7.3), settings sync, and the dial loop (4.5), started and stopped by the dialog observer.
 
-What it installs, and nothing else:
+**`wireGame(ctx)`** is called from `mountGame` right after `attachGame()`, for each mounted game: the game screen, each Academy lesson's sandbox and each return from the debrief. It returns `unwire`, which `mountGame`'s teardown calls and which calls `audio.release()`. It installs:
 
-1. `ctx.on(fn)` for engine events (4.1) and shell `ui` events.
-2. `S.on(fn)` for session events: `note`, `offer`, `rewound`, `tick` (for ambient state at most once a second and the catch-up detection).
-3. Progress hooks: the shell's `onComplete` and `onCodex` already toast; they call `audio.play` through two lines.
-4. One capture-phase `click` listener, one `change` and one `input` listener on `document`, looking the control up in the 4.3 table by `data-act`, `data-deal`, `data-wv`, `data-change`, with the element's state as it was before the action.
-5. A `MutationObserver` on `#dlg` (`open`, `class`), `#toasts` (children) and `#drawer` (`hidden`).
-6. World hooks (8.5): `hover` and `activate` get the sound before they act.
-7. The dial loop (4.5), started and stopped by the dialog observer.
-8. Wiring is **inside `try`**: a handler that throws logs once and is disabled; the game never breaks for sound.
+1. `ctx.on(fn)` for engine events (4.1) and the shell's `ui` events (4.2), each decided at event time: **catching up** (3.4.5) plays nothing unless a press was made in the last 1500 ms, and **a sandbox** (`ctx.g().sandbox`) silences the sounds of 4.1's last paragraph. Every game-class sound goes through `audio.request`.
+2. `S.on(fn)` for session events: `note`, `offer`, `rewound`, and `tick` (to see that a heartbeat arrived and for the ambient state at most once a second). The catch-up test is made per event, not on `tick`: `tick` is emitted after `advanceTo` returns, when every event of the replay has already played.
+3. Progress hooks: the shell's `onComplete` and `onCodex` already toast; they call `audio.request` through two lines.
+4. A `MutationObserver` on `#drawer` (`hidden`) and the world hooks (8.5): `hover` and `activate` get their sound after the outcome is known, and `World.footstep` and `World.zoomBy` report through `api.step` and `api.zoomed`.
+5. The ambient state call (6.4).
+6. Wiring is **inside `try`**: a handler that throws logs once and is disabled; the game never breaks for sound.
 
 ### 8.4 The legacy names
 
-`common.js` exports `sfx = { kaching, buzz, level, blip, alarm }` and tests substitute `ctx.sfx`. Both stay. The five become thin aliases through the causal groups (so a call site not yet migrated cannot double an event's sound):
+`common.js` exports `sfx = { kaching, buzz, level, blip, alarm }` and tests substitute `ctx.sfx`. Both stay. While `initAudio()` has run **every one of the five is a no-op**, for every call site; they play, as thin aliases, only when no wiring is installed (the Node tests, a page without audio):
 
-| Legacy call | Becomes | Cause |
+| Legacy call | Alias (no wiring only) | Replaced by |
 |---|---|---|
-| `sfx.kaching()` | `cash.in` m | `alias` (dropped if a money sound played in the last 700 ms) |
-| `sfx.buzz()` | `ui.refuse` | `alias` |
-| `sfx.level()` | `quest.complete` | `alias` (dropped if a moment played in the last 1.5 s) |
-| `sfx.blip()` | `ui.ok` | `alias` |
-| `sfx.alarm()` | `alert.advance` level 2 | `alias` (dropped inside its cooldown) |
+| `sfx.kaching()` | `cash.in` m | the event's money sound |
+| `sfx.buzz()` | `ui.refuse` | the refusal's own sound |
+| `sfx.level()` | `quest.complete` | the event's reward sound (and nothing on a hire, an upgrade, a crew level-up, a skill spend or Debt-free, which called it as a flourish and sounded "quest complete" with no quest) |
+| `sfx.blip()` | `ui.ok` | the event's sound (`codex.unlock`, `zone.open`, `ship.depart`, `crew.client`, `bank.draw`, `bank.repay`, the Deal Room's result tone) |
+| `sfx.alarm()` | `alert.advance` level 2 | `alert.advance` from the note |
 
-The 20 call sites that `grep -rn "sfx\." js` finds outside `common.js` are then removed one by one in later changes (each is replaced by the event it already follows, so they are redundant). `ctx.sfx` and `ctx.audio` are both on the drawer context. Code and tests that go through `ctx.audio` always write `ctx.audio?.play?.(...)`, and `tests/helpers/ctx.mjs` gets `audio: new Proxy({}, { get: () => () => {} })` beside its `sfx` stand-in.
+A call site that survives would otherwise double or contradict the real sound: the 19 sites that `grep -rn "sfx[.?]" js` finds outside `common.js` (and the alert queue's `sound:` dispatch) are listed in the test (10.2), each asserting that one cause plays one id. They are then removed one by one in later changes. `ctx.sfx` and `ctx.audio` are both on the drawer context. Code and tests that go through `ctx.audio` always write `ctx.audio?.play?.(...)`, and `tests/helpers/ctx.mjs` gets `audio: new Proxy({}, { get: () => () => {} })` beside its `sfx` stand-in.
 
 ### 8.5 Where the existing code is touched
 
-Small, local and additive. Each line is a call into `ctx.audio` or a constant; none changes behaviour when audio is unsupported.
+Small, local and additive. Each line is a call into `ctx.audio`, a constant or an additive field; none changes behaviour when audio is unsupported.
 
 | File | Change | Lines |
 |---|---|---|
-| `js/ui/common.js` | the sound block (`tone`, `sfx`) becomes the aliases of 8.4; `settings` gains `audio` through `migrateAudio`; `applySettings` mirrors `sound` and calls `audio.sync`; `settingsDialog` gets the Sound section of 7.2 and its Mute select goes. The focus code in `dlg` and `initDialog` is not touched | about 40 |
-| `js/ui/shell.js` | `ctx.audio`; `wireAudio` and `unwire`; `closeDrawer` emits `{type:'ui', ui:'close-drawer', id}`; key M; the legacy `sound:` of the alert queue and the 5 `sfx.*` calls stay until the clean-up | about 12 |
-| `js/ui/hud.js` | the speaker button | 3 |
-| `js/ui/worldview.js` | `hover` calls `ctx.audio?.world?.hover(h)`, `activate` calls `ctx.audio?.world?.pick(h, ground)`. If a change here must be avoided, `wireAudio` wraps `world.api.hover` and `world.api.activate` instead | 2 |
-| `js/engine.js` | optional, additive: a `kind` string in the extras of eleven `note` calls (`scam`, `counterfeit`, `settle`, `freight-arrive`, `customs`, `damage`, `mentor`, `sla`, `overdraft`, `fatigue`, `burnout`), and `reason: 'scam' \| 'counterfeit' \| 'nofit'` on the `pitch` event's rejected cases. Without it the wiring matches the note text and uses `gain: -1` for a scam; a test pins the texts | about 14 |
-| `js/meta/ids.js` | `EVENT_PAYLOAD.pitch` gains `reason` (documentation of the payload) | 1 |
-| `js/ui/academy.js` | `stepChanged`, `win`, `showReward`, `ac-pick`, `ac-reveal` call `audio.play` for `acad.*` (the existing `sfx.level()` in `win` and `showReward` become these) | 6 |
-| `index.html` | none | 0 |
+| `js/ui/common.js` | the sound block (`tone`, `sfx`) becomes the aliases of 8.4; `settings` gains `audio` through `migrateAudio`; `applySettings` mirrors `sound` and calls `audio.sync`; `settingsDialog` gets the Sound section of 7.2 and its Mute select goes; `initDialog()` calls `initAudio()`. The focus code in `dlg` and `initDialog` is not touched | about 45 |
+| `js/ui/shell.js` | `ctx.audio`; `wireGame` and `unwire`; `closeDrawer` emits `{type:'ui', ui:'close-drawer', id}`; the render emits `{type:'ui', ui:'zone', id}` when `U.zone` changes and `{type:'ui', ui:'lead', zone, ids, urgent}` for new buyers after a baseline exists (reseeded silently on mount, district change, rewind and resume); the Progress hooks call `audio.request`; the legacy `sound:` of the alert queue and the `sfx.*` calls stay as no-ops until the clean-up. Key M is not here | about 25 |
+| `js/ui/hud.js` | the speaker button (`data-fid="hud-sound"`, `aria-pressed`) | 3 |
+| `js/ui/worldview.js` | `hover` reports the rested-on thing; `activate` reports its outcome with `ctx.emit({type:'ui', ui:'locked', ...})` when it refuses (the bank before milestone 1, the audit office before milestone 2, a locked plot) and passes `step` and `zoomed` to the world's `api`. If a change here must be avoided, `wireGame` wraps `world.api.hover` and `world.api.activate` instead | about 8 |
+| `js/world/world.js` | `footstep(e, dt)` calls `this.api.step?.()` when `e` is the player, after its own `stepT` check; `zoomBy` and `fit` call `this.api.zoomed?.(kind)` (the wheel and the keys reach them; a call within 150 ms of a camera button's click is ignored, the click table has already played it) | 4 |
+| `js/ui/deal.js` | **additive, and applied after `v2/finish` has merged (11.2):** nine `ctx.emit?.({type:'ui', ui:'deal', what, ...})` lines of 4.2 in `go()`, `after1()`, `result()`, the quick acts and `after()`; the Sound toggle in `sheetHTML`'s header (`btn ghost sm`, `data-fid="deal-sound"`); the room's three `ctx.sfx` calls in `result()` stay as no-ops | about 16 |
+| `js/ui/academy.js` | `stepChanged`, `win`, `showReward`, `ac-pick`, `ac-reveal` call `audio.play` for `acad.*` (the existing `sfx.level()` in `win` and `showReward` become these); `countUp` callers call `audio.countUp` | 8 |
+| `js/engine.js` | optional, additive: a `kind` string in the extras of twelve `note` calls (`scam`, `counterfeit`, `settle` with `amt`, `freight-arrive`, `customs`, `damage`, `mentor`, `sla`, `overdraft`, `fatigue`, `burnout`, and the new `note('bad', 'Your net worth has fallen to zero or below.', {kind:'insolvent'})` beside the `insolvent` event); `reason: 'scam' \| 'counterfeit' \| 'nofit'` on the `pitch` event's rejected cases; `delay` on the `sell-pool` event; `pid` on the manager `cycle` event and `src: 'rent'` on the day tick's. Without them the wiring matches the note text, uses `gain: -1` for a scam, treats a `sell-pool` as immediate and reads rent as a cycle; a test pins the texts | about 22 |
+| `js/session.js` | `kind: 'swap'` on the two "Swap completed" notes | 2 |
+| `js/ui/drawers/crew.js`, `bank.js`, `quests.js`, `stock.js`, `travel.js`, `market.js` | none (their `ctx.sfx` calls are no-ops; `confirmBox`, `openDrawer` and `goToDistrict` are seen through the shell's events) | 0 |
+| `js/meta/ids.js` | `EVENT_PAYLOAD`: `pitch` gains `reason`, `sell-pool` gains `delay`, `cycle` gains `pid` and `src` (documentation of the payload) | 3 |
+| `css/`, `index.html` | none (the new buttons reuse `ibtn` and `btn ghost sm`; the net worth's `.neg` state needs one rule, in whichever sheet already styles `.rs`) | 1 |
 
-**Deliberately not touched**: `js/ui/deal.js` (the Deal Room is read from `[data-deal]` clicks, the dialog's class and the dial's inline styles, so the finishing branch can edit it freely), `js/ui/draft.js`, `js/ui/instructor.js`, `js/ui/drawers/*` (their `ctx.sfx` calls are aliased), `js/main.js`, `css/`, and every test except the one stand-in line. The Deal Room's result card calls `ctx.sfx.kaching/buzz/blip` today; through the aliases and the causal group those become nothing after a sale and `deal.result`-like cues otherwise, until the clean-up moves them.
+**Deliberately not touched**: `js/ui/draft.js` (the wiring listens for `keydown` on `.dr-in` and for `submit`), `js/ui/instructor.js`, `js/ui/debrief.js`, `js/main.js`, and every test except the one stand-in line. The Deal Room used to be on this list so that the finishing branch could edit it freely; the review showed that a room read only from clicks, class names and inline styles cannot say what happened in it, so it now takes nine additive lines, applied after that branch merges.
 
 ## 9. Sound is never the only cue
 
-For every sound, the counterpart is in its row of the map. The audit found **five places** where the sound would be the first or only signal and the visual is weak. Each is closed with a small addition made with the sound (not a dependency of it):
+For every sound, the counterpart is in its row of the map. The audit found **six places** where the sound would be the first or only signal and the visual is weak or, in one case, missing (revision 1 found five and listed a counterpart for `alert.insolvent` that the engine did not have). Each is closed with a small addition made with the sound (not a dependency of it):
 
 | Sound | What exists | Gap | Close it with |
 |---|---|---|---|
 | `buyer.urgent` | A bubble over the buyer; a count on the Market dock button (`aria-label` "N waiting", not live) | Not announced | polite `announce("A buyer needs a <need> now.")`, at most once a minute |
 | `ship.arrive` | The truck disappears; an info note shows only in the ticker (info notes are not toasted) | Not announced | polite `announce(note.text)` |
-| `cash.in` settle | An info note in the ticker | Not announced | polite `announce(note.text)` |
+| `cash.in` settle | An info note in the ticker, one per due item | Not announced, and a burst of them would be read out one by one | polite `announce("N payments settled")`, coalesced |
 | `mentor.tip` | An info note in the ticker, which can be hidden behind a more important note | Easy to miss | an info toast for notes of `kind: mentor` |
 | `swap.offer-in` | A badge on the Market dock and the Invitations list | Not announced | polite `announce("<name> sent you a swap offer.")` |
+| `alert.insolvent` | **Nothing**: the engine emits the bare `insolvent` event (no note, no toast, no ticker line) and net worth has no red state; only the hidden "Rock Bottom" achievement says anything, once | The sound is the only cue after the first time | a bad note of `kind: insolvent` ("Your net worth has fallen to zero or below.") which the shell toasts and announces assertively, and a `.neg` style on the net worth button while `s.insolvent` |
+
+**Announcements share one live region and are queued.** `announce()` clears the region and sets the text 30 ms later, so two in the same tick lose the first (a customs note beside an arrival). The additions above, and the mute and preset announcements of 7, go through one queue that speaks at most one per 700 ms and coalesces repeats, and each has a stated limit: `buyer.urgent` once a minute, `cash.in` settle one line per 700 ms ("N payments settled"), `swap.offer-in` one per offer, `ship.arrive` one per arrival, the mute one per change.
 
 Everything else already has a toast (a note of level good, warn or bad is toasted and read), a dialog, a result card, a changed number or a moved object. The ones worth naming:
 
-- Money: the HUD cash flashes (`.rs.up`, `.rs.down`), the world pops "+$x" over a building, a sale throws coins, and the ledger has the row.
+- Money: the HUD cash flashes (`.rs.up`, `.rs.down`), the world pops "+$x" over a building, a sale throws coins, and the ledger has the row. `bank.draw` ends low although the cash rises; the green flash and the toast are the cue.
 - Haggle and auction: every move says what happened in words ("They are very close", "Rival bid $x", "You are out"), with the event log.
 - Repair: the dial and its green zone are visual; `aria-valuetext` on the slider says where it is. The tone is an addition.
 - Alerts: a dialog with the code and readout; the toast; the ticker.
-- `world.hover`: the tooltip, and the keyboard list of everything in view.
+- `world.hover`: the tooltip, and the keyboard list of everything in view. The sound says only that there is something there.
+- `read.suspect`: the meter itself, which the sound follows.
 - Clock: the button's icon, `aria-pressed`, the speed value.
 - Ambient: nothing in it is information that is not also drawn (rain, night, the district's colour).
 
-The same rule is a test: for each sound id in `RECIPES`, the map names a counterpart, and the five additions above are in the test list (10.2).
+The same rule is a test: for each sound id in `RECIPES`, the map names a counterpart, and the six additions above, with their limits, are in the test list (10.2).
 
 ## 10. Test plan
 
 ### 10.1 Offline render, in headless Chrome (exists today: `dev/audio-proto/`)
 
-`node dev/audio-proto/run.mjs` serves the folder, opens `audition.html` with `scripts/cdp.mjs`, renders every variant twice through an `OfflineAudioContext` (mono, 48 kHz, no master chain, jitter off), computes the numbers below, and calibrates the trims. `node dev/audio-proto/audit.mjs` then audits the data. Thresholds become assertions in `tests/audio-render.test.mjs` when the engine lands (it skips without Chrome, like the other browser tests).
+`node dev/audio-proto/run.mjs` serves the folder, opens `audition.html` with `scripts/cdp.mjs`, renders every variant twice through an `OfflineAudioContext` (mono, 48 kHz, no master chain, jitter off), computes the numbers below, and calibrates the trims. `node dev/audio-proto/audit.mjs` then audits the data. `node dev/audio-proto/chain.mjs` renders every variant through the master chain (sounds started at 0.6 s, 3.7) and reports the tier gaps and each sound's share of energy above 250 Hz; `node dev/audio-proto/events.mjs` plays the heuristic bot with the shell's event order and reports the burst and reward figures of 3.4. Thresholds become assertions in `tests/audio-render.test.mjs` when the engine lands (it skips without Chrome, like the other browser tests).
 
-| Check | Threshold | Today |
+| Check | Threshold | Today (rev 1, measured) |
 |---|---|---|
-| Active level per tier (K-weighted) | tiny -30, medium -24, loud -19, ambient one-shot -32; within 2 dB (loud) | exact after trim; 8 loud held 0 to 1.6 dB under |
-| Single-sound peak before the buses | at most -6 dBFS (loud -5) | tiny -14.1 at the most, medium -6.3, loud -5.0 |
+| Active level per tier (K-weighted) | tiny -30 (plus the duration compensation of 3.2), medium -24, loud **-17**, ambient one-shot -32; within 2 dB (loud) | exact after trim at the rev-1 targets; 8 loud held 0 to 1.6 dB under |
+| Single-sound peak before the buses | at most -6 dBFS (loud **-3**) | tiny -14.1 at the most, medium -6.3, loud -5.0 |
+| **Tier gap through the chain** (new) | medium to loud at least 5 dB at master 100 and at 70, game bus, mean of the variants | 3.7 and 4.3 dB (rev 1 chain); 5.9 and 6.5 with loud +2 dB and the threshold at -16 dB |
 | Length | at most 3.0 s | 2.74 s at the most (`run.end` horizon) |
 | Tail at the declared length | below -50 dBFS (no cut-off click) | 0 failures of 207 |
 | Largest sample-to-sample step | at most 0.25 of full scale (no pops) | 0 failures |
 | DC offset | at most 0.002 | 0.0010 at the most |
 | Not finite | none | none |
-| Spectral centroid | at most 6,000 Hz | 5695 Hz at the most |
+| Spectral centroid | the sound map at most 6,000 Hz; ambient beds under 5 kHz and one-shots at most 6.5 kHz | 5695 Hz at the most in the map; beds 719 to 4,211 Hz; one-shots up to 6,075 Hz (`amb.shutter`) |
 | Every pitch in key; no raw frequency; no out-of-key partial louder than -26 dB | exact | 0 problems |
+| **Mid body** (new; reported by `chain.mjs`, to be held by `audit.mjs`) | every variant of the refusal and loss family (2.2) has at least 40% of its energy above 250 Hz | `chain.mjs` finds 15 under it (2.2) |
+| **Ambient is not a cue** (new; to be added to `audit.mjs`) | no ambient one-shot has a pitch-class sequence, voice or spacing in common with a sound of the map | 4 do (`amb.door-bell`, `amb.chime`, `amb.phone`, `amb.horn`: 6.4) |
 | Direction | 28 sounds rise and 22 fall by at least 1.5 semitones (list in `audit.mjs`) | 0 problems |
 | Brightness | gain brighter than loss in 14 pairs | 0 problems |
 | Size ladders longer step by step | 8 ladders | 0 problems |
 | Distinct | no two ids closer than 1.0 dB RMS in the spectral fingerprint; pairs under 6 dB are allow-listed as families | closest 2.8 dB (`ui.crate#pick1` and `haggle.move#hold`) |
 | Layer balance | no tone or bank layer more than 18 dB under its mix; a noise layer under 26 dB must carry `ghost: true` | 0 tone or bank layers; 42 noise layers to flag (clicks inside coins and showers, the paper in results) |
-| Worst case through the chain | at most -3.0 dBFS at master 1.0 | 12 loudest at once: -4.1 dBFS |
+| Worst case through the chain | at most -3.0 dBFS at master 1.0 | 12 loudest at once: -4.1 dBFS (rev 1 loud level) |
 | Beds | -28.0 dB active level, peak under -11 dBFS, centroid under 5 kHz | all 16 on target; centroids 719 to 4,211 Hz |
 
 ### 10.2 Node tests (no browser, a fake clock and a fake context)
 
-- **Settings.** `migrateAudio`: no saved audio; `sound: false` becomes `mute`; a saved `audio` with junk, strings, out-of-range numbers and unknown keys is clamped; `?sound=` variants; presets round-trip through `presetOf`; `applySettings` keeps `settings.sound` in step.
+- **Settings.** `migrateAudio`: no saved audio; `sound: false` becomes `mute` **and `touched`**; a saved `audio` with junk, strings, out-of-range numbers and unknown keys is clamped; `?sound=` variants, read before the first save and only while `touched` is false; presets round-trip through `presetOf`; a preset never unmutes; joining a room applies Classroom and leaving it restores the earlier values (and does not if a setting changed meanwhile); `applySettings` keeps `settings.sound` in step.
 - **`moneySize`.** The thresholds of 2.4 at $40.99, $41, $1,779, $1,780, $74,999, $75,000; the 20% bump; negative and zero amounts; non-finite input.
-- **Wiring coverage (table-driven from 4.1 and 4.2).** Feed one event for every type in `EVENT_TYPES` and every payload variant in 4.1 into `wireAudio` with a recording `audio` stub; assert the ids and params. A new event type with no row fails the test.
-- **Hidden information (a property test).** Two `buy` events that differ only in `fake` produce identical calls; so do two `inspect` events that differ in `fake` or `score` with `caught: false`; two `auction` events that differ in `surplus`; a `pitch` rejected with and without a scam flag when no `scam` note preceded it.
-- **Gating.** 1,000 requests in one second: no more than 12 voices, per-id cooldowns held, tiny dropped before medium, loud steals instead of being dropped; each speed row of 3.4; merging of `cycle`; the moment queue order and its 3 s expiry; the causal groups (a sale then a result card; a note then a toast; each legacy alias after its event).
+- **Wiring coverage (table-driven from 4.1, 4.2 and 4.3).** Feed one event for every type in `EVENT_TYPES` and every payload variant in 4.1 into `wireGame` with a recording `audio` stub; assert the ids and params. A new event type with no row fails the test. **Every id named in 4.1 to 4.3 exists in `RECIPES`, and every `RECIPES` id is named by at least one trigger** (the check run for the review found `ui.count-up`, `buyer.arrive`, `buyer.urgent`, `pitch.fit` and `bid.rival` named in no wiring row; they have hosts now: 4.2).
+- **Burst resolution.** The three recorded bot transcripts (`events.mjs`) and the hand-made cases: `[level, quest, pitch, streak]` plays the sale mix at t0, the level at t0 + clamp(sale length, 350, 500) ms, the quest as a tick; `[level, level, level]` plays the highest once; two `zone.open` the higher tier; four `codex.unlock` one sound; a reward inside the 10 s window is a tick and ticks come at most one per 3 s; at 16x the window is 20 s and `daily.done`, common achievements and Codex pages are silent; no burst has more than two audible sentences; `milestone`, `acad.graduate`, `run.end`, `perk.bailout` and `alert.*` are exempt; a press (`ui.*`) is never delayed; a `playMix` is admitted whole or not at all.
+- **Rank-aware cooldowns.** `cash.in` m then xl 80 ms later: the xl plays and stops the m (80 ms fade); xl then m: the m is dropped; achievement common then epic inside 1500 ms: the epic plays; `alert.shock` kinds do not silence each other; a preempting `alert.margin-call` cuts a level fanfare; a queued reward waits at most 500 ms and degrades to a tick; the queue holds one.
+- **Hidden information (a property test).** Two `buy` events that differ only in `fake` produce identical calls; **every `inspect` event, whatever `fake`, `caught`, `score` or `repeat`, produces no call** (two with the same shown `fakeProb` and different `fake` are identical, `caught: true` included); two `auction` events that differ in `surplus`; a `pitch` rejected with and without a scam flag when no `scam` note preceded it; two `ui:'lead'` events that differ only in a buyer's `scam` flag or a lot's `truth`.
+- **Money and cause.** Herd with `gain` 0.03 plays `hw` and coins as a win, with `gain` 0.01 plays `h`; flat with `gain` -0.05 routes its coins through `dull`; a `sell-pool` with `delay` 24 plays `pool.sell` alone and the settle note plays `cash.in` sized by `amt`; hire, upgrade, pipe-level, client and repair play `cash.out` only at size l or larger; an `audit` fail that follows `perk` `fine-waived` plays no coin.
+- **Gating and the clock.** 1,000 requests in one second: no more than 12 voices, per-id cooldowns held, tiny dropped before medium, loud steals instead of being dropped; each speed row of 3.4.5; merging of `cycle`; no standing coin at 16x (a summed `cash.in` at most every 8 s); the state-sound class (an overdraft at 64x plays once in 45 s, the next sized by the sum); catch-up: a 48-hour jump plays no `day.turn`, `cycle`, `pitch` or loud sound while the toasts remain, a 64x tick of 2.29 hours is **not** catching up, a tick 440 ms late is, a hidden-tab return is, a press in the last 1500 ms lifts it; the hold with the Deal Room open in a class and the one summed `cash.in` on close; the causal groups (a sale then a result card; a note then a toast; each legacy alias is a no-op once wired).
+- **The Deal Room.** `fixHTML` rendered and asserted to hold `.dial-mark` and the zone's inline `left` and `width`; the nine `ui:'deal'` events from a recorded run of each stage; `pass` and `walk` before round 1 play `deal.result` and close nothing; Quick buy plays one `deal.quick` and no `deal.open`; `deal.result` is skipped after any medium-or-louder sound in 1500 ms; `haggle.move` becomes a 40 ms tap when `haggle.tell` follows; `read.suspect` plays when the meter crosses 60%, once per lot, and **never** for `fake`.
+- **Controls.** Every row of 4.3, including the new Title, Instructor, Debrief and Draft keyboard rows; a control marked (R) plays only `ui.tick` at the click and its outcome sound after a success, and nothing but `ui.tick` and the toast's sound after a refusal; a control that cannot fail plays at the click.
+- **Lifecycle.** Mount and unmount the game 12 times: one `AudioContext`, no growth in listeners; every Academy lesson's sandbox is silent for `level`, `quest`, `achievement`, `milestone`, `zone.open`, `skill`, `codex` and the ambient bed, and keeps the money and `acad.*` sounds; with `#dlg` open, M toggles mute; `ambient(state)` while locked, then `unlock()`: the bed starts; hidden, then visible, then a press: no voice from before the hide is heard.
 - **Failure.** `AudioContext` missing: every method returns without throwing and `state` is `'unsupported'`. A recipe that throws is dropped and logged once. Malformed events (missing fields, non-numbers, a string for `amount`) never throw.
-- **Counterparts.** Each of the five additions of section 9 appears in `wireAudio`'s output as an `announce` or toast call.
-- **Aliases.** `sfx.kaching`, `buzz`, `level`, `blip`, `alarm` exist and call `audio.play`; `tests/ui-*.test.mjs` pass unchanged with their `ctx.sfx` stand-ins.
+- **Counterparts.** Each of the six additions of section 9 appears in `wireGame`'s output as an `announce` or toast call, with its rate limit (`buyer.urgent` once a minute; settle one line per 700 ms; two announcements in one tick are both spoken, in order).
+- **Aliases.** `sfx.kaching`, `buzz`, `level`, `blip`, `alarm` exist and call `audio.play` when no wiring is installed and do nothing once it is; each of the 19 call sites outside `common.js` (and the alert queue's `sound:`) leaves exactly one id played for its cause; `tests/ui-*.test.mjs` pass unchanged with their `ctx.sfx` stand-ins.
+- **Layer families.** Two sounds 100 ms apart that share a stamp, sparkle, brass, bell or thump layer play it once; voices that start within 120 ms share one jitter value; two voices on the same fundamental are 30 to 45 ms apart or one of them drops the note.
 
 ### 10.3 Headless Chrome, the real page
 
 - **Autoplay.** Load the app: no console message containing "AudioContext" before the first gesture; after `Input.dispatchMouseEvent` `audio.state === 'running'`; after `visibilitychange` hidden, `'suspended'`; after visible and a press, `'running'`.
-- **A driven session.** Start a bot game (`tests/bot.mjs` through `scripts/boot.mjs`), play three virtual days at 1x and 64x, record every `audio.play`. Assert: tiny sounds never exceed 8 in any one second; no `day.turn`, `buyer.arrive` or ambient one-shot at 64x; every recorded id exists; no console error. Compare the recorded id sequence to a stored transcript for the same seed (reviewed when the engine changes).
+- **A driven session.** Start a bot game (`tests/bot.mjs` through `scripts/boot.mjs`), play three virtual days at 1x and 64x, record every `audio.play`. Assert: tiny sounds never exceed 8 in any one second; no burst has more than two audible sentences; at 1x no more than one full reward sentence in any 10 s of real time and no more than two `buyer.arrive` a minute; no `day.turn`, `buyer.arrive` or ambient one-shot at 64x; every recorded id exists; no console error. Compare the recorded id sequence to a stored transcript for the same seed (reviewed when the engine changes).
 - **Controls.** Press every dock button, open and close every drawer, open the Deal Room in each of its stages (Quick), toggle the settings: the recorded sound for each matches 4.3.
-- **No timers when idle.** With sound on and ambient off, spy on `setInterval`, `setTimeout` and `requestAnimationFrame` from the audio modules: none while the game is idle. With ambient on: one `setTimeout` chain, no frame callbacks.
+- **The screens the first draft missed.** The Title, Draft, Academy intro, Instructor and Debrief screens each answer their controls; mount the game twelve times and count audio contexts.
+- **No timers when idle.** With sound on and ambient off, spy on `setInterval`, `setTimeout` and `requestAnimationFrame` from the audio modules: none while the game is idle (the collector's one-shot timer exists only between a request and its flush, 24 ms at the most). With ambient on: one `setTimeout` chain, no frame callbacks.
 
 ### 10.4 Load
 
@@ -951,12 +1177,13 @@ The audition page lists every sound. A checklist for the first review:
 
 1. Play each family in order. Does each sound like what it is named for? Anything harsh, thin or fatiguing?
 2. **Gain and loss, blind.** Give five listeners 20 unlabelled sounds (ten gains and losses, five warnings, five neutral). Target: at least 90% right on gain against loss.
-3. Play a busy minute: ten sales, a level-up and a quest at once. Does the loud moment stand clear, and does the queue make it one moment?
-4. Loudest sound at full volume: comfortable? Quietest sound at the default volume: audible on laptop speakers?
+3. Play a busy minute: ten sales, a level-up and a quest at once. Does the loud moment stand clear, and does the resolver make it one sentence and one reward?
+4. Loudest sound at full volume: comfortable? Quietest sound at the default volume: audible on laptop speakers? **Can you hear every "no" on laptop speakers at the default volume** (`ui.refuse`, `world.locked`, `sale.reject`, `acad.teach` wrong)?
 5. **Mono**: fold the output to mono; do any two sounds cancel or get confused?
-6. The bed for each district for 20 minutes: welcome or tiring? Does night and rain read?
-7. Safari and Firefox: any sound that renders very differently (the soft clip guarantees the ceiling, not the taste).
-8. Classroom: ten laptops in a room on the Classroom preset: bearable?
+6. The bed for each district for 20 minutes: welcome or tiring? Does night and rain read? Does any one-shot make you look for a buyer or a new day?
+7. Safari and Firefox: any sound that renders very differently (the soft clip guarantees the ceiling, not the taste), and the compressor's makeup measured at unlock.
+8. Classroom: ten laptops in a room on the Classroom rule: bearable?
+9. **Ten minutes at 1x, then at 16x.** Are the rewards rare enough to feel big? Do the ticks (`reward.also`, `daily.done`) read as "and something else" and not as noise? Are the duration compensations of 3.2 right: is a 30 ms tick as present as a 300 ms one?
 
 ## 11. Hand-off
 
@@ -964,33 +1191,47 @@ The audition page lists every sound. A checklist for the first review:
 
 Each step merges on its own and leaves the game working and, until step 4, silent or as it is today.
 
-1. **Palette and engine.** `js/audio/palette.js`, `recipes.js` (from `dev/audio-proto/`, trims baked in), `engine.js`; the offline render test.
-2. **Settings.** `settings.js`, the Sound section, the HUD button, key M, migration, the Node tests.
-3. **Interface sounds.** `wireAudio` with the 4.3 table, dialogs, toasts, drawers; the aliases in `common.js`.
-4. **Game sounds.** The event table 4.1 and 4.2; the engine `kind` and `reason` additions; the five counterpart additions of section 9.
-5. **The Deal Room and the world.** Stage sounds, the dial tone, world hover and pick.
+1. **Palette and engine.** `js/audio/palette.js`, `recipes.js` (from `dev/audio-proto/`, trims baked in and **recalibrated** for the rev-2 targets: loud -17 dB, the tiny duration compensation, the changed variants of 11.4), `resolve.js`, `engine.js`; the offline render test (voices at 0.6 s).
+2. **Settings.** `settings.js`, the Sound section, the HUD button, `initAudio()` with key M and the unlock, migration, the Node tests.
+3. **Interface sounds.** The 4.3 table (with its (R) controls), dialogs, toasts, drawers; the aliases of `common.js` become no-ops.
+4. **Game sounds.** The event table 4.1 and 4.2 and the collector; the engine additions (`kind`, `reason`, `delay`, `pid` and `src`, the `insolvent` note); the six counterpart additions of section 9.
+5. **The Deal Room and the world** (after `v2/finish` has merged). The nine `ui:'deal'` lines and the room's Sound toggle, the dial tone, world hover, pick, step, zoom and locked, the shell's `zone` and `lead` events.
 6. **Ambient.** `ambient.js`, the state call, the beds, the load test.
-7. **Clean-up.** Remove the 20 legacy `sfx` calls the events replace; keep the aliases.
+7. **Clean-up.** Remove the 19 legacy `sfx` calls the events replace; keep the aliases.
 
 ### 11.2 Merge notes
 
-The finishing branch (`v2/finish`) is editing `js/ui/deal.js`, `academy.js`, `css/ui-deal.css`, `common.js`' focus code, `stock.js`, `instructor.js`, `draft.js`, `main.js`, docs and `index.html`. This design touches `common.js` only in the sound block and `settingsDialog`, `academy.js` in six lines, `stock.js` and `deal.js` not at all, and adds only new files besides. Expect one trivial conflict at most (the Academy lines).
+The finishing branch (`v2/finish`) is editing `js/ui/deal.js`, `academy.js`, `css/ui-deal.css`, `common.js`' focus code, `stock.js`, `instructor.js`, `draft.js`, `main.js`, docs and `index.html`. This design touches `common.js` only in the sound block, `settingsDialog` and one line of `initDialog` (beside its focus code, not in it), `academy.js` in eight lines, and `deal.js` in about sixteen **additive** lines that are applied after `v2/finish` has merged, as a commit of their own, with each emission point named by function in 4.2 so it can be placed again if the function moved. `stock.js`, `draft.js`, `instructor.js`, `main.js` and `index.html` are not touched at all, and besides the Deal Room's toggle and the net worth's `.neg` rule there is nothing in `css/`. Expect one trivial conflict at most (the Academy lines) at the first merge, and none in `deal.js` until step 5.
 
 ### 11.3 For the author to decide
 
 1. **Default.** Interface and game sound on at 70%, ambient off. Should the first run start muted instead, with only the toast offering sound? (It would be the safest in a lecture hall; it would also make most students never hear the game.)
-2. **Classroom.** The automatic Classroom preset on joining a room: right default? A further step would be an instructor switch in the room protocol (a `sound` field on the `clock` message) that forces Classroom on every student; not designed here.
-3. **Repair dial tone** on by default: it helps everyone time the marker, but it is a continuous tone.
+2. **Classroom.** The automatic Classroom rule on joining a room (restored on leaving): right default? A further step would be an instructor switch in the room protocol (a `sound` field on the `clock` message) that forces Classroom on every student; not designed here.
+3. **Repair dial tone.** Revision 2 made it **off** by default, because a continuous tone that starts by itself is the one sound with no control inside the room it runs in. The room now has a Sound toggle and M works there, so it could go back to on. It helps everyone time the marker; it is still a continuous tone.
 4. **Instructor ceremonies.** `inst.cue` on by default on the dashboard, or off with the rest of the game sounds?
 5. **A visual "sound caption"** for projectors and demos (a small label at the screen's foot naming the last loud sound): not designed; the counterparts already carry the information.
 6. **Mono and pan.** Pan is limited to 0.6 so one earbud is never alone; an explicit "Mono" setting is not designed.
-7. **Safari and Firefox** need a listening pass before shipping (10.5, item 7).
+7. **Safari and Firefox** need a listening pass before shipping (10.5, item 7), and the compressor's makeup must be read at unlock there.
+8. **The budgets.** One full reward sentence per 10 s, a tick per 3 s, the 45 s state-sound rule, the 30 s door bell, 3 ambient one-shots a minute: all first estimates, set to make the big moments rare and the frequent ones quiet. They are constants in `resolve.js`; tune them after the first ten-minute listen (10.5, item 9).
+9. **`daily.done`.** A run pays about 130 daily bounties. The sound is a 160 ms tick that is silent from 4x and at most one a minute at 1x. Should it exist at all, or should a daily be a toast alone?
+
+### 11.4 What the prototype still needs (revision 1 to revision 2)
+
+The prototype under `dev/audio-proto/` is the **rev-1** measurement, kept as committed so that its numbers stay true. These are the changes of revision 2 that it does not contain, and the measurements that follow from them:
+
+- `sounds.js`: add `daily.done` and `reward.also`; rename `read.caught` to `read.suspect` and redraw it (the warning interval A5 to F#5 over a low knock, no sparkle); `world.hover` to the single tick; `quest.complete` loses the daily variant and the coin; `level.up` gains `s`; `sale.herd` gains `hw`; `ui.refuse`, `world.locked` and `achievement#common` move to the tiny tier and `read.suspect` is tiny; the Market motif, `pitch.angle#price`, `acad.teach#right`, `acad.win#reward` and `hire.manager#broker` lose their coin; `inst.cue#deploy` loses the warning pair; `ui.count-up` is 7 ticks and 400 ms; the 15 variants of 2.2 get their mid body; each id gets `class`, `player` and `rank`; the layer builders carry their family tag.
+- `ambient.js`: `amb.door-bell`, `amb.chime`, `amb.phone` and `amb.horn` revoiced (6.4).
+- `synth.js`: glue threshold -16 dB, the makeup measured per threshold, the loud ceiling.
+- `run.mjs`: loud target -17 and ceiling -3, the tiny duration compensation added to the trims, the chain render started at 0.6 s; then regenerate `trims.json`, Appendix A, 3.2, 3.7 and the Section 0 table.
+- `audit.mjs`: the mid-body check, the ambient-is-not-a-cue check, the ambient ceilings (10.1), every id named by a trigger, `ui.press` as an alias.
+- `audition.html`: the new ids, and a button that plays a recorded burst through the resolver.
+- Already added with this revision: `chain.mjs` and `events.mjs` (Appendix B).
 
 ---
 
-## Appendix A. Measured levels and trims
+## Appendix A. Measured levels and trims (revision 1)
 
-The measurements of 10.1, by tier (variants; active level in dB; peak in dBFS before the buses; length in ms):
+These are the rev-1 figures and trims, measured on the prototype as committed (loud target -19 dB, glue threshold -22 dB). Revision 2 moves the loud target to -17 dB, adds the tiny duration compensation and changes the variants listed in 11.4; `run.mjs` regenerates the trims when the prototype is brought in line. The measurements of 10.1, by tier (variants; active level in dB; peak in dBFS before the buses; length in ms):
 
 | Tier | Variants | Active level | Peak | Length (min / median / max) | Held by the peak ceiling |
 |---|---|---|---|---|---|
@@ -1005,15 +1246,64 @@ Trims in dB, one per variant (`id#variant`), applied as a single gain on each vo
 {"ui.tick#light":-12.6,"ui.tick#full":-13.2,"ui.toggle#on":-10.8,"ui.toggle#off":-8.5,"ui.select#i0":-12,"ui.select#i5":-13,"ui.crate#pick1":-11.9,"ui.crate#pick8":-12.4,"ui.crate#clear":-6.5,"ui.drawer-open#stock":-11.2,"ui.drawer-open#market":-10.7,"ui.drawer-open#crew":-10.9,"ui.drawer-open#bank":-10.7,"ui.drawer-open#travel":-10.5,"ui.drawer-open#codex":-8.2,"ui.drawer-open#quests":-11.1,"ui.drawer-close#d":-6.4,"ui.dialog-open#d":-8.1,"ui.dialog-close#d":-7.1,"ui.ask#normal":-12.4,"ui.ask#danger":-12.2,"ui.refuse#r":-7.1,"ui.nudge#n":-13.6,"ui.ok#o":-12.5,"ui.slider#mid":-9.4,"ui.slider#top":-14.7,"ui.slider#zero":-11.5,"ui.count-up#c":-7.6,"clock#pause":-14.3,"clock#resume":-11.5,"clock#speed4":-9.1,"cam#in":-4.9,"cam#out":-5.2,"cam#fit":-0.5,"cam#home":-8.7,"world.hover#buyer":-8.9,"world.hover#lot":-10.2,"world.hover#crate":-8.9,"world.hover#building":-8.1,"world.hover#locked":-10.9,"world.locked#l":-3.6,"world.step#a":-11.7,"world.step#b":-12,"zone.enter#t1":-11.2,"zone.enter#t4":-11.4,"buyer.arrive#b":-12.7,"buyer.urgent#u":-8.3,"day.turn#d":-13.2,"cash.in#s":-12.5,"cash.in#m":-7,"cash.in#l":-7.2,"cash.in#xl":-5.3,"cash.in#settle":-6.7,"cash.out#s":-8.3,"cash.out#m":-9.6,"cash.out#l":-5,"sale.win#w":-9.4,"sale.pioneer#p":-9.2,"sale.herd#h":-5.8,"sale.flat#f":-7.4,"sale.reject#nofit":-5.1,"sale.reject#fake":-6.2,"sale.scam#s":-6,"buy.lot#ok":-10,"buy.lot#broken":-8.9,"pool.sell#p":-3.8,"streak#n2":-10.9,"streak#n6":-13.1,"manager.cycle#gain":-14.7,"manager.cycle#loss":-9.8,"deal.open#sell":-7.1,"deal.open#buy":-3.1,"deal.open#fix":-6,"deal.stage-done#s":-13.2,"deal.quick#q":-8.2,"deal.verify#ok":-12.5,"deal.verify#bad":-8.2,"deal.result#good":-7.1,"deal.result#warn":-7.3,"deal.result#bad":-7.2,"deal.result#info":-11.9,"read.probe#look":-4.5,"read.probe#serial":-1.8,"read.probe#power":-7.1,"read.probe#papers":0,"read.probe#expert":-10.6,"read.caught#c":-7.8,"pitch.angle#prestige":-11.6,"pitch.angle#utility":-12.5,"pitch.angle#scarcity":-5.9,"pitch.angle#price":-13.3,"pitch.angle#story":-8.7,"pitch.angle#drop":-9.3,"pitch.fit#up":-12.4,"pitch.fit#down":-12.5,"haggle.anchor#high":-13.4,"haggle.anchor#fair":-14.1,"haggle.anchor#low":-11.3,"haggle.move#hold":-13,"haggle.move#small":-10.6,"haggle.move#large":-9.7,"haggle.move#split":-11.8,"haggle.leverage#l":-8.1,"haggle.close#accept":-5.5,"haggle.close#walk":-8,"haggle.tell#far":-11,"haggle.tell#reach":-12.4,"haggle.tell#near":-16,"bid.raise#r1":-10.5,"bid.raise#r5":-11,"bid.rival#in":-10.1,"bid.rival#out":-9.2,"bid.drop#d":-5.4,"bid.hammer#won":-9.2,"bid.hammer#lost":-9.3,"repair.stop#perfect":-9.9,"repair.stop#good":-14.3,"repair.stop#ok":-12.7,"repair.stop#miss":-10.1,"repair.done#great":-8.5,"repair.done#ok":-3.2,"repair.done#rough":-6.2,"hire.manager#student":-6.2,"hire.manager#broker":-6.4,"hire.manager#logistics":-6,"crew.build#level":-6.3,"crew.build#upgrade":-4.3,"crew.client#smb":-7.2,"crew.client#ent":-10.2,"ship.depart#s":-6.2,"ship.arrive#a":-10.6,"ship.trouble#customs":-9.3,"ship.trouble#damage":-4.7,"bank.draw#b":-3.3,"bank.repay#half":-5,"bank.repay#full":-6.2,"bank.repay#free":-4.9,"audit.notice#a":-5.5,"audit.result#pass":-8,"audit.result#fail":-6.2,"alert.advance#l1":-6,"alert.advance#l2":-7.6,"alert.advance#l3":-5.1,"alert.shock#tiktok":-1.6,"alert.shock#fed":-3.7,"alert.shock#tariff":-5,"alert.shock#viral":-10.3,"alert.shock#glut":-6.4,"alert.shock#scare":-5.3,"alert.margin-call#m":-7.8,"alert.insolvent#i":-4.5,"perk.bailout#bailout":-4.2,"perk.bailout#waived":-7,"quest.complete#quest":-8.9,"quest.complete#daily":-9.1,"achievement#common":-8.2,"achievement#rare":-9.3,"achievement#epic":-7.1,"codex.unlock#c":-12.2,"mentor.tip#t":-12,"level.up#l":-6.9,"level.up#big":-8.4,"skill.up#s":-7.7,"milestone#m1":-5.3,"milestone#m2":-5,"milestone#m3":-6.2,"zone.open#t1":-10.9,"zone.open#t4":-7.6,"swap.offer-in#o":-5.8,"swap.done#d":-5.3,"acad.step#s0":-12.2,"acad.step#s5":-13.4,"acad.teach#right":-9.3,"acad.teach#wrong":-10.9,"acad.teach#reveal":-9.2,"acad.win#goal":-10.5,"acad.win#reward":-4.6,"acad.graduate#g":-5.6,"draft.pick#slot1":-11.7,"draft.pick#slot2":-12.1,"draft.pick#complete":-9.2,"draft.pick#drop":-8.2,"draft.begin#b":-5.6,"run.end#horizon":-3.9,"run.end#start":-2.6,"run.end#done":-8.5,"inst.cue#deploy":-9.2,"inst.cue#start":-12,"inst.cue#rewind":-3.9}
 ```
 
-## Appendix B. The prototype
+## Appendix B. The prototype (revision 1, plus two measuring scripts)
 
 | File | What |
 |---|---|
 | `dev/audio-proto/synth.js` | the key, the shared noise, the layer renderer, `voice()`, the master chain and the soft clip |
-| `dev/audio-proto/sounds.js` | the 88 ids with their meta and builders |
-| `dev/audio-proto/ambient.js` | the 16 beds, 4 modifiers and 18 one-shots |
+| `dev/audio-proto/sounds.js` | the 88 ids with their meta and builders (rev 1) |
+| `dev/audio-proto/ambient.js` | the 16 beds, 4 modifiers and 18 one-shots (rev 1) |
 | `dev/audio-proto/measure.js` | the offline measurements (level, peak, length, centroid, tail, step, layer balance, fingerprints, worst case) |
 | `dev/audio-proto/run.mjs` | drives headless Chrome, calibrates, writes `trims.json` and the full result |
 | `dev/audio-proto/audit.mjs` | the Node audits of 10.1 |
+| `dev/audio-proto/chain.mjs` | **added in revision 2:** renders every variant through the master chain (voices at 0.6 s), prints the tier gaps at master 100 and 70 for the rev-1 chain and the rev-2 chain (loud +2 dB, threshold -16 dB, makeup measured), the compressor's makeup at both thresholds, and the share of each sound's energy above 250 Hz with the variants of the refusal and loss family that fall under 40% |
+| `dev/audio-proto/events.mjs` | **added in revision 2:** plays the heuristic bot (`tests/bot.mjs`) for 90 days with the shell's own order (`progress.onEvent` before the event is passed on) and real Progress hooks, and prints how often a reward came before the sale, the largest burst, the reward counts, the herd and flat splits, the buyers per minute at 1x and, from the table of 6.4, the ambient one-shots a minute by bed under the two readings of the scheduler |
 | `dev/audio-proto/audition.html` | every sound on a button, through the real master chain (`npm start`, then `/dev/audio-proto/audition.html`) |
-| `dev/audio-proto/trims.json` | the calibrated trims |
+| `dev/audio-proto/trims.json` | the calibrated trims (rev 1) |
+
+
+## Appendix C. The review log (revision 2)
+
+Thirty-nine findings came in two lists: **I1 to I17** from the first reviewer and **G01 to G22** from the second. Each was checked against the code (`js/engine.js`, `js/session.js`, `js/ui/*.js`, `js/world/world.js`, `js/deal.js`, `js/meta/*.js`) and the prototype, and the ones that quote numbers were measured again (`events.mjs` for the engine, `chain.mjs` for the chain, a bot with the shell's own event order and Progress hooks, three seeds of 90 days). **All 39 were verified; none was rejected.** Seven were fixed differently from what was proposed (marked "adjusted") and two had a figure corrected (marked "figure"); the table says how.
+
+| ID | Finding | Checked how, and what was found | Verdict | Resolved in |
+|---|---|---|---|---|
+| I1 | A burst is resolved in arrival order, which is consequence before cause | `Game.pitch()` calls `xp()` before it emits `pitch`; `Progress._reward()` calls `g.xp()` inside the hook, so a `level` event is emitted inside `progress.onEvent(pitch)`; `attachGame` runs `progress.onEvent` before `ctx.emit`. Bot: the reward came before the sale in 87 of 127, 92 of 116 and 75 of 108 sale steps with a reward (the review: 67 to 75%); biggest steps 11, 11, 20 triggers | Verified | 3.1, 3.4.1, 3.4.2, 3.4.7, 4.1, 8.2, 8.3 |
+| I2 | Reward sounds scale with the clock and every level is a fanfare | Bot, 3 seeds: 116 to 133 daily bounties against 7 story quests, 45 achievements (17 common, 20 to 21 rare, 8 epic), 36 Codex pages, 20 to 21 levels; `shell.js` `onComplete(kind)` serves quest, daily and achievement alike | Verified | 3.4.4; rows 71 to 75, 89, 90 |
+| I3 | A lesser variant silences a greater one; the queue never preempts | Read the cooldown rule (shared by variants) and the moment queue (3 s maxWait, no preemption). The engine's `_levelCheck` loops, so several `level` events per grant are real | Verified, **adjusted**: the six `alert.shock` kinds (and the two `ship.trouble`, three `haggle.tell`) are different causes, not sizes of one, so they get a cooldown each instead of a rank; and the delay of the second sentence (I1: the cause's length, at least 350 ms) is capped at 500 ms so that it agrees with the queue's 500 ms maximum wait | 3.4.1, 3.4.3, 3.4.7, 3.4.8 |
+| I4 | `buyer.arrive` is the most frequent non-UI sound | Engine alone, three seeds, start district, 336 virtual hours: 89 to 91 arrivals, 2.3 a minute at 1x (the review: 2.45 to 2.55), 47 to 54% with a need; no suppression in dialogs read in `shell.js` | Verified | 3.4.5; rows 21, 22 |
+| I5 | Speed gating leaves four gaps | (a) 16x manager coin: arithmetic of the 2 s rule over 1,010 to 1,231 cycles; (b) read the notes: SLA breach (2 per client), overdraft (every third day while negative, not daily), burnout, fatigue; (c) `main.js` heartbeat 250 ms, `SEC_PER_HOUR` 7: one tick at 64x is 2.29 hours; (d) `deal.js` pauses the clock only when `S.mode === 'solo'` | Verified, **adjusted**: (c) is measured as the real milliseconds still to replay (`floor(now) - s.hour`, because `stepHour` increments `s.hour` before it emits), threshold 600 ms | 3.4.5, 4.2 |
+| I6 | Several rows stack on one Deal Room click | Read the acts of `js/ui/deal.js` (`market-buy` calls `quick-all`, then `result()`), the skip list and `ui.count-up` | Verified | 3.4.6; rows 14, 36 to 40, 46; 4.3 |
+| I7 | The same layers recur in many ids; unisons beat | Counted in `sounds.js`: stamp 13 ids, sparkle 13, brass 16, a bell 25, a coin 16, the low thump 39 (30 direct, 9 through the stamp) | Verified, **figure**: the thump is in more ids than the review said (39, not 31) | 2.5, 3.3, 10.2 |
+| I8 | `sale.herd` plays a loss for a win; `sale.flat` covers two cases | `Game.pitch()`: `outcome = band === 'herd' ? 'herd' : !win ? 'flat' : ...`, and `streak` and win XP follow `win`. Bot: 88 of 90 herd sales were wins; 98 of 120 flat sales were more than 2% below fair | Verified (worse than reported), **adjusted**: the split is at `gain` 0.02 and -0.02 (the engine's own win test), not at zero | 4.1; rows 28, 29 |
+| I9 | `pool.sell` plays coins for money that has not moved | `sellPool`: `if (q.delay) s.settle.push(...) else s.cash += q.total`; `liqDelay` 24 h from district 9, 48 h from 13, 48 h routed; the event carries no `delay` | Verified; `delay` added to the payload | 4.1; rows 24, 33; 8.5 |
+| I10 | The coin voice is used for things that are not cash | `sounds.js`: the Market motif, `quest.complete`, `acad.teach#right`, `acad.win#reward`, `hire.manager#broker`, `pitch.angle#price` all use `coin`; hire, upgrade, pipe-level, client and repair are not in the money group | Verified | 2.3, 3.4.6; rows 5, 43, 56, 71, 82, 83 |
+| I11 | Four ambient one-shots clone game cues | `ambient.js` against `sounds.js`: `amb.door-bell` is `bellL D6, A5` at 0.12 s (`buyer.arrive`), `amb.chime` `gls D4, A4` (`day.turn`), `amb.phone` A5 F#5 (the warning pair up an octave), `amb.horn` D3 + D2 (freight and alarm horn). Rates computed from the table | Verified, **adjusted**: the review's 5 to 11 a minute assumes a timer per one-shot (3.0 to 6.6 in ten beds, 5.0 to 11.6 at night); 6.4 described one chain, which would give 1.1 to 3.0. 6.4 now says which and caps the total at 3 | 6.4; 10.1 |
+| I12 | Loudness is calibrated before the chain and one sound at a time | `chain.mjs`: medium to loud 4.7 dB before the chain, 3.7 after at master 100, 4.3 at 70; with loud +2 dB and threshold -16, 5.9 and 6.5. Tiny lengths: 14 under 60 ms, 22 under 120, 4 over 500. Classroom arithmetic checked (-49 against -52) | Verified, measured, **adjusted**: the compressor's makeup changes with its threshold (1.729 to 1.321) so it is measured at unlock with the final settings; and a compressor warm-up (up to 6 dB in the first 100 ms of a context) made the first measurement wrong, so offline renders start at 0.6 s. "Interface sounds at -6 dB relative to game" is read as 6 dB below the interface sounds of Full, which puts a tiny interface tick under a medium game sound (-45 against -40 dBFS) | 3.2, 3.7, 7.1, 10.1 |
+| I13 | The refusal and loss family is inaudible on laptop speakers | `chain.mjs` spectra: `ui.refuse` 2.4% of its energy above 250 Hz; 14 more variants of the family under 40% (list in 2.2); `ui.refuse` is tier medium on the ui bus, above every click | Verified | 2.1, 2.2, 0; rows 10, 18 and 14 more; 10.1 |
+| I14 | Ducking is fixed in length and the dial can be stolen | Read 3.5 and 3.3 | Verified | 3.3, 3.5 |
+| I15 | `world.hover` and `world.step` are too busy | Read the cooldown table: 140 ms is up to 7 a second; `World.footstep` every 0.26 s | Verified | rows 17, 19; 4.4 |
+| I16 | `inst.cue` deploy reads as an alarm; a waived fine plays a loss | `engine.js` `_auditFail` emits `perk` `fine-waived`, then `resolveAudit` emits `audit` (and the ignored-audit path emits only the perk) | Verified | rows 65, 70, 88; 4.1 |
+| I17 | Dangling references | `ui.press` in five control rows is not an id; row 24 lists a loan drawn as `cash.in` while 4.1 says no extra coins; the 6 kHz claims against `ambient.js` (`amb.shutter` 6075, `amb.flap` 5878, beds with `hp6000`, `hp7000`, `bp9000`) and `sounds.js` (`crew.client` has a 4.5 kHz band, `alert.shock` tiktok a high-pass at 5 kHz) | Verified: the "narrow band above 4 kHz" claim was false inside the map too. The ceiling is stated for the sound map and the ambient set has its own | 0, 2.1, 4.3, 10.1; rows 1, 24 |
+| G01 | `read.caught` is a function of hidden truth | `engine.js:758` `caught = lot.truth.fake && fakeProb >= 0.6`; `js/deal.js` `finish()` records it, and the result card withholds the truth after a Pass (`onShelf`) | Verified (blocker) | 1 (rule of the game), 4.1, 4.2; row 42 is `read.suspect`; 10.2 |
+| G02 | `alert.insolvent` has no visual counterpart | `engine.js:382` emits the bare event; `grep insolvent js/ui` finds only the instructor roster; `hud.js` has no red state | Verified | 9; row 69; 8.5 |
+| G03 | `wireAudio` lives in `mountGame`, which is not the whole app | `main.js` routes six screens through five mounts; the Academy mounts a game per lesson | Verified | 7.5, 8.3, 8.5 |
+| G04 | `ui.press` is not an id; some ids are named by no trigger | grep of the doc; the five ids named in no wiring row now have hosts | Verified | row 1; 4.2, 4.3; 10.2 |
+| G05 | The Deal Room repaints in place; an observer on `#dlg` sees none of it | `deal.js paint()`: `ctx.setHTML(el(), html)` | Verified; option (a) taken (additive emits); the contract test (b) is kept for the dial | 4.2, 8.5, 10.2 |
+| G06 | Four Deal Room mapping errors | `pass() { run.walkAway(); result(); }`, `walk()`, `market-buy` calls `acts['quick-all']`, `data-change-deal` and `data-deal-input` | Verified (all four) | 4.2, 4.3; rows 38, 40 |
+| G07 | Success sounds are keyed to the click, before a refusal | `stock.js` guards, `goToDistrict` (toast then `return false`), `market-*` | Verified | 4.3 (the (R) class) |
+| G08 | The legacy aliases double or contradict real sounds | `grep -rn "sfx[.?]" js` finds 19 call sites outside `common.js` (the review counted 23 with the definitions and the alert queue) | Verified, **figure** | 3.4.6, 8.4, 10.2 |
+| G09 | No way to mute inside a dialog; the dial tone starts by itself | `shell.js:266` returns while `dlg.el.open`; `deal.js startDial()` runs with the Fix stage | Verified | 4.5, 7.3, 7.6, 11.3 |
+| G10 | Sandbox lessons would play pretend rewards | `academy.js:195` feeds `ctx.emit`; `game.sandbox` exists | Verified | 4.1, 8.3 |
+| G11 | Ambient is dropped while locked and never retried | The 6.4 text: a no-op while the context is not running | Verified | 6.4, 7.5 |
+| G12 | Migration and presets leave holes | `applySettings()` at boot saves the defaults; presets say nothing about `mute` | Verified | 7.1, 10.2 |
+| G13 | Catch-up is detected after the replay | `session.js`: `emit('tick')` after `advanceTo` | Verified, **adjusted**: the test is real milliseconds still to replay (3.4.5), which also settles I5(c) | 3.4.5, 8.3 |
+| G14 | Hostless sounds | `worldview.update()` tracks `lastZone`; `World.footstep` runs only with `dust`; `countUp` returns the count | Verified | 4.2, 4.4, 8.5 |
+| G15 | `swap.done` is keyed to XP telemetry | `_swapDone` returns before `emit('p2p')` below the minimum, over the cap or with a repeat partner | Verified; the Practice Partner's `p2p` stays `ui.ok` | 4.1, 4.2 |
+| G16 | Payload gaps | `cycle` is also emitted by the day tick (rent, royalties); `hire`, `upgrade`, `pipe-level`, `client` carry no cost; `repay` only `amount` | Verified | 4.1, 8.5 |
+| G17 | World hit kinds and the camera | `world.js` hit kinds include `zone` and `truck`; `activate` refuses the bank and the audit office with a toast and no `locked` | Verified; after I15 every kind plays the same tick | rows 16, 17, 18; 4.3, 8.5 |
+| G18 | Dialog and toast observer corner cases | `dlg.open` closes then reopens in one task | Verified, **adjusted**: the dialog's class is still readable when the observer runs (the `close` event fires after it), but the kind is captured at open so the rule does not depend on that order | 3.4.6, 4.2 |
+| G19 | Instructor, Debrief and Title controls omitted | `instructor.js` and `debrief.js` acts; the sliders are friction, audit, classmates and demo students | Verified | 4.3 |
+| G20 | Keyboard and screen-reader details | `announce()` and `setHTML` restore focus only for `data-fid` elements | Verified | 7.2, 7.3, 7.6 |
+| G21 | Hidden tab and autoplay details | `visibilitychange` calls `S.tick()` directly; Escape is not an activation | Verified | 7.4, 7.5 |
+| G22 | Announcements overwrite each other | `announce()` clears and sets after 30 ms | Verified | 9 |
