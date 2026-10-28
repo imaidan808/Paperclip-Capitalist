@@ -1,14 +1,19 @@
 // The Academy: ten short missions played in the real UI against a scripted sandbox (docs/V2_DESIGN.md sections 9 and 12).
 // Plain data, validated by tests/meta-academy.test.mjs. Every asset, buyer and district named here is real content (js/data/tier1..4.js) and every
 // number in a `why.example` or a teach-back is what the real engine returns for the mission's own sandbox (quotePitch, repairQuote, forecast, draw,
-// deRatio, poolQuote, eei and the Deal Room games of js/deal.js), read at an average Deal Room result: a multiplier of exactly 1.00. The test file builds
+// deRatio, poolQuote, eei and the Deal Room games of js/deal.js), read at an average Deal Room result: a multiplier of exactly 1.00. The one other
+// reading is mission 5's repair, which is read at the Careful setting (quality x1.00, bill x1.30), the only run of the Fix stage that is the same every time:
+// no run of the marker gives quality x1.00 AND bill x1.00, so a card never calls a quote-level figure an "average marker". The test file builds
 // each sandbox with the real builder (js/ui/academy-sandbox.js), recomputes every number and fails when the economy, the content or a lesson drifts,
 // naming the number that moved. One example is deliberately not a sandbox deal: mission 4 walks a made-up buyer through the real Haggle game so that
 // three plays can meet the same hidden limit, and says so on the card.
 //
 // Conventions the runner relies on:
-//  - A mission's `win` is always a different event from its last step's `wait`, and always causally after it (a click on the control that
-//    produces it, or a consequence of it), so a runner that watches `win` only once the last step is done cannot dead-lock.
+//  - A mission's `win` is either a different event from its last step's `wait`, causally after it (a click on the control that produces it, or a
+//    consequence of it), or the very same event, with a last-step `wait.match` that implies the win's (js/ui/academy-sandbox.js `feedRun` lets one event
+//    finish the last step and win, and the test file plays both shapes). The second shape is for the two lessons whose last deal can reach the engine
+//    without a haggle, or can be struck with the wrong buyer: m01 (a sale to anyone sends the same haggle, so only the pitch names Wen) and m02 (the Market
+//    card's Quick buy sends a `buy` and no haggle). Everywhere else the step waits for the haggle and the win is the pitch or buy that follows it.
 //  - The Deal Room tells the engine what a player did only when the deal is over (js/deal.js `finish`: Pass, See the result or Quick), so an `inspect`,
 //    `haggle`, `auction` or `buy` event arrives together with the others at the end of one deal, never when a stage is concluded. Steps and wins are
 //    written against that order: inspect, then haggle, then auction, then buy or pitch.
@@ -18,7 +23,9 @@
 //    which is the same from every route (sprite, card, Stock row; Quick, by hand or a mix). Click waits are only for the HUD (hud-cash, hud-clock, hud-networth).
 //  - For a sale the engine hears haggle (the Close stage) first and pitch last (js/deal.js `finish`). The last deal of a lesson waits for haggle and wins on the
 //    pitch that follows it; a deal that is followed by another step waits for pitch, so the Continue press on its result screen can never advance a later step.
-//    A wait on haggle is safe only where the Close stage is really played: the test file checks that none of these sales is capped (nothing to haggle over).
+//    A wait on haggle is safe only where the Close stage is really played (the test file checks that none of these sales is capped: nothing to haggle over) and
+//    where the haggle itself says enough: its payload (role, mult, score, deal) names no buyer and no lot, so a step that must hear ONE buyer or ONE kind of lot
+//    waits for the pitch or the buy, whose payload does (seg, cls, fake, price).
 //  - A coach card whose anchor is a deal-* element is carried into the Deal Room while one is open (and floats above the dock before), so a step that opens a deal
 //    and plays it is anchored on deal-quick, deal-room or the stage panel it teaches; deal-room is the one that is there for every stage.
 //  - A 'paused' clock moves only when the player taps `hud-clock`; missions that need time (6, 7, 9) end a step with that tap. The lesson runs the clock
@@ -34,9 +41,17 @@
 //  - Districts that need their unlock bonus list at least two districts in `zones` (Game.B is cached by the number of open districts).
 //
 // What a runner must still do that no data can (the test file holds the reference check, `stillPossible`, and plays each mistake below): a lesson whose one scarce
-// thing (the paperclip, the broken van, the last pin set, the last lot) was spent on the wrong buyer cannot be finished and needs a restart, and the coach cannot
-// know it unless the runner asks; a clock tapped before its step spends the scripted shock early (the coach says "do not pause yet" and "watch the ticker", and
-// a runner should hold the clock until the step that asks for it, or pause it when the shock lands). The hints of those steps end by naming Restart.
+// thing (the paperclip, the broken van, the last pin set, the last lot, the only counterfeit, a manager's working capital) was spent on the wrong buyer or the wrong
+// route cannot be finished and needs a restart, and the coach cannot know it unless the runner asks (it should ask after every game event and whenever a step
+// begins, and rebuild the lesson with makeSandboxSession as `play(idx)` does, showing Restart at once rather than after the 20-second hint); a clock tapped before
+// its step spends the scripted shock early (the coach says "do not pause yet" and "watch the ticker", and a runner should hold the clock until the step that asks
+// for it, or pause it when the shock lands). The hints of those steps end by naming Restart.
+//
+// Three things the data cannot fix and the coach words around (js/ui/drawers/market.js and crew.js, js/ui/academy.js are outside this file): the Market card's
+// "Quick buy" calls game.buyLot() and skips the Deal Room, so it sends a `buy` and no inspect, haggle or auction (m02 and m10 name Look it over, and m02's last
+// step is finished by the buy itself); the hire dialog opens on the Broker whenever it is affordable, with the coach card behind it (m06's coach says so before
+// the dialog opens); and a lot or buyer spent early strands a lesson (above). A UI that routes Quick buy through the Deal Room, carries the card into the hire
+// dialog and offers Restart on a stranded lesson makes those three words redundant, not wrong.
 
 export const ACADEMY = [
   // ------------------------------------------------------------------------------------------------------------------ 1
@@ -54,9 +69,9 @@ export const ACADEMY = [
     },
     steps: [
       { id: 'cash', say: "Welcome, founder. This is your whole fortune: $0.00 and one paperclip worth about five cents. Everybody starts exactly here. Tap your cash to begin.", anchor: 'hud-cash', wait: { type: 'click', anchor: 'hud-cash' }, hint: "Tap the cash figure in the top bar. It is the number you are about to grow." },
-      { id: 'stock', say: "Open Stock to meet your paperclip. Its card shows what it is worth today, so you can tell a bargain from a bluff later.", anchor: 'dock-stock', wait: { type: 'ui', ui: 'open-drawer', id: 'stock' }, hint: "Click the Stock icon in the dock at the bottom of the screen." },
+      { id: 'stock', say: "Open Stock to meet your paperclip. Its card shows what it is worth today, so you can tell a bargain from a bluff later. Keep it for now: the sale comes last.", anchor: 'dock-stock', wait: { type: 'ui', ui: 'open-drawer', id: 'stock' }, hint: "Click the Stock icon in the dock at the bottom of the screen." },
       { id: 'market', say: "Now open Market. Buyers appear as cards: what each one wants and how much they can spend. Read all three before you choose, fit label included: how well your clip suits what that buyer wants.", anchor: 'dock-market', wait: { type: 'ui', ui: 'open-drawer', id: 'market' }, hint: "Click the Market icon in the dock, next to Stock." },
-      { id: 'student', say: "Tap the buyer who needs a thin metal tool right now, not the one with the biggest budget. In the Deal Room that opens, press Quick: it pitches at average skill so you can see what need is worth.", anchor: 'deal-quick', wait: { type: 'event', event: 'haggle', match: { role: 'sell' } }, hint: "Wen, the student with the thesis, is the card marked Urgent. Press Quick deal in the room. She pays partly in goods (barter): see Stock after. If the clip is gone, press Restart." },
+      { id: 'student', say: "Tap the buyer who needs a thin metal tool right now, not the one with the biggest budget. In the Deal Room that opens, press Quick: it pitches at average skill so you can see what need is worth.", anchor: 'deal-quick', wait: { type: 'event', event: 'pitch', match: { seg: 'student', outcome: 'win', price: { gte: 1 } } }, hint: "Wen, the student with the thesis, is the card marked Urgent. Press Quick deal in the room. She pays partly in goods (barter): see Stock after. If the clip is gone, press Restart." },
     ],
     win: { event: 'pitch', match: { outcome: 'win', price: { gte: 1 } } },
     why: {
@@ -104,9 +119,9 @@ export const ACADEMY = [
     steps: [
       { id: 'codex', say: "Your first swap unlocked Codex pages. Open the Codex and skim Urgency Premium. Every mission ends with a page like it, written for the next time you need it.", anchor: 'dock-codex', wait: { type: 'ui', ui: 'open-drawer', id: 'codex' }, hint: "Click the Codex icon in the dock." },
       { id: 'market', say: "Open Market. Three lots, all priced near their value, and none says which one is honest. The seller knows. You do not. That gap is called information asymmetry.", anchor: 'dock-market', wait: { type: 'ui', ui: 'open-drawer', id: 'market' }, hint: "Click the Market icon in the dock." },
-      { id: 'first-watch', say: "The first watch looks perfect, and so does its price. Tap it and READ it before you pay: the serial number check costs one inspection point and is the best fake detector.", anchor: 'world:lot:first-watch', wait: { type: 'event', event: 'inspect', match: { fake: true } }, hint: "Probe the serial number, then press Done reading, Continue and Pass on this lot. Passing keeps your read and leaves the watch on the shelf." },
-      { id: 'second-watch', say: "That first watch was a fake, worth about 8% of a real one, and its price never warned you. Now READ the second watch the same way, power-on for condition too, before you pay.", anchor: 'world:lot:second-watch', wait: { type: 'event', event: 'inspect', match: { fake: false } }, hint: "Probe the serial number and the power, then press Done reading, Continue and Pass on this lot to keep what you learned. Quick deal also works, but it buys the watch." },
-      { id: 'buy', say: "Genuine and sound? Then buy it: tap the genuine watch and press Quick. The haggle plays at average skill, so the price may land a little over the list.", anchor: 'world:lot:second-watch', wait: { type: 'event', event: 'haggle', match: { role: 'buy' } }, hint: "Tap the second watch again and press Quick deal. The signed baseball is genuine too, if you would rather buy that." },
+      { id: 'first-watch', say: "The first watch looks perfect, and so does its price. Tap it and READ it before you pay (Look it over, not Quick buy): the serial number check costs one inspection point and is the best fake detector.", anchor: 'world:lot:first-watch', wait: { type: 'event', event: 'inspect', match: { fake: true } }, hint: "Use Look it over, not Quick buy: Quick buy pays at once and skips the check. Probe the serial number, then press Done reading, Continue and Pass on this lot." },
+      { id: 'second-watch', say: "That first watch was a fake, worth about 8% of a real one, and its price never warned you. Now READ the second watch the same way, power-on for condition too, before you pay.", anchor: 'world:lot:second-watch', wait: { type: 'event', event: 'inspect', match: { fake: false } }, hint: "Use Look it over. Probe the serial number and the power, then press Done reading, Continue and Pass on this lot to keep what you learned. Quick deal also works, but it buys the watch." },
+      { id: 'buy', say: "Genuine and sound? Then buy it: tap the genuine watch and press Quick deal (the card's Quick buy works too). The haggle plays at average skill, so the price may land a little over the list.", anchor: 'world:lot:second-watch', wait: { type: 'event', event: 'buy', match: { fake: false } }, hint: "Tap the second watch again and press Quick deal. The signed baseball is genuine too, if you would rather buy that." },
     ],
     win: { event: 'buy', match: { fake: false } },
     why: {
@@ -122,17 +137,17 @@ export const ACADEMY = [
         steps: [
           "Blind buy at $277: 0.78 × $314.60 + 0.22 × $25.17 - $277 = -$26.07 expected. A loss, even though the genuine watch really is worth more than you pay.",
           "If a check were perfect and you bought only genuine watches: 0.78 × ($314.60 - $277) = +$29.33 expected.",
-          "A perfect check would be worth $29.33 + $26.07 = $55.40 compared with buying blind: 0.22 × ($277 - $25.17), the chance of a fake times the money at risk.",
-          "A real probe is noisy. Your serial check catches about four fakes in five and wrongly flags about 3% of genuine watches, so it is worth about $43 here, most of the perfect $55.",
-          "The baseball: blind -$10.75, perfect check +$14.82, so a perfect check is worth $25.57. Same 22%, under half the money at risk.",
+          "Without a look, your best choice is to skip the watch: $0. A perfect check turns that into +$29.33, and set against buying blind it is a $29.33 + $26.07 = $55.40 swing (0.22 × ($277 - $25.17), the chance of a fake times the money at risk).",
+          "A real probe is noisy. Your serial check catches about four fakes in five and wrongly flags about 3% of genuine watches, so it earns about $17 here, more than half of the perfect $29.",
+          "The baseball: blind -$10.75, perfect check +$14.82, a swing of $25.57. Same 22%, under half the money at risk.",
         ],
-        result: "A perfect check turns a -$26.07 bet into a +$29.33 deal on the watch, and a real one still adds about $43. The price did not warn you. Looking did.",
+        result: "Blind, the watch is a -$26.07 bet. A perfect check makes it a +$29.33 deal, and a real serial check about +$17. The price did not warn you. Looking did.",
       },
     },
     teachBack: {
       q: "A seller lists a signed jersey at $150, and a fake would carry the same price. Genuine it is worth $170, a fake about $14, and one in five is fake. A look costs one point. Spend it?",
       options: [
-        { text: "Yes. The listing hides a real chance of a fake, and one point is cheap protection against it.", correct: true, why: "Exactly. Blind, you lose about $11 on average (0.8 × $170 + 0.2 × $14 - $150). A perfect look would be worth about $27 (0.2 × ($150 - $14))." },
+        { text: "Yes. The listing hides a real chance of a fake, and one point is cheap protection against it.", correct: true, why: "Exactly. Blind, you lose about $11 on average (0.8 × $170 + 0.2 × $14 - $150). A perfect look turns that into a +$16 deal (0.8 × ($170 - $150)), a swing of about $27." },
         { text: "No. The jersey lists below its genuine value, so the average buyer still comes out clearly ahead.", correct: false, why: "The listing is below the genuine value, but one jersey in five is a $14 fake. Bought blind, the average buyer loses about $11." },
         { text: "No. The price looks normal, and a normal price means an honest seller.", correct: false, why: "Here fakes carry normal prices too, so a normal price tells you nothing. A look is the only thing that can warn you." },
       ],
@@ -154,9 +169,9 @@ export const ACADEMY = [
       lots: [], zones: [3], features: ['stock', 'market', 'codex'], skills: { ops: 3, growth: 1, fintech: 1 }, perks: ['grad'], cohort: { ghosts: 120 },
     },
     steps: [
-      { id: 'market', say: "Open Market. The Academy lends you a Niche Radar: each buyer's card now shows a crowd meter, how many rivals pitched there lately.", anchor: 'dock-market', wait: { type: 'ui', ui: 'open-drawer', id: 'market' }, hint: "Click the Market icon in the dock." },
-      { id: 'bree', say: "Tap Bree's card, the thrift flipper with the fullest crowd meter. In the Deal Room's PITCH stage read the hint about how she buys, then pick two angles she cares about and your pins can honestly back.", anchor: 'deal-stage-pitch', wait: { type: 'event', event: 'pitch', match: { seg: 'bree' } }, hint: "Pick two angles that fit the hint and what the pins offer (scarcity is their strength), then finish the deal. Quick skips the practice. A toast about crates? Use Bree's card in Market." },
-      { id: 'delphine', say: "Sold. Now tap Delphine, whose crowd meter is almost empty, and PITCH again: new buyer, new hint. Then compare with Bree's sale: 'x as keen' is your angles, the price gap is mostly the crowd.", anchor: 'deal-stage-pitch', wait: { type: 'event', event: 'haggle', match: { role: 'sell' } }, hint: "Tap Delphine's card in Market, choose two angles in the Pitch stage and finish the deal. Quick skips the angles, so you will not practise them. No pins left? Press Restart." },
+      { id: 'market', say: "Open Market. The Academy lends you a Niche Radar: each buyer's card now says how crowded that buyer is, and how many of the recent sales went there.", anchor: 'dock-market', wait: { type: 'ui', ui: 'open-drawer', id: 'market' }, hint: "Click the Market icon in the dock." },
+      { id: 'bree', say: "Tap Bree's card; her line reads Crowded. In the Pitch stage lead with two angles, the selling points you stress: read the hint on how she buys, then pick two her pins can back.", anchor: 'deal-stage-pitch', wait: { type: 'event', event: 'pitch', match: { seg: 'bree' } }, hint: "Pick two angles that fit the hint and what the pins offer (scarcity is their strength), then finish the deal. Quick skips the practice. A toast about crates? Use Bree's card in Market." },
+      { id: 'delphine', say: "Sold. Now tap Delphine, whose card says almost nobody else sells to her, and Pitch again: new buyer, new hint. 'x as keen' is your angles; the price gap is mostly the crowd.", anchor: 'deal-stage-pitch', wait: { type: 'event', event: 'haggle', match: { role: 'sell' } }, hint: "Tap Delphine's card in Market, choose two angles in the Pitch stage and finish the deal. Quick skips the angles, so you will not practise them. No pins left? Press Restart." },
     ],
     win: { event: 'pitch', match: { seg: 'bookstore' } },
     why: {
@@ -178,11 +193,11 @@ export const ACADEMY = [
       },
     },
     teachBack: {
-      q: "Bree buys with feeling, and your pins are rare and carry a story. Which pair of angles should you lead with?",
+      q: "Kenji, a physics tutor, weighs things up with his head and wants proof. You are selling him a graphing calculator that works well. Which pair of angles should you lead with?",
       options: [
-        { text: "Whichever two angles you like most about the pins. A good buyer will come round to what you love.", correct: false, why: "The pitch is about the buyer, not about you. Aim at what they care about and what your goods can honestly back." },
-        { text: "Utility with price: practical, cheap appeals that suit most buyers.", correct: false, why: "Those are the angles for a buyer who weighs numbers. Bree buys with feeling and the pins back neither, so she cooled to x0.98 and wanted 9% off." },
-        { text: "Scarcity with story: both suit how she buys, and rare pins with a story can honestly back them.", correct: true, why: "Yes. A pair works when the buyer cares about both angles and the goods back them up. Scarcity with story kept her keen (x1.12) and the price at fair." },
+        { text: "Scarcity with story, the pair that suited Bree.", correct: false, why: "That pair suited Bree because she buys with feeling and her pins were rare. Kenji weighs things with his head, so it leaves him only about x1.01 as keen, against about x1.13 for the best pair." },
+        { text: "Utility with price: both suit how he buys, and a calculator can honestly back them.", correct: true, why: "Yes. A pair works when the buyer cares about both angles and your goods back them up, here about x1.13 as keen. Bree needed feeling; Kenji needs proof and numbers." },
+        { text: "Prestige with scarcity: sell it as an exclusive piece.", correct: false, why: "A claim your goods cannot back is worse than silence. A calculator has no standing to claim, and this is Kenji's coolest pair, about x1.00 as keen." },
       ],
     },
     reward: { xp: 140, codex: ['persona-fit', 'market-saturation', 'saturation-herd'], points: 1 },
@@ -202,9 +217,9 @@ export const ACADEMY = [
       lots: [], zones: [2], features: ['stock', 'market', 'codex'], skills: { ops: 2, growth: 2, fintech: 2 }, cohort: { ghosts: 0 },
     },
     steps: [
-      { id: 'market', say: "Open Market. Three people circle your radios: Mr. Abernathy, a hard bargainer, Dolores, friendlier, and a busker who would pay less but is always your alternative.", anchor: 'dock-market', wait: { type: 'ui', ui: 'open-drawer', id: 'market' }, hint: "Click the Market icon in the dock." },
-      { id: 'careless', say: "Deal 1, the careless way: tap Mr. Abernathy's card, press Quick for the Pitch, then in the Close open at FAIR and take their first answer. Compare the result's multiple of fair, not the dollars.", anchor: 'deal-room', wait: { type: 'event', event: 'pitch', match: { seg: 'collector' } }, hint: "Anchor at fair. If they counter, press Accept. If they say yes at once, the deal is already done. Two crates? Use his card in Market, or tick one in Stock first." },
-      { id: 'careful', say: "Deal 2, the careful way: tap Dolores, press Quick for the Pitch again, then in the Close anchor HIGH, hold, and concede in small steps. If she stalls, press Mention your other option once. Aim for 10% over fair.", anchor: 'deal-room', wait: { type: 'event', event: 'haggle', match: { role: 'sell' } }, hint: "Accept only at 1.10 × fair or better. A weak Pitch can put that out of reach: if the Close stalls, Leave and tap Dolores again, and press Quick for the Pitch." },
+      { id: 'market', say: "Open Market. Three people circle your radios: Mr. Abernathy (a hard bargainer), Dolores (friendlier) and Tariq, a busker who would pay less but is your fallback.", anchor: 'dock-market', wait: { type: 'ui', ui: 'open-drawer', id: 'market' }, hint: "Click the Market icon in the dock." },
+      { id: 'careless', say: "Deal 1, the careless way: tap Mr. Abernathy's card, press 'Quick: auto-play at average skill' for the Pitch, then in the Close press Fair and take his first answer. Compare the multiple of fair, not the dollars.", anchor: 'deal-room', wait: { type: 'event', event: 'pitch', match: { seg: 'collector' } }, hint: "Press Fair. If they counter, press Accept their offer. If they say yes at once, the deal is already done. Two crates? Use his card in Market, or tick one in Stock first." },
+      { id: 'careful', say: "Deal 2, the careful way: tap Dolores, press the stage's Quick for the Pitch (not Quick deal). In the Close read 'Your read of their limit', press Aim high, Hold, then Come down small. Aim for 10% over fair.", anchor: 'deal-room', wait: { type: 'event', event: 'haggle', match: { role: 'sell' } }, hint: "Smallest step: the Come down button with the smallest amount. Quick deal skips the Close. If she stalls, Mention your other option once. Accept at 1.10 × fair. Weak Pitch? Leave and tap Dolores again." },
     ],
     win: { event: 'pitch', match: { mult: { gte: 1.1 } } },
     why: {
@@ -249,7 +264,7 @@ export const ACADEMY = [
     steps: [
       { id: 'quests', say: "Open Quests. Missions, bounties and your skill points live here. A point on Ops makes every repair cheaper and better, and this lesson pays you another one at the end.", anchor: 'dock-quests', wait: { type: 'ui', ui: 'open-drawer', id: 'quests' }, hint: "Click the Quests icon in the dock." },
       { id: 'stock', say: "Open Stock. Your broken van is in the crate. Broken goods sell for a fraction of their working price.", anchor: 'dock-stock', wait: { type: 'ui', ui: 'open-drawer', id: 'stock' }, hint: "Click the Stock icon in the dock." },
-      { id: 'repair', say: "Read the van's repair quote in Stock: cost, restored quality, new value. Is the gain bigger than the cost? Your Ops sets that price. Then press Repair and stop the marker in the green band.", anchor: 'drawer', wait: { type: 'event', event: 'repair' }, hint: "Press Repair on the van's card. In the Fix stage press Stop when the marker is in the green band, three times (Ops widens it), or press Careful. Van sold already? Press Restart." },
+      { id: 'repair', say: "Read the van's repair quote in Stock: cost, restored quality, new value. Is the gain bigger than the cost? Your Ops sets that price. Then press Repair and stop the marker in the green band.", anchor: 'drawer', wait: { type: 'event', event: 'repair' }, hint: "Press Repair on the van's card. In the Fix stage press Stop in the green band three times (Ops widens it), or press Careful: the quote's quality, a bill 30% over it. Van sold already? Press Restart." },
       { id: 'market', say: "Fixed. Open Market and find a buyer who wants a van that runs.", anchor: 'dock-market', wait: { type: 'ui', ui: 'open-drawer', id: 'market' }, hint: "Click the Market icon in the dock." },
       { id: 'fleet', say: "Delgado Delivery buys vans and pays far more for one that runs. Tap the fleet buyer's card, then press Quick in the Deal Room and compare the price with the $1,058 Delgado would have paid for the broken van.", anchor: 'deal-room', wait: { type: 'event', event: 'haggle', match: { role: 'sell' } }, hint: "Tap the fleet buyer's card in Market, then press Quick deal inside the Deal Room." },
     ],
@@ -259,19 +274,19 @@ export const ACADEMY = [
       body: [
         "A repair is an investment: you spend cash now to raise an asset's value. Repair ROI is the gain after cost divided by the cost. Do it only when the ROI beats what the same cash would earn elsewhere. That alternative return is your opportunity cost.",
         "Three things set the price of a fix. Ops makes it cheaper (each level multiplies the cost by 0.42) and better (quality climbs from 0.50 at Ops 1 to 1.00 at Ops 5). Auto Row takes 25% off the bill and unlocking it 10% more: 0.75 × 0.90 = 0.675 of the van's $1,050 base. Your timing on the marker nudges quality by up to 15% and cost by -10% to +30%.",
-        "So the same van can be a thin gain for one founder and a bargain for another. That is why a skill point on Ops is worth spending.",
+        "So the same van can be a loss for one founder and a bargain for another. Stock's quote is the bill before the marker, and Careful, the steady setting, runs 30% over it. That is why a skill point on Ops is worth spending.",
       ],
       formula: "ROI = (value after - value before - cost) / cost. Cost = base × 0.42^(Ops - 1) × district discounts. Quality = 0.50 + 0.50 × min(1, (Ops - 1) / 4).",
       example: {
-        setup: "A working van is worth $3,828. Broken, it is worth 30% of that: $1,148. Base repair $1,050, times 0.675 for Auto Row and its unlock bonus. Numbers assume an average Deal Room result and a perfectly average marker. Delgado Delivery takes broken vans too.",
+        setup: "A working van is worth $3,828. Broken, it is worth 30% of that: $1,148. Base repair $1,050, times 0.675 for Auto Row and its unlock bonus. Numbers assume an average Deal Room result and the Careful setting: the quote's quality at a bill 30% over it. Delgado Delivery takes broken vans too.",
         steps: [
-          "Ops 1: cost $1,050 × 0.675 = $709. Quality 0.50, so the van is worth $1,914. Gain $766 minus $709 cost = $57 (ROI 8%). Hardly worth the risk.",
-          "Ops 2: cost $1,050 × 0.42 × 0.675 = $298. Quality 0.625, value $2,393. Gain $1,244 minus $298 = $946 (ROI 318%).",
-          "Ops 3: cost $125, quality 0.75, value $2,871: +$1,598 (ROI 1,278%).",
-          "Even a poor marker at Ops 2 (quality -15%, cost +30%) nets +$498. A perfect one nets +$1,335.",
-          "Delgado pays $1,058 for the broken van and $2,203 for the repaired one, more than double, for a $298 repair.",
+          "Ops 1: cost $1,050 × 0.675 × 1.30 = $921.38. Quality 0.50, so the van is worth $1,914. Gain $765.60 minus $921.38 cost = -$155.77 (ROI -17%). It loses money.",
+          "Ops 2: cost $1,050 × 0.42 × 0.675 × 1.30 = $387. Quality 0.625, value $2,393. Gain $1,244 minus $387 = $857 (ROI 221%).",
+          "Ops 3: cost $163, quality 0.75, value $2,871: +$1,560 (ROI 960%).",
+          "Careful is not the worst case. A poor marker at Ops 2 (quality -15%, cost +30%) still nets +$498, and a perfect one (quality +15%, cost -10%) nets +$1,335.",
+          "Delgado pays $1,058 for the broken van and $2,203 for the repaired one, more than double, for a $387 repair.",
         ],
-        result: "One skill point on Ops turns a $57 scrape into a $946 profit on the same van. Always read the quote before you pay.",
+        result: "One skill point on Ops turns a $156 loss into an $857 profit on the same van. Always read the quote before you pay.",
       },
     },
     teachBack: {
@@ -294,29 +309,29 @@ export const ACADEMY = [
       features: ['stock', 'market', 'codex', 'quests', 'crew'], skills: { ops: 2, growth: 2, fintech: 2 }, cohort: { ghosts: 200 },
     },
     steps: [
-      { id: 'cash', say: "You hold $620 in cash. It is safe, and it earns $0 a day. Money that sits still is asleep. Tap your cash, then let's wake it up.", anchor: 'hud-cash', wait: { type: 'click', anchor: 'hud-cash' }, hint: "Tap the cash figure in the top bar." },
+      { id: 'cash', say: "You hold $620 in cash. It is safe, and it earns $0 a day. Cash at work can earn more, but starting the work costs a fee. Tap your cash, then let's price that trade.", anchor: 'hud-cash', wait: { type: 'click', anchor: 'hud-cash' }, hint: "Tap the cash figure in the top bar." },
       { id: 'crew', say: "Open Crew. This is where managers live: people who buy and sell for you in a loop, on a fixed cycle. At this size they pay thinly: we hire only to watch the loop run.", anchor: 'dock-crew', wait: { type: 'ui', ui: 'open-drawer', id: 'crew' }, hint: "Click the Crew icon in the dock." },
-      { id: 'hire', say: "Press Hire a manager. The fee AND the capital leave your wallet, so keep $450 free. Hire the Student on the laptop lane to Brightpath (a lane is the goods and buyer a manager runs). Expect a long payback.", anchor: 'drawer', wait: { type: 'event', event: 'hire' }, hint: "Pick the Student, Off-Lease Laptop Pallet and Brightpath Corporate Training. Leave Capital per cycle at full: Use what I can afford runs a big manager on pennies. You can also tap the empty plot." },
+      { id: 'hire', say: "Press Hire a manager. The room opens on the Broker: pick the Student first. The fee AND the capital leave your wallet, so keep $450 free. A lane is the goods and buyer a manager runs. Expect a long payback.", anchor: 'drawer', wait: { type: 'event', event: 'hire' }, hint: "The room opens on the Broker: click the Student. Lane: Off-Lease Laptop Pallet to Brightpath Corporate Training. Leave Capital per cycle at full; Use what I can afford runs a big manager on pennies." },
       { id: 'clock', say: "Your cash goes out to work as soon as time runs. Press the clock: it runs at 16x, so the 41-hour cycle takes about 18 seconds. Watch your $450 go out and come home.", anchor: 'hud-clock', wait: { type: 'click', anchor: 'hud-clock' }, hint: "Tap the clock to let time run. If the manager never starts a cycle it is starved of cash: press Restart on this card and hire the Student." },
     ],
     win: { event: 'cycle' },
     why: {
-      title: 'Cash is a tool, not a trophy',
+      title: 'A manager is a bet with a payback date',
       body: [
-        "Working capital is the cash a business needs to run its loop: pay for goods, wait, get paid. A manager turns idle cash into that loop. Money in the wallet earns nothing. Money in the loop earns whatever its cycle nets after fees, every time the loop closes.",
+        "Working capital is the cash a business needs to run its loop: pay for goods, wait, get paid. A manager turns idle cash into that loop. Money in the wallet earns nothing. Money in the loop earns whatever its cycle nets after fees, and that has to pay back the fee you spent to start it before it beats idle cash.",
         "Cash-flow velocity is how often a dollar completes the loop. Profit per day is the net of one cycle over its length in days, so a faster cycle or a bigger net both help. But every cycle pays a fee on the whole allocation, so a thin lane can lose money: read the forecast first. More capital, a faster lane and upgrades are what make a manager pay.",
         "The trap: a manager needs working capital as well as a fee. Spend everything on the hire and nothing is left to work with, so the manager sits idle, starved. A starved manager earns nothing, and the fee is already spent: your wallet is $600 lighter, and releasing the manager brings back only 60%. Lowering its capital to fit leaves you with an expensive manager earning next to nothing.",
       ],
-      formula: "Hire fee + working capital <= cash on hand. Net per cycle = gross - fee - tax - royalty - overhead. Profit per day = net per cycle / days per cycle.",
+      formula: "Hire fee + working capital <= cash on hand. Net per cycle = gross - fee - tax - royalty - overhead. Profit per day = net per cycle / days per cycle. Payback in days = hire fee / profit per day.",
       example: {
         setup: "You have $620. The Student costs $120 and works with up to $450. The Broker costs $600 and works with up to $1,000. Both take the quiet lane: laptop pallets to Brightpath. Your three skills, Ops, Growth and Fintech (Capital Sourcing), are at level 2. Forecasts are read at the moment you hire.",
         steps: [
           "Broker: $620 - $600 = $20 left to work with, against the $1,000 of capital per cycle it is set to use. Starved: no cycle ever starts, and the $600 fee has left your wallet.",
           "Student: $620 - $120 = $500 left, so the full $450 goes to work. A cycle lasts 41 hours.",
           "Its forecast: gross $16.43, less $15.06 of costs (the platform fee alone is $10.96, then tax, the manager's royalty and overhead), leaves $1.37, or $0.80 a day. Real cycles, the first included, pay more or less as the crowd moves.",
-          "A funded Broker on the same lane would net $8.28 in 32 hours, $6.21 a day. Idle cash earns $0 a day.",
+          "A funded Broker on the same lane would net $8.28 in 32 hours, $6.21 a day, and still need 97 days to earn back its $600 fee. Idle cash earns $0 a day.",
         ],
-        result: "Fed Student: $0.80 a day. Starved Broker: $0 and a wallet $600 lighter. Idle cash: $0 and nothing spent. At this size the Student is a training wheel: it needs about 150 days to earn back its $120 fee, longer than a 90-day run. Always read the payback before you hire.",
+        result: "Fed Student: $0.80 a day. Starved Broker: $0 and a wallet $600 lighter. Idle cash: $0, nothing spent. The Student needs about 150 days to earn back its $120 fee, longer than a 90-day run, so here it is a training wheel. Divide the fee by the profit per day before you hire.",
       },
     },
     teachBack: {
@@ -493,10 +508,10 @@ export const ACADEMY = [
       zones: [6], features: ['stock', 'market', 'crew', 'bank', 'travel', 'codex', 'quests'], skills: { ops: 2, growth: 2, fintech: 2 }, cohort: { ghosts: 0 },
     },
     steps: [
-      { id: 'read', say: "Deal Day. Tap an antique lot and READ it (serial, papers), then comes the AUCTION. Fixed and sold, a lot nets about $616: stop well short.", anchor: 'world:lot:estate-lot-a', wait: { type: 'event', event: 'inspect' }, hint: "Probe the serial number (a read with no probe does not count), press Done reading, then Continue. A ceiling near $450 is well short of $616 and still wins a lot." },
+      { id: 'read', say: "Deal Day. Tap an antique lot and READ it (serial, papers), then comes the AUCTION. Fixed and sold, a lot nets about $616: stop well short.", anchor: 'world:lot:estate-lot-a', wait: { type: 'event', event: 'inspect' }, hint: "Use Look it over, not Quick buy. Probe the serial number (a read with no probe does not count), press Done reading, then Continue. A ceiling near $450 is well short of $616 and still wins a lot." },
       { id: 'auction', say: "AUCTION: bid or drop out each round. A win above the lot's worth is the winner's curse. Outbid? Other lots remain.", anchor: 'deal-room', wait: { type: 'event', event: 'auction', match: { won: true } }, hint: "Press Bid while the next price is well under your ceiling and Drop out when it is not. If a rival outbids you, tap another lot and read it too." },
       { id: 'fix', say: "Yours, but broken. Open Stock and FIX it. Read the quote first: repair only if the gain beats the cost.", anchor: 'dock-stock', wait: { type: 'event', event: 'repair' }, hint: "Press Repair on the lot's card in Stock, then stop the marker in the green band, or press Careful." },
-      { id: 'score', say: "Your stake is $1,000. Tap your net worth: over $1,000 it is half your EEI score, and the time bonus is the rest.", anchor: 'hud-networth', wait: { type: 'click', anchor: 'hud-networth' }, hint: "Click the net worth figure in the top bar. Divide it by your $1,000 stake: that is half of your EEI." },
+      { id: 'score', say: "Your stake is $1,000. Tap your net worth, divide it by $1,000: one factor of your EEI. The time bonus multiplies it.", anchor: 'hud-networth', wait: { type: 'click', anchor: 'hud-networth' }, hint: "Click the net worth figure in the top bar, then divide it by $1,000. With all 90 days still ahead the time bonus is about x2." },
       { id: 'close', say: "Now sell: tap the antique dealer's card, PITCH two angles, then CLOSE: anchor high, hold, concede small. Then you choose your two Backgrounds.", anchor: 'deal-room', wait: { type: 'event', event: 'haggle', match: { role: 'sell' } }, hint: "Tap the dealer's card in Market, choose two angles in the Pitch stage, then open high, hold, and split or accept at or above fair." },
     ],
     win: { event: 'pitch', match: { seg: 'antiqueDealer' } },
@@ -516,7 +531,7 @@ export const ACADEMY = [
           "Ben: 20 × (1 + 0/90) = 20.00.",
           "For Ben to match Ana he would need to end with $26,667: speed counts like extra profit. Ana's $20,000 is after the 12% exit brokerage, so she needed about $22,727 first.",
         ],
-        result: "Same money, different days: 26.67 against 20.00. Your lesson stake was $1,000, so the net worth you checked, over $1,000, was the first half of your EEI. It grows from deals like this one, repeated well and early.",
+        result: "Same money, different days: 26.67 against 20.00. Your lesson stake was $1,000, so the net worth you checked, divided by $1,000, was the first factor of your EEI; the time bonus multiplies it. It grows from deals like this one, repeated well and early.",
       },
     },
     teachBack: {
