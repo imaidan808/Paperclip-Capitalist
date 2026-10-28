@@ -45,7 +45,7 @@ The **Debrief** screen assembles each student's own evidence (ledger rows, Day 4
 
 - **A, the asymmetric trade.** Identify a swap with a classmate whose specialty differed from yours. State the asset before and after, and explain with margin data how it created value neither of you could create alone.
 - **B, the Day 45 credit crunch.** Detail your capital structure when the shock went live. If leveraged, explain what you did to prevent margin compression; if holding cash, how you exploited the drop in asset values.
-- **C, decoding the creativity penalty.** Pick a phase where the Creativity Engine compressed your margins. Using the formula, analyse how cohort volume drove your returns and which niche you pivoted to.
+- **C, decoding the creativity penalty.** Pick a phase where the Creativity Engine compressed your margins. Using the formula, analyze how cohort volume drove your returns and which niche you pivoted to.
 
 ## Tuning for your course
 Instructor sliders: transaction friction, audit frequency, synthetic-classmate count, algorithmic events, EEI floor. Everything else is in `js/config.js` (rates, fees, shocks, the economy's knobs) and `js/data/` (districts, assets, buyers, Backgrounds).

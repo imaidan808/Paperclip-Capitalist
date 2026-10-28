@@ -8,11 +8,11 @@ export const PERKS = {
   },
   grad: {
     id: 'grad', name: 'Business-School Grad', icon: '🎓', basis: 'Credentials and theory.',
-    strength: 'Free Niche Radar with exact saturation, +1 Capital Sourcing, loan spreads 15% lower.', cost: 'Student loans: 5% of every profit is garnished until $3,000 is repaid; -1 Ops (theory over practice).',
-    mods: { radar: true, fintechBonus: 1, spreadAdj: -0.15, opsBonus: -1, garnish: { rate: 0.05, cap: 3000 } },
+    strength: 'Free Niche Radar with exact saturation, +1 Capital Sourcing, loan spreads 15% lower, and an alumni network: buyers bring 12% bigger budgets.', cost: 'Student loans: 5% of every profit is garnished until $3,000 is repaid; -1 Ops (theory over practice).',
+    mods: { radar: true, fintechBonus: 1, leadBudget: 1.12, spreadAdj: -0.15, opsBonus: -1, garnish: { rate: 0.05, cap: 3000 } },
   },
   trades: {
-    id: 'trades', name: 'Licensed Tradesperson', icon: '🔧', basis: 'Skilled labour.',
+    id: 'trades', name: 'Licensed Tradesperson', icon: '🔧', basis: 'Skilled labor.',
     strength: '+2 Ops, repairs cost 50% less, broken goods are 20% cheaper to source.', cost: 'Not a salesperson: pitch prices -8% and haggling is harder (buyers have less patience).',
     mods: { opsBonus: 2, repairMult: 0.5, brokenDiscount: 0.2, pitchMult: 0.92, haggleHandicap: 1 },
   },
