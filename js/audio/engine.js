@@ -22,7 +22,7 @@ function makeBucket([rate, burst]) {
 }
 const oscCount = (layers) => layers.reduce((n, L) => n + (L.k === 'tone' ? (L.uni ? L.uni[0] : 1) + (L.vib ? 1 : 0) : L.k === 'bank' ? keptPartials(L).length : 1 + (L.am ? 2 : 0)), 0);
 const clamp = (x, lo, hi) => Math.min(hi, Math.max(lo, x));
-const DEFAULT_SETTINGS = { master: 70, mute: false, ui: true, game: true, ambient: false, ambientLevel: 70, dial: false, clockSounds: true, quiet: false };
+const DEFAULT_SETTINGS = { master: 70, mute: false, ui: true, game: true, ambient: false, ambientLevel: 70, dial: false, clockSounds: true, quiet: false, worldTicks: true };
 
 /**
  * cfg: { get: () => settings.audio, now: () => ms, factory: () => AudioContext (null: Web Audio is missing), timers: { set, clear }, random, measure (false: do not measure the makeup) }
@@ -36,9 +36,9 @@ export function createAudio(cfg = {}) {
   const factory = cfg.factory !== undefined ? cfg.factory : (G.AudioContext || G.webkitAudioContext ? () => new (G.AudioContext || G.webkitAudioContext)({ latencyHint: 'interactive' }) : null);
   let supported = typeof factory === 'function';
   let meterNode = null;
-  let ctx = null, chain = null, nodes = null, unlocked = false, hidden = false, idleSuspended = false, makeupSet = false, seedN = 0;
+  let ctx = null, chain = null, nodes = null, unlocked = false, gesture = false, hidden = false, idleSuspended = false, makeupSet = false, seedN = 0, burstN = 0, momentBurst = -1;
   const listeners = new Set(), rs = createResolverState();
-  const env = { speed: 1, paused: false, busy: false, hold: false, lagMs: 0, justVisible: false, rewound: false, sandbox: false, lastPress: -Infinity, netWorth: 0, classroom: false };
+  const env = { speed: 1, paused: false, busy: false, market: false, hold: false, lagMs: 0, justVisible: false, rewound: false, sandbox: false, lastPress: -Infinity, netWorth: 0, classroom: false };
   const stats = { dropped: {}, played: {}, sentences: 0, bursts: 0, maxSentences: 0 };
   const voices = [], cd = new Map(), famLast = {}, poolLast = new Map(), rotateLast = new Map(), ducks = {}, buckets = {};
   for (const [k, v] of Object.entries(BUCKET_SPEC)) buckets[k] = makeBucket(v);
@@ -48,9 +48,11 @@ export function createAudio(cfg = {}) {
   const drop = (reason) => { stats.dropped[reason] = (stats.dropped[reason] || 0) + 1; return null; };
   const notify = (what) => { for (const fn of [...listeners]) { try { fn(what); } catch { /* a listener must not break the sound */ } } };
   const logOnce = (key, e) => { if (broken.has(key)) return; broken.add(key); try { console.warn('[audio]', key, e && e.message ? e.message : e); } catch { /* no console */ } };
-  const settings = () => { const a = get() || DEFAULT_SETTINGS; return { master: clamp(Number.isFinite(+a.master) ? +a.master : 70, 0, 100), mute: a.mute === true, ui: a.ui !== false, game: a.game !== false, ambient: a.ambient === true, ambientLevel: clamp(Number.isFinite(+a.ambientLevel) ? +a.ambientLevel : 70, 0, 100), dial: a.dial === true, clockSounds: a.clockSounds !== false, quiet: a.quiet === true }; };
+  const settings = () => { const a = get() || DEFAULT_SETTINGS; return { master: clamp(Number.isFinite(+a.master) ? +a.master : 70, 0, 100), mute: a.mute === true, ui: a.ui !== false, game: a.game !== false, ambient: a.ambient === true, ambientLevel: clamp(Number.isFinite(+a.ambientLevel) ? +a.ambientLevel : 70, 0, 100), dial: a.dial === true, clockSounds: a.clockSounds !== false, quiet: a.quiet === true, worldTicks: a.worldTicks !== false }; };
   /** What the settings amount to: the Classroom rule forces ambient, the dial tone and the clock sounds off (7.1). */
   const eff = () => { const s = settings(); return { ...s, ambient: s.ambient && !s.quiet, dial: s.dial && !s.quiet, clockSounds: s.clockSounds && !s.quiet }; };
+  /** Nothing can be heard: muted, or the volume is at 0. No voice is built, no bed runs and no context is made for it (a muted page costs nothing). */
+  const silent = () => { const s = eff(); return s.mute || s.master <= 0; };
   const playable = () => supported && !!ctx && unlocked && !hidden && ctx.state !== 'closed';
   const ctxNow = () => ctx.currentTime;
 
@@ -100,7 +102,7 @@ export function createAudio(cfg = {}) {
   const amb = createAmbient({
     ctx: () => ctx, out: () => nodes.ambLevel, now: nowMs, random,
     setTimeout: (f, ms) => timers.set(f, ms), clearTimeout: (h) => timers.clear(h),
-    enabled: () => eff().ambient && !eff().mute, running: () => playable(), dialogOpen: () => env.hold, lastMedium: () => lastMedium, lastMoment: () => lastMoment,
+    enabled: () => eff().ambient && !silent(), running: () => playable(), dialogOpen: () => env.hold, lastMedium: () => lastMedium, lastMoment: () => lastMoment,
     duck: (db) => { if (!nodes) return; const t = ctxNow(); nodes.ambBase.gain.cancelScheduledValues(t); nodes.ambBase.gain.setTargetAtTime(dB(db), t, db < 0 ? 0.1 : 0.17); },
     shot: (id, layers, pan) => { if (!nodes || !playable()) return; voice(ctx, nodes.ambLevel, layers, ctxNow() + LIMITS.LEAD, { seed: ++seedN, trim: TRIMS.oneShots?.[id] ?? 0, pan, jitterCents: 7 }); },
   });
@@ -108,8 +110,9 @@ export function createAudio(cfg = {}) {
   // ---- gates shared by play and request
   function gate(e, id, opts) {
     const s = eff();
-    if (s.mute) return 'mute';
+    if (s.mute || s.master <= 0) return 'mute';
     if (e.bus === 'ui' ? !s.ui : !s.game) return 'bus';
+    if ((id === 'world.hover' || id === 'world.step') && !s.worldTicks) return 'bus'; // the world's ticks have a switch of their own (7.1): hover and footsteps are the most frequent sounds there are
     if (s.quiet && e.bus === 'game' && tierOf(id, opts.variant ?? firstVariant(id)) === 'tiny') return 'quiet';
     if ((e.class === 'clock' || opts.clock) && !s.clockSounds) return 'bus';
     if (!playable()) return 'locked';
@@ -176,18 +179,22 @@ export function createAudio(cfg = {}) {
     if (!main.opts.noCooldown && last && t < last.until) { if (rank > last.rank && last.group && !last.group.stopped) replace = last.group; else return drop('cooldown'); }
     // the player flag: a press or a world activation in the last 1500 ms draws from a bucket of its own
     const player = main.opts.player ?? (main.e.player && (main.e.class === 'press' || main.e.class === 'world' || recentPress(env, t)));
-    const bkt = player ? buckets.player : buckets[heavy.tier];
+    // The bucket is the CAUSE's own tier, not its heaviest member's: a sale with an xl coin is a medium sound that carries a big coin, and charging the loud bucket for it left the level-up
+    // of the same burst nothing to draw from. The second sentence of a burst (the resolver's reward) was already limited by the reward budget, so it does not queue behind the first.
+    const second = base.role === 's2';
+    const bkt = player ? buckets.player : buckets[main.tier];
     // causal groups (3.4.6)
     if (main.opts.cause === 'result' && t - lastMedium < 1500) return drop('cooldown');
     if ((main.opts.cause === 'toast' || main.opts.cause === 'dialog') && t - lastGame < 400) return drop('cooldown');
     // refusal family escalation: a repeat within 2 s plays at -4 dB, a third is silent until 2 s of quiet
     let refuseDb = 0;
     if (REFUSAL.has(main.id)) { const r = t - refuse.last > 2000 ? 0 : refuse.n; if (r >= 2) return drop('cooldown'); refuseDb = r === 1 ? -4 : 0; }
-    if (!bkt.can(t)) return drop('bucket');
+    // run.end and the two alerts preempt (3.4.7): they are the most serious sounds in the game and are never held back by a bucket that a fanfare 1 s ago emptied
+    if (!bkt.can(t) && !second && !PREEMPT.has(main.id)) return drop('bucket');
     // the moment queue (3.4.7): the big moments are serial
     let extraDelay = 0;
     const moment = isMoment(heavy.id, heavy.variant, heavy.tier);
-    if (moment && t < momentUntil) {
+    if (moment && t < momentUntil && !(second && base.bid != null && base.bid === momentBurst)) { // the second sentence of the burst that made the slot busy is the resolver's own plan
       if (PREEMPT.has(heavy.id)) { for (const v of voices) if (v.moment) stopGroup(v, 0.12); }
       else if (momentUntil - t <= 500 && !momentQueued) { extraDelay = (momentUntil - t) / 1000; momentQueued = true; }
       else return drop('budget'); // the slot is taken: a reward degrades to its tick (the resolver's job), anything else is dropped
@@ -208,7 +215,7 @@ export function createAudio(cfg = {}) {
     const group = { id: main.id, variant: main.variant, tier: heavy.tier, startMs: t + extraDelay * 1000, endMs: t, voices: [], moment, osc: 0, stopped: false };
     const startT = ctxNow() + LIMITS.LEAD;
     for (const m of plan) {
-      const k = pickPool(m.e, m.id + '#' + m.variant);
+      const k = Number.isInteger(m.opts.poolIndex) && m.opts.poolIndex >= 0 && m.opts.poolIndex < (m.e.pool || 1) ? m.opts.poolIndex : pickPool(m.e, m.id + '#' + m.variant); // poolIndex: a member asked for by name (the audition page)
       let layers = layersFor(m.id, m.variant, m.opts.params, k);
       const skip = new Set();
       for (const [fam, ms2] of Object.entries(FAMILY_MS)) if (t - (snapshot[fam] ?? -Infinity) < ms2) skip.add(fam);
@@ -244,7 +251,7 @@ export function createAudio(cfg = {}) {
     if (REFUSAL.has(main.id)) { refuse = { n: (t - refuse.last > 2000 ? 0 : refuse.n) + 1, last: t }; }
     if (main.e.bus === 'game' && PRI[heavy.tier] >= 2) lastMedium = t;
     if (main.e.bus === 'game') lastGame = t;
-    if (moment) { momentUntil = Math.max(momentUntil, group.endMs); lastMoment = t; if (extraDelay === 0) momentQueued = false; }
+    if (moment) { momentUntil = Math.max(momentUntil, group.endMs); lastMoment = t; momentBurst = base.bid ?? -1; if (extraDelay === 0) momentQueued = false; }
     if (!main.opts.noDuck) { // a loud sound ducks the rest so it stands clear; the duck lasts as long as the sound plus 300 ms (3.5)
       const len = group.endMs - t + 300;
       if (heavy.tier === 'loud') { duck('amb', null, -9, len); for (const bus of ['ui', 'game']) { duck(bus, 'tiny', -6, len); duck(bus, 'medium', -3, len); } }
@@ -269,7 +276,8 @@ export function createAudio(cfg = {}) {
       for (const d of out.dropped) drop(d.reason);
       lastBurst = out;
       stats.sentences += out.sentences; stats.bursts++; stats.maxSentences = Math.max(stats.maxSentences, out.sentences);
-      for (const p of out.plays) playMix(p.mix.map(([id, o]) => [id, p.delay ? { ...o, delay: (o.delay || 0) + p.delay / 1000 } : o]), { burst: true });
+      const bid = ++burstN;
+      for (const p of out.plays) playMix(p.mix.map(([id, o]) => [id, p.delay ? { ...o, delay: (o.delay || 0) + p.delay / 1000 } : o]), { burst: true, role: p.role, bid });
     } catch (e) { logOnce('flush', e); }
   }
   function request(id, opts = {}) {
@@ -277,7 +285,15 @@ export function createAudio(cfg = {}) {
     try {
       const e = RECIPES[id];
       if (!e) { drop('unknown'); return false; }
-      if (e.class === 'press' || e.class === 'world') return !!play(id, opts);
+      if (e.class === 'press' || e.class === 'world') {
+        if (opts.state) { // a state sound (burnout's nudge) is a state whatever its class: it plays on entering, then once per 45 s, and not while the engine is catching up (4.2)
+          const why = gate(e, id, opts); if (why) { drop(why); return false; }
+          const at = nowMs();
+          if (catchingUp(env, at)) { drop('catchup'); return false; }
+          const sg = stateGate(rs, opts.state, opts.meta?.amount, at); if (!sg.play) { drop('budget'); return false; }
+        }
+        return !!play(id, opts);
+      }
       const reason = gate(e, id, opts);
       if (reason) { drop(reason); return false; }
       const t = nowMs();
@@ -301,7 +317,7 @@ export function createAudio(cfg = {}) {
   let dial = null;
   const dialApi = {
     start() {
-      if (dial || !playable() || !eff().dial || eff().mute) return false;
+      if (dial || !playable() || !eff().dial || silent() || !eff().game) return false; // the tone is a game-bus voice: with Game sounds off it is off
       try {
         const t = ctxNow(), g = ctx.createGain(), main = ctx.createOscillator(), oct = ctx.createOscillator(), shim = ctx.createOscillator(), og = ctx.createGain(), sg = ctx.createGain();
         main.type = 'sine'; oct.type = 'sine'; shim.type = 'sine';
@@ -340,8 +356,9 @@ export function createAudio(cfg = {}) {
     stopAll(ms = 60) { for (const g of voices) stopGroup(g, ms / 1000); voices.length = 0; queue = []; if (armed != null) { timers.clear(armed); armed = null; } dialApi.stop(); },
     unlock() {
       if (!supported) return;
+      gesture = true;
       try {
-        if (!ctx) create();
+        if (!ctx) { if (silent()) { notify('state'); return; } create(); } // a muted page (or one at volume 0) makes no context and never runs one: sync() makes it when sound is wanted
         unlocked = true;
         if (!hidden) { const p = ctx.resume && ctx.resume(); p && p.catch && p.catch(() => {}); idleSuspended = false; }
         amb.apply();
@@ -372,9 +389,11 @@ export function createAudio(cfg = {}) {
       try {
         applyGains(false);
         const s = eff();
-        if (!s.ambient || s.mute) amb.stop(0.4); else amb.apply();
-        if (!s.dial || s.mute) dialApi.stop();
-        if (s.mute) { api.stopAll(30); }
+        const quiet = silent();
+        if (!s.ambient || quiet) amb.stop(0.4); else amb.apply();
+        if (!s.dial || quiet || !s.game) dialApi.stop();
+        if (quiet) { api.stopAll(30); }
+        else if (gesture && !ctx && supported) api.unlock(); // unmuted (or the volume raised) after the first gesture: the context that a silent page never made
       } catch (e) { logOnce('sync', e); }
       notify('settings'); notify('mute');
     },
@@ -385,7 +404,7 @@ export function createAudio(cfg = {}) {
     setAmbientLevel(v) { const a = get(); if (a) a.ambientLevel = clamp(Math.round((+v || 0) / 5) * 5, 0, 100); api.sync(); },
     setDial(on) { const a = get(); if (a) a.dial = !!on; api.sync(); },
     setClockSounds(on) { const a = get(); if (a) a.clockSounds = !!on; api.sync(); },
-    applyPreset(name) { const a = get(); if (!a) return; const P = { full: { ui: true, game: true, ambient: false, dial: false, clockSounds: true, quiet: false }, classroom: { ui: true, game: true, ambient: false, dial: false, clockSounds: false, quiet: true }, interface: { ui: true, game: false, ambient: false, dial: false, clockSounds: true, quiet: false } }; if (name === 'off') a.mute = true; else if (P[name]) Object.assign(a, P[name], { master: 70 }); a.touched = true; api.sync(); },
+    applyPreset(name) { const a = get(); if (!a) return; const P = { full: { ui: true, game: true, ambient: false, dial: false, clockSounds: true, quiet: false }, classroom: { ui: true, game: true, ambient: false, dial: false, clockSounds: false, quiet: true }, interface: { ui: true, game: false, ambient: false, dial: false, clockSounds: true, quiet: false } }; if (name === 'off') a.mute = true; else if (P[name]) Object.assign(a, P[name], { master: 70, mute: false }); a.touched = true; api.sync(); },
     /** The clock-sound hold (3.4.5): true while a dialog, the Deal Room or a lesson is open; false plays the one summed coin. */
     hold(on) {
       on = !!on;

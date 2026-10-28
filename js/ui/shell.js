@@ -85,7 +85,7 @@ export function mountGame(root, S, hooks) {
     if (was !== id) $('#dh-title', el.drawer)?.focus({ preventScroll: true });
     ctx.emit({ type: 'ui', ui: 'open-drawer', id, ...(was === id ? { again: true } : {}), ...(o.quiet ? { quiet: true } : {}) }); // a drawer that was already open, or one opened as the quiet result of something with its own sound (a crate clicked in the world), is not heard opening; the Academy still hears the event
   }
-  function closeDrawer() { if (!U.drawer) return; const d = U.drawer; U.drawer = null; render(); $(`[data-fid="dk-${d}"]`, el.dock)?.focus({ preventScroll: true }); ctx.emit({ type: 'ui', ui: 'close-drawer', id: d }); }
+  function closeDrawer(o) { if (!U.drawer) return; const d = U.drawer; U.drawer = null; render(); $(`[data-fid="dk-${d}"]`, el.dock)?.focus({ preventScroll: true }); ctx.emit({ type: 'ui', ui: 'close-drawer', id: d, ...(o && o.quiet === true ? { quiet: true } : {}) }); }
 
   function render() {
     if (dead || !g()) return;
@@ -208,7 +208,7 @@ export function mountGame(root, S, hooks) {
     U.confirm = fn;
     dlg.open(`<h2 tabindex="-1" autofocus>${esc(title)}</h2>${body}<div class="row gap"><button class="btn ${danger ? 'danger' : ''}" data-act="confirm-go" autofocus>${esc(ok)}</button><button class="btn ghost" data-close>Cancel</button></div>`, { label: title });
   }
-  function say(r, good = 'good') { if (r.msg) toast(r.msg, r.ok ? good : 'bad'); if (!r.ok && !r.msg) audio.play('ui.refuse'); return r; } // a refusal with words is heard as its bad toast (js/audio/wire.js); one with none has no toast to be heard through
+  function say(r, good = 'good') { if (r.msg) toast(r.msg, r.ok ? good : 'bad', undefined, r.ok ? undefined : { refusal: true }); if (!r.ok && !r.msg) audio.play('ui.refuse'); return r; } // a refusal with words is heard as its bad toast (js/audio/wire.js); one with none has no toast to be heard through
 
   function breakdown(k) {
     const game = g(), s = game.s, row = (a, b, c = '') => `<dt>${a}</dt><dd class="${c}">${b}</dd>`;
@@ -250,7 +250,7 @@ export function mountGame(root, S, hooks) {
     menu,
     breakdown(b) { breakdown(b.dataset.k); },
     'confirm-go'() { const fn = U.confirm; U.confirm = null; dlg.close(); fn?.(); render(); },
-    alert(b) { const n = g().s.news[+b.dataset.i]; if (n?.alert) dlg.open(alertHTML(n.alert), { cls: 'alert', label: 'Macro alert' }); },
+    alert(b) { const n = g().s.news[+b.dataset.i]; if (n?.alert) { dlg.open(alertHTML(n.alert), { cls: 'alert', label: 'Macro alert' }); audio.request('alert.advance', { variant: 'l' + Math.min(3, Math.max(1, Math.round(Number(n.alert.level) || 1))) }); } }, // the ticker's note, opened again: the alert's sound (the dialog observer leaves .alert dialogs to this)
     debrief() { dlg.close(); hooks.onDebrief(); },
     academy() { dlg.close(); hooks.onAcademy?.(); },
     leave() { S.leaveRoom(); dlg.close(); toast('Left the room. You keep your solo run.', 'info'); render(); },

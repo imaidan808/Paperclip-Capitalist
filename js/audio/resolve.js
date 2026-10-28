@@ -7,7 +7,7 @@ import { moneySize } from './palette.js';
 export const RULES = {
   REWARD_WINDOW: 10000, REWARD_WINDOW_FAST: 20000, // one full reward sentence per window of real time (20 s at 16x and above)
   TICK_GAP: 3000, DAILY_GAP: 60000, LEVEL_FULL_GAP: 90000, STATE_GAP: 45000,
-  SECOND_MIN: 350, SECOND_MAX: 500, SECOND_GAIN_DB: -4, TICK_GAIN_DB: -6,
+  SECOND_MIN: 350, SECOND_MAX: 500, SECOND_GAIN_DB: -4, TICK_GAIN_DB: -3, TICK_TAIL: 0.65, TICK_WAIT_MAX: 1600,
   CATCHUP_MS: 600, PRESS_MS: 1500, MERGE_CYCLE: 400, BUYER_GAP: 30000, BUYER_GAP_4X: 45000, URGENT_GAP: 20000, CYCLE_GAP_4X: 3000, FAST_COIN_GAP: 8000, FAST_COIN_JITTER: 2000,
 };
 
@@ -55,7 +55,7 @@ export function gateClock(st, r, env, now) {
     return YES;
   }
   if (id === 'buyer.arrive' || id === 'buyer.urgent') {
-    if (speed >= 16 || env.busy || env.classroom) return no('budget');
+    if (speed >= 16 || env.busy || env.market || env.classroom) return no('budget'); // `market`: the Market drawer is open (a buyer is already a bubble and a badge there)
     if (id === 'buyer.urgent') { if (now - st.lastUrgent < RULES.URGENT_GAP) return no('budget'); st.lastUrgent = now; return YES; }
     const gap = speed >= 4 ? RULES.BUYER_GAP_4X : RULES.BUYER_GAP;
     if (st.buyers >= 3 && now - st.lastBuyer < gap) return no('budget'); // the first three of a run always play
@@ -168,7 +168,11 @@ export function resolveBurst(st, reqs, env, now) {
   // every other reward collapses into an "also" tick: a glass note each, rising, at most two, and at most one tick per 3 s over the whole run
   if (ticks.length && now - st.lastTick >= RULES.TICK_GAP) {
     st.lastTick = now;
-    plays.push({ delay: (s2 ? t1 : 0) + (s1 || s2 ? 140 : 0), role: 'also', mix: [['reward.also', { params: { n: Math.min(2, ticks.length) }, gainDb: RULES.TICK_GAIN_DB, noDuck: true }]], req: ticks[0] });
+    // The tick is an "and", and it is the quietest thing in the mix: put at 140 ms it landed 20 dB under a fanfare's tail and was 30% audible. It waits for the tail of the last full sentence to fall
+    // (a share of that sentence's length, 1.6 s at most) and is 3 dB under a full sound, not 6.
+    const last = s2 || s1, lastAt = s2 ? t1 : 0, lastLen = last ? env.durOf?.(last.id, variantOf(last)) ?? 0 : 0;
+    const wait = last ? Math.max(140, Math.min(RULES.TICK_WAIT_MAX, lastLen * RULES.TICK_TAIL)) : 0;
+    plays.push({ delay: lastAt + wait, role: 'also', mix: [['reward.also', { params: { n: Math.min(2, ticks.length) }, gainDb: RULES.TICK_GAIN_DB, noDuck: true }]], req: ticks[0] });
   } else for (const r of ticks) dropped.push({ id: r.id, reason: 'budget' });
   for (const r of causes.slice(1)) dropped.push({ id: r.id, reason: 'collector' }); // anything else in the burst is silent: its toast and ledger row stay
   const sentences = plays.filter((p) => p.role !== 'also').length; // the cause and the best reward; the tick is an "and", not a sentence

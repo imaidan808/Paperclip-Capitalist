@@ -5,7 +5,7 @@ import { audio, bindSettings } from './instance.js';
 import { initAudio, wireGame, wireAudio, wired } from './wire.js';
 
 export { audio, bindSettings, initAudio, wireGame, wireAudio, wired };
-export { migrateAudio, mirrorFlat, audioDefaults, audioSettingsHTML, bindAudioSettings, presetOf, applyPreset, joinRoom, leaveRoom, sanitizeAudio, PRESETS, PRESET_NAMES, statusText } from './settings.js';
+export { migrateAudio, mirrorFlat, audioDefaults, audioSettingsHTML, bindAudioSettings, presetOf, applyPreset, joinRoom, leaveRoom, sanitizeAudio, PRESETS, PRESET_NAMES, statusText, audible, whyQuiet, syncAudioSettings } from './settings.js';
 export { moneySize } from './palette.js';
 export { RECIPES, IDS } from './recipes.js';
 

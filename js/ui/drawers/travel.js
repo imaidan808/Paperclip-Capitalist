@@ -306,7 +306,7 @@ export function goToDistrict(ctx, id) {
   if (!Z || !ctx.g().s.zones.includes(id)) { ctx.toast('That district is still locked. Net worth opens it.', 'warn'); return false; }
   ctx.U.zone = id;
   focusWorld(ctx, id);
-  ctx.closeDrawer();
+  ctx.closeDrawer({ quiet: true }); // the arrival has its own sound (zone.enter): the drawer is not heard closing under it
   ctx.announce?.(`You are now in ${Z.name}.`);
   return true;
 }

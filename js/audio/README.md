@@ -16,7 +16,7 @@ this file says how it is built and where the engine chose differently from the d
 | `instance.js`, `index.js` | the one engine of the page; the public face and `legacySfx` |
 
 Checks: `node --test tests/audio.test.mjs` (no browser; a recording fake context) and `npm run audio` (renders every sound offline in headless Chrome and holds the levels, peaks, DC, clipping,
-lengths, brightness, the mid body, the ladders, the beds and the tier gaps through the master chain). `/dev/sounds.html` is the page to listen on.
+lengths, brightness, the mid body, the ladders, the beds and the tier gaps through the master chain). `/dev/sounds.html` is the page to listen on (grouped by meaning, with gain/loss pairs, ladders, every pool member, the dial tone and a minute of play through the real wiring). `node scripts/audio-lessons.mjs` mounts the ten Academy lessons with the sound layer wired and fails if one does not start.
 
 ## Where this differs from, or settles, the document
 

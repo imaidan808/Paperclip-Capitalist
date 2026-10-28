@@ -79,7 +79,9 @@ export function createWorldSound(ctx, deps = {}) {
   function step() {
     const w = world(), pl = w?.player;
     if (dead || !pl || steps >= STEPS_MAX || sheetOpen() || (typeof w.reduced === 'function' && w.reduced())) return;
-    if (typeof w.onView === 'function' && !w.onView(pl.x, pl.y, 30)) return;
+    // `World.view` exists once the world has drawn a frame; a sandbox whose player is already walking (Academy lessons 6, 7 and 9) polls before that, and `onView` read `view.x0` of nothing and threw into render()
+    if (!w.view) return;
+    try { if (typeof w.onView === 'function' && !w.onView(pl.x, pl.y, 30)) return; } catch { return; } // sound must never throw into the page's render
     steps++; ctx.emit({ type: 'ui', ui: 'step' });
   }
   function tick() {
@@ -91,9 +93,11 @@ export function createWorldSound(ctx, deps = {}) {
   }
   /** Called with every render and every click on the ground: if the player has somewhere to go and no walk is being listened to, the first foot lands now and the rest follow. */
   function poll() {
-    if (dead || stepT != null || !walking()) return;
-    steps = 0; idle = 0; step();
-    stepT = setTimeout(tick, stepIn());
+    try {
+      if (dead || stepT != null || !walking()) return;
+      steps = 0; idle = 0; step();
+      stepT = setTimeout(tick, stepIn());
+    } catch { /* the footsteps are an addition: a fault here must not reach render() */ }
   }
 
   // ---- the camera

@@ -124,6 +124,9 @@ export function layer(ctx, out, L, T0, o) {
   throw new Error('unknown layer ' + L.k);
 }
 
+/** An equal-power panner passes a centred mono voice at -3.01 dB per side; the voice gain adds that back, so total power is the same at every pan (and the same as with no panner). */
+export const PAN_COMP_DB = 20 * Math.log10(Math.SQRT2);
+
 /**
  * Plays a recipe's layers into `dest` at T0.
  * o: { seed, trim (dB), gainDb, pan, jitterCents, noJitter, lp (a voice-wide lowpass, Hz), skip (Set of layer families to leave out), secondary (no texture layers), dull (no ding layers) }
@@ -132,11 +135,14 @@ export function layer(ctx, out, L, T0, o) {
 export function voice(ctx, dest, layers, T0, o = {}) {
   const r = rng(o.seed ?? 1), jit = o.jit ?? (r() * 2 - 1) * (o.jitterCents ?? 7), vg = ctx.createGain();
   const gj = o.noJitter ? 0 : (r() * 2 - 1) * 0.7; // gain jitter, dB
-  vg.gain.value = dB((o.trim || 0) + (o.gainDb || 0) + gj);
+  // Every voice goes through the same equal-power panner, centred or not, and the panner's own -3 dB at the centre is made up in the voice gain: a panned sound is as loud as an unpanned one
+  // (one with a panner and one without differed by exactly 3.0 dB in total, so a sale whose buyer was off screen jumped by that much). Where there is no panner the voice goes straight to the bus.
+  const panner = ctx.createStereoPanner ? ctx.createStereoPanner() : null;
+  vg.gain.value = dB((o.trim || 0) + (o.gainDb || 0) + gj + (panner ? PAN_COMP_DB : 0));
   let tail = vg;
   const lp = o.lp || (o.dull ? 3500 : 0);
   if (lp) { const q = ctx.createBiquadFilter(); q.type = 'lowpass'; q.frequency.value = lp; vg.connect(q); tail = q; }
-  if (o.pan && ctx.createStereoPanner) { const p = ctx.createStereoPanner(); p.pan.value = o.pan; tail.connect(p); p.connect(dest); } else tail.connect(dest);
+  if (panner) { panner.pan.value = Number.isFinite(+o.pan) ? Math.max(-1, Math.min(1, +o.pan)) : 0; tail.connect(panner); panner.connect(dest); } else tail.connect(dest);
   let end = T0;
   const srcs = [], fams = new Set(), oo = { r, jit, srcs };
   for (const L of layers) {

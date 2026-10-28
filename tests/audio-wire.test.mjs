@@ -427,7 +427,8 @@ test('the speaker button says Sound, is pressed when sound is on, and shows the 
 // ---------------------------------------------------------------- the world
 function worldRig(over = {}) {
   const emitted = [], plays = [], player = { x: 10, y: 10, moving: false, path: [], ...over.player };
-  const w = { player, drag: null, pointers: new Map(), calls: [], cv: { getBoundingClientRect: () => ({ left: over.left ?? 0, top: 0 }) },
+  const w = { player, drag: null, pointers: new Map(), calls: [], view: over.noView ? undefined : { x0: 0, x1: 4000, y0: 0, y1: 4000 }, // `view` exists once the world has drawn a frame
+    cv: { getBoundingClientRect: () => ({ left: over.left ?? 0, top: 0 }) },
     rectOf: (k, id) => (over.rects ? over.rects[k + '|' + id] ?? null : { x: 700, y: 100, w: 40, h: 40 }), w2s: (x, y) => [x * 40, y * 20], onView: () => over.onView !== false, reduced: () => !!over.reduced,
     zoomBy(f) { w.calls.push(['zoomBy', f]); }, fit(a) { w.calls.push(['fit', a]); } };
   const ctx = { emit: (e) => emitted.push(e), dlg: { el: { open: !!over.sheet } } };

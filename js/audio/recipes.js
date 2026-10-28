@@ -37,7 +37,7 @@ S('ui.drawer-open', { bus: 'ui', tier: 'tiny', cd: 120, pan: 'center',
     stock: () => [wood('D4', 0.05, 0.45, 0.07), thump('D3', 'D2', 0.05, 0.3, 0.08)],
     market: () => [mar('E5', 0.05, 0.4, 0.14), paper(0.04, 0.05, 0.12)],
     crew: () => [bellL('A5', 0.06, 0.28, 0.5)],
-    bank: () => [{ k: 'tone', f: 'D3', t: 0.04, a: 0.01, d: 0.3, g: 0.4 }, gls('F#5', 0.1, 0.22, 0.4)],
+    bank: () => [{ k: 'tone', f: 'D3', t: 0.04, a: 0.01, d: 0.3, g: 0.4 }, gls('F#5', 0.1, 0.22, 0.4), ...body(0.04, 0.3, 'D4', 0.1)],
     travel: () => [gls('E5', 0.04, 0.3, 0.3), gls('A5', 0.13, 0.3, 0.4)],
     codex: () => [paper(0.1, 0.12, 0.2), gls('D5', 0.14, 0.3, 0.45)],
     quests: () => [brass('A4', 0.04, 0.3, 0.05, 0.2, 600, 1800)],
@@ -66,7 +66,7 @@ S('ui.ask', { bus: 'ui', tier: 'tiny', cd: 300, pan: 'center',
 S('ui.refuse', { bus: 'ui', tier: 'tiny', cd: 250, pan: 'center',
   trigger: 'The engine refuses an action (`say(r)` with `r.ok === false`: not enough cash, storage full, locked, blocked proposal, "That lot is gone")',
   meaning: 'A short low "no", never a buzzer', recipe: 'two soft taps: triangle D3 then A2 (110 ms apart) over a dull knock, plus a mid body (a sine D4 and a knock at 300 to 600 Hz) so a laptop speaker has something to play', visual: 'A bad toast with the reason in words',
-  variants: { r: {} }, dur: 0.3, build: () => [{ k: 'tone', f: 'D3', type: 'triangle', a: 0.003, d: 0.1, g: 0.7, lp: [900, 0.7] }, { k: 'tone', f: 'A2', type: 'triangle', t: 0.11, a: 0.003, d: 0.16, g: 0.7, lp: [800, 0.7] }, { k: 'noise', c: 'pink', a: 0.001, d: 0.04, g: 0.3, lp: [700, 0.7] }, ...body(0.01, 0.5, 'D4', 0.12)] });
+  variants: { r: {} }, dur: 0.3, build: () => [{ k: 'tone', f: 'D3', type: 'triangle', a: 0.003, d: 0.1, g: 0.7, lp: [900, 0.7] }, { k: 'tone', f: 'A2', type: 'triangle', t: 0.11, a: 0.003, d: 0.16, g: 0.7, lp: [800, 0.7] }, { k: 'noise', c: 'pink', a: 0.001, d: 0.04, g: 0.3, lp: [700, 0.7] }, ...body(0.01, 0.9, 'D4', 0.12)] });
 
 S('ui.nudge', { bus: 'ui', tier: 'tiny', cd: 400, pan: 'center',
   trigger: 'A warn toast that is advice and not a failure ("Tick a crate first", "Pick one of your crates first", "Slide to an amount first"), an Academy hint, an Academy lesson that cannot be finished',
@@ -82,7 +82,7 @@ S('ui.slider', { bus: 'ui', tier: 'tiny', cd: 80, pan: 'center',
   trigger: 'A range input (Bank amount, quick-pick percentages, Crew allocation, Deal Room dial slider, master volume) crosses a detent: every 10% of its travel, at most 12 a second, and the last one when the thumb is let go',
   meaning: 'Pitch follows value: low is less, high is more', recipe: 'wood tick on the nth of D4 E4 F#4 A4 B4 D5 E5 F#5 A5 B5 D6; at 0% a low thump D3, at 100% a glass ping D6 + A6', visual: 'The slider thumb, the value text',
   variants: { mid: { v: 5 }, top: { v: 10, end: 1 }, zero: { v: 0, zero: 1 } }, dur: 0.4,
-  build: (p) => p.zero ? [thump('D3', 'D2', 0, 0.5, 0.1), ...wood('D4', 0, 0.2)] : p.end ? [gls('D6', 0, 0.4, 0.3), gls('A6', 0.04, 0.3, 0.3)] : wood([...P5][Math.min(10, p.v)], 0, 0.45, 0.03) });
+  build: (p) => p.zero ? [thump('D3', 'D2', 0, 0.5, 0.1), ...wood('D4', 0, 0.2), ...body(0, 0.45, 'D4', 0.1)] : p.end ? [gls('D6', 0, 0.4, 0.3), gls('A6', 0.04, 0.3, 0.3)] : wood([...P5][Math.min(10, p.v)], 0, 0.45, 0.03) });
 
 S('ui.count-up', { bus: 'ui', tier: 'tiny', cd: 600, pan: 'center',
   trigger: 'A number counts up (`countUp` in js/ui/polish.js: the Deal Room result\'s XP, the lesson reward): one sound for the whole count, 700 ms',
@@ -110,12 +110,12 @@ S('cam', { bus: 'ui', tier: 'tiny', cd: 150, pan: 'center',
 S('world.locked', { bus: 'game', tier: 'tiny', cd: 400, pan: 'object x',
   trigger: 'A locked gate, plot, board or district is clicked ("... opens at $x net worth", "Not open yet", "Resolve your audit")',
   meaning: 'Shut. Not yet', recipe: 'chain rattle (4 noise bursts at 3.5 kHz, 35 ms apart) + two dull knocks D3 and A2 + a faint metal ting A5', visual: 'Warn toast with the gate\'s price in words',
-  variants: { l: {} }, dur: 0.3, build: () => [...ticks(4, 0, 0.035, 0.32, 3500), ...wood('D3', 0.02, 0.5, 0.08), ...wood('A2', 0.15, 0.5, 0.1), gls('A5', 0.02, 0.1, 0.12), ...wood('D4', 0.02, 0.4, 0.08), ...body(0.15, 0.4, 'D4', 0.12)] });
+  variants: { l: {} }, dur: 0.3, build: () => [...ticks(4, 0, 0.035, 0.32, 3500), ...wood('D3', 0.02, 0.5, 0.08), ...wood('A2', 0.15, 0.5, 0.1), gls('A5', 0.02, 0.1, 0.12), ...wood('D4', 0.02, 0.4, 0.08), ...body(0.15, 0.7, 'D4', 0.12)] });
 
 S('world.step', { bus: 'game', tier: 'tiny', cd: 280, pan: 'player x',
   trigger: 'Your character takes a step while walking between districts or to a ground click: one step every 0.3 s; never for NPCs',
   meaning: 'You are moving', recipe: 'soft step: a thump gliding from A3 or D3 down to D2 + gravel noise lowpassed at 1.2 kHz; two timbres in rotation', visual: 'The character walking, dust puffs',
-  variants: { a: {}, b: { b: 1 } }, rotate: true, dur: 0.15, build: (p) => [{ k: 'tone', f: p.b ? 'A3' : 'D3', f2: 'D2', gl: 0.04, a: 0.002, d: 0.06, g: 0.6 }, { k: 'noise', c: 'brown', a: 0.002, d: 0.05, g: 0.5, lp: [p.b ? 900 : 1300, 0.7] }] });
+  variants: { a: {}, b: { b: 1 } }, rotate: true, dur: 0.15, build: (p) => [{ k: 'tone', f: p.b ? 'A3' : 'D3', f2: 'D2', gl: 0.04, a: 0.002, d: 0.06, g: 0.18 }, { k: 'noise', c: 'brown', a: 0.002, d: 0.05, g: 0.08, lp: [p.b ? 900 : 1300, 0.7] }, { k: 'noise', c: 'pink', a: 0.002, d: 0.045, g: 2.8, bp: [p.b ? 520 : 700, 0.9], main: true }] }); // the gravel: a band at 500 to 700 Hz is the part of a footstep a small speaker plays
 
 S('zone.enter', { bus: 'game', tier: 'tiny', cd: 1500, pan: 'center',
   trigger: 'Your district changes (`U.zone`): travel, a quest link, the map. The note pair depends on the district\'s tier (1 to 4)',
@@ -139,28 +139,30 @@ S('day.turn', { bus: 'game', tier: 'tiny', cd: 2500, pan: 'center',
   variants: { d: {} }, dur: 1.1, build: () => [gls('D4', 0, 0.4, 0.7), gls('A4', 0.1, 0.34, 0.7), paper(0.01, 0.08, 0.14, 2000, 5000)] });
 
 // =============================================================================================== MONEY AND TRADE
+// A gain climbs (2.2): the last coin of every size is higher than the first. Size l used to end on D6 after a run up to E7 (the index (i * 3 + 1) % 8 of COINS), which is a fall.
+const L_COINS = ['A6', 'D7', 'B6', 'E7', 'D7', 'E7'];
 const sizeSpec = {
-  s: { n: 1, span: 0, g: 0.5, set: ['A6'] }, m: { n: 3, span: 0.12, g: 0.34, set: COINS }, l: { n: 6, span: 0.3, g: 0.3, set: COINS }, xl: { n: 10, span: 0.5, g: 0.22, set: COINS },
+  s: { n: 1, span: 0, g: 0.5, set: ['A6'] }, m: { n: 3, span: 0.12, g: 0.34, set: ['D6', 'E6', 'A6'], seq: true }, l: { n: 6, span: 0.3, g: 0.3, set: L_COINS, seq: true }, xl: { n: 10, span: 0.5, g: 0.3, set: ['A6', 'D7', 'B6', 'E7', 'D7', 'A6', 'E7', 'D7', 'E7', 'D7'], seq: true },
 };
 S('cash.in', { bus: 'game', tier: 'tiny', cd: 120, pan: 'source x, else center',
   trigger: 'Money arrives (see "Sizing money"): pool and manager proceeds, loan drawn, royalties, a released manager, exits. Size s, m, l, xl by `moneySize(amount, netWorth)`; `settle` is the quiet version for cash that lands after a delay',
   meaning: 'Coins: bigger sums are brighter and longer', recipe: 's: one coin A6; m: three coins A6 E7 D7; l: six coins + register ding D6; xl: ten coins + bell chord D6 A6 + soft brass stab D3 + glass shower; settle: four soft coins, lowpassed', visual: 'Cash in the HUD flashes green (`.rs.up`), a "+$" pop in the world',
   variants: { s: { z: 's' }, m: { z: 'm', tier: 'medium' }, l: { z: 'l', tier: 'medium' }, xl: { z: 'xl', tier: 'loud' }, settle: { z: 'settle' } }, pool: 3, dur: 1.5,
-  build: (p) => { if (p.z === 'settle') return coins(4, 0.5, 0, 0.2, RISE, { lp: [3600, 0.7] }, true); const q = sizeSpec[p.z], b = p.z === 's' ? coins(1, 0, 0, q.g, [['A6', 'D7', 'E6'][p.k | 0]], {}, true) : coins(q.n, q.span, 0, q.g, q.set);
+  build: (p) => { if (p.z === 'settle') return coins(4, 0.5, 0, 0.2, RISE, { lp: [3600, 0.7] }, true); const q = sizeSpec[p.z], b = p.z === 's' ? coins(1, 0, 0, q.g, [['A6', 'D7', 'E6'][p.k | 0]], {}, true) : coins(q.n, q.span, 0, q.g, q.set, {}, !!q.seq);
     if (p.z === 'l') b.push(bellL('D6', 0.04, 0.22, 0.7, { ding: true }));
-    if (p.z === 'xl') b.push(bellL('D6', 0.05, 0.2, 1.1, { fam: 'bell', ding: true }), bellL('A6', 0.05, 0.14, 1.0, { fam: 'bell', ding: true }), brass('D3', 0, 0.3, 0.1, 0.5, 400, 1800), sparkle(7, 0.2, 0.11, 9, 0.06));
+    if (p.z === 'xl') b.push(bellL('D6', 0.05, 0.1, 1.1, { fam: 'bell', ding: true }), bellL('A6', 0.05, 0.12, 1.0, { fam: 'bell', ding: true }), brass('D3', 0, 0.14, 0.1, 0.5, 400, 1800), sparkle(9, 0.2, 0.26, 11, 0.05), gls('D7', 0.06, 0.3, 0.9), gls('A7', 0.1, 0.26, 0.9), { k: 'noise', c: 'white', t: 0.04, a: 0.25, d: 0.5, g: 0.035, hp: [4800, 0.7] });
     return b; } });
 
 S('cash.out', { bus: 'game', tier: 'tiny', cd: 120, pan: 'source x, else center',
   trigger: 'Money leaves: a lot bought, repair, hire, upgrade, freight, client acquisition, loan repaid, fines, SLA penalties. Sizes s, m, l',
   meaning: 'Muted coins that fall: spending is quieter and darker than earning', recipe: 'the coin cascade through a 2.2 kHz lowpass, each coin a step lower (D6 B5 A5 E5 D5), with a pouch thud; l ends on a vault latch D2 + click', visual: 'Cash in the HUD flashes red (`.rs.down`)',
   variants: { s: { z: 1 }, m: { z: 3 }, l: { z: 5, tier: 'medium' } }, dur: 1.0,
-  build: (p) => [...coins(p.z, 0.04 + p.z * 0.05, 0, 0.28, FALL, { lp: [2200, 0.7] }, true), { k: 'noise', c: 'brown', a: 0.004, d: 0.08, g: 0.3, lp: [800, 0.7] }, ...(p.z >= 5 ? [thump('D3', 'D2', 0.3, 0.5, 0.14), click(0.32, 0.25, 2000)] : [])] });
+  build: (p) => [...coins(p.z, 0.04 + p.z * 0.05, 0, 0.28, FALL, { lp: [2200, 0.7] }, true), { k: 'noise', c: 'brown', a: 0.004, d: 0.08, g: 0.3, lp: [800, 0.7] }, ...(p.z >= 5 ? [thump('D3', 'D2', 0.3, 0.5, 0.14), click(0.32, 0.25, 2000), ...body(0.3, 0.5, 'D4', 0.12)] : [])] });
 
 S('sale.win', { bus: 'game', tier: 'medium', cd: 300, pan: 'buyer x',
   trigger: '`pitch` event with `outcome: "win"` (sold above fair value). Played together with `cash.in` sized by `price`',
   meaning: 'The cash register: a good sale', recipe: 'drawer thump A3 to D3 + register bell A5 with four partials (700 ms) + a short "ching" D7', visual: 'Coins thrown in the world, a good toast, the Deal Room result',
-  variants: { w: {} }, dur: 1.1, build: () => [thump('A3', 'D3', 0, 0.7, 0.1), bellL('A5', 0.03, 0.4, 0.7), bellL('D7', 0.05, 0.14, 0.3)] });
+  variants: { w: {} }, dur: 1.1, build: () => [thump('A3', 'D3', 0, 0.7, 0.1), bellL('A5', 0.03, 0.4, 0.7), bellL('D7', 0.1, 0.26, 0.3)] }); // the ching is 70 ms behind the bell and 4 dB under it, so the gain is heard to rise (it was 10.7 dB under, 20 ms behind: one flat chord)
 
 S('sale.pioneer', { bus: 'game', tier: 'medium', cd: 300, pan: 'buyer x',
   trigger: '`pitch` event with `outcome: "pioneer"` (a win in a niche nobody else is selling into)',
@@ -182,23 +184,23 @@ S('sale.reject', { bus: 'game', tier: 'medium', cd: 300, pan: 'buyer x',
   meaning: 'The buyer said no. A counterfeit is a coin that clunks and does not ring', recipe: 'nofit: paper shake + the refuse pair D3 A2; fake: a dull metal clunk (a thump + two short, non-ringing partials) with a rattle and a falling B3 to D3', visual: 'Buyer walks off, "No sale" or "Counterfeit spotted" title, bad toast',
   variants: { nofit: {}, fake: { fake: 1 } }, dur: 0.7,
   build: (p) => p.fake ? [thump('D3', 'D2', 0, 0.7, 0.1), { k: 'bank', f: 'A5', a: 0.001, g: 0.3, p: [[1, 1, 0.05], [1.5, 0.7, 0.04]], lp: [1500, 0.7] }, ...ticks(5, 0.04, 0.03, 0.22, 2800), { k: 'tone', f: 'B3', f2: 'D3', gl: 0.2, t: 0.1, type: 'triangle', a: 0.01, d: 0.25, g: 0.4, lp: [900, 0.7] }, ...body(0.02, 0.45, 'D4', 0.12)]
-    : [paper(0, 0.1, 0.25, 1400, 2200), { k: 'tone', f: 'D3', type: 'triangle', t: 0.04, a: 0.003, d: 0.1, g: 0.6, lp: [900, 0.7] }, { k: 'tone', f: 'A2', type: 'triangle', t: 0.15, a: 0.003, d: 0.16, g: 0.6, lp: [800, 0.7] }, ...body(0.04, 0.45, 'D4', 0.12)] });
+    : [paper(0, 0.1, 0.25, 1400, 2200), { k: 'tone', f: 'D3', type: 'triangle', t: 0.04, a: 0.003, d: 0.1, g: 0.6, lp: [900, 0.7] }, { k: 'tone', f: 'A2', type: 'triangle', t: 0.15, a: 0.003, d: 0.16, g: 0.6, lp: [800, 0.7] }, ...body(0.04, 0.9, 'D4', 0.12)] });
 
 S('sale.scam', { bus: 'game', tier: 'medium', cd: 600, pan: 'buyer x',
   trigger: '`pitch` with `outcome: "rejected"` while a `scam` note has just been sent (or `reason: "scam"`): an unverified fraudster took the crate and paid nothing',
   meaning: 'You were swindled: coins drain away, a door slams', recipe: 'muted coins falling in pitch, a comic slide D4 to D3 (450 ms), a door thump and a low horn blip', visual: '"Scammed" title, bad toast, the crate vanishes',
-  variants: { s: {} }, dur: 1.0, build: () => [...coins(5, 0.35, 0, 0.26, FALL, { lp: [2200, 0.7] }, true), { k: 'tone', f: 'D4', f2: 'D3', gl: 0.45, type: 'triangle', t: 0.1, a: 0.01, d: 0.5, g: 0.45, lp: [1000, 0.7] }, thump('D3', 'D2', 0.5, 0.7, 0.14), ...horn('A3', 'A2', 0.52, 0.22, 0.05, 0.2)] });
+  variants: { s: {} }, dur: 1.0, build: () => [...coins(5, 0.35, 0, 0.26, FALL, { lp: [2200, 0.7] }, true), { k: 'tone', f: 'D4', f2: 'D3', gl: 0.45, type: 'triangle', t: 0.1, a: 0.01, d: 0.5, g: 0.45, lp: [1000, 0.7] }, thump('D3', 'D2', 0.5, 0.7, 0.14), ...horn('A3', 'A2', 0.52, 0.22, 0.05, 0.2), ...body(0.5, 0.5, 'D4', 0.14)] });
 
 S('buy.lot', { bus: 'game', tier: 'medium', cd: 300, pan: 'lot x',
   trigger: '`buy` event. Never reads `fake` or the condition truth (that would give the lot away); `cond: "broken"` is public and adds a rattle. Played with `cash.out` sized by `price`',
   meaning: 'A crate lands on your shelf and the purse gets lighter', recipe: 'crate thump A2 to D2 + wood knock + pallet slide (noise 900 Hz); broken adds three metal rattles and a glass clink', visual: 'The pallet drops in the world, a toast, cash falls',
   variants: { ok: {}, broken: { b: 1 } }, dur: 0.6,
-  build: (p) => [thump('A2', 'D2', 0, 0.8, 0.16), ...wood('D4', 0.01, 0.5, 0.07), { k: 'noise', c: 'pink', t: 0.06, a: 0.02, d: 0.12, g: 0.2, bp: [900, 0.8, 500] }, ...(p.b ? [...ticks(3, 0.1, 0.045, 0.24, 2600), gls('A5', 0.1, 0.12, 0.1)] : [])] });
+  build: (p) => [thump('A2', 'D2', 0, 0.8, 0.16), ...wood('D4', 0.01, 0.5, 0.07), { k: 'noise', c: 'pink', t: 0.06, a: 0.02, d: 0.12, g: 0.2, bp: [900, 0.8, 500] }, ...body(0.01, 0.6, 'D4', 0.12), ...(p.b ? [...ticks(3, 0.1, 0.045, 0.24, 2600), gls('A5', 0.1, 0.12, 0.1)] : [])] });
 
 S('pool.sell', { bus: 'game', tier: 'medium', cd: 600, pan: 'center',
   trigger: '`sell-pool` event. Played with `cash.in` sized by `total` (the cash lands after a delay: `cash.in settle` plays then)',
   meaning: 'Crates go down the chute for a lump sum', recipe: 'chute slide (noise sweeping 1800 to 600 Hz, 500 ms) + three thumps + a soft register ding D5', visual: 'Crates leave the shelf, a good toast',
-  variants: { p: {} }, dur: 1.0, build: () => [swoosh(0, 0.5, 1800, 600, 0.3), thump('A2', 'D2', 0.15, 0.5, 0.1), thump('A2', 'D2', 0.28, 0.5, 0.1), thump('A2', 'D2', 0.42, 0.55, 0.12), bellL('D5', 0.45, 0.22, 0.5)] });
+  variants: { p: {} }, dur: 1.0, build: () => [swoosh(0, 0.5, 1800, 600, 0.3), thump('A2', 'D2', 0.15, 0.5, 0.1), thump('A2', 'D2', 0.28, 0.5, 0.1), thump('A2', 'D2', 0.42, 0.55, 0.12), bellL('D5', 0.45, 0.22, 0.5), ...body(0.28, 0.5, 'D4', 0.14)] });
 
 S('streak', { bus: 'game', tier: 'tiny', cd: 400, pan: 'center',
   trigger: '`streak` event (a second win in a row or more), layered on the sale sound; `n` is the length (capped at 6 notes)',
@@ -218,7 +220,7 @@ S('deal.open', { bus: 'game', tier: 'medium', cd: 500, pan: 'center',
   build: (p) => ({ sell: () => [bellL('A5', 0, 0.3, 0.5), paper(0.05, 0.1, 0.16), mar('D5', 0.12, 0.4, 0.3)], buy: () => [swoosh(0, 0.2, 500, 1500, 0.22), ...ticks(3, 0.18, 0.05, 0.2, 4200), mar('A4', 0.2, 0.4, 0.3)], fix: () => [{ k: 'bank', f: 'A5', a: 0.001, g: 0.34, p: [[1, 1, 0.4], [2, 0.5, 0.2], [3, 0.3, 0.1]] }, ...wood('D4', 0.12, 0.45, 0.07), ...wood('D4', 0.22, 0.4, 0.07)] })[p.v]() });
 
 S('deal.stage-done', { bus: 'game', tier: 'tiny', cd: 600, pan: 'center',
-  trigger: 'A stage finishes and its Continue or See the result button appears (Read, Pitch, Close, Bid, Fix)',
+  trigger: 'A stage finishes and its Continue or See the result button appears (Read and Pitch; Close, Bid and Fix end in the result card, which has its own sound)',
   meaning: 'This part is done', recipe: 'glass E5 then A5, soft (350 ms)', visual: 'The stepper shows a tick, "Continue" appears',
   variants: { s: {} }, dur: 0.7, build: () => pair('E5', 'A5', 0, 0.09, 0.4, 0.3) });
 
@@ -236,7 +238,7 @@ S('deal.result', { bus: 'game', tier: 'medium', cd: 800, pan: 'center',
   trigger: 'The result card is drawn (`result()` in the Deal Room). Skipped if a `sale.*`, `buy.lot` or fanfare sound played in the last 900 ms. tone good, warn, bad, info',
   meaning: 'How the whole deal went', recipe: 'good: glass arpeggio D5 F#5 A5 + soft stamp + sparkle; warn: glass A4 F#4 + stamp; bad: low D3 A2 + dull stamp; info: a stamp and a paper rustle only', visual: 'The result card\'s colored title and stamp',
   variants: { good: { v: 'good' }, warn: { v: 'warn' }, bad: { v: 'bad' }, info: { v: 'info', tier: 'tiny' } }, dur: 1.1,
-  build: (p) => ({ good: () => [...arp(['D5', 'F#5', 'A5'], 0.07, (n, t) => gls(n, t, 0.34, 0.5)), ...stamp(0.22, 0.6), ...sparkle(3, 0.3, 0.12, 11)], warn: () => [...pair('A4', 'F#4', 0, 0.12, 0.4, 0.4), ...stamp(0.2, 0.6)], bad: () => [{ k: 'tone', f: 'D3', type: 'triangle', a: 0.004, d: 0.18, g: 0.6, lp: [900, 0.7] }, { k: 'tone', f: 'A2', type: 'triangle', t: 0.14, a: 0.004, d: 0.3, g: 0.6, lp: [800, 0.7] }, ...stamp(0.18, 0.5), ...body(0, 0.9, 'D4', 0.16)], info: () => [...stamp(0, 0.7), paper(0.04, 0.12, 0.2)] })[p.v]() });
+  build: (p) => ({ good: () => [...arp(['D5', 'F#5', 'A5'], 0.07, (n, t) => gls(n, t, 0.34, 0.5)), ...stamp(0.22, 0.6), ...sparkle(3, 0.3, 0.12, 11)], warn: () => [...pair('A4', 'F#4', 0, 0.12, 0.4, 0.4), ...stamp(0.2, 0.6)], bad: () => [{ k: 'tone', f: 'D3', type: 'triangle', a: 0.004, d: 0.18, g: 0.6, lp: [900, 0.7] }, { k: 'tone', f: 'A2', type: 'triangle', t: 0.14, a: 0.004, d: 0.3, g: 0.6, lp: [800, 0.7] }, ...stamp(0.18, 0.5), ...body(0, 0.9, 'D4', 0.16)], info: () => [...stamp(0, 0.7), paper(0.04, 0.12, 0.2), ...body(0, 0.7, 'D4', 0.12)] })[p.v]() });
 
 S('read.probe', { bus: 'game', tier: 'tiny', cd: 120, pan: 'center',
   trigger: 'A probe is bought in the Read stage (`[data-deal="probe"]`): look, serial, power, papers, expert',
@@ -259,13 +261,13 @@ S('haggle.anchor', { bus: 'game', tier: 'tiny', cd: 200, pan: 'center',
   trigger: 'Your first number: Aim high (or Generous), Fair, Quick sale (or Lowball) (`[data-deal="anchor"]`)',
   meaning: 'The bolder the number, the bolder the note', recipe: 'high: brass-lite A4 (lowpass opening) + tap; fair: marimba D4 + tap; low: soft triangle F#3', visual: 'Your marker appears on the price track',
   variants: { high: { v: 'high' }, fair: { v: 'fair' }, low: { v: 'low' } }, dur: 0.5,
-  build: (p) => ({ high: () => [brass('A4', 0, 0.36, 0.05, 0.2, 700, 2400), ...wood('D4', 0, 0.3, 0.05)], fair: () => [mar('D4', 0, 0.5, 0.25), ...wood('D4', 0, 0.2, 0.04)], low: () => [{ k: 'tone', f: 'F#3', type: 'triangle', a: 0.01, d: 0.25, g: 0.5, lp: [900, 0.7] }] })[p.v]() });
+  build: (p) => ({ high: () => [brass('A4', 0, 0.36, 0.05, 0.2, 700, 2400), ...wood('D4', 0, 0.3, 0.05)], fair: () => [mar('D4', 0, 0.5, 0.25), ...wood('D4', 0, 0.2, 0.04)], low: () => [{ k: 'tone', f: 'F#3', type: 'triangle', a: 0.01, d: 0.25, g: 0.5, lp: [900, 0.7] }, { k: 'tone', f: 'F#4', type: 'triangle', a: 0.01, d: 0.2, g: 0.6, lp: [1200, 0.7] }] })[p.v]() });
 
 S('haggle.move', { bus: 'game', tier: 'tiny', cd: 200, pan: 'center',
   trigger: 'A move after the anchor: Hold; Raise your offer or Come down (small, medium, large); Split the difference',
   meaning: 'Hold is a still tap; concessions step down; a split brings two notes together', recipe: 'hold: one wood tap D4; concede: 1, 2 or 3 soft falling taps (D4 B3 A3) by size; split: two notes A3 and D4 converging to a glass unison D4', visual: 'The track marker moves, the rounds counter drops',
   variants: { hold: { v: 'hold' }, small: { v: 'c', n: 1 }, large: { v: 'c', n: 3 }, split: { v: 'split' } }, pool: 3, dur: 0.6,
-  build: (p) => p.v === 'hold' ? wood(['D4', 'E4', 'F#4'][p.k | 0], 0, 0.55, 0.07) : p.v === 'c' ? ['D4', 'B3', 'A3'].slice(0, p.n).flatMap((n, i) => wood(n, i * 0.085, 0.45 - i * 0.05, 0.06)) : [{ k: 'tone', f: 'A3', f2: 'D4', gl: 0.14, a: 0.01, d: 0.2, g: 0.3 }, { k: 'tone', f: 'F#4', f2: 'D4', gl: 0.14, a: 0.01, d: 0.2, g: 0.3 }, gls('D4', 0.15, 0.4, 0.4)] });
+  build: (p) => p.v === 'hold' ? wood(['D4', 'E4', 'F#4'][p.k | 0], 0, 0.55, 0.07) : p.v === 'c' ? ['A4', 'F#4', 'D4'].slice(0, p.n).flatMap((n, i) => wood(n, i * 0.085, 0.45 - i * 0.05, 0.06)) : [{ k: 'tone', f: 'A3', f2: 'D4', gl: 0.14, a: 0.01, d: 0.2, g: 0.3 }, { k: 'tone', f: 'F#4', f2: 'D4', gl: 0.14, a: 0.01, d: 0.2, g: 0.3 }, gls('D4', 0.15, 0.4, 0.4)] });
 
 S('haggle.leverage', { bus: 'game', tier: 'medium', cd: 600, pan: 'center',
   trigger: 'Mention your other option is pressed (once per haggle)',
@@ -276,13 +278,13 @@ S('haggle.close', { bus: 'game', tier: 'medium', cd: 600, pan: 'center',
   trigger: 'Accept their offer or price is pressed (handshake); Walk away is pressed (tiny)',
   meaning: 'A deal is shaken on, or you left the table', recipe: 'accept: two soft thumps (the clasp) + a coin D6 + a stamp; walk: chair slide (noise sweep down) + a door thump and latch tick', visual: '"Agreed at $x" callout, or "no deal"',
   variants: { accept: {}, walk: { walk: 1, tier: 'tiny' } }, dur: 0.7,
-  build: (p) => p.walk ? [swoosh(0, 0.2, 1600, 500, 0.2), thump('D3', 'D2', 0.22, 0.5, 0.1), click(0.25, 0.25, 2600), ...body(0.22, 0.35, 'D4', 0.1)] : [thump('A2', 'D2', 0, 0.5, 0.08), thump('A2', 'D2', 0.09, 0.5, 0.08), ...coin('D6', 0.18, 0.3), ...stamp(0.22, 0.6)] });
+  build: (p) => p.walk ? [swoosh(0, 0.2, 1600, 500, 0.2), thump('D3', 'D2', 0.22, 0.5, 0.1), click(0.25, 0.25, 2600), ...body(0.22, 0.35, 'D4', 0.1)] : [thump('A2', 'D2', 0, 0.5, 0.08), thump('A2', 'D2', 0.09, 0.5, 0.08), ...coin('D6', 0.18, 0.3), ...stamp(0.22, 0.6), ...body(0.09, 0.5, 'D4', 0.12)] });
 
 S('haggle.tell', { bus: 'game', tier: 'tiny', cd: 300, pan: 'center',
   trigger: 'After each counter, their stance changes ("far apart", "getting closer", "very close")',
   meaning: 'Warmer or colder: the interval shrinks and the tone opens as you close in', recipe: 'a two-note chord that narrows: far D3 + F#5 behind a 700 Hz lowpass; closer D4 + A4 behind 2 kHz; very close A4 + A4 (+7 cents, a slow beat) wide open', visual: 'The words "They are very close"',
   variants: { far: { v: 'far' }, reach: { v: 'reach' }, near: { v: 'near' } }, dur: 0.6,
-  build: (p) => ({ far: () => [{ k: 'tone', f: 'D3', a: 0.01, d: 0.3, g: 0.34, lp: [700, 0.7] }, { k: 'tone', f: 'F#5', a: 0.01, d: 0.3, g: 0.2, lp: [700, 0.7] }], reach: () => [{ k: 'tone', f: 'D4', a: 0.01, d: 0.3, g: 0.34, lp: [2000, 0.7] }, { k: 'tone', f: 'A4', a: 0.01, d: 0.3, g: 0.3, lp: [2000, 0.7] }], near: () => [{ k: 'tone', f: 'A4', a: 0.01, d: 0.4, g: 0.32 }, { k: 'tone', f: 'A4', det: 7, a: 0.01, d: 0.4, g: 0.32 }, gls('A5', 0, 0.12, 0.3)] })[p.v]() });
+  build: (p) => ({ far: () => [{ k: 'tone', f: 'D3', a: 0.01, d: 0.3, g: 0.3, lp: [700, 0.7] }, { k: 'tone', f: 'F#4', a: 0.01, d: 0.3, g: 0.26, lp: [700, 0.7] }, { k: 'tone', f: 'F#5', a: 0.01, d: 0.3, g: 0.12, lp: [700, 0.7] }], reach: () => [{ k: 'tone', f: 'D4', a: 0.01, d: 0.3, g: 0.34, lp: [2000, 0.7] }, { k: 'tone', f: 'A4', a: 0.01, d: 0.3, g: 0.3, lp: [2000, 0.7] }], near: () => [{ k: 'tone', f: 'A4', a: 0.01, d: 0.4, g: 0.32 }, { k: 'tone', f: 'A4', det: 7, a: 0.01, d: 0.4, g: 0.32 }, gls('A5', 0, 0.12, 0.3)] })[p.v]() });
 
 S('bid.raise', { bus: 'game', tier: 'tiny', cd: 120, pan: 'center',
   trigger: 'Bid (or Open the bidding) is pressed in an auction. `n` is the number of raises so far',
@@ -292,7 +294,7 @@ S('bid.raise', { bus: 'game', tier: 'tiny', cd: 120, pan: 'center',
 S('bid.rival', { bus: 'game', tier: 'tiny', cd: 200, pan: 'rival, alternating left and right',
   trigger: 'A rival bids (in) or drops out (out) in the auction log, each on its own side of the stereo field',
   meaning: 'Someone else is in the room: a lower bell for a bid, a falling note for a dropout', recipe: 'in: soft bell A3 (lowpass 2.5 kHz) + paddle tick; out: triangle E3 falling to D3 + a paper shuffle', visual: 'The rival list ("in", "out at $x") and the event log',
-  variants: { in: { v: 'in' }, out: { v: 'out' } }, dur: 0.5, build: (p) => p.v === 'in' ? [bellL('A3', 0, 0.3, 0.35, { lp: [2500, 0.7] }), click(0, 0.2, 1500, 1, 0.02)] : [{ k: 'tone', f: 'E3', f2: 'D3', gl: 0.2, type: 'triangle', a: 0.01, d: 0.25, g: 0.4, lp: [900, 0.7] }, paper(0.05, 0.1, 0.12, 1200, 600), ...body(0, 0.35, 'D4', 0.1)] });
+  variants: { in: { v: 'in' }, out: { v: 'out' } }, dur: 0.5, build: (p) => p.v === 'in' ? [bellL('A3', 0, 0.3, 0.35, { lp: [2500, 0.7] }), click(0, 0.2, 1500, 1, 0.02), ...body(0, 0.3, 'D4', 0.1)] : [{ k: 'tone', f: 'D4', f2: 'A3', gl: 0.2, type: 'triangle', a: 0.01, d: 0.25, g: 0.4, lp: [900, 0.7] }, paper(0.05, 0.1, 0.12, 1200, 600), ...body(0, 0.35, 'D4', 0.1)] }); // out falls D4 to A3 (a fifth): E3 to D3 was a tone apart, at the edge of what a laptop plays
 
 S('bid.drop', { bus: 'game', tier: 'tiny', cd: 300, pan: 'center',
   trigger: 'Drop out is pressed',
@@ -303,13 +305,13 @@ S('bid.hammer', { bus: 'game', tier: 'medium', cd: 800, pan: 'center',
   trigger: 'The auction ends (`sold` or `nosale` in the log). `won` if you hold the winning bid',
   meaning: 'Sold. The gavel falls; a chime rises if it is yours, a low note if it is not', recipe: 'gavel: hard wood hit (noise 800 Hz + thump D4 to A3 + knock); won: glass A5 D6 rising; lost: triangle D3', visual: 'The callout "You won at $x" or "You are out"',
   variants: { won: {}, lost: { lost: 1 } }, dur: 0.9,
-  build: (p) => [click(0, 0.6, 800, 0.8, 0.03), thump('D4', 'A3', 0, 0.7, 0.08), ...wood('D4', 0, 0.5, 0.08), ...(p.lost ? [{ k: 'tone', f: 'D3', type: 'triangle', t: 0.12, a: 0.01, d: 0.35, g: 0.5, lp: [900, 0.7] }, ...body(0.12, 0.4, 'D4', 0.14)] : [gls('A5', 0.1, 0.34, 0.5), gls('D6', 0.19, 0.38, 0.6)])] });
+  build: (p) => [click(0, 0.6, 800, 0.8, 0.03), thump('D4', 'A3', 0, 0.7, 0.08), ...wood('D4', 0, 0.5, 0.08), ...(p.lost ? [{ k: 'tone', f: 'D3', type: 'triangle', t: 0.12, a: 0.01, d: 0.35, g: 0.5, lp: [900, 0.7] }, ...body(0.12, 0.8, 'D4', 0.14)] : [gls('A5', 0.1, 0.34, 0.5), gls('D6', 0.19, 0.38, 0.6)])] });
 
 S('repair.stop', { bus: 'game', tier: 'tiny', cd: 150, pan: 'center',
   trigger: 'Stop is pressed on the repair dial (or Space, or Stop here on the slider). By precision: perfect >= 90%, good >= 65%, ok > 0, miss',
   meaning: 'The better the stop, the cleaner the ring', recipe: 'perfect: anvil bell D6 A6 + hammer thud + sparkle; good: anvil ting A5 + thud; ok: wood thunk + dull tink; miss: clunk + three rattles and a falling B3 to D3', visual: 'The step turns green, amber or red with its precision',
   variants: { perfect: { v: 'perfect', tier: 'medium' }, good: { v: 'good' }, ok: { v: 'ok' }, miss: { v: 'miss' } }, dur: 0.9,
-  build: (p) => ({ perfect: () => [thump('A3', 'D3', 0, 0.6, 0.1), bellL('D6', 0.01, 0.34, 0.8), bellL('A6', 0.02, 0.22, 0.7), ...sparkle(3, 0.12, 0.12, 12)], good: () => [thump('A3', 'D3', 0, 0.55, 0.1), bellL('A5', 0.01, 0.34, 0.4)], ok: () => [...wood('D3', 0, 0.55, 0.08), { k: 'bank', f: 'A5', a: 0.001, g: 0.18, p: [[1, 1, 0.07], [1.5, 0.5, 0.05]], lp: [2200, 0.7] }], miss: () => [thump('D3', 'D2', 0, 0.6, 0.1), ...ticks(3, 0.05, 0.04, 0.22, 2600), { k: 'tone', f: 'B3', f2: 'D3', gl: 0.2, type: 'triangle', t: 0.08, a: 0.01, d: 0.25, g: 0.3, lp: [900, 0.7] }, ...body(0.06, 0.6, 'D4', 0.1)] })[p.v]() });
+  build: (p) => ({ perfect: () => [thump('A3', 'D3', 0, 0.6, 0.1), bellL('D6', 0.01, 0.34, 0.8), bellL('A6', 0.02, 0.22, 0.7), ...sparkle(3, 0.12, 0.12, 12)], good: () => [thump('A3', 'D3', 0, 0.55, 0.1), bellL('A5', 0.01, 0.34, 0.4)], ok: () => [...wood('D3', 0, 0.55, 0.08), { k: 'bank', f: 'A5', a: 0.001, g: 0.18, p: [[1, 1, 0.07], [1.5, 0.5, 0.05]], lp: [2200, 0.7] }, ...body(0, 0.5, 'D4', 0.08)], miss: () => [thump('D3', 'D2', 0, 0.6, 0.1), ...ticks(3, 0.05, 0.04, 0.22, 2600), { k: 'tone', f: 'B3', f2: 'D3', gl: 0.2, type: 'triangle', t: 0.08, a: 0.01, d: 0.25, g: 0.3, lp: [900, 0.7] }, ...body(0.06, 0.6, 'D4', 0.1)] })[p.v]() });
 
 S('repair.done', { bus: 'game', tier: 'medium', cd: 800, pan: 'center',
   trigger: '`repair` event: great when precision >= 0.8, ok >= 0.4, rough below. Careful (pay more, guaranteed) plays ok',
@@ -322,7 +324,7 @@ S('hire.manager', { bus: 'game', tier: 'medium', cd: 800, pan: 'building x',
   trigger: '`hire` event (Hire in the Crew drawer). Flavor by kind: student, broker, logistics',
   meaning: 'Someone joins your team', recipe: 'door bell A5 + paper + two handshake thumps + a small brass swell D4 A4; student: marimba flourish; broker: marimba plink; logistics: horn blip', visual: 'A building rises on the plot, the Crew drawer lists them',
   variants: { student: { v: 'student' }, broker: { v: 'broker' }, logistics: { v: 'logistics' } }, dur: 1.2,
-  build: (p) => [bellL('A5', 0, 0.3, 0.5), paper(0.04, 0.1, 0.14), thump('A2', 'D2', 0.18, 0.4, 0.07), thump('A2', 'D2', 0.27, 0.4, 0.07), brass('D4', 0.3, 0.26, 0.08, 0.4, 500, 1800), brass('A4', 0.32, 0.2, 0.08, 0.4, 500, 1800), ...({ student: () => arp(['D5', 'F#5', 'A5'], 0.06, (n, t) => mar(n, 0.45 + t, 0.28, 0.2)), broker: () => [mar('A6', 0.5, 0.3, 0.14), click(0.5, 0.15, 3000)], logistics: () => horn('A3', 'A2', 0.45, 0.2, 0.08, 0.2) })[p.v]()] });
+  build: (p) => [bellL('A5', 0, 0.3, 0.5), paper(0.04, 0.1, 0.14), thump('A2', 'D2', 0.18, 0.4, 0.07), thump('A2', 'D2', 0.27, 0.4, 0.07), brass('D4', 0.3, 0.26, 0.08, 0.4, 500, 1800), brass('A4', 0.32, 0.2, 0.08, 0.4, 500, 1800), ...({ student: () => arp(['D5', 'F#5', 'A5'], 0.06, (n, t) => mar(n, 0.45 + t, 0.28, 0.2)), broker: () => [mar('A6', 0.5, 0.3, 0.14), click(0.5, 0.15, 3000)], logistics: () => [...horn('A3', 'A2', 0.45, 0.2, 0.08, 0.2), mar('D6', 0.52, 0.3, 0.2)] })[p.v]()] });
 
 S('crew.build', { bus: 'game', tier: 'medium', cd: 800, pan: 'building x',
   trigger: '`pipe-level` event (a manager leveled up) or `upgrade` event (a company upgrade bought)',
@@ -339,7 +341,7 @@ S('crew.client', { bus: 'game', tier: 'medium', cd: 800, pan: 'center',
 S('ship.depart', { bus: 'game', tier: 'medium', cd: 1000, pan: 'origin district x',
   trigger: '`ship` event (crates sent to another district)',
   meaning: 'A truck pulls out', recipe: 'engine rumble (brown noise lowpassed at 240 Hz and closing to 120) + a short air horn, D3 over D2', visual: 'A truck drives along the road, a "Shipped" toast',
-  variants: { s: {} }, dur: 1.2, build: () => [{ k: 'noise', c: 'brown', a: 0.3, d: 0.8, g: 0.5, lp: [240, 0.7, 120] }, ...horn('D3', 'D2', 0.2, 0.3, 0.12, 0.25)] });
+  variants: { s: {} }, dur: 1.2, build: () => [{ k: 'noise', c: 'brown', a: 0.3, d: 0.8, g: 0.5, lp: [240, 0.7, 120] }, { k: 'noise', c: 'pink', a: 0.3, d: 0.7, g: 0.3, bp: [450, 0.8], main: true }, ...horn('D3', 'D2', 0.2, 0.3, 0.12, 0.25), ...body(0.2, 0.4, 'D4', 0.3)] });
 
 S('ship.arrive', { bus: 'game', tier: 'tiny', cd: 1500, pan: 'destination district x',
   trigger: 'Note kind `freight-arrive` ("Freight arrived in ...")',
@@ -361,7 +363,7 @@ S('bank.repay', { bus: 'game', tier: 'medium', cd: 800, pan: 'center',
   trigger: '`repay` event: half or full of one loan; `free` when the last loan is cleared (Debt-free)',
   meaning: 'Debt goes down: a stamp, coins out, relief rising', recipe: 'stamp + three muted coins + glass A4 (half) or F#5 to A5 (full); free: vault latch closing + a rising glass arpeggio D5 F#5 A5 D6 + a shower', visual: 'The loan row shrinks, a toast; "Debt-free" toast for the last one',
   variants: { half: { v: 'half' }, full: { v: 'full' }, free: { v: 'free', tier: 'loud' } }, dur: 1.6,
-  build: (p) => p.v === 'free' ? [thump('D3', 'D2', 0, 0.7, 0.14), click(0.03, 0.3, 2000), ...arp(['D5', 'F#5', 'A5', 'D6'], 0.09, (n, t) => gls(n, 0.2 + t, 0.34, 0.8)), ...sparkle(6, 0.5, 0.14, 10, 0.06), gls('D6', 0.2, 0.3, 1.0)] : [...stamp(0, 0.8), ...coins(3, 0.15, 0.1, 0.24, FALL, { lp: [2600, 0.7] }, true), ...(p.v === 'half' ? [gls('A4', 0.3, 0.34, 0.5)] : [gls('F#5', 0.3, 0.34, 0.4), gls('A5', 0.4, 0.38, 0.7)])] });
+  build: (p) => p.v === 'free' ? [thump('D3', 'D2', 0, 0.7, 0.14), click(0.03, 0.3, 2000), ...arp(['D5', 'F#5', 'A5', 'D6'], 0.09, (n, t) => gls(n, 0.2 + t, 0.34, 0.8)), ...sparkle(6, 0.5, 0.14, 10, 0.06), gls('D6', 0.2, 0.3, 1.0)] : [...stamp(0, 0.8), ...coins(3, 0.15, 0.1, 0.12, FALL, { lp: [2600, 0.7] }, true), ...(p.v === 'half' ? [gls('A4', 0.3, 0.34, 0.4), gls('D5', 0.4, 0.36, 0.6)] : [gls('F#5', 0.3, 0.34, 0.4), gls('A5', 0.4, 0.38, 0.7)])] }); // the coins going out are soft; what is heard is relief rising (half: A4 to D5, full: F#5 to A5)
 
 S('audit.notice', { bus: 'game', tier: 'medium', cd: 2000, pan: 'center',
   trigger: 'Note with `audit: true` (an audit event with 72 virtual hours to answer)',
@@ -371,7 +373,7 @@ S('audit.notice', { bus: 'game', tier: 'medium', cd: 2000, pan: 'center',
 S('audit.result', { bus: 'game', tier: 'medium', cd: 2000, pan: 'center',
   trigger: '`audit` event (you answered): `ok` true is a pass, false a fail',
   meaning: 'Approved, or fined', recipe: 'pass: stamp + glass D5 F#5 A5 rising; fail: stamp + a falling triangle A3 to D3 + a muted coin', visual: 'Toast and the audit panel clears (a fine appears in the ledger)',
-  variants: { pass: {}, fail: { fail: 1 } }, dur: 1.0, build: (p) => p.fail ? [...stamp(0, 0.9), { k: 'tone', f: 'A3', f2: 'D3', gl: 0.3, type: 'triangle', t: 0.1, a: 0.01, d: 0.4, g: 0.45, lp: [900, 0.7] }, ...coin('D5', 0.35, 0.22, 0.1, { lp: [2000, 0.7] }), ...body(0.05, 0.8, 'D4', 0.14)] : [...stamp(0, 0.9), ...arp(['D5', 'F#5', 'A5'], 0.07, (n, t) => gls(n, 0.1 + t, 0.34, 0.6)), gls('D6', 0.24, 0.24, 0.5)] });
+  variants: { pass: {}, fail: { fail: 1 } }, dur: 1.0, build: (p) => p.fail ? [...stamp(0, 0.9), ...coin('D5', 0.02, 0.22, 0.1, { lp: [2000, 0.7] }), { k: 'tone', f: 'A3', f2: 'D3', gl: 0.3, type: 'triangle', t: 0.14, a: 0.01, d: 0.4, g: 0.45, lp: [900, 0.7] }, { k: 'tone', f: 'D4', f2: 'A3', gl: 0.25, t: 0.14, a: 0.01, d: 0.3, g: 0.9 }, ...body(0.05, 0.5, 'D4', 0.14)] : [...stamp(0, 0.9), ...arp(['D5', 'F#5', 'A5'], 0.07, (n, t) => gls(n, 0.1 + t, 0.34, 0.6)), gls('D6', 0.24, 0.24, 0.5)] });
 
 // =============================================================================================== ALERTS AND SHOCKS
 S('alert.advance', { bus: 'game', tier: 'medium', cd: 3000, pan: 'center',
@@ -384,17 +386,17 @@ S('alert.shock', { bus: 'game', tier: 'loud', cd: 3000, pan: 'center',
   trigger: '`shock` event (it is live now). By kind: tiktok, fed, tariff (scheduled), viral, glut, scare (surprise events, quieter)',
   meaning: 'tiktok: exciting; fed: ominous; tariff: heavy; viral: bright; glut: sinking; scare: nervous', recipe: 'tiktok: five-note bright arpeggio D5 to F#6 + confetti noise swell; fed: low brass A2 to D2 glide + rain-onset noise + rumble; tariff: gate slam + metal clang + horn A2; viral: glass D6 A6 D7; glut: marimba D5 A4 D4 falling; scare: the pair + a paper shake', visual: 'Breaking-news toast and dialog, rain or confetti in the world',
   variants: { tiktok: { v: 'tiktok' }, fed: { v: 'fed' }, tariff: { v: 'tariff' }, viral: { v: 'viral', tier: 'medium' }, glut: { v: 'glut', tier: 'medium' }, scare: { v: 'scare', tier: 'medium' } }, dur: 2.2,
-  build: (p) => ({ tiktok: () => [...arp(['D5', 'F#5', 'A5', 'D6', 'F#6'], 0.09, (n, t) => mar(n, t, 0.42, 0.3)), { k: 'noise', c: 'white', t: 0.1, a: 0.5, d: 0.6, g: 0.16, hp: [5000, 0.7] }, ...sparkle(5, 0.5, 0.14, 11, 0.07)], fed: () => [{ k: 'tone', f: 'A2', f2: 'D2', gl: 1.0, type: 'sawtooth', uni: [3, 8], a: 0.1, h: 0.5, d: 1.0, g: 0.5, lp: [380, 0.8] }, { k: 'noise', c: 'white', t: 0.3, a: 0.8, d: 0.9, g: 0.12, hp: [2500, 0.7] }, { k: 'noise', c: 'brown', a: 0.3, d: 1.2, g: 0.4, lp: [140, 0.7] }], tariff: () => [thump('D3', 'D2', 0, 0.9, 0.2), bellL('D3', 0.01, 0.34, 1.0), ...horn('A3', 'A2', 0.15, 0.4, 0.3, 0.5)], viral: () => [gls('D6', 0, 0.4, 0.4), gls('A6', 0.08, 0.4, 0.4), gls('D7', 0.16, 0.4, 0.6)], glut: () => arp(['D5', 'A4', 'D4'], 0.16, (n, t) => mar(n, t, 0.45, 0.35)), scare: () => [...pair('A4', 'F#4', 0, 0.13, 0.4, 0.3), paper(0.3, 0.12, 0.2)] })[p.v]() });
+  build: (p) => ({ tiktok: () => [...arp(['D5', 'F#5', 'A5', 'D6', 'F#6'], 0.09, (n, t) => mar(n, t, 0.42, 0.3)), { k: 'noise', c: 'white', t: 0.1, a: 0.5, d: 0.6, g: 0.16, hp: [5000, 0.7] }, ...sparkle(5, 0.5, 0.14, 11, 0.07)], fed: () => [{ k: 'tone', f: 'A2', f2: 'D2', gl: 1.0, type: 'sawtooth', uni: [3, 8], a: 0.1, h: 0.5, d: 1.0, g: 0.5, lp: [380, 0.8] }, { k: 'noise', c: 'white', t: 0.3, a: 0.8, d: 0.9, g: 0.12, hp: [2500, 0.7] }, { k: 'noise', c: 'brown', a: 0.3, d: 1.2, g: 0.4, lp: [140, 0.7] }, ...body(0.1, 0.6, 'D4', 0.5)], tariff: () => [thump('D3', 'D2', 0, 0.9, 0.2), bellL('D3', 0.01, 0.34, 1.0), ...horn('A3', 'A2', 0.15, 0.4, 0.3, 0.5), ...body(0.05, 0.6, 'D4', 0.3)], viral: () => [gls('D6', 0, 0.4, 0.4), gls('A6', 0.08, 0.4, 0.4), gls('D7', 0.16, 0.4, 0.6)], glut: () => arp(['D5', 'A4', 'D4'], 0.16, (n, t) => mar(n, t, 0.45, 0.35)), scare: () => [...pair('A4', 'F#4', 0, 0.13, 0.4, 0.3), paper(0.3, 0.12, 0.2)] })[p.v]() });
 
 S('alert.margin-call', { bus: 'game', tier: 'loud', cd: 5000, pan: 'center',
   trigger: '`margin-call` event (debt-to-equity passed 4.5: the bank liquidates)',
   meaning: 'The most serious sound in the game', recipe: 'siren pair A3 D4 three times (saw, lowpassed 1.4 kHz) + a vault slam thump + a low horn blast, D3 over D2', visual: 'The "Margin Liquidation Protocol" dialog, bad toast, assets sold off',
-  variants: { m: {} }, dur: 2.0, build: () => [...Array.from({ length: 3 }, (_, i) => [{ k: 'tone', f: 'A3', type: 'sawtooth', t: i * 0.45, a: 0.02, h: 0.14, d: 0.1, g: 0.4, lp: [1400, 0.8] }, { k: 'tone', f: 'D4', type: 'sawtooth', t: i * 0.45 + 0.2, a: 0.02, h: 0.14, d: 0.1, g: 0.4, lp: [1400, 0.8] }]).flat(), thump('D3', 'D2', 0, 0.9, 0.25), ...horn('D3', 'D2', 0.05, 0.5, 0.6, 0.6)] });
+  variants: { m: {} }, dur: 2.0, build: () => [...Array.from({ length: 3 }, (_, i) => [{ k: 'tone', f: 'A3', type: 'sawtooth', t: i * 0.45, a: 0.02, h: 0.14, d: 0.1, g: 0.4, lp: [1400, 0.8] }, { k: 'tone', f: 'D4', type: 'sawtooth', t: i * 0.45 + 0.2, a: 0.02, h: 0.14, d: 0.1, g: 0.4, lp: [1400, 0.8] }]).flat(), thump('D3', 'D2', 0, 0.9, 0.25), ...horn('D3', 'D2', 0.05, 0.5, 0.6, 0.6), ...body(0.05, 0.6, 'D4', 0.5)] });
 
 S('alert.insolvent', { bus: 'game', tier: 'loud', cd: 5000, pan: 'center',
   trigger: '`insolvent` event (net worth fell to zero or below)',
   meaning: 'You are broke: a toll and a slow fall', recipe: 'two deep bell tolls D3 (1.5 s each) over a falling slide D4 to D2', visual: 'Bad toast; net worth turns red',
-  variants: { i: {} }, dur: 2.6, build: () => [bellL('D3', 0, 0.38, 1.8, { a: 0.012 }), bellL('D3', 0.9, 0.32, 1.6, { a: 0.012 }), { k: 'tone', f: 'D4', f2: 'D2', gl: 1.5, type: 'triangle', a: 0.05, d: 1.6, g: 0.3, lp: [700, 0.7] }, ...body(0.05, 0.3, 'D4', 0.25), ...body(0.95, 0.28, 'D4', 0.25)] });
+  variants: { i: {} }, dur: 2.6, build: () => [bellL('D3', 0, 0.38, 1.8, { a: 0.012 }), bellL('D3', 0.9, 0.32, 1.6, { a: 0.012 }), { k: 'tone', f: 'D4', f2: 'D3', gl: 1.1, type: 'triangle', a: 0.05, d: 1.6, g: 0.34, lp: [700, 0.7] }, ...body(0.05, 0.3, 'D4', 0.25), ...body(0.95, 0.28, 'D4', 0.25)] }); // the slow fall stops at D3: below 150 Hz a laptop plays nothing, and the D4 to D2 slide spent 1.1 s of its 1.6 s there
 
 S('perk.bailout', { bus: 'game', tier: 'loud', cd: 5000, pan: 'center',
   trigger: '`perk` event: `bailout` (the Legacy Heir\'s family clears your debt) or `fine-waived` (the family lawyer, medium)',
@@ -439,13 +441,13 @@ S('milestone', { bus: 'game', tier: 'loud', cd: 5000, pan: 'center',
   trigger: '`milestone` event, `n` 1 to 3 (1: managers and the bank open; 2: audits begin; 3: enterprise opens)',
   meaning: 'A door opens; milestone 2 carries a warning', recipe: '1: brass fanfare D3 A3 D4 + marimba run + a door-open swell; 2: the same but the last chord turns to the warning pair A4 F#4; 3: longer, adds a bell chord D6 A6 and a second brass voice', visual: 'Milestone toast, confetti, new dock icons',
   variants: { m1: { n: 1 }, m2: { n: 2 }, m3: { n: 3 } }, dur: 2.4,
-  build: (p) => [brass('D3', 0, 0.36, 0.3, 0.7, 400, 2400), brass('A3', 0.12, 0.3, 0.3, 0.7, 400, 2400), brass('D4', 0.24, 0.3, 0.3, 0.7, 400, 2400), ...arp(['D5', 'F#5', 'A5', 'D6'], 0.1, (n, t) => mar(n, 0.3 + t, 0.4, 0.5)), swoosh(0.1, 0.8, 400, 3000, 0.16), ...(p.n === 2 ? pair('A4', 'F#4', 1.0, 0.18, 0.4, 0.6) : [gls('D6', 0.7, 0.3, 1.0)]), ...(p.n === 3 ? [bellL('D6', 0.7, 0.3, 1.2), bellL('A6', 0.75, 0.2, 1.0), brass('A4', 0.5, 0.26, 0.3, 0.7, 500, 2400), ...sparkle(8, 0.9, 0.12, 9, 0.06)] : [])] });
+  build: (p) => [brass('D3', 0, 0.36, 0.3, 0.7, 400, 2400), brass('A3', 0.12, 0.3, 0.3, 0.7, 400, 2400), brass('D4', 0.24, 0.3, 0.3, 0.7, 400, 2400), ...arp(['D5', 'F#5', 'A5', 'D6'], 0.1, (n, t) => mar(n, 0.3 + t, 0.4, 0.5)), swoosh(0.1, 0.8, 400, 3000, 0.16), ...(p.n === 2 ? pair('A4', 'F#4', 1.0, 0.18, 0.4, 0.6) : [gls('D6', 0.7, 0.3, 1.0)]), ...(p.n === 3 ? [bellL('D6', 0.7, 0.3, 1.4), bellL('A6', 0.75, 0.2, 1.2), brass('A4', 0.5, 0.26, 0.3, 0.7, 500, 2400), ...sparkle(8, 0.9, 0.12, 9, 0.06), gls('D7', 1.3, 0.14, 0.6)] : [])] }); // 3 is the longest: the bell chord rings 200 ms longer and a high glass closes it
 
 S('zone.open', { bus: 'game', tier: 'loud', cd: 4000, pan: 'district x',
   trigger: '`zone` event (a district opens as net worth passes its gate), `t` the tier 1 to 4; with `world.startReveal`',
   meaning: 'The fog lifts: a place opens to you', recipe: 'n+3 glass notes rising (n = tier) + a low pad swell D2 A2 + a rising air sweep and sparkle; tier 4 adds brass and a bell chord', visual: 'Rings and sparks over the district, its fog lifts, a "... is open" toast',
   variants: { t1: { t: 1, tier: 'medium' }, t4: { t: 4 } }, dur: 2.4,
-  build: (p) => [...Array.from({ length: p.t + 3 }, (_, i) => gls(P5[5 + i], i * 0.1, 0.32, 0.8)), { k: 'tone', f: 'D2', a: 0.4, h: 0.4, d: 0.8, g: 0.34 }, { k: 'tone', f: 'A2', a: 0.4, h: 0.4, d: 0.8, g: 0.24 }, swoosh(0, 1.2, 500, 4000, 0.18), ...sparkle(5 + p.t, 0.4, 0.11, 10, 0.07), ...(p.t >= 3 ? [brass('D3', 0.2, 0.3, 0.3, 0.8, 400, 2200), bellL('D6', 0.6, 0.24, 1.2)] : [])] });
+  build: (p) => [...Array.from({ length: p.t + 3 }, (_, i) => gls(P5[5 + i], i * 0.1, 0.32, 0.8)), { k: 'tone', f: 'D2', a: 0.4, h: 0.4, d: 0.8, g: 0.2 }, { k: 'tone', f: 'A2', a: 0.4, h: 0.4, d: 0.8, g: 0.14 }, swoosh(0, 1.2, 500, 4000, 0.18), ...sparkle(5 + p.t, 0.4, 0.11, 10, 0.07), ...(p.t >= 3 ? [brass('D3', 0.2, 0.3, 0.3, 0.8, 400, 2200), bellL('D6', 0.6, 0.24, 1.2)] : [])] });
 
 S('swap.offer-in', { bus: 'game', tier: 'medium', cd: 3000, pan: 'center',
   trigger: 'Session event `offer` (a classmate or the Practice Partner proposes a swap)',
@@ -495,13 +497,13 @@ S('run.end', { bus: 'game', tier: 'loud', cd: 8000, pan: 'center',
   trigger: 'Day 90 closes the run (`final` note); an exit launches (`exit` event: IPO or trade sale) and settles (note `final` with an exit)',
   meaning: 'The end of something big', recipe: 'horizon: three slow bell tolls D3; exit start: a trading-floor bell (eight fast strikes A5 decaying) + brass; exit done: the grand fanfare, brass D3 A3 D4 F#4 + bells + a glass shower (2.8 s)', visual: 'The "simulation is complete" dialog with the EEI',
   variants: { horizon: { v: 'h' }, start: { v: 's' }, done: { v: 'd' } }, dur: 3.0,
-  build: (p) => p.v === 'h' ? [bellL('D3', 0, 0.5, 2.0), bellL('D3', 0.85, 0.42, 1.8), bellL('D3', 1.7, 0.34, 1.6)] : p.v === 's' ? [...Array.from({ length: 8 }, (_, i) => bellL('A5', i * 0.08, 0.3 - i * 0.02, 0.3)), brass('D3', 0.3, 0.3, 0.2, 0.6, 400, 2000), ...stamp(0.7, 0.6)] : [...['D3', 'A3', 'D4', 'F#4'].map((n) => brass(n, 0, 0.3, 0.6, 1.0, 400, 2600)), ...['D5', 'A5', 'D6'].map((n, i) => bellL(n, 0.1 + i * 0.2, 0.3, 1.5)), ...arp(['D5', 'F#5', 'A5', 'D6', 'F#6', 'A6', 'D7'], 0.08, (n, t) => mar(n, 0.4 + t, 0.34, 0.6)), ...sparkle(14, 1.0, 0.12, 6, 0.07), ...coins(8, 0.8, 0.6, 0.2)] });
+  build: (p) => p.v === 'h' ? [bellL('D3', 0, 0.5, 2.0), bellL('D3', 0.85, 0.42, 1.8), bellL('D3', 1.7, 0.34, 1.6), gls('D4', 0, 0.3, 1.0), gls('D4', 0.85, 0.26, 0.9), gls('D4', 1.7, 0.22, 0.8)] : p.v === 's' ? [...Array.from({ length: 8 }, (_, i) => bellL('A5', i * 0.08, 0.3 - i * 0.02, 0.3)), brass('D3', 0.3, 0.3, 0.2, 0.6, 400, 2000), ...stamp(0.7, 0.6)] : [...['D3', 'A3', 'D4', 'F#4'].map((n) => brass(n, 0, 0.3, 0.6, 1.0, 400, 2600)), ...['D5', 'A5', 'D6'].map((n, i) => bellL(n, 0.1 + i * 0.2, 0.3, 1.5)), ...arp(['D5', 'F#5', 'A5', 'D6', 'F#6', 'A6', 'D7'], 0.08, (n, t) => mar(n, 0.4 + t, 0.34, 0.6)), ...sparkle(14, 1.0, 0.12, 6, 0.07), ...coins(8, 0.8, 0.6, 0.2)] });
 
 S('inst.cue', { bus: 'game', tier: 'medium', cd: 2000, pan: 'center',
   trigger: 'Instructor dashboard only: Deploy to cohort (deploy), Start simulation (start), Rewind (rewind). Off by default in a room',
   meaning: 'A ceremony for the teacher', recipe: 'deploy: marimba D5 A5 + a horn D3; start: horns D3 and A3 over D2 and A2 + bell D6; rewind: tape whir (noise sweeping down 3 kHz to 300 Hz) with ticks', visual: 'The dashboard\'s own toast',
   variants: { deploy: { v: 'deploy' }, start: { v: 'start' }, rewind: { v: 'rewind', tier: 'tiny' } }, dur: 1.4,
-  build: (p) => ({ deploy: () => [mar('D5', 0, 0.4, 0.3), mar('A5', 0.1, 0.4, 0.4), ...horn('D3', 'D2', 0.2, 0.34, 0.4, 0.4)], start: () => [...horn('D3', 'D2', 0, 0.4, 0.3, 0.5), ...horn('A3', 'A2', 0, 0.3, 0.3, 0.5), bellL('D6', 0.35, 0.3, 0.9)], rewind: () => [swoosh(0, 0.5, 3000, 300, 0.26), ...ticks(8, 0, 0.06, 0.15, 3000)] })[p.v]() });
+  build: (p) => ({ deploy: () => [...horn('D3', 'D2', 0, 0.34, 0.4, 0.4), ...body(0, 0.4, 'D4', 0.3), mar('D5', 0.08, 0.4, 0.3), mar('A5', 0.18, 0.4, 0.4), gls('D6', 0.3, 0.3, 0.5)], start: () => [...horn('D3', 'D2', 0, 0.4, 0.3, 0.5), ...horn('A3', 'A2', 0, 0.3, 0.3, 0.5), bellL('D6', 0.35, 0.3, 0.9), ...body(0.05, 0.5, 'D4', 0.3)], rewind: () => [swoosh(0, 0.5, 3000, 300, 0.26), ...ticks(8, 0, 0.06, 0.15, 3000)] })[p.v]() });
 
 // =============================================================================================== REVISION 2: redrawn and new
 S('world.hover', { bus: 'game', tier: 'tiny', cd: 330, pan: 'object x',
@@ -555,6 +557,7 @@ const REWARD_ORDER = ['milestone', 'zone.open', 'level.up#big', 'achievement#epi
 /** The rank of a cause, a state or a reward: higher plays first. Variants that are different causes have no rank among themselves. */
 export function sentenceRank(id, variant) {
   const c = CLASS_OF[id];
+  if (id === 'day.turn') return 7; // the new day outranks a manager's coin and a freight ding of the same step (the engine writes `cycle` before `day`): the chime was lost on every day a manager ran
   if (c === 'reward') {
     if (id === 'acad.graduate') return 125;
     if (id === 'acad.win') return 65;
@@ -600,7 +603,10 @@ const CD = {
 /** Different causes inside one id have a cooldown each (a Fed announcement is not silenced by a viral one). */
 export const CD_PER_VARIANT = new Set(['alert.shock', 'ship.trouble', 'haggle.tell']);
 const CD_BY_VARIANT = { achievement: { common: 3000 } };
-const TUNED = { 'ui.refuse': { trimDb: 3 }, 'world.locked': { trimDb: 3 } }; // a routine mis-click is no longer louder than a confirmation (2.2)
+// Per variant: the loss twin of a gain is a little softer than it (2.2: spending is quieter than earning). Calibration levels every variant of a tier to the same target, which took the softness away.
+const VARIANT_TRIM = { 'cash.out#l': -1.5, 'sale.herd#h': -1.5, 'sale.scam#s': -3, 'sale.reject#nofit': -1, 'ui.toggle#off': -1.5, 'pitch.fit#down': -1.5 };
+export const trimDbOf = (id, variant) => (RECIPES[id]?.trimDb || 0) + (VARIANT_TRIM[id + '#' + variant] || 0);
+const TUNED = {}; // the +3 dB of the refusal sounds is gone: a mis-click is never louder than a confirmation (2.2), and its body (a D4 sine and a knock at 440 Hz) carries it on a laptop instead
 
 export const RECIPES = {};
 for (const e of SOUNDS) {
@@ -632,5 +638,12 @@ export const trimFor = (id, variant, k = 0) => TRIMS.sounds?.[id + '#' + variant
 export const TIER_TARGET = { tiny: -30, medium: -24, loud: -17, amb: -32 };
 export const TIER_CEIL = { tiny: -6, medium: -6, loud: -3, amb: -6 };
 export const TIER_MAX_MS = { tiny: 1000, medium: 1500, loud: 3000, amb: 3000 };
-/** Loudness rises with duration up to about 200 ms and the frame-based level does not, so the tiny tier is compensated: +3 dB under 60 ms, +1.5 under 120, nothing to 500, -2 over (3.2). */
-export const durationComp = (ms) => ms < 60 ? 3 : ms < 120 ? 1.5 : ms <= 500 ? 0 : -2;
+/** The tier's compensation: the tiny tier follows the whole curve, the medium tier only its positive part (a short medium sound, a purchase of 140 ms, is as much under its tier on the Fast meter as a tick; a long one is not touched, so the gap to the loud tier holds), the loud tier none. */
+export const tierComp = (tier, ms) => tier === 'tiny' ? durationComp(ms) : tier === 'medium' ? Math.max(0, durationComp(ms)) : 0;
+/** Loudness rises with duration up to about 200 ms and the frame-based level does not, so the tiny tier is compensated along a smooth curve: +5.5 dB at 40 ms or less, +3.3 at 105 ms, +1.5 at 190 ms, nothing at 360 ms, -1 from 700 ms (3.2). */
+const COMP = [[40, 5.5], [75, 4.5], [105, 3.3], [140, 2.6], [190, 1.5], [260, 0.7], [360, 0], [500, -0.9], [700, -1]];
+export const durationComp = (ms) => { // measured: the 125 ms Fast level of a tiny sound is 6.5 dB under its active level at 40 ms and 1.2 dB over at 600 ms, smoothly; the compensation follows that curve at about 85%
+  if (ms <= COMP[0][0]) return COMP[0][1];
+  for (let i = 1; i < COMP.length; i++) if (ms <= COMP[i][0]) { const [x0, y0] = COMP[i - 1], [x1, y1] = COMP[i]; return Math.round((y0 + (y1 - y0) * (ms - x0) / (x1 - x0)) * 10) / 10; }
+  return COMP[COMP.length - 1][1];
+};

@@ -46,11 +46,12 @@ export function announce(msg, assertive = false) {
   el.textContent = '';
   setTimeout(() => { el.textContent = msg; }, 30);
 }
-export function toast(msg, level = 'info', ms = 4200) {
+export function toast(msg, level = 'info', ms = 4200, o = {}) { // o.refusal: the toast answers an action the engine refused (say(r)); the sound layer plays its "no" for those and for no other bad toast
   const box = $('#toasts');
   if (box) {
     const t = document.createElement('div');
     t.className = 'toast ' + level;
+    if (o && o.refusal) t.dataset.refusal = '1';
     t.textContent = msg;
     box.appendChild(t);
     while (box.children.length > 4) box.firstChild.remove();
@@ -102,7 +103,7 @@ export function initDialog() {
     }, 0);
   });
   d.addEventListener('click', (e) => { if (e.target === d) d.close(); });
-  initAudio({ settings, save: applySettings, announce, toast }); // the page-wide sound layer: the unlock, key M, the control table, the dialog and toast observers
+  initAudio({ settings, save: applySettings, announce, toast, kv }); // the page-wide sound layer: the unlock, key M, the control table, the dialog and toast observers
 }
 
 // ---- delegated actions: <button data-act="name" data-x="..."> -> acts.name(el, event)

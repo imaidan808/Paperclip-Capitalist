@@ -7,22 +7,29 @@
   button { font: inherit; padding: 6px 10px; border: 1px solid #3d4757; background: #161b22; color: inherit; border-radius: 6px; cursor: pointer; min-height: 32px; }
   button:hover { background: #21262d; } button:focus-visible, input:focus-visible { outline: 3px solid #ffc247; outline-offset: 2px; }
   button[data-tier=loud] { border-color: #ffc247; } button[data-tier=medium] { border-color: #5cd6ff; }
+  .grp p { margin: .2rem 0 .6rem; max-width: 80ch; } .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 8px; margin-top: 8px; }
+  .card { border: 1px solid #30363d; border-radius: 6px; padding: 8px; background: #11161d; display: flex; flex-direction: column; gap: 4px; } .card button { text-align: left; font-weight: 600; }
+  .chip { align-self: flex-start; font-size: .75rem; padding: 1px 8px; border-radius: 999px; border: 1px solid #3d4757; } .chip.loud { border-color: #ffc247; color: #ffc247; } .chip.medium { border-color: #5cd6ff; color: #5cd6ff; } .chip.tiny { color: #9aa7b4; }
+  .meaning { color: #e6edf3; } .trig summary { cursor: pointer; color: #9aa7b4; font-size: .85rem; } .trig p { font-size: .85rem; color: #9aa7b4; margin: 4px 0 0; }
+  button.all { background: #1f2a1f; } button.pair { text-align: left; }
   label { display: inline-flex; gap: 8px; align-items: center; margin-right: 16px; } .mute { color: #9aa7b4; }
   #bar { position: sticky; top: 0; background: #0d1117; padding: 8px 0; border-bottom: 1px solid #30363d; z-index: 2; }
   #meter { width: 220px; height: 14px; background: #161b22; border: 1px solid #3d4757; border-radius: 3px; position: relative; overflow: hidden; }
   #meter i { position: absolute; inset: 0 auto 0 0; width: 0; background: #46e38e; } #meter b { position: absolute; top: 0; bottom: 0; width: 2px; background: #ff6b6b; left: 85.5%; } #db { font-variant-numeric: tabular-nums; width: 8ch; }
 </style></head><body>
 <h1>Audio audition</h1>
-<p class="mute">Every sound of docs/AUDIO.md, played through the real engine (buses, glue compressor, soft clip at -3 dBFS). Border: yellow = loud, blue = medium, gray = tiny. Nothing plays until you press a button. This page is for the author's ears; it is not part of the staged site. <a href="/">The game</a></p>
+<p class="mute">Every sound of docs/AUDIO.md, played through the real engine (buses, glue compressor, soft clip at -3 dBFS). Each sound shows its tier as a word (loud, medium or tiny) as well as by its border, its meaning, and when it plays. Nothing plays until you press a button. This page is for the author's ears; it is not part of the staged site. <a href="/">The game</a></p>
 <div id="bar">
   <div class="row">
     <label>Volume <input id="vol" type="range" min="0" max="100" step="5" value="70" aria-label="Master volume"></label>
     <label><input id="mute" type="checkbox"> Mute</label>
     <label><input id="ui" type="checkbox" checked> Interface</label>
     <label><input id="game" type="checkbox" checked> Game</label>
+    <label><input id="world" type="checkbox" checked> World ticks</label>
     <label><input id="amb" type="checkbox"> Ambient</label>
     <label>Ambient level <input id="ambvol" type="range" min="0" max="100" step="5" value="70" aria-label="Ambient level"></label>
     <label><input id="quiet" type="checkbox"> Classroom rule</label>
+    <button id="stop" type="button">Stop everything</button>
   </div>
   <div class="row"><span>Level</span><div id="meter" role="meter" aria-label="Output level" aria-valuemin="-60" aria-valuemax="0"><i></i><b title="-3 dBFS"></b></div><span id="db">-inf dB</span><span id="state" class="mute" role="status"></span></div>
 </div>

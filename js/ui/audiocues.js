@@ -9,10 +9,11 @@
 // Announcements go through one queue that speaks at most one line per 700 ms and keeps only the latest of a kind (announce() clears the region and sets it 30 ms later, so two in one tick lose the first).
 // Nothing here reads a buyer's `scam`, a lot's truth or anything else the player has not been shown. No timer exists unless a line is waiting to be spoken.
 import { noteKind } from '../audio/wire.js';
+import { HINT_TEXT } from '../audio/settings.js';
 import { ASSETS } from '../config.js';
 
 export const SPEAK_GAP = 700, URGENT_GAP = 60000, SETTLE_WAIT = 80, STALE_HOURS = 3;
-export const HINT_TEXT = 'Sound effects are on. Press M or the speaker button to mute them.';
+export { HINT_TEXT }; // the words are in js/audio/settings.js: the page-wide layer says the same on the title and in the Draft
 export const INSOLVENT_TEXT = 'Your net worth has fallen to zero or below.';
 
 /**

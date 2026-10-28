@@ -2,6 +2,9 @@
 // touches the dialog it is given. The source of truth is `settings.audio`; the flat keys `sound`, `vol`, `sfxUi`, `sfxGame` and `ambient` mirror it for anything that reads them.
 
 export const AUDIO_V = 1;
+/** The one-time note of the first minute (7.4): in the game, where the speaker button is, and on the title and in the Draft, where there is none yet. */
+export const HINT_TEXT = 'Sound effects are on. Press M or the speaker button to mute them.';
+export const HINT_PAGE_TEXT = 'Sound effects are on. Press M to mute them, or change them under Display and sound.';
 export function audioDefaults() {
   return {
     v: AUDIO_V,
@@ -14,12 +17,14 @@ export function audioDefaults() {
     dial: false,       // the repair dial tone (4.5). Off until the player turns it on
     clockSounds: true, // buyers arriving, the new day, managers' coins, freight arriving, cash settling, a mentor's tip (3.4.5). Off in Classroom
     quiet: false,      // the Classroom rule (3.2): tiny game sounds off, medium and loud 10 dB lower, interface 6 dB lower, ambient, dial and clock sounds off
+    worldTicks: true,  // the world's hover ticks and footsteps (the most frequent game sounds; Calm and Classroom drop them anyway). Off silences those two and nothing else
+    mKey: true,        // key M mutes and unmutes (a single-key shortcut needs a way out, WCAG 2.1.4); the speaker button stays
     touched: false,    // the player has changed a sound setting by hand (stops the automatic Classroom preset), or a saved "sound off" was migrated
     hinted: false,     // the one-time "sound is on" note has been shown
   };
 }
 const NUM = { master: [0, 100, 5], ambientLevel: [0, 100, 5] };
-const BOOL = ['mute', 'ui', 'game', 'ambient', 'dial', 'clockSounds', 'quiet', 'touched', 'hinted'];
+const BOOL = ['mute', 'ui', 'game', 'ambient', 'dial', 'clockSounds', 'quiet', 'worldTicks', 'mKey', 'touched', 'hinted'];
 function num(v, lo, hi, step, d) { const n = typeof v === 'number' ? v : typeof v === 'string' && v.trim() !== '' ? Number(v) : NaN; return Number.isFinite(n) ? Math.min(hi, Math.max(lo, Math.round(n / step) * step)) : d; }
 /** Clamp every field to its range and drop unknown keys: a saved value is never trusted (numbers to their range and step, booleans only when exactly true or false). */
 export function sanitizeAudio(a) {
@@ -40,13 +45,18 @@ export function presetOf(a) {
   for (const [name, p] of Object.entries(PRESETS)) if (Object.keys(p).every((k) => a[k] === p[k])) return name;
   return 'custom';
 }
-/** A preset never unmutes: Full, Classroom and Interface only leave `mute` as it is; Off sets it. Returns a new object. */
+/**
+ * Off mutes. Every other preset is a request to hear something, so it unmutes and puts the volume at 70: a menu that left Mute on and snapped back to "Off" after the player chose Full was a trap
+ * (the only way out was a different control). Returns a new object.
+ */
 export function applyPreset(a, name) {
   const next = { ...a, touched: true };
   if (name === 'off') next.mute = true;
-  else if (PRESETS[name]) { Object.assign(next, PRESETS[name]); next.master = 70; }
+  else if (PRESETS[name]) { Object.assign(next, PRESETS[name]); next.master = 70; next.mute = false; }
   return next;
 }
+/** Can anything be heard at all? Not muted, not at volume 0, and at least one of the two buses on. */
+export const audible = (a) => !a.mute && a.master > 0 && (a.ui || a.game);
 /** `?sound=off|quiet|full`, read before the first save and only while `touched` is false. An instructor can put it in the student link. */
 function fromAddress(a, search) {
   if (a.touched || !search) return a;
@@ -99,70 +109,142 @@ export function leaveRoom(a, before) {
 
 // ---- the Sound section (7.2)
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+/** What is true about the sound right now, in words: it never says "on" for a state in which nothing can be heard. */
 export function statusText(a, state) {
   if (state === 'unsupported') return 'This browser cannot play sound; everything in the game still works.';
   if (a.mute) return 'Sound is off.';
-  return state === 'running' ? 'Sound is on. Your browser started audio after your first click.' : 'Sound is on. Your browser starts audio after your first click.';
+  if (a.master <= 0) return 'Volume is at 0: you will hear nothing.';
+  if (!a.ui && !a.game) return 'Interface sounds and game sounds are both off: you will hear nothing.';
+  const on = state === 'running' ? 'Sound is on. Your browser started audio after your first click.' : 'Sound is on. Your browser starts audio after your first click.';
+  return a.game ? (a.ui ? on : on + ' Interface sounds are off.') : on + ' Game sounds are off: coins and alerts are silent.';
 }
+/** The helper line beside a row: why it is off, or what it does. */
+function note(key, a) {
+  const muted = a.mute ? 'Muted.' : '';
+  if (key === 'ui' || key === 'game' || key === 'world') return muted + (key === 'world' && a.quiet ? ' Off in Classroom.' : '');
+  if (a.quiet) return 'Off in Classroom.';
+  if (a.mute) return 'Muted.';
+  return { clock: '', amb: 'Off by default. A quiet bed for each district.', dial: 'Hear where the marker is while you time a repair. Off by default.' }[key] ?? '';
+}
+/** Every control's state, in one place, so the markup and the in-place update below can never disagree. */
+function controls(a, state) {
+  const off = state === 'unsupported', q = !!a.quiet;
+  return {
+    's-preset': { value: presetOf(a), disabled: off },
+    's-vol': { value: String(a.master), disabled: off },
+    's-mute': { checked: !!a.mute, disabled: off },
+    's-ui': { checked: !!a.ui, disabled: off },
+    's-game': { checked: !!a.game, disabled: off },
+    's-world': { checked: !!a.worldTicks && !q, disabled: off || q || !a.game },
+    's-clock': { checked: !!a.clockSounds && !q, disabled: off || q },
+    's-amb': { checked: !!a.ambient && !q, disabled: off || q },
+    's-ambvol': { value: String(a.ambientLevel), disabled: off || !(a.ambient && !q) },
+    's-dial': { checked: !!a.dial && !q, disabled: off || q || !a.game },
+    's-mkey': { checked: a.mKey !== false, disabled: off },
+    's-sample': { disabled: off },
+  };
+}
+const NOTE_FOR = { 's-ui': 'ui', 's-game': 'game', 's-world': 'world', 's-clock': 'clock', 's-amb': 'amb', 's-dial': 'dial' };
+const noteOf = (id, a) => (NOTE_FOR[id] ? note(NOTE_FOR[id], a) : '');
 export function audioSettingsHTML(a, state = 'locked') {
-  const off = state === 'unsupported' ? ' disabled' : '', q = a.quiet ? ' disabled' : '', chk = (v) => (v ? ' checked' : '');
-  const preset = presetOf(a);
+  const C = controls(a, state), dis = (id) => (C[id].disabled ? ' disabled' : ''), chk = (id) => (C[id].checked ? ' checked' : '');
+  const preset = C['s-preset'].value;
   const opt = (v) => `<option value="${v}"${preset === v ? ' selected' : ''}>${PRESET_NAMES[v]}</option>`;
+  const hint = (id) => `<span class="small mute" id="${id}-h" data-h="${id}">${esc(noteOf(id, a))}</span>`;
+  const row = (id, key, label) => `<p class="snd-row"><label><input type="checkbox" id="${id}" data-snd="${key}"${chk(id)}${dis(id)} aria-describedby="${id}-h"> ${label}</label> ${hint(id)}</p>`;
   return `<fieldset class="snd gap"><legend class="h3">Sound</legend>
     <div class="grid g2">
-      <div><label for="s-preset">Sound preset</label><select id="s-preset" data-snd="preset"${off}>${['full', 'classroom', 'interface', 'off'].map(opt).join('')}<option value="custom"${preset === 'custom' ? ' selected' : ''} disabled>Custom</option></select></div>
-      <div><label for="s-vol">Volume</label><input id="s-vol" type="range" min="0" max="100" step="5" value="${a.master}" data-snd="master" aria-valuetext="${a.master} percent"${off}></div>
+      <div><label for="s-preset">Sound preset</label><select id="s-preset" data-snd="preset"${dis('s-preset')}>${['full', 'classroom', 'interface', 'off'].map(opt).join('')}${preset === 'custom' ? '<option value="custom" selected>Custom (your own mix)</option>' : ''}</select></div>
+      <div><label for="s-vol">Volume</label><input id="s-vol" type="range" min="0" max="100" step="5" value="${a.master}" data-snd="master" aria-valuetext="${a.master} percent"${dis('s-vol')}></div>
     </div>
-    <p class="snd-row"><label><input type="checkbox" id="s-mute" data-snd="mute"${chk(a.mute)}${off}> Mute all sound</label></p>
-    <p class="snd-row"><label><input type="checkbox" id="s-ui" data-snd="ui"${chk(a.ui)}${off}> Interface sounds (clicks, panels, dialogs)</label></p>
-    <p class="snd-row"><label><input type="checkbox" id="s-game" data-snd="game"${chk(a.game)}${off}> Game sounds (sales, coins, alerts, the Deal Room)</label></p>
-    <p class="snd-row"><label><input type="checkbox" id="s-clock" data-snd="clockSounds"${chk(a.clockSounds && !a.quiet)}${a.quiet ? ' disabled' : off}> Clock sounds (a buyer arriving, a new day, your managers' coins)</label>${a.quiet ? ' <span class="small mute">Off in Classroom</span>' : ''}</p>
-    <p class="snd-row"><label><input type="checkbox" id="s-amb" data-snd="ambient"${chk(a.ambient && !a.quiet)}${a.quiet ? ' disabled' : off}> Background ambience</label> <span class="small mute">${a.quiet ? 'Off in Classroom' : 'Off by default. A quiet bed for each district.'}</span></p>
-    <p class="snd-row"><label for="s-ambvol">Ambience level</label> <input id="s-ambvol" type="range" min="0" max="100" step="5" value="${a.ambientLevel}" data-snd="ambientLevel" aria-valuetext="${a.ambientLevel} percent"${a.ambient && !a.quiet ? off : ' disabled'}></p>
-    <p class="snd-row"><label><input type="checkbox" id="s-dial" data-snd="dial"${chk(a.dial && !a.quiet)}${a.quiet ? ' disabled' : off}> Repair dial tone</label> <span class="small mute">${a.quiet ? 'Off in Classroom' : 'Hear where the marker is while you time a repair. Off by default.'}</span></p>
-    <p><button type="button" class="btn ghost sm" id="s-sample" data-snd-act="sample"${off}>Play a test sound</button></p>
+    <p class="snd-row"><label><input type="checkbox" id="s-mute" data-snd="mute"${chk('s-mute')}${dis('s-mute')}> Mute all sound</label></p>
+    ${row('s-ui', 'ui', 'Interface sounds (clicks, panels, dialogs)')}
+    ${row('s-game', 'game', 'Game sounds (sales, coins, alerts, the Deal Room)')}
+    ${row('s-world', 'worldTicks', 'World sounds (hover ticks and footsteps)')}
+    ${row('s-clock', 'clockSounds', "Clock sounds (a buyer arriving, a new day, your managers' coins)")}
+    ${row('s-amb', 'ambient', 'Background ambience')}
+    <p class="snd-row"><label for="s-ambvol">Ambience level</label> <input id="s-ambvol" type="range" min="0" max="100" step="5" value="${a.ambientLevel}" data-snd="ambientLevel" aria-valuetext="${a.ambientLevel} percent"${dis('s-ambvol')}></p>
+    ${row('s-dial', 'dial', 'Repair dial tone')}
+    <p class="snd-row"><label><input type="checkbox" id="s-mkey" data-snd="mKey"${chk('s-mkey')}${dis('s-mkey')}> Keyboard shortcut: M mutes and unmutes</label></p>
+    <p><button type="button" class="btn ghost sm" id="s-sample" data-snd-act="sample"${dis('s-sample')}>Play a test sound</button></p>
     <p id="s-status" role="status" class="small mute">${esc(statusText(a, state))}</p>
     <p class="small mute">Sound is made in your browser. Nothing is downloaded and nothing is recorded. If you hear nothing, check your device's volume and its silent switch: the browser can be on while the device is silent.</p>
   </fieldset>`;
 }
+/** Bring the controls already on the page to the settings, without replacing a single element: the control with the cursor keeps it (replacing the section dropped the cursor to the page). */
+export function syncAudioSettings(root, a, state = 'locked') {
+  const sec = root.querySelector('fieldset.snd'); if (!sec) return;
+  const C = controls(a, state);
+  for (const [id, c] of Object.entries(C)) {
+    const el = sec.querySelector('#' + id); if (!el) continue;
+    if ('checked' in c && el.checked !== c.checked) el.checked = c.checked;
+    if ('value' in c && el.value !== c.value && id !== 's-preset') el.value = c.value;
+    if (el.disabled !== c.disabled) el.disabled = c.disabled;
+    if (id === 's-vol' || id === 's-ambvol') el.setAttribute('aria-valuetext', `${c.value} percent`);
+  }
+  const pre = sec.querySelector('#s-preset');
+  if (pre) { // the Custom entry exists only while the mix is custom
+    const custom = C['s-preset'].value === 'custom', has = pre.querySelector('option[value="custom"]');
+    if (custom && !has) { const o = pre.ownerDocument.createElement('option'); o.value = 'custom'; o.textContent = 'Custom (your own mix)'; pre.appendChild(o); }
+    else if (!custom && has) has.remove();
+    pre.value = C['s-preset'].value;
+  }
+  for (const h of sec.querySelectorAll('[data-h]')) { const t = noteOf(h.dataset.h, a); if (h.textContent !== t) h.textContent = t; }
+  const st = sec.querySelector('#s-status'); if (st) { const t = statusText(a, state); if (st.textContent !== t) st.textContent = t; }
+}
+/** What the test button says when it cannot make a sound. */
+export function whyQuiet(a) {
+  if (a.mute) return 'Sound is muted: turn it on to hear the test.';
+  if (a.master <= 0) return 'Volume is at 0: raise it to hear the test.';
+  if (!a.ui && !a.game) return 'Interface sounds and game sounds are both off: switch one on to hear the test.';
+  return '';
+}
+/** The test sound: a click, then the warning, then coins, so the last thing heard is the good one. */
+export const TEST_STEPS = [[0, 'ui.tick', { variant: 'full' }], [600, 'alert.advance', { variant: 'l1' }], [1300, 'cash.in', { size: 'm' }]];
+export const TEST_MS = 1300 + 900;
 /**
- * Wires the section inside `root`. deps: { audio (the engine), settings, save (applySettings), announce, redraw (re-render the section) }.
- * Every control is a native one with a visible label; every change is stored (`touched`), applied to the engine and said politely.
+ * Wires the section inside `root`. deps: { audio (the engine), settings, save (applySettings), announce }.
+ * Every control is a native one with a visible label; every change is stored (`touched`), applied to the engine and said politely. A change updates the controls in place, a slider changes the
+ * engine's gain while the thumb moves and is stored (and the page redrawn) once, when it is let go.
  */
 export function bindAudioSettings(root, deps) {
   const { audio, settings, save, announce } = deps;
   const A = () => settings.audio;
-  const set = (patch) => { settings.audio = { ...A(), ...patch, touched: true }; save?.(); };
-  const redraw = () => { const sec = root.querySelector('fieldset.snd'); if (sec) { sec.outerHTML = audioSettingsHTML(A(), audio.state); bind(); } };
-  function bind() {
-    const q = (sel) => root.querySelector(sel);
-    const vol = q('#s-vol'), amb = q('#s-ambvol');
-    for (const el of root.querySelectorAll('[data-snd]')) {
-      const k = el.dataset.snd;
-      if (k === 'preset') el.onchange = () => { settings.audio = applyPreset(A(), el.value); save?.(); announce?.(`Sound preset: ${PRESET_NAMES[el.value]}.`); audio.play?.('ui.ok'); redraw(); };
-      else if (k === 'master' || k === 'ambientLevel') {
-        el.oninput = () => { set({ [k]: num(el.value, 0, 100, 5, 70) }); el.setAttribute('aria-valuetext', `${A()[k]} percent`); audio.play?.('ui.slider', { params: { v: Math.round(A()[k] / 10) } }); };
-        el.onchange = () => { audio.play?.('ui.tick', { variant: 'full' }); };
-      } else if (el.type === 'checkbox') {
-        el.onchange = () => {
-          set({ [k]: el.checked });
-          if (k === 'mute') announce?.(el.checked ? 'Sound off.' : 'Sound on.');
-          if (k === 'mute' && !el.checked) audio.play?.('ui.ok'); else if (k !== 'mute') audio.play?.('ui.toggle', { variant: el.checked ? 'on' : 'off' });
-          redraw();
-        };
-      }
-    }
-    const btn = q('#s-sample');
-    if (btn) btn.onclick = () => { // plays ui.tick, cash.in m and alert.advance 1 in turn, 600 ms apart
-      audio.unlock?.();
-      audio.play?.('ui.tick', { variant: 'full' });
-      setTimeout(() => audio.play?.('cash.in', { size: 'm' }), 600);
-      setTimeout(() => audio.play?.('alert.advance', { variant: 'l1' }), 1200);
-      announce?.('Played a test sound.');
+  const set = (patch, store = true) => { settings.audio = { ...A(), ...patch, touched: true }; if (store) save?.(); else audio.sync?.(); };
+  const refresh = () => syncAudioSettings(root, A(), audio.state);
+  let testing = false;
+  for (const el of root.querySelectorAll('[data-snd]')) {
+    const k = el.dataset.snd;
+    if (k === 'preset') el.onchange = () => {
+      if (el.value === 'custom') return; // naming the current mix is not a change
+      settings.audio = applyPreset(A(), el.value); save?.();
+      const p = presetOf(A());
+      announce?.(`Sound preset: ${PRESET_NAMES[p]}.${p === 'off' ? '' : ' Sound is on.'}`);
+      audio.play?.('ui.ok'); refresh();
     };
-    void vol; void amb;
+    else if (k === 'master' || k === 'ambientLevel') {
+      el.oninput = () => { set({ [k]: num(el.value, 0, 100, 5, 70) }, false); el.setAttribute('aria-valuetext', `${A()[k]} percent`); refresh(); audio.play?.('ui.slider', { params: { v: Math.round(A()[k] / 10) } }); };
+      el.onchange = () => { save?.(); audio.play?.('ui.tick', { variant: 'full' }); refresh(); };
+    } else if (el.type === 'checkbox') {
+      el.onchange = () => {
+        set({ [k]: el.checked });
+        if (k === 'mute') announce?.(el.checked ? 'Sound off.' : 'Sound on.');
+        if (k === 'mute' && !el.checked) audio.play?.('ui.ok'); else if (k !== 'mute') audio.play?.('ui.toggle', { variant: el.checked ? 'on' : 'off' });
+        refresh();
+      };
+    }
   }
-  bind();
-  const off = audio.on?.((what) => { if (!root.isConnected) { off?.(); return; } if (what === 'state' || what === 'mute') { const st = root.querySelector('#s-status'); if (st) st.textContent = statusText(A(), audio.state); } });
-  return { redraw };
+  const btn = root.querySelector('#s-sample');
+  if (btn) btn.onclick = () => {
+    if (testing) return; // a second press while the first is playing would stack the three sounds on each other
+    audio.unlock?.();
+    const a = A(), why = whyQuiet(a);
+    if (why) { announce?.(why); return; }
+    testing = true;
+    announce?.(a.game ? 'Playing a test: a click, a warning, then coins.' : 'Playing a test click. Game sounds are off, so the warning and the coins are silent.');
+    for (const [ms, id, o] of TEST_STEPS) setTimeout(() => audio.play?.(id, o), ms);
+    setTimeout(() => { testing = false; }, TEST_MS);
+  };
+  const off = audio.on?.((what) => { if (!root.isConnected) { off?.(); return; } if (what === 'state' || what === 'mute' || what === 'settings') { const st = root.querySelector('#s-status'); if (st) st.textContent = statusText(A(), audio.state); } });
+  return { redraw: refresh };
 }
