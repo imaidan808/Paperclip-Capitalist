@@ -28,8 +28,8 @@ export const PERKS = {
   },
   heir: {
     id: 'heir', name: 'Legacy Heir', icon: '🏛️', basis: 'Inherited safety nets.',
-    strength: 'Once per run the family clears 60% of your debt when you are margin-called, loan spreads 25% lower, the first audit fine is waived.', cost: 'Born on third base: no skill edge (all skills start at 1, no specialty) and you learn 10% slower.',
-    mods: { bailout: { uses: 1, fraction: 0.6 }, spreadAdj: -0.25, fineWaive: 1, noSpecialty: true, xpMult: 0.9 },
+    strength: 'Once per run the family clears 60% of your debt when you are margin-called, loan spreads 25% lower, the first audit fine is waived, and family friends send buyers who bring 5% bigger budgets.', cost: 'Born on third base: no skill edge (all skills start at 1, no specialty) and you learn 10% slower.',
+    mods: { bailout: { uses: 1, fraction: 0.6 }, spreadAdj: -0.25, fineWaive: 1, leadBudget: 1.05, noSpecialty: true, xpMult: 0.9 },
   },
   creator: {
     id: 'creator', name: 'Creator', icon: '📱', basis: 'Audience and virality.',
@@ -48,8 +48,8 @@ export const PERKS = {
   },
   native: {
     id: 'native', name: 'Digital Native', icon: '💻', basis: 'Online reach.',
-    strength: 'Digital goods +20% value, digital buyers appear in any district, lots refresh 25% faster.', cost: 'Scam magnet: 18% of buyers are fraudulent unless you verify them; tool subscriptions cost 1.5% of your cash a month.',
-    mods: { digitalMult: 1.2, digitalBuyers: true, lotRefresh: 0.25, scamRate: 0.18, subscription: { rate: 0.015 } },
+    strength: 'Digital goods +10% value, digital buyers appear in any district, lots refresh 25% faster.', cost: 'Scam magnet: 12% of buyers are fraudulent unless you verify them; tool subscriptions cost 1.5% of your cash a month.',
+    mods: { digitalMult: 1.1, digitalBuyers: true, lotRefresh: 0.25, scamRate: 0.12, subscription: { rate: 0.015 } },
   },
   second: {
     id: 'second', name: 'Second-Chance Hustler', icon: '🗝️', basis: 'Street smarts, but a record.',
@@ -58,8 +58,8 @@ export const PERKS = {
   },
   pro: {
     id: 'pro', name: 'Seasoned Pro', icon: '🧭', basis: 'Decades of experience and a mentor.',
-    strength: 'Appraisal sense (+2 inspection accuracy), a mentor tip each week, steady hands in haggling.', cost: 'Old school: digital goods -25%, you learn 15% slower, managers cost 10% more.',
-    mods: { inspectBonus: 2, mentor: true, haggleAssist: 1, digitalMult: 0.75, xpMult: 0.85, managerCost: 1.1 },
+    strength: 'Appraisal sense (+2 inspection accuracy), a mentor tip each week, steady hands in haggling.', cost: 'Old school: digital goods -15%, you learn 15% slower, managers cost 10% more.',
+    mods: { inspectBonus: 2, mentor: true, haggleAssist: 1, digitalMult: 0.85, xpMult: 0.85, managerCost: 1.1 },
   },
 };
 export const PERK_IDS = Object.keys(PERKS);

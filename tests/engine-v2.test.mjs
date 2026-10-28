@@ -854,10 +854,10 @@ test('blind quotes show what a player may see: no hidden truth and no undisclose
 });
 
 // ---------------------------------------------------------------------------------------------------- scams
-test('Digital Native: about 18% of buyers are fraudulent; every other Background meets none', () => {
+test('Digital Native: about 12% of buyers are fraudulent; every other Background meets none', () => {
   const count = (perks, trades = 3) => { let n = 0, s = 0; for (let seed = 1; seed <= 60; seed++) { const g = mk(perks, seed); g.s.trades = trades; for (let i = 0; i < 40; i++) { g.s.leads[1] = []; g._spawnLead(1); n++; if (g.s.leads[1][0].scam) s++; } } return { n, s }; };
   const nat = count(['native', 'pro']), other = count(['trades', 'pro']);
-  assert.ok(Math.abs(nat.s / nat.n - 0.18) < 4.5 * sd(0.18, nat.n) / nat.n, `${nat.s} of ${nat.n}`);
+  assert.ok(Math.abs(nat.s / nat.n - 0.12) < 4.5 * sd(0.12, nat.n) / nat.n, `${nat.s} of ${nat.n}`);
   assert.equal(other.s, 0);
   assert.equal(count(['native', 'pro'], 2).s, 0, 'no fraud before the third trade (audit F3: a first sale to a fraud ended the run at $0)');
 });

@@ -76,7 +76,7 @@ test('perkMods: multipliers multiply, adders add, the largest threshold wins, bo
   assert.deepEqual(perkMods(), none); assert.deepEqual(perkMods(['nope', 'also-not']), none, 'unknown ids are ignored');
   // multipliers
   rel(perkMods(['trades', 'pro']).repairMult, 0.5); rel(perkMods(['trades', 'pro']).pitchMult, 0.92);
-  rel(perkMods(['pro', 'native']).digitalMult, 0.75 * 1.2, 1e-12);                     // -25% and +20% = -10%
+  rel(perkMods(['pro', 'native']).digitalMult, 0.85 * 1.1, 1e-12);                     // -15% and +10% = -6.5% (it was -25% and +20%: docs/BALANCE.md, Digital Native pocket)
   rel(perkMods(['veteran', 'creator']).trendMult, 0.8 * 1.3, 1e-12);
   rel(perkMods(['heir', 'pro']).xpMult, 0.9 * 0.85, 1e-12);
   rel(perkMods(['gigger', 'pro']).xpMult, 1.25 * 0.85, 1e-12);
@@ -393,10 +393,10 @@ test('roots: loyal buyers return with 20% bigger budgets, overhead -15%; costs: 
 });
 
 // ---------------------------------------------------------------------------------------------------- Digital Native
-test('native: digital goods +20%, digital buyers in any district, lots refresh faster; costs: 18% scam buyers and a 1.5% monthly subscription', () => {
+test('native: digital goods +10%, digital buyers in any district, lots refresh faster; costs: 12% scam buyers and a 1.5% monthly subscription', () => {
   const val = (x, cls) => x.val({ cls, cond: 'ok', quality: 1, wear: 1, zone: 10 }, 10);
   const n = mk(['native']), p = mk([]);
-  rel(val(n, 'saas') / val(p, 'saas'), 1.2, 1e-12); rel(val(n, 'fleet'), val(p, 'fleet'), 1e-12);
+  rel(val(n, 'saas') / val(p, 'saas'), 1.1, 1e-12); rel(val(n, 'fleet'), val(p, 'fleet'), 1e-12);
   // digital buyers from elsewhere turn up in a district that has none of its own
   const foreign = (perks) => { let f = 0, t = 0; for (let seed = 1; seed <= 40; seed++) { const g = mk(perks, seed); g._openZone(5); for (let i = 0; i < 30; i++) { g.s.leads[5] = []; g._spawnLead(5); t++; if (BUYERS[g.s.leads[5][0].seg].zone !== 5) f++; } } return f / t; };
   assert.equal(foreign([]), 0); assert.ok(foreign(['native']) > 0.15, 'about a quarter: ' + foreign(['native']));
@@ -412,7 +412,7 @@ test('native: digital goods +20%, digital buyers in any district, lots refresh f
   near(s.s.cash, 985, 1e-9); assert.equal(q.s.cash, 1000);
   assert.ok(s.s.ledger.some((e) => e.type === 'subscription'));
   // the scam magnet, and the check that costs 1% (the rest of the mechanics is in engine-v2.test.mjs)
-  assert.equal(n.P.scamRate, 0.18); assert.equal(p.P.scamRate, 0);
+  assert.equal(n.P.scamRate, 0.12); assert.equal(p.P.scamRate, 0);
   assert.equal(n.P.digitalBuyers, true);
 });
 
@@ -444,7 +444,7 @@ test('second: counterfeits come flagged, 12% cheaper lots in gray-market distric
 });
 
 // ---------------------------------------------------------------------------------------------------- Seasoned Pro
-test('pro: appraisal sense, a mentor tip each week, steady hands in haggling; costs: digital goods -25%, 15% slower learning, managers cost 10% more', () => {
+test('pro: appraisal sense, a mentor tip each week, steady hands in haggling; costs: digital goods -15%, 15% slower learning, managers cost 10% more', () => {
   const g = mk(['pro']), p = mk([]);
   assert.equal(g.P.inspectBonus, 2); assert.equal(p.P.inspectBonus, 0);
   assert.equal(g.P.haggleAssist, 1); assert.equal(p.P.haggleAssist, 0);
@@ -459,7 +459,7 @@ test('pro: appraisal sense, a mentor tip each week, steady hands in haggling; co
   assert.match(tips(g)[0].text, /look at .* for .* in /);
   // the costs
   const val = (x, cls) => x.val({ cls, cond: 'ok', quality: 1, wear: 1, zone: 10 }, 10);
-  rel(val(g, 'saas') / val(p, 'saas'), 0.75, 1e-12); rel(val(g, 'fleet'), val(p, 'fleet'), 1e-12);
+  rel(val(g, 'saas') / val(p, 'saas'), 0.85, 1e-12); rel(val(g, 'fleet'), val(p, 'fleet'), 1e-12);
   g.xp(100); assert.equal(g.s.xp, 85);
   const a = rich(mk(['pro']), 6000), b = rich(mk([]), 6000);
   rel(a.pipeCost('broker', 5) / b.pipeCost('broker', 5), 1.1, 1e-12);
