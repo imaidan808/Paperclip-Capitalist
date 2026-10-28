@@ -254,7 +254,8 @@ const FACTS = {
   'hedging': (() => { const f = ZONES[5].friction + 0.025; return [pct(ZONES[5].friction), pct(f), usd(f * 1500), usd(0.5 * 1500, 0), pct(f * 1500 / 750), usd(750 + f * 1500), usd(1500 - 750 - f * 1500)]; })(),
   'anchoring': (() => { const s = fmvAt('sneakers', 5); return [usd(s), usd(s * 1.4), usd(s * 0.7), usd((s * 1.4 + 295) / 2), ((s * 1.4 + 295) / 2 / s).toFixed(2) + 'x', usd((s + 295) / 2), ((s + 295) / 2 / s).toFixed(2) + 'x', (s * 1.4 / 390).toFixed(2), usd(1.25 * 390), usd(s * 0.4), usd((s * 1.4 + 295) / 2 - (s + 295) / 2)]; })(),
   'batna-zopa': (() => { const pool = bikeFmv * (1 - ZONES[3].friction - 0.025); return [usd(bikeFmv), pct(1 - ZONES[3].friction - 0.025), usd(pool), usd(34 - pool), usd((pool + 34) / 2), usd((29.5 + 34) / 2), usd(29.5 - pool), usd((29.5 + 34) / 2 - (pool + 34) / 2)]; })(),
-  'adverse-selection': [pct(11 / (11 + 7.8))],
+  // the same watch as information-asymmetry: 32 fakes in 100 (the counter's 22%, weighted to the goods easiest to fake), deep discounts on half the fakes and a tenth of the genuine ones
+  'adverse-selection': (() => { const fakes = 32, deep = fakes * 0.5, genuine = (100 - fakes) * 0.1; return [fakes + ' are fake', fakes + ' x 0.50 = ' + deep, (100 - fakes) + ' x 0.10 = ' + genuine.toFixed(1), pct(deep / (deep + genuine))]; })(),
   'due-diligence': ['-' + usd(0.78 * 10 - 0.22 * 80), '+' + usd(0.78 * 10 - 0.044 * 80), usd(0.78 * 10 - 0.044 * 80 + (0.22 * 80 - 0.78 * 10))],
   'comparative-advantage': [String(10 + 2), String(5 + 4), String(18)],
   'specialization': [usd(repairCost(5), 0), usd(carWork * restore(5) - carAsIs - repairCost(5), 0), usd(repairCost(3), 0), usd(carWork * restore(3), 0), usd(carWork * restore(3) - carAsIs - repairCost(3), 0), usd((carWork * restore(5) - carAsIs - repairCost(5)) - (carWork * restore(3) - carAsIs - repairCost(3)), 0), usd(carAsIs, 0), usd(carWork, 0)],

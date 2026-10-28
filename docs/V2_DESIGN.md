@@ -7,7 +7,7 @@ This is the single source of truth for the v2 redesign. Parallel work (data, min
 1. **Unequal starts.** Three profiles began with $0.05, $5,000 and $50,000 in three different places. That made the loop incomparable between starts.
 2. **It is a business sim, not a game.** Seven tabs, tables, forms. Nothing to *do* with your hands. The tutorial shows the outcome but not the *why*.
 3. **Three zones are not a world.** The loop never changes character. Trades are one button: Pitch, Confirm.
-4. **No skill expression.** Stats decide outcomes. A player's judgement, reading and timing change nothing.
+4. **No skill expression.** Stats decide outcomes. A player's judgment, reading and timing change nothing.
 
 ## 2. Principles
 
@@ -17,7 +17,7 @@ This is the single source of truth for the v2 redesign. Parallel work (data, min
 - **Sixteen districts, one loop.** Every district runs the same core loop (source, improve, sell, reinvest) at a different scale, with *one signature rule* that teaches *one concept*.
 - **Skill is a choice you make, not a reflex.** Every important interaction has a strategic skill layer (information, persuasion, negotiation, precision, bidding). Stats change the *difficulty*, never the *outcome*. Every game has a **Quick** option (auto-play at average skill) and an **Assist** mode, so nobody is excluded and time is never forced.
 - **Learn by doing, then by naming it.** Each mission ends with *why it worked*, a *teach-back* question and a *Codex* entry.
-- **Accessibility is not optional.** Nothing is timing-only. Everything is keyboard operable. Reduced motion is honoured.
+- **Accessibility is not optional.** Nothing is timing-only. Everything is keyboard operable. Reduced motion is honored.
 
 ## 3. Backgrounds (replace Profiles)
 
@@ -51,7 +51,7 @@ One avenue runs through all sixteen. Unlock is by **net worth** (`gate`). `scale
 | 3 | Campus Quad | 1 | $80 | $25 | **Semester waves**: paper, training and electronics demand swings on a 28-day cycle; trends spread fast | `saturation-herd` | none |
 | 4 | Pawn District | 1 | $250 | $90 | **Fakes and auctions**: 22% of the lots are counterfeit (shared out by each good's `fakeRisk`, so a watch is fake about a third of the time); appraisal is the game | `information-asymmetry` | none |
 | 5 | Metro Hub | 2 | $1,000 | $400 | **Managers and the Bank open**; client contracts | `working-capital` | Managers, Bank, clients |
-| 6 | Estate Sales | 2 | $2,500 | $900 | **Auctions** (50% of lots); hidden-value boxes | `winners-curse` | lots +1 slot |
+| 6 | Estate Sales | 2 | $2,500 | $900 | **Auctions** (55% of lots); hidden-value boxes | `winners-curse` | lots +1 slot |
 | 7 | Auto Row | 2 | $6,000 | $2,500 | **Repair bays**: 60% of lots are broken; repair costs 25% less here | `repair-roi` | repairs 10% cheaper everywhere |
 | 8 | Harbor Docks | 2 | $12,000 | $5,000 | **Customs**: freight arriving here may be inspected; tariff exposure | `supply-chain` | freight 30% cheaper |
 | 9 | Industrial Park | 3 | $25,000 | $9,000 | **Bulk contracts** and SLAs; compliance audits begin (Milestone 2) | `scale-compliance` | pipeline caps +25% |
@@ -204,6 +204,6 @@ Four authors write `tier1..4.js` in parallel and never see each other's files, s
 ## 14. Procedure for parallel authors
 
 1. Work only in your own git worktree and branch (instructions are in your brief); never touch `main` or the main checkout, and touch only the files you own (section 10).
-2. Read sections 1-6, the parts of 7-13 your brief names, `js/data/schema.js` (the vocabulary and validators) and, for engine-adjacent code, `js/rng.js`, `js/market.js` and `js/config.js` (v1 numbers and behaviours you must stay compatible with).
+2. Read sections 1-6, the parts of 7-13 your brief names, `js/data/schema.js` (the vocabulary and validators) and, for engine-adjacent code, `js/rng.js`, `js/market.js` and `js/config.js` (v1 numbers and behaviors you must stay compatible with).
 3. Run your tests (`node --test tests/<yours>.test.mjs`) until they pass; run `node --check` on every file. Do not run the whole suite (the engine is mid-refactor on main).
 4. Commit with a clear message, ending with the line `Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>`. Report: branch name, commit hash, files, anything in the contract you found ambiguous and how you read it, and anything you could not satisfy.
