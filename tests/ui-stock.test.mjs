@@ -135,7 +135,8 @@ test('selling to the pool asks first, shows the as-described figure (never the t
   g.s.assets = [];
   g.s.pool[1] = ZONES[1].pool;
   const a = addCrate(ctx, 'bike', 1, { basis: 5, extra: { known: false, belief: null, truth: { q: 0.7, fake: true, defects: [] } } });
-  const exact = g.poolQuote([a.id]).total, described = g.val(a) * (1 - g.poolQuote([a.id]).fric);
+  const exact = g.poolQuote([a.id], false, { blind: false }).total, described = g.val(a) * (1 - g.poolQuote([a.id]).fric); // an ordinary pool quote is blind (as described); only the sale itself checks the crate
+  assert.ok(Math.abs(g.poolQuote([a.id]).total - described) < 1e-9, 'a plain pool quote is the as-described figure');
   assert.ok(exact < described * 0.2 && described > 5, 'the real offer is far below the as-described figure');
   let box = null;
   ctx.confirmBox = (title, body, ok, fn) => { box = { title, body, ok }; ctx._confirm = fn; };

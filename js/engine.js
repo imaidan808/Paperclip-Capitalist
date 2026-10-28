@@ -16,6 +16,7 @@ const fail = (msg, extra = {}) => ({ ...extra, ok: false, msg });
 // A number from outside (the Deal Room, a peer, a test) that is not a finite number becomes the neutral default instead of poisoning cash.
 const fin = (x, d) => (typeof x === 'number' && !Number.isNaN(x) ? x : d); // +-Infinity is a number: the caller's clamp turns it into the nearest bound
 const own = (o, k) => typeof k === 'string' && Object.prototype.hasOwnProperty.call(o, k); // ids come from the UI and the network: never index a plain object by them unchecked
+const DE_CAP = 999; // a debt-to-equity figure that is logged or shown is finite: nothing left to divide by reads as 999, not Infinity (JSON writes Infinity as null)
 const money = (x) => (Math.abs(x) < 100 ? '$' + x.toFixed(2) : '$' + Math.round(x).toLocaleString('en-US'));
 const uniq = (ids) => [...new Set(ids)]; // an id list from outside may repeat an id: one crate is one crate
 const isNum = (x) => typeof x === 'number' && Number.isFinite(x); // a real number: not NaN, not +-Infinity, not a string (JSON turns Infinity into null)
@@ -23,7 +24,6 @@ const LEDGER_CAP = 3200, LEDGER_FOLD = 200; // see led()
 const OFFER_MAX = 24; // crates in one swap: more than any district holds
 const ROYALTY_GRACE_H = 2; // hours a stream's last payment may be late
 const ROYALTY_NW = 0.1; // a promised royalty is worth at most this share of what its promiser is worth
-const DE_SHOWN = 999; // a debt-to-equity ratio is stored at most this: Infinity (net worth <= 0 with debt) would become null in a save and crash the debrief
 
 export class Game {
   constructor(opts = {}) {
@@ -160,22 +160,50 @@ export class Game {
   }
   xp(n) { this.s.xp += Math.round(n * this.P.xpMult); this._levelCheck(); }
   level() { return Math.floor(Math.sqrt(this.s.xp / LEVEL_XP)) + 1; }
-  /** Each new level grants one skill point (spendPoint). */
+  /** Each new level grants one skill point (spendPoint) while a skill can still use it; once all three are at mastery the level pays XP instead. */
   _levelCheck() {
     const s = this.s;
     while (this.level() > s.lvlPaid) {
-      s.lvlPaid++; s.points++;
-      this.note('good', `Level ${s.lvlPaid}. You earned a skill point.`, { level: s.lvlPaid });
+      s.lvlPaid++;
+      const g = this.grantPoints(1);
+      this.note('good', g.points ? `Level ${s.lvlPaid}. You earned a skill point.` : `Level ${s.lvlPaid}. Every skill is at mastery, so the level pays ${g.xp} XP instead of a point.`, { level: s.lvlPaid });
       this.emit('level', { level: s.lvlPaid });
     }
   }
+  /** Skill points the three skills can still use (what SKILL_MAX leaves, less the points already banked). */
+  pointRoom() {
+    const s = this.s;
+    return Math.max(0, Object.values(s.skills).reduce((a, l) => a + Math.max(0, SKILL_MAX - l), 0) - s.points);
+  }
+  /** Quests, achievements, Academy missions and levels grant skill points through here. Points no skill can use any more are paid as XP (ECON.pointXp each) rather than banked as dead weight. */
+  grantPoints(n) {
+    const s = this.s;
+    n = Math.max(0, Math.floor(fin(+n, 0)));
+    const points = Math.min(n, this.pointRoom()), spare = n - points, xp = Math.round(spare * ECON.pointXp);
+    s.points += points;
+    if (xp > 0) { s.xp += xp; this._levelCheck(); } // a spare point's XP is never multiplied again; a level it reaches pays like any other (and ends in XP too once skills are maxed)
+    return { points, xp };
+  }
   burnedOut() { return this.s.hour < this.s.ps.burnoutUntil; }
-  /** A fraction of profit is garnished while the Business-School Grad's student loans last. Returns what was taken. */
-  garnish(profit) {
+  /**
+   * A fraction of profit is garnished while the Business-School Grad's student loans last. Returns what was taken.
+   * Only money that is actually in hand can be taken: `avail` (default: the cash on hand) caps the take, and what the servicer was owed but could not collect
+   * is carried in ps.garnishDue and collected from the next profit, so the cap is still repaid in full and cash never goes negative because of it.
+   */
+  garnish(profit, avail = this.s.cash) {
+    const s = this.s, take = this._garnishTake(profit, avail);
+    s.cash -= take;
+    return take;
+  }
+  /** The bookkeeping half of garnish(): works out and records the take but leaves the money to the caller (a delayed settlement pays it out of the queued amount). */
+  _garnishTake(profit, avail) {
     const g = this.P.garnish, s = this.s;
-    if (!g || profit <= 0 || s.ps.garnished >= g.cap) return 0;
-    const take = Math.min(profit * g.rate, g.cap - s.ps.garnished);
-    s.ps.garnished += take; s.cash -= take;
+    if (!g || !(profit > 0) || s.ps.garnished >= g.cap) return 0;
+    const owed = Math.min(g.cap - s.ps.garnished, (s.ps.garnishDue || 0) + profit * g.rate);
+    const take = Math.min(owed, Math.max(0, fin(avail, 0)));
+    s.ps.garnishDue = owed - take;
+    if (take <= 0) return 0;
+    s.ps.garnished += take;
     this.led('garnish', 'Student-loan garnishment', -take);
     return take;
   }
@@ -208,9 +236,20 @@ export class Game {
     }
     return (this._m = m);
   }
+  /** The player's own sales of one class in one district over the last 48 virtual hours (a pitch, a pool sale or a manager's cycle each count one), read from s.niche once per hour. */
+  ownVolume(zone, cls) {
+    const s = this.s, key = s.hour + ':' + s.niche.length;
+    if (!this._ov || this._ov.key !== key || this._ov.s !== s) {
+      const m = new Map(), from = s.hour - 48;
+      for (const [h, z, c] of s.niche) if (h > from) { const k = z + '|' + c; m.set(k, (m.get(k) || 0) + 1); }
+      this._ov = { key, s, m };
+    }
+    return this._ov.m.get(zone + '|' + cls) || 0;
+  }
+  /** Price pressure from everyone selling the same class in a district: the cohort's volume plus your own, so your selling narrows the gap you sold into (docs: arbitrage-at-scale). */
   crowd(cls, zone) {
     const c = this.env.cohort?.counts(this.s.hour, zone, cls);
-    let m = c ? 1 - 0.4 * Math.min(1, c.total / 220) : 1;
+    let m = 1 - 0.4 * Math.min(1, ((c ? c.total : 0) + this.ownVolume(zone, cls)) / 220);
     const vol = this.P.volatility; // the Creator's algorithm whiplash: non-trend demand swings every three days
     if (vol && !ASSETS[cls].tags.includes('trend')) m *= 1 + vol * (hash01(this.s.seed + ':v' + Math.floor(this.day / 3) + cls) * 2 - 1);
     return m;
@@ -351,7 +390,7 @@ export class Game {
         if (!ev.warned) { ev.warned = true; ev.warnedAt = h; this.note('bad', `BREAKING: ${ev.name} is live now.`, { alert: { ...ev.alert, name: ev.name, level: ev.level, start: ev.start } }); }
         else this.note('bad', `${ev.name} is now in effect.`);
         this.emit('shock', { kind: ev.kind });
-        s.shockLog.push({ id: ev.id, kind: ev.kind, name: ev.name, start: h, nw: this.netWorth(), cash: s.cash, debt: this.debt(), de: Math.min(DE_SHOWN, this.deRatio()), inv: this.invValue(), pipes: s.pipes.length, intl: s.pipes.filter((p) => p.channel === 'intl').length, pivot0: s.pivot, nwAfter: null, pivots: null, warnedHours: ev.start - (ev.warnedAt ?? ev.start) });
+        s.shockLog.push({ id: ev.id, kind: ev.kind, name: ev.name, start: h, nw: this.netWorth(), cash: s.cash, debt: this.debt(), de: Math.min(this.deRatio(), DE_CAP), inv: this.invValue(), pipes: s.pipes.length, intl: s.pipes.filter((p) => p.channel === 'intl').length, pivot0: s.pivot, nwAfter: null, pivots: null, warnedHours: ev.start - (ev.warnedAt ?? ev.start) });
         this._m = null;
       }
       if (ev.kind === 'tiktok' && h === ev.start + 48) this.note('bad', 'Market fatigue: trend goods lose half their value for 72 hours.');
@@ -411,7 +450,7 @@ export class Game {
         seg = cand[Math.floor(this.rand() * cand.length)];
         need = ASSETS[a.cls].tags.slice().sort((x, y) => (BUYERS[seg].like[y] || 0) - (BUYERS[seg].like[x] || 0))[0];
         const fmv = this.val(a);
-        budget = fmv < 2 ? 3 + this.rand() * 12 : fmv * (1.4 + this.rand() * 2.2);
+        budget = fmv < 2 ? 3 + this.rand() * 12 : fmv * (1 + (0.4 + this.rand() * 2.2) * ECON.urgentK * (1 - ECON.urgentFade * clamp((z - 4) / 8, 0, 1)));
         if (fmv < 2) budget = Math.min(budget, BUYERS[seg].budget[1]);
       }
     } else {
@@ -428,7 +467,8 @@ export class Game {
     if (budget == null) budget = B.budget[0] + (B.budget[1] - B.budget[0]) * this.rand() ** 3;
     budget *= this.P.leadBudget * (1 + this.P.loyalty * Math.min(1, (s.loyal[seg] || 0) / 3));
     budget = clamp(budget, B.budget[0], Math.max(B.budget[1] * this.P.leadBudget, B.budget[0]));
-    const scam = !!this.P.scamRate && this.rand() < this.P.scamRate;
+    // No fraud before the third trade: a founder with one paperclip and no cash cannot afford the check, and a first sale to a fraud would end the run at $0.
+    const scam = !!this.P.scamRate && this.rand() < this.P.scamRate && s.trades >= 3;
     s.leads[z].push({ id: 'L' + s.nid++, zone: z, seg, budget: Math.round(budget * 100) / 100, need, born: s.hour, exp: s.hour + 18 + Math.floor(this.rand() * 19), ...(scam ? { scam: true } : {}) });
   }
   _weighted(items, wf) {
@@ -452,39 +492,52 @@ export class Game {
     });
     if (!classes.length) return;
     const cls = classes[Math.floor(this.rand() * classes.length)], def = ASSETS[cls];
-    const cond = def.repair && this.rand() < (Z.rules.repair ? 0.6 : 0.4) ? 'broken' : 'ok';
+    // The district's headline rates are rates of LOTS, whatever the mix of classes on sale: a broken lot needs a class that can be repaired and a counterfeit needs a working
+    // lot of a class that can be faked, so each roll is divided by the share of the draw that can take it. (A district that can't reach its rate, for want of such classes, falls short.)
+    const repairable = classes.filter((c) => ASSETS[c].repair).length / classes.length, riskOf = (c) => ASSETS[c].fakeRisk ?? 1;
+    const brokenLots = Math.min(repairable, Z.rules.repair ? 0.6 : 0.4 * repairable); // the Auto Row's 60% of lots; elsewhere 40% of the classes that can be repaired
+    const cond = def.repair && this.rand() < Math.min(1, brokenLots / repairable) ? 'broken' : 'ok';
     const asset = { cls, cond, quality: 1, wear: 1 };
     const asIs = assetFMV(asset, z, this.mods(), this.crowd(cls, z));
     const ops = this.lvl('ops');
-    let disc = cond === 'ok' ? Math.max(ECON.lotDiscLo, ECON.lotDiscHi - 0.025 * (ops - 1)) : Math.max(0.8, 1 - 0.03 * (ops - 1));
+    let disc = cond === 'ok' ? Math.max(ECON.lotDiscLo, ECON.lotDiscHi - 0.025 * (ops - 1)) : Math.max(ECON.brokenLo, 1 - ECON.brokenSlope * (ops - 1));
     if (cond === 'broken') disc *= 1 - this.P.brokenDiscount;
     if (asIs < Z.scale * 0.6) disc *= 1 - (this.P.lotDiscount || 0); // small lots (the Side-Hustler)
     if (Z.rules.gray) disc *= 1 - (this.P.lotDiscountGray || 0); // gray markets (the Second-Chance Hustler)
     // What the seller does not say: the real condition, and whether it is genuine. Posted prices describe the lot "as described".
     const q = z <= 2 ? 0.85 + this.rand() * 0.3 : 0.7 + this.rand() * 0.45;
-    const fake = cond === 'ok' && this.rand() < (Z.rules.fakes || 0) * (def.fakeRisk ?? 1);
+    const meanRisk = classes.reduce((a, c) => a + riskOf(c), 0) / classes.length;
+    const fake = cond === 'ok' && this.rand() < Math.min(1, (Z.rules.fakes || 0) * riskOf(cls) / (meanRisk * (1 - brokenLots)));
     const labels = ['worn finish', 'loose fittings', 'faded markings', 'missing parts', 'failing seal', 'hairline cracks'];
     const defects = labels.filter((_, i) => i < Math.round((1 - q) * 8 + (fake ? 1 : 0))).map((label, i) => ({ id: 'd' + i, label }));
     const mode = Z.rules.auction && this.rand() < Z.rules.auction ? 'auction' : 'fixed';
+    const id = 'T' + s.nid++;
+    // The Second-Chance street sense is a strong signal, not a perfect one: it flags most counterfeits (never an honest lot) and misses a few, decided by the lot's own id so it never changes for a lot.
+    const warn = this.P.fakeDetect && fake && hash01(s.seed + ':warn:' + id) >= ECON.warnMiss;
     s.lots[z].push({
-      id: 'T' + s.nid++, zone: z, cls, cond, price: Math.max(0.01, Math.round(asIs * disc * 100) / 100), exp: s.hour + 24 + Math.floor(this.rand() * 24), mode,
-      truth: { q: Math.round(q * 100) / 100, fake, defects }, ...(this.P.fakeDetect && fake ? { warn: true } : {}),
+      id, zone: z, cls, cond, price: Math.max(0.01, Math.round(asIs * disc * 100) / 100), exp: s.hour + 24 + Math.floor(this.rand() * 24), mode,
+      truth: { q: Math.round(q * 100) / 100, fake, defects }, ...(warn ? { warn: true } : {}),
     });
   }
-  ownCounts(zone, cls) {
+  /** Your own recent sales of a class in a district. `skip` leaves out the cycles of one pipeline (a niche row is [hour, zone, cls, buyer, pipelineId?]). */
+  ownCounts(zone, cls, skip = null) {
     const out = { total: 0, byBuyer: {} }, from = this.s.hour - 48;
-    for (const [h, z, c, b] of this.s.niche) if (h > from && z === zone && c === cls) { out.total++; out.byBuyer[b] = (out.byBuyer[b] || 0) + 1; }
+    for (const [h, z, c, b, pid] of this.s.niche) if (h > from && z === zone && c === cls && !(skip && pid === skip)) { out.total++; out.byBuyer[b] = (out.byBuyer[b] || 0) + 1; }
     return out;
   }
-  cmFor(zone, cls, seg) {
+  /**
+   * The Creativity Multiplier of a niche. Pass `skip` (a pipeline's id) to see it as that pipeline does: its own cycles are not part of the crowd it sells into. A manager that
+   * has the lane to itself is not "a herd of one" (alone, S would read 1 and Cm would sit on its 0.40 floor from the second cycle on); the crowd is the class, you by hand and your other managers.
+   */
+  cmFor(zone, cls, seg, skip = null) {
     const c = this.env.cohort?.counts(this.s.hour, zone, cls) || { total: 0, byBuyer: {} };
-    const own = this.ownCounts(zone, cls);
+    const own = this.ownCounts(zone, cls, skip);
     const vT = c.total + own.total, vN = (c.byBuyer[seg] || 0) + (own.byBuyer[seg] || 0);
     const cm = creativity(vN, vT);
     return { cm, S: saturation(vN, vT), vN, vT, band: creativityBand(cm), key: nicheKey(zone, cls, seg) };
   }
-  logNiche(zone, cls, seg, cm) {
-    this.s.niche.push([this.s.hour, zone, cls, seg]);
+  logNiche(zone, cls, seg, cm, pid = null) {
+    this.s.niche.push(pid ? [this.s.hour, zone, cls, seg, pid] : [this.s.hour, zone, cls, seg]);
     if (seg !== 'npc-pool') { this.s.cm.sum += cm; this.s.cm.n++; }
   }
   /** Every underserved niche in a zone, best first (the Market Research "Niche Radar"). */
@@ -509,7 +562,11 @@ export class Game {
     const l = BUYERS[seg].like;
     return (l.scrap || 0) >= 0.5 || (l.industrial || 0) >= 0.7 || (l.vehicle || 0) >= 0.8;
   }
-  /** deal = { mult } from the Deal Room (pitch angle x haggle result). Clamped here, so no game can break the economy. */
+  /**
+   * deal = { mult } from the Deal Room (pitch angle x haggle result). Clamped here, so no game can break the economy.
+   * A quote is BLIND unless `opts.blind === false`: what the player may be shown, as described, with no peek at a crate's hidden truth or at a buyer's undisclosed fraud.
+   * Only pitch() asks for the real thing (the buyer checks what you sell).
+   */
   quotePitch(assetId, leadId, deal, opts = {}) {
     const s = this.s, a = s.assets.find((x) => x.id === assetId);
     if (!a) return fail('Pick an asset from your inventory.');
@@ -526,9 +583,8 @@ export class Game {
     const ci = this.cmFor(z, a.cls, lead.seg);
     const fmv = this.val(a);
     const B = BUYERS[lead.seg];
-    // `blind` quotes are what the player may be shown: as described, with no peek at the crate's hidden truth or at a buyer's undisclosed fraud.
-    // The real sale (pitch) is never blind: the buyer checks what you are selling.
-    const seen = !opts.blind || !!a.known;
+    const blind = opts.blind !== false;
+    const seen = !blind || !!a.known;
     const counterfeit = seen && !!a.truth?.fake;
     const qual = seen && a.truth && !a.truth.fake ? a.truth.q : 1;
     const ref = lead.need ? lead.budget : fmv * (a.known ? 1 : qual);
@@ -553,13 +609,19 @@ export class Game {
     }
     const received = (goods ? goods.value : 0) + change;
     return {
-      ok: true, rejected, reason: counterfeit ? 'counterfeit' : fit < 0.15 ? 'nofit' : null, scam: !opts.blind && !!lead.scam && !lead.verified, fit, fmv, ci, price, capped, tax, fee, net, goods, change, received,
-      lead, asset: a, zone: z, mods: this.mods(), deal: dealMult,
+      ok: true, rejected, reason: counterfeit ? 'counterfeit' : fit < 0.15 ? 'nofit' : null, scam: !blind && !!lead.scam && !lead.verified, fit, fmv, ci, price, capped, tax, fee, net, goods, change, received,
+      lead: blind ? this._publicLead(lead) : lead, asset: a, zone: z, mods: this.mods(), deal: dealMult,
       gain: fmv > 0 ? received / fmv - 1 : 0, profit: received - (a.basis || 0), parts: { ref, term, base: CM.pitchBase, cm: ci.cm, growth: this.growthMult(), hustle, deal: dealMult, quality: qual },
     };
   }
+  /** A buyer as the player may see them: the fraud flag shows only once the buyer has been verified. */
+  _publicLead(lead) {
+    if (!lead.scam || lead.verified) return lead;
+    const { scam, ...rest } = lead;
+    return rest;
+  }
   pitch(assetId, leadId, deal) {
-    const q = this.quotePitch(assetId, leadId, deal);
+    const q = this.quotePitch(assetId, leadId, deal, { blind: false });
     if (!q.ok) return q;
     const s = this.s, a = q.asset, z = q.zone;
     s.leads[z] = s.leads[z].filter((l) => l.id !== leadId);
@@ -592,7 +654,7 @@ export class Game {
       got = ASSETS[g.cls].name + (g.cond === 'broken' ? ' (broken)' : '');
     }
     s.cash += q.change;
-    this.garnish(q.profit);
+    this.garnish(q.profit); // capped at the cash on hand: goods taken in kind are not money yet
     const win = q.received > q.fmv * 1.02;
     s.streak = win ? s.streak + 1 : 0;
     s.bestStreak = Math.max(s.bestStreak, s.streak);
@@ -600,7 +662,9 @@ export class Game {
     const xp = win ? 40 + 60 * clamp(Math.log10(1 + q.gain), 0, 3) + Math.min(s.streak, 10) * 5 : 5; // a long streak keeps its glory, not an endless XP spigot
     this.xp(xp);
     this.led('pitch', `${ASSETS[a.cls].name} to ${BUYERS[q.lead.seg].name}${got ? ' for ' + got : ''}`, q.received - q.fmv, { z, cm: q.ci.cm, S: q.ci.S, vN: q.ci.vN, vT: q.ci.vT, cls: a.cls, seg: q.lead.seg, fmv: q.fmv, recv: q.received });
-    const outcome = q.ci.band.id === 'pioneer' ? 'pioneer' : q.ci.band.id === 'herd' ? 'herd' : win ? 'win' : 'flat';
+    // The sale decides the label, the niche only qualifies a sale that paid: 'pioneer' and 'herd' are never reported on a sale that did not clear fair value (a capped or weak-fit sale
+    // in a rare niche is not a pioneer win). What a loss in the herd taught is still in the result (`ci.band`, `ci.cm`), for the Deal Room's lesson.
+    const band = q.ci.band.id, outcome = !win ? 'flat' : band === 'pioneer' ? 'pioneer' : band === 'herd' ? 'herd' : 'win';
     evt(outcome);
     if (win && s.streak >= 2) this.emit('streak', { n: s.streak });
     return ok(win ? 'Successful arbitrage.' : 'Traded, no gain.', { ...q, outcome, xp: Math.round(xp), gotName: got });
@@ -612,10 +676,12 @@ export class Game {
     for (const z of s.zones) lead = lead || (s.leads[z] || []).find((l) => l.id === leadId);
     if (!lead) return fail('That buyer has left.');
     if (lead.verified) return ok('Already verified.', { scam: !!lead.scam });
-    const cost = Math.max(0.01, Math.round(lead.budget * 0.01 * 100) / 100);
+    let cost = Math.max(0.01, Math.round(lead.budget * 0.01 * 100) / 100);
+    // A founder down to the last crate with nothing to pay for the check is vouched for: a fraud taking that crate would leave $0, nothing to sell and no way back.
+    if (s.cash < cost && s.assets.length <= 1 && !s.pipes.length) cost = 0;
     if (s.cash < cost) return fail(`Verification costs ${money(cost)}.`);
     s.cash -= cost; lead.verified = true;
-    this.led('verify', 'Checked a buyer\'s credentials', -cost);
+    this.led('verify', 'Checked a buyer\'s credentials', cost ? -cost : 0);
     return ok(lead.scam ? 'Fraud confirmed. Skip this buyer.' : 'Verified: this buyer is genuine.', { scam: !!lead.scam, cost });
   }
   /** What the Deal Room needs to simulate a lot: the lot's hidden truth. Evidence from Inspect is noisy, so this is not a leak. */
@@ -623,12 +689,24 @@ export class Game {
     const lot = this.s.lots[zone]?.find((l) => l.id === lotId);
     return lot ? { ...lot.truth, defects: lot.truth.defects.map((d) => ({ ...d })) } : null;
   }
+  /**
+   * Skill games pay XP, count in the debrief and tell the quests once per thing played, not once per run: `key` names it (the Deal Room passes the lot or the lead id; a
+   * Read is keyed by its lot). A repeat of the same key is allowed and pays nothing. A run with no key (a test, an older caller) is paid every time.
+   */
+  _firstPlay(kind, key) {
+    if (key == null) return true;
+    const paid = (this.s.paid ||= {}), k = kind + ':' + key;
+    if (own(paid, k)) return false;
+    paid[k] = 1;
+    return true;
+  }
   /** The Deal Room's Read stage reports what the player learned; the lot (and the crate it becomes) remembers the belief. */
   recordInspect(zone, lotId, res) {
     const lot = this.s.lots[zone]?.find((l) => l.id === lotId);
     if (!lot || !res?.estimate) return fail('That lot is gone.');
     lot.belief = { quality: res.estimate.quality, fakeProb: res.estimate.fakeProb, confidence: res.confidence ?? 0 };
     const caught = lot.truth.fake && res.estimate.fakeProb >= 0.6;
+    if (!this._firstPlay('inspect', res.key ?? lotId)) return ok('Recorded.', { caught, repeat: true });
     const score = clamp(res.score ?? 0.5, 0, 1);
     this.xp(8 + 22 * score);
     this._tally('inspect', score, !!res.quick);
@@ -644,6 +722,7 @@ export class Game {
   }
   /** A skill game played for its own sake (haggle, auction, repair) pays a little XP for good play. */
   recordPlay(kind, res) {
+    if (!this._firstPlay(kind, res?.key)) return;
     const score = clamp(res?.score ?? 0.5, 0, 1);
     this.xp(6 + 24 * score);
     this._tally(kind, score, !!res?.quick);
@@ -724,28 +803,29 @@ export class Game {
     for (const z of this.s.zones) { const v = items.reduce((x, a) => x + this.val(a, z), 0); if (v > bv) { bv = v; best = z; } }
     return best;
   }
-  poolQuote(ids, route = false) {
-    const s = this.s, items = ids.map((id) => s.assets.find((a) => a.id === id)).filter(Boolean);
+  /** Blind unless `opts.blind === false` (as quotePitch): a crate nobody has checked is valued as described. sellPool is the one caller that gets the truth, because the pool checks what it buys. */
+  poolQuote(ids, route = false, opts = {}) {
+    const s = this.s, items = ids.map((id) => s.assets.find((a) => a.id === id)).filter(Boolean), blind = opts.blind !== false;
     if (!items.length) return fail('Select assets to sell.');
     if (route && (s.zones.length < 2 || items.some((a) => !ASSETS[a.cls].tags.includes('digital')))) return fail('Digital routing needs a second district and digital assets.');
     const zone = route ? this.bestZone(items) : items[0].zone;
     if (!route && items.some((a) => a.zone !== zone)) return fail('Sell assets from one district at a time.');
     const fric = route ? FEES.digitalRouting : ZONES[zone].friction + this.instFee('pool');
-    const per = items.map((a) => ({ a, value: this.val(a, zone) * (1 - fric) * (a.known ? 1 : truthMult(a)) }));
+    const per = items.map((a) => ({ a, value: this.val(a, zone) * (1 - fric) * (a.known || blind ? 1 : truthMult(a)) }));
     const total = per.reduce((x, y) => x + y.value, 0);
     return ok('', { per, total, zone, delay: route ? 48 : this.liqDelay(zone), room: s.pool[zone], fric, route });
   }
   sellPool(ids, route = false) {
-    const q = this.poolQuote(ids, route);
+    const q = this.poolQuote(ids, route, { blind: false });
     if (!q.ok) return q;
     const s = this.s;
-    if (q.total > s.pool[q.zone]) return fail(`The ${ZONES[q.zone].short} liquidity pool only has ${money(s.pool[q.zone])} left. It refills 35% a day.`, q);
+    if (q.total > s.pool[q.zone]) return fail(`The ${ZONES[q.zone].short} liquidity pool only has ${money(s.pool[q.zone])} left. It refills 35% a day.`, this.poolQuote(ids, route)); // the failure shows the blind quote, not the truth
     s.pool[q.zone] -= q.total;
     s.assets = s.assets.filter((a) => !ids.includes(a.id));
     for (const { a } of q.per) { this.logNiche(q.zone, a.cls, 'npc-pool', CM.ref); }
-    if (q.delay) s.settle.push({ amt: q.total, at: s.hour + q.delay, note: 'Liquidation settlement' });
-    else s.cash += q.total;
-    this.garnish(q.total - q.per.reduce((x, y) => x + (y.a.basis || 0), 0));
+    const profit = q.total - q.per.reduce((x, y) => x + (y.a.basis || 0), 0);
+    if (q.delay) s.settle.push({ amt: q.total - this._garnishTake(profit, q.total), at: s.hour + q.delay, note: 'Liquidation settlement' }); // the garnishment comes out of the proceeds when they land
+    else { s.cash += q.total; this.garnish(profit); }
     s.pivot++;
     this.led('pool', `Sold ${q.per.length} asset(s) to the ${ZONES[q.zone].short} liquidity pool${q.delay ? ' (settles in ' + q.delay + 'h)' : ''}`, q.total, { z: q.zone });
     this.emit('sell-pool', { zone: q.zone, total: q.total, count: q.per.length });
@@ -860,7 +940,7 @@ export class Game {
   forecast(p) {
     const s = this.s, K = PIPE[p.kind], m = this.mods(), z = p.zone;
     const alloc = Math.min(p.alloc || 0, this.pipeCap(p));
-    const ci = p.cls && p.buyer ? this.cmFor(z, p.cls, p.buyer) : { cm: CM.ref, S: 0, vN: 0, vT: 0, band: creativityBand(CM.ref) };
+    const ci = p.cls && p.buyer ? this.cmFor(z, p.cls, p.buyer, p.id) : { cm: CM.ref, S: 0, vN: 0, vT: 0, band: creativityBand(CM.ref) };
     const rel = ci.cm / CM.ref;
     const def = p.cls ? ASSETS[p.cls] : null;
     const lane = def ? Math.sqrt(demandMult(def, z, m)) * priceMult(def, z, m) : 1;
@@ -948,7 +1028,8 @@ export class Game {
   }
   buyUpgrade(id) {
     const s = this.s, U = own(UPGRADES, id) ? UPGRADES[id] : null;
-    if (!U || s.upg[id]) return fail('Already installed.');
+    if (!U) return fail('Unknown upgrade.');
+    if (s.upg[id]) return fail('Already installed.');
     if (!s.zones.includes(U.zone)) return fail('Unlocks at Metro Hub.');
     if (s.cash < U.cost) return fail(`Costs ${money(U.cost)}.`);
     s.cash -= U.cost; s.upg[id] = true; this.xp(100);
@@ -982,29 +1063,37 @@ export class Game {
     s.acc.profit += f.net; s.lastAuto = s.hour;
     this.garnish(f.net);
     this.emit('cycle', { zone: p.zone, net: f.net });
-    this.logNiche(p.zone, p.cls, p.buyer, f.ci.cm);
+    this.logNiche(p.zone, p.cls, p.buyer, f.ci.cm, p.id);
     this.led('pipe', `${PIPE[p.kind].name}: ${ASSETS[p.cls].name} to ${BUYERS[p.buyer].name}`, f.net, { z: p.zone, cm: f.ci.cm, pid: p.id });
     this.xp(Math.max(1, Math.log10(Math.abs(f.net) + 1) * 4));
   }
 
   // ------------------------------------------------------------------ clients (CAC vs LTV)
+  /** A contract is paid at the daily ticks: the first one after signing, then C.days in all. `until` is the hour just after its last payment (so a contract signed any time of day pays exactly C.days
+   *  days and frees its slot the hour after the last one), and `payDays` how many of those payments the run still has room for. */
+  _contract(C) {
+    const first = (Math.floor(this.s.hour / 24) + 1) * 24;
+    return { until: first + (C.days - 1) * 24 + 1, payDays: Math.max(0, Math.min(C.days, Math.floor((TOTAL_HOURS - first) / 24) + 1)) };
+  }
+  /** `days` is the contract's length; `payDays` how many of those days it can pay before day 90 (the run cuts a contract off with no refund), and the LTV, ratio and payback are the ones that count. */
   clientQuote(tier) {
     const s = this.s, C = CLIENTS[tier];
     const cac = C.cac * Math.max(0.5, 1 - 0.08 * (this.lvl('growth') - 1)) * (s.upg.seo ? 0.85 : 1);
-    const days = C.days, ltv = C.perDay * days * (1 - this.zoneTax(C.zone));
-    return { cac, ltv, ratio: ltv / cac, payback: cac / (C.perDay * (1 - this.zoneTax(C.zone))), perDay: C.perDay, days };
+    const day = C.perDay * (1 - this.zoneTax(C.zone)), payDays = this._contract(C).payDays, ltv = day * payDays, payback = cac / day;
+    return { cac, ltv, ratio: ltv / cac, payback, perDay: C.perDay, days: C.days, payDays, worthwhile: payback < payDays };
   }
-  acquireClient(tier) {
+  acquireClient(tier, opts = {}) {
     const s = this.s, C = own(CLIENTS, tier) ? CLIENTS[tier] : null;
     if (!C) return fail('Unknown account type.');
     if (!s.zones.includes(C.zone)) return fail('Not available in your districts yet.');
     if (C.needs && !s.mil[C.needs]) return fail(`Unlocks at Milestone ${C.needs.slice(1)}.`);
-    if (s.clients.filter((c) => c.tier === tier).length >= C.max) return fail('You already hold the maximum of these accounts.');
+    if (s.clients.filter((c) => c.tier === tier && !c.done && s.hour < c.until).length >= C.max) return fail('You already hold the maximum of these accounts.');
     if (s.pipes.length < C.minRunning) return fail(`This account's SLA needs ${C.minRunning} pipeline${C.minRunning > 1 ? 's' : ''} running. Build the capacity first, then sign the client.`);
     const q = this.clientQuote(tier);
+    if (!q.worthwhile && !opts.force) return fail(`This contract could not earn back its ${money(q.cac)} before day 90: ${q.payDays} paying day${q.payDays === 1 ? '' : 's'} are left and it needs ${Math.ceil(q.payback)}.`, q);
     if (s.cash < q.cac) return fail(`Acquisition costs ${money(q.cac)}.`);
     s.cash -= q.cac;
-    s.clients.push({ id: 'C' + s.nid++, tier, cac: q.cac, until: s.hour + C.days * 24, earned: 0, breaches: 0 });
+    s.clients.push({ id: 'C' + s.nid++, tier, cac: q.cac, until: this._contract(C).until, earned: 0, breaches: 0 });
     this.xp(90);
     this.led('client', `Signed a ${C.name}`, -q.cac);
     this.emit('client', { tier });
@@ -1018,7 +1107,7 @@ export class Game {
     const owed = s.loans.filter((l) => l.prod === prod).reduce((a, l) => a + l.principal + l.accr, 0);
     let lim;
     if (prod === 'pipeline') lim = L.limitPct * (this.invValue() + s.pipes.reduce((a, p) => a + p.basis, 0));
-    else if (prod === 'circle') lim = (this.P.circle?.pct || 0) * Math.max(0, this.netWorth() + owed);
+    else if (prod === 'circle') lim = (this.P.circle?.pct || 0) * Math.max(0, this.netWorth()); // borrowing leaves net worth as it was (cash and debt rise together), so the cap is a share of that
     else lim = L.limit * mult;
     const de = Math.max(0, DEBT.maxDE * this.netWorth() - this.debt());
     return { limit: lim, owed, room: Math.max(0, Math.min(lim - owed, de)), de };
@@ -1040,9 +1129,10 @@ export class Game {
     if (block) return fail(block);
     const r = this.loanRoom(prod);
     amount = Math.min(+amount || 0, r.room);
-    if (amount <= 0) return fail('Nothing available to draw. Your debt-to-equity ratio caps borrowing at 3.0.');
+    if (!(amount >= 0.01)) return fail('Nothing available to draw. Your debt-to-equity ratio caps borrowing at 3.0.'); // less than a cent is no loan (and would only add an empty record)
     const fee = amount * L.fee;
     s.cash += amount - fee;
+    if (prod === 'enterprise' && !s.loans.some((l) => l.prod === 'enterprise')) s.entFeeNext = s.hour + L.every; // the facility's monthly fee starts with its first draw
     s.loans.push({ id: 'D' + s.nid++, prod, principal: amount, accr: 0, last: s.hour, next: s.hour + L.every, drawn: s.hour });
     if (prod === 'enterprise') s.entOpened = true;
     this.led('loan', `Drew ${money(amount)} on the ${L.name}`, amount - fee, { fee });
@@ -1110,7 +1200,7 @@ export class Game {
       let decay = d.dep * 0.002 * (s.upg.jit ? 0.5 : 1);
       if (Z.rules.fads && d.tags.includes('digital')) decay *= 2; // fads: digital goods lose value twice as fast
       a.wear *= 1 - decay;
-      if (d.perish) a.wear *= 1 - 0.8 / d.perish; // perishables spoil
+      if (d.perish) a.wear *= 1 - 0.8 / d.perish * (s.upg.jit ? 0.5 : 1); // perishables spoil (just-in-time stock spoils half as fast)
     }
     let dayProfit = s.acc.profit;
     // assets that pay while you hold them (royalties, rent)
@@ -1153,13 +1243,17 @@ export class Game {
       const r = this.loanRate(l.prod);
       l.accr += l.principal * r / 30;
       dayProfit -= l.principal * r / 30;
-      if (s.hour >= l.next) {
-        l.principal += l.accr; l.accr = 0; l.next = s.hour + LOANS[l.prod].every;
-        if (l.prod === 'enterprise' && s.entOpened) {
-          const unused = Math.max(0, LOANS.enterprise.limit * this.B.creditLimitMult - l.principal);
-          const fee = unused * LOANS.enterprise.commit;
-          if (fee > 0) { l.principal += fee; this.led('loan', 'Unused-commitment fee', -fee); }
-        }
+      if (s.hour >= l.next) { l.principal += l.accr; l.accr = 0; l.next = s.hour + LOANS[l.prod].every; }
+    }
+    // The Enterprise Revolving Credit's commitment fee belongs to the facility, not to a draw: once a month, 1.5% of what is still undrawn of the whole line, however many draws it was taken in.
+    const ent = s.loans.filter((l) => l.prod === 'enterprise');
+    if (ent.length && s.entOpened) {
+      s.entFeeNext ??= Math.min(...ent.map((l) => l.next)); // a save from before the facility had its own schedule
+      if (s.hour >= s.entFeeNext) {
+        s.entFeeNext = s.hour + LOANS.enterprise.every;
+        const drawn = ent.reduce((a, l) => a + l.principal + l.accr, 0);
+        const fee = Math.max(0, LOANS.enterprise.limit * this.B.creditLimitMult - drawn) * LOANS.enterprise.commit;
+        if (fee > 0) { ent[0].principal += fee; this.led('loan', 'Unused-commitment fee', -fee); }
       }
     }
     if (s.cash < 0) { const od = -s.cash * 0.005; s.cash -= od; s.overdraft += od; if (day % 3 === 0) this.note('bad', `Cash is negative (${money(s.cash)}). Overdraft interest is accruing.`); }
@@ -1311,15 +1405,19 @@ export class Game {
     return { va, vb, variance, ok: variance <= FMV_BAND, flagged: variance > FMV_BAND };
   }
   /** What an asset would be worth in YOUR hands: Ops restores broken goods, Growth monetises digital ones. */
-  projected(pubAsset, skills = this.s.skills, mods = this.mods()) {
+  projected(pubAsset, skills, mods = this.mods()) {
     const def = ASSETS[pubAsset.cls], z = pubAsset.zone;
-    const working = assetFMV({ ...pubAsset, cond: 'ok', quality: 1, wear: pubAsset.wear ?? 1 }, z, mods, 1);
+    // Your own view is what the engine would really give you: your effective skills (a Background's bonus counts), your repair discounts (the district's, the Background's, the unlocked bonuses),
+    // and your Background's pull on this kind of goods. A classmate's published levels are the raw ones, so theirs are priced with the district and the shocks only.
+    const mine = !skills, k = mine ? { ops: this.lvl('ops'), growth: this.lvl('growth'), fintech: this.lvl('fintech') } : skills;
+    const pv = mine ? this.perkValue(pubAsset.cls) : 1, crowd = mine ? this.crowd(pubAsset.cls, z) : 1;
+    const working = assetFMV({ ...pubAsset, cond: 'ok', quality: 1, wear: pubAsset.wear ?? 1 }, z, mods, crowd);
     if (pubAsset.cond === 'broken' && def.repair) {
-      const q = restoreQuality(skills.ops), cost = repairCostFor(def.repair, skills.ops, z > 4 ? mods.repair : 1);
-      return working * q - cost;
+      const q = restoreQuality(k.ops), local = (1 - (ZONES[z].rules.repair || 0)) * (z > 4 ? mods.repair : 1); // repairMultFor(), read from the mods given
+      return working * q * pv - repairCostFor(def.repair, k.ops, mine ? local * this.P.repairMult * this.B.repairMult : local);
     }
-    if (def.tags.includes('digital')) return working * Math.min(1.4, 0.7 + 0.1 * skills.growth);
-    return assetFMV(pubAsset, z, mods, 1);
+    if (def.tags.includes('digital')) return working * Math.min(1.4, 0.7 + 0.1 * k.growth) * pv;
+    return assetFMV(pubAsset, z, mods, crowd) * pv;
   }
   /** An asset leaves for a classmate as it truly is: what it is really worth is folded into its quality and the hidden truth stays behind, so a swap neither leaks the truth nor launders a counterfeit into a genuine crate. */
   _disclosed(a) {

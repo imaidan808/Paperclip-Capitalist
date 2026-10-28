@@ -4,7 +4,7 @@ import { makeGame, run } from '../bot.mjs';
 import { esc } from '../../js/ui/common.js';
 import { fmtMoney, fmtPct } from '../../js/market.js';
 
-export function fakeCtx({ days = 0, perks = ['trades', 'pro'], seed = 7, zone } = {}) {
+export function fakeCtx({ days = 0, perks = ['trades', 'pro'], seed = 9, zone } = {}) { // seed 9: these tests need the bot to be past Industrial Park with a loan open by day 25, which is a matter of the world (seed 7 got there on day 30 once the economy was retuned)
   const game = makeGame(perks, 'ops', seed);
   if (days) run(game, { days });
   const S = {
