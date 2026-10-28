@@ -157,7 +157,10 @@ test('selling with nothing ticked, or from two districts at once, is refused in 
   const ctx = fakeCtx({ days: 25, perks: PAIRS[0] }), g = ctx.g(), acts = stock.acts(ctx);
   acts['stock-sellpool']({ dataset: {} });
   assert.ok(ctx.toasts.some(([m]) => /Tick a crate/.test(m)));
-  const [a, b] = [g.s.assets.find((x) => x.zone === 2), g.s.assets.find((x) => x.zone !== 2)];
+  // whatever the bot happens to hold, make sure there is a crate in each of two different districts
+  const a = g.s.assets[0] || (g.s.assets.push(g._mk(g.s, 'paperclip', { zone: g.s.zones[0] })), g.s.assets[0]);
+  let b = g.s.assets.find((x) => x.zone !== a.zone);
+  if (!b) { b = g._mk(g.s, 'paperclip', { zone: g.s.zones.find((z) => z !== a.zone) ?? a.zone + 1 }); g.s.assets.push(b); }
   ctx.U.sel.add(a.id); ctx.U.sel.add(b.id);
   const html = stock.html(ctx);
   assert.match(html, /Pick crates from one district/);
