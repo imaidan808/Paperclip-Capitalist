@@ -56,9 +56,11 @@ export function cellsFor(r, a, out = {}) {
 /** A chunk's integer key: its scale key, column and row (cells stay within +-2,000 at any zoom the world allows, and a scale key within 0 to 2^20). */
 export const chunkKey = (sk, i, j) => (sk * 4096 + (i + 2048)) * 4096 + (j + 2048);
 /**
- * Is a chunk baked at scale `a0` a fair stand-in for scale `a` while the zoom moves? Shown scaled by k = a / a0: at most 1.25 up and 1 / 0.84 down (the plan's window), never more. Returns k, or 0 when it is not.
+ * Is a chunk baked at scale `a0` a fair stand-in for scale `a` while the zoom moves? Shown scaled by k = a / a0: at most 1.5 up and 1 / 0.7 down. The plan's window for a SPRITE is 1.25 and 0.84 (a prop has fine detail that
+ * a resample blurs); the ground is flat colour fields with anti-aliased edges, so a stand-in scaled by half again reads as motion, and it is a blit where the alternative is the legacy ground drawn straight, 12 to 16 ms
+ * a frame (measured: a pinch out from 1.6 fell to 24 ms with the narrow window and the direct cells it brought). Returns k, or 0 when it is not.
  */
-export const STALE_UP = 1.25, STALE_DOWN = 0.84;
+export const STALE_UP = 1.5, STALE_DOWN = 0.7;
 export const staleRatio = (a0, a) => { const k = a / a0; return k <= STALE_UP && k >= STALE_DOWN ? k : 0; };
-/** How many chunks the cache may hold: what the window touches, plus a quarter for the stale ones that stand in while a zoom settles (PEAK), plus two. The memory table of docs/RENDER_PLAN.md is this number x 0.59 MB. */
-export const chunkCap = (w, h, dpr) => Math.ceil(chunksTouched(w, h, dpr) * PEAK) + 2;
+/** How many chunks the cache may hold: what the window touches, plus a third for the stale ones that stand in while a zoom settles and the cells a zoom out reveals, plus two. The memory table of docs/RENDER_PLAN.md is this number x 0.59 MB (the window touches at most 54 at dsf 2; a real window is 40 to 48). */
+export const chunkCap = (w, h, dpr) => Math.ceil(chunksTouched(w, h, dpr) * 1.35) + 2;

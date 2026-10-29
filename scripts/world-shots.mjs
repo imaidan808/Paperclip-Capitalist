@@ -125,7 +125,7 @@ const PAGE = String.raw`(() => {
     R.seed = o.seed;
     w.stop();                                                  // no frame loop: nothing changes except by hand
     const SP = await import('/js/world/sprites.js'); SP.setBuildBudget(1e9, 6, 100); SP.setSpriteFade(0); // sprites are built in a few milliseconds a frame; here all at once, and an exact sprite replaces its stand-in at once (no 120 ms fade), so no picture waits on the clock
-    w.gcBudget = [1e9, 1e9];                                   // the ground's chunks likewise: every chunk of a view is baked in its first draw
+    w.gcBudget = [1e9, 1e9]; w.gcRest = 0;                                   // the ground's chunks likewise: every chunk of a view is baked in its first draw
     if (o.dpr) { w.targetDpr = () => o.dpr; w.resize(); }     // pin the canvas density (a software-drawn canvas would be capped by the game)
     if (w.light) w.light.perFrame = 99;                        // every light layer in the first draw, not one a frame
     const before = html.dataset.motion; html.dataset.motion = 'reduce'; // walk everything to where it is going (the calm path moves fast and makes no dust)

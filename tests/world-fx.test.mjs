@@ -208,6 +208,7 @@ test('the ground is stamped from chunks of the exact scale: a still camera bakes
   const w = new World({ session, ui: { zone: 1, sel: new Set() }, activate: noop, hover: noop });
   w.host = { getBoundingClientRect: () => ({ width: 1000, height: 640 }) }; w.resize(); w.sync(); w.placePlayer();
   let direct = 0, still = 0, live = 0; const dg = w.drawGround.bind(w); w.drawGround = (c, v, mode = 0) => { if (mode === 0) direct++; else if (mode === 1) still++; else live++; dg(c, v, mode); };
+  w.gcRest = 0; // (the scale must rest 90 ms before chunks are baked at it; a test that draws in a loop says it has)
   const settle = (n = 80) => { for (let i = 0; i < n; i++) { w.draw(); if (w.gcValid) break; } return w.gcValid; };
   w.focusZone(1, false); w.draw(); assert.ok(w.gc && w.gc.size > 0, 'the first frame bakes at least one chunk (progress is guaranteed)'); assert.equal(direct, 0, 'and no frame draws the whole ground directly while chunks can be made'); assert.equal(live, 1, 'what moves is drawn live over them');
   assert.ok(settle(), 'a still camera bakes every visible chunk'); const baked = w.gc.stats.baked, cells = w.gc.size;
@@ -239,7 +240,7 @@ test('the cached ground puts every moving decal on top: water and pulses are dra
   w.host = { getBoundingClientRect: () => ({ width: 1000, height: 640 }) }; w.resize(); w.sync(); w.placePlayer();
   const kinds = []; const dd = w.drawDecal.bind(w); w.drawDecal = (c, d, z, k, part = 0) => { kinds.push(d.k + ':' + part); dd(c, d, z, k, part); };
   let id = 0; for (const z of [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]) if (DIST[z].decals.some((d) => d.k === 'water' || d.k === 'pulse')) { id = z; break; }
-  assert.ok(id, 'some district has a moving decal'); w.focusZone(id, false); w.draw(); w.draw(); kinds.length = 0; w.draw();
+  assert.ok(id, 'some district has a moving decal'); w.gcRest = 0; w.focusZone(id, false); for (let i = 0; i < 80 && !w.gcValid; i++) w.draw(); w.draw(); kinds.length = 0; w.draw();
   assert.ok(kinds.length > 0 && kinds.every((k) => k.endsWith(':2')), 'a stamped frame draws only the live part of the moving decals: ' + [...new Set(kinds)].join());
   delete globalThis.OffscreenCanvas;
 });

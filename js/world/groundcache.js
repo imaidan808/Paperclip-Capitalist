@@ -12,12 +12,14 @@
 //   - what moves on the ground (water, pulses: stage mode 2) is drawn live over the chunks, as before.
 // A district opening is drawn directly while it lasts (its fog is moving), exactly as before.
 import { groundKey } from './stack.js';
-import { CHUNK_PX, CHUNK_FULL, BLEED, scaleKey, cellsFor, chunkCap, snapTranslation } from './chunks.js';
+import { CHUNK_PX, scaleKey, cellsFor, chunkCap, snapTranslation } from './chunks.js';
 import { ChunkCache } from './chunkcache.js';
 export { CHUNK_PX, chunkWorld, chunkBytes, chunksTouched, groundBytes, chunksFor } from './chunks.js'; // the chunk cache's arithmetic (tests/world-ledger.test.mjs holds the memory ledger to it)
 
 /** Milliseconds a frame may spend baking chunks: with the camera still (the picture is settling, nothing else to do) and while it moves (a pan must stay cheap). The first bake of a frame always goes ahead. */
 export const BAKE_MS_STILL = 10, BAKE_MS_MOVING = 3.5;
+/** The scale must stand still this long (ms) before chunks are baked at it: while it changes every frame, stale chunks and direct cells stand in. */
+export const ZOOM_REST_MS = 90;
 
 export const groundCacheMethods = {
   /** The render scale of this frame: device pixels per world pixel (chunks.js renderScale). */
@@ -36,6 +38,8 @@ export const groundCacheMethods = {
     let store = this.gc; if (!(store instanceof ChunkCache)) { if (store) this.gc = null; store = this.gc = new ChunkCache('ground.chunks'); }
     if (store.setVer((Math.imul(this.unlockHash | 0, 31) + gk) | 0)) this.gcValid = false;
     const a = this.renderScale(), sk = scaleKey(a), snap = this.snap || (this.snap = [0, 0]); snapTranslation(W, H, dpr, cam.x, cam.y, a, snap);
+    const now = performance.now(); if (a !== this.gcA) { this.gcA = a; this.gcAt = now; }
+    const zooming = now - (this.gcAt ?? -1e9) < (this.gcRest ?? ZOOM_REST_MS); // the scale is changing (a pinch, a wheel, a glide): nothing is baked at a scale that is gone in the next frame; stand-ins and direct cells cover the window, and the exact scale is baked once it rests
     const e = snap[0], f = snap[1], cw = this.cv.width, ch = this.cv.height;
     const win = this.gcWin || (this.gcWin = { x0: 0, x1: 0, y0: 0, y1: 0 }); win.x0 = -e / a; win.x1 = (cw - e) / a; win.y0 = -f / a; win.y1 = (ch - f) / a;
     const cells = cellsFor(win, a, this.gcCells || (this.gcCells = {}));
@@ -48,8 +52,15 @@ export const groundCacheMethods = {
     if (miss.length) {
       const pts = []; for (let n = 0; n < miss.length; n += 2) pts.push([miss[n], miss[n + 1], Math.hypot((miss[n] + 0.5) * s - cx, (miss[n + 1] + 0.5) * s - cy)]); pts.sort((p, q) => p[2] - q[2]);
       const budget = this.gcSeen >= 1 ? (this.gcBudget?.[0] ?? BAKE_MS_STILL) : (this.gcBudget?.[1] ?? BAKE_MS_MOVING), t0 = performance.now(); miss.length = 0; // (this.gcBudget: a test's own milliseconds [still, moving])
+      if (zooming) store.standIns(a, sk);
+      const ab = Math.round(Math.pow(2, Math.round(Math.log2(a) * 4) / 4) * 1e5) / 1e5, sb = CHUNK_PX / ab; // the quarter-octave bucket: what is baked while the scale moves is baked here, so the frames of one stretch of a zoom share their chunks
       for (const [i, j] of pts) {
-        if (baked === 0 || performance.now() - t0 < budget) { const c = store.bake(draw, a, i, j, dpr); if (c) { baked++; continue; } }
+        const ok = baked === 0 || performance.now() - t0 < budget;
+        if (!zooming) { if (ok) { const c = store.bake(draw, a, i, j, dpr); if (c) { baked++; continue; } } }
+        else { // while the scale changes a cell is baked only when nothing stands in for it (the cells a zoom out reveals), at the bucket scale: that chunk stands in for the next frames of the zoom, and costs a bake once where a direct draw costs every frame
+          const mx = (i + 0.5) * s, my = (j + 0.5) * s;
+          if (!store.covered(mx, my) && ok) { const c = store.bake(draw, ab, Math.floor(mx / sb), Math.floor(my / sb), dpr); if (c) { baked++; store.standIns(a, sk); } }
+        }
         miss.push(i, j);
       }
     }
@@ -65,7 +76,7 @@ export const groundCacheMethods = {
         for (const c of L) {
           const kk = a / c.a, dx = c.i * CHUNK_PX * kk + e, dy = c.j * CHUNK_PX * kk + f, sz = CHUNK_PX * kk;
           if (dx + sz + kk < 0 || dy + sz + kk < 0 || dx - kk > cw || dy - kk > ch) continue;
-          ctx.drawImage(c.img, dx - BLEED * kk, dy - BLEED * kk, CHUNK_FULL * kk, CHUNK_FULL * kk);
+          c.last = ++store.tick; if (c.empty || store.hidden(c, sk, s)) continue; ctx.drawImage(c.img, dx - kk * 0.5, dy - kk * 0.5, sz + kk, sz + kk); // (a pixel larger than its cell, so scaled neighbours overlap and never leave a hairline)
         }
         ctx.restore(); store.stats.stale += L.length;
       }
@@ -81,8 +92,8 @@ export const groundCacheMethods = {
       }
     }
     for (let j = cells.j0; j <= cells.j1; j++) for (let i = cells.i0; i <= cells.i1; i++) {
-      const c = store.get(sk, i, j); if (!c) continue;
-      ctx.drawImage(c.img, BLEED, BLEED, CHUNK_PX, CHUNK_PX, X(i), Y(j), CHUNK_PX, CHUNK_PX); store.stats.hits++;
+      const c = store.get(sk, i, j); if (!c || c.empty) continue;
+      ctx.drawImage(c.img, X(i), Y(j)); store.stats.hits++; // the whole bitmap, 1:1 on whole pixels (with a source rectangle the same blit costs twice as much on a CPU-drawn canvas)
     }
     ctx.restore();
     this.gcValid = miss.length === 0;
