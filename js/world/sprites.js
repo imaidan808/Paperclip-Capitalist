@@ -2,17 +2,14 @@
 // This draws such a prop once into its own canvas and from then on only blits it. What it draws: nothing of its own, it records what a layer's body() draws.
 // What it never does: cache anything that moves (smoke, flicker, lights and signs that change are a layer's live() part, drawn after the blit), read game state,
 // or change where anything stands (a sprite is blitted on the same pixel grid its own drawing would land on).
+// Owner: T5 RASTER QUALITY (docs/RENDER_PLAN.md sections 4 and 5).
 //
-// A sprite is keyed by prop, zoom (1/1024 octave: a sprite is always built at the scale it is shown at, so the blit is a straight copy, which is ten times cheaper than a
-// resampled one), fog bucket (sixteenths) and night bucket (eighths): night moves windows on one by one, so eight steps read as evening coming on.
-// While the zoom is changing (a wheel turn, a camera glide) props are drawn directly and nothing is built, so a gesture never pays for a rebuild; once the scale has
-// rested 90 ms the next frames build what is missing, a few milliseconds' worth a frame (BUILD_MS), and a prop whose turn has not come yet is served by its sprite of
-// the neighbouring night or fog step (or drawn directly if it has none), so a dusk that crosses a bucket never rebuilds the whole district in one frame.
-// A zoom that is still moving (or a sprite whose turn to be built has not come) shows the prop's sprite of the zoom before, scaled by the ratio of the two, in place of drawing the prop
-// again: a scaled copy is one blit, drawing it directly is hundreds of path operations, and the copy is exact again as soon as the zoom rests and its own sprite is built.
-// Memory is bounded (the budget below, least recently used go first; the sprite being drawn is never the one to go).
+// A sprite is keyed by prop, layer definition, zoom (1/1024 octave of the render scale: a sprite is built at the scale it is shown at, so the blit is a straight copy, which is ten times cheaper than a
+// resampled one), fog bucket (sixteenths) and night bucket (eighths: night moves windows on one by one, so eight steps read as evening coming on).
+// While the zoom is changing a sprite of a nearby scale is shown scaled by the ratio of the two (a stand-in); once the scale has rested 90 ms the next frames build what is missing, a few milliseconds' worth a
+// frame (BUILD_MS), and a prop whose turn has not come yet is served by its sprite of the neighbouring night or fog step (or drawn directly if it has none), so a dusk that crosses a bucket never rebuilds the
+// whole district in one frame. Memory is bounded (the budget below, least recently used go first, overlays before bases; the sprite being drawn is never the one to go).
 // Where there is no canvas (a Node test) drawSprite() answers undefined and the caller draws directly, exactly as before.
-
 import { ledger, registerReleaser } from './gfx.js';
 import { closeAlpha } from './seal.js';
 import { DETAIL_MIN } from './lod.js';
@@ -120,10 +117,9 @@ export function drawSprite(ctx, p, env, layer, alpha = 1) {
   if (a !== lastA) { lastA = a; changedAt = now; }
   const key = Math.round(Math.log2(a) * ZOOM_STEPS), dq = Math.round((env.dim || 0) * 16), nq = layer.night === false ? 0 : Math.round((env.night || 0) * 8), ov = layer.ov === true;
   const fl = (env.lite ? 1 : 0) | (env.crunch ? 2 : 0), moving = now - changedAt < MOVING_MS;
-  let arr = STORE.get(p), e = null, near = null, other = null, n = 0;
+  let arr = STORE.get(p), e = null, near = null, other = null;
   if (arr) for (let i = 0; i < arr.length; i++) {
     const c = arr[i]; if (c.fl !== fl || c.L !== layer) continue; // (a sprite belongs to the layer definition that drew it: a flag flipped between legacy and V2 never serves the other's picture)
-    n++;
     const d = key - c.key, close = Math.abs(c.dq - dq) <= 2 && Math.abs(c.nq - nq) <= 1; // one step of evening or three of fog off: close enough for a frame or two
     if (d === 0) {
       if (c.dq === dq && c.nq === nq) { e = c; break; }

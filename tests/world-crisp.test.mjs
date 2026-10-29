@@ -86,3 +86,15 @@ test('the world: tiers rise under slow frames, fall again under fast ones, and t
   const top = w.slow; for (let i = 0; i < 400; i++) { w.t += 40; w.govern(4, 0); } assert.ok(w.slow < top && w.slow === 0, 'fast frames bring it back: ' + w.slow);
   w.slow = 0; w.fps = 60; w.gov.cost = 8; for (let i = 0; i < 30; i++) w.govern(6, 90); assert.ok(w.slow >= 3, 'cheap JavaScript but a raster that cannot keep up (the interval is 90 ms against 16.7) steps down too: ' + w.slow);
 });
+
+// ---------------------------------------------------------------- labels: whole device pixels
+test('labels: a rule is a whole number of device pixels and a text baseline is on a device pixel, at every density', async () => {
+  const { Labels } = await import('../js/world/labels.js');
+  for (const d of [1, 1.25, 1.5, 1.75, 2]) {
+    const l = new Labels(); l.dpr = d;
+    for (const n of [1, 1.33, 2]) { const w = l.lw(n) * d; assert.ok(Math.abs(w - Math.round(w)) < 1e-9 && w >= 1, `dpr ${d}, rule ${n}: ${w} device px`); }
+    const seen = []; const g = { textAlign: 'left', fillText: (s, x, y) => seen.push([x, y]) }; l.text(g, 'abc', 10.3, 9.37); assert.ok(Math.abs(seen[0][1] * d - Math.round(seen[0][1] * d)) < 1e-9 && Math.abs(seen[0][0] * d - Math.round(seen[0][0] * d)) < 1e-9, `dpr ${d}: the baseline is on a pixel`);
+    const c = { textAlign: 'center', fillText: (s, x, y) => seen.push([x, y]) }; l.text(c, 'abc', 10.3, 9.37); assert.equal(seen[1][0], 10.3, 'a centred run keeps its anchor');
+  }
+  const two = new Labels(); two.dpr = 2; assert.equal(two.lw(), 1.5, 'the 2x rule is unchanged: three device pixels');
+});

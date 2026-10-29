@@ -35,6 +35,9 @@ export class Labels {
   }
   sprite(key, build) { let s = this.cache.get(key); if (s === undefined) s = this.cache.set(key, build()); return s; }
 
+  /** Fill text with its baseline (and a left-aligned run's start) on a whole device pixel: a baseline between two pixel rows is two blurred rows of every letter, at every density that is not a whole number of device pixels to the css pixel. */
+  text(g, s, x, y) { const d = this.dpr || 1; g.fillText(s, g.textAlign === 'center' ? x : Math.round(x * d) / d, Math.round(y * d) / d); }
+
   /** Stamp a sprite so its anchor lands at (x, y), snapped to the device-pixel grid. */
   blit(ctx, spr, x, y, ax = spr.ax, ay = spr.ay) {
     const d = this.dpr || 1;
@@ -53,7 +56,7 @@ export class Labels {
       return this.make(w, h, (g) => {
         roundRect(g, 0.5, 2.5, w, h, 5 * s); g.fillStyle = 'rgba(2,4,10,.4)'; g.fill();
         roundRect(g, lw / 2, lw / 2, w - lw, h - lw, 5 * s); g.fillStyle = 'rgba(16,20,28,.93)'; g.fill(); g.strokeStyle = color; g.lineWidth = lw; g.stroke();
-        g.font = f; g.fillStyle = color; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(text, w / 2, h / 2 + 0.5);
+        g.font = f; g.fillStyle = color; g.textAlign = 'center'; g.textBaseline = 'middle'; this.text(g, text, w / 2, h / 2 + 0.5);
       });
     });
   }
@@ -65,7 +68,7 @@ export class Labels {
       return this.make(d, d, (g) => {
         g.beginPath(); g.arc(r + 0.5, r + 2.5, r, 0, 7); g.fillStyle = 'rgba(2,4,10,.4)'; g.fill();
         g.beginPath(); g.arc(r, r, r - lw / 2, 0, 7); g.fillStyle = sel ? '#ffd36e' : 'rgba(16,20,28,.93)'; g.fill(); g.strokeStyle = sel ? '#ffffff' : '#5b6b85'; g.lineWidth = lw; g.stroke();
-        g.font = sans(14 * s); g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillStyle = '#fff'; g.fillText(icon, r, r + 1);
+        g.font = sans(14 * s); g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillStyle = '#fff'; this.text(g, icon, r, r + 1);
       });
     });
   }
@@ -78,8 +81,8 @@ export class Labels {
       return this.make(w, h, (g) => {
         roundRect(g, 0.5, 2.5, w, h, 6 * s); g.fillStyle = 'rgba(2,4,10,.4)'; g.fill();
         roundRect(g, lw / 2, lw / 2, w - lw, h - lw, 6 * s); g.fillStyle = 'rgba(16,20,28,.94)'; g.fill(); g.strokeStyle = hov ? '#ffffff' : color; g.lineWidth = lw; g.stroke();
-        g.textAlign = 'left'; g.textBaseline = 'middle'; g.font = sans(13 * s); g.fillStyle = '#fff'; g.fillText(icon, 5 * s, h / 2 + 1);
-        g.font = f; g.fillStyle = color; g.fillText(text, 22 * s, h / 2 + 1);
+        g.textAlign = 'left'; g.textBaseline = 'middle'; g.font = sans(13 * s); g.fillStyle = '#fff'; this.text(g, icon, 5 * s, h / 2 + 1);
+        g.font = f; g.fillStyle = color; this.text(g, text, 22 * s, h / 2 + 1);
       });
     });
   }
@@ -92,9 +95,9 @@ export class Labels {
         roundRect(g, 0.5, 2.5, w, h, 7 * s); g.fillStyle = 'rgba(2,4,10,.4)'; g.fill();
         roundRect(g, lw / 2, lw / 2, w - lw, h - lw, 7 * s); g.fillStyle = 'rgba(16,20,28,.95)'; g.fill(); g.strokeStyle = urgent ? '#ffd36e' : hov ? '#ffffff' : '#5b6b85'; g.lineWidth = lw; g.stroke();
         g.beginPath(); g.moveTo(w / 2 - 4 * s, h - lw / 2); g.lineTo(w / 2 + 4 * s, h - lw / 2); g.lineTo(w / 2, h + tail); g.closePath(); g.fill();
-        g.textAlign = 'left'; g.textBaseline = 'middle'; g.font = sans(14 * s); g.fillStyle = '#fff'; g.fillText(icon, 5 * s, h / 2 + 1);
-        g.font = f; g.fillStyle = urgent ? '#ffd36e' : '#e8eef6'; g.fillText(text, 23 * s, h / 2 + 1);
-        if (urgent) { g.fillStyle = '#ffd36e'; g.beginPath(); g.arc(w - 2, 2, 7 * s, 0, 7); g.fill(); g.fillStyle = '#1a1303'; g.font = mono(900, 11 * s); g.textAlign = 'center'; g.fillText('!', w - 2, 3); }
+        g.textAlign = 'left'; g.textBaseline = 'middle'; g.font = sans(14 * s); g.fillStyle = '#fff'; this.text(g, icon, 5 * s, h / 2 + 1);
+        g.font = f; g.fillStyle = urgent ? '#ffd36e' : '#e8eef6'; this.text(g, text, 23 * s, h / 2 + 1);
+        if (urgent) { g.fillStyle = '#ffd36e'; g.beginPath(); g.arc(w - 2, 2, 7 * s, 0, 7); g.fill(); g.fillStyle = '#1a1303'; g.font = mono(900, 11 * s); g.textAlign = 'center'; this.text(g, '!', w - 2, 3); }
       }, PAD + 6);
       if (sp) { sp.ax = w / 2; sp.ay = h; }
       return sp;
@@ -126,9 +129,9 @@ export class Labels {
         roundRect(g, 0.5, 2.5, w, h, 7); g.fillStyle = 'rgba(2,4,10,.4)'; g.fill();
         roundRect(g, lw / 2, lw / 2, w - lw, h - lw, 7); g.fillStyle = 'rgba(16,20,28,.95)'; g.fill(); g.strokeStyle = cur || hov ? '#ffd36e' : open ? pal : '#5b6b85'; g.lineWidth = lw; g.stroke();
         g.fillStyle = pal; g.fillRect(1, 6, 4, h - 12);
-        g.font = sans(16); g.textAlign = 'left'; g.textBaseline = 'middle'; g.fillStyle = '#fff'; g.fillText(D.icon, 10, h / 2 + 1);
-        g.font = f1; g.fillStyle = open ? '#ffd36e' : '#a3b3c9'; g.fillText(l1, 30, compact ? h / 2 + 1 : 13);
-        if (!compact) { g.font = f2; g.fillStyle = open ? '#e8eef6' : '#a3b3c9'; g.fillText(l2, 30, 27); }
+        g.font = sans(16); g.textAlign = 'left'; g.textBaseline = 'middle'; g.fillStyle = '#fff'; this.text(g, D.icon, 10, h / 2 + 1);
+        g.font = f1; g.fillStyle = open ? '#ffd36e' : '#a3b3c9'; this.text(g, l1, 30, compact ? h / 2 + 1 : 13);
+        if (!compact) { g.font = f2; g.fillStyle = open ? '#e8eef6' : '#a3b3c9'; this.text(g, l2, 30, 27); }
       });
       if (sp) { sp.cw = w; sp.ch = h; }
       return sp;
