@@ -31,7 +31,7 @@ const all = [];
 class El {
   constructor(tag) {
     this.tagName = String(tag).toUpperCase(); this.children = []; this.dataset = {}; this.attrs = {}; this.className = ''; this._text = ''; this.parent = null; this.listeners = {}; this._cls = new Set();
-    this.value = ''; this.checked = false; this.title = ''; this.type = ''; this.id = ''; this.onclick = null; this.oninput = null;
+    this.value = ''; this.checked = false; this.title = ''; this.type = ''; this.id = ''; this.onclick = null; this.oninput = null; this.style = {}; this.href = '';
     const self = this;
     this.classList = { toggle(c, on) { const want = on === undefined ? !self._cls.has(c) : !!on; if (want) self._cls.add(c); else self._cls.delete(c); return want; }, add(c) { self._cls.add(c); }, remove(c) { self._cls.delete(c); }, contains: (c) => self._cls.has(c) };
     all.push(this);
@@ -39,19 +39,26 @@ class El {
   get textContent() { return this._text + this.children.map((c) => (typeof c === 'string' ? c : c.textContent)).join(''); }
   set textContent(v) { this._text = String(v); this.children = []; }
   get firstElementChild() { return this.children.find((c) => typeof c !== 'string') || null; }
+  replaceChildren() { this.children = []; this._text = ''; }
+  focus() {}
+  querySelectorAll(sel) { // `tag.class` or `.class` or `tag`, depth first
+    const [tag, cls] = sel.startsWith('.') ? [null, sel.slice(1)] : sel.split('.'), out = [];
+    const walk = (n) => { for (const c of n.children) { if (typeof c === 'string') continue; if ((!tag || c.tagName === tag.toUpperCase()) && (!cls || c.className.split(/\s+/).includes(cls))) out.push(c); walk(c); } };
+    walk(this); return out;
+  }
   append(...nodes) { for (const n of nodes) { if (typeof n !== 'string') n.parent = this; this.children.push(n); } }
   appendChild(n) { this.append(n); return n; }
   setAttribute(k, v) { this.attrs[k] = String(v); }
   addEventListener(t, fn) { (this.listeners[t] ||= []).push(fn); }
-  querySelector(sel) { // a class selector, depth first
-    const cls = sel.startsWith('.') ? sel.slice(1) : null;
-    for (const c of this.children) { if (typeof c === 'string') continue; if (cls && (c.className.split(/\s+/).includes(cls))) return c; const d = c.querySelector(sel); if (d) return d; }
+  querySelector(sel) { // a class selector or a tag name, depth first
+    const cls = sel.startsWith('.') ? sel.slice(1) : null, tag = cls ? null : sel.toUpperCase();
+    for (const c of this.children) { if (typeof c === 'string') continue; if ((cls && c.className.split(/\s+/).includes(cls)) || (tag && c.tagName === tag)) return c; const d = c.querySelector(sel); if (d) return d; }
     return null;
   }
 }
 const bar = {}; // the elements dev/sounds.html declares
 for (const [id, tag, o] of [['vol', 'input', { type: 'range', value: '70' }], ['mute', 'input', { type: 'checkbox' }], ['ui', 'input', { type: 'checkbox', checked: true }], ['game', 'input', { type: 'checkbox', checked: true }],
-  ['world', 'input', { type: 'checkbox', checked: true }], ['amb', 'input', { type: 'checkbox' }], ['ambvol', 'input', { type: 'range', value: '70' }], ['quiet', 'input', { type: 'checkbox' }],
+  ['world', 'input', { type: 'checkbox', checked: true }], ['amb', 'input', { type: 'checkbox' }], ['ambvol', 'input', { type: 'range', value: '70' }], ['quiet', 'input', { type: 'checkbox' }], ['mono', 'input', { type: 'checkbox' }], ['lap', 'input', { type: 'checkbox' }], ['toc', 'nav', {}],
   ['stop', 'button', {}], ['reset', 'button', {}], ['state', 'span', {}], ['app', 'div', {}], ['meter', 'div', {}], ['db', 'span', {}]]) { const e = new El(tag); e.id = id; Object.assign(e, o); bar[id] = e; }
 bar.meter.append(new El('i'));
 let page; // the page's own handle: window.audioAudition = { audio, settings, say }
@@ -59,6 +66,7 @@ const press = async (btn, ms = 90000) => { assert.equal(typeof btn.onclick, 'fun
 const status = () => bar.state.textContent;
 const buttons = () => all.filter((e) => e.tagName === 'BUTTON' && e.onclick);
 const label = (b) => b.textContent || b.id;
+const inBlind = (e) => { for (let n = e; n; n = n.parent) if (n.className === 'blind') return true; return false; };
 const sum = (o) => Object.values(o).reduce((a, b) => a + b, 0);
 
 async function loadPage() {
@@ -148,7 +156,7 @@ test('A3: EVERY button of the page, in every configuration of the bar, either so
   const problems = [];
   const skip = new Set(['stop', 'reset']); // checked on their own below
   for (const [cfg, set] of Object.entries(CONFIGS)) {
-    const bs = buttons().filter((b) => !skip.has(b.id)), t0 = Date.now(); let n = 0;
+    const bs = buttons().filter((b) => !skip.has(b.id) && !inBlind(b)), t0 = Date.now(); let n = 0; // (the blind round names nothing and is tested on its own below)
     for (const b of bs) {
       if (process.env.R2X_LOG && n++ % 20 === 0) console.error(`[${cfg}] ${n}/${bs.length} ${Date.now() - t0} ms, ${V.q.length} timers, virtual ${Math.round((V.now - 5000) / 1000)} s`);
       setBar(set); page.audio.release(); page.audio.dial.stop(); page.say(''); page.audio.setEnv({ hold: false }); await advance(3000);
@@ -201,4 +209,57 @@ test('A3: a run of sounds says at its end how many did not sound and why, and th
   setBar({}); await press(buttons().find((b) => /Stop the minute/.test(label(b))), 100); assert.match(status(), /the minute was stopped/);
 });
 
+// ================================================================================ fourth round: the audition page's own faults and the tools the listening checklist asks for
+const live = () => { const box = all.find((e) => e.className === 'blind'); return box.children[0]; }; // the box's one div: rebuilt at every step of the round
+const kids = (e) => e.children.filter((c) => typeof c !== 'string');
+const rows = (e) => kids(e).flatMap((c) => (c.tagName === 'DIV' && c.className === 'row' ? kids(c) : [c]));
+test('U4: Stop everything stops the ambient bed too, unticks Ambient and says so (it said everything had stopped while the bed went on)', async () => {
+  const bed = buttons().find((b) => /^bed harbor$/.test(label(b))); assert.ok(bed);
+  setBar({ amb: true }); page.audio.release(); await press(bed, 2000);
+  assert.equal(page.audio.stats().ambient.playing, true, 'the bed is playing');
+  await press(bar.stop, 2000);
+  assert.equal(page.audio.stats().ambient.playing, false, 'and Stop everything stopped it'); assert.equal(bar.amb.checked, false);
+  assert.match(status(), /ambient bed/); assert.match(status(), /tick it to hear a bed again/);
+});
+test('U5: a card pressed while a fanfare still rings is heard: the press cuts the moment (the game plays big moments one at a time; an audition is a listener moving from card to card)', async () => {
+  setBar({}); page.audio.release(); await advance(3000);
+  const card = (name) => buttons().find((b) => label(b) === name); const lvl = card('level.up / big'), mile = card('milestone / m3'); assert.ok(lvl && mile);
+  await press(lvl, 300); const a = page.audio.stats();
+  assert.equal(status().includes('silent'), false, 'the first is heard');
+  await press(mile, 300); // 300 ms later, the level-up still ringing
+  assert.equal(status().includes('silent'), false, `the second is heard too (${status()})`); assert.ok(page.audio.stats().played['milestone'] > (a.played['milestone'] || 0));
+});
+test('U12: the page lists its contents, the bed modifiers say whether they are on, and the mono fold and the laptop speaker are in the bar', async () => {
+  const toc = bar.toc; assert.ok(kids(toc).length >= 15, `${kids(toc).length} anchors for ${all.filter((e) => e.tagName === 'SECTION').length} sections`);
+  for (const a of kids(toc)) assert.match(a.href, /^#g-/);
+  const night = buttons().find((b) => label(b) === 'night'), was = night.attrs['aria-pressed']; assert.ok(was === 'true' || was === 'false', 'a switch always says which it is');
+  setBar({ amb: true }); await press(night, 500); assert.equal(night.attrs['aria-pressed'], was === 'true' ? 'false' : 'true', 'flipped'); await press(night, 500); assert.equal(night.attrs['aria-pressed'], was, 'and back');
+  const html = src('dev/sounds.html'); assert.match(html, /id="mono"/); assert.match(html, /id="lap"/); assert.match(html, /id="toc"/);
+  assert.match(html, /button\[aria-pressed=true\]/, 'a style that does not depend on colour alone: the word on');
+});
+test('U12: the mono and laptop boxes route the end of the chain through the nodes that fold and filter, and say what they did', async () => {
+  page.audio.unlock(); const ch = page.audio.chain, ctx = page.audio.context; assert.ok(ch && ctx);
+  bar.mono.checked = true; for (const fn of bar.mono.listeners.input || []) fn({});
+  assert.match(status(), /mono/); assert.ok(ctx.nodes.some((n) => n.kind === 'gain' && n.channelCount === 1 && n.channelCountMode === 'explicit'), 'a one-channel gain: the fold');
+  bar.lap.checked = true; for (const fn of bar.lap.listeners.input || []) fn({});
+  const hps = ctx.nodes.filter((n) => n.kind === 'biquad' && n.type === 'highpass' && n.frequency.value === 220); assert.equal(hps.length, 2, 'two stages of high-pass at 220 Hz');
+  assert.match(status(), /laptop speaker/);
+  bar.mono.checked = false; bar.lap.checked = false; for (const b of [bar.mono, bar.lap]) for (const fn of b.listeners.input || []) fn({});
+  assert.match(status(), /full range|stereo/);
+});
+test('U12: the blind round: twenty sounds that name nothing, five of each kind, and a score on gain against loss at the end', async () => {
+  const names = (e) => (e.textContent || '');
+  let box = live(); const start = rows(box).find((b) => /Start a round/.test(label(b))); assert.ok(start, 'a round is started by the listener');
+  start.onclick(); box = live(); assert.match(names(box), /Sound 1 of 20/);
+  const text = () => names(live());
+  for (let i = 0; i < 20; i++) {
+    assert.match(text(), new RegExp(`Sound ${i + 1} of 20`));
+    assert.ok(!/[a-z]+\.[a-z-]+#?/.test(text().replace(/Sound \d+ of 20/, '')), 'no sound id on the page while the round runs');
+    const play = rows(live()).find((b) => b.dataset.blind === 'play'); assert.ok(play); play.onclick(); await advance(400);
+    const say = rows(live()).find((b) => b.dataset.kind === 'gain'); say.onclick();
+  }
+  const done = text(); assert.match(done, /Gain against loss: \d+ of 10 right/); assert.match(done, /target is 90%/); assert.match(done, /All four kinds: \d+ of 20/);
+  const table = kids(live()).find((e) => e.tagName === 'TABLE'); assert.equal(kids(table).length, 21, 'a key to all twenty, after the round');
+  assert.ok(/\d+ of 10 right/.test(done) && rows(live()).some((b) => /Another round/.test(label(b))));
+});
 test('(clean up) the virtual clock is put back', () => { restore(); assert.equal(globalThis.setTimeout, real.setTimeout); });

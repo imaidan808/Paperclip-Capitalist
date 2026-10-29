@@ -216,7 +216,7 @@ export function createAudio(cfg = {}) {
     let extraDelay = 0;
     const moment = isMoment(heavy.id, heavy.variant, heavy.tier);
     if (moment && t < momentUntil && !(second && base.bid != null && base.bid === momentBurst)) { // the second sentence of the burst that made the slot busy is the resolver's own plan
-      if (PREEMPT.has(heavy.id)) { for (const v of voices) if (v.moment) stopGroup(v, 0.12); }
+      if (PREEMPT.has(heavy.id) || main.opts.preempt) { for (const v of voices) if (v.moment) stopGroup(v, 0.12); } // `preempt`: a press on the audition page wins over the moment still ringing (the game never asks for it)
       else if (momentUntil - t <= 500 && !momentQueued) { extraDelay = (momentUntil - t) / 1000; momentQueued = true; }
       else return drop('budget'); // the slot is taken: a reward degrades to its tick (the resolver's job), anything else is dropped
     }
@@ -386,7 +386,8 @@ export function createAudio(cfg = {}) {
   const api = {
     play, request, playMix,
     stop(h, ms = 80) { try { h?.stop?.(ms); } catch { /* gone */ } },
-    stopAll(ms = 60) { for (const g of voices) stopGroup(g, ms / 1000); voices.length = 0; queue = []; if (armed != null) { timers.clear(armed); armed = null; } dialApi.stop(); },
+    /** Every voice gets a fade; `keepMs` lets one that began that recently play on (the tick of the press that is leaving the screen). */
+    stopAll(ms = 60, keepMs = 0) { const t = nowMs(), rest = []; for (const g of voices) { if (keepMs > 0 && t - g.startMs < keepMs) rest.push(g); else stopGroup(g, ms / 1000); } voices.length = 0; voices.push(...rest); queue = []; if (armed != null) { timers.clear(armed); armed = null; } dialApi.stop(); },
     unlock() {
       if (!supported) return;
       gesture = true;
@@ -470,7 +471,7 @@ export function createAudio(cfg = {}) {
       if (o.chain) dest = master(oc, { master: o.master ?? 1, makeup: 1 / (TRIMS.makeup || MAKEUP_FALLBACK) }).buses[e.bus];
       return voice(oc, dest, layersFor(id, variant ?? firstVariant(id), o.params, o.k || 0), at, { seed: o.seed ?? 7, trim: trimFor(id, variant ?? firstVariant(id), o.k || 0) + (o.gainDb || 0), noiseAt: noiseAtFor(id, variant ?? firstVariant(id), o.k || 0), noJitter: true, jit: 0 });
     },
-    release() { api.stopAll(40); amb.stop(0.3); queue = []; if (idleT != null) { timers.clear(idleT); idleT = null; } env.hold = false; env.sandbox = false; },
+    release(keepMs = 0) { api.stopAll(40, keepMs); amb.stop(0.3); queue = []; if (idleT != null) { timers.clear(idleT); idleT = null; } env.hold = false; env.sandbox = false; },
     /** Closed on pagehide. */
     close() { api.release(); try { ctx?.close?.(); } catch { /* ignore */ } ctx = null; chain = null; nodes = null; unlocked = false; },
     get supported() { return supported; },

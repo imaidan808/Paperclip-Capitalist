@@ -72,8 +72,8 @@ export function instructorParts(S, U) {
   const dist = distribution(students), drafted = draftCounts(students), here = U.zone && ZONES[U.zone] ? U.zone : busiest(dist);
 
   const head = `<div class="grow"><h1 tabindex="-1" style="margin:0;font-size:1.3rem">Instructor dashboard</h1><span class="small mute">Room <b class="mono gold" style="font-size:1.2rem">${esc(room.code)}</b> &middot; ${S.room?.kind === 'relay' ? 'relay server (' + esc(S.room.state) + ')' : 'this browser only (open other tabs with ?room=' + esc(room.code) + ')'} &middot; <b>${onlineN}</b> student${onlineN === 1 ? '' : 's'} online${real.length > onlineN ? ' (' + (real.length - onlineN) + ' away)' : ''}${S.demo ? ' + ' + S.demo + ' demo' : ''}</span></div>
-      <button class="btn sm ghost" data-act="copylink" data-link="${esc(link)}">Copy student link</button>
-      <div class="in-quietlink" style="display:grid;gap:.15rem;max-width:12.5rem"><label class="row" style="color:var(--ink);margin:0"><input type="checkbox" data-change="linkquiet" data-fid="lq" aria-describedby="lq-h"${U.quietLink ? ' checked' : ''}> Quiet sound link</label><span class="tiny mute" id="lq-h">Adds ?sound=quiet: students start in Classroom sound.</span></div>
+      <div class="in-quietlink" style="display:grid;gap:.15rem;max-width:12.5rem"><label class="row" style="color:var(--ink);margin:0"><input type="checkbox" data-change="linkquiet" data-fid="lq" aria-describedby="lq-h"${U.quietLink ? ' checked' : ''}> Quiet sound link</label><span class="tiny mute" id="lq-h">Adds &amp;sound=quiet: students start in Classroom sound, only while they are in the room.</span></div>
+      <button class="btn sm ghost" data-act="copylink" data-link="${esc(link)}"${U.quietLink ? ' data-quiet="1"' : ''}>Copy student link</button>
       <button class="btn sm ghost" data-act="settings">Display and sound</button><button class="btn sm danger" data-act="close">Close room</button>`;
 
   const events = Object.values(EVENTS).map((e) => `<option value="${e.id}" ${U.ev === e.id ? 'selected' : ''}>${esc(e.name)}</option>`).join('') + Object.entries(ALGO_EVENTS).map(([k, e]) => `<option value="${k}" ${U.ev === k ? 'selected' : ''}>${esc(e.name)} (algorithmic)</option>`).join('');
@@ -145,7 +145,7 @@ export function mountInstructor(root, S, hooks) {
     settings() { settingsDialog(); },
     close() { hooks.onClose(); },
     linkquiet(b) { U.quietLink = !!b.checked; render(); }, // the student link carries ?sound=quiet, or not
-    copylink(b) { navigator.clipboard?.writeText(b.dataset.link).then(() => toast('Student link copied.', 'good'), () => toast(b.dataset.link, 'info', 9000)); },
+    copylink(b) { navigator.clipboard?.writeText(b.dataset.link).then(() => toast(b.dataset.quiet ? 'Student link copied, with quiet sound.' : 'Student link copied.', 'good'), () => toast(b.dataset.link, 'info', 9000)); }, // the box comes first and the toast says what the link carries: copying before ticking left a link without the flag, and nothing said so
     start() { S.clock.set({ hour: 0, paused: false }); S._sendClock(); render(); toast('Simulation started.', 'good'); },
     pause() { S.setPaused(!S.clock.paused); },
     speed(b) { S.setSpeed(+b.dataset.v); },

@@ -140,3 +140,30 @@ export async function pressBurst(audio, fn, o = {}) {
   if (closed && ticked) text = `${text ? text + ' ' : ''}(Rewards past the budget played as a small tick: ${w0})`; // everything the burst asked for was "heard", but a fanfare became a tick
   return { heard, dropped, text, waited, ticked };
 }
+
+// ---- the listening checklist's tools (docs/AUDIO.md 10.5, fourth round): a blind round for gain against loss (item 2). The mono fold (item 5) and the laptop speaker (the premise of the loudness models)
+// are routed in the page (dev/sounds.js: they need the context); what is pure is here, so a Node test holds it.
+/** The four kinds a listener names in the blind round, and where each draws its sounds from. Every entry is `id#variant`. */
+export const BLIND_KINDS = ['gain', 'loss', 'warning', 'neutral'];
+export const BLIND_POOLS = {
+  gain: ['cash.in#m', 'cash.in#l', 'sale.win#w', 'pitch.fit#up', 'audit.result#pass', 'bid.hammer#won', 'repair.done#great', 'bank.repay#full', 'deal.result#good', 'haggle.close#accept', 'sale.pioneer#p', 'deal.verify#ok'],
+  loss: ['cash.out#m', 'cash.out#l', 'sale.herd#h', 'sale.scam#s', 'sale.reject#nofit', 'pitch.fit#down', 'audit.result#fail', 'bid.hammer#lost', 'repair.done#rough', 'deal.result#bad', 'bank.draw#b', 'sale.reject#fake'],
+  warning: ['alert.advance#l1', 'alert.advance#l2', 'alert.advance#l3', 'ui.nudge#n', 'ui.ask#danger', 'audit.notice#a', 'read.suspect#s', 'alert.shock#fed', 'deal.verify#bad'],
+  neutral: ['ui.tick#light', 'ui.tick#full', 'ui.select#i0', 'ui.drawer-open#stock', 'ui.dialog-open#d', 'ui.crate#pick1', 'cam#in', 'ui.slider#mid', 'day.turn#d', 'buyer.arrive#b', 'mentor.tip#t', 'ui.toggle#on'],
+};
+/** The deck of 10.5 item 2: 20 unlabelled sounds, five of each kind, in a shuffled order. `random` is any () => [0, 1) (a test gives a seeded one). Returns [{ key, kind }]. */
+export function blindDeck(random = Math.random, per = 5) {
+  const pick = (list) => { const a = [...list]; for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a.slice(0, per); };
+  const deck = BLIND_KINDS.flatMap((kind) => pick(BLIND_POOLS[kind]).map((key) => ({ key, kind })));
+  for (let i = deck.length - 1; i > 0; i--) { const j = Math.floor(random() * (i + 1)); [deck[i], deck[j]] = [deck[j], deck[i]]; }
+  return deck;
+}
+/**
+ * The score of a round: `answers[i]` is the kind the listener named for `deck[i]` (or nothing). The target of 10.5 is on gain against loss: of the sounds that were gains or losses, how many were named
+ * the right one of the two (a gain called a warning is not a gain called a loss, and is counted wrong). Returns { gainLoss: { right, of, share }, all: { right, of }, rows: [{ key, kind, said, right }] }.
+ */
+export function blindScore(deck, answers) {
+  const rows = deck.map((d, i) => ({ key: d.key, kind: d.kind, said: answers[i] || null, right: answers[i] === d.kind }));
+  const gl = rows.filter((r) => r.kind === 'gain' || r.kind === 'loss'), right = gl.filter((r) => r.right).length;
+  return { gainLoss: { right, of: gl.length, share: gl.length ? right / gl.length : 0 }, all: { right: rows.filter((r) => r.right).length, of: rows.length }, rows };
+}

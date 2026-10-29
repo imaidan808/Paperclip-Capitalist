@@ -30,6 +30,16 @@ export function dialEarText(i) {
   return `Prefer to listen? Turn on Repair dial tone with the Dial tone button at the top of this window, or in Display and sound. ${CAREFUL}`;
 }
 
+/**
+ * The short line: the state of the tone and the way that needs no timing, in a dozen words. Stop is described by it every time the cursor lands on it (Stop takes the cursor at each of the three steps of
+ * every repair), and it is the line under the dial after the first repair of a run: the long line (`dialEarText`) is for the first one (fourth round, U9).
+ */
+export function dialShortText(i) {
+  const info = i || dialInfo({});
+  const tone = info.quiet ? 'Dial tone is off in Classroom.' : info.on && info.heard ? 'Dial tone is on.' : info.on ? 'Dial tone is on, but you will not hear it.' : 'Dial tone is off.';
+  return `${tone} Careful needs no timing.`;
+}
+
 /** What is said, politely, when the room opens on its Fix stage with the animated dial: the dial's track is a picture (aria-hidden), so this is how a player who cannot see it learns what to do. */
 export function dialAnnounceText(i) {
   const info = i || dialInfo({});
@@ -38,13 +48,22 @@ export function dialAnnounceText(i) {
 }
 
 /**
- * The room's switch for the tone, beside its Sound toggle (the pattern of that toggle: a stable accessible name and `aria-pressed`, the visible words say the state). Only a repair room has a dial,
- * and only until its result is shown. `m.dialInfo` is `dialInfo(settings.audio)` as the session knows it; a model that does not know has the tone off.
+ * A toggle of the room's header (Sound, Dial tone): the NAME is the words the button shows ("Sound", "Dial tone"), so a player who says them to a voice-control program, or reads them out to a screen
+ * reader, finds the same thing (WCAG 2.5.3); the state is `aria-pressed` and a badge ("on", "off") that the name leaves out, and the pressed button looks different (filled edge and a tick) so the two
+ * states are not two commands in one style (fourth round, U10). Pure.
+ */
+export function toggleHTML({ act, fid, name, on, title = '' }) {
+  return `<button class="btn ghost sm deal-tog" data-deal="${act}" data-snd data-fid="${fid}" aria-pressed="${!!on}"${title ? ` title="${title}"` : ''}><span class="tn">${name}</span> <span class="tb" aria-hidden="true">${on ? 'on' : 'off'}</span></button>`;
+}
+
+/**
+ * The room's switch for the tone, beside its Sound toggle (the pattern of that toggle). Only a repair room has a dial, and only until its result is shown. `m.dialInfo` is `dialInfo(settings.audio)` as the
+ * session knows it; a model that does not know has the tone off.
  */
 export function dialSwitchHTML(m) {
   if (!m || m.kind !== 'repair' || m.stage === 'result') return '';
   const i = m.dialInfo || dialInfo({});
-  return `<button class="btn ghost sm" data-deal="dialtone" data-snd data-fid="deal-dial" aria-pressed="${i.on}" aria-label="${DIAL_NAME}"><span aria-hidden="true">Dial tone ${i.on ? 'on' : 'off'}</span></button>`;
+  return toggleHTML({ act: 'dialtone', fid: 'deal-dial', name: 'Dial tone', on: i.on, title: DIAL_NAME });
 }
 
 /**

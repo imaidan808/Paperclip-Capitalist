@@ -81,7 +81,7 @@ const screens = {
           <button class="btn ghost big" data-act="academy">${academyDone ? 'Replay the Academy' : 'Try the Academy (10 short missions)'}</button>
         </div>
         <div class="choices">
-          <section class="panel"><h2>Join a classroom</h2><label for="jc">Room code from your instructor</label><input id="jc" maxlength="8" autocomplete="off" style="text-transform:uppercase" value="${esc(room)}">
+          <section class="panel" data-room-panel><h2>Join a classroom</h2><label for="jc">Room code from your instructor</label><input id="jc" maxlength="8" autocomplete="off" style="text-transform:uppercase" value="${esc(room)}">
             <details class="gap"><summary class="small">Relay server (only if your instructor gave you one)</summary><label for="jr" class="gap">Relay URL</label><input id="jr" placeholder="wss://relay.example.edu" value="${esc(relay)}"></details>
             <button class="btn gap" data-act="join">Join</button></section>
           <section class="panel"><h2>Instructor</h2><p class="small mute">Create a room, set the pace, deploy shocks and export grades. Students on the same browser can join as extra tabs; add a relay for real classes.</p>

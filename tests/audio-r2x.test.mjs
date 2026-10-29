@@ -17,9 +17,9 @@ import * as D from '../js/deal.js';
 import * as UI from '../js/ui/deal.js';
 import { audio as page } from '../js/audio/index.js';
 import { createAudio } from '../js/audio/engine.js';
-import { audioDefaults, migrateAudio } from '../js/audio/settings.js';
+import { audioDefaults, migrateAudio, audioSettingsHTML } from '../js/audio/settings.js';
 import * as wire from '../js/audio/wire.js';
-import { dialInfo, dialEarText, dialAnnounceText, dialSwitchHTML, toggleDial, tellOnce, _resetTold } from '../js/audio/dialtone.js';
+import { dialInfo, dialEarText, dialShortText, dialAnnounceText, dialSwitchHTML, toggleDial, tellOnce, _resetTold } from '../js/audio/dialtone.js';
 import { instructorParts } from '../js/ui/instructor.js';
 import { settings as appSettings } from '../js/ui/common.js';
 
@@ -131,7 +131,8 @@ test('A1: the link flag is read at boot and never over a sound setting the stude
   const mine = { audio: { ...audioDefaults(), touched: true, master: 90 } };
   assert.deepEqual(migrateAudio(mine, search), { ...audioDefaults(), touched: true, master: 90 }, 'a saved choice of the student\'s stands');
   const none = migrateAudio({}, search);
-  assert.equal(none.quiet, true); assert.equal(none.touched, true); assert.equal(none.master, 70, 'the volume is the student\'s own');
+  assert.equal(none.quiet, true); assert.equal(none.touched, false, 'with a room in the link it is the room\'s rule applied early, not a choice the student made (fourth round, U6): joining remembers the earlier values'); assert.equal(none.master, 70, 'the volume is the student\'s own');
+  assert.equal(migrateAudio({}, '?sound=quiet').touched, true, 'a quiet link with no room is a choice made for the student, and stays one');
   assert.equal(migrateAudio({ sound: false }, search).mute, true, 'a student who turned sound off stays silent');
   assert.equal(migrateAudio({}, '?room=ABCD').quiet, false, 'no flag, no change');
   assert.equal(migrateAudio({}, '?room=ABCD&sound=full').quiet, false);
@@ -198,13 +199,14 @@ const world = (perks = ['grad', 'native'], seed = 9) => {
 };
 const brokenCrate = (g) => { const a = g.s.assets.find((x) => ASSETS[x.cls].repair); a.cond = 'broken'; return { kind: 'repair', assetId: a.id }; };
 const fixedLot = (g, z = 4) => ({ kind: 'buy', zone: z, lotId: g.s.lots[z].find((l) => l.mode === 'fixed').id });
-const model = (run, extra = {}) => ({ ...D.modelOf(run, { reduced: !!extra.reduced }), pick: [], slider: 0.2, sound: true, tone: false, dialInfo: extra.dialInfo ?? null });
+const model = (run, extra = {}) => ({ ...D.modelOf(run, { reduced: !!extra.reduced }), pick: [], slider: 0.2, sound: true, tone: false, dialInfo: extra.dialInfo ?? null, ...(extra.dialLong !== undefined ? { dialLong: extra.dialLong } : {}) });
 
 test('A4: the animated Fix stage tells a player who cannot see the dial what to press, where the tone is, and that Careful needs no timing', { skip: !HAS }, () => {
   const g = world(), r = D.startRun(g, brokenCrate(g)), h = UI.fixHTML(model(r));
   assert.match(h, /<div class="dial" role="group" aria-label="Repair timing"><div class="dial-track" aria-hidden="true">/, 'the track is a picture; the group around it is named');
   assert.match(h, /<p class="small mute" id="dial-ear">Prefer to listen\? Turn on Repair dial tone with the Dial tone button at the top of this window, or in Display and sound\. Prefer not to time it\? Choose Careful: pay more, no timing\.<\/p>/);
-  assert.match(h, /<button class="btn big" data-deal="stop" data-snd data-fid="stop" aria-describedby="dial-ear" autofocus>Stop<\/button>/, 'the cursor lands on Stop, which reads the line');
+  assert.match(h, /<button class="btn big" data-deal="stop" data-snd data-fid="stop" aria-describedby="dial-short" autofocus>Stop<\/button>/, 'the cursor lands on Stop, which reads the SHORT line (fourth round, U9: forty words at every cursor stop of every step were too many)');
+  assert.match(h, /<span class="sr" id="dial-short">Dial tone is off\. Careful needs no timing\.<\/span>/);
   assert.match(h, /Watch the marker\. Press <b>Stop<\/b> \(or Space, or Enter\)/); assert.match(h, /data-deal="careful"[^>]*>Careful: pay more, no timing</);
   assert.equal([...h.matchAll(/ id="dial-ear"/g)].length, 1, 'one id');
   const on = UI.fixHTML(model(r, { dialInfo: dialInfo({ dial: true }) })), muted = UI.fixHTML(model(r, { dialInfo: dialInfo({ dial: true, mute: true }) })), cls = UI.fixHTML(model(r, { dialInfo: dialInfo({ dial: true, quiet: true }) }));
@@ -216,14 +218,15 @@ test('A4: the animated Fix stage tells a player who cannot see the dial what to 
 test('A4: a repair room has a Dial tone switch beside Sound; no other room has one, and neither has the result', { skip: !HAS }, () => {
   const g = world(), r = D.startRun(g, brokenCrate(g));
   const off = UI.sheetHTML(model(r)), on = UI.sheetHTML(model(r, { dialInfo: dialInfo({ dial: true }) }));
-  assert.match(off, /<button class="btn ghost sm" data-deal="dialtone" data-snd data-fid="deal-dial" aria-pressed="false" aria-label="Repair dial tone"><span aria-hidden="true">Dial tone off<\/span><\/button>/);
-  assert.match(on, /aria-pressed="true" aria-label="Repair dial tone"><span aria-hidden="true">Dial tone on</);
+  assert.match(off, /<button class="btn ghost sm deal-tog" data-deal="dialtone" data-snd data-fid="deal-dial" aria-pressed="false" title="Repair dial tone"><span class="tn">Dial tone<\/span> <span class="tb" aria-hidden="true">off<\/span><\/button>/);
+  assert.match(on, /aria-pressed="true" title="Repair dial tone"><span class="tn">Dial tone<\/span> <span class="tb" aria-hidden="true">on</);
+  assert.ok(!/aria-label="Repair dial tone"/.test(off + on), 'the name is the words on the button (Dial tone), not another phrase that voice control cannot find (fourth round, U10)');
   assert.ok(off.indexOf('data-fid="deal-sound"') < off.indexOf('data-fid="deal-dial"') && off.indexOf('data-fid="deal-dial"') < off.indexOf('data-fid="leave"'), 'beside Sound, before Leave');
   assert.ok(!/data-deal="dialtone"/.test(UI.sheetHTML(model(D.startRun(g, fixedLot(g))))), 'a purchase has no dial');
   assert.equal(dialSwitchHTML(null), '');
   assert.equal(dialSwitchHTML({ kind: 'repair', stage: 'result' }), '', 'and the result of a repair has finished with it');
   assert.match(dialSwitchHTML({ kind: 'repair', stage: 'fix' }), /aria-pressed="false"/, 'a model that does not know has it off');
-  const q = UI.sheetHTML(model(r, { dialInfo: dialInfo({ dial: true, quiet: true }) })); assert.match(q, /aria-pressed="false" aria-label="Repair dial tone"/, 'in Classroom it is not pressed');
+  const q = UI.sheetHTML(model(r, { dialInfo: dialInfo({ dial: true, quiet: true }) })); assert.match(q, /aria-pressed="false" title="Repair dial tone"/, 'in Classroom it is not pressed');
 });
 
 // ---- the session
@@ -274,7 +277,7 @@ test('A4: pressing the room\'s switch turns the tone on, starts it at once while
     assert.equal(appSettings.audio.dial, true); assert.equal(appSettings.audio.touched, true, 'a choice by hand');
     assert.deepEqual(R.said, ['Repair dial tone on. Low is left, high is right, and the tone brightens in the green zone.']);
     assert.deepEqual(R.dial, ['start'], 'the tone follows the marker from this moment, not from the next stage');
-    assert.equal(UI.viewModel(R.ses).dialInfo.on, true); assert.match(UI.sheetHTML(UI.viewModel(R.ses)), /aria-pressed="true" aria-label="Repair dial tone"/, 'the sheet shows it');
+    assert.equal(UI.viewModel(R.ses).dialInfo.on, true); assert.match(UI.sheetHTML(UI.viewModel(R.ses)), /aria-pressed="true" title="Repair dial tone"/, 'the sheet shows it');
     R.said.length = 0; R.ses.acts.dialtone();
     assert.equal(appSettings.audio.dial, false); assert.deepEqual(R.said, ['Repair dial tone off.']); assert.deepEqual(R.dial, ['start', 'stop']);
     R.ses.raf = 0;
@@ -320,4 +323,92 @@ test('A4: the docs say the default stays off and why, and the toast that could n
   assert.match(doc, /painted over by the sheet and its backdrop/); assert.match(doc, /activeModalDialog/);
   assert.ok(!/the first Fix stage of a run shows one info toast/.test(doc), '4.5 no longer promises the toast');
   assert.match(doc, /Dial tone button/);
+});
+
+// ================================================================================ fourth round (docs/AUDIO.md Appendix G)
+test('U1: the repair tone comes back when sound is unmuted, when Game sounds are switched off and on, and when the tab is shown again; the room used to say it was on and the tone was gone for the rest of the stage', { skip: !HAS }, async () => {
+  await withRig({}, async (R) => {
+    appSettings.audio = { ...audioDefaults(), dial: false };
+    const clock = fakeClock(), fctx = fakeContext({ sampleRate: 8000 });
+    const au = createAudio({ get: () => appSettings.audio, now: clock.now, timers: clock.timers_, factory: () => fctx, random: () => 0.5, measure: false });
+    au.unlock(); fctx.state = 'running'; R.ctx.audio = au; // the room's own engine: the real one, under a recording context
+    R.ses = UI.openDeal(R.ctx, brokenCrate(R.g)); await Promise.resolve();
+    R.ses.raf = 7; // the animated dial is running
+    R.ses.acts.dialtone(); assert.equal(au.dial.active, true, 'the switch starts the tone');
+    const set = (patch) => { appSettings.audio = { ...appSettings.audio, ...patch }; au.sync(); };
+    set({ mute: true }); assert.equal(au.dial.active, false, 'key M: the engine ended it');
+    set({ mute: false }); assert.equal(au.dial.active, true, 'and unmuting brings it back (it did not: the flag said it was on, the tone was never started again)');
+    set({ game: false }); assert.equal(au.dial.active, false); set({ game: true }); assert.equal(au.dial.active, true, 'Game sounds off and on');
+    au.setHidden(true); assert.equal(au.dial.active, false, 'a tab put away'); au.setHidden(false); clock.flush(); assert.equal(au.dial.active, true, 'and shown again');
+    assert.equal(UI.viewModel(R.ses).dialInfo.on, true, 'the room says on, and it is');
+    set({ dial: false }); assert.equal(au.dial.active, false, 'the setting switched off by another door: the tone lets go');
+    R.ses.raf = 0;
+  });
+});
+test('U1: the tone is not started for a room whose dial is not running (reduced motion, or the stage is over), and is let go with the room', { skip: !HAS }, async () => {
+  await withRig({}, async (R) => {
+    appSettings.audio = { ...audioDefaults(), dial: true };
+    const clock = fakeClock(), fctx = fakeContext({ sampleRate: 8000 });
+    const au = createAudio({ get: () => appSettings.audio, now: clock.now, timers: clock.timers_, factory: () => fctx, random: () => 0.5, measure: false });
+    au.unlock(); fctx.state = 'running'; R.ctx.audio = au;
+    R.ses = UI.openDeal(R.ctx, brokenCrate(R.g)); await Promise.resolve();
+    appSettings.audio = { ...appSettings.audio, mute: true }; au.sync(); appSettings.audio = { ...appSettings.audio, mute: false }; au.sync();
+    assert.equal(au.dial.active, false, 'no dial running (raf 0): an engine event starts nothing');
+    R.ses.raf = 7; appSettings.audio = { ...appSettings.audio, mute: true }; au.sync(); appSettings.audio = { ...appSettings.audio, mute: false }; au.sync(); assert.equal(au.dial.active, true);
+    R.ses.raf = 0; R.ses.dispose(); assert.equal(au.dial.active, false, 'closing the room lets go of the tone'); appSettings.audio = { ...appSettings.audio, mute: true }; au.sync(); appSettings.audio = { ...appSettings.audio, mute: false }; au.sync();
+    assert.equal(au.dial.active, false, 'and a disposed room is not listening');
+  });
+});
+test('U9: Stop is described by a short line, always; the long line is for the first repair of a run, and a later repair shows the short one under the dial', { skip: !HAS }, () => {
+  const g = world(), r = D.startRun(g, brokenCrate(g));
+  const first = UI.fixHTML(model(r, { dialLong: true })), later = UI.fixHTML(model(r, { dialLong: false })), unknown = UI.fixHTML(model(r));
+  assert.match(first, /aria-describedby="dial-short"/); assert.match(first, /id="dial-ear">Prefer to listen\?/, 'the first says it all, where it can be read');
+  assert.match(later, /aria-describedby="dial-ear"/); assert.match(later, /id="dial-ear">Dial tone is off\. Careful needs no timing\.<\/p>/); assert.ok(!/id="dial-short"/.test(later), 'one line, not two');
+  assert.ok(!/Prefer to listen/.test(later), 'and the long one is not under every dial of every repair');
+  assert.match(unknown, /aria-describedby="dial-short"/, 'a model that does not know is the first');
+  assert.equal(dialShortText(dialInfo({ dial: true })), 'Dial tone is on. Careful needs no timing.'); assert.match(dialShortText(dialInfo({ dial: true, mute: true })), /you will not hear it/); assert.match(dialShortText(dialInfo({ dial: true, quiet: true })), /off in Classroom/);
+  assert.ok(dialShortText(dialInfo({ dial: true })).split(/\s+/).length <= 12, 'a dozen words');
+});
+test('U9: the session says it all in the first repair of a run only, and the page shows the long line once', { skip: !HAS }, async () => {
+  await withRig({}, async (R) => {
+    appSettings.audio = { ...audioDefaults() };
+    R.ses = UI.openDeal(R.ctx, brokenCrate(R.g)); await Promise.resolve();
+    assert.equal(R.ses.longEar, true); assert.equal(UI.viewModel(R.ses).dialLong, true);
+    R.ses.dispose();
+    R.ses = UI.openDeal(R.ctx, brokenCrate(R.g)); assert.equal(R.ses.longEar, false, 'the second repair of the run'); assert.equal(UI.viewModel(R.ses).dialLong, false);
+  });
+});
+test('U10: the Deal Room\'s switches are named by the words on them; their state is aria-pressed and a badge the name leaves out, with a pressed style that is not colour alone', { skip: !HAS }, () => {
+  const g = world(), r = D.startRun(g, brokenCrate(g)), h = UI.sheetHTML(model(r));
+  for (const [name, fid] of [['Sound', 'deal-sound'], ['Dial tone', 'deal-dial']]) {
+    const b = h.match(new RegExp(`<button[^>]*data-fid="${fid}"[^>]*>[\\s\\S]*?</button>`))[0];
+    assert.ok(!/aria-label=/.test(b), `${name}: no label that differs from the visible words`);
+    const text = b.replace(/<span class="tb" aria-hidden="true">[^<]*<\/span>/, '').replace(/<[^>]+>/g, '').trim();
+    assert.equal(text, name, 'the accessible name (the content without the aria-hidden badge) is the visible label');
+    assert.match(b, /class="tb" aria-hidden="true">(on|off)</, 'the state is in a badge');
+  }
+  assert.match(src('css/ui-deal.css'), /\.deal-tog\[aria-pressed="true"\] \{ border-color: var\(--gold\); box-shadow: inset 0 0 0 1px var\(--gold\); \}/);
+  assert.match(src('css/ui-deal.css'), /\.deal-tog\[aria-pressed="true"\] \.tb::before \{ content: "\\2713/, 'a tick on the pressed one');
+});
+test('U6: the dashboard\'s Quiet sound box comes before Copy student link, the copy says what it carries, and the link is the room\'s rule applied early (it is put back when the student leaves)', () => {
+  const S = roomSession(), off = instructorParts(S, {}).head, on = instructorParts(S, { quietLink: true }).head;
+  assert.ok(off.indexOf('data-change="linkquiet"') < off.indexOf('data-act="copylink"'), 'tick, then copy');
+  assert.match(on, /data-act="copylink" data-link="[^"]+" data-quiet="1">/); assert.ok(!/data-quiet=/.test(off));
+  assert.match(src('js/ui/instructor.js'), /b\.dataset\.quiet \? 'Student link copied, with quiet sound\.' : 'Student link copied\.'/);
+  // the link with a room: untouched, quiet; joining remembers the earlier values and leaving puts them back
+  const a = migrateAudio({ audio: { ...audioDefaults(), master: 55, v: 1 } }, '?room=ABCD&sound=quiet');
+  assert.equal(a.quiet, true); assert.equal(a.touched, false); assert.equal(a.master, 55);
+  const store = new Map(), toasts = [], d = { settings: { audio: a }, kv: { get: (k) => (store.has(k) ? store.get(k) : null), set: (k, v) => { store.set(k, v); return true; }, del: (k) => { store.delete(k); } }, save: () => {}, toast: (m) => toasts.push(m) };
+  assert.equal(wire.pendingRoom({ code: 'ABCD' }, d), 'joined', 'the room is joined with the rule already on'); assert.equal(toasts.length, 1, 'and told once');
+  const before = store.get(wire.BEFORE_ROOM); assert.equal(before.quiet, false); assert.equal(before.clockSounds, true); assert.equal(before.master, 55);
+  assert.equal(wire.applyRoomRule(d, false), 'left'); assert.equal(d.settings.audio.quiet, false, 'a laptop is not left in Classroom for solo play at home'); assert.equal(d.settings.audio.clockSounds, true); assert.equal(d.settings.audio.master, 55);
+  // a quiet link with no room, and a student who has changed a setting, are as they were
+  assert.equal(migrateAudio({}, '?sound=quiet').touched, true);
+  const mine = migrateAudio({ audio: { ...audioDefaults(), touched: true, master: 90, v: 1 } }, '?room=ABCD&sound=quiet'); assert.equal(mine.quiet, false); assert.equal(mine.master, 90);
+});
+test('U13: the test button and the line that says whether sound can be heard are the first things under the preset and the volume, not below nine controls', () => {
+  const html = audioSettingsHTML(audioDefaults(), 'running');
+  assert.ok(html.indexOf('id="s-sample"') < html.indexOf('id="s-mute"') && html.indexOf('id="s-status"') < html.indexOf('id="s-mute"'));
+  assert.ok(html.indexOf('id="s-vol"') < html.indexOf('id="s-sample"'), 'after the preset and the volume');
+  assert.match(html, /<span id="s-status" role="status"/);
 });

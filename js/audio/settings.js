@@ -97,15 +97,20 @@ export function speakerState(a) {
   if (a.ui === false && a.game === false) return { on: false, title: 'Interface sounds and game sounds are both off (Display and sound)' };
   return { on: true, title: 'Sound is on. Press to mute (M)' };
 }
-/** `?sound=off|quiet|full`, read before the first save and only while `touched` is false. An instructor can put it in the student link. */
+/**
+ * `?sound=off|quiet|full`, read before the first save and only while `touched` is false. An instructor can put it in the student link.
+ * `quiet` in a link that carries a room code (`?room=`, which the instructor's link always does) is the room's rule applied early, not a choice of the student's: it is left `touched: false`, so
+ * joining finds the player already in Classroom, remembers the earlier values and puts them back on leaving the room (`joinRoom`). It used to be marked as the student's own, and a class's laptops stayed
+ * in Classroom for solo play at home for good (fourth round, U6). A quiet link with no room (a lecture hall) is a choice made for the student and stays one.
+ */
 function fromAddress(a, search) {
   if (a.touched || !search) return a;
-  let v = null;
-  try { v = new URLSearchParams(search).get('sound'); } catch { /* not a query string */ }
+  let v = null, room = false;
+  try { const q = new URLSearchParams(search); v = q.get('sound'); room = !!q.get('room'); } catch { /* not a query string */ }
   if (!v) return a;
   v = v.toLowerCase();
   if (v === 'off') return { ...a, mute: true, touched: true };
-  if (v === 'quiet' || v === 'classroom') return { ...applyPreset(a, 'classroom'), touched: true };
+  if (v === 'quiet' || v === 'classroom') return { ...applyPreset(a, 'classroom'), touched: !room };
   if (v === 'full') return { ...a, touched: true };
   return a;
 }
@@ -136,7 +141,9 @@ export function mirrorFlat(settings) {
 }
 /** Joining a classroom room: a student who has never touched a sound setting gets the Classroom rule, the earlier values are kept. Returns { next, before } or null. */
 export function joinRoom(a) {
-  if (a.touched || a.quiet) return null;
+  if (a.touched) return null;
+  // Quiet and never touched by hand: the room's link put it there (`fromAddress`). The player's earlier values are the Full preset on the volume they have, which is what they come back to on leaving.
+  if (a.quiet) return { before: { ...a, ...PRESETS.full }, next: { ...a } };
   return { before: { ...a }, next: { ...applyPreset(a, 'classroom'), touched: false } };
 }
 /** Leaving the room puts the earlier values back, unless a sound setting was changed meanwhile (the room's own preset is no longer exactly what is set). */
@@ -200,6 +207,7 @@ export function audioSettingsHTML(a, state = 'locked') {
       <div><label for="s-preset">Sound preset</label><select id="s-preset" data-snd="preset"${dis('s-preset')}>${['full', 'classroom', 'interface', 'off'].map(opt).join('')}${preset === 'custom' ? '<option value="custom" selected>Custom (your own mix)</option>' : ''}</select></div>
       <div><label for="s-vol">Volume</label><input id="s-vol" type="range" min="0" max="100" step="5" value="${a.master}" data-snd="master" aria-valuetext="${a.master} percent"${dis('s-vol')}></div>
     </div>
+    <p class="snd-test"><button type="button" class="btn ghost sm" id="s-sample" data-snd-act="sample"${dis('s-sample')}>Play a test sound</button> <span id="s-status" role="status" class="small mute">${esc(statusText(a, state))}</span></p>
     <p class="snd-row"><label><input type="checkbox" id="s-mute" data-snd="mute"${chk('s-mute')}${dis('s-mute')}> Mute all sound</label></p>
     ${row('s-ui', 'ui', 'Interface sounds (clicks, panels, dialogs)')}
     ${row('s-game', 'game', 'Game sounds (sales, coins, alerts, the Deal Room)')}
@@ -209,8 +217,6 @@ export function audioSettingsHTML(a, state = 'locked') {
     <p class="snd-row"><label for="s-ambvol">Ambience level</label> <input id="s-ambvol" type="range" min="0" max="100" step="5" value="${a.ambientLevel}" data-snd="ambientLevel" aria-valuetext="${a.ambientLevel} percent"${dis('s-ambvol')}></p>
     ${row('s-dial', 'dial', 'Repair dial tone')}
     <p class="snd-row"><label><input type="checkbox" id="s-mkey" data-snd="mKey"${chk('s-mkey')}${dis('s-mkey')}> Keyboard shortcut: M mutes and unmutes</label></p>
-    <p><button type="button" class="btn ghost sm" id="s-sample" data-snd-act="sample"${dis('s-sample')}>Play a test sound</button></p>
-    <p id="s-status" role="status" class="small mute">${esc(statusText(a, state))}</p>
     <p class="small mute">Sound is made in your browser. Nothing is downloaded and nothing is recorded. If you hear nothing, check your device's volume and its silent switch: the browser can be on while the device is silent.</p>
   </fieldset>`;
 }

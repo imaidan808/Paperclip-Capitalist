@@ -5,7 +5,7 @@
 import { PERKS, PERK_IDS, perkMods, SKILLS } from '../config.js';
 import { PERK_PAIRS } from '../data/perks.js';
 import { hash } from '../rng.js';
-import { $, $$, esc, setHTML, delegate, announce } from './common.js';
+import { $, $$, esc, setHTML, delegate, announce, settingsDialog } from './common.js';
 import { audio } from '../audio/index.js';
 
 export const MAX_PICKS = 2;
@@ -178,6 +178,7 @@ export function draftHTML(st) {
       <h1 id="dr-h" tabindex="-1">Draft your build</h1>
       <p class="dr-lede"><b class="gold">Everyone starts the same: one paperclip and $0.</b> The only difference between you and any other founder is the build you choose here, so draft the two Backgrounds that fit how you want to play. Each one has a real-world basis, a real strength and a real cost.</p>
       ${st.room ? `<div class="callout">Joining room <b class="mono">${esc(st.room.code)}</b>. Your run starts on the instructor's clock.</div>` : ''}
+      <p class="dr-tools"><button class="btn ghost sm" type="button" data-act="settings" data-fid="dr-sound">Display and sound</button></p>
     </header>
     <div class="dr-layout">
       <div class="dr-main">
@@ -238,6 +239,7 @@ export function mountDraft(root, S, { room = null, onBegin, onBack } = {}) {
     clear() { const before = st.picks.length; send({ type: 'clear' }); heard(before); $('[data-fid="dr-reroll"]', root)?.focus({ preventScroll: true }); },
     reroll() { send({ type: 'reroll' }); rattle(); },
     back() { onBack?.(); },
+    settings() { settingsDialog(); }, // the notes about sound say "Display and sound": the Draft has the button they name (the title and the game have theirs)
   };
   delegate(root, acts);
 

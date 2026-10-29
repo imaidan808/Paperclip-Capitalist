@@ -21,12 +21,18 @@ const SPEND = { hire: ['hire'], 'pipe-level': ['hire'], upgrade: ['upgrade'], cl
 export function lastSpend(s, kind) { const L = s && Array.isArray(s.ledger) ? s.ledger : [], r = L[L.length - 1]; return r && (SPEND[kind] || []).includes(r.type) && Number.isFinite(+r.amt) && +r.amt < 0 && r.h === s.hour ? -r.amt : 0; }
 
 /**
+ * Distance (3.6): what happens in another district than the one the player is in is 8 dB quieter behind a 2.5 kHz lowpass, and the player's own actions never are. Only the events the player did not
+ * cause have a place that is not theirs (a manager's cycle, freight arriving, customs): a sale, a purchase and a shipment are the player's. `hooks.elsewhere(zone)` says whether a district is another
+ * one than the player's; with no such hook (a test, a screen with no map) nothing is attenuated. Returns the option to spread into a request.
+ */
+export const awayFrom = (zone, hooks) => (zone != null && hooks && typeof hooks.elsewhere === 'function' && hooks.elsewhere(zone) ? { where: 'elsewhere' } : {});
+/**
  * An engine event (4.1) -> the calls it makes: [['request' | 'play', id, opts], ...]. `st` is the wiring state (a sale's open mix, the notes that arrived first).
  * hooks: { now(), netWorth(), pan(kind, id), zoneTier(id), loansLeft(), cost(kind, id) }.
  */
 export function eventCalls(ev, st = newWireState(), hooks = {}) {
   if (!ev || typeof ev !== 'object') return [];
-  const now = hooks.now ? hooks.now() : 0, pan = (k, id) => (hooks.pan ? hooks.pan(k, id) : undefined);
+  const now = hooks.now ? hooks.now() : 0, pan = (k, id) => (hooks.pan ? hooks.pan(k, id) : undefined), away = (z) => awayFrom(z, hooks);
   const num = (v) => (Number.isFinite(+v) ? +v : 0);
   switch (ev.type) {
     case 'pitch': {
@@ -69,7 +75,7 @@ export function eventCalls(ev, st = newWireState(), hooks = {}) {
     case 'ship': return calls(['request', 'ship.depart', { pan: pan('zone', ev.from), cause: 'money' }]);
     case 'hire': { const kind = ['student', 'broker', 'logistics'].includes(ev.kind) ? ev.kind : 'student', amt = hooks.cost ? hooks.cost('hire', ev.kind) : 0; return calls(['request', 'hire.manager', { variant: kind, cause: 'money', with: amt && sizeFor(amt, hooks) !== 's' && sizeFor(amt, hooks) !== 'm' ? [['cash.out', { size: costFor(amt, hooks), gainDb: -4 }]] : [] }]); }
     case 'upgrade': case 'pipe-level': { const amt = hooks.cost ? hooks.cost(ev.type, ev.id) : 0, z = sizeFor(amt, hooks); return calls(['request', 'crew.build', { variant: ev.type === 'upgrade' ? 'upgrade' : 'level', cause: 'money', with: amt && (z === 'l' || z === 'xl') ? [['cash.out', { size: 'l', gainDb: -4 }]] : [] }]); }
-    case 'cycle': return ev.src === 'rent' ? calls(['request', 'cash.in', { size: 's', clock: true, meta: { net: num(ev.net) } }]) : calls(['request', 'manager.cycle', { meta: { net: num(ev.net) }, pan: ev.pid != null ? pan('pipe', ev.pid) : pan('zone', ev.zone) }]);
+    case 'cycle': return ev.src === 'rent' ? calls(['request', 'cash.in', { size: 's', clock: true, meta: { net: num(ev.net) } }]) : calls(['request', 'manager.cycle', { meta: { net: num(ev.net) }, pan: ev.pid != null ? pan('pipe', ev.pid) : pan('zone', ev.zone), ...away(ev.zone) }]);
     case 'draw': return calls(['request', 'bank.draw', { cause: 'money' }]);
     case 'repay': return calls(['request', 'bank.repay', { variant: hooks.loansLeft && hooks.loansLeft() === 0 ? 'free' : (hooks.repayF ? hooks.repayF() : st.repayF) === 'half' ? 'half' : 'full', cause: 'money' }]);
     case 'client': { const amt = hooks.cost ? hooks.cost('client', ev.tier) : 0, z = sizeFor(amt, hooks); return calls(['request', 'crew.client', { variant: ev.tier === 'smb' ? 'smb' : 'ent', cause: 'money', with: amt && (z === 'l' || z === 'xl') ? [['cash.out', { size: 'l', gainDb: -4 }]] : [] }]); }
@@ -110,17 +116,29 @@ export function noteKind(n) {
   if (/^Your net worth has fallen to zero/.test(t)) return 'insolvent';
   return '';
 }
+/**
+ * The amount a note's text names: "$1,250,000" (what the engine writes for a settlement, a penalty and an overdraft) and, read the same, "$1.25M" or "$2.30B" (market.js `fmtMoney`: a suffix of
+ * K, M or B straight after the number). A parser that stopped at the suffix heard a settlement of $1.25M as $1.25 and sized the coin 's' (fourth round, W-7); the engine's own text has never
+ * carried one, so this is a guard and a test (tests/audio-r4.test.mjs) keeps both forms.
+ */
+const SUFFIX = { k: 1e3, m: 1e6, b: 1e9 };
+export function amountIn(text) {
+  const m = /\$([\d,.]+)([kKmMbB])?(?![A-Za-z])/.exec(String(text ?? ''));
+  if (!m) return 0;
+  const v = Number(m[1].replace(/,/g, ''));
+  return Number.isFinite(v) ? v * (m[2] ? SUFFIX[m[2].toLowerCase()] : 1) : 0;
+}
 /** A session note (4.2) -> calls. Sounds that depend on what a note is about use its kind. */
 export function noteCalls(n, st = newWireState(), hooks = {}) {
   if (!n || typeof n !== 'object') return [];
-  const now = hooks.now ? hooks.now() : 0, k = noteKind(n), amt = Number.isFinite(+n.amt) ? +n.amt : Number((String(n.text).match(/\$([\d,.]+)/) || [])[1]?.replace(/,/g, '')) || 0;
+  const now = hooks.now ? hooks.now() : 0, k = noteKind(n), amt = Number.isFinite(+n.amt) ? +n.amt : amountIn(n.text);
   if (k === 'scam') { st.scamAt = now; return []; }
   if (k === 'counterfeit') { st.counterfeitAt = now; return []; }
   if (k === 'settle') return calls(['request', 'cash.in', { variant: 'settle', clock: true, meta: { amount: amt } }]);
   const zoneOf = () => { const t = String(n.text), id = Object.keys(ZONES).find((z) => t.includes(' in ' + ZONES[z].short + '.') || t.includes(' in ' + ZONES[z].short + ':')); return id ? Number(id) : undefined; }; // "Freight arrived in Harbor.": pan from that district
   const where = () => { const z = zoneOf(), p = z != null && hooks.pan ? hooks.pan('zone', z) : undefined; return p === undefined ? {} : { pan: p }; };
-  if (k === 'freight-arrive') return calls(['request', 'ship.arrive', { clock: true, ...where() }]);
-  if (k === 'customs' || k === 'damage') return calls(['request', 'ship.trouble', { variant: k, state: 'trouble-' + k, ...(k === 'customs' ? where() : {}) }]);
+  if (k === 'freight-arrive') return calls(['request', 'ship.arrive', { clock: true, ...where(), ...awayFrom(zoneOf(), hooks) }]);
+  if (k === 'customs' || k === 'damage') return calls(['request', 'ship.trouble', { variant: k, state: 'trouble-' + k, ...(k === 'customs' ? { ...where(), ...awayFrom(zoneOf(), hooks) } : {}) }]);
   if (k === 'mentor') return calls(['request', 'mentor.tip', { clock: true }]);
   if (k === 'sla') return calls(['request', 'cash.out', { size: 'm', state: 'sla', meta: { amount: amt } }]);
   if (k === 'overdraft') return calls(['request', 'cash.out', { size: 's', state: 'overdraft', meta: { amount: amt } }]);
@@ -242,7 +260,7 @@ export function controlFor(c) {
 
 // ---- the Classroom rule (7.1): a student who joins a room and has never touched a sound setting gets Classroom, with one toast; the earlier values come back when they leave
 export const BEFORE_ROOM = 'audioBeforeRoom';
-export const ROOM_TOAST = 'Sound is set to Classroom (quieter) in this room. You can change it in Display and sound.';
+export const ROOM_TOAST = 'Sound is set to Classroom (quieter) in this room. Press M to mute, or change it under Display and sound.'; // the title, the Draft and the game all have a Display and sound button; M works everywhere
 /**
  * d: { settings, save(), toast(msg, level), kv }. inRoom: the student is in a room now. Idempotent: it acts only on the way in (nothing remembered yet) and on the way out (something remembered).
  * Returns 'joined', 'left' or null.
@@ -291,7 +309,18 @@ export function pendingRoom(room, d = deps) {
 // ================================================================================ the DOM
 const isField = (el) => !!el && (el.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName)) && !(el.tagName === 'INPUT' && /^(checkbox|radio|button|submit|range)$/.test(el.type));
 let installed = false, deps = null, gamesWired = 0;
+/** Is this press inside the title's Join panel (the code, the relay, the Join button)? */
+const inJoinPanel = (t) => typeof t?.closest === 'function' && !!(t.closest('[data-act="join"]') || t.closest('[data-room-panel]'));
+/** Does the address carry a room code (?room=), or has the code field text in it? Then the player is on the way into a room and the room's note is the one they will get. */
+const roomAsked = () => {
+  try { if (new URLSearchParams(location.search).get('room')) return true; } catch { /* no address */ }
+  try { return !!(document.getElementById('jc')?.value || '').trim(); } catch { return false; }
+};
 const pageState = { repayF: null, bids: 0 };
+/** A dialog that closes within this long of a press that played a sound of its own is closed by that press: the press is the voice (fourth round, W-4). Escape and a click on the backdrop play no press sound, so they still get the close. */
+const PRESS_CLOSES_MS = 250;
+/** Leaving a game stops its voices, except one that began in the last 150 ms: the press that left (Open debrief, Leave) has its own tick, and a 40 ms fade cut it to a blip (fourth round, W-4). */
+const KEEP_MS = 150;
 /** Is a game's wiring installed? While it is, the five legacy names of common.js are no-ops (8.4): the events speak for themselves. Before any game is wired (the title, the draft) they still play. */
 export const wired = () => gamesWired > 0;
 /** A test hook: forget the page-wide layer, so a test can install it again with its own stand-ins. */
@@ -307,16 +336,18 @@ export function initAudio(d = {}) {
   const guard = (fn) => (...a) => { try { return fn(...a); } catch (e) { try { console.warn('[audio] listener disabled:', e && e.message); } catch { /* no console */ } fn = () => {}; } };
   const opts = { capture: true };
   const A = () => deps.settings?.audio || {};
-  let uiState = { rangeIdx: new WeakMap(), lastDlg: false, lastTick: 0 };
+  let uiState = { rangeIdx: new WeakMap(), lastDlg: false, lastTick: 0, pressedAt: -Infinity };
   // 1. the first activating input creates or resumes the context; that same press plays its tick as soon as it can
   const unlock = guard((e) => {
+    if (e.isTrusted === false) return; // a script-made pointerdown or click is no gesture: Chrome refuses the context it would make and logs a warning for each (lab automation); a real press follows
     if (e.type === 'keydown' && (e.key === 'Escape' || /^(Shift|Control|Alt|Meta|CapsLock)$/.test(e.key))) return;
     audio.touch(); if (audio.state !== 'running') audio.unlock();
     // The first minute (7.4): the title and the Draft play sounds from the first click with no speaker button on the page, so the one-time note is made here when no game is mounted yet
     // (a mounted game says it itself, once, with the button). Not muted, not Classroom, and only once.
-    // (Not on the press that joins a classroom: the room's own note follows within the moment, and a student who has just typed a code is told one thing about sound, not two.)
-    const a = deps.settings?.audio, joining = typeof e.target?.closest === 'function' && !!e.target.closest('[data-act="join"]');
-    if (!gamesWired && a && !a.hinted && !a.mute && !a.quiet && !joining && audio.supported && deps.toast) { deps.settings.audio = { ...a, hinted: true }; deps.save?.(); deps.toast(HINT_PAGE_TEXT, 'info'); }
+    // (Not for a student who is joining a classroom: the room's own note follows within the moment, and a student is told one thing about sound, not two. That is a press anywhere in the Join panel (the
+    // code field, the relay, the button), any press while the address carries ?room= or the code field has text, and a key that does nothing yet: Tab, the arrows and the letters of a code make no sound.)
+    const a = deps.settings?.audio, joining = inJoinPanel(e.target) || roomAsked(), idle = e.type === 'keydown' && e.key !== 'Enter' && e.key !== ' ';
+    if (!gamesWired && a && !a.hinted && !a.mute && !a.quiet && !joining && !idle && audio.supported && deps.toast) { deps.settings.audio = { ...a, hinted: true }; deps.save?.(); deps.toast(HINT_PAGE_TEXT, 'info'); }
   });
   for (const t of ['pointerdown', 'touchend', 'keydown']) document.addEventListener(t, unlock, opts);
   // 2. visibility: hidden stops every voice and suspends; visible resumes after the shell's own tick has run
@@ -325,6 +356,7 @@ export function initAudio(d = {}) {
   // 3. key M mutes and unmutes wherever focus is not in a field, in every dialog too (the shell's own handler returns while a dialog is open)
   document.addEventListener('keydown', guard((e) => {
     if ((e.key !== 'm' && e.key !== 'M') || e.ctrlKey || e.metaKey || e.altKey || e.repeat || isField(e.target)) return;
+    if (!audio.supported) return; // a browser with no Web Audio has nothing to mute: M announced "Sound off." there while the settings said it cannot play sound
     const a = A(); if (!deps.settings?.audio || a.mKey === false) return; // the shortcut can be switched off (a single-key shortcut with no way out fails WCAG 2.1.4); the speaker button stays
     const r = toggleMute(a); // the same switch as the speaker button and the Deal Room's: at volume 0 "on" brings the volume back and says so, and nothing claims a sound nobody can hear
     if (r.changed) { deps.settings.audio = r.next; deps.save?.(); }
@@ -352,7 +384,9 @@ export function initAudio(d = {}) {
       setTimeout(guard(() => { const n = ticked(); if (n !== before) doCall(controlFor({ act: 'stock-pick', kind: 'change', count: n })); }), 0);
       return;
     }
-    doCall(controlFor(c));
+    const call = controlFor(c);
+    if (call) uiState.pressedAt = performance.now(); // a control that has a sound at its click: if that press also closes the dialog, the click's sound is the one voice (below)
+    doCall(call);
   }), opts);
   document.addEventListener('change', guard((e) => {
     const el = e.target; if (!el || el.matches('[data-snd], #s-preset') || el.closest('#dlg .snd')) return;
@@ -390,7 +424,7 @@ export function initAudio(d = {}) {
         if (dlg.classList.contains('deal') || dlg.classList.contains('alert')) { /* the Deal Room plays its own opening (js/ui/deal.js: it knows the kind, and a Quick deal opens none); the alert note plays alert.advance */ }
         else if (dlg.querySelector('[data-act="confirm-go"]')) later('ui.ask', { variant: dlg.querySelector('.btn.danger') ? 'danger' : 'normal', cause: 'dialog' });
         else later('ui.dialog-open', { cause: 'dialog' });
-      } else if (was) later('ui.dialog-close', { cause: 'dialog' });
+      } else if (was && performance.now() - uiState.pressedAt > PRESS_CLOSES_MS) later('ui.dialog-close', { cause: 'dialog' }); // a dialog the player's press closed (Open debrief, Academy replay, Join) is heard once: the press's own sound, not that and the dialog's close 50 ms behind it
     })).observe(dlg, { attributes: true, attributeFilter: ['open'] });
   }
   const toasts = document.getElementById('toasts');
@@ -427,6 +461,7 @@ export function wireGame(ctx) {
     loansLeft: () => g()?.s?.loans?.length,
     repayF: () => pageState.repayF,
     zoneTier: (id) => ZONES[id]?.tier || 1,
+    elsewhere: (zone) => U?.zone != null && Number(zone) !== Number(U.zone), // another district than the player's (3.6): the sound is 8 dB down behind a 2.5 kHz lowpass
     pan: (kind, id) => { try { const wv = ctx.world?.(), r = wv?.rectOf ? wv.rectOf(kind, id) : wv?.world?.rectOf?.(kind, id); if (!r) return 0; const w = innerWidth || 1; return Math.max(-0.6, Math.min(0.6, ((r.x + r.w / 2 - w / 2) / (w / 2)) * 0.6)); } catch { return 0; } }, // a thing whose place is unknown is centred (a sound is as loud there as anywhere)
     cost: (kind) => lastSpend(g()?.s, kind),
     poolDelayed: () => poolDelayed(g()?.s),
@@ -440,7 +475,9 @@ export function wireGame(ctx) {
     audio.setEnv({ speed: clock?.speed || 1, paused: !!clock?.paused, lagMs: lag(), sandbox: !!game?.sandbox, netWorth: hooks.netWorth(), market: U?.drawer === 'market' }); // the Market drawer open: no door bell
   };
   let wasIn = null; // is the student in a room? (the Classroom rule above; the session says 'room' on the way in and nothing on the way out, so a tick looks too)
-  const roomCheck = () => { const now = !!(S && S.roomInfo && S.roomInfo.role === 'student'); if (now === wasIn) return; wasIn = now; if (deps) applyRoomRule(deps, now); };
+  // An Academy lesson is a sandbox with a session of its own, which has no room: a rehearsal neither joins a room nor leaves one, so it never touches the rule (the first lesson of a class used to put
+  // the earlier, louder settings back while the student was still in the room; the real game's mount finds the rule already in place and says nothing more).
+  const roomCheck = () => { if (g()?.sandbox) return; const now = !!(S && S.roomInfo && S.roomInfo.role === 'student'); if (now === wasIn) return; wasIn = now; if (deps) applyRoomRule(deps, now); };
   const run = (list) => { for (const [m, id, o] of list) { if (m === 'countUp') audio.countUp(o ?? 0); else if (m === 'play') audio.play(id, o); else audio.request(id, o); } };
   const safe = (fn) => (...a) => { if (!alive) return; try { fn(...a); } catch (e) { alive = false; try { console.warn('[audio] wiring disabled:', e && e.message); } catch { /* no console */ } } };
   const pushAmbient = () => { // at most once a second, and only when something in the state changed
@@ -470,7 +507,7 @@ export function wireGame(ctx) {
   audio.setEnv({ sandbox: !!g()?.sandbox });
   roomCheck();
   pushAmbient();
-  return function unwire() { if (!alive && gamesWired === 0) return; alive = false; gamesWired = Math.max(0, gamesWired - 1); for (const off of offs) { try { off(); } catch { /* gone */ } } audio.release(); };
+  return function unwire() { if (!alive && gamesWired === 0) return; alive = false; gamesWired = Math.max(0, gamesWired - 1); for (const off of offs) { try { off(); } catch { /* gone */ } } audio.release(KEEP_MS); };
 }
 /** The one entry point for a screen that wants both layers: the page-wide one (once) and the game's. */
 export function wireAudio(ctx, d) { initAudio(d); return wireGame(ctx); }

@@ -58,7 +58,10 @@ export function gateClock(st, r, env, now) {
     if (speed >= 16 || env.busy || env.market || env.classroom) return no('budget'); // `market`: the Market drawer is open (a buyer is already a bubble and a badge there)
     if (id === 'buyer.urgent') { if (now - st.lastUrgent < RULES.URGENT_GAP) return no('budget'); st.lastUrgent = now; return YES; }
     const gap = speed >= 4 ? RULES.BUYER_GAP_4X : RULES.BUYER_GAP;
-    if (st.buyers >= 3 && now - st.lastBuyer < gap) return no('budget'); // the first three of a run always play
+    if (st.buyers >= 3 && now - st.lastBuyer < gap) return no('budget');
+    // The first three of a run always play, to teach the cue (3.4.5): the resolver lets them through and so must the engine's own 30 s cooldown of the id, which dropped the second and the third
+    // (a new player heard one door bell in the first 30 s; fourth round, W-3). From the fourth on the gap above and that cooldown say the same thing.
+    if (st.buyers < 3) r.opts = { ...r.opts, noCooldown: true };
     st.buyers++; st.lastBuyer = now;
     return YES;
   }

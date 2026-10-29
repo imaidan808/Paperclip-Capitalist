@@ -196,10 +196,11 @@ function observerRig() {
   const played = [], saved = {};
   for (const k of ['play', 'hold', 'setEnv', 'sync', 'touch', 'unlock']) { saved[k] = page[k]; page[k] = (...a) => { if (k === 'play') played.push([a[0], a[1]]); }; }
   const settings = { audio: audioDefaults() }, said = [];
+  const sup = Object.getOwnPropertyDescriptor(page, 'supported'); Object.defineProperty(page, 'supported', { get: () => true, configurable: true }); // key M does nothing in a browser with no Web Audio (fourth round, U15)
   wire._resetForTest?.();
   observers = [];
   wire.initAudio({ settings, save: () => {}, announce: (m) => said.push(m), toast: () => {}, kv });
-  return { played, said, settings, restore() { for (const k of Object.keys(saved)) page[k] = saved[k]; wire._resetForTest?.(); } };
+  return { played, said, settings, restore() { for (const k of Object.keys(saved)) page[k] = saved[k]; if (sup) Object.defineProperty(page, 'supported', sup); else delete page.supported; wire._resetForTest?.(); } };
 }
 const toastEl = (cls, dataset = {}) => ({ classList: { contains: (c) => c === 'toast' || cls.includes(c) }, dataset });
 test('a toast that owns its sound is never rung over: the daily bounty a resolver keeps silent at 4x, the common achievement and the Codex page at 16x', async () => {

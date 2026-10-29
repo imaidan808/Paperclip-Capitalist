@@ -92,7 +92,7 @@ test('migrateAudio: defaults, old saves, junk, the address and the presets', () 
   assert.equal(applyPreset({ ...audioDefaults(), mute: true }, 'full').mute, false, 'a preset other than Off is a request to hear: it unmutes, so the menu is never a trap');
   assert.equal(presetOf(applyPreset({ ...audioDefaults(), mute: true }, 'classroom')), 'classroom'); assert.equal(applyPreset({ ...audioDefaults(), mute: true }, 'off').mute, true);
   const f = mirrorFlat({ audio: { ...audioDefaults(), mute: true, master: 40 } }); assert.equal(f.sound, false); assert.equal(f.vol, 40);
-  assert.match(audioSettingsHTML(audioDefaults(), 'running'), /Mute all sound[\s\S]*Play a test sound/);
+  assert.match(audioSettingsHTML(audioDefaults(), 'running'), /Play a test sound[\s\S]*Mute all sound/);
   assert.match(audioSettingsHTML(audioDefaults(), 'unsupported'), /cannot play sound/);
 });
 test('joining a room applies Classroom and leaving puts the earlier values back', () => {

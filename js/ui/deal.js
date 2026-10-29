@@ -12,7 +12,7 @@ import { startRun, modelOf, tForPos, STAGE_LABEL } from '../deal.js';
 import { pos as dialPos } from '../play/repair.js';
 import { countUp } from './polish.js';
 import { audio, toggleMute, audible } from '../audio/index.js';
-import { dialInfo, dialEarText, dialAnnounceText, dialSwitchHTML, toggleDial, tellOnce } from '../audio/dialtone.js';
+import { dialInfo, dialEarText, dialShortText, dialAnnounceText, dialSwitchHTML, toggleHTML, toggleDial, tellOnce } from '../audio/dialtone.js';
 import { settings as appSettings, applySettings } from './common.js';
 
 const num = (x, d = 0) => (Number.isFinite(x) ? x : d);
@@ -202,8 +202,9 @@ export function fixHTML(m) {
           <div class="row"><button class="btn" data-deal="stop" data-snd data-fid="stop" autofocus>Stop here</button></div></div>`
       : `<div class="dial" role="group" aria-label="Repair timing"><div class="dial-track" aria-hidden="true">${zone}<i class="dial-mark" style="left:50%"></i></div>
           <p class="small mute" id="dial-help">Watch the marker. Press <b>Stop</b> (or Space, or Enter) when it is inside the green zone.</p>
-          <p class="small mute" id="dial-ear">${esc(dialEarText(m.dialInfo))}</p>
-          <div class="row"><button class="btn big" data-deal="stop" data-snd data-fid="stop" aria-describedby="dial-ear" autofocus>Stop</button></div></div>`;
+          <p class="small mute" id="dial-ear">${esc(m.dialLong === false ? dialShortText(m.dialInfo) : dialEarText(m.dialInfo))}</p>
+          ${m.dialLong === false ? '' : `<span class="sr" id="dial-short">${esc(dialShortText(m.dialInfo))}</span>`}
+          <div class="row"><button class="btn big" data-deal="stop" data-snd data-fid="stop" aria-describedby="${m.dialLong === false ? 'dial-ear' : 'dial-short'}" autofocus>Stop</button></div></div>`; // the long line is for the first repair of a run, and even then Stop is described by the short one: forty words read at every cursor stop of every step were too many
     dial += `<div class="row"><button class="btn ghost" data-deal="careful" data-snd data-fid="care">Careful: pay more, no timing</button></div>`;
   }
   const cost = !m.stageDone && !m.blocker ? '' : '';
@@ -247,7 +248,7 @@ function dockHTML(m) {
   return parts ? `<div class="deal-dock">${parts}</div>` : '';
 }
 /** The room's own sound switch (docs/AUDIO.md 4.5 and 7.3): the repair tone is a continuous sound, so whoever turns it on can turn it off without leaving the room. The label never changes, aria-pressed says whether sound is on. */
-export const soundHTML = (m) => `<button class="btn ghost sm" data-deal="sound" data-snd data-fid="deal-sound" aria-pressed="${m.sound !== false}" aria-label="Sound"><span aria-hidden="true">Sound ${m.sound !== false ? 'on' : 'off'}</span></button>`;
+export const soundHTML = (m) => toggleHTML({ act: 'sound', fid: 'deal-sound', name: 'Sound', on: m.sound !== false }); // the name is the visible word; on and off are the pressed state and a badge (dialtone.js)
 export function sheetHTML(m) {
   const z = m.zone, style = z && z.palette ? ` style="--zg:${esc(z.palette[0])};--za:${esc(z.palette[1])}"` : '';
   const lock = m.assistLocked ? ' disabled' : '';
@@ -267,6 +268,7 @@ export function viewModel(session) {
   m.revealed = !!session.revealed; // the result has been staged once: a later paint (Assist toggled) shows it at rest
   m.sound = session.sound ? session.sound() : true;
   m.tone = !!(session.toneWanted && session.toneWanted()); // the repair tone is on: the slider's own detents are silent (docs/AUDIO.md 4.5)
+  m.dialLong = session.longEar !== false; // the first repair of a run says it all (dialtone.js tellOnce), a later one a short line
   m.dialInfo = session.dialInfo ? session.dialInfo() : null; // what the room says about the tone: on or off, held off by Classroom, heard or not (js/audio/dialtone.js)
   return m;
 }
@@ -403,7 +405,15 @@ export function createSession(ctx, run) {
   ses.dialInfo = () => dialInfo(appSettings.audio);
   const tone = (p, z) => { const st = toneStep(ses.tone, p, z.lo, z.hi); if (st) { ses.tone = st; try { eng().dial.update(st.pos, z.lo, z.hi); } catch { /* the tone is an addition */ } } };
   /** The tone's switch was pressed while the animated dial runs: start following the marker at once, or let go of it. (A slider's tone is made per move.) */
-  const retone = () => { if (!ses.raf || ses.reduced()) return; if (ses.toneWanted() && !ses.toneOn) toneOn(); else if (!ses.toneWanted() && ses.toneOn) { ses.toneOn = false; ses.tone = null; try { eng().dial.stop(); } catch { /* gone */ } } };
+  // The engine owns the tone and ends it by itself when sound is muted, Game sounds go off or the tab is hidden, and says so only through its events: the room's own `toneOn` flag went stale, `dial.update`
+  // does nothing without a tone, and a Fix stage that was muted and unmuted (key M, the room's Sound switch, a tab put away and back) never heard the tone again while the room went on saying it was on.
+  // So the flag is checked against the engine (`dial.active`, false only when it really is not running) and the tone is started again as soon as it can be heard.
+  const toneGone = () => { try { return eng().dial.active === false; } catch { return false; } };
+  const retone = () => {
+    if (!ses.raf || ses.reduced()) return;
+    if (ses.toneWanted()) { if (!ses.toneOn || toneGone()) { ses.toneOn = false; toneOn(); } }
+    else if (ses.toneOn) { ses.toneOn = false; ses.tone = null; try { eng().dial.stop(); } catch { /* gone */ } }
+  };
   const toneOn = () => { try { const d = eng().dial; ses.toneOn = !!(d && typeof d.start === 'function' && d.start()); } catch { ses.toneOn = false; } ses.tone = null; return ses.toneOn; };
   /** What the screen shows now, for the sound to be chosen from: the stage's key, its view, and how many log entries an auction has. */
   const look = () => { const k = run.key; return { k, v: run.view(), n: k === 'bid' && run.st.bid && run.st.bid.events ? run.st.bid.events.length : 0 }; };
@@ -456,6 +466,7 @@ export function createSession(ctx, run) {
       if (!v || !mark) { ses.raf = 0; return; }
       const p = dialPos(performance.now() - ses.t0, v.step, v.seed);
       mark.style.left = `${(p * 100).toFixed(2)}%`;
+      if (ses.toneOn && toneGone()) retone(); // the engine ended it behind the room's back: start it again, or let the flag go
       if (ses.toneOn) tone(p, v.zone);
       ses.raf = requestAnimationFrame(tick);
     };
@@ -556,12 +567,13 @@ export function createSession(ctx, run) {
     // The room opens with the voice of what it is about (a shop door, a stall, the bench). A microtask, queued before the sheet opens: the page's dialog observer plays deal.open too, with no way to know
     // which room this is, and this one comes first, so its sound is the one that stands. Quick buy takes the sheet over in this same task and plays deal.quick instead (docs/AUDIO.md 4.3).
     Promise.resolve().then(() => { if (!ses.disposed && !ses.quicked) one({ hear: ['deal.open', { variant: openVariant(run.plan.kind) }] }); });
-    try { let was = ses.sound(); const off = eng().on && eng().on(() => { const now = ses.sound(); if (now !== was && !ses.disposed) { was = now; paint(); } }); if (typeof off === 'function') ses.offMute = off; } catch { /* no engine to watch */ } // key M mutes from anywhere: the switch follows
+    try { let was = ses.sound(); const off = eng().on && eng().on(() => { if (ses.disposed) return; retone(); const now = ses.sound(); if (now !== was) { was = now; paint(); } }); if (typeof off === 'function') ses.offMute = off; } catch { /* no engine to watch */ } // key M mutes from anywhere: the switch follows, and so does the repair tone (unmuting, or showing the tab again, starts it again)
     // the world waits while you deal (unless a classroom clock is in charge)
     if (S && S.clock && !S.clock.paused && (S.mode ? S.mode === 'solo' : S.canSetClock && S.canSetClock())) { S.setPaused(true); ses.paused = true; } // a solo run only: never the class's clock
+    // a repair opens on a dial whose track is a picture: the first one of a run says in words what to press and how to do it without timing or sight (once per run: tellOnce), on the page and aloud
+    ses.longEar = run.key === 'fix' && !run.res.fix && !ses.reduced() && tellOnce(kv, S && S.worldSeed);
     paint();
-    // a repair opens on a dial whose track is a picture: the first one of a run says in words what to press and how to do it without timing or sight (once per run: tellOnce)
-    const dialSay = run.key === 'fix' && !run.res.fix && !ses.reduced() && tellOnce(kv, S && S.worldSeed) ? ` ${dialAnnounceText(ses.dialInfo())}` : '';
+    const dialSay = ses.longEar ? ` ${dialAnnounceText(ses.dialInfo())}` : '';
     ctx.announce?.(`${titleOf(modelOf(run))}. ${run.plan.cast.name} says: ${run.plan.cast.hello}${dialSay}`);
   };
   ses.paint = paint;

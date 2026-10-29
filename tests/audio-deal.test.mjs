@@ -114,8 +114,9 @@ test('the buttons that play their own sound carry data-snd, so the page adds no 
 test('the room carries a Sound switch: a labelled toggle that says whether sound is on, in the header beside Leave', { skip: !HAS }, () => {
   const g = world(), r = D.startRun(g, fixedLot(g));
   const on = UI.sheetHTML(model(r, { sound: true })), off = UI.sheetHTML(model(r, { sound: false }));
-  assert.match(on, /<button class="btn ghost sm" data-deal="sound" data-snd data-fid="deal-sound" aria-pressed="true" aria-label="Sound">/); assert.match(off, /aria-pressed="false" aria-label="Sound"/);
-  assert.match(on, /Sound on/); assert.match(off, /Sound off/);
+  // the name is the visible word (WCAG 2.5.3: a voice-control player who says "Sound" finds it), the state is aria-pressed and a badge the name leaves out (fourth round, U10)
+  assert.match(on, /<button class="btn ghost sm deal-tog" data-deal="sound" data-snd data-fid="deal-sound" aria-pressed="true"><span class="tn">Sound<\/span> <span class="tb" aria-hidden="true">on<\/span><\/button>/); assert.match(off, /aria-pressed="false"><span class="tn">Sound<\/span> <span class="tb" aria-hidden="true">off</);
+  assert.ok(!/aria-label="Sound"/.test(on), 'no label that differs from the words on the button');
   assert.ok(on.indexOf('deal-sound') < on.indexOf('data-fid="leave"'), 'before Leave, after Assist');
   assert.match(UI.sheetHTML(model(r)), /aria-pressed="true"/, 'a model that does not know is on');
   const fix = D.startRun(g, brokenCrate(g));

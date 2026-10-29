@@ -5,7 +5,7 @@ import { audio, bindSettings, migrateAudio } from '../js/audio/index.js';
 import { RECIPES, IDS, variantsOf, tierOf } from '../js/audio/recipes.js';
 import { BED_IDS, ONE_SHOTS } from '../js/audio/ambient.js';
 import { eventCalls, noteCalls, uiCalls, controlFor, newWireState } from '../js/audio/wire.js';
-import { explainDrop, ambientWhy, oneShotWhy, dialWhy, pressBurst, describeMinute } from '../js/audio/audition.js';
+import { explainDrop, ambientWhy, oneShotWhy, dialWhy, pressBurst, describeMinute, blindDeck, blindScore, BLIND_KINDS } from '../js/audio/audition.js';
 import { SECTIONS, PAIRS, LADDERS, MINUTE } from './sections.js';
 
 const settings = { audio: migrateAudio({}, location.search) };
@@ -14,6 +14,25 @@ const $ = (id) => document.getElementById(id);
 const A = () => settings.audio;
 const sync = () => { Object.assign(A(), { master: +$('vol').value, mute: $('mute').checked, ui: $('ui').checked, game: $('game').checked, worldTicks: $('world').checked, ambient: $('amb').checked, ambientLevel: +$('ambvol').value, quiet: $('quiet').checked, dial: true }); audio.sync(); };
 for (const id of ['vol', 'mute', 'ui', 'game', 'world', 'amb', 'ambvol', 'quiet']) $(id).addEventListener('input', () => { audio.unlock(); sync(); });
+// The listening checklist asks for two things the engine does not do: the mono fold (10.5 item 5) and the laptop speaker (the premise of the loudness models, 3.2). They sit between the end of the master
+// chain (the soft clip) and the destination, so they change what is heard and nothing the engine does: the level meter still reads the chain's own output.
+const route = { nodes: [], ctx: null };
+function reroute() {
+  const ctx = audio.context, ch = audio.chain; if (!ctx || !ch || !ch.clip) return false;
+  for (const n of route.nodes) { try { n.disconnect(); } catch { /* not connected */ } }
+  try { ch.clip.disconnect(ctx.destination); } catch { /* already apart */ }
+  route.nodes = []; route.ctx = ctx;
+  let tail = ch.clip;
+  const add = (n) => { tail.connect(n); route.nodes.push(n); tail = n; };
+  if ($('lap').checked) { // two high-pass stages (a 4th-order, 24 dB per octave) and a low-pass: what a small speaker plays of the output
+    for (const q of [0.54, 1.31]) { const f = ctx.createBiquadFilter(); f.type = 'highpass'; f.frequency.value = 220; f.Q.value = q; add(f); }
+    const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 9000; lp.Q.value = 0.7; add(lp);
+  }
+  if ($('mono').checked) { const m = ctx.createGain(); m.channelCount = 1; m.channelCountMode = 'explicit'; m.channelInterpretation = 'speakers'; add(m); } // a mono input mixes L and R to one channel, which the destination plays on both
+  tail.connect(ctx.destination);
+  return true;
+}
+for (const id of ['mono', 'lap']) $(id).addEventListener('input', () => { audio.unlock(); sync(); if (!reroute()) { $(id).checked = false; say('the audio engine is not running yet: press anywhere once, then tick this again.'); } else say($(id).checked ? (id === 'mono' ? 'output folded to mono: listen for two sounds that cancel or blur together.' : 'laptop speaker: nothing under 220 Hz and a roll-off above 9 kHz, as a small speaker plays it.') : (id === 'mono' ? 'stereo again.' : 'full range again.')); });
 const press = () => audio.unlock();
 document.addEventListener('pointerdown', press); document.addEventListener('keydown', press);
 // What the last press said about itself: a press the engine drops (Mute, Classroom, a bus off, the world's ticks off, the reward budget...) is silent, and a page built for listening must not leave it
@@ -40,7 +59,7 @@ const app = $('app');
 const keyOf = (id, v) => id + '#' + v;
 const split = (k) => { const i = k.indexOf('#'); return i < 0 ? [k, null] : [k.slice(0, i), k.slice(i + 1)]; };
 const expand = (item) => { const [id, v] = split(item); if (!RECIPES[id]) return []; return v ? [[id, v]] : variantsOf(id).map((x) => [id, x]); };
-const hear = (id, v, o = {}, mark = null) => { audio.unlock(); sync(); const before = dropped(), r = audio.play(id, { variant: v, noCooldown: true, player: true, ...o }); said(!!r, id, before, mark); return r; };
+const hear = (id, v, o = {}, mark = null) => { audio.unlock(); sync(); const before = dropped(), r = audio.play(id, { variant: v, noCooldown: true, player: true, preempt: true, ...o }); said(!!r, id, before, mark); return r; }; // preempt: a card pressed while a fanfare still rings cuts it (the game plays big moments one at a time; an audition is a listener moving from card to card, and a silent card is taken for a broken one)
 /** Play a list of [id, variant] one after the other, each given the room of its own length (and a breath). */
 let seqToken = 0;
 /** A run of sounds one after another: each press speaks for itself while it plays, and at the end the status line says how many did not sound and why (the last one heard must not hide the ones before). */
@@ -49,11 +68,17 @@ async function sequence(list, gap = 350) {
   for (const [id, v] of list) { if (token !== seqToken) return; hear(id, v); if (!said.last.heard) { miss++; why = said.last.why; } await sleep(Math.max(500, (RECIPES[id].dur || 0.5) * 1000) + gap); }
   if (token === seqToken) say(miss ? `${why} (${miss} of ${list.length} did not sound)` : '');
 }
-$('stop').onclick = () => { seqToken++; audio.stopAll(60); audio.dial.stop(); say('stopped every sound and the repair dial tone.'); };
+$('stop').onclick = () => { seqToken++; audio.stopAll(60); audio.dial.stop(); $('amb').checked = false; sync(); say('stopped every sound, the repair dial tone and the ambient bed (Ambient is unticked: tick it to hear a bed again).'); }; // the bed is a sound too: it kept playing under a status line that said everything had stopped
 // Back to the settings of a first visit, in one press: a bar left on Mute or on the Classroom rule from an earlier test is the likeliest reason for a silent card.
-$('reset').onclick = () => { for (const [id, on] of [['mute', false], ['ui', true], ['game', true], ['world', true], ['amb', false], ['quiet', false]]) $(id).checked = on; $('vol').value = 70; $('ambvol').value = 70; audio.unlock(); sync(); say('settings are back to a first visit: volume 70, Interface, Game and World ticks on, Ambient off, no Classroom rule.'); };
+$('reset').onclick = () => { for (const [id, on] of [['mute', false], ['ui', true], ['game', true], ['world', true], ['amb', false], ['quiet', false], ['mono', false], ['lap', false]]) $(id).checked = on; $('vol').value = 70; $('ambvol').value = 70; audio.unlock(); sync(); reroute(); say('settings are back to a first visit: volume 70, Interface, Game and World ticks on, Ambient off, no Classroom rule, stereo, full range.'); };
 
 // ---- the cards: a sound with its tier (a word, not only a colour), its meaning and its trigger
+/** The clause of the id's recipe that is about one variant ("on: ...; off: ..." -> the one for `on`), or '' when the recipe does not name it. */
+function variantLine(e, v) {
+  if (!v || !e.recipe || variantsOf(e.id).length < 2) return '';
+  const seg = String(e.recipe).split(/;\s+/).find((t) => t.startsWith(v + ': ') || t.startsWith(v + ' '));
+  return seg ? v + ': ' + seg.replace(/^[^:]*:\s*/, '') : '';
+}
 function card(parent, id, v) {
   const e = RECIPES[id], tier = tierOf(id, v), c = el('div', 'card', null, parent);
   const b = el('button', null, id + (variantsOf(id).length > 1 ? ' / ' + v : ''), c); b.dataset.tier = tier;
@@ -61,6 +86,7 @@ function card(parent, id, v) {
   el('span', 'chip ' + tier, tier, c);
   el('p', 'why', '', c); // filled when a press is held back
   el('div', 'meaning', e.meaning, c);
+  const vl = variantLine(e, v); if (vl) el('div', 'mute', vl, c).style.fontSize = '.85rem'; // what THIS variant is (the meaning above is the id's, shared by all its variants)
   const d = el('details', 'trig', null, c); el('summary', null, 'when it plays', d); el('p', null, e.trigger, d);
   return c;
 }
@@ -160,13 +186,45 @@ const bursts = {
   };
   for (const id of BED_IDS) { const b = el('button', null, 'bed ' + id, row); b.onclick = () => { st.theme = id; push(b); }; }
   const row2 = el('div', 'row', null, sec);
-  for (const [label, fn] of [['night', () => { st.night = st.night ? 0 : 1; }], ['rain', () => { st.rain = !st.rain; }], ['tariff', () => { st.tariff = !st.tariff; }], ['wealth tier 3', () => { st.tier = st.tier >= 3 ? 1 : 3; }], ['wealth tier 4', () => { st.tier = st.tier >= 4 ? 1 : 4; }]]) { const b = el('button', null, label, row2); b.onclick = () => { fn(); push(b); }; }
+  // A modifier is a switch: it says whether it is on (aria-pressed, and a style that does not depend on colour), since pressing 'night' twice is the only way back and nothing else showed which were set.
+  const mods = [['night', () => { st.night = st.night ? 0 : 1; }, () => !!st.night], ['rain', () => { st.rain = !st.rain; }, () => st.rain], ['tariff', () => { st.tariff = !st.tariff; }, () => st.tariff], ['wealth tier 3', () => { st.tier = st.tier === 3 ? 1 : 3; }, () => st.tier === 3], ['wealth tier 4', () => { st.tier = st.tier === 4 ? 1 : 4; }, () => st.tier === 4]], modBtns = [];
+  const paintMods = () => { for (const [b, on] of modBtns) b.setAttribute('aria-pressed', String(!!on())); };
+  for (const [label, fn, on] of mods) { const b = el('button', null, label, row2); b.setAttribute('aria-pressed', 'false'); modBtns.push([b, on]); b.onclick = () => { fn(); paintMods(); push(b); }; }
   const row3 = el('div', 'row', null, sec);
   for (const o of ONE_SHOTS) {
     const b = el('button', null, o.id, row3); b.title = o.recipe;
     b.onclick = () => { audio.unlock(); sync(); const v = audio.playOneShot?.(o.id), why = oneShotWhy(A(), audio.state) || (v ? '' : 'the engine is not running yet (press anywhere once), or the tab is hidden.'); b.classList.toggle('silent', !!why); silent(why); };
   }
 }
+// ---- the blind round (docs/AUDIO.md 10.5 item 2): twenty unlabelled sounds, five gains, five losses, five warnings and five neutral, in a shuffled order; the listener names each, and the score on gain against loss
+// (the target is 90% right) and the key to every sound come at the end. Names, tiers and meanings are not on the page while it runs.
+{ const sec = el('section', 'grp', null, app); el('h2', null, 'Blind round: gain or loss?', sec);
+  el('p', 'mute', 'Twenty sounds with no names: press Play, then say what it is. The target of the listening checklist is at least 90% right on gain against loss. Nothing on this page names a sound until the round is over.', sec);
+  const box = el('div', 'blind', null, sec), live = el('div', null, null, box); let deck = [], answers = [], at = 0;
+  const start = () => { deck = blindDeck(); answers = []; at = 0; show(); };
+  const show = () => {
+    live.replaceChildren();
+    if (!deck.length) { const b = el('button', 'all', 'Start a round', live); b.onclick = start; return; }
+    if (at >= deck.length) return finish();
+    el('div', 'big', `Sound ${at + 1} of ${deck.length}`, live);
+    const row = el('div', 'row', null, live), p = el('button', null, 'Play (again)', row); p.onclick = () => { const [id, v] = deck[at].key.split('#'); hear(id, v, { preempt: true }); }; p.dataset.blind = 'play';
+    const row2 = el('div', 'row', null, live); row2.style.marginTop = '6px';
+    for (const k of BLIND_KINDS) { const b = el('button', null, k[0].toUpperCase() + k.slice(1), row2); b.dataset.kind = k; b.onclick = () => { answers[at] = k; at++; show(); }; }
+    p.focus({ preventScroll: true });
+  };
+  const finish = () => {
+    live.replaceChildren();
+    const r = blindScore(deck, answers), pc = Math.round(r.gainLoss.share * 100);
+    el('div', 'big ' + (pc >= 90 ? 'good' : 'bad'), `Gain against loss: ${r.gainLoss.right} of ${r.gainLoss.of} right (${pc}%; the target is 90%). All four kinds: ${r.all.right} of ${r.all.of}.`, live);
+    const t = el('table', null, null, live), hd = el('tr', null, null, t); for (const h of ['#', 'sound', 'it is', 'you said']) el('th', null, h, hd);
+    r.rows.forEach((x, i) => { const tr = el('tr', x.right ? 'good' : 'bad', null, t); el('td', null, String(i + 1), tr); el('td', null, x.key, tr); el('td', null, x.kind, tr); el('td', null, x.said || '-', tr); });
+    const again = el('button', 'all', 'Another round', live); again.onclick = start; again.style.marginTop = '8px';
+  };
+  show();
+}
+
+// ---- contents: the page is 14,000 px of cards in seventeen groups
+{ const toc = $('toc'); let n = 0; for (const sec of app.querySelectorAll('section.grp')) { const h = sec.querySelector('h2'); if (!h) continue; if (!sec.id) sec.id = 'g-x' + (++n); const a = el('a', null, h.textContent.replace(/\s*\(.*$/, ''), toc); a.href = '#' + sec.id; } }
 // ---- the meter
 const meter = $('meter').firstElementChild, dbEl = $('db'), buf = new Float32Array(1024);
 let peakHold = -99;
