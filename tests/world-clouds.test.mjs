@@ -8,7 +8,7 @@ import { fogged, luma, mix, rgb, gray } from '../js/world/iso.js';
 import { veiled, CLOUD } from '../js/world/palette.js';
 import { FLAGS, setFlag, slotFor, runLayer } from '../js/world/stack.js';
 import { crescent, crescentWidth, pathCrescent, lobesOf, bankOf, bankTones, lobeLift, paintBank, paintPuff, slideAt, bobAt, swellAt, MOTION, SHELLS, LOOK } from '../js/world/cloudpaint.js';
-import { scaleFor, CROSS_MS, paintShadow, paintPadlock, FAR_SCALE, MID_SCALE, FINE_SCALE, REVEAL_MS } from '../js/world/clouds.js';
+import { scalesAt, skyCloudAt, SKY_CELL, paintShadow, paintPadlock, FAR_SCALE, MID_SCALE, FINE_SCALE, REVEAL_MS } from '../js/world/clouds.js';
 import { bankPuffs } from '../js/world/cloudbank.js';
 import { FOG_DIM } from '../js/world/common.js';
 
@@ -101,12 +101,13 @@ test('the layers: a puff is three fills; the bank\'s shadow is two quads of the 
   const none = recCtx(); paintPadlock(none.ctx, 0, 0, 0, 0.01); assert.equal(none.log.calls.length, 0);
 });
 
-test('which bank is drawn: the far one to 0.22, the coarse one to 0.66, the fine one from there, with a hysteresis of 0.02 so a zoom that rests at an edge never flips; the change is a cross-fade in time, never in zoom', () => {
-  assert.equal(scaleFor(0.129, 0), FAR_SCALE); assert.equal(scaleFor(0.5, 0), MID_SCALE); assert.equal(scaleFor(0.9, 0), FINE_SCALE); assert.equal(scaleFor(0.3, 0), MID_SCALE);
-  assert.equal(scaleFor(0.215, FAR_SCALE), FAR_SCALE, 'a far bank stays far until 0.23'); assert.equal(scaleFor(0.225, FAR_SCALE), FAR_SCALE); assert.equal(scaleFor(0.231, FAR_SCALE), MID_SCALE); assert.equal(scaleFor(0.215, MID_SCALE), MID_SCALE, 'a coarse one stays coarse down to 0.21');
-  assert.equal(scaleFor(0.67, MID_SCALE), MID_SCALE); assert.equal(scaleFor(0.681, MID_SCALE), FINE_SCALE); assert.equal(scaleFor(0.65, FINE_SCALE), FINE_SCALE, 'a fine one stays fine down to 0.64'); assert.equal(scaleFor(0.639, FINE_SCALE), MID_SCALE);
-  for (const z of [0.2, 0.22, 0.66, 0.67]) { const a = scaleFor(z, FAR_SCALE), b = scaleFor(z, MID_SCALE), c = scaleFor(z, FINE_SCALE); assert.ok([a, b, c].every((s) => [FAR_SCALE, MID_SCALE, FINE_SCALE].includes(s))); }
-  assert.equal(CROSS_MS, 350);
+test('which banks are drawn is a pure function of the zoom: the far bank to 0.18, the coarse one from 0.22 to 0.62, the fine one from 0.70, and between them a short band in which the finer one grows in as the coarser one shrinks (opaque, never a pop)', () => {
+  assert.deepEqual(scalesAt(0.129), [FAR_SCALE, 1, 0, 0]); assert.deepEqual(scalesAt(0.5), [MID_SCALE, 1, 0, 0]); assert.deepEqual(scalesAt(0.9), [FINE_SCALE, 1, 0, 0]); assert.deepEqual(scalesAt(0.3), [MID_SCALE, 1, 0, 0]); assert.deepEqual(scalesAt(0.18), [FAR_SCALE, 1, 0, 0]); assert.deepEqual(scalesAt(0.22), [MID_SCALE, 1, 0, 0]);
+  for (const [lo, hi, a, b] of [[0.62, 0.70, MID_SCALE, FINE_SCALE], [0.18, 0.22, FAR_SCALE, MID_SCALE]]) {
+    let prevG = 0, prevS = 1; for (let z = lo + 0.001; z < hi; z += (hi - lo) / 40) { const s = scalesAt(z); assert.equal(s[0], a); assert.equal(s[2], b); assert.ok(s[3] >= prevG - 1e-12 && s[1] <= prevS + 1e-12, 'the finer grows, the coarser shrinks, monotonically'); assert.ok(s[1] >= 0.7 - 1e-9 && s[1] <= 1); near(s[1], 1 - 0.3 * s[3], 1e-12); prevG = s[3]; prevS = s[1]; }
+    assert.ok(scalesAt(hi - 0.001)[3] > 0.99 && scalesAt(lo + 0.001)[3] < 0.01, 'it begins and ends at nothing and everything');
+  }
+  assert.deepEqual(scalesAt(0.129), scalesAt(0.129), 'a function of the zoom and nothing else');
 });
 
 test('the V2 layer: a locked district under cloud draws its bank, shadow and padlock; an open one draws nothing; the opening plays the dissolve; under reduced motion it is a 400 ms cross-fade of the whole bank', () => {
@@ -134,14 +135,14 @@ test('while the clouds are V2 a colour under cloud is veiled, never darkened (a 
   finally { setFlag('clouds', 'legacy'); }
 });
 
-test('the V2 layer changes banks by a cross-fade in time: two banks for 350 ms after the zoom crosses an edge, one after, and at once under reduced motion', () => {
-  const D = DIST[3], b = bankOf(D, 1), view = { x0: b.box.x0 - 50, x1: b.box.x1 + 50, y0: b.box.y0 - 50, y1: b.box.y1 + 50 }, vz = new Set([3]), fx = { dim: FOG_DIM, fog: 1, lights: 0 }; let T = 1000, calm = false, z = 0.5;
-  const w = { cam: { get z() { return z; } }, dusk: 0, env: { t: 0, night: 0 }, reveal: {}, hits: [], overlay: [], lights: [], dirty: false, toWorld() {}, toScreen() {}, fxOf: () => fx, reduced: () => calm, get t() { return T; } };
-  const arcs = () => { const r = recCtx(); setFlag('clouds', 'v2'); runLayer('clouds', w, r.ctx, view, vz); return r.log.calls.filter((c) => c[0] === 'arc').length; };
-  try {
-    arcs(); const coarse = arcs(); z = 0.75; T += 16; w.dirty = false; const start = arcs(); assert.ok(start > coarse * 0.5 && w.dirty, 'the fine bank begins to grow over the coarse one and the world keeps drawing');
-    T += 175; const mid = arcs(); assert.ok(mid > coarse, 'both banks are on show half way'); T += 400; w.dirty = false; const fine = arcs(); assert.equal(w.dirty, false, 'then it is done'); assert.ok(fine > coarse, 'the fine bank has more puffs');
-    T += 400; assert.equal(arcs(), fine, 'one bank at rest');
-    calm = true; z = 0.4; T += 16; w.dirty = false; const instant = arcs(); assert.equal(w.dirty, false, 'reduced motion: no cross-fade'); assert.ok(instant < fine);
-  } finally { setFlag('clouds', 'legacy'); }
+
+test('the sky\'s own clouds: a cell holds at most one, deterministic, drifting east at 8 world px a second inside its cell and fading in and out at its ends; they are drawn over the sea at the far and middle zooms and not close in', () => {
+  const a = {}, b = {}; let cell = null; for (let cx = 0; cx < 8 && !cell; cx++) if (skyCloudAt(cx, 1, 5000, a)) cell = [cx, 1]; assert.ok(cell); skyCloudAt(cell[0], cell[1], 5000, b); assert.deepEqual(a, b);
+  let n = 0; for (let cx = -10; cx < 10; cx++) for (let cy = -10; cy < 10; cy++) { const o = {}; if (!skyCloudAt(cx, cy, 0, o)) continue; n++; assert.ok(o.x >= cx * SKY_CELL && o.x <= (cx + 1) * SKY_CELL && o.a >= 0 && o.a <= 1 && o.size >= 0.8 && o.size <= 1.3); }
+  assert.ok(n >= 140 && n <= 220, `${n} clouds in 400 cells`);
+  const p = {}, q = {}; skyCloudAt(cell[0], cell[1], 0, p); skyCloudAt(cell[0], cell[1], 10000, q); assert.ok(Math.abs(q.x - p.x - 80) < 1 || Math.abs(q.x - p.x + SKY_CELL - 80) < 1, 'eight world px a second');
+  let faded = 0; for (let t = 0; t < 400000; t += 1000) { const o = {}; skyCloudAt(cell[0], cell[1], t, o); if (o.a < 0.05) faded++; } assert.ok(faded > 0, 'it fades out at the end of its crossing, so nothing pops at the cell\'s edge');
+  const view = { x0: -4400, x1: 6300, y0: -200, y1: 5200 }, w = { cam: { z: 0.13 }, dusk: 0, env: { t: 30000, night: 0 }, reveal: {}, hits: [], overlay: [], lights: [], dirty: false, toWorld() {}, toScreen() {}, fxOf: () => ({ dim: 0, fog: 0, lights: 0 }), reduced: () => false, t: 30000 };
+  const arcs = (z) => { w.cam.z = z; const r = recCtx(); setFlag('clouds', 'v2'); try { runLayer('clouds', w, r.ctx, view, new Set()); } finally { setFlag('clouds', 'legacy'); } return r.log.calls.filter((c) => c[0] === 'arc').length; };
+  assert.ok(arcs(0.13) > 20, 'small clouds over the sea at the whole-island view'); assert.equal(arcs(1.2), 0, 'none at the working zoom: the player is looking at the ground'); assert.equal(arcs(0.13), arcs(0.13), 'deterministic');
 });
