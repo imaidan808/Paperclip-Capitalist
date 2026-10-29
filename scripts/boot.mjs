@@ -11,9 +11,13 @@ export async function startApp({ base = 'http://localhost:8090', w = 1440, h = 9
 }
 
 export async function newGame(p, { perks = 'trades,pro', days = 0 } = {}) {
-  await p.eval(`(async()=>{const wait=ms=>new Promise(r=>setTimeout(r,ms)); [...document.querySelectorAll('button')].find(b=>/Play solo/i.test(b.textContent)).click(); await wait(500);
+  // Every step waits for the screen it needs (the page loads its modules over the network, and a slow or busy machine takes longer than any fixed pause), and gives up with a message that says which one never came.
+  await p.eval(`(async()=>{const wait=ms=>new Promise(r=>setTimeout(r,ms)); const until=async(f,what)=>{ for (let i=0;i<400;i++){ const v=f(); if (v) return v; await wait(50); } throw new Error('newGame: timed out waiting for '+what); };
+    (await until(()=>document.querySelector('button[data-act="solo"]'),'the title screen')).click();
+    await until(()=>document.querySelector('input[type=checkbox]'),'the Background draft');
     for (const id of ${JSON.stringify(perks.split(','))}) { const cb=[...document.querySelectorAll('input[type=checkbox]')].find(c=>c.value===id||c.closest('label,article,div')?.textContent.toLowerCase().includes(id)); cb?.click(); await wait(100); }
-    [...document.querySelectorAll('button')].find(b=>/^Begin/i.test(b.textContent.trim())).click(); await wait(1500); })()`);
+    (await until(()=>[...document.querySelectorAll('button')].find(b=>/^Begin/i.test(b.textContent.trim())),'the Begin button')).click();
+    await until(()=>window.pc && window.pc.world && window.pc.S && window.pc.S.game,'the game and its world'); await wait(500); })()`);
   if (+days) await p.eval(`(async()=>{const {run}=await import('/tests/bot.mjs'); run(pc.S.game,{days:${+days}}); pc.S.emit('change'); await new Promise(r=>setTimeout(r,800)); })()`);
   await quiet(p);
 }
