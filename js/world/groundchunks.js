@@ -4,6 +4,7 @@
 // Owner: T1 TERRAIN, COAST AND WATER (docs/RENDER_PLAN.md).
 import { lockedOf, sceneOf } from './scene.js';
 import { LAYOUT } from './layout.js';
+import { registerReleaser } from './gfx.js';
 
 const BUFS = new Map(); // one pixel buffer (and its ImageData) per bake size: the base is painted into it and put into the chunk's surface
 const bufFor = (n) => { let b = BUFS.get(n); if (!b) { const buf = new Uint8ClampedArray(n * n * 4); b = { buf, img: typeof ImageData === 'function' ? new ImageData(buf, n, n) : null }; BUFS.set(n, b); } return b; };
@@ -21,3 +22,4 @@ export function chunkDescriptor(w, view, info) {
 }
 /** Let go of the pixel buffers (a world that gives its memory back, a test). */
 export function releaseChunkBuffers() { BUFS.clear(); }
+registerReleaser(releaseChunkBuffers); // (World.release gives the pixel buffers back with everything else)

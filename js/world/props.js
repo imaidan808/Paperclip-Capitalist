@@ -6,6 +6,7 @@ import { P, box, ellipse } from './iso.js';
 import { hazeAt } from './shading.js';
 import { drawSprite, drawOverlays } from './sprites.js';
 import { propV2 } from './stack.js';
+import { METAL, PLASTER, TILE } from './palette.js';
 import { DRAW, LAYER, tint, body, hot, smoke, sign, signLeft } from './props-common.js';
 import { roof } from './props-buildings.js';
 import './props-street.js';
@@ -16,8 +17,11 @@ export { DRAW };
 
 // ---------------------------------------------------------------- far view and dispatch
 /** Far view: a plain shaded block with the prop's own colour (no windows, no animation). */
+/** The block a prop is from the island view when it carries no colour of its own: a toy tone of the palette by kind, never the old dull grey-blue (the blocks stood grey beside the pastel V2 ground and buildings). */
+const FAR_TONE = Object.assign(Object.create(null), { crates: TILE.mustard, cart: TILE.mustard, scrap: METAL.steelLight, tires: TILE.slate, barrel: TILE.terracotta, containers: TILE.teal, autos: TILE.terracotta, tank: METAL.steelLight, silo: METAL.corrugated, stack: METAL.corrugated, dome: PLASTER.cream, dish: METAL.steelHi, windmill: PLASTER.cream, fence: PLASTER.butter, bench: PLASTER.butter, bollard: PLASTER.butter, lamp: METAL.steelLight, hay: TILE.thatch, planter: PLASTER.mint, hedge: PLASTER.mint, pillar: PLASTER.cream, statue: PLASTER.lilac, fountain: PLASTER.sky, forsale: PLASTER.rose, billboard: PLASTER.rose, polesign: PLASTER.rose });
+const FAR_DEFAULT = METAL.steelLight;
 function farDraw(ctx, p, env) {
-  const c = p.col || p.color || p.hull || p.acc || '#8a94a8';
+  const c = p.col || p.color || p.hull || p.acc || FAR_TONE[p.t] || FAR_DEFAULT;
   if (p.t === 'tree' || p.t === 'topiary') { ellipse(ctx, ...P(p.gx, p.gy, p.h * 0.6), 8, 7, tint(p.c || '#3f8a4a', env)); return null; }
   const f = box(ctx, p.gx, p.gy, p.w, p.d, Math.max(4, p.h), body(c, env));
   return p.hot ? hot(f) : null;
