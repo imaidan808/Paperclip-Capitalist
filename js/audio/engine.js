@@ -5,7 +5,7 @@ import { voice, master, dB, hz, fadeIn, noiseBuffers, MAKEUP_FALLBACK, FAMILY_MS
 import { RECIPES, IDS, layersFor, tierOf, firstVariant, variantsOf, cooldownOf, variantRank, trimFor, noiseAtFor, isMoment, PREEMPT, jitterOf } from './recipes.js';
 import { createAmbient, oneShotLayers } from './ambient.js';
 import { TRIMS } from './trims.js';
-import { createResolverState, resolveBurst, gateClock, holdRelease, stateGate, catchingUp, recentPress } from './resolve.js';
+import { createResolverState, resolveBurst, gateClock, holdRelease, stateGate, catchingUp, recentPress, resetRun, dropHeld } from './resolve.js';
 import { volumeGain, masterGain, CLASSROOM_DB } from './settings.js';
 
 const PRI = { tiny: 1, medium: 2, loud: 3 };
@@ -509,7 +509,9 @@ export function createAudio(cfg = {}) {
       if (o.chain) dest = master(oc, { master: o.master ?? 1, makeup: 1 / (TRIMS.makeup || MAKEUP_FALLBACK) }).buses[e.bus];
       return voice(oc, dest, layersFor(id, variant ?? firstVariant(id), o.params, o.k || 0), at, { seed: o.seed ?? 7, trim: trimFor(id, variant ?? firstVariant(id), o.k || 0) + (o.gainDb || 0), noiseAt: noiseAtFor(id, variant ?? firstVariant(id), o.k || 0), noJitter: true, jit: 0 });
     },
-    release(keepMs = 0) { api.stopAll(40, keepMs); amb.stop(0.3); queue = []; if (idleT != null) { timers.clear(idleT); idleT = null; } env.hold = false; env.sandbox = false; },
+    release(keepMs = 0) { api.stopAll(40, keepMs); amb.stop(0.3); queue = []; if (idleT != null) { timers.clear(idleT); idleT = null; } env.hold = false; env.sandbox = false; dropHeld(rs); }, // a game that is left takes its held coin with it: the sheet that would release it is gone, and `hold(false)` returns early when the hold is already off (WA-1)
+    /** A real game is wired or has been left (WA-1): the resolver's run-scoped state goes back to a first run's (the door bells that teach the cue, the held coin, the gaps); the reward budget stays. Not for an Academy lesson's sandbox: `wireGame` does not call it. */
+    newRun() { resetRun(rs); },
     /** Closed on pagehide. */
     close() { api.release(); try { ctx?.close?.(); } catch { /* ignore */ } ctx = null; chain = null; nodes = null; unlocked = false; },
     get supported() { return supported; },

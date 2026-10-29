@@ -178,3 +178,81 @@ test('R3-2: AUDIO.md 4.5 says what the level is now and scripts/audio-check.mjs 
   const check = src('scripts/audio-check.mjs');
   assert.match(check, /DIAL_TOL = 3\.0/); assert.match(check, /m\.dialTone\(\$\{sr\}\)/); assert.match(check, /--dial/); assert.match(check, /await dialCheck\(call, tierMedian\.tiny\)/);
 });
+
+// ================================================================================ WA-1: what a run keeps, and what the page keeps
+import { createResolverState, resetRun, dropHeld, holdRelease, RUN_FIELDS } from '../js/audio/resolve.js';
+/** What the resolver measures in real time whatever run is on: the reward budget (a fanfare that rang 5 s ago holds the next one back, in a new run too) and the counters `stats()` reports. */
+const KEPT_FIELDS = ['lastFull', 'lastTick', 'lastDaily', 'lastFullLevel', 'sentences', 'bursts', 'maxSentences'];
+/** A resolver state that a run has used: every field away from where a first run starts. */
+function used() {
+  const st = createResolverState();
+  Object.assign(st, { lastFull: 5000, lastTick: 5100, lastDaily: 5200, lastFullLevel: 5300, lastBuyer: 6000, lastUrgent: 6100, lastCycle: 6200, buyers: 7, days: 9, holdNet: 120, holdAny: true, fastNet: 33, nextFast: 99999, sentences: 4, bursts: 3, maxSentences: 2 });
+  st.states.overdraft = { last: 6300, sum: 12 };
+  return st;
+}
+test('WA-1: every field of the resolver state belongs to the run or to the page, so a field added later cannot be forgotten by a new run', () => {
+  assert.deepEqual([...RUN_FIELDS, ...KEPT_FIELDS].sort(), Object.keys(createResolverState()).sort(), 'put a new field in RUN_FIELDS (a run starts without it) or say here why the page keeps it');
+  assert.deepEqual(RUN_FIELDS.filter((k) => KEPT_FIELDS.includes(k)), [], 'and on one side only');
+});
+test('WA-1: resetRun puts the run\'s fields back to a first run\'s, in place, and leaves the reward budget and the counters', () => {
+  const st = used(), states = st.states, fresh = createResolverState();
+  assert.equal(resetRun(st), st, 'in place: the engine keeps the one object');
+  for (const k of RUN_FIELDS) assert.deepEqual(st[k], fresh[k], `${k} is a first run's`);
+  assert.deepEqual(st.states, {}); assert.notEqual(st.states, states, 'the standing-state gates are a new object (a state that was announced 40 s ago is announced again by the new run)');
+  for (const k of KEPT_FIELDS) assert.equal(st[k], used()[k], `${k} stays`);
+});
+test('WA-1: dropHeld forgets the sums that wait for a coin, and only those', () => {
+  const st = dropHeld(used()), was = used();
+  assert.deepEqual([st.holdNet, st.holdAny, st.fastNet], [0, false, 0]);
+  for (const k of Object.keys(was).filter((k) => !['holdNet', 'holdAny', 'fastNet'].includes(k))) assert.deepEqual(st[k], was[k], `${k} stays`);
+  assert.equal(holdRelease(st, 5000), null, 'and a dialog that closes after it has no coin to play');
+});
+test('WA-1: a coin held under a dialog does not outlive the game that held it: hold, a manager cycle, release, then the next game\'s first dialog plays nothing', () => {
+  const t = rig(); t.audio.setEnv({ netWorth: 10000, speed: 1 });
+  const coins = () => (t.audio.stats().played['cash.in'] || 0) + (t.audio.stats().played['cash.out'] || 0);
+  // the control: in one game the held cycles come out as one coin when the dialog closes
+  t.audio.hold(true);
+  assert.equal(t.audio.request('manager.cycle', { meta: { net: 4000 } }), false, 'held');
+  assert.equal(t.audio.request('manager.cycle', { meta: { net: 2500 } }), false, 'held');
+  t.audio.hold(false); t.clock.advance(60);
+  assert.equal(coins(), 1, 'one coin for both (the control: the hold works)');
+  t.clock.advance(5000); // (long after the coin's own cooldown: a second coin that is held back must be held back by the fix, not by that)
+  // a dialog is open, a cycle is held, and the game is left (unwire releases the engine): the sheet that would release the coin is gone with the game
+  t.audio.hold(true); t.audio.request('manager.cycle', { meta: { net: 4000 } });
+  t.audio.release(KEEP_MS);
+  const built = sources(t.ctx).length;
+  // the next game's first dialog opens and closes
+  t.audio.hold(true); t.audio.hold(false); t.clock.advance(60);
+  assert.equal(coins(), 1, 'no second coin: it rang a shower for money of another run (cash.in xl)');
+  assert.equal(sources(t.ctx).length, built, 'nothing was built');
+});
+test('WA-1: the 16x coin\'s sum goes with the game too, not only the dialog\'s', () => {
+  const t = rig(); t.audio.setEnv({ netWorth: 10000, speed: 16 });
+  const st = t.audio._resolver;
+  t.audio.request('manager.cycle', { meta: { net: 40 } }); t.clock.advance(60); // the first plays, with its sum
+  t.audio.request('manager.cycle', { meta: { net: 70 } }); // within the 8 s: summed, not played
+  assert.equal(st.fastNet, 70);
+  t.audio.release(KEEP_MS);
+  assert.equal(st.fastNet, 0, 'a game that is left takes the sum with it');
+});
+test('WA-1: the three door bells that teach the cue are a run\'s: after newRun the next run\'s first three ring, however soon after the last run\'s', () => {
+  const t = rig(), bells = () => t.audio.stats().played['buyer.arrive'] || 0;
+  const arrive = () => { t.audio.request('buyer.arrive', { clock: true }); t.clock.advance(3500); };
+  for (let i = 0; i < 3; i++) arrive();
+  assert.equal(bells(), 3, 'three bells');
+  arrive(); assert.equal(bells(), 3, 'the fourth, 10 s after the first, waits for the 30 s gap');
+  for (let i = 0; i < 3; i++) arrive();
+  assert.equal(bells(), 3, 'the control: in a run that goes on, the next buyers are held to one per 30 s');
+  t.audio.newRun();
+  for (let i = 0; i < 3; i++) arrive();
+  assert.equal(bells(), 6, 'a new run teaches the cue again, 3.5 s apart');
+  arrive(); assert.equal(bells(), 6, 'and its fourth waits for the 30 s as ever');
+});
+test('WA-1: a new run keeps the reward budget, and so does leaving a game: a fanfare that rang a few seconds ago still holds the next one back', () => {
+  const t = rig(); t.audio.setEnv({ lastPress: t.clock.now() });
+  t.audio.request('level.up', { meta: { level: 2 } }); t.audio.request('sale.win', { variant: 'w', with: [['cash.in', { size: 'm' }]] }); t.clock.flush();
+  const rs = t.audio._resolver, budget = KEPT_FIELDS.map((k) => rs[k]);
+  assert.ok(rs.lastFull > -Infinity, 'a full reward sentence was spent');
+  t.audio.newRun(); assert.deepEqual(KEPT_FIELDS.map((k) => rs[k]), budget, 'newRun');
+  t.audio.release(KEEP_MS); assert.deepEqual(KEPT_FIELDS.map((k) => rs[k]), budget, 'release');
+});

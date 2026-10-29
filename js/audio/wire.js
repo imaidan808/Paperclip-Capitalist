@@ -510,10 +510,14 @@ export function wireGame(ctx) {
     }));
     if (typeof off === 'function') offs.push(off);
   }
-  audio.setEnv({ sandbox: !!g()?.sandbox });
+  const sandboxed = !!g()?.sandbox;
+  audio.setEnv({ sandbox: sandboxed });
+  // A real game starts with the resolver's run-scoped state of a first run (sixth round, WA-1): the door bells that teach the cue are the run's own, and nothing held by an earlier run, or spent by an
+  // Academy lesson, is carried into it. A lesson's sandbox neither starts a run nor ends one: it counts and holds what it likes, and the next real game starts clean.
+  if (!sandboxed) audio.newRun?.();
   roomCheck();
   pushAmbient();
-  return function unwire() { if (!alive && gamesWired === 0) return; alive = false; gamesWired = Math.max(0, gamesWired - 1); for (const off of offs) { try { off(); } catch { /* gone */ } } audio.release(KEEP_MS); };
+  return function unwire() { if (!alive && gamesWired === 0) return; alive = false; gamesWired = Math.max(0, gamesWired - 1); for (const off of offs) { try { off(); } catch { /* gone */ } } audio.release(KEEP_MS); if (!sandboxed) audio.newRun?.(); };
 }
 /** The one entry point for a screen that wants both layers: the page-wide one (once) and the game's. */
 export function wireAudio(ctx, d) { initAudio(d); return wireGame(ctx); }
