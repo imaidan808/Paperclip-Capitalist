@@ -49,9 +49,9 @@ reg('hall', { far: farBlock, body: hallBody, live: hallLive, pad: [12, 30, 12, 8
 // the exchange: the hall in champagne with the golden pedestal on the roof; the globe turns live
 const exchangeBody = (ctx, p, env) => {
   const q = { ...p, col: '#fffaf0', roofCol: '#7a5a30', sign: 'EXCHANGE', hot: 1 }, r = hallBody(ctx, q, env, { hot: 1 }), S = styleOf(p, env), gold = S.C('#f6c94f');
-  const [x, y] = P(p.gx + p.w / 2, p.gy + p.d / 2, p.h + 4 + 3);
+  const [x, y] = P(p.gx + p.w / 2, p.gy + p.d / 2, p.h + 4 + 9);
   ctx.fillStyle = 'rgba(74,63,136,.22)'; ctx.beginPath(); ctx.ellipse(x + 3, y + 3, 17, 7, 0, 0, 6.3); ctx.fill();
-  toyBox(ctx, p.gx + p.w / 2 - 0.5, p.gy + p.d / 2 - 0.5, 1, 1, 8, mix(gold, '#ffffff', 0.15), { z: p.h + 4 + 3, r: 3.5, gloss: 0.9 });
+  toyBox(ctx, p.gx + p.w / 2 - 0.5, p.gy + p.d / 2 - 0.5, 1, 1, 8, mix(gold, '#ffffff', 0.15), { z: p.h + 4 + 9, r: 3.5, gloss: 0.9 });
   ctx.strokeStyle = rgbaOf(gold, 0.5); ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(x, y - 8 - 17, 22, 0, 6.3); ctx.stroke(); // the halo ring behind the globe
   return r;
 };
@@ -65,12 +65,12 @@ function globeAt(ctx, x, y, r, env, t) {
   ctx.fillStyle = 'rgba(255,255,255,.4)'; ctx.beginPath(); ctx.ellipse(x - r * 0.38, y - r * 0.4, r * 0.26, r * 0.18, -0.5, 0, 6.3); ctx.fill();
 }
 const exchangeLive = (ctx, p, env) => {
-  const [x, y] = P(p.gx + p.w / 2, p.gy + p.d / 2, p.h + 4 + 3 + 8 + 17);
+  const [x, y] = P(p.gx + p.w / 2, p.gy + p.d / 2, p.h + 4 + 9 + 8 + 17);
   globeAt(ctx, x, y, 16, env, env.t || 0);
   if (!(env.lite || env.far)) env.lights?.push({ wx: x, wy: y - env.zoff, r: 80, c: '245,211,106', a: 0.35 });
   hallLive(ctx, p, env);
 };
-reg('exchange', { far: farBlock, body: exchangeBody, live: exchangeLive, pad: [12, 56, 12, 8] });
+reg('exchange', { far: farBlock, body: exchangeBody, live: exchangeLive, pad: [12, 64, 12, 8] });
 
 // ---------------------------------------------------------------- the commercial bank
 reg('bank', {

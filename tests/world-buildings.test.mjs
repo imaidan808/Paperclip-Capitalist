@@ -183,3 +183,23 @@ test('the new modules keep the art direction\'s rules in their source: no stroke
     assert.ok(!/\.clip\(\)/.test(src.replace(/ctx\.arc\(x, y, r, 0, 6\.3\); ctx\.clip\(\);/, '').replace(/c\.clip\(\); c\.fillStyle = C\('#ffd02e'\)/, '')), `${f}.js: a path clip is the dearest thing a software canvas is asked for`);
   }
 });
+
+// ---------------------------------------------------------------- plots and pipelines (entities, drawn through the 'plot' and 'pipe' layers)
+const { plotMethods } = await import('../js/world/ents-plots.js'), { slotFor, setFlag } = await import('../js/world/stack.js'), { PLOTS } = await import('../js/world/layout.js');
+function fakeWorld(o = {}) { const w = { hits: [], overlay: [], cam: { z: 1 }, far: false, vt: 0, night: 0, hover: null, g: { s: { hour: 9 } }, reduced: () => false, hourF: () => 9, chip() {}, progress() {}, ...o }; return w; }
+test('the V2 plot and pipe drawers leave the legacy hit polygons, chips and bars: the same click targets, the new picture', () => {
+  const zone = Object.keys(PLOTS).map(Number).find((z) => PLOTS[z] && PLOTS[z].length), pipeKinds = ['student', 'broker', 'logistics'], seen = [];
+  for (const locked of [false, true]) for (const hov of [false, true]) {
+    const e = { id: 'E' + zone, zone, plot: 1, locked, zoneLocked: false }, hover = hov ? { eid: e.id } : null, a = fakeWorld({ hover }), b = fakeWorld({ hover });
+    setFlag('plot', 'legacy'); plotMethods.drawPlot.call(a, recCtx().ctx, e); setFlag('plot', 'v2'); const r = recCtx(); slotFor('plot').draw(r.ctx, {}, env(), b, e); setFlag('plot', 'legacy');
+    assert.deepEqual(b.hits, a.hits, 'the same plot hit'); assert.equal(b.overlay.length, a.overlay.length); assert.equal(b.overlay[0].wy, a.overlay[0].wy); assert.equal(r.log.depth, 0); assert.ok(thinnestStroke(r.log) >= 1.5, 'plot stroke ' + thinnestStroke(r.log)); seen.push('plot');
+  }
+  const locked = fakeWorld(), e2 = { id: 'E', zone, plot: 0, locked: true, zoneLocked: true }; setFlag('plot', 'v2'); slotFor('plot').draw(recCtx().ctx, {}, env(), locked, e2); setFlag('plot', 'legacy'); assert.equal(locked.hits.length, 0, 'a plot under cloud takes no clicks');
+  for (const kind of pipeKinds) for (const [level, status] of [[1, 'running'], [5, 'paused'], [9, 'running'], [3, 'audit']]) {
+    const pipe = { id: 'P' + kind + level, kind, level, status, inflight: 1, prog: 3, len: 12 }, e = { id: 'e' + pipe.id, zone, plot: 0, drop: 7, pipe }, a = fakeWorld(), b = fakeWorld();
+    setFlag('pipe', 'legacy'); plotMethods.drawPipe.call(a, recCtx().ctx, e); setFlag('pipe', 'v2'); const r = recCtx(); slotFor('pipe').draw(r.ctx, {}, env(), b, e); setFlag('pipe', 'legacy');
+    assert.deepEqual(b.hits, a.hits, `${kind} level ${level}: the same pipeline hit`); assert.equal(b.overlay.length, a.overlay.length); assert.equal(b.overlay[0].wy, a.overlay[0].wy, 'the bar stands where it stood');
+    assert.equal(r.log.depth, 0); assert.ok(thinnestStroke(r.log) >= 1.5, `${kind} stroke ${thinnestStroke(r.log)}`); assert.equal(r.log.clips, 0); seen.push('pipe');
+  }
+  assert.equal(seen.length, 4 + 12);
+});
