@@ -14,6 +14,7 @@ import { Fx } from './fx.js';
 import { Lighting, dayTargets } from './lighting.js';
 import { Labels } from './labels.js';
 import { surface, softwareRaster, releaseAll } from './gfx.js';
+import { snapTranslation } from './chunks.js';
 import { clearSprites, setSpriteBudget } from './sprites.js';
 import { FAR_ZOOM, FOG_DIM, money } from './common.js';
 import { runLayer } from './stack.js';
@@ -109,7 +110,7 @@ export class World {
    * makes what it needs again on demand, exactly as after a resize.
    */
   release() {
-    this.gc = null; this.gcValid = false; this.gcSeen = 0; this.waterGr = null; this.seaStrip = undefined; this.seaKey = -1;
+    this.releaseGround(); this.waterGr = null; this.seaStrip = undefined; this.seaKey = -1;
     this.light.release(); this.labels.release(); clearSprites(); releaseShadows(); releaseAll(); // (releaseAll: every holder a module registered through gfx.js's registerReleaser)
   }
   start() { if (this.running) return; this.running = true; this.last = performance.now(); this.raf = requestAnimationFrame((t) => this.frame(t)); }
@@ -131,7 +132,7 @@ export class World {
     this.refreshInset(); setSpriteBudget(this.dpr);
     this.cv.width = Math.floor(this.W * this.dpr); this.cv.height = Math.floor(this.H * this.dpr);
     this.cv.style.width = this.W + 'px'; this.cv.style.height = this.H + 'px';
-    this.gc = null; this.gcValid = false; this.labels.setDpr(this.dpr); // what was made for the old size is made again on demand (the sea's strip is the same at any size: it is stretched, not remade)
+    this.gcValid = false; this.labels.setDpr(this.dpr); // what was made for the old size is made again on demand: the ground's chunks are the same at any window size (they are cut by scale, not by window), and a new density is a new scale the sweep tells from the old
     this.dirty = true;
     if (this.g && this.unlocked) this.draw(); // a resized canvas is blank until redrawn: never show that gap
   }
@@ -506,8 +507,12 @@ export class World {
   safe(name, ctx) { try { this[name](ctx); } catch (err) { ctx.restore?.(); this.fault(err, name); } }
   /** Run one layer of the stack in a screen-space pass; a layer that throws is logged once (under the method's old name) and never blanks the frame. */
   safeLayer(id, name, ctx) { try { runLayer(id, this, ctx, this.view); } catch (err) { ctx.restore?.(); this.fault(err, name); } }
-  /** The camera transform: world pixels (a grid point's sx, sy) to device pixels. The one place it is written. */
-  toWorld(ctx) { const { W, H, dpr } = this, cam = this.cam; ctx.setTransform(dpr * cam.z, 0, 0, dpr * cam.z, dpr * (W / 2 - cam.x * cam.z), dpr * (H / 2 - cam.y * cam.z)); }
+  /**
+   * The camera transform: world pixels (a grid point's sx, sy) to device pixels. The one place it is written. The scale is the frame's render scale (dpr x zoom to 1e-5, `renderScale`) and the translation is rounded to
+   * WHOLE device pixels (docs/RENDER_PLAN.md section 5): the ground chunks, the cached sprites and the live art share one raster phase, a pan moves them all by whole pixels together so no edge crawls against another, and
+   * every cached blit lands 1:1. Hit testing (w2s, s2w) keeps the exact camera: the difference is at most half a device pixel.
+   */
+  toWorld(ctx) { const a = this.renderScale(), s = this.snap || (this.snap = [0, 0]); snapTranslation(this.W, this.H, this.dpr, this.cam.x, this.cam.y, a, s); ctx.setTransform(a, 0, 0, a, s[0], s[1]); }
   /** The screen transform: css pixels of the window to device pixels. */
   toScreen(ctx) { const dpr = this.dpr; ctx.setTransform(dpr, 0, 0, dpr, 0, 0); }
   /** Add one thing to this frame's depth-sorted list (reusing the record). */
