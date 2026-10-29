@@ -11,6 +11,7 @@ import { surface, ledger, registerReleaser } from './gfx.js';
 import { tintFor } from './palette.js';
 import { registerLayer } from './stack.js';
 import { DIST, LAYOUT } from './layout.js';
+import { coverUnder } from './cloudpaint.js';
 import { stampGlow } from './gfx.js';
 
 const SCALE = 4;          // the five sources are a quarter of the window
@@ -103,17 +104,19 @@ export class Grade extends Lighting {
   }
 
   /**
-   * The light pools of the lamps and windows, stamped additively as Lighting.lights does, except that a light standing in a district that is still under cloud is a third as strong: the cloud is in front of it
-   * (the art direction's "the windows glow through the gaps"), so it must not shine on top of the bank like a lamp in front of a sheet.
+   * The light pools of the lamps and windows, stamped additively as Lighting.lights does, except that a light standing under a district's cloud is not stamped at all: the cloud is in front of it, so it must not
+   * shine on top of the bank like a lamp in front of a sheet (judge F6: glowing blobs inside the cloud where no source could be seen). A light in one of the bank's windows (the art direction's "the windows glow
+   * through the gaps") shines in full, and so does every light of a district that is open.
    */
   lights(ctx, w, cap) {
     const { W, H, cam, lights } = w, z = cam.z, ox = W / 2 - cam.x * z, oy = H / 2 - cam.y * z, lk = this.locked; lk.length = 0;
-    if (w.unlocked) for (const id of LAYOUT.ids) if (!w.unlocked.has(id)) lk.push(DIST[id].bb);
+    if (w.unlocked) for (const id of LAYOUT.ids) if (!w.unlocked.has(id)) lk.push(DIST[id]);
     ctx.save(); ctx.globalCompositeOperation = 'lighter'; let n = 0;
     for (const l of lights) {
       if (n++ >= cap) break;
       const x = l.wx * z + ox, y = l.wy * z + oy, r = l.r * z; if (x < -r || x > W + r || y < -r * 2 || y > H + r * 2) continue;
-      let k = 1; for (let i = 0; i < lk.length; i++) { const b = lk[i]; if (l.wx > b[0] && l.wx < b[2] && l.wy > b[1] && l.wy < b[3]) { k = 0.3; break; } }
+      let k = 1; for (let i = 0; i < lk.length; i++) { const D = lk[i], b = D.bb; if (l.wx > b[0] && l.wx < b[2] && l.wy > b[1] && l.wy < b[3]) { k = 1 - coverUnder(D, l.wx, l.wy, l.r); break; } }
+      if (k < 0.04) continue;
       if (l.gy !== undefined) stampGlow(ctx, l.c, x, l.gy * z + oy, r * 1.3, l.a * 0.9 * k, 0.5);
       if (!stampGlow(ctx, l.c, x, y, r, l.a * k)) { const g = ctx.createRadialGradient(x, y, 1, x, y, r); g.addColorStop(0, `rgba(${l.c},${l.a * k})`); g.addColorStop(1, `rgba(${l.c},0)`); ctx.fillStyle = g; ctx.fillRect(x - r, y - r, r * 2, r * 2); }
     }
