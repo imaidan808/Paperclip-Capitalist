@@ -353,6 +353,8 @@ function bootOn(saved, search) {
   return d;
 }
 const FULL80 = { master: 80 };
+/** Every .js under a folder of the repository (not node_modules or the revision-1 prototype), as paths from the root. */
+const walk = (dir) => { const out = []; for (const f of readdirSync(new URL('../' + dir, import.meta.url))) { const p = dir + '/' + f, st = statSync(new URL('../' + p, import.meta.url)); if (st.isDirectory()) { if (f !== 'node_modules' && f !== 'audio-proto') out.push(...walk(p)); } else if (f.endsWith('.js')) out.push(p); } return out; };
 test('UX3: Classroom plays the voice one tier down for the loud rewards and the shock alert; with the rule off a request is unchanged', () => {
   const off = (id, o) => wire.softened(id, o, false), on = (id, o) => wire.softened(id, o, true);
   const lv = { variant: 'l', meta: { level: 5 } };
@@ -393,7 +395,6 @@ test('UX3: the wiring asks for the softer voice only while the page\'s rule is o
   assert.equal(t.audio._resolver.lastFullLevel, -Infinity, 'and the 90 s window of the full fanfare is not spent by it');
 });
 test('UX3: no call site asks for a level, an epic achievement, a milestone or the shock alert except through softened()', () => {
-  const walk = (dir) => { const out = []; for (const f of readdirSync(new URL('../' + dir, import.meta.url))) { const p = dir + '/' + f, st = statSync(new URL('../' + p, import.meta.url)); if (st.isDirectory()) { if (f !== 'node_modules' && f !== 'audio-proto') out.push(...walk(p)); } else if (f.endsWith('.js')) out.push(p); } return out; };
   const files = [...walk('js'), ...walk('dev')].filter((f) => !/js\/audio\/(recipes|trims|resolve|engine)\.js$/.test(f));
   const bare = /\.(request|play|playMix)\(\s*['"](level\.up|alert\.shock|milestone|achievement)['"]|\[\s*['"](request|play)['"]\s*,\s*['"](level\.up|alert\.shock|milestone|achievement)['"]/;
   for (const f of files) assert.ok(!bare.test(src(f)), `${f} asks for one of them without softened()`);
@@ -401,7 +402,7 @@ test('UX3: no call site asks for a level, an epic achievement, a milestone or th
   assert.equal((w.match(/soft\(hooks, 'level\.up'/g) || []).length, 1); assert.equal((w.match(/soft\(hooks, 'milestone'/g) || []).length, 1); assert.equal((w.match(/soft\(hooks, 'alert\.shock'/g) || []).length, 2, 'the shock event and Market fatigue');
   assert.match(src('js/ui/shell.js'), /audio\.request\(\.\.\.softened\('achievement', \{[^}]*\}[^)]*settings\.audio\?\.quiet === true\)\)/, 'the shell\'s achievement request');
   assert.match(src('js/audio/index.js'), /softened, rememberLinkRule/);
-  assert.match(src('js/audio/audition.js'), /softened\(id, opts, quiet\)/, 'the audition page\'s bursts'); assert.match(src('dev/sounds.js'), /quiet: \(\) => A\(\)\.quiet === true/, 'and its minute');
+  assert.match(src('dev/audition.js'), /softened\(id, opts, quiet\)/, 'the audition page\'s bursts'); assert.match(src('dev/sounds.js'), /quiet: \(\) => A\(\)\.quiet === true/, 'and its minute');
 });
 test('UX3: the three link values: Normal adds nothing, Quiet is Classroom as the room\'s rule applied early, Off is Classroom with Mute on; neither is the student\'s own choice, and neither raises a volume of 0', () => {
   const at = (search, saved = FULL80) => S.migrateAudio({ audio: { ...audioDefaults(), ...saved, v: 1 } }, search);
@@ -505,4 +506,20 @@ test('UX3: the kit says what the link does and that Classroom is "less than half
   assert.ok(Math.abs(-S.CLASSROOM_DB.game + room - 12.6) < 0.05 && Math.abs(-S.CLASSROOM_DB.ui + room - 10.6) < 0.05, `${(-S.CLASSROOM_DB.game + room).toFixed(2)} and ${(-S.CLASSROOM_DB.ui + room).toFixed(2)} dB under Full`);
   assert.ok(2 ** (-(-S.CLASSROOM_DB.ui + room) / 10) < 0.5, 'less than half the loudness, even for the interface (10 dB is half)');
   assert.match(kit, /12\.6 and 10\.6 dB under Full/);
+});
+
+// ================================================================================ item 8: the audition page's helper lives beside the page
+import { existsSync } from 'node:fs';
+test('the audition page\'s helper is dev/audition.js, beside the one page that uses it: not among the game\'s modules, imported by nothing in js/, and every reference says where it is', () => {
+  const at = (f) => existsSync(new URL('../' + f, import.meta.url));
+  assert.ok(at('dev/audition.js')); assert.ok(!at('js/audio/audition.js'), 'it sat in js/audio/ until the sixth round');
+  assert.match(src('dev/sounds.js'), /from '\.\/audition\.js';/);
+  for (const f of walk('js')) assert.ok(!/audition\.js/.test(src(f)), `${f}: the game's modules never name the audition page's helper`);
+  for (const f of readdirSync(new URL('../tests', import.meta.url)).filter((x) => x.endsWith('.mjs') && x !== 'audio-r6.test.mjs')) assert.ok(!/js\/audio\/audition/.test(src('tests/' + f)), `tests/${f} names the old path`);
+  const a = src('dev/audition.js');
+  for (const m of ['settings', 'recipes', 'resolve', 'engine', 'wire']) assert.match(a, new RegExp(`from '\\.\\./js/audio/${m}\\.js'`), `its import of ${m}.js is relative to dev/`);
+  assert.ok(!/from '\.\/(settings|recipes|resolve|engine|wire)\.js'/.test(a), 'and none is left as it was in js/audio/');
+  assert.match(src('tests/finish-site.test.mjs'), /\['js\/meta\/ids\.js'\], 'a module nothing imports is either dead or the tests\\' alone/, 'the module-graph test names one exception, not two');
+  const doc = src('docs/AUDIO.md'); assert.match(doc, /\| `dev\/audition\.js` \| \(rev 5; \*\*in `dev\/` since the sixth round\*\*/, '8.1 says where it is'); assert.ok(!/\| `js\/audio\/audition\.js` \|/.test(doc));
+  assert.ok(!/^\| `audition\.js` \|/m.test(src('js/audio/README.md')), 'the folder\'s README no longer lists it');
 });

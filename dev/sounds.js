@@ -5,7 +5,7 @@ import { audio, bindSettings, migrateAudio } from '../js/audio/index.js';
 import { RECIPES, IDS, variantsOf, tierOf } from '../js/audio/recipes.js';
 import { BED_IDS, ONE_SHOTS } from '../js/audio/ambient.js';
 import { eventCalls, noteCalls, uiCalls, controlFor, newWireState } from '../js/audio/wire.js';
-import { explainDrop, ambientWhy, oneShotWhy, dialWhy, pressBurst, describeMinute, blindDeck, blindScore, BLIND_KINDS } from '../js/audio/audition.js';
+import { explainDrop, ambientWhy, oneShotWhy, dialWhy, pressBurst, describeMinute, blindDeck, blindScore, BLIND_KINDS } from './audition.js';
 import { SECTIONS, PAIRS, LADDERS, MINUTE } from './sections.js';
 
 const settings = { audio: migrateAudio({}, location.search) };

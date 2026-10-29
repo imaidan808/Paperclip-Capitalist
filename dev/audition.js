@@ -1,11 +1,12 @@
-// What the audition page (dev/sounds.html) tells its listener (docs/AUDIO.md Appendix F). A page built for listening must never leave a silent button to be taken for a broken one: every press
+// What the audition page (dev/sounds.html) tells its listener (docs/AUDIO.md Appendix F). It lives in dev/ with the page that is its only user (it sat in js/audio/ until the sixth round, where it looked like game code and needed an
+// entry in the test that lists the modules nothing imports; the stager never published it, because it follows the import graph from js/main.js). A page built for listening must never leave a silent button to be taken for a broken one: every press
 // either sounds or says, on the status line, which rule held it back. The engine counts its drops by reason (`audio.stats().dropped`) and the collector names the sounds it dropped
 // (`lastBurst.dropped`); this file turns those into words and runs the bursts the page offers. No DOM here, and the engine is a parameter, so a Node test runs it on a fake clock.
-import { whyDropped } from './settings.js';
-import { RECIPES } from './recipes.js';
-import { RULES, createResolverState } from './resolve.js';
-import { SANDBOX_SILENT } from './engine.js';
-import { softened } from './wire.js';
+import { whyDropped } from '../js/audio/settings.js';
+import { RECIPES } from '../js/audio/recipes.js';
+import { RULES, createResolverState } from '../js/audio/resolve.js';
+import { SANDBOX_SILENT } from '../js/audio/engine.js';
+import { softened } from '../js/audio/wire.js';
 
 const secs = (ms) => Math.max(1, Math.ceil(ms / 1000));
 

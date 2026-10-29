@@ -116,7 +116,7 @@ test('the real app: every module main.js reaches exists, deal.js\'s optional gam
   // haggle.js and auction.js are loaded by deal.js with import(`./play/${name}.js`): the page needs them, so they are staged and preloaded; academy.js is a static import of ui/academy.js and of the Codex drawer
   assert.ok(g.dynamic.includes('js/play/haggle.js') && g.dynamic.includes('js/play/auction.js') && !g.dynamic.includes('js/meta/academy.js'), 'the lessons are a static import now (tests/finish-repair.test.mjs V5)');
   const all = walkDir(join(ROOT, 'js')).filter((f) => f.endsWith('.js')).map((f) => 'js/' + f);
-  assert.deepEqual(all.filter((f) => !g.modules.includes(f)), ['js/audio/audition.js', 'js/meta/ids.js'], 'a module nothing imports is either dead or the tests\' alone: say which in this list'); // audition.js is the audition page's alone (dev/sounds.html, never published); it sits in js/audio/ so the page and the tests reach the engine by one path, and is staged with the folder: moving it under dev/ is a small open item
+  assert.deepEqual(all.filter((f) => !g.modules.includes(f)), ['js/meta/ids.js'], 'a module nothing imports is either dead or the tests\' alone: say which in this list'); // (the audition page's helper, audition.js, was the second until the sixth round: it is dev/audition.js now, beside the one page that uses it, and is not in js/ at all)
   assert.ok(!/js\/meta\/ids\.js/.test(Object.values(g.edges).flatMap((e) => [...e.statics, ...e.dynamics]).join(' ')));
 });
 
