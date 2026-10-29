@@ -1,7 +1,10 @@
 // A recording fake AudioContext for the sound layer's tests: every node, every connection and every automation call is kept, so a test can look at what a voice did without a browser.
 class Param {
-  constructor(v = 0) { this.value = v; this.calls = []; }
-  setValueAtTime(v, t) { this.calls.push(['set', v, t]); this.value = v; return this; }
+  constructor(v = 0) { this._v = v; this.calls = []; this.assigned = []; }
+  // `assigned` keeps every plain `param.value = x` with the number of automation calls made before it, so a test can see that a value was put in place BEFORE the first event (I1: a gain node's own value is 1)
+  get value() { return this._v; }
+  set value(x) { this.assigned.push([this.calls.length, x]); this._v = x; }
+  setValueAtTime(v, t) { this.calls.push(['set', v, t]); this._v = v; return this; }
   linearRampToValueAtTime(v, t) { this.calls.push(['linear', v, t]); return this; }
   exponentialRampToValueAtTime(v, t) { this.calls.push(['exp', v, t]); return this; }
   setTargetAtTime(v, t, c) { this.calls.push(['target', v, t, c]); return this; }

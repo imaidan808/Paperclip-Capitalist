@@ -1,7 +1,7 @@
 // Offline measurement of the sound layer (dev only; not part of the staged site). Loaded by scripts/audio-check.mjs in headless Chrome and by dev/sounds.js.
 // Every recipe is rendered through an OfflineAudioContext (mono, 48 kHz, no master chain, jitter off) and analyzed: duration, peak, RMS, K-weighted active level, DC, clipped samples,
 // spectral centroid at the start and at the end, the share of the energy above 250 Hz, the tail at the declared end, the largest step, NaNs.
-import { voice, master, MAKEUP_FALLBACK, GLUE, dB } from '../js/audio/palette.js';
+import { voice, master, MAKEUP_FALLBACK, GLUE, dB, fadeIn, noiseBuffers } from '../js/audio/palette.js';
 import { RECIPES, IDS, variantsOf, tierOf, layersFor, firstVariant } from '../js/audio/recipes.js';
 import { ONE_SHOTS, BED_CASES, buildBed, oneShotLayers } from '../js/audio/ambient.js';
 import { createAudio } from '../js/audio/engine.js';
@@ -166,5 +166,43 @@ export async function worstCase(keys, trims, makeup, masterGain = 1) {
   const buf = await ctx.startRendering(); let pk = 0;
   for (let c = 0; c < 2; c++) { const d = buf.getChannelData(c); for (let i = 0; i < d.length; i++) pk = Math.max(pk, Math.abs(d[i])); }
   return db(pk);
+}
+
+/**
+ * The start times the engine really produces (docs/AUDIO.md 3.7, Appendix F): the context's currentTime is a whole number of 128-frame render quanta (q * 128 / sr), the voice starts LEAD (12 ms)
+ * after it, and a second voice on the same fundamental is shifted 30 to 45 ms. At 48 kHz these land on a sample boundary (0.012 * 48000 is 576), at 44.1 kHz almost never, and the hazard of a
+ * parameter event that applies a hair after its frame (I1) lives exactly at the boundary. Half of the starts carry a shift of 0 to 15 ms in whole milliseconds on top.
+ */
+export function engineStarts(sr, n = 32) {
+  const out = [];
+  for (let i = 0; i < n; i++) { const q = 3 + 37 * i + (i % 5), shift = i % 2 ? 0.03 + ((i >> 1) % 16) * 0.001 : 0; out.push((q * 128) / sr + 0.012 + shift); }
+  return out;
+}
+/** Every layer of a recipe at a gain of 1e-9: whatever is heard is not the sound but a leak (a sample of the shared noise or an oscillator let through before the layer's envelope was in place). */
+const muted = (layers) => layers.map((L) => ({ ...L, g: 1e-9 }));
+/**
+ * The leak sweep (I1): every variant, every pool member and every ambient one-shot, MUTED, started at the engine's real start times at 44.1 and 48 kHz. The peak of what comes out is a leak;
+ * with the envelopes in place it is below -140 dBFS. Returns [{ key, sr, peak (dBFS), at (s) }].
+ */
+export async function leakSweep(srs = [44100, 48000], per = 16, pools = false) {
+  const out = [], items = [...entries(pools).map((en) => ({ key: en.key, layers: () => layersFor(en.id, en.v, {}, en.k) })), ...ONE_SHOTS.map((o) => ({ key: o.id, layers: () => oneShotLayers(o.id) }))];
+  const peak = (x) => { let pk = 0, at = 0; for (let i = 0; i < x.length; i++) { const a = Math.abs(x[i]); if (a > pk) { pk = a; at = i; } } return [db(pk), at]; };
+  for (const sr of srs) {
+    const starts = engineStarts(sr, per);
+    for (const it of items) {
+      const layers = muted(flat(it.layers())), tmax = Math.max(0, ...layers.map((L) => L.t || 0));
+      const ctx = new OfflineAudioContext(1, Math.ceil(sr * (starts[starts.length - 1] + tmax + 0.08)), sr);
+      starts.forEach((t, i) => voice(ctx, ctx.destination, layers, t, { seed: i + 1, noJitter: true, jit: 0 }));
+      const [pk, at] = peak((await ctx.startRendering()).getChannelData(0));
+      out.push({ key: it.key, sr, peak: pk, at: at / sr });
+    }
+    { // the fade-in of the beds, their modifiers and the dial tone: a looped noise source behind `fadeIn` to a muted target
+      const ctx = new OfflineAudioContext(1, Math.ceil(sr * (starts[starts.length - 1] + 0.1)), sr), nb = noiseBuffers(ctx);
+      starts.forEach((t, i) => { const src = ctx.createBufferSource(), g = ctx.createGain(); src.buffer = nb.white; src.loop = true; src.connect(g); g.connect(ctx.destination); fadeIn(g.gain, t, 2, 1e-9); src.start(t, 0.3 + i * 0.01); });
+      const [pk, at] = peak((await ctx.startRendering()).getChannelData(0));
+      out.push({ key: 'fadeIn', sr, peak: pk, at: at / sr });
+    }
+  }
+  return out;
 }
 export { IDS, firstVariant, dB };

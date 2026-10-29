@@ -7,6 +7,7 @@
 //   --calibrate  first trim every variant to its tier's target (the only thing calibration changes), write js/audio/trims.js, then check against it
 //   --fast       skip the master-chain renders (tier gaps and the pile-up)
 //   --pools      also render the other members of every pool (`id#variant@k`)
+//   --leak       only the start-click sweep (I1): every variant muted, started at the engine's real start times at 44.1 and 48 kHz
 //   --json file  write the full rows
 // Needs headless Chrome (scripts/cdp.mjs). Server on PORT (default 8401), Chrome on CDP (default 9901).
 import { createServer } from 'node:http';
@@ -32,8 +33,18 @@ const BRIGHTER = [['cash.in#s', 'cash.in#m', 'cash.in#l', 'cash.in#xl'], ['haggl
 /** A loss is never louder than the gain it mirrors (2.2: spending is quieter than earning), by the active level and by the K-weighted Fast level. */
 const LOSS_TWINS = [['cash.in#s', 'cash.out#s'], ['cash.in#m', 'cash.out#m'], ['cash.in#l', 'cash.out#l'], ['sale.win#w', 'sale.herd#h'], ['sale.win#w', 'sale.scam#s'], ['sale.win#w', 'sale.reject#nofit'], ['ui.toggle#on', 'ui.toggle#off'],
   ['deal.result#good', 'deal.result#bad'], ['pitch.fit#up', 'pitch.fit#down'], ['audit.result#pass', 'audit.result#fail'], ['bid.hammer#won', 'bid.hammer#lost'], ['repair.done#great', 'repair.done#rough']];
+const LEAK_FLOOR = -90; // dBFS: a muted layer started at any time the engine can start one may not put anything over this out (I1: a one-sample click of -8 to -40 dBFS was measured)
 const LAPTOP_TOL = 3.0, FAST_TOL = 3.0; // dB from the tier's median: the K-weighted Fast level of a sound after a 220 Hz high-pass (a small speaker), and without one
 const PAN_PROBES = ['ui.tick#full', 'sale.win#w', 'level.up#l', 'cash.out#m', 'alert.advance#l2', 'ui.refuse#r']; // total power at any pan is the total power at the centre
+
+
+/** The start-click sweep (I1): a muted voice leaves nothing but a leak. Runs at 44.1 and 48 kHz with the engine's own start times (js/audio/palette.js env(), fadeIn()). */
+async function leakCheck(call, pools) {
+  const rows = await call(`m.leakSweep([44100, 48000], 16, ${pools})`), bad = rows.filter((r) => r.peak > LEAK_FLOOR);
+  for (const sr of [44100, 48000]) { const a = rows.filter((r) => r.sr === sr); console.log(`start clicks at ${sr} Hz: ${a.length} muted variants and one-shots at 16 engine start times, worst ${f1(Math.max(...a.map((r) => r.peak)))} dBFS (limit ${LEAK_FLOOR})`); }
+  for (const r of bad.sort((a, c) => c.peak - a.peak).slice(0, 12)) fail(`start click: ${r.key} at ${r.sr} Hz leaks ${f1(r.peak)} dBFS at ${r.at.toFixed(4)} s with every layer muted (a gain node's own value is 1: the envelope must be in place before the first frame)`);
+  if (bad.length > 12) fail(`start click: ${bad.length - 12} more over ${LEAK_FLOOR} dBFS`);
+}
 
 const srv = createServer(handler).listen(PORT, '127.0.0.1');
 const b = await launch(CDP);
@@ -44,6 +55,7 @@ try {
   const p = await open(b, `http://127.0.0.1:${PORT}/dev/sounds.html?check=1`);
   const call = (expr) => p.eval(`(async()=>{const m=await import('/dev/measure.js');return JSON.stringify(await (${expr}))})()`).then(JSON.parse);
   const pools = args.has('--pools');
+  if (args.has('--leak')) { await leakCheck(call, pools); b.close(); srv.close(); for (const f of fails) console.log(' -', f); console.log(fails.length ? fails.length + ' problems' : 'no start clicks'); process.exit(fails.length ? 1 : 0); }
   let trims = {};
   const makeup = await call('m.makeupGain()');
 
@@ -125,6 +137,9 @@ try {
     if (by[l].fast > by[g].fast + 0.3) fail(`loss: ${l} (${f1(by[l].fast)} dB Fast) is louder than ${g} (${f1(by[g].fast)} dB Fast)`);
   }
   if (pools) for (const r of res.rows) if (r.key.includes('@')) { const b0 = by[r.key.replace(/@\d+$/, '')]; if (b0 && Math.abs(r.level - b0.level) > 1.2) fail(`pool: ${r.key} is ${f1(r.level - b0.level)} dB from its first member`); }
+
+  // ---- start clicks
+  if (!args.has('--fast')) await leakCheck(call, pools);
 
   // ---- pan: a panned sound is as loud as a centred one (total power of both channels)
   for (const k of PAN_PROBES) {

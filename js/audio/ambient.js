@@ -1,7 +1,7 @@
 // The ambient bed (docs/AUDIO.md section 6): sixteen beds of looped filtered noise and quiet drones in the key, four modifiers (night, rain, tariff, wealth) and eighteen sparse one-shots.
 // Off by default (it is unsolicited), at the very bottom of the mix, and it carries no information that is not also drawn. Nothing here is created until the player turns it on.
 // The data and the bed builder are pure Web Audio (they render offline for the audit); the controller at the bottom is driven by the engine through a small `host`.
-import { hz, dB, noiseBuffers, click, gls, bellL, thump, wood, horn } from './palette.js';
+import { hz, dB, noiseBuffers, fadeIn, click, gls, bellL, thump, wood, horn } from './palette.js';
 import { TRIMS } from './trims.js';
 
 /** A bed layer: { c: noise color, hp/lp/bp: [f, Q], g: level, lfo: [Hz, depth] slow swell, am: [Hz, depth] fast pulse } or { drone: note, g }. Levels are linear before the bed's trim. */
@@ -89,7 +89,7 @@ export function buildBed(ctx, out, theme, opts = {}) {
   };
   bed.addMod = (name, at = ctx.currentTime, fade = 4) => {
     if (bed.mods.has(name) || !MODS[name]) return;
-    const g = ctx.createGain(); g.gain.setValueAtTime(0.0001, at); g.gain.linearRampToValueAtTime(1, at + fade);
+    const g = ctx.createGain(); fadeIn(g.gain, at, fade, 1);
     const grp = layerGroup(ctx, MODS[name], at, 0);
     grp.tex.connect(g); grp.dr.connect(g); g.connect(pre);
     bed.mods.set(name, { gain: g, srcs: grp.srcs });
@@ -214,7 +214,7 @@ export function createAmbient(host) {
     bed = buildBed(ctx, host.out(), state.theme, { T: t });
     if (!bed) return;
     const target = bed.gain.gain.value;
-    bed.gain.gain.cancelScheduledValues(t); bed.gain.gain.setValueAtTime(0.0001, t); bed.gain.gain.linearRampToValueAtTime(target, t + AMB.FADE_IN);
+    bed.gain.gain.cancelScheduledValues(t); fadeIn(bed.gain.gain, t, AMB.FADE_IN, target);
     c.stats.beds++;
     due.clear();
   }

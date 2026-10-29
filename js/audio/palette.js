@@ -48,16 +48,27 @@ export function noiseBuffers(ctx) {
 }
 
 // ---- envelopes: linear attack (0.4 ms at least, so nothing clicks), optional hold, exponential decay to -60 dB. Returns the time the voice is silent.
+// A gain node's own value is 1, and an event at time T applies from the first frame at or after T: when T falls on a sample boundary and a rounding hair after the frame's own time (the engine's
+// starts do, at 48 kHz: 0.012 s is 576 frames, and currentTime is a whole number of 128-frame quanta), the frame at T was rendered BEFORE the event and passed the first sample of the source at
+// full scale, a one-sample click of up to -14 dBFS (Appendix F, I1). So the value is put in place first and the first event only repeats it.
 export const MIN_ATTACK = 0.0004;
 export function env(param, t, a, h, d, g) {
-  param.setValueAtTime(0.0001, t);
+  param.value = 0;
+  param.setValueAtTime(0, t);
   param.linearRampToValueAtTime(g, t + a);
   if (h > 0) param.setValueAtTime(g, t + a + h);
-  param.exponentialRampToValueAtTime(Math.max(0.0001, g * 0.001), t + a + h + d);
+  param.exponentialRampToValueAtTime(Math.max(1e-12, Math.min(g, Math.max(0.0001, g * 0.001))), t + a + h + d); // the release never rises: a layer quieter than the -80 dB floor stays where it is
   return t + a + h + d;
+}
+/** A fade in from silence that is silent at its first frame whatever the grid: the same rule as `env` for a ramp that is not a layer's (a bed, a modifier, the dial tone). */
+export function fadeIn(param, at, dur, to = 1) {
+  param.value = 0;
+  param.setValueAtTime(0, at);
+  param.linearRampToValueAtTime(to, at + dur);
 }
 function biquad(ctx, type, spec, T, dur) { // spec = [f0, Q, f1?]: a static filter, or one swept (exponentially) to f1 over dur
   const q = ctx.createBiquadFilter(); q.type = type; q.Q.value = spec[1] ?? 0.7;
+  q.frequency.value = spec[0]; // the value first: the filter's default is 350 Hz, and a frame rendered before the event would use it
   q.frequency.setValueAtTime(spec[0], T);
   if (spec[2]) q.frequency.exponentialRampToValueAtTime(spec[2], T + dur);
   return q;
@@ -88,6 +99,7 @@ export function layer(ctx, out, L, T0, o) {
     for (let i = 0; i < n; i++) {
       const osc = ctx.createOscillator(); osc.type = L.type || 'sine';
       osc.detune.value = (n > 1 ? (i / (n - 1) * 2 - 1) * L.uni[1] : 0) + (L.det || 0) + o.jit;
+      osc.frequency.value = hz(L.f);
       osc.frequency.setValueAtTime(hz(L.f), T);
       if (L.f2) osc.frequency.exponentialRampToValueAtTime(hz(L.f2), T + (L.gl ?? d));
       if (L.vib) { const lfo = ctx.createOscillator(), lg = ctx.createGain(); lfo.frequency.value = L.vib[0]; lg.gain.value = L.vib[1]; lfo.connect(lg); lg.connect(osc.detune); go(lfo, T, end + 0.03); }

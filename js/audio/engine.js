@@ -1,7 +1,7 @@
 // The engine (docs/AUDIO.md section 3 and 8.2): one AudioContext for the page, the buses and the master chain, the voice manager, rank-aware cooldowns, token buckets, ducking, the collector,
 // the settings sync, the ambient bed and the repair dial tone. Nothing here touches the DOM, and the context comes from an injected factory, so a recording fake context tests all of it in
 // Node. With Web Audio missing, or any failure, `state` is 'unsupported' and every method returns without throwing. With sound idle there is no timer and no frame callback.
-import { voice, master, dB, hz, MAKEUP_FALLBACK, FAMILY_MS, layerSpans, isGhost, moneySize } from './palette.js';
+import { voice, master, dB, hz, fadeIn, MAKEUP_FALLBACK, FAMILY_MS, layerSpans, isGhost, moneySize } from './palette.js';
 import { RECIPES, IDS, layersFor, tierOf, firstVariant, variantsOf, cooldownOf, variantRank, trimFor, isMoment, PREEMPT } from './recipes.js';
 import { createAmbient, oneShotLayers } from './ambient.js';
 import { TRIMS } from './trims.js';
@@ -353,7 +353,7 @@ export function createAudio(cfg = {}) {
         const t = ctxNow(), g = ctx.createGain(), main = ctx.createOscillator(), oct = ctx.createOscillator(), shim = ctx.createOscillator(), og = ctx.createGain(), sg = ctx.createGain();
         main.type = 'sine'; oct.type = 'sine'; shim.type = 'sine';
         main.frequency.value = hz(NOTES[0]); oct.frequency.value = hz(NOTES[0]) * 2; shim.frequency.value = hz('A5');
-        g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(dB(-33), t + 0.03); // 6 dB under a tiny sound (-36 dB active level; a sine's peak is 3 dB over its level)
+        fadeIn(g.gain, t, 0.03, dB(-33)); // 6 dB under a tiny sound (-36 dB active level; a sine's peak is 3 dB over its level)
         og.gain.value = 0.0001; sg.gain.value = 0.0001;
         main.connect(g); oct.connect(og); shim.connect(sg); og.connect(g); sg.connect(g); g.connect(chain.buses.game);
         for (const o of [main, oct, shim]) o.start(t);
