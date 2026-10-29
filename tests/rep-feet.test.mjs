@@ -136,7 +136,8 @@ const STICKY = {
   '.qs-nav': { how: 'bar', file: 'js/ui/drawers/quests.js', edge: 'top', tag: 'nav class="qs-nav"' },
   '.dr-actions': { how: 'bar', file: 'js/ui/draft.js', edge: 'bottom', tag: 'div class="dr-actions" id="dr-actions"' },
   '.wvlist > summary': { how: 'bar', file: 'js/ui/worldview.js', edge: 'top', tag: 'summary' },
-  '.deal-dock': { how: 'deal' }, '.deal-foot': { how: 'deal' }, '.deal-result > .row:last-child': { how: 'deal' },
+  '.deal-dock': { how: 'deal' }, '.deal-foot': { how: 'deal' }, '.deal-top': { how: 'deal' }, // .deal-top: the header from 761 px up (the sound branch's U5: at XL text it kept scrolling out of view; scroll-padding-top in css/ui-deal.css keeps a focused control clear of it)
+  '.deal-result > .row:last-child': { how: 'deal' },
   '.dr-side': { how: 'column' },
   '.ac-coach:not(.handle) .ac-btns': { how: 'card' },
 };

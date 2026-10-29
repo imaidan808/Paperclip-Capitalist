@@ -349,8 +349,9 @@ function fire(w, type, props = {}) {
 const wheel = (w, props) => fire(w, 'wheel', { deltaMode: 0, deltaX: 0, ctrlKey: false, metaKey: false, altKey: false, ...props });
 /** Run the world's own update (the loop's step) until no ease is pending. Returns the steps taken. */
 function settleWorld(w, dt = 1 / 60, max = 300) { let n = 0; while (w.zin.pending && n++ < max) w.update(dt); return n; }
-const worldAt = (w, px, py) => w.s2w(px, py);
-const screenOf = (w, p) => w.w2s(p[0], p[1]);
+// the camera's own numbers (js/world/world.js zoomAbout): the picture is drawn from a translation rounded to whole device pixels (World.origin), which w2s and s2w follow, so they are a half device pixel off the camera's promise
+const worldAt = (w, px, py) => [(px - w.W / 2) / w.cam.z + w.cam.x, (py - w.H / 2) / w.cam.z + w.cam.y];
+const screenOf = (w, p) => [(p[0] - w.cam.x) * w.cam.z + w.W / 2, (p[1] - w.cam.y) * w.cam.z + w.H / 2];
 const press = (w, id, x, y, type = 'pointerdown') => fire(w, type, { pointerId: id, offsetX: x, offsetY: y, clientX: x, clientY: y, button: 0 });
 
 // ================================================================ the World: the wheel

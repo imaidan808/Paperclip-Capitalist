@@ -110,6 +110,8 @@ docs/             FACULTY_KIT.md, ARCHITECTURE.md, COMPLIANCE.md, BALANCE.md, V2
 .github/workflows/pages.yml
 ```
 
+`js/audio/` is the generated sound layer (Web Audio, no audio files: a collector, the buses and a master chain, sixteen ambient beds, the repair dial tone and a Classroom preset; [docs/AUDIO.md](docs/AUDIO.md) is its contract, `/dev/sounds.html` its audition page, `npm run audio` its render check).
+
 [docs/V2_DESIGN.md](docs/V2_DESIGN.md) is the design contract with an appendix of how the build differs; [docs/BALANCE.md](docs/BALANCE.md) says what the engine actually does and how it was tuned.
 
 ## Privacy

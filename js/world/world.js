@@ -194,8 +194,10 @@ export class World {
   zoomBy(f, px = this.W / 2, py = this.H / 2) { this.zoomAbout((this.zin.settle() ?? this.cam.z) * f, px, py); }
   /** Set the zoom, keeping the world point under a screen point where it is: the one place the camera is zoomed (the wheel, a trackpad pinch, Safari's gestures and the ease all come through here). */
   zoomAbout(z, px = this.W / 2, py = this.H / 2) {
-    const before = this.s2w(px, py); this.cam.z = z; this.clampCam();
-    const after = this.s2w(px, py); this.cam.x += before[0] - after[0]; this.cam.y += before[1] - after[1]; this.clampCam(); this.camTo = null; this.dirty = true; this.rebaseDrag();
+    // The anchor is worked out from the camera's own numbers, never from origin(): the picture is drawn from a translation rounded to whole device pixels, and an anchor taken from the rounded one would add that rounding twice (before and after)
+    const cam = this.cam, hw = this.W / 2, hh = this.H / 2, bx = (px - hw) / cam.z + cam.x, by = (py - hh) / cam.z + cam.y;
+    cam.z = z; this.clampCam();
+    cam.x += bx - ((px - hw) / cam.z + cam.x); cam.y += by - ((py - hh) / cam.z + cam.y); this.clampCam(); this.camTo = null; this.dirty = true; this.rebaseDrag();
   }
   /** One pointer is panning and the zoom changed under it: take hold of the ground where it is now, or the next move would work the camera out from where the drag began and the ground would slide off. */
   rebaseDrag() { const d = this.drag; if (!d || this.pointers.size !== 1) return; const [p] = [...this.pointers.values()]; if (d.moved) { d.x = p.x; d.y = p.y; } d.cx = this.cam.x; d.cy = this.cam.y; }
