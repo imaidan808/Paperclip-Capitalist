@@ -62,7 +62,8 @@ export const staticLayerOf = (t) => (BUILDING_KINDS.has(t) ? 'static-bldg' : 'st
 const BY_ID = new Map(), SLOT = Object.create(null), V2 = new Map(), GROUND_IDS = LAYERS.filter((l) => l.stage === 'ground' && l.id !== 'livedecals').map((l) => l.id);
 export const FLAGS = Object.create(null);
 const slotOf = (L, impl, draw, space) => ({ id: L.id, impl, space, draw });
-for (const L of LAYERS) { BY_ID.set(L.id, L); FLAGS[L.id] = 'legacy'; SLOT[L.id] = slotOf(L, 'legacy', L.legacy, L.space); }
+const V2_DEFAULT = new Set(['sea', 'shore', 'terrain', 'roads', 'blocks', 'livedecals']); // layers whose V2 drawer is the default (the orchestrator's flip; ?layers=all:legacy brings the old picture back)
+for (const L of LAYERS) { BY_ID.set(L.id, L); FLAGS[L.id] = V2_DEFAULT.has(L.id) ? 'v2' : 'legacy'; SLOT[L.id] = slotOf(L, 'legacy', L.legacy, L.space); }
 
 const settle = (id) => { const L = BY_ID.get(id), v = V2.get(id); SLOT[id] = FLAGS[id] === 'v2' && v ? slotOf(L, 'v2', v.draw, v.space) : slotOf(L, 'legacy', L.legacy, L.space); };
 

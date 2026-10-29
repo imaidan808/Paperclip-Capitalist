@@ -7,6 +7,9 @@ import { readFileSync } from 'node:fs';
 import { Game } from '../js/engine.js';
 import { Lighting } from '../js/world/lighting.js';
 import * as sprites from '../js/world/sprites.js';
+import { FLAGS, setFlag, setFlags } from '../js/world/stack.js';
+// The sea-strip test below pins the LEGACY sea: it runs with every layer flagged legacy (?layers=all:legacy). The V2 sea is pinned by tests/world-water.test.mjs.
+const withLegacy = async (fn) => { const was = { ...FLAGS }; setFlags('all:legacy'); try { await fn(); } finally { for (const [k, v] of Object.entries(was)) setFlag(k, v); } };
 
 const read = (f) => readFileSync(new URL('../' + f, import.meta.url), 'utf8');
 const noop = () => {};
@@ -119,7 +122,7 @@ function countCanvases() {
   globalThis.OffscreenCanvas = class { constructor(w, h) { this.width = w; this.height = h; made.push([w, h]); this.g = fakeCtx({ n: 0, by: {} }); } getContext() { return this.g; } transferToImageBitmap() { return { width: this.width, height: this.height, close() {} }; } };
   return made;
 }
-test('a whole day and night turn makes no bitmap of the sea: one strip for the life of the world, and no full-window layer beyond the light\'s own four', async () => {
+test('a whole day and night turn makes no bitmap of the sea: one strip for the life of the world, and no full-window layer beyond the light\'s own four', async () => { await withLegacy(async () => {
   const made = countCanvases();
   const { w } = await makeWorld([1440, 900], { dom: { dpr: 2 } }); // 1.5 or 2 by what an earlier test taught the module about the GPU: either way a canvas of millions of pixels
   assert.ok(w.dpr >= 1.5 && w.cv.width >= 2160);
@@ -139,6 +142,7 @@ test('a whole day and night turn makes no bitmap of the sea: one strip for the l
   assert.equal(strips(), 1, 'the sea is one strip, made once and painted again at each step');
   w.release(); assert.equal(w.seaStrip, undefined, 'release gives the strip back too'); w.draw(); assert.equal(strips(), 2, 'and a world drawn again makes it again, once');
   delete globalThis.OffscreenCanvas;
+  });
 });
 
 // ---------------------------------------------------------------- the sprite cache in a zoom

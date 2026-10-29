@@ -4,6 +4,8 @@ import { P, quad, fogged } from './iso.js';
 import { LAYOUT, DIST } from './layout.js';
 import { FAR_ZOOM } from './common.js';
 import { runLayer } from './stack.js';
+import './groundart.js'; // the V2 ground layers register themselves here
+import './water.js';
 
 export const groundMethods = {
   /** Ground: coast cliffs, the terrain (drawn coarser the further out you are), roads and bridges between districts, each block's flat patches and decals. */

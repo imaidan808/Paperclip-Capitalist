@@ -2,7 +2,8 @@
 // Owner: T5 RASTER QUALITY (docs/RENDER_PLAN.md). The CONTENT of the copy is the ground layers (T1); how it is kept, keyed, supersampled and invalidated is this file.
 import { LAYOUT } from './layout.js';
 import { surface } from './gfx.js';
-import { groundKey } from './stack.js';
+import { groundKey, slotFor } from './stack.js';
+import { chunkPass } from './groundchunks.js';
 export { CHUNK_PX, chunkWorld, chunkBytes, chunksTouched, groundBytes, chunksFor } from './chunks.js'; // the chunk cache's arithmetic (tests/world-ledger.test.mjs holds the memory ledger to it)
 
 export const groundCacheMethods = {
@@ -12,6 +13,7 @@ export const groundCacheMethods = {
    * (water, pulses) is drawn live on top. While the camera moves, or a district is opening, it is drawn directly, as it always was.
    */
   groundPass(ctx, view) {
+    if (slotFor('shore').impl === 'v2' && chunkPass(this, ctx)) { this.drawGround(ctx, view, 2); return; } // the V2 ground is served from chunks (groundchunks.js, T1); with no offscreen surfaces it falls through to the direct draw below
     const { W, H, dpr } = this, cam = this.cam, k = this.gcKey;
     let cached = false;
     if (this.cacheOK() && !this.revealing()) {

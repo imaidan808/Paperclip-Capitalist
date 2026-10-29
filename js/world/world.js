@@ -507,7 +507,7 @@ export class World {
   /** Run one layer of the stack in a screen-space pass; a layer that throws is logged once (under the method's old name) and never blanks the frame. */
   safeLayer(id, name, ctx) { try { runLayer(id, this, ctx, this.view); } catch (err) { ctx.restore?.(); this.fault(err, name); } }
   /** The camera transform: world pixels (a grid point's sx, sy) to device pixels. The one place it is written. */
-  toWorld(ctx) { const { W, H, dpr } = this, cam = this.cam; ctx.setTransform(dpr * cam.z, 0, 0, dpr * cam.z, dpr * (W / 2 - cam.x * cam.z), dpr * (H / 2 - cam.y * cam.z)); }
+  toWorld(ctx) { const { W, H, dpr } = this, cam = this.cam; ctx.setTransform(dpr * cam.z, 0, 0, dpr * cam.z, Math.round(dpr * (W / 2 - cam.x * cam.z)), Math.round(dpr * (H / 2 - cam.y * cam.z))); } // the translation is whole device pixels (RENDER_PLAN section 5): ground chunks, sprites and live art share one raster phase
   /** The screen transform: css pixels of the window to device pixels. */
   toScreen(ctx) { const dpr = this.dpr; ctx.setTransform(dpr, 0, 0, dpr, 0, 0); }
   /** Add one thing to this frame's depth-sorted list (reusing the record). */

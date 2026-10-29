@@ -8,6 +8,10 @@ import { Labels, qs, readable } from '../js/world/labels.js';
 import { ZONES } from '../js/data/index.js';
 import { Game } from '../js/engine.js';
 import { DIST } from '../js/world/layout.js';
+import { FLAGS, setFlag, setFlags } from '../js/world/stack.js';
+// These tests pin the LEGACY ground and sea (the full-window ground cache, the sea's one strip): they run with every layer flagged legacy (?layers=all:legacy), a picture that is still supported.
+// The V2 ground (chunks, the sea in world space) is pinned by tests/world-chunks.test.mjs and tests/world-water.test.mjs.
+const withLegacy = async (fn) => { const was = { ...FLAGS }; setFlags('all:legacy'); try { await fn(); } finally { for (const [k, v] of Object.entries(was)) setFlag(k, v); } };
 
 const noop = () => {};
 const grad = { addColorStop: noop };
@@ -200,7 +204,7 @@ test('on the map, cards that would overlap are pushed apart and kept on the scre
 });
 
 // ---------------------------------------------------------------- the ground cache
-test('the ground is drawn once for a still camera and stamped after that; anything that changes it draws it again', async () => {
+test('the ground is drawn once for a still camera and stamped after that; anything that changes it draws it again', async () => { await withLegacy(async () => {
   const g = newGame(3); openTo(g, 3);
   const log = stubDom(1000, 640); installOffscreen(log);
   const { World } = await import('../js/world/world.js');
@@ -220,6 +224,7 @@ test('the ground is drawn once for a still camera and stamped after that; anythi
   const b4 = cachedPart, d4 = direct; document.documentElement.dataset.motion = 'auto'; w.reveal[2] = { t0: w.t, dur: 2600 }; w.draw(); w.draw(); assert.equal(cachedPart, b4, 'no copy while a district is opening (its fog is moving)'); assert.ok(direct > d4, 'it is drawn directly then');
   delete w.reveal[2];
   assert.deepEqual(faults(w), []); delete globalThis.OffscreenCanvas;
+  });
 });
 
 test('a reveal nobody is looking at does not hold the ground cache off: one that has finished is swept', async () => {
@@ -229,7 +234,7 @@ test('a reveal nobody is looking at does not hold the ground cache off: one that
   w.t = 12000; assert.equal(w.revealing(), false); assert.deepEqual(Object.keys(w.reveal), []);
 });
 
-test('the cached ground puts every moving decal on top: water and pulses are drawn live, not stamped', async () => {
+test('the cached ground puts every moving decal on top: water and pulses are drawn live, not stamped', async () => { await withLegacy(async () => {
   const g = newGame(3); openTo(g, 16);
   const log = stubDom(1000, 640); installOffscreen(log);
   const { World } = await import('../js/world/world.js');
@@ -241,6 +246,7 @@ test('the cached ground puts every moving decal on top: water and pulses are dra
   assert.ok(id, 'some district has a moving decal'); w.focusZone(id, false); w.draw(); w.draw(); kinds.length = 0; w.draw();
   assert.ok(kinds.length > 0 && kinds.every((k) => k.endsWith(':2')), 'a stamped frame draws only the live part of the moving decals: ' + [...new Set(kinds)].join());
   delete globalThis.OffscreenCanvas;
+  });
 });
 
 // ---------------------------------------------------------------- the game's own news, read
