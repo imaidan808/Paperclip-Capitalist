@@ -165,11 +165,11 @@ const byY = (p, q) => p.cy - q.cy;
 /**
  * An open district is never under its neighbours' clouds. A bank's puffs are a hundred world px across at the far scales and spill over the block beside it, which buried the player's own district (the Scrap Yard's
  * crates, roof and crane at the island's fit view: the first judge pass). The footprints of the open districts (block and pavement, in world px) are cut out of what is baked, with a soft edge: wide faint strokes
- * outwards, then the footprint whole. Only ever on a chunk's own surface: the live path (no surfaces: the Node tests) paints on the frame itself, where cutting would cut the ground.
+ * outwards, then the footprint whole. Only at the coarse and far lattices (`ps` above 1), where the puffs are that big: a fine bank hugs its own block, and at the working zoom a straight cut through a puff shows. Only ever on a chunk's own surface: the live path (no surfaces: the Node tests) paints on the frame itself, where cutting would cut the ground.
  */
 const OPEN_POLY = new Map();
 const openPoly = (D) => { let p = OPEN_POLY.get(D.id); if (!p) { const [x, y, w, d] = D.fp; OPEN_POLY.set(D.id, p = [P(x, y, D.z), P(x + w, y, D.z), P(x + w, y + d, D.z), P(x, y + d, D.z)]); } return p; };
-export const FEATHER = Object.freeze([[72, 0.12], [48, 0.16], [30, 0.22], [14, 0.3]]); // [line width in world px, alpha]: the edge fades over about 36 px outside the footprint
+export const FEATHER = Object.freeze([[104, 0.08], [78, 0.1], [56, 0.14], [38, 0.18], [22, 0.24], [10, 0.32]]); // [line width in world px, alpha]: the edge fades over about 50 px outside the footprint
 export function clearOpen(g, open) {
   if (!open || !open.length) return;
   g.save(); g.globalCompositeOperation = 'destination-out'; g.lineJoin = 'round';
@@ -209,7 +209,7 @@ function stampBanks(ctx, w, st, ids, tones, ps) {
   const room = LEDGER_LIMIT_MB * 1e6 * CLOUD_CEILING - (ledger.total() - ledger.total(store.name)), q = ratioFor(a, a <= 0.8 ? 0 : wantedCells(banks, win, a, SCRATCH.cells, SCRATCH.want), room, st.q), ac = a * q, sk = scaleKey(ac);
   const kk = a / ac, D = Math.abs(CHUNK_PX * kk - Math.round(CHUNK_PX * kk)) < 1e-3 ? Math.round(CHUNK_PX * kk) : CHUNK_PX * kk; // a chunk's side on the frame: 384, or exactly 512 at the ratio 3/4
   st.tones = tones; st.night = (tones.key & 15) / 8; st.dusk = (tones.key >> 4) / 8;
-  const open = st.open; open.length = 0; if (w.unlocked) for (const id of LAYOUT.ids) if (w.unlocked.has(id)) open.push(openPoly(DIST[id]));
+  const open = st.open; open.length = 0; if (ps > 1 && w.unlocked) for (const id of LAYOUT.ids) if (w.unlocked.has(id)) open.push(openPoly(DIST[id]));
   const mask = lockedMask(w.unlocked), ver = mask | (tones.key << 17) | (((dpr * 4) | 0) << 25), changed = store.markStale(ver), force = changed && mask !== st.mask; st.mask = mask;
   if (ac !== st.a) { st.a = ac; st.at = now; }
   const rig = typeof window !== 'undefined' && !!window.__rig, zooming = now - st.at < (w.gcRest ?? REST_MS), fadeMs = w.reduced() ? 0 : (w.gcFade ?? FADE_MS);

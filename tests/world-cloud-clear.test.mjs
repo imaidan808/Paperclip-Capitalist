@@ -36,5 +36,5 @@ test('C2: the chunk painter clears the open districts once, after every bank, an
   const src = readFileSync(join(ROOT, 'js/world/clouds.js'), 'utf8');
   assert.equal((src.match(/clearOpen\(/g) || []).length, 2, 'the definition and the one call');
   assert.match(src, /paintLobes\(g, b\.lobes[^\n]*\n\s*clearOpen\(g, st\.open\);/, 'in the chunk painter, after the banks');
-  assert.match(src, /const open = st\.open; open\.length = 0; if \(w\.unlocked\) for \(const id of LAYOUT\.ids\) if \(w\.unlocked\.has\(id\)\) open\.push\(openPoly\(DIST\[id\]\)\);/, 'from the world\'s open districts, before the chunks are keyed');
+  assert.match(src, /const open = st\.open; open\.length = 0; if \(ps > 1 && w\.unlocked\) for \(const id of LAYOUT\.ids\) if \(w\.unlocked\.has\(id\)\) open\.push\(openPoly\(DIST\[id\]\)\);/, 'from the world\'s open districts at the coarse and far lattices only, before the chunks are keyed');
 });
