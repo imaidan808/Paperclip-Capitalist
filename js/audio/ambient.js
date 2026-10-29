@@ -1,7 +1,7 @@
 // The ambient bed (docs/AUDIO.md section 6): sixteen beds of looped filtered noise and quiet drones in the key, four modifiers (night, rain, tariff, wealth) and eighteen sparse one-shots.
 // Off by default (it is unsolicited), at the very bottom of the mix, and it carries no information that is not also drawn. Nothing here is created until the player turns it on.
 // The data and the bed builder are pure Web Audio (they render offline for the audit); the controller at the bottom is driven by the engine through a small `host`.
-import { hz, dB, noiseBuffers, fadeIn, click, gls, bellL, thump, wood, horn } from './palette.js';
+import { hz, dB, noiseBuffers, fadeIn, equalFade, click, gls, bellL, thump, wood, horn } from './palette.js';
 import { TRIMS } from './trims.js';
 
 /** A bed layer: { c: noise color, hp/lp/bp: [f, Q], g: level, lfo: [Hz, depth] slow swell, am: [Hz, depth] fast pulse } or { drone: note, g }. Levels are linear before the bed's trim. */
@@ -118,8 +118,9 @@ export function buildBed(ctx, out, theme, opts = {}) {
   }
   if (opts.night != null || opts.rain || opts.surge) bed.setNight(opts.night ?? 0, !!opts.rain, !!opts.surge, T);
   bed.layers = def.layers.length + (opts.mods || []).reduce((n, m) => n + (MODS[m]?.length || 0), 0);
-  bed.stop = (at, fade = 2) => { // fade out, then stop every source (so nothing keeps running under a hidden bed)
-    bedGain.gain.cancelScheduledValues(at); bedGain.gain.setValueAtTime(Math.max(0.0001, bedGain.gain.value), at); bedGain.gain.linearRampToValueAtTime(0.0001, at + fade);
+  bed.stop = (at, fade = 2, o = {}) => { // fade out, then stop every source (so nothing keeps running under a hidden bed). `equalPower`: the fade of a change of district (a cosine, to meet the new bed's sine)
+    if (o.equalPower) equalFade(bedGain.gain, at, fade, Math.max(0.0001, bedGain.gain.value), 'out');
+    else { bedGain.gain.cancelScheduledValues(at); bedGain.gain.setValueAtTime(Math.max(0.0001, bedGain.gain.value), at); bedGain.gain.linearRampToValueAtTime(0.0001, at + fade); }
     const all = [...bed.srcs, ...[...bed.mods.values()].flatMap((m) => m.srcs)];
     for (const s of all) { try { s.stop(at + fade + 0.05); } catch { /* already stopped */ } }
     bed.stopped = at + fade + 0.05;
@@ -157,7 +158,11 @@ const flatL = (x) => x.flat(Infinity).filter(Boolean);
 export const oneShotLayers = (id) => flatL(ONE_SHOTS.find((o) => o.id === id)?.build() || []);
 
 // ---- the controller: a bed per district, a crossfade between them, modifiers, and one timer chain for the one-shots
-export const AMB = { MAX_PER_MIN: 3, MIN_GAP: 4000, AFTER_MEDIUM: 1500, AFTER_MOMENT: 6000, FADE_IN: 3, FADE_OUT: 2, OVER_FADE: 4, SPEED_GAP: { 4: 40000 } };
+// CROSS: the length of a change of district, the same for the bed going and the bed coming, on equal-power curves (a sine in, a cosine out). They were linear, 3 s in and 2 s out, and two uncorrelated
+// beds dipped by 4 to 7 dB for 1.4 s at every change of district (fourth round, R4).
+export const AMB = { MAX_PER_MIN: 3, MIN_GAP: 4000, AFTER_MEDIUM: 1500, AFTER_MOMENT: 6000, CROSS: 3, OVER_FADE: 4, SPEED_GAP: { 4: 40000 } };
+/** The new bed coming in on a sine, to its own trim (the level the bed was built with). */
+export function fadeBedIn(bed, t, fade = AMB.CROSS) { const target = bed.gain.gain.value; equalFade(bed.gain.gain, t, fade, target, 'in'); }
 
 /** The latest state, normalized: what a bad value does is nothing. */
 export function normState(s) {
@@ -209,12 +214,11 @@ export function createAmbient(host) {
   }
   function crossfade() {
     const ctx = host.ctx(), t = ctx.currentTime;
-    if (bed) { fadeOut(bed, AMB.FADE_OUT); olds.push(bed); }
+    if (bed) { try { bed.stop(host.ctx().currentTime, AMB.CROSS, { equalPower: true }); } catch { /* context gone */ } olds.push(bed); }
     reap(); while (olds.length > 1) { const o = olds.shift(); try { o.stop(t, 0.05); } catch { /* gone */ } } // at most two beds exist at once
     bed = buildBed(ctx, host.out(), state.theme, { T: t });
     if (!bed) return;
-    const target = bed.gain.gain.value;
-    bed.gain.gain.cancelScheduledValues(t); fadeIn(bed.gain.gain, t, AMB.FADE_IN, target);
+    fadeBedIn(bed, t);
     c.stats.beds++;
     due.clear();
   }

@@ -67,8 +67,8 @@
 .dr-actions { position: sticky; bottom: 0; z-index: 3; display: flex; flex-wrap: wrap; align-items: center; gap: .7rem; margin: 1rem -1rem -.9rem; padding: .7rem 1rem; background: var(--panel); border-top: var(--bw) solid var(--gold); }
 .dr-need { min-width: 0; } .dr-notice { flex-basis: 100%; }
 /* the notes about sound land above the bar, not on it: a toast at the corner hid the Begin button's label for its 3.5 seconds on a laptop-size window (the bar is about 4.6rem tall; on a phone the need line takes a row of its own) */
-body:has(.dr-actions) #toasts { bottom: calc(var(--edge-b) + 4.9rem); }
-@media (max-width: 640px) { body:has(.dr-actions) #toasts { bottom: calc(var(--edge-b) + 8.6rem); } }
+body:has(.dr-actions) #toasts { bottom: calc(max(.5rem, env(safe-area-inset-bottom, 0px)) + 4.9rem); }
+@media (max-width: 640px) { body:has(.dr-actions) #toasts { bottom: calc(max(.5rem, env(safe-area-inset-bottom, 0px)) + 8.6rem); } }
 
 @media (max-width: 640px) {
   .dr-card { padding: .6rem .65rem .65rem; gap: .35rem; } .dr-card:nth-child(n) { transform: none; } .dr-card:hover, .dr-card[data-on="1"] { transform: none; }

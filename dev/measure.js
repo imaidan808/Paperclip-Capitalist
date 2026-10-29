@@ -2,8 +2,8 @@
 // Every recipe is rendered through an OfflineAudioContext (mono, 48 kHz, no master chain, jitter off) and analyzed: duration, peak, RMS, K-weighted active level, DC, clipped samples,
 // spectral centroid at the start and at the end, the share of the energy above 250 Hz, the tail at the declared end, the largest step, NaNs.
 import { voice, master, MAKEUP_FALLBACK, GLUE, dB, fadeIn, noiseBuffers, rng } from '../js/audio/palette.js';
-import { RECIPES, IDS, variantsOf, tierOf, layersFor, firstVariant } from '../js/audio/recipes.js';
-import { ONE_SHOTS, BED_CASES, buildBed, oneShotLayers } from '../js/audio/ambient.js';
+import { RECIPES, IDS, variantsOf, tierOf, layersFor, firstVariant, jitterOf } from '../js/audio/recipes.js';
+import { ONE_SHOTS, BED_CASES, buildBed, oneShotLayers, fadeBedIn, AMB } from '../js/audio/ambient.js';
 import { createAudio } from '../js/audio/engine.js';
 
 export const SR = 48000;
@@ -42,6 +42,17 @@ const aw = (x) => { let y = x; for (const [b, a] of A_SECTIONS) y = biq(y, b, a)
 function fastLevel(k) {
   const a = Math.exp(-1 / (0.125 * SR)); let m = 0, mx = 0;
   for (let i = 0; i < k.length; i++) { m = a * m + (1 - a) * k[i] * k[i]; if (m > mx) mx = m; }
+  return 10 * Math.log10(Math.max(1e-12, mx));
+}
+/**
+ * Momentary loudness (BS.1770: a 400 ms window, here every 100 ms) of an already weighted signal: the loudest window's mean square, in dB. A sound shorter than the window is spread over it, so a tick
+ * of 40 ms is 10 dB under what a Fast meter says and a half-second chord is not: the longer the integration, the more the length of a sound counts (fourth round, R2). `win` is in seconds.
+ */
+export function momentary(k, win = 0.4, hop = 0.1) {
+  const W = Math.round(win * SR), H = Math.round(hop * SR), n = k.length, cs = new Float64Array(n + 1);
+  for (let i = 0; i < n; i++) cs[i + 1] = cs[i] + k[i] * k[i];
+  let mx = 0;
+  for (let s = 0; s < n; s += H) { const e = Math.min(n, s + W), m = (cs[e] - cs[s]) / W; if (m > mx) mx = m; }
   return 10 * Math.log10(Math.max(1e-12, mx));
 }
 /** The K-weighted active level (BS.1770 blocks of 20 ms, gated 24 dB under the top one) of an already K-weighted signal. */
@@ -97,7 +108,7 @@ export function analyze(x, declared) {
   const lastSample = Math.min(n, lastFrame * H + F), W = Math.round(0.1 * SR);
   const t0 = Math.round((0.01 + declared) * SR); let tail = 0; for (let i = Math.max(0, t0 - 240); i < Math.min(n, t0 + 240); i++) tail = Math.max(tail, Math.abs(x[i]));
   return {
-    fast: fastLevel(k), lap: activeOf(kw(hp2(x, LAPTOP_HZ))), lapFast: fastLevel(kw(hp2(x, LAPTOP_HZ))), lapA: activeOf(aw(hp2(x, LAPTOP_HZ))), lapFastA: fastLevel(aw(hp2(x, LAPTOP_HZ))),
+    fast: fastLevel(k), lap: activeOf(kw(hp2(x, LAPTOP_HZ))), lapFast: fastLevel(kw(hp2(x, LAPTOP_HZ))), lapA: activeOf(aw(hp2(x, LAPTOP_HZ))), lapFastA: fastLevel(aw(hp2(x, LAPTOP_HZ))), lapMomA: momentary(aw(hp2(x, LAPTOP_HZ))),
     peak: db(peak), rms: db(Math.sqrt(sq / n)), level: cnt ? 10 * Math.log10(sum / cnt) : -99, ms: Math.max(0, Math.round((lastFrame * H + F) / SR * 1000 - 10)),
     dc: Math.abs(dc / n), step: Math.round(step * 1000) / 1000, clipped, nonFinite, tail: db(tail),
     centroid: wholeCentroid(x, first), c0: centroidAt(x, first, W), c1: centroidAt(x, Math.max(first, lastSample - W), W), share250: shareAbove(x, 250),
@@ -113,8 +124,10 @@ export async function renderLayers(layers, dur, o = {}) {
 export function quick(x) {
   const k = kw(x);
   const h = hp2(x, LAPTOP_HZ);
-  return { level: activeOf(k), fast: fastLevel(k), lapFast: fastLevel(kw(h)), lapFastA: fastLevel(aw(h)), peak: db(x.reduce((m, v) => Math.max(m, Math.abs(v)), 0)) };
+  return { level: activeOf(k), fast: fastLevel(k), lapFast: fastLevel(kw(h)), lapFastA: fastLevel(aw(h)), lapMomA: momentary(aw(h)), peak: db(x.reduce((m, v) => Math.max(m, Math.abs(v)), 0)) };
 }
+/** The peak alone (dBFS): the 32 plays of every variant that hold the ceiling to account need nothing else, and are far cheaper without the filters. */
+export const peakOf = (x) => { let pk = 0; for (let i = 0; i < x.length; i++) { const a = Math.abs(x[i]); if (a > pk) pk = a; } return db(pk); };
 /** Every variant (and every pool member, k > 0, as `id#variant@k`). */
 export const entries = (pools = false) => IDS.flatMap((id) => variantsOf(id).flatMap((v) => {
   const e = RECIPES[id], out = [{ id, v, k: 0, key: id + '#' + v, tier: tierOf(id, v), dur: e.dur }];
@@ -139,7 +152,7 @@ export async function measureEntry(layers, dur, { trim = 0, list = null, n = 0, 
     const cs = list && list.length ? list : candidates(n), cands = [];
     for (let j = 0; j < cs.length; j++) cands.push({ c: cs[j], ...quick(await renderLayers(layers, dur, { trim, seed: j + 1, at: 0.012 + (3 + (j * 7) % 64) * 128 / SR, tail: 0.15, voice: { noiseAt: [cs[j]] } })) });
     const col = (f) => cands.map((c) => c[f]);
-    Object.assign(row, { level: med(col('level')), fast: med(col('fast')), lapFast: med(col('lapFast')), lapFastA: med(col('lapFastA')), peak: Math.max(...col('peak')), spread: Math.max(...col('fast')) - Math.min(...col('fast')), ncand: cands.length });
+    Object.assign(row, { level: med(col('level')), fast: med(col('fast')), lapFast: med(col('lapFast')), lapFastA: med(col('lapFastA')), lapMomA: med(col('lapMomA')), peak: Math.max(...col('peak')), spread: Math.max(Math.max(...col('fast')) - Math.min(...col('fast')), Math.max(...col('lapFastA')) - Math.min(...col('lapFastA'))), ncand: cands.length });
     if (keep) row.cands = cands;
   }
   return row;
@@ -207,6 +220,19 @@ export async function throughChain(id, v, trim, makeup, masterGain = 1, k = 0, g
   const x = (await ctx.startRendering()).getChannelData(0).slice(Math.round(0.5 * SR));
   return analyze(x, e.dur + 0.1);
 }
+/**
+ * One variant through the whole master chain at a pan (fourth round, R8), both channels: the K-weighted Fast level of the two channels' power together (what a listener on speakers hears), the peak of the louder
+ * channel. A voice at pan 0.6 puts 2.6 dB more on its near channel than a centred one puts on either, so a loud sound's near channel reaches the glue compressor and the soft clip harder and the chain takes
+ * more off it. Returns { fast, peak }.
+ */
+export async function panChain(id, v, trim, makeup, masterGain = 1, pan = 0, gainDb = 0) {
+  const e = RECIPES[id], ctx = new OfflineAudioContext(2, SR * 4, SR), m = master(ctx, { master: masterGain, makeup: 1 / makeup });
+  voice(ctx, m.buses[e.bus], layersFor(id, v, {}), 0.6, { seed: 3, trim, gainDb, pan, noJitter: true, jit: 0 });
+  const b = await ctx.startRendering(), from = Math.round(0.5 * SR), L = b.getChannelData(0).slice(from), R = b.getChannelData(1).slice(from);
+  const kl = kw(L), kr = kw(R), both = new Float32Array(kl.length); for (let i = 0; i < both.length; i++) both[i] = Math.hypot(kl[i], kr[i]);
+  let pk = 0; for (let i = 0; i < L.length; i++) pk = Math.max(pk, Math.abs(L[i]), Math.abs(R[i]));
+  return { fast: fastLevel(both), peak: db(pk) };
+}
 /** The twelve loudest sounds at once through the chain: the worst pile-up. Returns the peak in dBFS. */
 export async function worstCase(keys, trims, makeup, masterGain = 1) {
   const ctx = new OfflineAudioContext(2, SR * 5, SR), m = master(ctx, { master: masterGain, makeup: 1 / makeup });
@@ -262,10 +288,52 @@ export async function plays(id, v, k = 0, trim = 0, n = 32, jitter = true, noise
   const layers = layersFor(id, v, {}, k), dur = RECIPES[id].dur, out = [];
   for (let i = 0; i < n; i++) {
     const at = 0.012 + (3 + (i * 7) % 64) * 128 / SR, rnd = rng(i + 101);
-    const x = await renderLayers(layers, dur, { at, seed: i + 1, trim, tail: 0.15, voice: { noJitter: !jitter, jit: (rnd() * 2 - 1) * 7, jitterCents: 7, noiseAt } });
+    const x = await renderLayers(layers, dur, { at, seed: i + 1, trim, tail: 0.15, voice: { noJitter: !jitter, jit: (rnd() * 2 - 1) * 7 * jitterOf(id, v), jitterCents: 7, noiseAt } });
     out.push(quick(x));
   }
   return out;
+}
+
+/**
+ * The engine's own plays of EVERY variant (fourth round, R1 and R7): `n` plays of each the way the engine makes them (its own seed for the place in the noise, the pitch jitter of 7 cents, the gain jitter of
+ * 0.7 dB, a start time of its own), at the given trims and lists of places. Where the checks used to look at ten frequent sounds, this looks at all of them: a rare loud sound that varied by 3 dB from one
+ * play to the next, and a fanfare whose real peaks were 1 to 2 dB over a ceiling that held for the one play the calibration made, were not in the ten.
+ * Returns { key: { peak: [p95, max], fast: [min, median, max], lapFastA: [min, median, max], lapMomA: [min, median, max] } } (dBFS and dB). `levels: false` reads the peak alone, a third of the work.
+ * keys: only these entries (default: all, pool members too with `pools`, and the ambient one-shots).
+ */
+export async function sweep(trims = {}, lists = {}, n = 32, o = {}) {
+  const out = {}, only = o.keys ? new Set(o.keys) : null;
+  const items = [...entries(!!o.pools).map((en) => ({ key: en.key, layers: layersFor(en.id, en.v, {}, en.k), dur: RECIPES[en.id].dur, jit: jitterOf(en.id, en.v) })), ...ONE_SHOTS.map((sh) => ({ key: sh.id, layers: oneShotLayers(sh.id), dur: sh.dur }))];
+  for (const it of items) {
+    if (only && !only.has(it.key)) continue;
+    const base = it.key.replace(/@\d+$/, ''), trim = trims[it.key] ?? trims[base] ?? 0, noiseAt = lists[it.key] ?? lists[base] ?? null, peaks = [], fast = [], lapA = [], mom = [], jScale = it.jit ?? 1;
+    for (let i = 0; i < n; i++) {
+      const at = 0.012 + (3 + (i * 7) % 64) * 128 / SR, rnd = rng(i + 101 + (o.seed0 || 0));
+      const x = await renderLayers(it.layers, it.dur, { at, seed: i + 1 + (o.seed0 || 0), trim, tail: 0.15, voice: { noJitter: false, jit: (rnd() * 2 - 1) * 7 * jScale, jitterCents: 7, noiseAt } });
+      if (o.levels === false) { peaks.push(peakOf(x)); continue; }
+      const q = quick(x); peaks.push(q.peak); fast.push(q.fast); lapA.push(q.lapFastA); mom.push(q.lapMomA);
+    }
+    const stat = (a) => (a.length ? [Math.min(...a), med(a), Math.max(...a)] : null);
+    out[it.key] = { peak: [pct(peaks, 0.95), Math.max(...peaks)], fast: stat(fast), lapFastA: stat(lapA), lapMomA: stat(mom) };
+  }
+  return out;
+}
+
+/**
+ * A change of district through the real ambient gains (fourth round, R4): bed `a` plays on its own, then at 4 s bed `b` takes over with the crossfade the controller uses, and the level in 100 ms steps is
+ * read off a mono render at 48 kHz. Returns { before, after (dB, the means of the two beds alone: the last and the first second away from the fade), dip (dB the quietest 100 ms of the fade sits under the lower of the
+ * two), at (s into the fade) }. Two beds are uncorrelated noise, so their powers add: a fade that is not equal-power dips in the middle.
+ */
+export async function crossfadeDip(a, b, fade = AMB.CROSS) {
+  const T = 4, ctx = new OfflineAudioContext(1, SR * (T + fade + 5), SR);
+  const oldBed = buildBed(ctx, ctx.destination, a, { T: 0 }), newBed = buildBed(ctx, ctx.destination, b, { T });
+  oldBed.stop(T, fade, { equalPower: true }); fadeBedIn(newBed, T, fade); // the two calls the controller makes at a change of district
+  const x = (await ctx.startRendering()).getChannelData(0), W = Math.round(0.1 * SR), lv = [];
+  for (let s = 0; s + W <= x.length; s += W) { let e = 0; for (let i = s; i < s + W; i++) e += x[i] * x[i]; lv.push(10 * Math.log10(Math.max(1e-12, e / W))); }
+  const mean = (arr) => 10 * Math.log10(arr.reduce((p, v) => p + 10 ** (v / 10), 0) / arr.length);
+  const before = mean(lv.slice(20, 38)), after = mean(lv.slice(Math.round((T + fade) * 10) + 8, lv.length - 2));
+  const from = Math.round(T * 10), to = Math.round((T + fade) * 10), win = lv.slice(from, to), lo = Math.min(...win);
+  return { before, after, dip: Math.min(before, after) - lo, at: (win.indexOf(lo)) / 10 };
 }
 
 export { IDS, firstVariant, dB };

@@ -172,8 +172,8 @@ test('U7: the notes name a Display and sound button, and the title (data-room-pa
 });
 test('U8: the notes land above the Draft\'s footer, not on its Begin button (the bar is the bottom 4.6rem; on a phone the need line takes a row more)', () => {
   const css = src('css/ui-draft.css');
-  assert.match(css, /body:has\(\.dr-actions\) #toasts \{ bottom: calc\(var\(--edge-b\) \+ 4\.9rem\); \}/);
-  assert.match(css, /@media \(max-width: 640px\) \{ body:has\(\.dr-actions\) #toasts \{ bottom: calc\(var\(--edge-b\) \+ 8\.6rem\); \} \}/);
+  assert.match(css, /body:has\(\.dr-actions\) #toasts \{ bottom: calc\(max\(\.5rem, env\(safe-area-inset-bottom, 0px\)\) \+ 4\.9rem\); \}/);
+  assert.match(css, /@media \(max-width: 640px\) \{ body:has\(\.dr-actions\) #toasts \{ bottom: calc\(max\(\.5rem, env\(safe-area-inset-bottom, 0px\)\) \+ 8\.6rem\); \} \}/);
 });
 
 // ================================================================================ B2 / U15: gestures and unsupported browsers
@@ -227,4 +227,165 @@ test('W-7: the amount of a note is read with its K, M or B suffix; the engine\'s
     const n = g.s.news[0], call = wire.noteCalls(n, wire.newWireState(), { now: () => 1 })[0];
     assert.equal(call[2].meta.amount, amt, `${n.text} reads as ${amt}`); void size;
   }
+});
+
+// ================================================================================ engine and calibration (Appendix G: R1 to R8)
+const { equalFade, dB: dbOf } = await import('../js/audio/palette.js');
+const { buildBed, fadeBedIn, AMB, createAmbient } = await import('../js/audio/ambient.js');
+const { jitterOf, LOUD_JITTER, trimDbOf, RECIPES, tierOf, TIER_CEIL, layersFor, variantsOf } = await import('../js/audio/recipes.js');
+const { CLASSROOM_DB } = await import('../js/audio/settings.js');
+const calib = await import('../scripts/audio-calib.mjs');
+const measure = await import('../dev/measure.js');
+
+/** The value of a recorded AudioParam at time q: its first assigned value, then its set and linear events in order. */
+function valueAt(p, q) {
+  let tp = 0, vp = p.assigned.length ? p.assigned[0][1] : 0;
+  for (const c of p.calls) {
+    if (c[0] === 'cancel') continue;
+    const [kind, v, t] = c;
+    if (kind === 'set') { if (q < t) return vp; tp = t; vp = v; } else if (kind === 'linear') { if (q <= t) return vp + (v - vp) * (q - tp) / (t - tp || 1); tp = t; vp = v; }
+  }
+  return vp;
+}
+test('R4: an equal-power fade keeps one power across a crossfade; the linear fades of 3 s in and 2 s out dipped by 5 dB (they are what the beds had)', () => {
+  const ctx = fakeContext(), a = ctx.createGain(), b = ctx.createGain();
+  equalFade(a.gain, 4, 3, 0.5, 'out'); equalFade(b.gain, 4, 3, 0.5, 'in');
+  assert.equal(valueAt(b.gain, 3.9), 0, 'the new bed is silent before the fade (its value is in place before the first event: I1)'); assert.equal(b.gain.assigned[0][1], 0);
+  assert.ok(Math.abs(valueAt(a.gain, 4) - 0.5) < 1e-12 && Math.abs(valueAt(a.gain, 7)) < 1e-9 && Math.abs(valueAt(b.gain, 7) - 0.5) < 1e-9, 'out from the level to silence, in from silence to the level');
+  let worst = 0;
+  for (let q = 4; q <= 7.0001; q += 0.1) { const p = (valueAt(a.gain, q) / 0.5) ** 2 + (valueAt(b.gain, q) / 0.5) ** 2; worst = Math.max(worst, Math.abs(10 * Math.log10(p))); }
+  assert.ok(worst < 0.05, `the sum of the two beds\' powers stays within ${worst.toFixed(3)} dB of one`);
+  // the old fades, for the strength of the test
+  let dip = 0; for (let q = 0; q <= 3; q += 0.05) dip = Math.min(dip, 10 * Math.log10(Math.max(0, 1 - q / 2) ** 2 + (q / 3) ** 2));
+  assert.ok(dip < -4.5, `linear 2 s out and 3 s in dip ${dip.toFixed(1)} dB`);
+});
+test('R4: a bed leaves on a cosine and the next comes in on a sine over one length: the controller and the offline measure use the same two calls', () => {
+  const ctx = fakeContext(), out = ctx.createGain(), old = buildBed(ctx, out, 'scrap', { T: 0, trimDb: -6 }), next = buildBed(ctx, out, 'market', { T: 4, trimDb: -9 });
+  old.stop(4, AMB.CROSS, { equalPower: true }); fadeBedIn(next, 4, AMB.CROSS);
+  const lo = dbOf(-6), ln = dbOf(-9);
+  for (let q = 4; q <= 7.0001; q += 0.25) { const p = (valueAt(old.gain.gain, q) / lo) ** 2 + (valueAt(next.gain.gain, q) / ln) ** 2; assert.ok(Math.abs(10 * Math.log10(p)) < 0.06, `at ${q} s: ${p}`); }
+  assert.equal(AMB.CROSS, 3); assert.equal(AMB.FADE_IN, undefined, 'one length for both'); assert.equal(AMB.FADE_OUT, undefined);
+  const w = src('js/audio/ambient.js'); assert.match(w, /bed\.stop\(host\.ctx\(\)\.currentTime, AMB\.CROSS, \{ equalPower: true \}\)/); assert.match(w, /fadeBedIn\(bed, t\);/);
+  assert.match(src('dev/measure.js'), /oldBed\.stop\(T, fade, \{ equalPower: true \}\); fadeBedIn\(newBed, T, fade\)/, 'the measure runs the calls the controller runs');
+  // an ordinary stop (a mute, the end of a run) is still a linear fade to silence
+  const c2 = fakeContext(), o2 = c2.createGain(), b2 = buildBed(c2, o2, 'scrap', { T: 0, trimDb: -6 }); b2.stop(1, 0.6);
+  assert.deepEqual(b2.gain.gain.calls.filter((c) => c[0] === 'linear').map((c) => c[2]), [1.6]);
+});
+test('R4: the controller crossfades with them when the district changes', async () => {
+  const ctx = fakeContext({ state: 'running' }), out = ctx.createGain(); let nowMs = 1000;
+  const c = createAmbient({ ctx: () => ctx, out: () => out, now: () => nowMs, random: () => 0.5, setTimeout: () => 1, clearTimeout() {}, enabled: () => true, running: () => true, dialogOpen: () => false, lastMedium: () => -Infinity, lastMoment: () => -Infinity, duck() {}, shot() {} });
+  const { TRIMS } = await import('../js/audio/trims.js');
+  c.set({ theme: 'scrap', tier: 1, zone: 1 }); ctx.currentTime = 10;
+  const first = ctx.nodes.find((n) => n.kind === 'gain' && n.out.includes(out)); first.gain._v = dbOf(TRIMS.beds.scrap); // (a real AudioParam reads its present value; the recording one keeps the last event's)
+  c.set({ theme: 'market', tier: 1, zone: 2 });
+  const beds = ctx.nodes.filter((n) => n.kind === 'gain' && n.out.includes(out)); assert.equal(beds.length, 2);
+  const [a, b] = beds, la = dbOf(TRIMS.beds.scrap), lb = dbOf(TRIMS.beds.market);
+  for (let q = 10; q <= 13.001; q += 0.25) { const p = (valueAt(a.gain, q) / la) ** 2 + (valueAt(b.gain, q) / lb) ** 2; assert.ok(Math.abs(10 * Math.log10(p)) < 0.3, `at ${q} s: ${(10 * Math.log10(p)).toFixed(2)} dB`); }
+});
+
+test('R7: the share of the pitch jitter: the loud tier and the xl coin take 0.4 of it, alert.insolvent 0.2, the rest all of it; the engine applies it to the voice', () => {
+  assert.equal(LOUD_JITTER, 0.4);
+  for (const id of Object.keys(RECIPES)) for (const v of variantsOf(id)) {
+    const j = jitterOf(id, v);
+    if (id === 'alert.insolvent') assert.equal(j, 0.2, id); else if (tierOf(id, v) === 'loud' || (id === 'cash.in' && v === 'xl')) assert.equal(j, LOUD_JITTER, id + '#' + v); else assert.equal(j, 1, id + '#' + v);
+  }
+  assert.equal(jitterOf('nope', 'x'), 1);
+  const detune = (id, o) => { // the pitch jitter the engine gave the first oscillator it built
+    const clock = fakeClock(), ctx = fakeContext({ sampleRate: 8000 }), s = { ...audioDefaults() };
+    const au = createAudio({ get: () => s, now: clock.now, timers: clock.timers_, factory: () => ctx, random: () => 0.9, measure: false });
+    au.unlock(); ctx.state = 'running'; au.play(id, o); return ctx.nodes.find((n) => n.kind === 'osc').detune.value;
+  };
+  const full = detune('cash.in', { size: 's' }), xl = detune('cash.in', { size: 'xl' });
+  assert.ok(Math.abs(full - 5.6) < 1e-9, 'a small coin: the whole jitter (0.8 of 7 cents)'); assert.ok(Math.abs(xl - 5.6 * 0.4) < 1e-9, `the xl shower: 0.4 of it (${xl})`);
+});
+
+test('R5: the pairs of a loss and its gain include sale.reject#fake and bank.draw#b, and a loss that is not under its gain is lowered to be', () => {
+  const have = (g, l) => calib.LOSS_TWINS.some(([a, b]) => a === g && b === l);
+  assert.ok(have('sale.win#w', 'sale.reject#fake') && have('bank.repay#full', 'bank.draw#b')); assert.equal(calib.LOSS_TWINS.length, 14);
+  assert.ok(trimDbOf('sale.reject', 'fake') <= -1.5 && trimDbOf('bank.draw', 'b') <= -1.5, 'with a softness of their own');
+  const row = (key, o) => { const [id, v] = key.split('#'); return { key, id, v, tier: 'medium', ms: 400, level: -24, fast: -24, lapFast: -24, lapFastA: -26, lapMomA: -28, peak: -12, ...o }; };
+  const rows = [row('sale.win#w'), row('sale.reject#fake', { fast: -22.6, lapFastA: -26.8 })], t = { 'sale.win#w': 0, 'sale.reject#fake': 0 };
+  const held = calib.holdTwins(rows, t);
+  assert.ok(Math.abs(held['sale.reject#fake'] - -(1.4 + calib.TWIN_MARGIN)) < 0.06, `lowered by what it was over plus the margin: ${held['sale.reject#fake']}`); assert.equal(held['sale.win#w'], 0, 'the gain stays');
+  assert.equal(calib.holdTwins(rows.map((r) => (r.key === 'sale.reject#fake' ? { ...r, fast: -25, lapFastA: -28 } : r)), t)['sale.reject#fake'], 0, 'a loss already under its gain is left');
+});
+
+test('R1: a ceiling holds the 95th percentile of the engine-like plays (peakJ), with a margin for other seeds; the single play of the render no longer decides', () => {
+  assert.equal(calib.CEIL_MARGIN, 0.5);
+  const base = { key: 'level.up#l', id: 'level.up', v: 'l', tier: 'loud', ms: 1500, level: -30, peak: -5.5 };
+  const plain = calib.stage1(base), jittered = calib.stage1({ ...base, peakJ: -3.5 });
+  assert.ok(Math.abs(plain + 5.5 - (TIER_CEIL.loud - calib.CEIL_MARGIN)) > 0 || plain + (-5.5) <= TIER_CEIL.loud - calib.CEIL_MARGIN + 1e-9);
+  assert.ok(Math.abs(jittered + -3.5 - (TIER_CEIL.loud - calib.CEIL_MARGIN)) < 1e-9, 'held on the jittered peak: ' + (jittered - 3.5));
+  assert.ok(jittered < plain, 'which is lower than the one play would have allowed');
+  assert.equal(calib.peakOf({ peak: -5, peakJ: -3 }), -3); assert.equal(calib.peakOf({ peak: -5 }), -5); assert.equal(calib.peakOf({ peak: -5, peakJ: -9 }), -5);
+  // stage 2 keeps it too
+  const rows = [...Array.from({ length: 11 }, (_, i) => ({ key: 'cam#x' + i, id: 'cam', v: 'x' + i, tier: 'loud', ms: 300, level: -30, fast: -30, lapFast: -30, lapFastA: -30, peak: -10 })), { key: 'alert.shock#fed', id: 'alert.shock', v: 'fed', tier: 'loud', ms: 300, level: -30, fast: -30, lapFast: -30, lapFastA: -40, peak: -8, peakJ: -3.2 }];
+  const t = calib.centre(rows, Object.fromEntries(rows.map((r) => [r.key, 0])));
+  assert.ok(-3.2 + t['alert.shock#fed'] <= TIER_CEIL.loud - calib.CEIL_MARGIN + 1e-9, 'never traded for balance: ' + t['alert.shock#fed']);
+  assert.match(src('scripts/audio-check.mjs'), /PLAYS_N = 32, PLAY_SEED = 500/); assert.match(src('scripts/audio-check.mjs'), /m\.sweep\(\$\{JSON\.stringify\(pass1\.lists\)\}|m\.sweep\(\{\}, \$\{JSON\.stringify\(pass1\.lists\)\}/);
+});
+
+test('R2: the quiet laptop\'s momentary loudness is a third model: stage 2 balances on it and a sound short in time is lifted by it', () => {
+  const mk = (key, o = {}) => { const [id, v] = key.split('#'); return { key, id, v, tier: 'medium', ms: 300, level: -24, fast: -24, lapFast: -24, lapFastA: -26, lapMomA: -28, peak: -14, ...o }; };
+  const rows = [...Array.from({ length: 11 }, (_, i) => mk('cam#x' + i)), mk('buy.lot#ok', { lapMomA: -33 })];
+  assert.deepEqual(calib.metricsOf(rows), ['fast', 'lapFastA', 'lapMomA']); assert.deepEqual(calib.metricsOf(rows.map(({ lapMomA, ...r }) => r)), ['fast', 'lapFastA'], 'rows without it are balanced on the two as before');
+  const t = calib.centre(rows, Object.fromEntries(rows.map((r) => [r.key, 0])));
+  assert.ok(Math.abs(t['buy.lot#ok'] - 5 / 3) < 0.15, `raised by a third of the 5 dB it is under (the mean of the three): ${t['buy.lot#ok']}`);
+  const M = calib.tierMedians(rows, t); assert.ok(Number.isFinite(M.medium.m) && Math.abs(M.medium.m - -28) < 0.3);
+  // the measure: a tick of 40 ms is 10 dB under a stationary sound in a window of 400 ms
+  const n = measure.SR, tick = new Float32Array(n), steady = new Float32Array(n); for (let i = 0; i < n; i++) steady[i] = 1; for (let i = 0; i < Math.round(0.04 * n); i++) tick[i] = 1;
+  assert.ok(Math.abs(measure.momentary(steady)) < 0.01); assert.ok(Math.abs(measure.momentary(tick) + 10) < 0.15, String(measure.momentary(tick)));
+  const half = new Float32Array(n); for (let i = 0; i < Math.round(0.2 * n); i++) half[i] = 1; assert.ok(Math.abs(measure.momentary(half) + 3) < 0.15, 'half the window is 3 dB');
+  const check = src('scripts/audio-check.mjs'); assert.match(check, /\['lapMomA', 'quiet-laptop A-weighted momentary \(400 ms\)'\]/); assert.match(check, /TIER_GAP_MIN = 1\.5/); assert.match(check, /MOM_TOL = 3\.0/);
+});
+
+test('R3: the Classroom rule is 6 dB lower for the interface and 8 for the game; the two mediums on the interface bus take their 3 dB back', () => {
+  assert.deepEqual(CLASSROOM_DB, { ui: -6, game: -8 });
+  const gain = (settings, id, o = {}) => { const clock = fakeClock(), ctx = fakeContext({ sampleRate: 8000 }), au = createAudio({ get: () => settings, now: clock.now, timers: clock.timers_, factory: () => ctx, random: () => 0.5, measure: false }); au.unlock(); ctx.state = 'running'; au.play(id, o); return 20 * Math.log10(ctx.nodes.find((n) => n.kind === 'gain' && n.out.some((x) => x.kind === 'pan')).gain.value); };
+  for (const [id, db] of [['sale.win', -8], ['ui.ok', -6], ['zone.open', -8]]) assert.ok(Math.abs(gain({ ...audioDefaults(), quiet: true }, id, { player: true }) - gain(audioDefaults(), id, { player: true }) - db) < 0.01, id);
+  assert.ok(trimDbOf('acad.teach', 'right') > 0 && trimDbOf('draft.pick', 'complete') > 0 && RECIPES['acad.teach'].bus === 'ui' && RECIPES['draft.pick'].bus === 'ui' && tierOf('acad.teach', 'right') === 'medium');
+  const check = src('scripts/audio-check.mjs'); assert.match(check, /tiers at the speaker/); assert.match(check, /AT_BUS_GAP = 2\.5/); assert.match(check, /CLASSROOM_DB/);
+});
+
+test('R6: the herd (h) and the scam fall where a laptop plays: a note in 250 to 800 Hz that steps down, by the ear\'s measure and through the laptop model', () => {
+  const notes = (L) => L.filter((x) => (x.k === 'tone' || x.k === 'bank') && x.type !== 'sawtooth').map((x) => ({ t: x.t || 0, f: typeof x.f === 'number' ? x.f : 440 * 2 ** ((12 * (+x.f.slice(-1) + 1) + { C: 0, 'C#': 1, D: 2, E: 4, 'F#': 6, A: 9, B: 11 }[x.f.slice(0, -1)] - 69) / 12), g: x.g ?? 1 })).filter((x) => x.f >= 250 && x.f <= 800);
+  for (const k of ['sale.herd#h', 'sale.scam#s']) {
+    const [id, v] = k.split('#'), N = notes(layersFor(id, v)), mx = Math.max(...N.map((x) => x.g)), sal = N.filter((x) => x.g >= mx * 0.5).sort((a, b) => a.t - b.t || b.f - a.f);
+    assert.ok(12 * Math.log2(sal[sal.length - 1].f / sal[0].f) <= -2.5, `${k} falls ${(12 * Math.log2(sal[sal.length - 1].f / sal[0].f)).toFixed(1)} semitones`);
+  }
+  assert.ok(notes(layersFor('sale.herd', 'hw')).length >= 1, 'the herd that paid is unchanged: a bell, no falling pair');
+});
+
+test('R8: a loud sound panned off centre is a little quieter than the same centred, and the remedy proposed (a lower voice gain) made it worse: the engine adds none, and the guard is in audio-check', () => {
+  const clock = fakeClock(), ctx = fakeContext({ sampleRate: 8000 }), s = { ...audioDefaults() };
+  const au = createAudio({ get: () => s, now: clock.now, timers: clock.timers_, factory: () => ctx, random: () => 0.5, measure: false });
+  au.unlock(); ctx.state = 'running'; au.play('zone.open', { variant: 't4', pan: 0.6, noCooldown: true });
+  const g1 = 20 * Math.log10(ctx.nodes.find((n) => n.kind === 'gain' && n.out.some((x) => x.kind === 'pan')).gain.value);
+  const c2 = fakeContext({ sampleRate: 8000 }), a2 = createAudio({ get: () => s, now: clock.now, timers: clock.timers_, factory: () => c2, random: () => 0.5, measure: false }); a2.unlock(); c2.state = 'running'; a2.play('zone.open', { variant: 't4', pan: 0, noCooldown: true });
+  const g0 = 20 * Math.log10(c2.nodes.find((n) => n.kind === 'gain' && n.out.some((x) => x.kind === 'pan')).gain.value);
+  assert.ok(Math.abs(g1 - g0) < 1e-9, 'the same voice gain at every pan: the equal-power law is the only difference');
+  const check = src('scripts/audio-check.mjs'); assert.match(check, /PAN_LOSS_MAX = 1\.6/); assert.match(check, /m\.panChain/);
+});
+
+// ================================================================================ the documents say what the code does (U2, W-9, U14, G)
+test('U2: the first listen is on /dev/sounds.html, and the prototype\'s page says it is the prototype', () => {
+  const doc = src('docs/AUDIO.md');
+  assert.ok(!/open `\/dev\/audio-proto\/audition\.html`/.test(doc), 'no instruction to listen on the prototype'); assert.match(doc, /then open \*\*`\/dev\/sounds\.html`\*\*/);
+  assert.ok(!/`npm start`, then `\/dev\/audio-proto\/audition\.html`\) \|$/m.test(doc.replace(/revision-1 prototype's page[^|]*\|/, '')), 'the file table does not send the author to the prototype');
+  assert.match(doc, /item 2 is its \*\*Blind round\*\*/); assert.match(src('dev/audio-proto/audition.html'), /Revision-1 prototype\.<\/b>[^<]*[\s\S]*href="\/dev\/sounds\.html"/);
+});
+test('W-9 / U14: the faculty kit says what the link gains, what the room does and what the instructor cannot do; row 88 says what nothing gates', () => {
+  const kit = src('docs/FACULTY_KIT.md'), doc = src('docs/AUDIO.md');
+  assert.match(kit, /the link gains `&sound=quiet`/); assert.ok(!/the link ends `\?sound=quiet`/.test(kit));
+  assert.match(kit, /Before class, one minute/); assert.match(kit, /tell them sound is quiet in a room and \*\*M\*\* mutes it/); assert.match(kit, /you cannot see how a student's sound is set/); assert.match(kit, /the volume alone included/); assert.match(kit, /a shock you deploy to the cohort is a loud sound on every laptop at once/);
+  assert.match(kit, /Tick \*\*Quiet sound link\*\* \*before\* you press \*\*Copy student link\*\*/); assert.match(kit, /medium and loud ones are 8 dB lower/);
+  assert.ok(!/Off by default in a room/.test(doc), 'row 88'); assert.match(doc, /On by default on the instructor's own screen \(nothing gates it/);
+  assert.match(src('README.md'), /`js\/audio\/` is the generated sound layer/);
+});
+test('Appendix G exists, answers every finding, and says which were not taken as reported', () => {
+  const doc = src('docs/AUDIO.md'), g = doc.slice(doc.indexOf('## Appendix G.'));
+  for (const id of ['R1', 'R2', 'R3', 'R4', 'R5', 'R6', 'R7', 'R8', 'W-1', 'W-2', 'W-3', 'W-4', 'W-5', 'W-6', 'W-7', 'W-8', 'W-9', 'B1', 'B2', 'U1', 'U2', 'U3', 'U4', 'U5', 'U6', 'U7', 'U8', 'U9', 'U10', 'U11', 'U12', 'U13', 'U14', 'U15']) assert.ok(g.includes(id), id + ' is in Appendix G');
+  assert.match(g, /\*\*Not as reported\.\*\*/); assert.match(g, /The remedy proposed \(-1\.5 dB when panned\) was measured and is worse/); assert.match(g, /### G\.3 What only ears can say/);
+  assert.match(doc, /Revision 6 \(2026-10-29, the fourth repair round\)/); assert.match(doc, /Appendix D, E, F and G the four repair rounds/);
+  assert.ok(!/10 dB lower, interface 6 dB lower/.test(doc), 'the Classroom figure is 8 everywhere'); assert.ok(!/game 10\b/.test(src('scripts/audio-check.mjs')));
 });

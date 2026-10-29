@@ -15,6 +15,12 @@ export const volumeGain = (v) => (Math.max(0, Math.min(100, Number.isFinite(+v) 
  */
 export const HEADROOM = 1 / volumeGain(DEFAULT_MASTER);
 export const HEADROOM_DB = 20 * Math.log10(HEADROOM);
+/**
+ * The Classroom rule's cut, in dB, by bus (3.2): interface sounds 6 dB lower, game sounds 8. It was 10 for the game until the fourth round (R3): with the interface bus 3 dB under the game bus and no
+ * headroom, a medium game sound was only 1.8 dB over the loudest tiny interface sound under the quiet-laptop model and the tiers all but touched; at 8 the clear gap is 3.8 dB. A room is still 12.6 dB
+ * under Full for a medium game sound at the default volume (the headroom is not given back), and the tiny game sounds are not played at all.
+ */
+export const CLASSROOM_DB = { ui: -6, game: -8 };
 /** The master gain for the settings: the taper, the headroom (not in Classroom), 0 when muted. */
 export const masterGain = (a) => (a.mute ? 0 : volumeGain(a.master) * (a.quiet ? 1 : HEADROOM));
 /** The one-time note of the first minute (7.4): in the game, where the speaker button is, and on the title and in the Draft, where there is none yet. */
@@ -31,7 +37,7 @@ export function audioDefaults() {
     ambientLevel: 70,  // 0 to 100, gain = (v / 100) ** 1.5 on top of the ambient bus
     dial: false,       // the repair dial tone (4.5). Off until the player turns it on
     clockSounds: true, // buyers arriving, the new day, managers' coins, freight arriving, cash settling, a mentor's tip (3.4.5). Off in Classroom
-    quiet: false,      // the Classroom rule (3.2): tiny game sounds off, medium and loud 10 dB lower, interface 6 dB lower, ambient, dial and clock sounds off
+    quiet: false,      // the Classroom rule (3.2): tiny game sounds off, medium and loud 8 dB lower, interface 6 dB lower, ambient, dial and clock sounds off
     worldTicks: true,  // the world's hover ticks and footsteps (the most frequent game sounds; Calm and Classroom drop them anyway). Off silences those two and nothing else
     mKey: true,        // key M mutes and unmutes (a single-key shortcut needs a way out, WCAG 2.1.4); the speaker button stays
     touched: false,    // the player has changed a sound setting by hand (stops the automatic Classroom preset), or a saved "sound off" was migrated

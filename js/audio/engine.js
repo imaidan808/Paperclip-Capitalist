@@ -2,11 +2,11 @@
 // the settings sync, the ambient bed and the repair dial tone. Nothing here touches the DOM, and the context comes from an injected factory, so a recording fake context tests all of it in
 // Node. With Web Audio missing, or any failure, `state` is 'unsupported' and every method returns without throwing. With sound idle there is no timer and no frame callback.
 import { voice, master, dB, hz, fadeIn, noiseBuffers, MAKEUP_FALLBACK, FAMILY_MS, layerSpans, isGhost, moneySize } from './palette.js';
-import { RECIPES, IDS, layersFor, tierOf, firstVariant, variantsOf, cooldownOf, variantRank, trimFor, noiseAtFor, isMoment, PREEMPT } from './recipes.js';
+import { RECIPES, IDS, layersFor, tierOf, firstVariant, variantsOf, cooldownOf, variantRank, trimFor, noiseAtFor, isMoment, PREEMPT, jitterOf } from './recipes.js';
 import { createAmbient, oneShotLayers } from './ambient.js';
 import { TRIMS } from './trims.js';
 import { createResolverState, resolveBurst, gateClock, holdRelease, stateGate, catchingUp, recentPress } from './resolve.js';
-import { volumeGain, masterGain } from './settings.js';
+import { volumeGain, masterGain, CLASSROOM_DB } from './settings.js';
 
 const PRI = { tiny: 1, medium: 2, loud: 3 };
 export const LIMITS = { VOICES: 12, OSCILLATORS: 160, LEAD: 0.012, IDLE_MS: 60000, DUCK_REL: 600 };
@@ -264,13 +264,13 @@ export function createAudio(cfg = {}) {
       const osc = total(spans);
       const s = eff();
       let gainDb = (m.opts.gainDb || 0) + refuseDb + (m.opts.where === 'elsewhere' ? -8 : m.opts.where === 'offscreen' ? -4 : 0);
-      if (s.quiet) gainDb += m.e.bus === 'ui' ? -6 : -10;
+      if (s.quiet) gainDb += m.e.bus === 'ui' ? CLASSROOM_DB.ui : CLASSROOM_DB.game;
       const lp = m.opts.where === 'elsewhere' ? 2500 : m.opts.where === 'offscreen' ? 3500 : m.opts.lp || 0;
       const bus = m.e.bus, dest = m.opts.noDuck || m.tier === 'loud' || bus === 'amb' ? chain.buses[bus] : nodes[bus][m.tier];
       const pan = Number.isFinite(+m.opts.pan) ? clamp(+m.opts.pan, -1, 1) : mainPan; // the coins and the streak of a sale sound where the sale does (3.6); a member that must stay centred says `pan: 0`
       let v;
       try {
-        v = voice(ctx, dest, layers, startT + shift, { seed: ++seedN, trim: trimFor(m.id, m.variant, k), noiseAt: noiseAtFor(m.id, m.variant, k), gainDb, pan, jit: sharedJitter(t), skip, secondary: m.opts.secondary, dull: m.opts.dull, lp });
+        v = voice(ctx, dest, layers, startT + shift, { seed: ++seedN, trim: trimFor(m.id, m.variant, k), noiseAt: noiseAtFor(m.id, m.variant, k), gainDb, pan, jit: sharedJitter(t) * jitterOf(m.id, m.variant), skip, secondary: m.opts.secondary, dull: m.opts.dull, lp });
       } catch (e) { logOnce('recipe ' + m.id, e); continue; }
       group.voices.push(v); group.osc += osc; group.spans.push(...spans);
       for (const fam of v.fams) famLast[fam] = t;

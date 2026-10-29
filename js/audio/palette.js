@@ -120,6 +120,18 @@ export function fadeIn(param, at, dur, to = 1) {
   param.setValueAtTime(0, at);
   param.linearRampToValueAtTime(to, at + dur);
 }
+/**
+ * An equal-power fade (fourth round, R4): the gain follows a quarter of a sine going up (`in`, from silence) or of a cosine going down (`out`, from `level`) over `dur` seconds, in `steps` linear pieces,
+ * so that two uncorrelated sounds fading across each other (two noise beds; a change of district) keep one power: sin^2 + cos^2 = 1. Two linear fades of different lengths, as the beds had, dip by 4 to 7 dB
+ * in the middle (-3 dB for equal lengths, -5.1 for 3 s in and 2 s out). The first value is put in place before the first event, as `fadeIn` does (I1). Piecewise linear because a recording fake and every
+ * engine take it, and 16 pieces of a quarter wave are within 0.15% of it.
+ */
+export function equalFade(param, at, dur, level, dir = 'in', steps = 16) {
+  const f = (u) => level * (dir === 'in' ? Math.sin(u * Math.PI / 2) : Math.cos(u * Math.PI / 2));
+  param.cancelScheduledValues(at);
+  if (dir === 'in') { param.value = 0; param.setValueAtTime(0, at); } else param.setValueAtTime(level, at);
+  for (let i = 1; i <= steps; i++) param.linearRampToValueAtTime(f(i / steps), at + dur * i / steps);
+}
 function biquad(ctx, type, spec, T, dur) { // spec = [f0, Q, f1?]: a static filter, or one swept (exponentially) to f1 over dur
   const q = ctx.createBiquadFilter(); q.type = type; q.Q.value = spec[1] ?? 0.7;
   q.frequency.value = spec[0]; // the value first: the filter's default is 350 Hz, and a frame rendered before the event would use it
@@ -298,13 +310,15 @@ export const pair = (a, b, t = 0, gap = 0.12, g = 0.4, d = 0.3) => [gls(a, t, g,
  * to F#4 a third) in the time the taps take to fall. Without `from` the body is one held note (a neutral "no", or a body in a sound that is not a loss).
  * `knock`: the share of the noise knock. A loud alert that is held under its level by its peak (-3 dBFS) takes a body with most of its knock taken out and the sines (which have a crest factor of 3 dB, not 12)
  * raised, so that its level under a quiet laptop can rise without its peak.
+ * The tone rings 2.0 times `d` (1.5 for the second note of a fall), where it rang 1.4 (1.1) until the fourth round: the loss family and the short purchases sat 3.4 to 4.1 dB under their tier in the quiet laptop's
+ * MOMENTARY loudness (400 ms), which counts how long a sound is as well as how loud, and a body that rings a little longer is what a small speaker plays of them (Appendix G, R2).
  * The body sits at 370 to 590 Hz and not lower (it was D4, 294 Hz, until the third repair round): at the level of a quiet laptop (about 40 phon, A-weighted after the speaker's high-pass) 294 Hz is 7 dB
  * under 1 kHz and 440 Hz is 4, so a body at D4 made every loss 4 to 7 dB quieter than its tier on the device it was written for (Appendix F, I2).
  */
 export const body = (t = 0, g = 0.5, note = 'A4', d = 0.12, from = null, knock = 1) => [
   ...(from
-    ? [{ k: 'tone', f: from, t, a: 0.004, d: d * 0.6, g: g * 1.6 }, { k: 'tone', f: note, t: t + d * 0.45, a: 0.004, d: d * 1.1, g: g * 2 }]
-    : [{ k: 'tone', f: note, t, a: 0.004, d: d * 1.4, g: g * 2 }]),
+    ? [{ k: 'tone', f: from, t, a: 0.004, d: d * 0.6, g: g * 1.6 }, { k: 'tone', f: note, t: t + d * 0.45, a: 0.004, d: d * 1.5, g: g * 2 }]
+    : [{ k: 'tone', f: note, t, a: 0.004, d: d * 2.0, g: g * 2 }]),
   { k: 'noise', c: 'pink', t, a: 0.002, d: d * 0.6, g: g * 3 * knock, bp: [440, 0.9], main: true },
 ];
 

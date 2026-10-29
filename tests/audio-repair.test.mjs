@@ -147,7 +147,7 @@ test('the duration compensation is a smooth curve: +5.5 dB for the shortest tick
 });
 test('a refusal is no louder than a confirmation, and every loss twin is softer than its gain', () => {
   assert.equal(trimDbOf('ui.refuse', 'r'), 0); assert.equal(trimDbOf('world.locked', 'l'), 0);
-  for (const k of ['cash.out#l', 'sale.herd#h', 'sale.scam#s', 'ui.toggle#off']) { const [id, v] = k.split('#'); assert.ok(trimDbOf(id, v) <= -1.5, k); }
+  for (const k of ['cash.out#l', 'sale.herd#h', 'sale.scam#s', 'ui.toggle#off', 'sale.reject#fake', 'bank.draw#b']) { const [id, v] = k.split('#'); assert.ok(trimDbOf(id, v) <= -1.5, k); }
   const src = readFileSync(new URL('../scripts/audio-check.mjs', import.meta.url), 'utf8');
   assert.match(src, /LOSS_TWINS/); assert.match(src, /share250 < 0\.4/); assert.match(src, /LAPTOP_TOL/); assert.match(src, /panPower/);
 });

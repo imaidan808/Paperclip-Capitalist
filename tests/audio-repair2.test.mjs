@@ -169,8 +169,8 @@ function laptop(layers) {
   return 12 * Math.log2(sal[sal.length - 1].f / sal[0].f);
 }
 const LOSS_BODY = ['clock#pause', 'pitch.fit#down', 'audit.result#fail', 'world.locked#l', 'repair.stop#miss', 'repair.done#rough', 'ship.trouble#damage', 'alert.insolvent#i', 'bid.rival#out', 'bid.hammer#lost', 'haggle.close#walk',
-  'alert.shock#fed', 'sale.reject#nofit', 'ui.refuse#r', 'deal.result#bad', 'bank.draw#b', 'acad.teach#wrong', 'sale.reject#fake'];
-test('the eighteen losses whose fall lived under 250 Hz now fall where a laptop plays: the body steps down inside 250 to 800 Hz, by the ear\'s measure and through the laptop model', () => {
+  'alert.shock#fed', 'sale.reject#nofit', 'ui.refuse#r', 'deal.result#bad', 'bank.draw#b', 'acad.teach#wrong', 'sale.reject#fake', 'sale.herd#h', 'sale.scam#s']; // (the last two had a held A4 and a coin fall a laptop plays 12 dB under it: fourth round, R6)
+test('the twenty losses whose fall lived under 250 Hz now fall where a laptop plays: the body steps down inside 250 to 800 Hz, by the ear\'s measure and through the laptop model', () => {
   for (const k of LOSS_BODY) {
     const [id, v] = k.split('#'); assert.ok(variantsOf(id).includes(v === 'r' ? 'r' : v) || variantsOf(id).length, k);
     const vv = variantsOf(id).includes(v) ? v : variantsOf(id)[0], L = layersFor(id, vv);

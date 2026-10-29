@@ -71,12 +71,12 @@ function firstVoiceDb(settings, play) {
   assert.ok(g, 'a voice was built');
   return 20 * Math.log10(g.gain.value);
 }
-test('A1: the Draft\'s begin fanfare is 10 dB quieter for a student who has typed a room code than for anyone else (the loudest sound of the first minute)', () => {
+test('A1: the Draft\'s begin fanfare is 8 dB quieter on the bus for a student who has typed a room code than for anyone else (the loudest sound of the first minute; it was 10 until the fourth round, R3: see CLASSROOM_DB)', () => {
   const solo = { audio: audioDefaults() }, room = deps();
   const a = firstVoiceDb(solo, (au) => au.request('draft.begin'));
   assert.equal(wire.pendingRoom({ code: 'ABCD' }, room), 'joined');
   const b = firstVoiceDb(room.settings, (au) => au.request('draft.begin'));
-  assert.ok(Math.abs((a - b) - 10) < 0.05, `Classroom is 10 dB down on the game bus: ${a.toFixed(2)} dB solo, ${b.toFixed(2)} dB in the Draft of a room`);
+  assert.ok(Math.abs((a - b) - 8) < 0.05, `Classroom is 8 dB down on the game bus: ${a.toFixed(2)} dB solo, ${b.toFixed(2)} dB in the Draft of a room`);
   // and the Draft's other game sounds that are tiny are left out altogether, as in the room
   const t = { audio: audioDefaults() }; wire.pendingRoom({ code: 'ABCD' }, { ...deps(), settings: t });
   assert.equal(t.audio.quiet, true);

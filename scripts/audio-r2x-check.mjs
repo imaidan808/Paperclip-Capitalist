@@ -5,6 +5,9 @@
 //   A4  the repair room: the switch, the line under the dial, the description on Stop, the announcement inside the sheet (and that the page's own live region is not in the accessibility tree while
 //       the sheet is open: the reason `announce()` writes inside it), and that pressing the switch starts the real tone at once.
 //   A3  the audition page, pressed for real: the bursts in the author's order, a bed with Ambient off, a one-shot under a mute, the dial tone in Classroom.
+//   Fourth round (Appendix G): the Academy's first lesson in a room keeps Classroom (W-1); a student who types the code is told one thing (U3/W-5); the Draft has its Display and sound button and the note
+//   is not on Begin (U7/U8); the Deal Room's switches are named by their words (U10) and the tone comes back after M, M and after a hidden tab (U1); a press that closes the dialog plays one voice (W-4);
+//   a script-made event creates no context (B2); the audition page's new tools run (U4, U5, U12).
 // Prints ok / FAIL per check and exits 1 if any failed.
 import { createServer } from 'node:http';
 import { handler } from '../server/static.mjs';
@@ -20,10 +23,10 @@ const errors = (p) => p.logs.filter((l) => /^(error|EXC)/.test(l) && !/favicon|F
 const settingsOf = `(async()=>{ const c = await import('/js/ui/common.js'); return c.settings.audio; })()`;
 
 /** A page on its own storage slot, past the title, with a run started through the real draft (or left at the title). */
-async function page(query, { reduced = false, play = true } = {}) {
+async function page(query, { reduced = false, play = true, academy = false, w = 1280, h = 900 } = {}) {
   const slot = 'r2x' + Math.floor(Math.random() * 1e6);
-  const p = await open(b, `${BASE}/?slot=${slot}${query}`, { w: 1280, h: 900, reduced });
-  await p.eval(`localStorage.setItem('pc.academyDone.${slot}', 'true')`);
+  const p = await open(b, `${BASE}/?slot=${slot}${query}`, { w, h, reduced });
+  if (!academy) await p.eval(`localStorage.setItem('pc.academyDone.${slot}', 'true')`);
   if (play) {
     await p.eval(`(async()=>{const wait=ms=>new Promise(r=>setTimeout(r,ms)); [...document.querySelectorAll('button')].find(b=>/Play solo/i.test(b.textContent)).click(); await wait(500);
       for (const id of ['trades','pro']) { document.querySelector('.dr-in[value="'+id+'"]')?.click(); await wait(100); }
@@ -115,11 +118,11 @@ try {
     ok(await open1(false), 'A4: a repair room opens');
     ok(await p.eval(`document.querySelector('.deal[data-kind]').dataset.kind`) === 'repair', 'A4: it is a repair');
     const sw = await p.eval(`(()=>{ const x = document.querySelector('[data-deal="dialtone"]'); return x && { name: x.getAttribute('aria-label'), pressed: x.getAttribute('aria-pressed'), text: x.textContent.trim(), after: x.previousElementSibling && x.previousElementSibling.dataset.fid, next: x.nextElementSibling && x.nextElementSibling.dataset.fid }; })()`);
-    ok(sw && sw.name === 'Repair dial tone' && sw.pressed === 'false' && /Dial tone off/.test(sw.text), 'A4: the Dial tone switch is in the room, off: ' + JSON.stringify(sw));
+    ok(sw && sw.name === null && sw.pressed === 'false' && /Dial tone off/.test(sw.text), 'A4: the Dial tone switch is in the room, off, named by its words (no other label): ' + JSON.stringify(sw));
     ok(sw && sw.after === 'deal-sound' && sw.next === 'leave', 'A4: beside Sound, before Leave');
     const ear = await p.eval(`document.getElementById('dial-ear')?.textContent`);
     ok(/^Prefer to listen\? Turn on Repair dial tone/.test(ear || '') && /Careful: pay more, no timing/.test(ear || ''), 'A4: the line under the dial: ' + ear);
-    ok(await p.eval(`document.querySelector('[data-deal="stop"]').getAttribute('aria-describedby') === 'dial-ear' && document.activeElement === document.querySelector('[data-deal="stop"]')`), 'A4: the cursor lands on Stop, which is described by that line');
+    ok(await p.eval(`document.querySelector('[data-deal="stop"]').getAttribute('aria-describedby') === 'dial-short' && document.activeElement === document.querySelector('[data-deal="stop"]')`), 'A4: the cursor lands on Stop, which is described by the short line');
     const say = await p.eval(`document.querySelector('#dlg [data-say="status"]')?.textContent`);
     ok(/Fix\. A marker moves across a bar by itself/.test(say || '') && /choose Careful: pay more, no timing/.test(say || ''), 'A4: the room\'s own live region, inside the sheet, says it: ' + (say || '').slice(0, 140));
     // the accessibility tree: the page's live region is ignored while the sheet is open, the one inside is not
@@ -128,7 +131,11 @@ try {
     const live = await axOf(`document.getElementById('live')`), mine = await axOf(`document.querySelector('#dlg [data-say="status"]')`), stopN = await axOf(`document.querySelector('[data-deal="stop"]')`);
     ok(live.ignored === true && (live.ignoredReasons || []).some((r) => r.name === 'activeModalDialog'), 'A4: (the finding) #live is not in the accessibility tree while the modal sheet is open: ' + JSON.stringify((live.ignoredReasons || []).map((r) => r.name)));
     ok(mine.ignored === false && mine.role.value === 'status', 'A4: the region inside the sheet is in the tree, as a status');
-    ok(/Prefer to listen/.test((stopN.description && stopN.description.value) || ''), 'A4: Stop\'s accessible description is the line: ' + ((stopN.description && stopN.description.value) || '').slice(0, 80));
+    ok(/^Dial tone is off\. Careful needs no timing\.$/.test((stopN.description && stopN.description.value) || ''), 'A4: Stop\'s accessible description is the short line (a dozen words, not forty): ' + ((stopN.description && stopN.description.value) || '').slice(0, 80));
+    const names = await p.eval(`(()=>{ const nm = (f) => document.querySelector('[data-fid="'+f+'"]'); return { sound: nm('deal-sound').querySelector('.tn').textContent, dial: nm('deal-dial').querySelector('.tn').textContent, badge: nm('deal-dial').querySelector('.tb').getAttribute('aria-hidden') }; })()`);
+    const soundAX = await axOf(`document.querySelector('[data-fid="deal-sound"]')`), dialAX = await axOf(`document.querySelector('[data-fid="deal-dial"]')`);
+    const nm = (x) => x.name.value.trim().toLowerCase(); // (the sheet draws buttons in capitals, and the name is computed from what is drawn)
+    ok(nm(soundAX) === 'sound' && nm(dialAX) === 'dial tone' && names.badge === 'true', 'U10: the accessible names are the visible words (Sound, Dial tone); the state is aria-pressed and a badge the name leaves out: ' + nm(soundAX) + ' / ' + nm(dialAX));
     // the switch, for real: a click turns the tone on and the real tone starts at once
     const pl2 = await playedOf(p);
     await p.clickSel('[data-deal="dialtone"]'); await sleep(400);
@@ -138,6 +145,18 @@ try {
     ok(on.pressed === 'true' && /Dial tone on/.test(on.text) && on.dial === true, 'A4: the switch is pressed and the setting is on: ' + JSON.stringify({ pressed: on.pressed, dial: on.dial }));
     ok(on.active === true, 'A4: the real tone is running, started at once while the marker moves (engine ' + on.state + ')');
     ok(on.focus, 'A4: the switch keeps the cursor through the redraw');
+    {
+      const dial = () => p.eval(`(async()=>{ const { audio } = await import('/js/audio/index.js'); return { active: audio.dial.active, state: audio.state, mute: (await import('/js/ui/common.js')).settings.audio.mute }; })()`);
+      await p.key('m'); await sleep(300); const muted = await dial();
+      ok(muted.mute === true && muted.active === false, 'U1: key M mutes: the engine ends the tone: ' + JSON.stringify(muted));
+      ok(/Dial tone/.test(await p.eval(`document.querySelector('[data-deal="dialtone"]').textContent`)), 'U1: and the room still says what it said');
+      await p.key('m'); await sleep(500); const back = await dial();
+      ok(back.mute === false && back.active === true, 'U1: M again: the tone is running again, while the marker moves (it stayed silent for the rest of the stage): ' + JSON.stringify(back));
+      await p.eval(`(async()=>{ const { audio } = await import('/js/audio/index.js'); audio.setHidden(true); })()`); await sleep(200);
+      ok((await dial()).active === false, 'U1: a tab put away ends the tone');
+      await p.eval(`(async()=>{ const { audio } = await import('/js/audio/index.js'); audio.setHidden(false); })()`); await sleep(500);
+      ok((await dial()).active === true, 'U1: and shown again it comes back');
+    }
     ok(/^Repair dial tone is on: low on the left/.test(on.ear || ''), 'A4: the line now says what the tone does: ' + (on.ear || '').slice(0, 70));
     ok(/Repair dial tone on\. Low is left, high is right/.test(on.said || ''), 'A4: and the sheet\'s live region says so: ' + (on.said || '').slice(0, 80));
     await p.clickSel('[data-deal="dialtone"]'); await sleep(300);
@@ -160,6 +179,80 @@ try {
     ok(await p.eval(`!!document.querySelector('#dial-in') && !document.getElementById('dial-ear')`), 'A4: under reduced motion the dial is the slider, with its own words, and nobody is pushed');
     ok(!/A marker moves/.test(await p.eval(`document.querySelector('#dlg [data-say="status"]')?.textContent || ''`)), 'A4: and nothing is announced about a marker');
     ok(!!(await p.eval(`document.querySelector('[data-deal="dialtone"]')`)), 'A4: the switch is still there (the tone follows the slider)');
+    await p.close();
+  }
+
+  // ============================================================ fourth round (Appendix G)
+  {
+    // W-1: the Academy's first lesson, played in a room, keeps Classroom (it put the earlier settings back, and the class played every lesson at full volume)
+    const { p, slot } = await page('&room=ABCD', { play: false, academy: true });
+    await p.clickSel('[data-act="join"]'); await sleep(600);
+    for (const id of ['trades', 'pro']) { await p.eval(`document.querySelector('.dr-in[value="${id}"]').click()`); await sleep(100); }
+    await p.clickSel('#dr-begin'); await sleep(2500);
+    ok(await p.eval(`!!document.querySelector('[data-act="ac-start"]')`), 'W-1: Begin in a room opens the Academy on a first run');
+    ok((await p.eval(settingsOf)).quiet === true, 'W-1: Classroom on the Academy\'s intro');
+    const toasts0 = (await toasts(p)).length;
+    await p.clickSel('[data-act="ac-start"]'); await sleep(1800);
+    const a = await p.eval(settingsOf);
+    ok(a.quiet === true && a.clockSounds === false, 'W-1: Classroom through lesson 1 (the sandbox is not a room it can leave): ' + JSON.stringify({ quiet: a.quiet, clock: a.clockSounds }));
+    ok(!!(await p.eval(`localStorage.getItem('pc.audioBeforeRoom.${slot}')`)), 'W-1: the earlier values are still remembered, to be put back on leaving the room');
+    ok((await toasts(p)).filter((x) => /Classroom \(quieter\)/.test(x)).length <= 1 && (await toasts(p)).length <= toasts0 + 1, 'W-1: no second note of the room\'s: ' + JSON.stringify(await toasts(p)));
+    ok(!errors(p).length, 'W-1: no console error: ' + errors(p).join(' | ').slice(0, 200));
+    await p.close();
+  }
+  {
+    // U3 / W-5: a student who types the code is told one thing about sound; U7: the Draft has the button the notes name
+    const { p } = await page('', { play: false });
+    await p.clickSel('#jc'); await sleep(300);
+    ok((await toasts(p)).length === 0, 'U3: a press in the code field makes no "sound effects are on": ' + JSON.stringify(await toasts(p)));
+    await p.eval(`document.querySelector('#jc').value = 'ABCD'`);
+    await p.clickSel('[data-act="join"]'); await sleep(700);
+    const t = await toasts(p);
+    ok(t.length === 1 && /Classroom \(quieter\) in this room\. Press M to mute, or change it under Display and sound\./.test(t[0]), 'U3: Join then says one thing, and the room\'s: ' + JSON.stringify(t));
+    const rects = await p.eval(`(()=>{ const t = document.querySelector('#toasts .toast')?.getBoundingClientRect(), b = document.querySelector('#dr-begin')?.getBoundingClientRect(); return t && b && { t: [t.left, t.top, t.right, t.bottom], b: [b.left, b.top, b.right, b.bottom] }; })()`);
+    const overlap = (r) => !(r.t[2] <= r.b[0] || r.t[0] >= r.b[2] || r.t[3] <= r.b[1] || r.t[1] >= r.b[3]);
+    ok(rects && !overlap(rects), 'U8: the note is not on the Begin button (1280x900): ' + JSON.stringify(rects));
+    ok(await p.eval(`!!document.querySelector('[data-act="settings"][data-fid="dr-sound"]')`), 'U7: the Draft has a Display and sound button');
+    await p.clickSel('[data-fid="dr-sound"]'); await sleep(400);
+    ok(await p.eval(`document.querySelector('#dlg h2')?.textContent`) === 'Display and sound', 'U7: and it opens the dialog the notes name');
+    await p.eval(`document.querySelector('#dlg [data-close]')?.click()`); await sleep(300);
+    ok(!errors(p).length, 'U3: no console error: ' + errors(p).join(' | ').slice(0, 200));
+    await p.close();
+  }
+  for (const [w, h] of [[1366, 768], [1280, 720], [390, 844]]) {
+    // U8: at the sizes the report measured, and on a phone
+    const { p } = await page('&room=ABCD', { play: false, w, h });
+    await p.clickSel('[data-act="join"]'); await sleep(700);
+    const r = await p.eval(`(()=>{ const t = document.querySelector('#toasts .toast')?.getBoundingClientRect(), b = document.querySelector('#dr-begin')?.getBoundingClientRect(); return t && b && { t: [t.left, t.top, t.right, t.bottom].map(Math.round), b: [b.left, b.top, b.right, b.bottom].map(Math.round), h: innerHeight }; })()`);
+    const hit = r && !(r.t[2] <= r.b[0] || r.t[0] >= r.b[2] || r.t[3] <= r.b[1] || r.t[1] >= r.b[3]);
+    ok(r && !hit, `U8: ${w}x${h}: the note is not on Begin: ` + JSON.stringify(r));
+    await p.close();
+  }
+  {
+    // W-4: a press that closes the dialog plays its own tick and nothing behind it; B2: a script-made event is no gesture
+    const { p } = await page('');
+    await p.clickSel('[data-act="menu"]'); await sleep(600);
+    const pl = await playedOf(p);
+    await p.clickSel('#dlg [data-act="debrief"]'); await sleep(900);
+    const d = added(pl, await playedOf(p));
+    ok(JSON.stringify(d) === '{"ui.tick":1}', 'W-4: Open debrief (the menu closes, the screen changes) plays one tick, not a tick and a dialog close: ' + JSON.stringify(d));
+    await p.close();
+    const q = await page('', { play: false });
+    await q.p.eval(`document.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true })); document.querySelector('button').click();`); await sleep(500);
+    const ctxs = await q.p.eval(`(async()=>{ const { audio } = await import('/js/audio/index.js'); return { ctx: !!audio.context, state: audio.state }; })()`);
+    ok(ctxs.ctx === false, 'B2: a script-made pointerdown and click create no AudioContext: ' + JSON.stringify(ctxs));
+    await q.p.click(10, 10); await sleep(400);
+    ok(await q.p.eval(`(async()=>{ const { audio } = await import('/js/audio/index.js'); return !!audio.context; })()`), 'B2: a real press does');
+    await q.p.close();
+  }
+  {
+    // U6: the dashboard's order, and the link a student gets
+    const { p } = await page('', { play: false });
+    await p.clickSel('[data-act="instr"]'); await sleep(900);
+    await p.eval(`document.querySelector('#dlg [data-close]')?.click()`); await sleep(300);
+    ok(await p.eval(`(()=>{ const a = document.querySelector('input[data-change="linkquiet"]'), c = document.querySelector('[data-act="copylink"]'); return !!(a.compareDocumentPosition(c) & Node.DOCUMENT_POSITION_FOLLOWING); })()`), 'U6: the Quiet sound link box comes before Copy student link');
+    await p.clickSel('input[data-change="linkquiet"]'); await sleep(300);
+    ok(await p.eval(`document.querySelector('[data-act="copylink"]').dataset.quiet === '1'`), 'U6: and the copy knows what it carries');
     await p.close();
   }
 
@@ -202,6 +295,29 @@ try {
     ok(await p.eval(`audioAudition.audio.dial.active`) && !/silent/.test(await status()), 'A3: the dial tone sounds otherwise');
     await press('Stop', 200); ok(/dial tone stopped/.test(await status()), 'A3: its Stop says what it did: ' + (await status()));
     await press('Stop everything', 200); ok(/stopped every sound/.test(await status()), 'A3: Stop everything says what it did');
+    // fourth round: the bed stops with it (U4), a card pressed over a fanfare is heard (U5), the tools of the listening checklist run (U12)
+    await p.eval(`document.getElementById('amb').checked = true`); await press('bed harbor', 1000);
+    ok(await p.eval(`audioAudition.audio.stats().ambient.playing`), 'U4: a bed plays');
+    await press('Stop everything', 600);
+    ok(!(await p.eval(`audioAudition.audio.stats().ambient.playing`)) && !(await p.eval(`document.getElementById('amb').checked`)) && /ambient bed/.test(await status()), 'U4: Stop everything stopped the bed too, unticked Ambient and said so: ' + (await status()));
+    await press('level.up / big', 300); await press('milestone / m3', 500);
+    ok(!/silent/.test(await status()), 'U5: a card pressed 300 ms after a fanfare is heard (it was silent with the moment-queue reason): ' + (await status()));
+    await p.eval(`audioAudition.audio.stopAll(40)`);
+    ok(await p.eval(`document.querySelectorAll('#toc a').length`) >= 15 && await p.eval(`document.querySelector('#toc a').getAttribute('href').startsWith('#g-')`), 'U12: the contents list jumps between the groups');
+    await p.eval(`document.getElementById('amb').checked = true`); await press('night', 200);
+    ok(await p.eval(`[...document.querySelectorAll('button')].find(b => b.textContent.trim() === 'night').getAttribute('aria-pressed')`) === 'true', 'U12: a modifier says it is on');
+    await p.eval(`document.getElementById('mono').click()`); await sleep(300);
+    ok(/mono/.test(await status()) && await p.eval(`document.getElementById('mono').checked`), 'U12: the Mono box folds the output: ' + (await status()));
+    await p.eval(`document.getElementById('lap').click()`); await sleep(300);
+    ok(/laptop speaker/.test(await status()), 'U12: and the Laptop speaker box filters it: ' + (await status()));
+    await press('night', 100); await press('ui.tick / full', 300);
+    await p.eval(`document.getElementById('mono').click(); document.getElementById('lap').click()`); await sleep(200);
+    {
+      await press('Start a round', 100);
+      for (let i = 0; i < 20; i++) { await p.eval(`document.querySelector('.blind [data-blind="play"]').click()`); await sleep(120); await p.eval(`document.querySelector('.blind [data-kind="gain"]').click()`); }
+      const txt = await p.eval(`document.querySelector('.blind').textContent`);
+      ok(/Gain against loss: \d+ of 10 right/.test(txt) && /All four kinds: \d+ of 20/.test(txt), 'U12: the Blind round: twenty sounds, a score on gain against loss and a key: ' + txt.slice(0, 120));
+    }
     ok(!errors(p).length, 'A3: no console error: ' + errors(p).join(' | ').slice(0, 200));
     await p.close();
   }

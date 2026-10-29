@@ -9,6 +9,7 @@
   label { display: inline-flex; gap: 8px; align-items: center; margin-right: 16px; } .mute { color: #9aa7b4; }
 </style></head><body>
 <h1>Audio audition (prototype of docs/AUDIO.md)</h1>
+<p role="note" style="border:2px solid #ffc247;padding:8px 12px;max-width:80ch"><b>Revision-1 prototype.</b> This page plays the first draft of the sounds, with its own synth and its own levels, and is kept for the history of the design. <b>The shipped sounds are at <a href="/dev/sounds.html" style="color:#ffc247">/dev/sounds.html</a></b>: judge them there.</p>
 <p class="mute">Every recipe of the sound map, played through the real master chain (buses, glue compressor, soft clip at -3 dBFS). Border: yellow = loud, blue = medium, grey = tiny. Nothing plays until you press a button.</p>
 <p><label>Master <input id="vol" type="range" min="0" max="100" value="70" aria-label="Master volume"></label><label><input id="mute" type="checkbox"> Mute</label></p>
 <div id="app"></div>

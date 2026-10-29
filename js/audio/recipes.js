@@ -110,7 +110,7 @@ S('cam', { bus: 'ui', tier: 'tiny', cd: 150, pan: 'center',
 S('world.locked', { bus: 'game', tier: 'tiny', cd: 400, pan: 'object x',
   trigger: 'A locked gate, plot, board or district is clicked ("... opens at $x net worth", "Not open yet", "Resolve your audit")',
   meaning: 'Shut. Not yet', recipe: 'chain rattle (4 noise bursts at 3.5 kHz, 35 ms apart) + two dull knocks D3 and A2 + a faint metal ting A5', visual: 'Warn toast with the gate\'s price in words',
-  variants: { l: {} }, dur: 0.3, build: () => [...ticks(4, 0, 0.035, 0.32, 3500), ...wood('D3', 0.02, 0.5, 0.08), ...wood('A2', 0.15, 0.5, 0.1), gls('A5', 0.02, 0.1, 0.12), ...wood('D4', 0.02, 0.4, 0.08), ...body(0.15, 0.7, 'A4', 0.12, 'D5')] });
+  variants: { l: {} }, dur: 0.4, build: () => [...ticks(4, 0, 0.035, 0.32, 3500), ...wood('D3', 0.02, 0.5, 0.08), ...wood('A2', 0.15, 0.5, 0.1), gls('A5', 0.02, 0.1, 0.12), ...wood('D4', 0.02, 0.4, 0.08), ...body(0.15, 0.7, 'A4', 0.12, 'D5')] });
 
 S('world.step', { bus: 'game', tier: 'tiny', cd: 280, pan: 'player x',
   trigger: 'Your character takes a step while walking between districts or to a ground click: one step every 0.3 s; never for NPCs',
@@ -172,7 +172,7 @@ S('sale.pioneer', { bus: 'game', tier: 'medium', cd: 300, pan: 'buyer x',
 S('sale.herd', { bus: 'game', tier: 'medium', cd: 300, pan: 'buyer x',
   trigger: '`pitch` event with `outcome: "herd"` (sold into a crowded niche, whatever it paid)',
   meaning: 'Money, but a hollow one: the herd is crowded', recipe: 'h (lost money in the crowd): drawer thump + a dull bell A4 (lowpass 2 kHz) then a soft falling pair B3 to A3 over a low shuffle; hw (it paid, whatever the crowd): the thump and the dull bell, no falling pair', visual: '"Sold into the herd" title and the saturation lesson',
-  variants: { h: {}, hw: { w: 1 } }, dur: 1.0, build: (p) => p.w ? [thump('A3', 'D3', 0, 0.6, 0.1), bellL('A4', 0.03, 0.34, 0.5, { lp: [2000, 0.7] })] : [thump('A3', 'D3', 0, 0.6, 0.1), bellL('A4', 0.03, 0.34, 0.5, { lp: [2000, 0.7] }), { k: 'tone', f: 'B3', type: 'triangle', t: 0.25, a: 0.01, d: 0.18, g: 0.34, lp: [900, 0.7] }, { k: 'tone', f: 'A3', type: 'triangle', t: 0.4, a: 0.01, d: 0.3, g: 0.34, lp: [800, 0.7] }, { k: 'noise', c: 'brown', t: 0.1, a: 0.05, d: 0.3, g: 0.12, lp: [400, 0.7] }, ...body(0.25, 0.4, 'A4', 0.14)] });
+  variants: { h: {}, hw: { w: 1 } }, dur: 1.0, build: (p) => p.w ? [thump('A3', 'D3', 0, 0.6, 0.1), bellL('A4', 0.03, 0.55, 0.5, { lp: [2000, 0.7] })] : [thump('A3', 'D3', 0, 0.3, 0.1), bellL('A4', 0.03, 0.55, 0.5, { lp: [2000, 0.7] }), { k: 'tone', f: 'B3', type: 'triangle', t: 0.25, a: 0.01, d: 0.18, g: 0.18, lp: [900, 0.7] }, { k: 'tone', f: 'A3', type: 'triangle', t: 0.4, a: 0.01, d: 0.3, g: 0.18, lp: [800, 0.7] }, { k: 'noise', c: 'brown', t: 0.1, a: 0.05, d: 0.3, g: 0.06, lp: [400, 0.7] }, ...body(0.25, 1.1, 'F#4', 0.14, 'A4')] }); // the herd's body steps down a third, A4 to F#4: gentler than the other losses, and a fall where a laptop plays it (fourth round, R6)
 
 S('sale.flat', { bus: 'game', tier: 'medium', cd: 300, pan: 'buyer x',
   trigger: '`pitch` event with `outcome: "flat"` (sold at or below fair value)',
@@ -189,13 +189,13 @@ S('sale.reject', { bus: 'game', tier: 'medium', cd: 300, pan: 'buyer x',
 S('sale.scam', { bus: 'game', tier: 'medium', cd: 600, pan: 'buyer x',
   trigger: '`pitch` with `outcome: "rejected"` while a `scam` note has just been sent (or `reason: "scam"`): an unverified fraudster took the crate and paid nothing',
   meaning: 'You were swindled: coins drain away, a door slams', recipe: 'muted coins falling in pitch, a comic slide D4 to D3 (450 ms), a door thump and a low horn blip', visual: '"Scammed" title, bad toast, the crate vanishes',
-  variants: { s: {} }, dur: 1.0, build: () => [...coins(5, 0.35, 0, 0.26, FALL, { lp: [2200, 0.7] }, true), { k: 'tone', f: 'D4', f2: 'D3', gl: 0.45, type: 'triangle', t: 0.1, a: 0.01, d: 0.5, g: 0.3, lp: [1000, 0.7] }, thump('D3', 'D2', 0.5, 0.4, 0.14), ...horn('A3', 'A3', 0.52, 0.16, 0.05, 0.2), ...body(0.5, 0.7, 'A4', 0.14)] });
+  variants: { s: {} }, dur: 1.0, build: () => [...coins(5, 0.35, 0, 0.26, FALL, { lp: [2200, 0.7] }, true), { k: 'tone', f: 'D4', f2: 'D3', gl: 0.45, type: 'triangle', t: 0.1, a: 0.01, d: 0.5, g: 0.3, lp: [1000, 0.7] }, thump('D3', 'D2', 0.5, 0.4, 0.14), ...horn('A3', 'A3', 0.52, 0.16, 0.05, 0.2), ...body(0.5, 0.7, 'A4', 0.26, 'D5', 0.6)] }); // the scam's body steps down a fifth, D5 to A4 (the coins that fall are quieter than the body, 12 dB under it, and a laptop plays them hardly at all: fourth round, R6)
 
 S('buy.lot', { bus: 'game', tier: 'medium', cd: 300, pan: 'lot x',
   trigger: '`buy` event. Never reads `fake` or the condition truth (that would give the lot away); `cond: "broken"` is public and adds a rattle. Played with `cash.out` sized by `price`',
   meaning: 'A crate lands on your shelf and the purse gets lighter', recipe: 'crate thump A2 to D2 + wood knock + pallet slide (noise 900 Hz); broken adds three metal rattles and a glass clink', visual: 'The pallet drops in the world, a toast, cash falls',
   variants: { ok: {}, broken: { b: 1 } }, dur: 0.6,
-  build: (p) => [thump('A2', 'D2', 0, 0.45, 0.16), ...wood('D4', 0.01, 0.5, 0.07), { k: 'noise', c: 'pink', t: 0.06, a: 0.02, d: 0.12, g: 0.2, bp: [900, 0.8, 500] }, ...body(0.01, 0.8, 'A4', 0.12), ...(p.b ? [...ticks(3, 0.1, 0.045, 0.24, 2600), gls('A5', 0.1, 0.12, 0.1)] : [])] });
+  build: (p) => [thump('A2', 'D2', 0, 0.45, 0.16), ...wood('D4', 0.01, 0.5, 0.07), { k: 'noise', c: 'pink', t: 0.06, a: 0.02, d: 0.12, g: 0.2, bp: [900, 0.8, 500] }, ...body(0.01, 0.8, 'A4', 0.28, null, 0.6), ...(p.b ? [...ticks(3, 0.1, 0.045, 0.24, 2600), gls('A5', 0.1, 0.12, 0.1)] : [])] });
 
 S('pool.sell', { bus: 'game', tier: 'medium', cd: 600, pan: 'center',
   trigger: '`sell-pool` event. Played with `cash.in` sized by `total` (the cash lands after a delay: `cash.in settle` plays then)',
@@ -278,7 +278,7 @@ S('haggle.close', { bus: 'game', tier: 'medium', cd: 600, pan: 'center',
   trigger: 'Accept their offer or price is pressed (handshake); Walk away is pressed (tiny)',
   meaning: 'A deal is shaken on, or you left the table', recipe: 'accept: two soft thumps (the clasp) + a coin D6 + a stamp; walk: chair slide (noise sweep down) + a door thump and latch tick', visual: '"Agreed at $x" callout, or "no deal"',
   variants: { accept: {}, walk: { walk: 1, tier: 'tiny' } }, dur: 0.7,
-  build: (p) => p.walk ? [swoosh(0, 0.2, 1600, 500, 0.2), thump('D3', 'D2', 0.22, 0.5, 0.1), click(0.25, 0.25, 2600), ...body(0.22, 0.35, 'A4', 0.1, 'D5')] : [thump('A2', 'D2', 0, 0.5, 0.08), thump('A2', 'D2', 0.09, 0.5, 0.08), ...coin('D6', 0.18, 0.3), ...stamp(0.22, 0.6), ...body(0.09, 0.5, 'A4', 0.12)] });
+  build: (p) => p.walk ? [swoosh(0, 0.2, 1600, 500, 0.2), thump('D3', 'D2', 0.22, 0.5, 0.1), click(0.25, 0.25, 2600), ...body(0.22, 0.35, 'A4', 0.1, 'D5')] : [thump('A2', 'D2', 0, 0.5, 0.08), thump('A2', 'D2', 0.09, 0.5, 0.08), ...coin('D6', 0.18, 0.3), ...stamp(0.22, 0.6), ...body(0.09, 0.5, 'A4', 0.28, null, 0.6)] });
 
 S('haggle.tell', { bus: 'game', tier: 'tiny', cd: 300, pan: 'center',
   trigger: 'After each counter, their stance changes ("far apart", "getting closer", "very close")',
@@ -386,14 +386,15 @@ S('alert.shock', { bus: 'game', tier: 'loud', cd: 3000, pan: 'center',
   trigger: '`shock` event (it is live now). By kind: tiktok, fed, tariff (scheduled), viral, glut, scare (surprise events, quieter)',
   meaning: 'tiktok: exciting; fed: ominous; tariff: heavy; viral: bright; glut: sinking; scare: nervous', recipe: 'tiktok: five-note bright arpeggio D5 to F#6 + confetti noise swell; fed: low brass A2 to D2 glide + rain-onset noise + rumble; tariff: gate slam + metal clang + horn A2; viral: glass D6 A6 D7; glut: marimba D5 A4 D4 falling; scare: the pair + a paper shake', visual: 'Breaking-news toast and dialog, rain or confetti in the world',
   variants: { tiktok: { v: 'tiktok' }, fed: { v: 'fed' }, tariff: { v: 'tariff' }, viral: { v: 'viral', tier: 'medium' }, glut: { v: 'glut', tier: 'medium' }, scare: { v: 'scare', tier: 'medium' } }, dur: 2.2,
-  build: (p) => ({ tiktok: () => [...arp(['D5', 'F#5', 'A5', 'D6', 'F#6'], 0.09, (n, t) => mar(n, t, 0.42, 0.3)), { k: 'noise', c: 'white', t: 0.1, a: 0.5, d: 0.6, g: 0.16, hp: [5000, 0.7] }, ...sparkle(5, 0.5, 0.14, 11, 0.07)], fed: () => [{ k: 'tone', f: 'A2', f2: 'D2', gl: 1.0, type: 'sawtooth', uni: [3, 8], a: 0.1, h: 0.5, d: 1.0, g: 0.5, lp: [380, 0.8] }, { k: 'noise', c: 'white', t: 0.3, a: 0.8, d: 0.9, g: 0.12, hp: [2500, 0.7] }, { k: 'noise', c: 'brown', a: 0.3, d: 1.2, g: 0.4, lp: [140, 0.7] }, ...body(0.1, 0.9, 'A4', 0.5, 'D5', 0.35)], tariff: () => [thump('D3', 'D2', 0, 0.3, 0.2), bellL('D3', 0.01, 0.3, 1.0), bellL('D4', 0.03, 0.22, 0.9), ...horn('A3', 'A3', 0.15, 0.4, 0.3, 0.5), ...body(0.05, 1.0, 'A4', 0.3, null, 0.35)], viral: () => [gls('D6', 0, 0.4, 0.4), gls('A6', 0.08, 0.4, 0.4), gls('D7', 0.16, 0.4, 0.6)], glut: () => arp(['D5', 'A4', 'D4'], 0.16, (n, t) => mar(n, t, 0.45, 0.35)), scare: () => [...pair('A4', 'F#4', 0, 0.13, 0.4, 0.3), paper(0.3, 0.12, 0.2)] })[p.v]() });
+  build: (p) => ({ tiktok: () => [...arp(['D5', 'F#5', 'A5', 'D6', 'F#6'], 0.09, (n, t) => mar(n, t, 0.42, 0.3)), { k: 'noise', c: 'white', t: 0.1, a: 0.5, d: 0.6, g: 0.16, hp: [5000, 0.7] }, ...sparkle(5, 0.5, 0.14, 11, 0.07)], fed: () => [{ k: 'tone', f: 'A2', f2: 'D2', gl: 1.0, type: 'sawtooth', uni: [3, 8], a: 0.1, h: 0.5, d: 1.0, g: 0.5, lp: [380, 0.8] }, { k: 'noise', c: 'white', t: 0.3, a: 0.8, d: 0.9, g: 0.12, hp: [2500, 0.7] }, { k: 'noise', c: 'brown', a: 0.3, d: 1.2, g: 0.4, lp: [140, 0.7] }, ...body(0.1, 0.9, 'A4', 0.5, 'D5', 0.35)], tariff: () => [thump('D3', 'D2', 0, 0.3, 0.2), bellL('D3', 0.01, 0.3, 1.0), bellL('D4', 0.03, 0.22, 0.9), ...horn('A3', 'A3', 0.15, 0.4, 0.3, 0.5), ...body(0.05, 1.1, 'A4', 0.55, null, 0.2)], viral: () => [gls('D6', 0, 0.4, 0.4), gls('A6', 0.08, 0.4, 0.4), gls('D7', 0.16, 0.4, 0.6)], glut: () => arp(['D5', 'A4', 'D4'], 0.16, (n, t) => mar(n, t, 0.45, 0.35)), scare: () => [...pair('A4', 'F#4', 0, 0.13, 0.4, 0.3), paper(0.3, 0.12, 0.2)] })[p.v]() });
 
 S('alert.margin-call', { bus: 'game', tier: 'loud', cd: 5000, pan: 'center',
   trigger: '`margin-call` event (debt-to-equity passed 4.5: the bank liquidates)',
   meaning: 'The most serious sound in the game', recipe: 'siren pair A3 D4 three times (saw, lowpassed 1.4 kHz) + a vault slam thump + a low horn blast, D3 over D2', visual: 'The "Margin Liquidation Protocol" dialog, bad toast, assets sold off',
   variants: { m: {} }, dur: 2.0, build: () => [...Array.from({ length: 3 }, (_, i) => [{ k: 'tone', f: 'A3', type: 'sawtooth', t: i * 0.45, a: 0.02, h: 0.14, d: 0.1, g: 0.4, lp: [1400, 0.8] }, { k: 'tone', f: 'D4', type: 'sawtooth', t: i * 0.45 + 0.2, a: 0.02, h: 0.14, d: 0.1, g: 0.4, lp: [1400, 0.8] }]).flat(), thump('D3', 'D2', 0, 0.3, 0.25), ...horn('D4', 'D3', 0.05, 0.5, 0.6, 0.6), ...body(0.05, 1.1, 'A4', 0.5, null, 0.35)] });
 
-S('alert.insolvent', { bus: 'game', tier: 'loud', cd: 5000, pan: 'center',
+S('alert.insolvent', { bus: 'game', tier: 'loud', cd: 5000, pan: 'center', jitter: 0.2, // a descending glide over a low chord: its unisons overlap longest and it moved 3.4 dB from one play to the next at 7 cents, 2.6 at 2.8
+ 
   trigger: '`insolvent` event (net worth fell to zero or below)',
   meaning: 'You are broke: a toll and a slow fall', recipe: 'two deep bell tolls D3 (1.5 s each) over a falling slide D4 to D2', visual: 'Bad toast; net worth turns red',
   variants: { i: {} }, dur: 2.6, build: () => [bellL('D3', 0, 0.38, 1.8, { a: 0.03 }), bellL('D3', 0.9, 0.32, 1.6, { a: 0.03 }), bellL('D4', 0.03, 0.26, 1.4, { a: 0.03 }), bellL('D4', 0.93, 0.22, 1.3, { a: 0.03 }), { k: 'tone', f: 'A4', f2: 'D3', gl: 1.1, type: 'triangle', a: 0.05, d: 1.6, g: 0.27, lp: [700, 0.7] }, ...body(0.09, 0.35, 'A4', 0.25, 'D5', 0.35), ...body(0.99, 0.32, 'A4', 0.25, 'D5', 0.35), { k: 'tone', f: 'A4', t: 0.25, a: 0.5, h: 0.9, d: 0.9, g: 0.4 }, { k: 'tone', f: 'D5', t: 0.25, a: 0.5, h: 0.9, d: 0.9, g: 0.2 }] }); // the slow fall stops at D3: below 150 Hz a laptop plays nothing, and the D4 to D2 slide spent 1.1 s of its 1.6 s there; it starts at A4 so that the first half of it, and the body's two steps, are in what a laptop plays
@@ -604,8 +605,24 @@ const CD = {
 export const CD_PER_VARIANT = new Set(['alert.shock', 'ship.trouble', 'haggle.tell', 'run.end']);
 const CD_BY_VARIANT = { achievement: { common: 3000 } };
 // Per variant: the loss twin of a gain is a little softer than it (2.2: spending is quieter than earning). Calibration levels every variant of a tier to the same target, which took the softness away.
-const VARIANT_TRIM = { 'cash.out#l': -1.5, 'cash.out#s': -1, 'sale.herd#h': -1.5, 'sale.scam#s': -2, 'sale.reject#nofit': -1, 'ui.toggle#off': -1.5, 'pitch.fit#down': -1.5, 'deal.result#bad': -1.5, 'audit.result#fail': -1.5, 'bid.hammer#lost': -1.5, 'repair.done#rough': -1.5 };
+// Fourth round: sale.reject#fake and bank.draw#b were louder than the gain they mirror and were not in the list (R5); the two mediums on the interface bus, which is 3 dB under the game bus, take the 3 dB
+// back so that they sit over the loudest tiny game sound by a medium's distance, as every other medium does (R3).
+const VARIANT_TRIM = { 'cash.out#l': -1.5, 'cash.out#s': -1, 'sale.herd#h': -1.5, 'sale.scam#s': -2, 'sale.reject#nofit': -1, 'sale.reject#fake': -1.5, 'bank.draw#b': -1.5, 'ui.toggle#off': -1.5, 'pitch.fit#down': -1.5, 'deal.result#bad': -1.5, 'audit.result#fail': -1.5, 'bid.hammer#lost': -1.5, 'repair.done#rough': -1.5,
+  'acad.teach#right': 1.5, 'draft.pick#complete': 1.5 };
 export const trimDbOf = (id, variant) => (RECIPES[id]?.trimDb || 0) + (VARIANT_TRIM[id + '#' + variant] || 0);
+/**
+ * The share of the pitch jitter (7 cents, shared by the voices that start together) a variant takes. The big layered sounds (the loud tier and the xl coin shower) have the same pitch in several layers that
+ * overlap in time; their phase at any moment is 2 pi f (t - start), and a shift of 0.4% in f moves it by whole turns after a tenth of a second, so the unisons add or cancel at random and the Fast level of
+ * one play differed from the next by 2 to 2.5 dB from the pitch alone (3.4 dB with the gain jitter: alert.insolvent, cash.in xl, run.end horizon; fourth round, R7). At 0.4 (+-2.8 cents) it is under 1.2.
+ */
+export const LOUD_JITTER = 0.4;
+export function jitterOf(id, variant) {
+  const e = RECIPES[id]; if (!e) return 1;
+  const v = e.variants[variant];
+  if (v && v.jitter != null) return v.jitter;
+  if (e.jitter != null) return e.jitter;
+  return tierOf(id, variant) === 'loud' || (id === 'cash.in' && variant === 'xl') ? LOUD_JITTER : 1;
+}
 const TUNED = {}; // the +3 dB of the refusal sounds is gone: a mis-click is never louder than a confirmation (2.2), and its body (a D4 sine and a knock at 440 Hz) carries it on a laptop instead
 
 export const RECIPES = {};

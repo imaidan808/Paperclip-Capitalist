@@ -7,7 +7,7 @@
 //   --calibrate  first trim every variant (the only thing calibration changes): to its tier's target on the median of 32 places in the noise (I3), then balanced between the K-weighted and the quiet-laptop
 //                model (I2, scripts/audio-calib.mjs), and give the sounds that move with the place in the noise a list of places; write js/audio/trims.js, then check against it
 //   --fast       skip the master-chain renders (tier gaps and the pile-up)
-//   --pools      also render the other members of every pool (`id#variant@k`)
+//   --pools      also render the other members of every pool (`id#variant@k`); the calibration, and the 32 plays of every variant (R1, R7), always include them
 //   --leak       only the start-click sweep (I1): every variant muted, started at the engine's real start times at 44.1 and 48 kHz
 //   --json file  write the full rows
 // Needs headless Chrome (scripts/cdp.mjs). Server on PORT (default 8401), Chrome on CDP (default 9901).
@@ -16,10 +16,11 @@ import { writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { handler } from '../server/static.mjs';
 import { launch, open } from './cdp.mjs';
-import { TIER_TARGET, TIER_CEIL, TIER_MAX_MS, tierComp, RECIPES, trimDbOf } from '../js/audio/recipes.js';
-import { calibrate, stage1, median, percentile, BAL_MAX, CEIL_MARGIN, LIST_SPREAD } from './audio-calib.mjs';
+import { TIER_TARGET, TIER_CEIL, TIER_MAX_MS, tierComp, RECIPES, trimDbOf, tierOf } from '../js/audio/recipes.js';
+import { calibrate, stage1, median, percentile, peakOf, BAL_MAX, CEIL_MARGIN, LIST_SPREAD, LOSS_TWINS } from './audio-calib.mjs';
 import { ONE_SHOTS } from '../js/audio/ambient.js';
-import { masterGain, DEFAULT_MASTER } from '../js/audio/settings.js';
+import { masterGain, DEFAULT_MASTER, CLASSROOM_DB } from '../js/audio/settings.js';
+import { AMB } from '../js/audio/ambient.js';
 
 const args = new Set(process.argv.slice(2)), arg = (n) => { const i = process.argv.indexOf(n); return i > 0 ? process.argv[i + 1] : null; };
 const PORT = +process.env.PORT || 8401, CDP = +process.env.CDP || 9901;
@@ -33,12 +34,17 @@ const LADDERS = [['cash.in#s', 'cash.in#m', 'cash.in#l', 'cash.in#xl'], ['cash.o
   ['zone.open#t1', 'zone.open#t4'], ['level.up#s', 'level.up#l', 'level.up#big'], ['milestone#m1', 'milestone#m2', 'milestone#m3']];
 /** Ladders that must also get brighter at each step (the whole sound's spectral centroid): bigger sums are brighter, and the interval narrows and the tone opens as you close in. */
 const BRIGHTER = [['cash.in#s', 'cash.in#m', 'cash.in#l', 'cash.in#xl'], ['haggle.tell#far', 'haggle.tell#reach', 'haggle.tell#near']];
-/** A loss is never louder than the gain it mirrors (2.2: spending is quieter than earning), by the active level and by the K-weighted Fast level. */
-const LOSS_TWINS = [['cash.in#s', 'cash.out#s'], ['cash.in#m', 'cash.out#m'], ['cash.in#l', 'cash.out#l'], ['sale.win#w', 'sale.herd#h'], ['sale.win#w', 'sale.scam#s'], ['sale.win#w', 'sale.reject#nofit'], ['ui.toggle#on', 'ui.toggle#off'],
-  ['deal.result#good', 'deal.result#bad'], ['pitch.fit#up', 'pitch.fit#down'], ['audit.result#pass', 'audit.result#fail'], ['bid.hammer#won', 'bid.hammer#lost'], ['repair.done#great', 'repair.done#rough']];
+/** A loss is never louder than the gain it mirrors (2.2: spending is quieter than earning), by the K-weighted Fast level and by the quiet laptop's: the pairs are scripts/audio-calib.mjs `LOSS_TWINS`. */
 const LEAK_FLOOR = -90; // dBFS: a muted layer started at any time the engine can start one may not put anything over this out (I1: a one-sample click of -8 to -40 dBFS was measured)
+const TIER_GAP_MIN = 1.5; // dB of clear gap between one tier's loudest and the next tier's quietest variant under every model, before the buses: the nearest it came under the 400 ms momentary was 1.1 (R2)
+const MOM_TOL = 3.0; // dB from the tier's median: the quiet laptop's MOMENTARY loudness (400 ms; fourth round, R2)
 const LAPTOP_TOL = 3.0, FAST_TOL = 3.0, LAPA_TOL = 3.0; // dB from the tier's median: the K-weighted Fast level of a sound after a 220 Hz high-pass (a small speaker), without one, and the A-weighted Fast level after the high-pass (the quiet laptop, I2)
-const SURVEY_N = 16, CALIB_N = 32; // places in the noise a noisy sound is played from: for the check, and for the calibration (docs/AUDIO.md Appendix F, I3)
+const PAN_LOSS_MAX = 1.6;  // dB a loud sound at pan 0.6 may be under the same sound centred, through the chain (R8: 0.7 at the default volume, 1.2 at 100%)
+const CROSS_DIP_MAX = 1.5; // dB the quietest 100 ms of a change of district may sit under the lower of the two beds (R4)
+const AT_BUS_GAP_K = 1.5;  // ... and under the K-weighted Fast level of a flat speaker, where the interface bus's two mediums are bright and the tiny game sounds are low and loud
+const AT_BUS_GAP = 2.5;    // dB of clear gap between one tier's loudest and the next tier's quietest sound at the speaker, in Full and in Classroom, K-weighted and quiet-laptop Fast (R3)
+const PLAYS_N = 32, PLAY_SEED = 500; // plays of every variant the way the engine makes them (R1, R7); the check draws its own, other than the calibration's
+const SURVEY_N = 16, CALIB_N = 64; // places in the noise a noisy sound is played from: for the check, and for the calibration (docs/AUDIO.md Appendix F, I3)
 const SPREAD_MAX = 2.5; // dB: the most the Fast level of a noisy sound moves with the place in the noise, once its list of places is in
 // Frequent sounds, played the way the engine plays them: 32 plays with their own seeds, noise places, pitch and gain jitter. (I3)
 const PLAY_PROBES = ['world.step#a', 'world.step#b', 'world.hover#t', 'ui.tick#light', 'ui.tick#full', 'ui.select#i0', 'ui.crate#pick1', 'haggle.move#small', 'cash.in#s', 'bid.raise#r1'];
@@ -69,7 +75,11 @@ try {
 
   if (args.has('--calibrate')) {
     const r0 = await call(`m.run({}, true, { n: ${CALIB_N}, keep: true })`); // every member of every pool has a trim of its own
-    const c = calibrate(r0.rows, r0.shots), sounds = {}, oneShots = c.oneShots;
+    // The ceilings hold the peak of the engine's own plays (R1): the first pass finds the lists of places in the noise, the plays are then made with them (pitch jitter, gain jitter, the place), and the second pass
+    // trims with the 95th percentile of their peaks.
+    const pass1 = calibrate(r0.rows, r0.shots), pk = await call(`m.sweep({}, ${JSON.stringify(pass1.lists)}, ${PLAYS_N}, { pools: true, levels: false })`);
+    const withPeak = (r) => ({ ...r, peakJ: pk[r.key] ? pk[r.key].peak[0] : undefined });
+    const c = calibrate(r0.rows.map(withPeak), r0.shots.map(withPeak)), sounds = {}, oneShots = c.oneShots;
     for (const k of Object.keys(c.sounds).sort((x, y) => r0.rows.findIndex((r) => r.key === x) - r0.rows.findIndex((r) => r.key === y))) sounds[k] = c.sounds[k];
     const beds0 = await call('m.runBeds({})'), beds = {};
     for (const r of beds0) if (!r.mods.length) beds[r.id] = Math.round((BED_TARGET - r.level) * 10) / 10;
@@ -85,19 +95,30 @@ try {
   const res = await call(`m.run(${JSON.stringify(T)}, ${pools}, { n: ${SURVEY_N}, lists: ${JSON.stringify(trims.noiseAt || {})} })`);
   const bedRows = await call(`m.runBeds(${JSON.stringify(trims.beds || {})})`);
 
+  // ---- the engine's plays of EVERY variant (R1, R7): n plays the way the engine makes them (the place in the noise, the pitch jitter, the gain jitter), drawn other than the calibration's.
+  // They come first because the table below reads the peak a ceiling holds from them: the 95th percentile of these plays, not the one play the render made.
+  let sw = null;
+  const tierOfKey = (k) => { const [id, rest] = k.split('#'); return rest ? tierOf(id, rest.replace(/@\d+$/, '')) : 'amb'; };
+  if (!args.has('--fast')) {
+    const t0 = Date.now(), T0 = { ...trims.sounds, ...trims.oneShots };
+    sw = await call(`m.sweep(${JSON.stringify(T0)}, ${JSON.stringify(trims.noiseAt || {})}, ${PLAYS_N}, { pools: true, seed0: ${PLAY_SEED} })`);
+    sw.took = Math.round((Date.now() - t0) / 1000);
+    for (const r of [...res.rows, ...res.shots]) if (sw[r.key]) r.peakJ = sw[r.key].peak[0];
+  }
+
   // ---- the table
   const pad = (s, n) => String(s).padEnd(n), num = (x, n) => String(f1(x)).padStart(n);
   console.log(pad('sound', 30), pad('tier', 6), 'ms'.padStart(5), 'peak'.padStart(6), 'rms'.padStart(6), 'level'.padStart(6), 'dc'.padStart(6), 'clip', 'cent0'.padStart(6), 'cent1'.padStart(6), 'tail'.padStart(6), 'trim'.padStart(5), 'fastK'.padStart(6), 'fastA'.padStart(6), 'bal'.padStart(5), 'sprd'.padStart(5), ' flags');
   const rows = [...res.rows, ...res.shots];
   const tierMedian = {};
-  for (const tier of ['tiny', 'medium', 'loud']) { const L = res.rows.filter((r) => r.tier === tier && !r.key.includes('@')); tierMedian[tier] = { lapFast: median(L.map((r) => r.lapFast)), fast: median(L.map((r) => r.fast)), lapFastA: median(L.map((r) => r.lapFastA)) }; }
+  for (const tier of ['tiny', 'medium', 'loud']) { const L = res.rows.filter((r) => r.tier === tier && !r.key.includes('@')); tierMedian[tier] = { lapFast: median(L.map((r) => r.lapFast)), fast: median(L.map((r) => r.fast)), lapFastA: median(L.map((r) => r.lapFastA)), lapMomA: median(L.map((r) => r.lapMomA)) }; }
   for (const r of rows) {
     const flags = [];
     const base = r.key.replace(/@\d+$/, '');
     const id = r.id, tier = r.tier;
     const comp = tierComp(tier, r.ms);
     const target = tier === 'amb' ? TIER_TARGET.amb : TIER_TARGET[tier] + comp + trimDbOf(id, r.v);
-    const limited = r.peak > TIER_CEIL[tier] - CEIL_MARGIN - 0.15; // the trim was held by the peak ceiling (and the margin the calibration keeps under it)
+    const limited = peakOf(r) > TIER_CEIL[tier] - CEIL_MARGIN - 0.15; // the trim was held by the peak ceiling (and the margin the calibration keeps under it): of the engine-like plays when they were made
     if (r.nonFinite) { fail(`${r.key}: ${r.nonFinite} NaN or infinite samples`); flags.push('NaN'); }
     if (r.peak < -60 || r.level < -60) { fail(`${r.key}: silent (peak ${f1(r.peak)} dBFS)`); flags.push('SILENT'); }
     if (r.clipped) { fail(`${r.key}: ${r.clipped} clipped samples`); flags.push('CLIP'); }
@@ -109,17 +130,18 @@ try {
     if (tier === 'amb' ? r.centroid > SHOT_CENTROID : r.centroid > MAP_CENTROID) { fail(`${r.key}: centroid ${r.centroid} Hz is too bright`); flags.push('BRIGHT'); }
     const off = r.level - target;
     // how far the balance between the two models moved this variant from its tier's target (it is what the trim holds, over what the level alone asks): read back from the measured figures
-    const bal = tier === 'amb' ? 0 : r.trim - stage1({ ...r, level: r.level - r.trim, peak: r.peak - r.trim });
+    const bal = tier === 'amb' ? 0 : r.trim - stage1({ ...r, level: r.level - r.trim, peak: r.peak - r.trim, peakJ: r.peakJ - r.trim });
     if (limited ? off < -2.05 - BAL_MAX || off > BAL_MAX + 0.6 : Math.abs(off) > BAL_MAX + 0.6) { fail(`${r.key}: active level ${f1(r.level)} dB is ${f1(off)} dB from its target ${f1(target)}${limited ? ' (held by the peak ceiling)' : ''}`); flags.push('LEVEL'); }
     else if (limited && off < -0.4) flags.push('held ' + f1(off));
     if (Math.abs(bal) > BAL_MAX - 0.05) flags.push('bal' + (bal > 0 ? '+' : '-'));
     if (r.spread != null && r.spread > SPREAD_MAX) { fail(`${r.key}: its Fast level moves ${f1(r.spread)} dB with the place in the noise it starts from (more than ${SPREAD_MAX}: it needs a list of places, or less random noise)`); flags.push('NOISE'); }
     if (tier !== 'amb' && r.share250 < 0.4) { fail(`${r.key}: only ${Math.round(r.share250 * 100)}% of its energy is above 250 Hz (a laptop speaker has nothing under 220 Hz: ${FAMILY.includes(base) ? 'a "no" needs a body it can play' : 'every sound needs a mid body, 2.2'})`); flags.push('BODY'); }
-    const med = tierMedian[tier];
+    const med = tierMedian[tier], soft = trimDbOf(id, r.v); // (a variant that is meant to sit under its tier, a loss twin, or over it, a medium on the interface bus, is held to its window less that softness, as stage 2 measures it)
     if (med && !r.key.includes('@')) {
-      if (Math.abs(r.lapFast - med.lapFast) > LAPTOP_TOL) { fail(`${r.key}: ${f1(r.lapFast)} dB K-weighted Fast level after a 220 Hz high-pass is ${f1(r.lapFast - med.lapFast)} dB from the ${tier} median ${f1(med.lapFast)} (a small speaker plays it ${r.lapFast - med.lapFast < 0 ? 'quieter' : 'louder'} than its tier)`); flags.push('LAPTOP'); }
-      if (Math.abs(r.lapFastA - med.lapFastA) > LAPA_TOL) { fail(`${r.key}: ${f1(r.lapFastA)} dB A-weighted Fast level after a 220 Hz high-pass is ${f1(r.lapFastA - med.lapFastA)} dB from the ${tier} median ${f1(med.lapFastA)} (a quiet laptop at about 40 phon plays it ${r.lapFastA - med.lapFastA < 0 ? 'quieter' : 'louder'} than its tier)`); flags.push('QUIET'); }
-      if (Math.abs(r.fast - med.fast) > FAST_TOL) { fail(`${r.key}: ${f1(r.fast)} dB Fast level is ${f1(r.fast - med.fast)} dB from the ${tier} median ${f1(med.fast)} (a very short tick under-compensated, or a dense one over)`); flags.push('FAST'); }
+      if (Math.abs(r.lapFast - med.lapFast - soft) > LAPTOP_TOL) { fail(`${r.key}: ${f1(r.lapFast)} dB K-weighted Fast level after a 220 Hz high-pass is ${f1(r.lapFast - med.lapFast)} dB from the ${tier} median ${f1(med.lapFast)} (a small speaker plays it ${r.lapFast - med.lapFast < 0 ? 'quieter' : 'louder'} than its tier)`); flags.push('LAPTOP'); }
+      if (Math.abs(r.lapFastA - med.lapFastA - soft) > LAPA_TOL) { fail(`${r.key}: ${f1(r.lapFastA)} dB A-weighted Fast level after a 220 Hz high-pass is ${f1(r.lapFastA - med.lapFastA)} dB from the ${tier} median ${f1(med.lapFastA)} (a quiet laptop at about 40 phon plays it ${r.lapFastA - med.lapFastA < 0 ? 'quieter' : 'louder'} than its tier)`); flags.push('QUIET'); }
+      if (Number.isFinite(r.lapMomA) && Math.abs(r.lapMomA - med.lapMomA - soft) > MOM_TOL) { fail(`${r.key}: ${f1(r.lapMomA)} dB A-weighted momentary level (400 ms) after a 220 Hz high-pass is ${f1(r.lapMomA - med.lapMomA)} dB from the ${tier} median ${f1(med.lapMomA)} (under a longer integration the quiet laptop plays it ${r.lapMomA - med.lapMomA < 0 ? 'quieter' : 'louder'} than its tier)`); flags.push('MOMENT'); }
+      if (Math.abs(r.fast - med.fast - soft) > FAST_TOL) { fail(`${r.key}: ${f1(r.fast)} dB Fast level is ${f1(r.fast - med.fast)} dB from the ${tier} median ${f1(med.fast)} (a very short tick under-compensated, or a dense one over)`); flags.push('FAST'); }
     }
     console.log(pad(r.key, 30), pad(tier, 6), String(r.ms).padStart(5), num(r.peak, 6), num(r.rms, 6), num(r.level, 6), r.dc.toFixed(4).padStart(6), String(r.clipped).padStart(4), String(r.c0).padStart(6), String(r.c1).padStart(6), num(r.tail, 6), num(r.trim, 5), num(r.fast, 6), num(r.lapFastA, 6), num(bal, 5), r.spread == null ? '     ' : num(r.spread, 5), ' ' + flags.join(' '));
   }
@@ -148,12 +170,13 @@ try {
   }
   // The tiers do not overlap under either model of a listener (I2): the loudest tiny sound is under the quietest medium one, the loudest medium under the quietest loud one, on the K-weighted Fast level
   // and on the A-weighted Fast level after the laptop's high-pass. A loss is never quieter than the tier below it, which is the same rule read for the family that used to fall through it.
-  const TIERS = ['tiny', 'medium', 'loud'], MODELS = [['fast', 'K-weighted Fast'], ['lapFast', 'K-weighted Fast after the 220 Hz high-pass'], ['lapFastA', 'quiet-laptop A-weighted Fast']];
+  const TIERS = ['tiny', 'medium', 'loud'], MODELS = [['fast', 'K-weighted Fast'], ['lapFast', 'K-weighted Fast after the 220 Hz high-pass'], ['lapFastA', 'quiet-laptop A-weighted Fast'], ['lapMomA', 'quiet-laptop A-weighted momentary (400 ms)']];
   for (const [f, name] of MODELS) for (let i = 1; i < TIERS.length; i++) {
     const lo = Object.values(by).filter((r) => r.tier === TIERS[i - 1]), up = Object.values(by).filter((r) => r.tier === TIERS[i]);
     const top = lo.reduce((a, r) => (r[f] > a[f] ? r : a)), bot = up.reduce((a, r) => (r[f] < a[f] ? r : a));
     console.log(`tiers under ${name}: loudest ${TIERS[i - 1]} ${top.key} ${f1(top[f])}, quietest ${TIERS[i]} ${bot.key} ${f1(bot[f])} (gap ${f1(bot[f] - top[f])} dB)`);
     if (!(bot[f] > top[f])) fail(`tiers overlap under ${name}: ${bot.key} (${TIERS[i]}, ${f1(bot[f])} dB) is not louder than ${top.key} (${TIERS[i - 1]}, ${f1(top[f])} dB)`);
+    else if (bot[f] - top[f] < TIER_GAP_MIN) fail(`tiers all but touch under ${name}: ${bot.key} (${TIERS[i]}) is only ${f1(bot[f] - top[f])} dB over ${top.key} (${TIERS[i - 1]}); ${TIER_GAP_MIN} dB at least`);
     for (const r of up) if (FAMILY.includes(r.key) && r[f] < top[f]) fail(`a loss under ${name}: ${r.key} (${TIERS[i]}, ${f1(r[f])} dB) is quieter than ${top.key}, the loudest ${TIERS[i - 1]} sound (${f1(top[f])} dB)`);
   }
   if (pools) for (const r of res.rows) if (r.key.includes('@')) { const b0 = by[r.key.replace(/@\d+$/, '')]; if (b0 && Math.abs(r.level - b0.level) > 1.2) fail(`pool: ${r.key} is ${f1(r.level - b0.level)} dB from its first member`); }
@@ -169,6 +192,25 @@ try {
     if (rg(pj, 'fast') > PLAY_JITTER_SPREAD) fail(`plays: ${key} moves ${f1(rg(pj, 'fast'))} dB from play to play with the engine's jitter (limit ${PLAY_JITTER_SPREAD})`);
     if (p95 > TIER_CEIL[r.tier] + 0.15) fail(`plays: the 95th percentile of ${key}'s peak over 32 jittered plays is ${f1(p95)} dBFS, over the ${r.tier} ceiling ${TIER_CEIL[r.tier]}`);
     if (Math.abs(bias) > PLAY_BIAS) fail(`plays: the median play of ${key} is ${f1(bias)} dB from the level it was calibrated at (limit ${PLAY_BIAS})`);
+  }
+
+  if (sw) {
+    const took = sw.took; delete sw.took;
+    let nOver = 0, nWide = 0, worstOver = -99, worstSpread = 0, worstMax = -99;
+    for (const [k, x] of Object.entries(sw)) {
+      const tier = tierOfKey(k), over = x.peak[0] - TIER_CEIL[tier], wideK = x.fast[2] - x.fast[0], wideA = x.lapFastA[2] - x.lapFastA[0];
+      worstOver = Math.max(worstOver, over); worstMax = Math.max(worstMax, x.peak[1] - TIER_CEIL[tier]); worstSpread = Math.max(worstSpread, wideK, wideA);
+      if (over > 0.15) { nOver++; fail(`plays: the 95th percentile of ${k}'s peak over ${PLAYS_N} plays the way the engine makes them is ${f1(x.peak[0])} dBFS, ${f1(over)} dB over the ${tier} ceiling ${TIER_CEIL[tier]}`); }
+      if (wideK > PLAY_JITTER_SPREAD || wideA > PLAY_JITTER_SPREAD) { nWide++; fail(`plays: ${k} moves ${f1(wideK)} dB (K-weighted Fast) and ${f1(wideA)} dB (quiet-laptop A-weighted Fast) from play to play with the engine's jitter (limit ${PLAY_JITTER_SPREAD})`); }
+    }
+    console.log(`plays of every variant (${Object.keys(sw).length} of them, ${PLAYS_N} each, ${took} s): the 95th percentile of the peak is at most ${f1(worstOver)} dB over its tier's ceiling and the largest peak of all ${f1(worstMax)} dB over; the Fast level moves at most ${f1(worstSpread)} dB (limit ${PLAY_JITTER_SPREAD}); ${nOver} over the ceiling, ${nWide} too wide`);
+  }
+
+  // ---- a change of district (R4): two uncorrelated beds fade across each other and the level must not dip in the middle (equal-power curves of one length)
+  for (const [a, c] of [['scrap', 'market'], ['harbor', 'campus'], ['tech', 'farm'], ['finance', 'industrial']]) {
+    const x = await call(`m.crossfadeDip(${JSON.stringify(a)}, ${JSON.stringify(c)})`);
+    console.log(`change of district ${a} to ${c} (${AMB.CROSS} s, equal power): before ${f1(x.before)} dB, after ${f1(x.after)} dB, the quietest 100 ms of the fade is ${f1(x.dip)} dB under the lower of the two (${f1(x.at)} s in)`);
+    if (x.dip > CROSS_DIP_MAX) fail(`ambient: the change of district ${a} to ${c} dips ${f1(x.dip)} dB in the middle (limit ${CROSS_DIP_MAX}; two linear fades of different lengths dipped 4 to 7)`);
   }
 
   // ---- start clicks
@@ -222,14 +264,40 @@ try {
       if (gapLoud < need) fail(`the medium to loud gap through the master chain is ${f1(gapLoud)} dB (${need} dB at least) at volume ${v}%`);
       if (gapMed < need) fail(`the tiny to medium gap through the master chain is ${f1(gapMed)} dB (${need} dB at least) at volume ${v}%`);
     }
-    const room = await levelsAt({ master: DEFAULT_MASTER, quiet: true }, { ui: -6, game: -10 }); // the Classroom rule: interface 6 dB lower, game 10 dB lower, tiny game sounds off, and no headroom
+    const room = await levelsAt({ master: DEFAULT_MASTER, quiet: true }, CLASSROOM_DB); // the Classroom rule: interface 6 dB lower, game 8 dB lower, tiny game sounds off, and no headroom
     console.log(`the Classroom rule at volume ${DEFAULT_MASTER}%: ${show(room)}`);
-    for (const [name, o] of Object.entries(room)) { const d = at[DEFAULT_MASTER][name].level - o.level; console.log(`   ${name}: ${f1(d)} dB under Full at the same volume`); if (d < (name.includes('interface') ? 6 : 10)) fail(`the Classroom rule is only ${f1(d)} dB under Full for the ${name} sounds at volume ${DEFAULT_MASTER}% (it must stay clearly quieter: 6 dB for the interface, 10 for the game)`); }
+    for (const [name, o] of Object.entries(room)) { const d = at[DEFAULT_MASTER][name].level - o.level; console.log(`   ${name}: ${f1(d)} dB under Full at the same volume`); if (d < (name.includes('interface') ? -CLASSROOM_DB.ui : -CLASSROOM_DB.game)) fail(`the Classroom rule is only ${f1(d)} dB under Full for the ${name} sounds at volume ${DEFAULT_MASTER}% (it must stay clearly quieter: ${-CLASSROOM_DB.ui} dB for the interface, ${-CLASSROOM_DB.game} for the game)`); }
     for (const [name, o] of Object.entries(at[DEFAULT_MASTER])) if (o.peak > -3 + 0.15) fail(`${name} peaks at ${f1(o.peak)} dBFS at the default volume (the chain's ceiling is -3)`);
     const loudest = res.rows.filter((r) => r.tier === 'loud' && RECIPES[r.id].bus === 'game' && !r.key.includes('@')).sort((a, c) => c.level - a.level).slice(0, 12).map((r) => r.key);
     const worst = await call(`m.worstCase(${JSON.stringify(loudest)}, ${JSON.stringify(trims.sounds)}, ${makeup}, ${masterGain({ master: 100 })})`);
     console.log(`the ${loudest.length} loudest sounds at once through the chain at volume 100% peak at ${f1(worst)} dBFS`);
     if (worst > -2.9) fail(`the worst pile-up peaks at ${f1(worst)} dBFS (the chain's ceiling is -3.0)`);
+
+    // The tiers at the speaker (R3): the checks above are before the buses. The interface bus is 3 dB under the game bus, so the interface's mediums met the loudest tiny game sound, and Classroom (interface -6, game -8,
+    // no headroom, no tiny game sounds) narrows every gap again. Each variant goes through the chain on its own bus, at the default volume, in Full and in Classroom; the clear gap between one tier's loudest sound
+    // and the next tier's quietest must stay over AT_BUS_GAP under the K-weighted Fast level and under the quiet laptop's.
+    const everyone = res.rows.filter(own);
+    for (const [label, a, gd] of [['Full', { master: DEFAULT_MASTER, quiet: false }, { ui: 0, game: 0 }], ['Classroom', { master: DEFAULT_MASTER, quiet: true }, CLASSROOM_DB]]) {
+      const L = [];
+      for (const r of everyone) { if (a.quiet && RECIPES[r.id].bus === 'game' && r.tier === 'tiny') continue; const x = await call(`m.throughChain(${JSON.stringify(r.id)}, ${JSON.stringify(r.v)}, ${r.trim}, ${makeup}, ${masterGain(a)}, 0, ${gd[RECIPES[r.id].bus]})`); L.push({ key: r.key, tier: r.tier, fast: x.fast, lapFastA: x.lapFastA }); }
+      for (const [f, name] of [['fast', 'K-weighted Fast'], ['lapFastA', 'quiet-laptop A-weighted Fast']]) for (const [lo, hi] of [['tiny', 'medium'], ['medium', 'loud']]) {
+        const A = L.filter((x) => x.tier === lo), B = L.filter((x) => x.tier === hi), top = A.reduce((p, x) => (x[f] > p[f] ? x : p)), bot = B.reduce((p, x) => (x[f] < p[f] ? x : p));
+        console.log(`tiers at the speaker, ${label}, ${name}: loudest ${lo} ${top.key} ${f1(top[f])}, quietest ${hi} ${bot.key} ${f1(bot[f])} (clear gap ${f1(bot[f] - top[f])} dB)`);
+        if (bot[f] - top[f] < (f === 'fast' ? AT_BUS_GAP_K : AT_BUS_GAP)) fail(`the tiers at the speaker in ${label}, ${name}: ${bot.key} (${hi}, ${f1(bot[f])}) is only ${f1(bot[f] - top[f])} dB over ${top.key} (${lo}, ${f1(top[f])}); ${f === 'fast' ? AT_BUS_GAP_K : AT_BUS_GAP} dB at least`);
+      }
+    }
+
+    // A loud sound panned off centre (R8): a voice at pan 0.6 puts 2.6 dB more on its near channel than a centred one puts on either, the glue compressor and the soft clip take more off it, and it is a little quieter
+    // than the same sound centred. The remedy proposed (a lower voice gain when panned) made it quieter still, so the loss is held rather than cured: not worse than 1.6 dB, and the peak under the ceiling.
+    for (const k of ['zone.open#t4', 'level.up#l', 'run.end#horizon', 'alert.shock#fed']) {
+      const [id, v] = k.split('#'), r = by[k]; if (!r) continue;
+      for (const vol of [DEFAULT_MASTER, 100]) {
+        const c = await call(`m.panChain(${JSON.stringify(id)}, ${JSON.stringify(v)}, ${r.trim}, ${makeup}, ${masterGain({ master: vol })}, 0, 0)`), p6 = await call(`m.panChain(${JSON.stringify(id)}, ${JSON.stringify(v)}, ${r.trim}, ${makeup}, ${masterGain({ master: vol })}, 0.6, 0)`);
+        console.log(`${k} at pan 0.6, volume ${vol}%: ${f1(p6.fast - c.fast)} dB from the centred play (K-weighted Fast, both channels), peak ${f1(p6.peak)} dBFS`);
+        if (p6.fast - c.fast < -PAN_LOSS_MAX) fail(`pan: ${k} at pan 0.6 and volume ${vol}% is ${f1(c.fast - p6.fast)} dB quieter than the same sound centred (limit ${PAN_LOSS_MAX})`);
+        if (p6.peak > -3 + 0.15) fail(`pan: ${k} at pan 0.6 and volume ${vol}% peaks at ${f1(p6.peak)} dBFS (the chain's ceiling is -3)`);
+      }
+    }
   }
   console.log(`\ncompressor makeup (measured): ${makeup.toFixed(3)}; ${rows.length} sounds, ${bedRows.length} beds; ${ONE_SHOTS.length} one-shots`);
   if (arg('--json')) writeFileSync(arg('--json'), JSON.stringify({ rows: res.rows, shots: res.shots, beds: bedRows, makeup, trims }, null, 1));
