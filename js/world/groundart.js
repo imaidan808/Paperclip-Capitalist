@@ -4,21 +4,29 @@
 // from their arguments and the world's state, never from the camera, and every mark is a filled shape (nothing is stroked thinner than 1.5 world pixels).
 import { registerLayer } from './stack.js';
 import { LAYOUT, DIST, EDGES, zAt, BW, BD, GW, GH } from './layout.js';
-import { ROAD, PAVE, SAND, WOOD, LIGHT, SEA, TOY, GRASS, BLOOM, groundSet, veiled } from './palette.js';
+import { ROAD, PAVE, SAND, WOOD, LIGHT, SEA, TOY, GRASS, BLOOM, ROCK, ROCKHI, groundSet } from './palette.js';
 import { mix, clamp, h2 } from './iso.js';
 import { bakeBase } from './rasterbase.js';
 import { surface } from './gfx.js';
 import { LATTICE } from './noise.js';
-import { decalV2 } from './decalart.js';
-import { VEIL } from './terrainfield.js';
+import { decalV2, warmVeil } from './decalart.js';
+import { VEIL, liftGround } from './terrainfield.js';
 
 const HW = 32, HH = 16;
 const px = (gx, gy) => (gx - gy) * HW, py = (gx, gy, z) => (gx + gy) * HH - z;
 const SETS = new Map();
 /** A district's daylight colours (the palette's row for its theme), memoised. */
-function setOf(D) { let s = SETS.get(D.id); if (!s) { const g = groundSet(D.theme) || { ground: D.cols.ground, walk: D.cols.walk, hi: D.cols.ground, alt: D.cols.ground, pad: D.cols.pad, road: D.cols.road }; s = { ...g, asphalt: mix(ROAD.mid, g.ground, 0.1), kerb: ROAD.kerb }; SETS.set(D.id, s); } return s; }
+function setOf(D) {
+  let s = SETS.get(D.id);
+  if (!s) {
+    const g = groundSet(D.theme) || { ground: D.cols.ground, walk: D.cols.walk, hi: D.cols.ground, alt: D.cols.ground, pad: D.cols.pad, road: D.cols.road };
+    const ground = liftGround(g.ground), hi = mix(ground, LIGHT.white, 0.3), pad = mix(ground, '#9a7e58', 0.3); // the ground a fifth more vivid than the table's, its rim lighter, and the yard a warm earth a step darker (never violet-dark: that was the mud)
+    s = { ...g, ground, hi, pad, asphalt: mix(ROAD.mid, ground, 0.1), kerb: ROAD.kerb }; SETS.set(D.id, s);
+  }
+  return s;
+}
 const lockedOf = (w, id) => (w.unlocked ? !w.unlocked.has(id) : false);
-const V = (c, k) => (k ? veiled(c, k * VEIL) : c);
+const V = (c, k) => (k ? warmVeil(c, k * VEIL) : c);
 
 // ---------------------------------------------------------------- the base: sea, cliffs and land, per pixel
 /** `shore`: paint the chunk's whole buffer (sea, walls, land) and put it into the chunk. With no chunk (a direct draw: the Node tests) nothing is painted here. */
@@ -31,12 +39,30 @@ registerLayer('shore', drawShore, 'inherit', () => 1);
 // ---------------------------------------------------------------- the terrain's dressing: tufts and flowers
 const TUFT = [GRASS.hi, GRASS.shade, GRASS.deep, GRASS.coolShade];
 const zOn = (gx, gy) => { const { ZV, VW } = LAYOUT, x = clamp(gx, 0, GW - 1e-6), y = clamp(gy, 0, GH - 1e-6), i = x | 0, j = y | 0, fx = x - i, fy = y - j; return (ZV[j * VW + i] * (1 - fx) + ZV[j * VW + i + 1] * fx) * (1 - fy) + (ZV[(j + 1) * VW + i] * (1 - fx) + ZV[(j + 1) * VW + i + 1] * fx) * fy; };
+/** A bush at (x, y): a soft shadow towards the lower right, three overlapping rounded lobes of green from deep to light with a highlight on the upper left, and now and then a few flowers. `r` its radius in world pixels, `h` a 0..1 hash that picks its greens. */
+export function bush(ctx, x, y, r, h) {
+  const a = ctx.globalAlpha, body = h < 0.5 ? GRASS.shade : GRASS.mid, deepc = GRASS.deep, hi = GRASS.hi;
+  ctx.globalAlpha = a * 0.2; ctx.fillStyle = LIGHT.shadow; ctx.beginPath(); ctx.ellipse(x + r * 0.5, y + r * 0.15, r * 1.3, r * 0.42, 0, 0, 6.2832); ctx.fill();
+  ctx.globalAlpha = a; ctx.fillStyle = deepc; ctx.beginPath(); ctx.ellipse(x, y - r * 0.5, r, r * 0.78, 0, 0, 6.2832); ctx.ellipse(x - r * 0.55, y - r * 0.3, r * 0.68, r * 0.55, 0, 0, 6.2832); ctx.ellipse(x + r * 0.6, y - r * 0.3, r * 0.62, r * 0.52, 0, 0, 6.2832); ctx.fill();
+  ctx.fillStyle = body; ctx.beginPath(); ctx.ellipse(x - r * 0.1, y - r * 0.68, r * 0.84, r * 0.62, 0, 0, 6.2832); ctx.ellipse(x - r * 0.55, y - r * 0.45, r * 0.5, r * 0.4, 0, 0, 6.2832); ctx.fill();
+  ctx.globalAlpha = a * 0.75; ctx.fillStyle = hi; ctx.beginPath(); ctx.ellipse(x - r * 0.3, y - r * 0.95, r * 0.42, r * 0.26, -0.3, 0, 6.2832); ctx.fill();
+  if (h > 0.72) { ctx.globalAlpha = a; ctx.fillStyle = h > 0.86 ? BLOOM.pink : BLOOM.butter; ctx.beginPath(); for (let f = 0; f < 4; f++) { const fx = x + (f - 1.5) * r * 0.42, fy = y - r * (0.55 + 0.2 * (f % 2)); ctx.moveTo(fx + 1.3, fy); ctx.arc(fx, fy, 1.3, 0, 6.2832); } ctx.fill(); }
+}
+/** A boulder at (x, y): a soft shadow, a body of sandstone, a lighter top on the upper left and a lilac side towards the lower right. `r` its half width in world pixels. */
+export function boulder(ctx, x, y, r) {
+  const a = ctx.globalAlpha;
+  ctx.globalAlpha = a * 0.22; ctx.fillStyle = LIGHT.shadow; ctx.beginPath(); ctx.ellipse(x + r * 0.55, y + r * 0.1, r * 1.35, r * 0.45, 0, 0, 6.2832); ctx.fill();
+  ctx.globalAlpha = a; ctx.fillStyle = ROCK.shade; ctx.beginPath(); ctx.ellipse(x, y - r * 0.5, r, r * 0.72, 0, 0, 6.2832); ctx.fill();
+  ctx.fillStyle = ROCK.mid; ctx.beginPath(); ctx.ellipse(x - r * 0.12, y - r * 0.62, r * 0.88, r * 0.6, -0.1, 0, 6.2832); ctx.fill();
+  ctx.fillStyle = ROCKHI.light; ctx.globalAlpha = a * 0.85; ctx.beginPath(); ctx.ellipse(x - r * 0.3, y - r * 0.82, r * 0.5, r * 0.28, -0.3, 0, 6.2832); ctx.fill();
+  ctx.globalAlpha = a;
+}
 /**
  * `terrain`: the dressing laid on the baked ground, near and close only (it fades in with the level of detail, so nothing pops): small tufts of three curved blades in three greens and the odd cluster of
  * flowers, hashed per tile, never on a road, a block, a pad or within a tile and a half of the coast. At most 1,500 marks in a chunk; it is baked with the chunk, so a pan never draws it.
  */
 function drawTerrain(ctx, view, env, w, a) {
-  const ch = a && a.chunk, lod = env.lod ? env.lod.detail : null; if (!ch || !lod || lod[2] < 0.04) return;
+  const ch = a && a.chunk, lod = env.lod ? env.lod.detail : null; if (!ch || !lod || lod[1] < 0.04) return;
   const T = ch.scene.terr, { land, core } = LAYOUT, VW = LAYOUT.VW;
   let a0 = 1e9, a1 = -1e9, b0 = 1e9, b1 = -1e9;
   for (const [x, y] of [[view.x0, view.y0], [view.x1, view.y0], [view.x0, view.y1], [view.x1, view.y1]]) for (const zz of [0, 60]) { const u = x / 64 + (y + zz) / 32, v = (y + zz) / 32 - x / 64; a0 = Math.min(a0, u); a1 = Math.max(a1, u); b0 = Math.min(b0, v); b1 = Math.max(b1, v); }
@@ -44,6 +70,13 @@ function drawTerrain(ctx, view, env, w, a) {
   for (let j = Math.max(0, Math.floor(b0)); j <= Math.min(GH - 1, Math.ceil(b1)) && budget > 0; j++) for (let i = Math.max(0, Math.floor(a0)); i <= Math.min(GW - 1, Math.ceil(a1)); i++) {
     const k = j * GW + i; if (!land[k] || core[k]) continue;
     const kv = j * VW + i; if (T.inl[kv] > -1.5 || T.inl[kv + 1] > -1.5 || T.inl[kv + VW] > -1.5 || T.inl[kv + VW + 1] > -1.5) continue; // the beach and the coast keep their own look
+    const hb = h2(i * 17 + 3, j * 23 + 9000); // a bush or a boulder here and there on the lawns, hashed from the tile (the same in every chunk and at every zoom, mid band and up)
+    if ((hb < 0.065 || hb > 0.968) && T.inl[kv] < -2.4 && T.inl[kv + 1] < -2.4 && T.inl[kv + VW] < -2.4 && T.inl[kv + VW + 1] < -2.4) {
+      const gx = i + 0.25 + 0.5 * h2(i + 5, j * 7 + 2), gy = j + 0.25 + 0.5 * h2(i * 3 + 1, j + 11);
+      if (!LAYOUT.footAt(gx, gy)) { const z = zOn(gx, gy), x = px(gx, gy), y = py(gx, gy, z); ctx.globalAlpha = lod[1]; if (hb < 0.065) bush(ctx, x, y, 7 + 5 * h2(i * 11, j * 5 + 4), h2(i, j * 13 + 6)); else boulder(ctx, x, y, 5 + 3.4 * h2(i * 3, j * 9 + 8)); ctx.globalAlpha = 1; budget -= 8; }
+    }
+    if (lod[2] < 0.04) continue;
+    ctx.globalAlpha = lod[2] * 0.9;
     const n = per + h2(i, j + 4000) * per, cnt = (n | 0) + (h2(i + 91, j) < n - (n | 0) ? 1 : 0);
     for (let q = 0; q < cnt; q++) {
       const gx = i + h2(i * 7 + q, j * 3 + 17), gy = j + h2(i * 5 + 3, j * 11 + q * 5 + 1); if (LAYOUT.footAt(gx, gy)) continue;
@@ -74,16 +107,26 @@ const fillQuad = (ctx, x, y, w, d, z, c) => { ctx.beginPath(); ctx.moveTo(px(x, 
 
 // ---------------------------------------------------------------- the districts' blocks
 let GRAIN;
-/** A 64 x 64 tile of fine speckle (light and violet-dark specks at a few percent), made once: laid over a block it gives plaza, asphalt and dirt a weathered surface. It is a pattern in world space, so it runs on across chunks. */
+/**
+ * A 256 x 256 tile of soft mottle (light warm and violet-dark patches at up to 7%, two scales of smooth periodic noise: a patch of a few tiles and a drift of one), made once and laid over a block in WORLD space, so
+ * plaza, asphalt and dirt are weathered by large soft tonal patches that scale with the camera and are the same at every zoom: the old pattern was a 64-pixel tile of fine per-pixel speckle (sandpaper at the close
+ * zoom, nothing at the far). The noise wraps at the tile's edge, so the pattern has no seam. Pure arrays, `mottleTile`, for the test.
+ */
+export function mottleTile(size = 256) {
+  const lat = (n, seed) => { const t = new Float32Array(n * n); for (let i = 0; i < n * n; i++) t[i] = LATTICE[(i * 131 + seed * 977) & 65535]; return t; }, A = lat(6, 3), B = lat(15, 11), out = new Float32Array(size * size);
+  const at = (t, n, u, v) => { const x = u * n, y = v * n, i = Math.floor(x), j = Math.floor(y); let fx = x - i, fy = y - j; fx = fx * fx * (3 - 2 * fx); fy = fy * fy * (3 - 2 * fy); const a0 = t[(j % n) * n + (i % n)], a1 = t[(j % n) * n + ((i + 1) % n)], b0 = t[((j + 1) % n) * n + (i % n)], b1 = t[((j + 1) % n) * n + ((i + 1) % n)]; return (a0 + (a1 - a0) * fx) + ((b0 + (b1 - b0) * fx) - (a0 + (a1 - a0) * fx)) * fy; };
+  for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) out[y * size + x] = at(A, 6, x / size, y / size) * 0.62 + at(B, 15, x / size, y / size) * 0.38;
+  return out;
+}
 function grainPattern(ctx) {
   if (GRAIN !== undefined) return GRAIN;
   GRAIN = null;
   try {
-    const f = surface(64, 64); if (!f || typeof ImageData !== 'function' || typeof ctx.createPattern !== 'function') return GRAIN;
-    const img = f.g.createImageData(64, 64), d = img.data;
-    for (let i = 0; i < 64 * 64; i++) { const h = LATTICE[(i * 7 + 13) & 65535], dark = h < 0.5, a = Math.abs(h - 0.5) * 2; d[i * 4] = dark ? 74 : 255; d[i * 4 + 1] = dark ? 63 : 247; d[i * 4 + 2] = dark ? 136 : 220; d[i * 4 + 3] = Math.round(a * a * 46); }
+    const f = surface(256, 256); if (!f || typeof ImageData !== 'function' || typeof ctx.createPattern !== 'function') return GRAIN;
+    const img = f.g.createImageData(256, 256), d = img.data, m = mottleTile(256);
+    for (let i = 0; i < 256 * 256; i++) { const v = (m[i] - 0.5) * 2.6, dark = v < 0, a = Math.min(1, Math.abs(v)); d[i * 4] = dark ? 74 : 255; d[i * 4 + 1] = dark ? 63 : 247; d[i * 4 + 2] = dark ? 136 : 220; d[i * 4 + 3] = Math.round(a * a * 36); }
     f.g.putImageData(img, 0, 0); GRAIN = ctx.createPattern(f.c, 'repeat') || null;
-  } catch { GRAIN = null; /* a context without patterns: the blocks are drawn without the grain */ }
+  } catch { GRAIN = null; /* a context without patterns: the blocks are drawn without the mottle */ }
   return GRAIN;
 }
 /**
@@ -95,8 +138,10 @@ function drawBlocks(ctx, view, env, w, a) {
   for (const id of LAYOUT.ids) {
     const D = DIST[id], b = D.bb; if (!(b[2] > view.x0 && b[0] < view.x1 && b[3] + 200 > view.y0 && b[1] < view.y1 + 200)) continue;
     const S = setOf(D), k = lockedOf(w, id) ? 1 : 0, z = D.z, ox = D.ox, oy = D.oy, v = (c) => V(c, k);
-    // the contact shadow of the stage on the ground round it (three soft steps, towards +gx)
-    for (let i = 3; i >= 1; i--) fillRR(ctx, ox - 0.5 + i * 0.28, oy - 0.5 + i * 0.12, BW + 1 + i * 0.22, BD + 1 + i * 0.3, 1.6, z, LIGHT.shadow, 0.045);
+    // the verge and the contact shadow of the stage on the ground round it: ten faint steps each (a falloff, never a band), the verge the block's own ground fading into the meadow over half a tile, the shadow
+    // a cool violet that falls towards +gx and is a little longer than the verge
+    for (let i = 10; i >= 1; i--) fillRR(ctx, ox - 0.5 + i * 0.16, oy - 0.5 + i * 0.07, BW + 1 + i * 0.12, BD + 1 + i * 0.18, 1.6, z, LIGHT.shadow, 0.0085);
+    for (let i = 6; i >= 1; i--) fillRR(ctx, ox - 0.02 - i * 0.085, oy - 0.02 - i * 0.085, BW + 0.04 + i * 0.17, BD + 0.04 + i * 0.17, 0.9 + i * 0.08, z, v(S.ground), 0.1);
     for (const g of D.ground) {
       if (g.kind === 'block') { fillRR(ctx, g.x, g.y, g.w, g.d, 0.9, z, v(S.ground)); fillRR(ctx, g.x + 0.32, g.y + 0.32, g.w - 0.64, g.d - 0.64, 0.7, z, v(S.hi), 0.16); }
       else if (g.kind === 'walk') fillQuad(ctx, g.x, g.y, g.w, g.d, z, v(S.walk));
@@ -124,7 +169,7 @@ function drawBlocks(ctx, view, env, w, a) {
     ctx.fill();
     for (const g of D.ground) if (g.kind === 'pad') { fillRR(ctx, g.x, g.y, g.w, g.d, 0.5, z, v(S.pad)); fillRR(ctx, g.x + 0.12, g.y + 0.12, g.w - 0.24, g.d - 0.24, 0.4, z, v(S.hi), 0.28); fillRR(ctx, g.x + 0.3, g.y + 0.3, g.w - 0.6, g.d - 0.6, 0.3, z, v(S.pad)); }
     const gp = grainPattern(ctx);
-    if (gp) { ctx.fillStyle = gp; ctx.globalAlpha = 0.85; ctx.beginPath(); rrect(ctx, ox, oy, BW, BD, 0.9, z); ctx.fill(); ctx.globalAlpha = 1; } // a weathered surface
+    if (gp) { ctx.fillStyle = gp; ctx.globalAlpha = 1; ctx.beginPath(); rrect(ctx, ox, oy, BW, BD, 0.9, z); ctx.fill(); ctx.globalAlpha = 1; } // a weathered surface: soft tonal patches in world space
     if (detail[2] > 0.05) { // near and close: two manholes on the avenue
       if (detail[3] > 0.05) for (const mx of [ox + 4.6, ox + 16.8]) { ctx.globalAlpha = detail[3]; ctx.fillStyle = v(ROAD.manhole); ctx.beginPath(); ctx.ellipse(px(mx, oy + 8.5), py(mx, oy + 8.5, z), 0.3 * HW * 1.42, 0.3 * HH * 1.42, 0, 0, 6.2832); ctx.fill(); ctx.fillStyle = v(ROAD.light); ctx.beginPath(); ctx.ellipse(px(mx, oy + 8.5), py(mx, oy + 8.5, z) - 0.6, 0.2 * HW * 1.42, 0.2 * HH * 1.42, 0, 0, 6.2832); ctx.fill(); ctx.globalAlpha = 1; }
     }
@@ -168,8 +213,8 @@ function drawRoads(ctx, view, env, w, a) {
     if (!e.v2bb) { let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9; for (const [x, y] of e.pts) { x0 = Math.min(x0, px(x, y)); x1 = Math.max(x1, px(x, y)); y0 = Math.min(y0, py(x, y, 0)); y1 = Math.max(y1, py(x, y, 0)); } e.v2bb = [x0 - 80, y0 - LAYOUT.maxZ - 80, x1 + 80, y1 + 80]; e.br = LAYOUT.bridges.filter((b) => b.edge === e); }
     const bb = e.v2bb; if (!(bb[2] > view.x0 && bb[0] < view.x1 && bb[3] > view.y0 && bb[1] < view.y1)) continue;
     const open = w.unlocked ? w.unlocked.has(e.gate) : true, d = denseOf(e);
-    if (e.ferry) { // a line of soft round buoys, red and cream, where the ferry sails (the route glints when it runs: livedecals)
-      for (let s = 3, n = 0; s < e.len - 3; s += 1.5, n++) { const p = at(d, s), x = px(p[0], p[1]), y = py(p[0], p[1], 0); ctx.globalAlpha = open ? 1 : 0.7; ctx.fillStyle = n % 2 ? PAVE.cream : TOY.red; ctx.beginPath(); ctx.ellipse(x, y, 3.2, 2.4, 0, 0, 6.2832); ctx.fill(); ctx.fillStyle = LIGHT.white; ctx.beginPath(); ctx.ellipse(x - 0.8, y - 1, 1.1, 0.8, 0, 0, 6.2832); ctx.fill(); }
+    if (e.ferry) { // a line of buoys, red and cream: each a rounded cone with a white band, a lamp on its top, a foam ring where it meets the water and a soft shadow on the sea, so it reads as a thing and not as a speck
+      for (let s = 3, n = 0; s < e.len - 3; s += 1.5, n++) { const p = at(d, s); buoy(ctx, px(p[0], p[1]), py(p[0], p[1], 0), n % 2 ? PAVE.cream : TOY.red, open ? 1 : 0.7); }
       ctx.globalAlpha = 1; continue;
     }
     const hw = e.w / 2, brokenBridge = !open && DIST[e.gate]?.gateKind === 'bridge', br = e.br[0];
@@ -191,6 +236,17 @@ function drawRoads(ctx, view, env, w, a) {
 }
 registerLayer('roads', drawRoads, 'inherit', () => 1);
 
+/** A buoy at (x, y) on the water: a soft shadow and a ring of foam on the sea, a cone of `col` (a little taller than wide) with a white band and a small yellow lamp, lit from the upper left. About 7 x 11 world pixels. */
+export function buoy(ctx, x, y, col, alpha = 1) {
+  ctx.globalAlpha = 0.22 * alpha; ctx.fillStyle = LIGHT.shadow; ctx.beginPath(); ctx.ellipse(x + 2.2, y + 1.6, 6, 2.5, 0, 0, 6.2832); ctx.fill();
+  ctx.globalAlpha = 0.85 * alpha; ctx.fillStyle = SEA.foam; ctx.beginPath(); ctx.ellipse(x, y + 0.6, 6.4, 2.7, 0, 0, 6.2832); ctx.fill();
+  ctx.globalAlpha = alpha; ctx.fillStyle = shadeOf(col); ctx.beginPath(); ctx.moveTo(x - 4, y); ctx.quadraticCurveTo(x - 4.4, y - 3.4, x - 1.8, y - 8); ctx.lineTo(x + 1.8, y - 8); ctx.quadraticCurveTo(x + 4.4, y - 3.4, x + 4, y); ctx.quadraticCurveTo(x, y + 2, x - 4, y); ctx.fill();
+  ctx.fillStyle = col; ctx.beginPath(); ctx.moveTo(x - 3.7, y - 0.4); ctx.quadraticCurveTo(x - 4.1, y - 3.4, x - 1.7, y - 8); ctx.lineTo(x + 0.6, y - 8); ctx.quadraticCurveTo(x - 0.6, y - 3, x - 0.4, y + 0.6); ctx.quadraticCurveTo(x - 2, y + 0.4, x - 3.7, y - 0.4); ctx.fill();
+  ctx.fillStyle = LIGHT.white; ctx.fillRect(x - 3.5, y - 4.4, 7, 1.6);
+  ctx.fillStyle = TOY.yellow; ctx.beginPath(); ctx.arc(x, y - 9.2, 1.7, 0, 6.2832); ctx.fill(); ctx.fillStyle = INKD; ctx.fillRect(x - 0.5, y - 8.2, 1, 1);
+  ctx.globalAlpha = 1;
+}
+const INKD = '#5a4a8c', shadeOf = (c) => mix(c, '#5a52a8', 0.28);
 // ---------------------------------------------------------------- bridges
 const STONE = mix(PAVE.cobble, PAVE.cobbleJoint, 0.3);
 /** A plank deck of rounded boards, cream kerbs, rails on posts with ball caps and two stone piers with a foam collar where they meet the water. A broken bridge ends in a stub at each bank. */

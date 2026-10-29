@@ -10,11 +10,13 @@
 //      accuracy from G, plus a coarse field out to 56 tiles for the deep sea.
 // Everything here is a function of the land mask and nothing else: the same layout gives the same bytes.
 import { clamp } from './iso.js';
+import { vnoise } from './noise.js';
 
 export const FS = 4;          // field samples per tile (one sample is 0.25 tile, 8.9 world pixels along a tile edge)
 export const FPAD = 14;       // tiles of sea kept round the island in the fine field
 export const CPAD = 56;       // tiles of sea kept round the island in the coarse field (one sample a tile)
-export const FAR_D = 56;      // the distance the deep sea is measured to (tiles)
+export const FAR_D = 56;
+export const COAST_WOBBLE = 0.36; // tiles of swing the island's coast is given (landField's `wobble`): the tile coast is made of straight runs along the two iso axes, and a swing this deep takes the ruler out of them      // the distance the deep sea is measured to (tiles)
 
 // ---------------------------------------------------------------- the smooth land field
 /** A gaussian kernel of radius r (weights sum to 1). */
@@ -37,22 +39,41 @@ export function landField(mask, GW, GH, FV, o = {}) {
   for (let b = 0; b < ny; b++) { const ty = Math.floor(oy + (b + 0.5) / FS); if (ty < 0 || ty >= GH) continue; for (let a = 0; a < nx; a++) { const tx = Math.floor(ox + (a + 0.5) / FS); if (tx >= 0 && tx < GW && mask[ty * GW + tx]) m[b * nx + a] = 1; } }
   const f0 = new Float32Array(nx * ny); for (let i = 0; i < f0.length; i++) f0[i] = m[i];
   const G = blur(f0, nx, ny, kernel(sigma, Math.ceil(sigma * 3)));
-  const bend = o.bend ?? 0.55, lim = o.limit ?? 0.2;
+  const bend = o.bend ?? 0.55, lim = o.limit ?? 0.2, wob = o.wobble ?? 0;
   for (let b = 0; b < ny; b++) for (let a = 0; a < nx; a++) {
     const i = b * nx + a; let g = G[i] - 0.5;
+    const gx = ox + (a + 0.5) / FS, gy = oy + (b + 0.5) / FS;
     if (FV && bend) { // the generator's own field, bilinear on the vertex grid: its zero is the coast the island was made with
-      const gx = ox + (a + 0.5) / FS, gy = oy + (b + 0.5) / FS;
       if (gx > 0 && gy > 0 && gx < GW && gy < GH) { const x0 = Math.floor(gx), y0 = Math.floor(gy), fx = gx - x0, fy = gy - y0, v = (FV[y0 * VW + x0] * (1 - fx) + FV[y0 * VW + x0 + 1] * fx) * (1 - fy) + (FV[(y0 + 1) * VW + x0] * (1 - fx) + FV[(y0 + 1) * VW + x0 + 1] * fx) * fy; g += clamp(v * 1.4, -lim, lim) * bend; }
     }
+    if (wob > 0) g += wobbleAt(gx, gy) * wob * WOB_GAIN; // a swing of the coast, a few tiles long and under half a tile deep: bays, spits and rounded noses, so no run of it is a ruler
     G[i] = g;
   }
-  // the clamp: a sample whose whole 4-neighbourhood is land is land, one whose whole 4-neighbourhood is sea is sea. The contour then stays within one sample of the tile coast.
+  // the clamp: a sample whose whole 4-neighbourhood is land is land, one whose whole 4-neighbourhood is sea is sea. The contour then stays within one sample of the tile coast. With a wobble the sea
+  // side is looser (a sample is sea only when every sample within two of it is), so the coast may advance by up to half a tile where the noise asks, never retreat past the 4-neighbourhood rule.
   const at = (a, b) => (a < 0 || b < 0 || a >= nx || b >= ny ? 0 : m[b * nx + a]);
-  for (let b = 0; b < ny; b++) for (let a = 0; a < nx; a++) {
-    const i = b * nx + a, c = at(a, b) + at(a - 1, b) + at(a + 1, b) + at(a, b - 1) + at(a, b + 1);
-    if (c === 5 && G[i] < 0.03) G[i] = 0.03; else if (c === 0 && G[i] > -0.03) G[i] = -0.03;
+  const clampDeep = (G2, wide) => {
+    const seaCore = wide ? erode(m, nx, ny, 2, 0) : null;
+    for (let b = 0; b < ny; b++) for (let a = 0; a < nx; a++) {
+      const i = b * nx + a, c = at(a, b) + at(a - 1, b) + at(a + 1, b) + at(a, b - 1) + at(a, b + 1);
+      if (c === 5 && G2[i] < 0.03) G2[i] = 0.03; else if ((wide ? seaCore[i] === 1 : c === 0) && G2[i] > -0.03) G2[i] = -0.03;
+    }
+  };
+  clampDeep(G, wob > 0);
+  if (wob > 0) { // the clamp left kinks where it bit: one more blur takes them out, and the deep samples are put back where the blur moved them
+    const G3 = blur(G, nx, ny, kernel(0.9, 3)); G.set(G3); clampDeep(G, true);
   }
   return { G, nx, ny, ox, oy, S: FS, GW, GH };
+}
+/** The coast's swing at a grid position, -1..1: two octaves of value noise (a bay or a spit every two to four tiles, a ripple every tile), the same everywhere and every time. */
+export function wobbleAt(gx, gy) { return (vnoise(gx * 0.37 + 7.1, gy * 0.37 + 2.3) - 0.5) * 1.3 + (vnoise(gx * 0.93 + 19.7, gy * 0.93 + 41.3) - 0.5) * 0.7; }
+const WOB_GAIN = 1.6;      // field units of swing for one tile of wobble (the field falls by about 0.94 a tile across the coast)
+/** 1 where every sample within `r` (Chebyshev) of the sample has the value `v` (and the field's border counts as the other value), else 0. Two separable passes. */
+export function erode(m, nx, ny, r, v) {
+  const t = new Uint8Array(nx * ny), out = new Uint8Array(nx * ny);
+  for (let b = 0; b < ny; b++) for (let a = 0; a < nx; a++) { let ok = 1; for (let k = -r; k <= r && ok; k++) { const aa = a + k; if (aa < 0 || aa >= nx ? v !== 0 : m[b * nx + aa] !== v) ok = 0; } t[b * nx + a] = ok; }
+  for (let b = 0; b < ny; b++) for (let a = 0; a < nx; a++) { let ok = 1; for (let k = -r; k <= r && ok; k++) { const bb = b + k; if (bb < 0 || bb >= ny ? v !== 0 : !t[bb * nx + a]) ok = 0; } out[b * nx + a] = ok; }
+  return out;
 }
 
 // ---------------------------------------------------------------- marching squares: the rings of a field

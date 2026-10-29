@@ -4,7 +4,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { LAYOUT, GW, GH, DIST } from '../js/world/layout.js';
-import { rings, chaikin, ringArea, edt2, blur, landField, signedDistance, sample, buildCoast, tileCoastDistance, FS } from '../js/world/coastgeo.js';
+import { rings, chaikin, ringArea, edt2, blur, landField, signedDistance, sample, buildCoast, tileCoastDistance, FS, COAST_WOBBLE, wobbleAt, erode } from '../js/world/coastgeo.js';
 
 const field = (nx, ny, f) => { const g = new Float32Array(nx * ny); for (let b = 0; b < ny; b++) for (let a = 0; a < nx; a++) g[b * nx + a] = f(a, b); return g; };
 
@@ -67,10 +67,23 @@ test('sample: bilinear, exact at the sample centres and clamped at the border', 
 });
 
 // ---------------------------------------------------------------------------------------------------------------------------- the real island
-const COAST = buildCoast({ land: LAYOUT.land, FV: LAYOUT.FV, GW, GH });
-test('the island\'s smooth coast never strays more than 12 world pixels from the tile coast, and its rings are closed, oriented and few', () => {
+const PLAIN = buildCoast({ land: LAYOUT.land, FV: LAYOUT.FV, GW, GH }), COAST = buildCoast({ land: LAYOUT.land, FV: LAYOUT.FV, GW, GH }, { wobble: COAST_WOBBLE });
+const devOf = (C) => { let worst = 0, sum = 0, n = 0; for (const r of C.rings) for (let i = 0; i < r.length; i += 2) { const d = tileCoastDistance(LAYOUT.land, GW, GH, r[i], r[i + 1]); worst = Math.max(worst, d); sum += d; n++; } return { worst, mean: sum / n }; };
+test('the island\'s coast is given a swing (CHANGED from "never strays more than 12 world pixels": the straight iso runs of the tile coast are broken by a noise swing of up to 0.6 tile, 22 world pixels, and its mean is more than twice the plain coast\'s); the plain field still holds the old bound', () => {
+  const a = devOf(COAST), b = devOf(PLAIN);
+  assert.ok(b.worst * 35.78 <= 12.0, `the plain coast is ${(b.worst * 35.78).toFixed(1)} world pixels from the tile coast at its worst`);
+  assert.ok(a.worst * 35.78 <= 22.0, `the swung coast is ${(a.worst * 35.78).toFixed(1)} world pixels from the tile coast at its worst`);
+  assert.ok(a.mean > b.mean * 2, `the swing is really there: mean ${a.mean.toFixed(3)} against ${b.mean.toFixed(3)} tiles`);
+});
+test('wobbleAt is smooth value noise in -1..1 that is the same everywhere and every time, and erode keeps only the samples whose whole neighbourhood has the value', () => {
+  assert.equal(wobbleAt(12.3, 45.6), wobbleAt(12.3, 45.6)); let lo = 9, hi = -9; for (let i = 0; i < 4000; i++) { const w = wobbleAt(i * 0.37, i * 0.91); lo = Math.min(lo, w); hi = Math.max(hi, w); assert.ok(w >= -1 && w <= 1); } assert.ok(lo < -0.3 && hi > 0.3, 'it swings both ways');
+  assert.ok(Math.abs(wobbleAt(5, 5) - wobbleAt(5.01, 5)) < 0.05, 'smooth');
+  const m = new Uint8Array(81); for (let b = 3; b <= 5; b++) for (let a = 3; a <= 5; a++) m[b * 9 + a] = 1; const e = erode(m, 9, 9, 1, 1); let n = 0; for (const v of e) n += v; assert.equal(n, 1, 'a 3 x 3 block eroded by one is its middle'); assert.equal(e[4 * 9 + 4], 1);
+  const s = erode(m, 9, 9, 1, 0); assert.equal(s[0], 1, 'the corner of the sea'); assert.equal(s[1 * 9 + 1], 1); assert.equal(s[2 * 9 + 2], 0, 'next to the land is not deep sea'); assert.equal(erode(new Uint8Array(9), 3, 3, 1, 0)[4], 1);
+});
+test('the island\'s smooth coast, swung, keeps what must be land inside it and its rings are closed, oriented and few', () => {
   let worst = 0; for (const r of COAST.rings) for (let i = 0; i < r.length; i += 2) worst = Math.max(worst, tileCoastDistance(LAYOUT.land, GW, GH, r[i], r[i + 1]));
-  assert.ok(worst * 35.78 <= 12.0, `the smooth coast is ${(worst * 35.78).toFixed(1)} world pixels from the tile coast at its worst`);
+  assert.ok(worst * 35.78 <= 22.0, `the smooth coast is ${(worst * 35.78).toFixed(1)} world pixels from the tile coast at its worst`);
   assert.ok(COAST.rings.length >= 6 && COAST.rings.length <= 40, `${COAST.rings.length} rings`);
   const big = COAST.rings.map(ringArea).sort((a, b) => b - a)[0]; assert.ok(big > 10000, 'the main island is one ring');
   assert.ok(COAST.rings.some((r) => ringArea(r) < 0), 'the lake and the bays are holes');
@@ -92,7 +105,7 @@ test('what must be land is inside the smooth coast: every district centre and la
 });
 test('the distance agrees with the tile mask away from the coast (sign) and is a distance (the sea is positive, the land negative)', () => {
   let bad = 0, n = 0;
-  for (let j = 0; j < GH; j += 3) for (let i = 0; i < GW; i += 3) { const gx = i + 0.5, gy = j + 0.5, t = tileCoastDistance(LAYOUT.land, GW, GH, gx, gy); if (t < 0.4) continue; n++; if ((COAST.dist(gx, gy) < 0) !== (LAYOUT.land[j * GW + i] === 1)) bad++; }
+  for (let j = 0; j < GH; j += 3) for (let i = 0; i < GW; i += 3) { const gx = i + 0.5, gy = j + 0.5, t = tileCoastDistance(LAYOUT.land, GW, GH, gx, gy); if (t < 0.65) continue; n++; /* (0.65: the swung coast may lie 0.6 tile from the tile coast) */ if ((COAST.dist(gx, gy) < 0) !== (LAYOUT.land[j * GW + i] === 1)) bad++; }
   assert.equal(bad, 0, `${bad} of ${n} samples have the wrong sign`);
   assert.ok(COAST.dist(-30, -30) > 20 && COAST.dist(-30, -30) <= 56, 'far out to sea the distance saturates at the deep sea\'s'); assert.ok(COAST.dist(500, 500) <= 56.01);
 });

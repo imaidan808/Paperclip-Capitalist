@@ -301,7 +301,8 @@ Why the splits fall where they do. `kits.js` is T3's because it names the buildi
     "groundchunks.js",
     "groundart.js",
     "decalart.js",
-    "water.js"
+    "water.js",
+    "waves.js"
   ],
   "T2": [
     "clouds.js",
