@@ -15,7 +15,7 @@ const outline = (ctx, B, col, w, a = 0.42) => { if (!(w > 0)) return; ctx.save()
 // ---------------------------------------------------------------- the freight depot
 reg('depot', {
   far: farBlock,
-  pad: [10, 26, 12, 8],
+  pad: [4, 4, 4, 4],
   body(ctx, p, env) {
     const lv = detailFor(ctx, env), zm = zoomOf(ctx, env), { gx, gy, w, d, h } = p, S = styleOf({ ...p, col: p.color }, env), C = S.C, seed = seedOf(p), night = env.night || 0;
     const wall = mix(S.wall, C('#ffffff'), 0.1), roofC = mix(wall, C('#ffffff'), 0.4), contour = contourW(zm, lv);
@@ -50,7 +50,7 @@ reg('depot', {
 const stackAt = (p, i) => P(p.gx + p.w * (0.6 + i * 0.15), p.gy + p.d * 0.3, p.h);
 reg('factory', {
   far: farBlock,
-  pad: [12, 70, 14, 8],
+  pad: [4, 4, 16, 4],
   body(ctx, p, env) {
     const lv = detailFor(ctx, env), zm = zoomOf(ctx, env), { gx, gy, w, d, h } = p, S = styleOf(p, env), C = S.C, seed = seedOf(p), night = env.night || 0, wall = S.wall, contour = contourW(zm, lv);
     stage(ctx, p, env, h + 30);
@@ -80,7 +80,7 @@ reg('factory', {
 const SH = { rust: '#e8955a', teal: '#43b8b0', cream: '#f2e6c8', roof: '#c9693d' };
 reg('shack', {
   far: farBlock,
-  pad: [12, 34, 14, 8],
+  pad: [4, 4, 5, 4],
   body(ctx, p, env) {
     const lv = detailFor(ctx, env), zm = zoomOf(ctx, env), { gx, gy, w, d, h } = p, S = styleOf(p, env), C = S.C, seed = seedOf(p), night = env.night || 0, contour = contourW(zm, lv), wall = C(SH.rust);
     stage(ctx, p, env, h + 12);
@@ -138,7 +138,7 @@ function panels(ctx, wl, p, S, o) {
 reg('rack', {
   far: farBlock,
   night: false,
-  pad: [10, 24, 12, 8],
+  pad: [4, 4, 4, 4],
   body(ctx, p, env) {
     const lv = detailFor(ctx, env), zm = zoomOf(ctx, env), { gx, gy, w, d, h } = p, S = styleOf({ ...p, col: p.col }, env), C = S.C, seed = seedOf(p), wall = C(p.col || '#7b88d8'), contour = contourW(zm, lv), rows = Math.max(3, Math.round(h / 7)), accent = C(p.acc || '#22d9ee');
     stage(ctx, p, env, h + 8);
@@ -193,7 +193,7 @@ const barnRoof = (ctx, p, z, C, lv) => {
 };
 reg('barn', {
   far: farBlock,
-  pad: [12, 44, 14, 8],
+  pad: [4, 4, 11, 4],
   body(ctx, p, env) {
     const lv = detailFor(ctx, env), zm = zoomOf(ctx, env), { gx, gy, w, d, h } = p, S = styleOf({ ...p, col: BARN.wall }, env), C = S.C, seed = seedOf(p), night = env.night || 0, wall = C(p.col || BARN.wall), trim = C(p.trim || BARN.trim), contour = contourW(zm, lv);
     stage(ctx, p, env, h + 22, { m: 0.26 });

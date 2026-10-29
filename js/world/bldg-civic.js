@@ -44,7 +44,7 @@ function hallBody(ctx, p, env, o = {}) {
   return o.hot || p.hot ? hitsOf(facesOf(gx, gy, w, d, h, z0)) : null;
 }
 const hallLive = (ctx, p, env) => windowGlow(env, p, leftFace(p, p.h, 4), 0.8);
-reg('hall', { far: farBlock, body: hallBody, live: hallLive, pad: [12, 30, 12, 8] });
+reg('hall', { far: farBlock, body: hallBody, live: hallLive, pad: [29, 4, 9, 4] });
 
 // the exchange: the hall in champagne with the golden pedestal on the roof; the globe turns live
 const exchangeBody = (ctx, p, env) => {
@@ -70,13 +70,13 @@ const exchangeLive = (ctx, p, env) => {
   if (!(env.lite || env.far)) env.lights?.push({ wx: x, wy: y - env.zoff, r: 80, c: '245,211,106', a: 0.35 });
   hallLive(ctx, p, env);
 };
-reg('exchange', { far: farBlock, body: exchangeBody, live: exchangeLive, pad: [12, 64, 12, 8] });
+reg('exchange', { far: farBlock, body: exchangeBody, live: exchangeLive, pad: [15, 4, 4, 4] });
 
 // ---------------------------------------------------------------- the commercial bank
 reg('bank', {
   far: farBlock,
   night: false,
-  pad: [14, 40, 12, 8],
+  pad: [8, 4, 8, 4],
   body(ctx, p, env) {
     const lv = detailFor(ctx, env), zm = zoomOf(ctx, env), { gx, gy, w, d, h } = p, S = styleOf({ ...p, col: env.crunch ? '#e0b2a8' : '#f2ecd6' }, env), C = S.C, stone = C(PAVE.joint), z0 = 5, contour = contourW(zm, lv);
     const mint = C('#e8f4de'), gold = C('#f6c94f'), seed = seedOf(p);
@@ -105,7 +105,7 @@ reg('bank', {
 // ---------------------------------------------------------------- the regulatory office (civic stone, a cupola, the scales)
 reg('office', {
   far: farBlock,
-  pad: [10, 36, 12, 8],
+  pad: [4, 4, 8, 4],
   body(ctx, p, env) {
     const lv = detailFor(ctx, env), zm = zoomOf(ctx, env), { gx, gy, w, d, h } = p, S = styleOf({ ...p, col: '#c4ccf0' }, env), C = S.C, wall = C('#c4ccf0'), seed = seedOf(p), contour = contourW(zm, lv), night = env.night || 0;
     stage(ctx, p, env, h + 16, { m: 0.3 });
@@ -178,12 +178,12 @@ function towerLive(ctx, p, env) {
   if (on_) { ctx.fillStyle = 'rgba(255,90,80,.3)'; ctx.beginPath(); ctx.arc(x, y - 23, 5.2 + k, 0, 6.3); ctx.fill(); ctx.fillStyle = '#ff5f4e'; ctx.beginPath(); ctx.arc(x, y - 23, 2.6, 0, 6.3); ctx.fill(); if (!(env.lite || env.far) && env.night > 0.2) env.lights?.push({ wx: x, wy: y - 23 - env.zoff, r: 22, c: '255,70,60', a: 0.5 }); }
   windowGlow(env, p, leftFace(p), 1.1);
 }
-reg('tower', { far: farBlock, body: towerBody, live: towerLive, pad: [10, 44, 14, 8] });
+reg('tower', { far: farBlock, body: towerBody, live: towerLive, pad: [4, 4, 14, 4] });
 
 // ---------------------------------------------------------------- the IPO tower: three setbacks of pale glass, a gold crown with the golden bell in an arch, a spire
 reg('ipo', {
   far: farBlock,
-  pad: [14, 80, 34, 10],
+  pad: [4, 4, 28, 4],
   body(ctx, p, env) {
     const lv = detailFor(ctx, env), zm = zoomOf(ctx, env), { gx, gy, w, d, h } = p, S = styleOf({ ...p, col: '#8db2f0' }, env), C = S.C, night = env.night || 0, seed = seedOf(p), contour = contourW(zm, lv), pod = 6;
     const wall = C('#8db2f0'), trim = mix(wall, C('#ffffff'), 0.5), glass = [C('#cdeeff'), C('#5a94de')], gold = C('#f6c94f');

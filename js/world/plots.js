@@ -82,7 +82,7 @@ function pipeBody(ctx, q, env) {
   if (q.off) { const [zx, zy] = P(x + 1.2, y + 1.2, h + 6); ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.arc(zx + 10, zy - 14, 7, 0, 6.3); ctx.arc(zx + 16, zy - 12, 5.6, 0, 6.3); ctx.arc(zx + 4, zy - 11, 5, 0, 6.3); ctx.fill(); ctx.fillStyle = '#8a80c0'; ctx.font = `800 7px ${FONT}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('zzz', zx + 10, zy - 13); }
   return null;
 }
-const PIPE_SPRITE = { night: true, pad: [8, 40, 28, 8], body: pipeBody };
+const PIPE_SPRITE = { night: true, pad: [4, 10, 20, 4], body: pipeBody };
 const PROXY = new WeakMap(); // pipeline record -> the small stable record its sprite is keyed by (made again when what is painted changes)
 function proxyFor(e, pl, D) {
   const p = e.pipe, off = p.status === 'paused' || p.status === 'audit', running = p.status === 'running', sig = p.kind + '|' + p.level + '|' + (off ? 1 : 0) + '|' + (running ? 1 : 0);

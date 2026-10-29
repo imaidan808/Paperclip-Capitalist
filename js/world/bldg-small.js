@@ -19,7 +19,7 @@ const GOODS = [['#e8503a', '#ff8a6a', '#6cc178'], ['#f2c94c', '#ffe27a', '#e8a03
 reg('stall', {
   far: farBlock,
   night: false,
-  pad: [10, 20, 12, 8],
+  pad: [4, 4, 4, 4],
   body(ctx, p, env) {
     const lv = detailFor(ctx, env), { gx, gy, w, d } = p, S = styleOf(p, env), C = S.C, seed = seedOf(p), woodC = C(p.col || '#cc8f50'), a1 = C(p.awn || S.acc), a2 = C(p.awn2 || '#fff4dc');
     stage(ctx, p, env, 24, { m: 0.18, a: 0.5 });
@@ -46,7 +46,7 @@ reg('stall', {
 reg('kiosk', {
   far: farBlock,
   night: false,
-  pad: [10, 16, 12, 8],
+  pad: [4, 4, 4, 4],
   body(ctx, p, env) {
     const lv = detailFor(ctx, env), { gx, gy, w, d, h } = p, S = styleOf(p, env), C = S.C, col = C(p.col || '#5fa8e8'), [x, y] = P(gx + w / 2, gy + d / 2, 0), rx = Math.max(w, d) * 17;
     stage(ctx, p, env, h + 3, { m: 0.2, a: 0.5 });
@@ -66,7 +66,7 @@ reg('kiosk', {
 reg('podium', {
   far: farBlock,
   night: false,
-  pad: [10, 28, 12, 8],
+  pad: [4, 4, 4, 4],
   body(ctx, p, env) {
     const lv = detailFor(ctx, env), { gx, gy, w, d } = p, S = styleOf(p, env), C = S.C, carpet = C(p.col || '#a98bd6'), gold = C('#f6c94f'), stone = C('#e8dcc4');
     stage(ctx, p, env, 26, { m: 0.22, a: 0.5 });
@@ -102,7 +102,7 @@ function terraceHouse(ctx, q, env, S, lv, i, seed) {
 }
 reg('rentrow', {
   far: farBlock,
-  pad: [10, 34, 12, 8],
+  pad: [4, 4, 4, 4],
   body(ctx, p, env) {
     const lv = detailFor(ctx, env), { gx, gy, w, d, h } = p, S = styleOf(p, env), seed = seedOf(p), C = S.C, n = 3, cw = w / n, hs = [h, h - 8, h + 4];
     stage(ctx, p, env, h + 14, { m: 0.2 });
@@ -117,7 +117,7 @@ reg('rentrow', {
 // ---------------------------------------------------------------- the manor: a cream block under a plum hip roof with two dormers, a columned portico, shutters, two chimneys
 reg('manor', {
   far: farBlock,
-  pad: [12, 40, 14, 8],
+  pad: [4, 4, 8, 4],
   body(ctx, p, env) {
     const lv = detailFor(ctx, env), zm = zoomOf(ctx, env), { gx, gy, w, d, h } = p, S = styleOf(p, env), C = S.C, seed = seedOf(p), night = env.night || 0, wall = S.wall, roofC = C(p.roofCol || '#a272c8'), contour = contourW(zm, lv), shutter = C('#c9a6ff');
     stage(ctx, p, env, h + 16, { m: 0.28 });

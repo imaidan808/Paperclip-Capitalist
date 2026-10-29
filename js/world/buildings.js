@@ -187,7 +187,7 @@ export function farBlock(ctx, p, env) {
 }
 const bldgFar = farBlock;
 
-reg('bldg', { body: bldgBody, live: bldgLive, far: bldgFar, pad: [12, 22, 14, 8] });
+reg('bldg', { body: bldgBody, live: bldgLive, far: bldgFar, pad: [4, 4, 4, 4] });
 // (the 'shop' kind is not placed by any district: it keeps its legacy drawer until a kit uses it)
 
 export { bldgBody, chimneySmoke, roofKit };
