@@ -7,6 +7,8 @@ import { LAYOUT, DIST, EDGES, zAt, BW, BD, GW, GH } from './layout.js';
 import { ROAD, PAVE, SAND, WOOD, LIGHT, SEA, TOY, GRASS, BLOOM, groundSet, veiled } from './palette.js';
 import { mix, clamp, h2 } from './iso.js';
 import { bakeBase } from './rasterbase.js';
+import { surface } from './gfx.js';
+import { LATTICE } from './noise.js';
 import { decalV2 } from './decalart.js';
 import { VEIL } from './terrainfield.js';
 
@@ -67,9 +69,19 @@ function rrect(ctx, x, y, w, d, r, z) {
   arc(x + w - r, y + r, -Math.PI / 2); arc(x + w - r, y + d - r, 0); arc(x + r, y + d - r, Math.PI / 2); arc(x + r, y + r, Math.PI); ctx.closePath();
 }
 const fillRR = (ctx, x, y, w, d, r, z, c, a = 1) => { ctx.beginPath(); rrect(ctx, x, y, w, d, r, z); ctx.globalAlpha = a; ctx.fillStyle = c; ctx.fill(); ctx.globalAlpha = 1; };
+const quadPath = (ctx, x, y, w, d, z) => { ctx.moveTo(px(x, y), py(x, y, z)); ctx.lineTo(px(x + w, y), py(x + w, y, z)); ctx.lineTo(px(x + w, y + d), py(x + w, y + d, z)); ctx.lineTo(px(x, y + d), py(x, y + d, z)); ctx.closePath(); };
 const fillQuad = (ctx, x, y, w, d, z, c) => { ctx.beginPath(); ctx.moveTo(px(x, y), py(x, y, z)); ctx.lineTo(px(x + w, y), py(x + w, y, z)); ctx.lineTo(px(x + w, y + d), py(x + w, y + d, z)); ctx.lineTo(px(x, y + d), py(x, y + d, z)); ctx.closePath(); ctx.fillStyle = c; ctx.fill(); };
 
 // ---------------------------------------------------------------- the districts' blocks
+let GRAIN;
+/** A 64 x 64 tile of fine speckle (light and violet-dark specks at a few percent), made once: laid over a block it gives plaza, asphalt and dirt a weathered surface. It is a pattern in world space, so it runs on across chunks. */
+function grainPattern(ctx) {
+  if (GRAIN !== undefined) return GRAIN;
+  GRAIN = null; const f = surface(64, 64); if (!f || typeof ImageData !== 'function' || typeof ctx.createPattern !== 'function') return GRAIN;
+  const img = f.g.createImageData(64, 64), d = img.data;
+  for (let i = 0; i < 64 * 64; i++) { const h = LATTICE[(i * 7 + 13) & 65535], dark = h < 0.5, a = Math.abs(h - 0.5) * 2; d[i * 4] = dark ? 74 : 255; d[i * 4 + 1] = dark ? 63 : 247; d[i * 4 + 2] = dark ? 136 : 220; d[i * 4 + 3] = Math.round(a * a * 46); }
+  f.g.putImageData(img, 0, 0); GRAIN = ctx.createPattern(f.c, 'repeat') || null; return GRAIN;
+}
 /**
  * Each district's block as a little stage: a soft violet contact shadow on the terrain towards the shade side, the block in its daylight ground with a lighter rim, the sidewalks in cream, the avenue and the
  * cross street as kerbed asphalt, the stash yard in its own tone with a light border, then its decals and its crosswalks. A locked district's colours are veiled, never darkened.
@@ -84,6 +96,11 @@ function drawBlocks(ctx, view, env, w, a) {
     for (const g of D.ground) {
       if (g.kind === 'block') { fillRR(ctx, g.x, g.y, g.w, g.d, 0.9, z, v(S.ground)); fillRR(ctx, g.x + 0.32, g.y + 0.32, g.w - 0.64, g.d - 0.64, 0.7, z, v(S.hi), 0.16); }
       else if (g.kind === 'walk') fillQuad(ctx, g.x, g.y, g.w, g.d, z, v(S.walk));
+    }
+    if (detail[2] > 0.05) { // near: joints between the sidewalk's pavers, a tile each (drawn before the roads, which cover the middle of the walk's band)
+      ctx.fillStyle = v(PAVE.joint); ctx.globalAlpha = 0.6 * detail[2]; ctx.beginPath();
+      for (const g of D.ground) if (g.kind === 'walk') { for (let i = 1; i < g.w; i++) quadPath(ctx, g.x + i - 0.035, g.y, 0.07, g.d, z); for (let j = 1; j < g.d; j++) quadPath(ctx, g.x, g.y + j - 0.035, g.w, 0.07, z); }
+      ctx.fill(); ctx.globalAlpha = 1;
     }
     // the roads: kerb colour first for both, then the asphalt inset, so the two streets meet in a crossing with kerb returns
     const roads = D.ground.filter((g) => g.kind === 'road'), kb = 0.2, kerb = v(S.kerb), asph = v(S.asphalt);
@@ -102,6 +119,11 @@ function drawBlocks(ctx, view, env, w, a) {
     }
     ctx.fill();
     for (const g of D.ground) if (g.kind === 'pad') { fillRR(ctx, g.x, g.y, g.w, g.d, 0.5, z, v(S.pad)); fillRR(ctx, g.x + 0.12, g.y + 0.12, g.w - 0.24, g.d - 0.24, 0.4, z, v(S.hi), 0.28); fillRR(ctx, g.x + 0.3, g.y + 0.3, g.w - 0.6, g.d - 0.6, 0.3, z, v(S.pad)); }
+    const gp = grainPattern(ctx);
+    if (gp) { ctx.fillStyle = gp; ctx.globalAlpha = 0.85; ctx.beginPath(); rrect(ctx, ox, oy, BW, BD, 0.9, z); ctx.fill(); ctx.globalAlpha = 1; } // a weathered surface
+    if (detail[2] > 0.05) { // near and close: two manholes on the avenue
+      if (detail[3] > 0.05) for (const mx of [ox + 4.6, ox + 16.8]) { ctx.globalAlpha = detail[3]; ctx.fillStyle = v(ROAD.manhole); ctx.beginPath(); ctx.ellipse(px(mx, oy + 8.5), py(mx, oy + 8.5, z), 0.3 * HW * 1.42, 0.3 * HH * 1.42, 0, 0, 6.2832); ctx.fill(); ctx.fillStyle = v(ROAD.light); ctx.beginPath(); ctx.ellipse(px(mx, oy + 8.5), py(mx, oy + 8.5, z) - 0.6, 0.2 * HW * 1.42, 0.2 * HH * 1.42, 0, 0, 6.2832); ctx.fill(); ctx.globalAlpha = 1; }
+    }
     for (const d of D.decals) if (a.zoom >= (d.min ?? 0.3)) decalV2(ctx, d, z, k, S, detail);
   }
 }

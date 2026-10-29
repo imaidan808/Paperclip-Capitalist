@@ -2,8 +2,11 @@
 // the sea meets the coast); this module is the layer under them and, below, the live motion on top. Docs/ART_DIRECTION.md 5.1 to 5.3 and 5.10.
 // Owner: T1 TERRAIN, COAST AND WATER (docs/RENDER_PLAN.md).
 import { registerLayer } from './stack.js';
-import { mix } from './iso.js';
+import { mix, h2 } from './iso.js';
 import { SEA } from './palette.js';
+import { LAYOUT, DIST, zAt } from './layout.js';
+import { coastOf } from './scene.js';
+import { tone } from './decalart.js';
 
 const FILL = mix(SEA.sea, SEA.deep, 0.5);
 /** `sea` (world space): fill the view with the open sea's colour, so that whatever a chunk has not painted yet (a chunk being baked) is sea and never a hole. The depth is in the chunks. */
@@ -15,10 +18,6 @@ registerLayer('sea', drawSea, 'world');
 // breath on top; under Calm, Off and reduced motion `env.t` is 0 and every motif stands at its resting pose, drawn once with the rest). Docs/ART_DIRECTION.md 5.2 and 5.4.
 // Sizes have a screen-space minimum (a crest at least 14 x 3 screen pixels, a curl 8 across, a glint 3) so nothing is a dash at any zoom; the detail fades in by `env.lod` (crests from the mid band, curls
 // and glints from the near band): nothing pops. A motif is never inside a bridge's corridor or within a tile and a half of the coast.
-import { LAYOUT, DIST } from './layout.js';
-import { coastOf } from './scene.js';
-import { h2 } from './iso.js';
-import { tone } from './decalart.js';
 
 const CELL = 6, HWd = 32, HHd = 16, TAU = 6.2832;
 const CELLS = new Map();
@@ -49,8 +48,8 @@ const smoothstep = (a, b, x) => { const t = Math.max(0, Math.min(1, (x - a) / (b
  * Draw the live sea over the ground chunks: crests (soft lens highlights lying along the shore), foam curls and four-point glints, in world space, under the camera transform the caller has set.
  * `zoom` is the camera's; `t` the visual clock in seconds (0 when motion is off); `lod` the detail alphas. Counts are bounded: about 600 motifs at the mid zoom, 1,100 near.
  */
-export function drawMotifs(ctx, view, zoom, t, lod) {
-  const dm = lod[1], dn = lod[2]; if (dm < 0.02) return;
+export function drawMotifs(ctx, view, zoom, t, lod, tier = 0) {
+  const dm = tier >= 2 ? 0 : lod[1], dn = tier >= 1 ? 0 : lod[2]; if (dm < 0.02) return; // the governor's tiers (docs/RENDER_PLAN.md section 5): tier 1 drops the curls and glints, tier 2 the crests too
   const [ci0, ci1, cj0, cj1] = cellRange(view), crestCol = SEA.crest, foamCol = SEA.foam, sparkle = SEA.sparkle, still = t === 0;
   let budget = zoom < 0.7 ? 600 : 1100;
   const dgx = still ? 0 : 0.12 * Math.sin(TAU * t / 23), dgy = still ? 0 : 0.12 * Math.cos(TAU * t / 31); // one slow current for the whole sea: at most 0.04 tile a second, the same for every motif
@@ -92,6 +91,37 @@ export function drawMotifs(ctx, view, zoom, t, lod) {
   ctx.restore();
 }
 
+// ---------------------------------------------------------------- the swash: the water breathing on the beaches
+const BEACH = new WeakMap();
+/** For one ring of the coast: for each point, is the ground there a beach (under 2.5 pixels high)? A cliff has no swash: the sea does not run up a wall. */
+function beachFlags(ring) { let f = BEACH.get(ring); if (!f) { const n = ring.length / 2; f = new Uint8Array(n); for (let i = 0; i < n; i++) f[i] = zAt(ring[2 * i], ring[2 * i + 1]) < 2.5 ? 1 : 0; BEACH.set(ring, f); } return f; }
+/**
+ * Along every beach in view, a film of foam that advances and retreats over 6.5 seconds, its phase running along the coast (0.12 of a cycle a tile) so the swash travels down the beach: a soft wide
+ * band of shoal colour under a narrower white one, a stretch of 0.7 tile at a time. The baked ground holds the foam line at mid swash, which is the whole picture at rest; this is only drawn while
+ * motion is on, and not at all at tier 3 and over. Strokes are never under 1.5 world pixels.
+ */
+export function drawSwash(ctx, view, zoom, t, tier = 0) {
+  if (!t || tier >= 3 || zoom < 0.45) return;
+  const rings = coastOf().rings; let arc = 0;
+  ctx.save(); ctx.lineCap = 'butt'; ctx.lineJoin = 'round'; // butt ends and short stretches: no bumps where two meet
+  for (const ring of rings) {
+    const n = ring.length / 2, fl = beachFlags(ring);
+    let i = 0;
+    while (i < n) {
+      const gx = ring[2 * i], gy = ring[2 * i + 1], x = (gx - gy) * HWd, y = (gx + gy) * HHd;
+      let j = i, len = 0; for (; j + 1 < n && len < 0.7; j++) len += Math.hypot(ring[2 * j + 2] - ring[2 * j], ring[2 * j + 3] - ring[2 * j + 1]);
+      if (fl[i] && x > view.x0 - 90 && x < view.x1 + 90 && y > view.y0 - 90 && y < view.y1 + 90) {
+        const breath = 0.5 + 0.5 * Math.sin(TAU * (t / 6.5 + arc * 0.12)); ctx.beginPath(); ctx.moveTo(x, y);
+        for (let q = i + 1; q <= j; q++) ctx.lineTo((ring[2 * q] - ring[2 * q + 1]) * HWd, (ring[2 * q] + ring[2 * q + 1]) * HHd);
+        ctx.strokeStyle = SEA.shoal; ctx.globalAlpha = 0.16 + 0.2 * breath; ctx.lineWidth = Math.max(1.5, 7 + 8 * breath); ctx.stroke();
+        ctx.strokeStyle = SEA.foam; ctx.globalAlpha = 0.25 + 0.4 * breath; ctx.lineWidth = Math.max(1.5, 2.2 + 3 * breath); ctx.stroke();
+      }
+      arc += len; i = Math.max(j, i + 1);
+    }
+  }
+  ctx.restore();
+}
+
 /** The moving decals of the districts in view: soft round pulses on the circuit ground and light on the harbor's basin (crests and a glint, with the sea's own shapes). */
 function liveDecals(ctx, view, env, w) {
   const t = env.t / 1000, still = t === 0, zoom = w.cam.z;
@@ -110,7 +140,7 @@ function liveDecals(ctx, view, env, w) {
 }
 /** `livedecals` (V2): everything on the ground that moves or fades, drawn over the chunks: the sea's motifs and the districts' own moving decals. */
 function drawLive(ctx, view, env, w) {
-  if (!env.far && env.lod.detail[1] >= 0.02) drawMotifs(ctx, view, w.cam.z, env.t / 1000, env.lod.detail);
+  if (!env.far && env.lod.detail[1] >= 0.02) { drawSwash(ctx, view, w.cam.z, env.t / 1000, w.slow | 0); drawMotifs(ctx, view, w.cam.z, env.t / 1000, env.lod.detail, w.slow | 0); }
   liveDecals(ctx, view, env, w);
 }
 registerLayer('livedecals', drawLive, 'inherit');

@@ -24,6 +24,13 @@ function seaLut() {
   for (let i = 0; i < LUT_LEN; i++) { const c = rgb(seaRamp(Math.max(0.3, i / LUT_N))); r[i] = c[0]; g[i] = c[1]; b[i] = c[2]; }
   return { r, g, b };
 }
+/** The wave bands as a table by distance: soft ribbons of lighter water lying along the shore at 2, 4, 6, 8, 10, 12, 14, 17, 20, 24, 28 and 34 tiles (art direction 5.2), each wider the farther out it is. 0..1. */
+export const BAND_LEVELS = Object.freeze([2, 4, 6, 8, 10, 12, 14, 17, 20, 24, 28, 34]);
+function bandLut() {
+  const t = new Float32Array(LUT_LEN);
+  for (let i = 0; i < LUT_LEN; i++) { const d = i / LUT_N; let v = 0; for (const L of BAND_LEVELS) { const w = 0.13 + 0.012 * L, x = Math.abs(d - L) / w; if (x < 1) v = Math.max(v, 1 - x * x * (3 - 2 * x)); } t[i] = v; }
+  return t;
+}
 /**
  * Everything a bake reads, made once per layout and unlock state: the coast, the terrain field, the sea's colour table and the palette tokens as float triples.
  * `bounds` is LAYOUT.bounds (the haze begins beyond it), `ZV`/`VW` the heights.
@@ -31,7 +38,7 @@ function seaLut() {
 export function makeScene(coast, terr, bounds, ZV, VW, GW, GH) {
   const walls = buildWalls(coast, ZV, VW, GW, GH);
   return {
-    coast, terr, bounds, ZV, lut: seaLut(),
+    coast, terr, bounds, ZV, lut: seaLut(), band: bandLut(),
     foam: rgbf(SEA.foam), crest: rgbf(SEA.crest), shoal: rgbf(SEA.shoal), shadow: rgbf(mix(SEA.sea, LIGHT.shadow, 0.55)), haze: rgbf(mix(SKY.horizon, SKY.mid, 0.4)), glow: rgbf(mix(SEA.shoal, SEA.shallow, 0.5)),
     sandMid: rgbf(SAND.mid), sandLight: rgbf(SAND.light), sandHi: rgbf(SAND.hi), wet: rgbf(SAND.wet), wetSheen: rgbf(SAND.wetSheen), lip: rgbf(GRASS.shade), rock: rgbf(ROCK.mid), rockShade: rgbf(ROCK.shade), rockLight: rgbf(ROCK.light), rockHi: rgbf(ROCKHI.light), rockHiShade: rgbf(ROCKHI.shade), strata: rgbf(ROCK.strata), ao: rgbf(LIGHT.ao), walls,
   };
@@ -75,7 +82,8 @@ export function seaPass(buf, W, H, S, ox, oy, sc, skipLand = false) {
   }
   // ---- the pixels: in 2 x 2 blocks where the sea is smooth (interpolated from the nodes), one pixel at a time within a tile and a half of the coast (the exact distance, the foam)
   const isk = 1 / SK, NEAR = 1.7;
-  const exact = (px, py, o, k, k1, k2, k3, tx, ty, nf, nt) => {
+  const band = sc.band, crest = sc.crest;
+  const exact = (px, py, o, k, k1, k2, k3, tx, ty, nf, nt, nbk) => {
     const w00 = (1 - tx) * (1 - ty), w10 = tx * (1 - ty), w01 = (1 - tx) * ty, w11 = tx * ty, di = nd[k] * w00 + nd[k1] * w10 + nd[k2] * w01 + nd[k3] * w11; // the lattice's own estimate of the distance
     if (di > 1.25) { buf[o] = nr[k] * w00 + nr[k1] * w10 + nr[k2] * w01 + nr[k3] * w11; buf[o + 1] = ng[k] * w00 + ng[k1] * w10 + ng[k2] * w01 + ng[k3] * w11; buf[o + 2] = nb[k] * w00 + nb[k1] * w10 + nb[k2] * w01 + nb[k3] * w11; buf[o + 3] = 255; return; }
     const wy = oy + (py + 0.5) * inv, wx = ox + (px + 0.5) * inv, gx = wx / 64 + wy / 32, gy = wy / 32 - wx / 64, d = fineAt(gx, gy), dd = d < 0 ? 0 : d, li = dd * LUT_N | 0;
@@ -86,6 +94,7 @@ export function seaPass(buf, W, H, S, ox, oy, sc, skipLand = false) {
       if (d > 0.25) { const tr = clamp((d - 0.3) / aa * 0.5 + 0.5, 0, 1) * clamp((0.58 - d) / aa * 0.5 + 0.5, 0, 1) * smooth(0.5, 0.72, nt) * 0.5; if (tr > fa) fa = tr; }
       if (fa > 0) { r += (foam[0] - r) * fa; g += (foam[1] - g) * fa; b += (foam[2] - b) * fa; }
     }
+    const bv = band[li]; if (bv > 0.02) { const m = bv * 0.16 * nbk; r += (crest[0] - r) * m; g += (crest[1] - g) * m; b += (crest[2] - b) * m; }
     buf[o] = r; buf[o + 1] = g; buf[o + 2] = b; buf[o + 3] = 255;
   };
   for (let py = 0; py < H; py += 2) {
@@ -97,13 +106,15 @@ export function seaPass(buf, W, H, S, ox, oy, sc, skipLand = false) {
       if (dmin < -7) continue;
       if (dmin > NEAR) {
         const w00 = (1 - tx) * (1 - ty), w10 = tx * (1 - ty), w01 = (1 - tx) * ty, w11 = tx * ty;
-        const r = nr[k] * w00 + nr[k1] * w10 + nr[k2] * w01 + nr[k3] * w11, g = ng[k] * w00 + ng[k1] * w10 + ng[k2] * w01 + ng[k3] * w11, b = nb[k] * w00 + nb[k1] * w10 + nb[k2] * w01 + nb[k3] * w11;
+        let r = nr[k] * w00 + nr[k1] * w10 + nr[k2] * w01 + nr[k3] * w11, g = ng[k] * w00 + ng[k1] * w10 + ng[k2] * w01 + ng[k3] * w11, b = nb[k] * w00 + nb[k1] * w10 + nb[k2] * w01 + nb[k3] * w11;
+        const dI = d00 * w00 + d10 * w10 + d01 * w01 + d11 * w11, bv = band[(dI > FAR_D ? FAR_D : dI) * LUT_N | 0];
+        if (bv > 0.02) { const bx = ox + xc * inv, by = oy + yc * inv, m = bv * 0.16 * smooth(0.42, 0.68, lnoise((bx / 64 + by / 32) * 0.55 + 21, (by / 32 - bx / 64) * 0.55 + 4)); r += (crest[0] - r) * m; g += (crest[1] - g) * m; b += (crest[2] - b) * m; } // soft ribbons of lighter water along the shore, broken by noise
         let o = (py * W + px) * 4, o2 = (py1 * W + px) * 4; const two = px + 1 < W;
         let q = cellNoise(px, py) * 2.2; buf[o] = r + q; buf[o + 1] = g + q; buf[o + 2] = b + q; buf[o + 3] = 255; q = cellNoise(px + 5, py1 + 3) * 2.2; buf[o2] = r + q; buf[o2 + 1] = g + q; buf[o2 + 2] = b + q; buf[o2 + 3] = 255; // (a level of dither, so the gradient is never a band)
         if (two) { q = cellNoise(px + 1, py + 9) * 2.2; buf[o + 4] = r + q; buf[o + 5] = g + q; buf[o + 6] = b + q; buf[o + 7] = 255; q = cellNoise(px + 8, py1 + 1) * 2.2; buf[o2 + 4] = r + q; buf[o2 + 5] = g + q; buf[o2 + 6] = b + q; buf[o2 + 7] = 255; }
       } else {
-        const bx = ox + xc * inv, by = oy + yc * inv, bgx = bx / 64 + by / 32, bgy = by / 32 - bx / 64, nf = lnoise(bgx * 2.3 + 7, bgy * 2.3), nt = lnoise(bgx * 1.4 + 3, bgy * 1.4 + 11); // the scallop noise varies over twenty pixels: one sample a block
-        for (let qy = py; qy <= py1; qy++) for (let qx = px; qx <= px + 1 && qx < W; qx++) { if (useIds) { const id = ids[qy * W + qx]; if (id !== 0 && TRI[id * TS + 18] === 1) continue; } const cx = (qx + 0.5) * isk, cy = (qy + 0.5) * isk; exact(qx, qy, (qy * W + qx) * 4, k, k1, k2, k3, cx - ci, cy - cj, nf, nt); }
+        const bx = ox + xc * inv, by = oy + yc * inv, bgx = bx / 64 + by / 32, bgy = by / 32 - bx / 64, nf = lnoise(bgx * 2.3 + 7, bgy * 2.3), nt = lnoise(bgx * 1.4 + 3, bgy * 1.4 + 11), nbk = smooth(0.42, 0.68, lnoise(bgx * 0.55 + 21, bgy * 0.55 + 4)); // the scallop noise varies over twenty pixels: one sample a block; the bands are broken by noise
+        for (let qy = py; qy <= py1; qy++) for (let qx = px; qx <= px + 1 && qx < W; qx++) { if (useIds) { const id = ids[qy * W + qx]; if (id !== 0 && TRI[id * TS + 18] === 1) continue; } const cx = (qx + 0.5) * isk, cy = (qy + 0.5) * isk; exact(qx, qy, (qy * W + qx) * 4, k, k1, k2, k3, cx - ci, cy - cj, nf, nt, nbk); }
       }
     }
   }
@@ -209,7 +220,7 @@ export function landShade(buf, W, H, S, sc) {
           const nb = lnoise(gx * 1.7 + 9, gy * 1.7) - 0.5, low = z >= 5.2 ? 0 : z <= 2.4 ? 1 : smooth(5.2, 2.4, z); // low ground is beach; a cliff top is not
           if (low > 0) {
             const edge = 1.25 + nb * 1.1, sand = low * (1 - smooth(edge - 0.4, edge + 0.12, inland));
-            if (sand > 0) { const t = smooth(0.3, 1.3, inland), sn = cellNoise(Math.floor(gx * GK * 1.3), Math.floor(gy * GK * 1.3)) * 0.12, sr = (sandMid[0] + (sandLight[0] - sandMid[0]) * t) * (1 + sn), sg = (sandMid[1] + (sandLight[1] - sandMid[1]) * t) * (1 + sn), sb = (sandMid[2] + (sandLight[2] - sandMid[2]) * t) * (1 + sn); r += (sr - r) * sand; g += (sg - g) * sand; b += (sb - b) * sand; }
+            if (sand > 0) { const t = smooth(0.3, 1.3, inland), sn = (lnoise(gx * GK * 0.8, gy * GK * 0.8) - 0.5) * 0.11, sr = (sandMid[0] + (sandLight[0] - sandMid[0]) * t) * (1 + sn), sg = (sandMid[1] + (sandLight[1] - sandMid[1]) * t) * (1 + sn), sb = (sandMid[2] + (sandLight[2] - sandMid[2]) * t) * (1 + sn); r += (sr - r) * sand; g += (sg - g) * sand; b += (sb - b) * sand; }
             const wt = low * (1 - smooth(0.2, 0.36 + nb * 0.08, inland)); // the wet edge of the sand, darker, with a sheen along its outer half
             if (wt > 0) { r += (wet[0] - r) * wt * 0.85; g += (wet[1] - g) * wt * 0.85; b += (wet[2] - b) * wt * 0.85; }
             const sh = low * clamp(1 - Math.abs(inland - 0.3) / 0.1, 0, 1) * 0.35; if (sh > 0) { r += (wetSheen[0] - r) * sh; g += (wetSheen[1] - g) * sh; b += (wetSheen[2] - b) * sh; }

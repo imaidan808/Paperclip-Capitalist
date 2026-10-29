@@ -6,7 +6,7 @@ import { recCtx, thinnestStroke } from './helpers/recctx.mjs';
 import { LAYOUT, DIST, EDGES } from '../js/world/layout.js';
 import { coastOf } from '../js/world/scene.js';
 import { lodOf } from '../js/world/lod.js';
-import { motifCell, drawMotifs } from '../js/world/water.js';
+import { motifCell, drawMotifs, drawSwash } from '../js/world/water.js';
 import { tone } from '../js/world/decalart.js';
 import { slotFor, runLayer } from '../js/world/stack.js';
 import { luma } from '../js/world/iso.js';
@@ -87,4 +87,13 @@ test('the V2 roads draw every road of the island as a kerbed ribbon: the kerb co
 test('decal colours are read for daylight: a dark kit colour is lifted towards cream, a light one is kept, alpha is kept, and a district under cloud is veiled', () => {
   assert.ok(luma(tone('#232c3a')) > 0.5, 'a dark slab becomes pale'); assert.equal(tone('#fff0cf'), '#fff0cf'); assert.match(tone('rgba(20,16,12,.3)'), /^rgba\(\d+,\d+,\d+,0\.3\)$/); assert.equal(tone(null), null);
   assert.notEqual(tone('#d4c070', 1), tone('#d4c070', 0), 'veiled'); assert.ok(luma(tone('#d4c070', 1)) >= luma('#d4c070') - 0.03, 'never darker');
+});
+
+test('the swash breathes on the beaches only while motion is on: nothing at rest, soft strokes with a phase that runs along the coast, none thinner than 1.5, none at tier 3, none far out', () => {
+  const view = { x0: -4800, x1: -3000, y0: 1800, y1: 3200 };
+  const sw = (t, zoom = 1, tier = 0) => { const r = recCtx(); drawSwash(r.ctx, view, zoom, t, tier); return r; };
+  assert.equal(sw(0).log.calls.length, 0, 'at rest the baked foam is the picture'); assert.equal(sw(3, 1, 3).log.calls.length, 0); assert.equal(sw(3, 0.3).log.calls.length, 0);
+  const r = sw(2.5), strokes = r.log.strokes; assert.ok(strokes.length > 8, `${strokes.length} strokes on the beaches in view`); assert.ok(thinnestStroke(r.log) >= 1.5); assert.equal(r.log.depth, 0);
+  const alphas = new Set(strokes.map((s) => s.alpha.toFixed(2))); assert.ok(alphas.size > 4, 'the phase differs along the coast');
+  const a = sw(2.5).log.strokes.map((s) => s.alpha.toFixed(3)).join(), b = sw(2.5 + 6.5).log.strokes.map((s) => s.alpha.toFixed(3)).join(); assert.equal(a, b, 'the breath has a period of 6.5 seconds');
 });
