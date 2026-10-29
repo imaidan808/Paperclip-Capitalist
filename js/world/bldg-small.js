@@ -1,23 +1,22 @@
 // The small and the grand houses: market stalls with striped awnings, the metro kiosk pod, the auction podium, the terrace of the property row, the estate manor and the plain shop. Owner: T3 BUILDINGS (docs/RENDER_PLAN.md).
 // V2 drawers of the 'static-bldg' layer on the toy kit; the same hit polygons as the legacy drawers.
-import { registerProp } from './stack.js';
 import { P, mix, clamp, h2 } from './iso.js';
 import { PAVE, WOOD, TILE, BRICK } from './palette.js';
-import { toyBox, toyRadius, toyTone, rampOf, wallOf, onWall, rrect, contourOf, puff } from './solids.js';
-import { facesOf, hitsOf, on, rgbaOf, windowGrid, archDoor, plank, wallMaterial, FONT, detailFor, zoomOf, contourW, styleOf, windowGlow, stage, roof, chimney, columns, pennant, tank, puffs, apron } from './parts.js';
+import { toyBox, toyRadius, toyTone, rampOf, wallOf, onWall, rrect, contourOf } from './solids.js';
+import { ball, reg, facesOf, hitsOf, on, rgbaOf, windowGrid, archDoor, plank, wallMaterial, FONT, detailFor, zoomOf, contourW, styleOf, windowGlow, stage, roof, chimney, columns, pennant, tank, puffs, apron } from './parts.js';
 import { seedOf, leftFace } from './props-common.js';
 import { farBlock } from './buildings.js';
 
 const tone = toyTone;
 const CREAM = '#fff4de';
-const clipSil = (ctx, B) => { ctx.beginPath(); ctx.moveTo(B.sil[0][0], B.sil[0][1]); for (let i = 1; i < B.sil.length; i++) ctx.lineTo(B.sil[i][0], B.sil[i][1]); ctx.closePath(); ctx.clip(); };
+const clipSil = (ctx, B) => { ctx.beginPath(); ctx.moveTo(B.sil[0][0], B.sil[0][1]); for (let i = 1; i < B.sil.length; i++) ctx.lineTo(B.sil[i][0], B.sil[i][1]); ctx.closePath(); };
 const outline = (ctx, B, col, w, a = 0.42) => { if (!(w > 0)) return; ctx.save(); ctx.lineJoin = 'round'; ctx.strokeStyle = contourOf(col); ctx.lineWidth = w; ctx.globalAlpha = a; ctx.beginPath(); ctx.moveTo(B.sil[0][0], B.sil[0][1]); for (let i = 1; i < B.sil.length; i++) ctx.lineTo(B.sil[i][0], B.sil[i][1]); ctx.closePath(); ctx.stroke(); ctx.restore(); };
 const poly = (ctx, pts, fill) => { ctx.beginPath(); ctx.moveTo(pts[0][0], pts[0][1]); for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]); ctx.closePath(); ctx.fillStyle = fill; ctx.fill(); };
-const post = (ctx, x, y, h, col) => { ctx.strokeStyle = col; ctx.lineWidth = 3.6; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x, y - h); ctx.stroke(); ctx.strokeStyle = rgbaOf('#ffffff', 0.35); ctx.lineWidth = 1.3; ctx.beginPath(); ctx.moveTo(x - 0.9, y - 1); ctx.lineTo(x - 0.9, y - h + 1); ctx.stroke(); };
+const post = (ctx, x, y, h, col) => { ctx.strokeStyle = col; ctx.lineWidth = 3.6; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x, y - h); ctx.stroke(); ctx.strokeStyle = rgbaOf('#ffffff', 0.35); ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(x - 0.9, y - 1); ctx.lineTo(x - 0.9, y - h + 1); ctx.stroke(); };
 
 // ---------------------------------------------------------------- the market stall
 const GOODS = [['#e8503a', '#ff8a6a', '#6cc178'], ['#f2c94c', '#ffe27a', '#e8a03a'], ['#6cc178', '#a4dc66', '#3fb9b2']];
-registerProp('stall', {
+reg('stall', {
   far: farBlock,
   night: false,
   pad: [10, 20, 12, 8],
@@ -29,9 +28,9 @@ registerProp('stall', {
     for (const [px, py] of [[gx + 0.08, gy + 0.08], [gx + w - 0.08, gy + 0.08]]) { const [x, y] = P(px, py); post(ctx, x, y, zT, tone(woodC).r); }
     const cB = toyBox(ctx, gx + 0.05, gy + d * 0.38, w - 0.1, d * 0.58, 8, woodC, { r: 3, gloss: 0.9 }), CL = wallOf(cB.left);
     ctx.save(); clipSil(ctx, cB); wallMaterial(ctx, CL, 'boards', woodC, 'l', lv, seed); ctx.restore();
-    onWall(ctx, CL, (c) => { c.fillStyle = rgbaOf(a1, 0.85); c.fillRect(0, -CL.H + 0.5, CL.W, 2.6); });
+    onWall(ctx, CL, (c) => { c.fillStyle = rgbaOf(a1, 0.85); c.fillRect(CL.ins[0], -CL.H + 0.5, CL.W - CL.ins[0] - CL.ins[1], 2.6); });
     const goods = GOODS[(p.goods | 0) % 3];
-    for (let i = 0; i < 4; i++) { const u = (i + 0.5) / 4, [x, y] = P(gx + 0.1 + (w - 0.2) * u, gy + d * 0.62, 8); ctx.fillStyle = tone(woodC).l; ctx.beginPath(); ctx.ellipse(x, y, 8.4, 4.2, 0, 0, 6.3); ctx.fill(); ctx.fillStyle = rgbaOf('#4a3f88', 0.25); ctx.beginPath(); ctx.ellipse(x, y + 0.6, 7, 3.2, 0, 0, 6.3); ctx.fill(); for (let k = 0; k < 4; k++) puff(ctx, x + (k - 1.5) * 3.1, y - 2.2 - (k % 2) * 1.4, 2.9, goods[(i + k) % 3], '#fff7dc', mix(goods[(i + k) % 3], '#4a3f88', 0.45)); }
+    for (let i = 0; i < 4; i++) { const u = (i + 0.5) / 4, [x, y] = P(gx + 0.1 + (w - 0.2) * u, gy + d * 0.62, 8); ctx.fillStyle = tone(woodC).l; ctx.beginPath(); ctx.ellipse(x, y, 8.4, 4.2, 0, 0, 6.3); ctx.fill(); ctx.fillStyle = rgbaOf('#4a3f88', 0.25); ctx.beginPath(); ctx.ellipse(x, y + 0.6, 7, 3.2, 0, 0, 6.3); ctx.fill(); for (let k = 0; k < 4; k++) ball(ctx, x + (k - 1.5) * 3.1, y - 2.2 - (k % 2) * 1.4, 2.9, goods[(i + k) % 3], '#fff7dc', mix(goods[(i + k) % 3], '#4a3f88', 0.45)); }
     for (const [px, py] of [[gx + 0.08, gy + d - 0.05], [gx + w - 0.08, gy + d - 0.05]]) { const [x, y] = P(px, py); post(ctx, x, y, zF + 1, tone(woodC).l); }
     for (let i = 0; i < n; i++) { const u0 = i / n, u1 = (i + 1) / n, c = tone(i % 2 ? a2 : a1); poly(ctx, [G(u0, -0.02, zT), G(u1, -0.02, zT), G(u1, d + 0.2, zF), G(u0, d + 0.2, zF)], i % 2 ? mix(c.t, c.l, 0.4) : mix(c.t, c.l, 0.4)); }
     // the scalloped valance and the lit lip, a hanging lantern and a price flag
@@ -44,7 +43,7 @@ registerProp('stall', {
 });
 
 // ---------------------------------------------------------------- the kiosk pod: a round-bodied pod with a glass band, an accent sign and a thin overhanging roof disc
-registerProp('kiosk', {
+reg('kiosk', {
   far: farBlock,
   night: false,
   pad: [10, 16, 12, 8],
@@ -64,7 +63,7 @@ registerProp('kiosk', {
 });
 
 // ---------------------------------------------------------------- the auction podium: a plum-carpeted dais, a lectern and gavel, brass stanchions with a rope, a vase, a banner
-registerProp('podium', {
+reg('podium', {
   far: farBlock,
   night: false,
   pad: [10, 28, 12, 8],
@@ -73,7 +72,7 @@ registerProp('podium', {
     stage(ctx, p, env, 26, { m: 0.22, a: 0.5 });
     toyBox(ctx, gx - 0.2, gy - 0.2, w + 0.4, d + 0.4, 3, stone, { z: 0, r: 4, gloss: 0.8 });
     const D = toyBox(ctx, gx + 0.04, gy + 0.04, w - 0.08, d - 0.08, 1.6, carpet, { z: 3, r: 2.4, gloss: 0.9, ao: false, edge: false });
-    const L = wallOf(D.left); onWall(ctx, L, (c) => { c.fillStyle = gold; c.fillRect(0, -L.H, L.W, 1); });
+    const L = wallOf(D.left); onWall(ctx, L, (c) => { c.fillStyle = gold; c.fillRect(L.ins[0], -L.H, L.W - L.ins[0] - L.ins[1], 1); });
     const lec = toyBox(ctx, gx + w * 0.3, gy + d * 0.25, w * 0.4, d * 0.46, 12, carpet, { z: 4.6, r: 3, gloss: 1 }), LL = wallOf(lec.left);
     onWall(ctx, LL, (c) => { c.fillStyle = gold; rrect(c, LL.W * 0.28, -LL.H * 0.82, LL.W * 0.44, LL.H * 0.5, 2.4); c.fill(); c.fillStyle = tone(carpet).l; c.font = `800 5px ${FONT}`; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText('LOT', LL.W * 0.5, -LL.H * 0.57); });
     const top = P(gx + w * 0.5, gy + d * 0.48, 4.6 + 12); // the gavel: a round head on a short handle
@@ -82,7 +81,7 @@ registerProp('podium', {
     const s0 = P(gx + 0.05, gy + d + 0.2, 3), s1 = P(gx + w - 0.05, gy + d + 0.2, 3);
     for (const q of [s0, s1]) { ctx.strokeStyle = gold; ctx.lineWidth = 3; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(q[0], q[1]); ctx.lineTo(q[0], q[1] - 14); ctx.stroke(); ctx.fillStyle = mix(gold, '#ffffff', 0.4); ctx.beginPath(); ctx.arc(q[0], q[1] - 15, 2.6, 0, 6.3); ctx.fill(); ctx.fillStyle = rgbaOf('#4a3f88', 0.25); ctx.beginPath(); ctx.ellipse(q[0] + 1, q[1], 4, 2, 0, 0, 6.3); ctx.fill(); }
     ctx.strokeStyle = C('#d94a6a'); ctx.lineWidth = 2.4; ctx.beginPath(); ctx.moveTo(s0[0], s0[1] - 14); ctx.quadraticCurveTo((s0[0] + s1[0]) / 2, (s0[1] + s1[1]) / 2 - 8, s1[0], s1[1] - 14); ctx.stroke();
-    const v = P(gx + w * 0.82, gy + d * 0.3, 4.6); ctx.fillStyle = tone(C('#cdeedc')).l; rrect(ctx, v[0] - 2.6, v[1] - 6, 5.2, 6, 2); ctx.fill(); for (let k = 0; k < 3; k++) { puff(ctx, v[0] + (k - 1) * 3, v[1] - 8 - (k % 2), 2.4, ['#ff9cc2', '#ffd84d', '#fffbe8'][k], '#ffffff', '#c06080'); }
+    const v = P(gx + w * 0.82, gy + d * 0.3, 4.6); ctx.fillStyle = tone(C('#cdeedc')).l; rrect(ctx, v[0] - 2.6, v[1] - 6, 5.2, 6, 2); ctx.fill(); for (let k = 0; k < 3; k++) { ball(ctx, v[0] + (k - 1) * 3, v[1] - 8 - (k % 2), 2.4, ['#ff9cc2', '#ffd84d', '#fffbe8'][k], '#ffffff', '#c06080'); }
     const b = P(gx + w * 0.1, gy + d * 0.2, 4.6); ctx.strokeStyle = tone(C('#9c6238')).l; ctx.lineWidth = 1.8; ctx.beginPath(); ctx.moveTo(b[0], b[1]); ctx.lineTo(b[0], b[1] - 22); ctx.stroke(); ctx.fillStyle = C('#ff7fb8'); rrect(ctx, b[0] + 0.8, b[1] - 22, 8, 10, 1.4); ctx.fill(); ctx.fillStyle = '#fffaf0'; ctx.font = `800 4px ${FONT}`; ctx.textAlign = 'center'; ctx.fillText('BID', b[0] + 4.8, b[1] - 15.8);
     void lv; return null;
   },
@@ -93,7 +92,7 @@ const ROW = [['#ff9f8a', '#e2704c'], ['#ffd8b6', '#3fb9b2'], ['#cdeedc', '#a272c
 function terraceHouse(ctx, q, env, S, lv, i, seed) {
   const C = S.C, wall = C(ROW[i % 3][0]), roofC = C(ROW[i % 3][1]), night = env.night || 0, { gx, gy, w, d, h } = q;
   const B = toyBox(ctx, gx, gy, w, d, h, wall, { r: toyRadius(w, d) * 0.8, gloss: 0.9 }), L = wallOf(B.left), Rt = wallOf(B.right);
-  ctx.save(); clipSil(ctx, B); onWall(ctx, L, (c) => { c.fillStyle = tone(mix(wall, C(PAVE.joint), 0.55)).l; c.fillRect(0, -3.6, L.W, 3.6); }); onWall(ctx, Rt, (c) => { c.fillStyle = tone(mix(wall, C(PAVE.joint), 0.55)).r; c.fillRect(0, -3.6, Rt.W, 3.6); }); ctx.restore();
+  ctx.save(); clipSil(ctx, B); onWall(ctx, L, (c) => { c.fillStyle = tone(mix(wall, C(PAVE.joint), 0.55)).l; c.fillRect(L.ins[0], -3.6, L.W - L.ins[0] - L.ins[1], 3.6); }); onWall(ctx, Rt, (c) => { c.fillStyle = tone(mix(wall, C(PAVE.joint), 0.55)).r; c.fillRect(Rt.ins[0], -3.6, Rt.W - Rt.ins[0] - Rt.ins[1], 3.6); }); ctx.restore();
   windowGrid(ctx, L, { cols: 2, rows: 2, x0: L.W * 0.08, x1: L.W * 0.92, y0: 6, y1: h - 4, fw: 0.42, fh: 0.58, S: 'l', trim: CREAM, shutter: S.shutter || C('#7be0cf'), curtain: S.curtain, box: true, lit: night * 1.3, night, seed: seed + i, lv });
   archDoor(ctx, L, { x: L.W * 0.5 - 4.4, w: 8.8, h: Math.min(18, h * 0.46), S: 'l', col: C(['#98413f', '#2f8f86', '#744c9e'][i % 3]), trim: CREAM, lv, seed: seed + i, num: 12 + i * 2 });
   windowGrid(ctx, Rt, { cols: 1, rows: 2, x0: Rt.W * 0.25, x1: Rt.W * 0.75, y0: 6, y1: h - 4, fw: 0.6, fh: 0.58, S: 'r', trim: CREAM, lit: night * 1.2, night, seed: seed + i + 3, lv });
@@ -101,7 +100,8 @@ function terraceHouse(ctx, q, env, S, lv, i, seed) {
   chimney(ctx, gx + w * 0.3, gy + d * 0.28, h + rf.rise * 0.45, 9, { col: C(BRICK.mid), w: 0.24 });
   return { B, L, rf };
 }
-registerProp('rentrow', {
+reg('rentrow', {
+  far: farBlock,
   pad: [10, 34, 12, 8],
   body(ctx, p, env) {
     const lv = detailFor(ctx, env), { gx, gy, w, d, h } = p, S = styleOf(p, env), seed = seedOf(p), C = S.C, n = 3, cw = w / n, hs = [h, h - 8, h + 4];
@@ -115,7 +115,7 @@ registerProp('rentrow', {
 });
 
 // ---------------------------------------------------------------- the manor: a cream block under a plum hip roof with two dormers, a columned portico, shutters, two chimneys
-registerProp('manor', {
+reg('manor', {
   far: farBlock,
   pad: [12, 40, 14, 8],
   body(ctx, p, env) {
@@ -123,7 +123,7 @@ registerProp('manor', {
     stage(ctx, p, env, h + 16, { m: 0.28 });
     const B = toyBox(ctx, gx, gy, w, d, h, wall, { r: toyRadius(w, d) * 0.8, gloss: 0.9 }), L = wallOf(B.left), Rt = wallOf(B.right);
     ctx.save(); clipSil(ctx, B); wallMaterial(ctx, L, 'plaster', wall, 'l', lv, seed); wallMaterial(ctx, Rt, 'plaster', wall, 'r', lv, seed + 1);
-    for (const [wl, side] of [[L, 'l'], [Rt, 'r']]) onWall(ctx, wl, (c) => { c.fillStyle = tone(mix(wall, C(PAVE.joint), 0.6))[side]; c.fillRect(0, -3.6, wl.W, 3.6); c.fillStyle = tone(C('#fffaf0'))[side]; c.fillRect(0, -wl.H, wl.W, 3); c.fillStyle = rgbaOf('#4a3f88', 0.2); c.fillRect(0, -wl.H + 3, wl.W, 7); }); ctx.restore();
+    for (const [wl, side] of [[L, 'l'], [Rt, 'r']]) onWall(ctx, wl, (c) => { c.fillStyle = tone(mix(wall, C(PAVE.joint), 0.6))[side]; c.fillRect(wl.ins[0], -3.6, wl.W - wl.ins[0] - wl.ins[1], 3.6); c.fillStyle = tone(C('#fffaf0'))[side]; c.fillRect(wl.ins[0], -wl.H, wl.W - wl.ins[0] - wl.ins[1], 3); c.fillStyle = rgbaOf('#4a3f88', 0.2); c.fillRect(wl.ins[0], -wl.H + 3, wl.W - wl.ins[0] - wl.ins[1], 7); }); ctx.restore();
     outline(ctx, B, wall, contour);
     const cols = Math.max(5, Math.round(w * 0.9));
     windowGrid(ctx, L, { cols, rows: 2, x0: L.W * 0.06, x1: L.W * 0.94, y0: 6, y1: h - 8, fw: 0.46, fh: 0.62, S: 'l', trim: CREAM, shutter, curtain: S.curtain, box: false, lit: night * 1.3, night, seed, lv, arch: false });
@@ -140,7 +140,7 @@ registerProp('manor', {
     }
     // the portico: four round columns under a small gable, steps in front
     const pw = Math.min(w * 0.3, 2.4), pd = 0.7, px = gx + (w - pw) / 2, ph = h * 0.62, P0 = toyBox(ctx, px, gy + d - 0.02, pw, pd, ph, wall, { r: 3.4, gloss: 0.9 }), PL = wallOf(P0.left);
-    onWall(ctx, PL, (c) => { c.fillStyle = rgbaOf('#5c4c96', 0.4); rrect(c, PL.W * 0.05, -(PL.H - 6), PL.W * 0.9, PL.H - 8, 3); c.fill(); c.fillStyle = tone(wall).l; c.fillRect(0, -PL.H, PL.W, 5); });
+    onWall(ctx, PL, (c) => { c.fillStyle = rgbaOf('#5c4c96', 0.4); rrect(c, PL.W * 0.05, -(PL.H - 6), PL.W * 0.9, PL.H - 8, 3); c.fill(); c.fillStyle = tone(wall).l; c.fillRect(PL.ins[0], -PL.H, PL.W - PL.ins[0] - PL.ins[1], 5); });
     columns(ctx, PL, { n: 4, x0: PL.W * 0.08, x1: PL.W * 0.92, base: 2.5, top: PL.H - 5, cw: 4.6, col: C('#fffaf0'), S: 'l', lv });
     archDoor(ctx, PL, { x: PL.W * 0.5 - 4, w: 8, h: PL.H * 0.55, S: 'l', col: C('#744c9e'), trim: CREAM, lv: [1, 0, 0, 0], seed });
     roof(ctx, { gx: px, gy: gy + d - 0.02, w: pw, d: pd }, ph, { kind: 'gable', col: roofC, wall, lv, e: 0.08, rise: 8, axis: 'y' });

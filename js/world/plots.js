@@ -8,8 +8,8 @@ import { P, mix, clamp } from './iso.js';
 import { PLOTS, DIST } from './layout.js';
 import { PIP_ZOOM, FOG_DIM } from './common.js';
 import { SOIL, LIGHT, PAVE, PLASTER, TILE, GRASS, TOY } from './palette.js';
-import { toyBox, toyRadius, toyTone, rampOf, wallOf, onWall, rrect, roundedPoly, puff } from './solids.js';
-import { tintC, detailOf, facesOf, rgbaOf, windowGrid, archDoor, wallMaterial, roof, stage, puffs, FONT, lip } from './parts.js';
+import { toyBox, toyRadius, toyTone, rampOf, wallOf, onWall, rrect, roundedPoly } from './solids.js';
+import { ball, tintC, detailOf, facesOf, rgbaOf, windowGrid, archDoor, wallMaterial, roof, stage, puffs, FONT, lip } from './parts.js';
 import { drawSprite } from './sprites.js';
 
 const tone = toyTone;
@@ -42,7 +42,7 @@ function drawPlotV2(ctx, view, env, w, e) {
   } else { ctx.fillStyle = locked ? '#c9b8e8' : '#ffd84d'; roundedPoly(ctx, [P(x + 0.5, y + 0.5), P(x + 2.5, y + 0.5), P(x + 2.5, y + 2.5), P(x + 0.5, y + 2.5)], 6); ctx.fill(); }
   if (hov && !far) { ctx.strokeStyle = rgbaOf('#ffb347', 0.5); ctx.lineWidth = 6; roundedPoly(ctx, pts, 9); ctx.stroke(); ctx.strokeStyle = '#fff4de'; ctx.lineWidth = 3; ctx.stroke(); }
   if (!far && lv[3] > 0.02 && !locked) { // a sapling and a toy shovel, close up
-    ctx.globalAlpha = lv[3]; const [sx, sy] = P(x + 1.6, y + 1.2); ctx.strokeStyle = '#9c6238'; ctx.lineWidth = 2; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(sx, sy - 9); ctx.stroke(); puff(ctx, sx - 2.4, sy - 11, 3.2, GRASS.mid, GRASS.hi, GRASS.shade); puff(ctx, sx + 2.6, sy - 12, 3.4, GRASS.light, GRASS.hi, GRASS.mid); puff(ctx, sx, sy - 14.4, 3, GRASS.mid, GRASS.hi, GRASS.shade);
+    ctx.globalAlpha = lv[3]; const [sx, sy] = P(x + 1.6, y + 1.2); ctx.strokeStyle = '#9c6238'; ctx.lineWidth = 2; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(sx, sy - 9); ctx.stroke(); ball(ctx, sx - 2.4, sy - 11, 3.2, GRASS.mid, GRASS.hi, GRASS.shade); ball(ctx, sx + 2.6, sy - 12, 3.4, GRASS.light, GRASS.hi, GRASS.mid); ball(ctx, sx, sy - 14.4, 3, GRASS.mid, GRASS.hi, GRASS.shade);
     const [hx, hy] = P(x + 2.2, y + 2.1); ctx.strokeStyle = '#e8b872'; ctx.lineWidth = 2.2; ctx.beginPath(); ctx.moveTo(hx, hy); ctx.lineTo(hx + 3, hy - 13); ctx.stroke(); ctx.fillStyle = '#b2bed8'; rrect(ctx, hx - 3.2, hy - 1, 6.4, 6, 2); ctx.fill(); ctx.globalAlpha = 1;
   }
   if (locked && !far) { const [cx, cy] = P(x + 1.5, y + 1.5); ctx.fillStyle = 'rgba(74,63,136,.28)'; rrect(ctx, cx - 9 + 1.4, cy - 14 + 1.6, 18, 16, 4); ctx.fill(); ctx.fillStyle = '#fffaf0'; rrect(ctx, cx - 9, cy - 14, 18, 16, 4); ctx.fill(); ctx.strokeStyle = '#8a80c0'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(cx, cy - 11.5, 3.6, Math.PI, 0); ctx.stroke(); ctx.fillStyle = '#8a80c0'; rrect(ctx, cx - 5, cy - 11, 10, 7, 2); ctx.fill(); }
@@ -66,8 +66,8 @@ function pipeBody(ctx, q, env) {
   const C = (c) => tintC(c, env), wall = C(R.wall), roofC = C(R.roof), x = q.gx, y = q.gy;
   stage(ctx, { gx: x, gy: y, w: 2.4, d: 2.4 }, env, h + 8, { m: 0.28 });
   const B = toyBox(ctx, x, y, 2.4, 2.4, h, wall, { z: 1, r: toyRadius(2.4, 2.4), gloss: 0.9 }), L = wallOf(B.left), Rt = wallOf(B.right);
-  ctx.save(); ctx.beginPath(); ctx.moveTo(B.sil[0][0], B.sil[0][1]); for (let i = 1; i < 6; i++) ctx.lineTo(B.sil[i][0], B.sil[i][1]); ctx.closePath(); ctx.clip();
-  for (const [wl, side] of [[L, 'l'], [Rt, 'r']]) onWall(ctx, wl, (c) => { c.fillStyle = tone(mix(wall, C(PAVE.joint), 0.55))[side]; c.fillRect(0, -3.4, wl.W, 3.4); for (let f = 1; f <= floors; f++) { const yy = 3.4 + f * 13 - 1; c.fillStyle = tone(mix(wall, C(R.trim), 0.5))[side]; c.fillRect(0, -yy - 1.6, wl.W, 2.8); c.fillStyle = rgbaOf('#4a3f88', 0.1); c.fillRect(0, -yy - 4.4, wl.W, 2.6); } }); ctx.restore();
+  ctx.save(); ctx.beginPath(); ctx.moveTo(B.sil[0][0], B.sil[0][1]); for (let i = 1; i < 6; i++) ctx.lineTo(B.sil[i][0], B.sil[i][1]); ctx.closePath();
+  for (const [wl, side] of [[L, 'l'], [Rt, 'r']]) onWall(ctx, wl, (c) => { c.fillStyle = tone(mix(wall, C(PAVE.joint), 0.55))[side]; c.fillRect(wl.ins[0], -3.4, wl.W - wl.ins[0] - wl.ins[1], 3.4); for (let f = 1; f <= floors; f++) { const yy = 3.4 + f * 13 - 1; c.fillStyle = tone(mix(wall, C(R.trim), 0.5))[side]; c.fillRect(wl.ins[0], -yy - 1.6, wl.W - wl.ins[0] - wl.ins[1], 2.8); c.fillStyle = rgbaOf('#4a3f88', 0.1); c.fillRect(wl.ins[0], -yy - 4.4, wl.W - wl.ins[0] - wl.ins[1], 2.6); } }); ctx.restore();
   const rows = floors; // one row of windows per floor; the ground floor has the door
   windowGrid(ctx, L, { cols: 3, rows: Math.max(1, rows), x0: L.W * 0.1, x1: L.W * 0.9, y0: 6, y1: h - 4, fw: 0.42, fh: 0.54, S: 'l', trim: R.trim, lit: q.running ? 0.8 + 0.2 * night : night * 0.5, night, seed: 3, lv });
   windowGrid(ctx, Rt, { cols: 3, rows: Math.max(1, rows), x0: Rt.W * 0.1, x1: Rt.W * 0.9, y0: 6, y1: h - 4, fw: 0.42, fh: 0.54, S: 'r', trim: R.trim, lit: q.running ? 0.8 : night * 0.5, night, seed: 9, lv });
@@ -75,7 +75,7 @@ function pipeBody(ctx, q, env) {
   else archDoor(ctx, L, { x: L.W * 0.5 - 4.4, w: 8.8, h: Math.min(h * 0.5, 17), S: 'l', col: C(R.door), trim: R.trim, lv, seed: 5, num: 1 });
   // the roof: a gentle hip in the role's colour, a roof garden from level 4, a gold crown ring from level 8
   toyBox(ctx, x - 0.2, y - 0.2, 2.8, 2.8, 4, roofC, { z: h + 1, r: 5, gloss: 0.8, ao: false });
-  if (floors >= 4) { for (const [u, v] of [[0.3, 0.3], [0.62, 0.34], [0.46, 0.62]]) { const [gx, gy] = P(x + 2.4 * u + 0.1, y + 2.4 * v + 0.1, h + 5); puff(ctx, gx, gy - 4, 4.4, GRASS.mid, GRASS.hi, GRASS.shade); } const [fx, fy] = P(x + 2.1, y + 0.4, h + 5); ctx.strokeStyle = '#fffaf0'; ctx.lineWidth = 1.8; ctx.beginPath(); ctx.moveTo(fx, fy); ctx.lineTo(fx, fy - 13); ctx.stroke(); ctx.fillStyle = C(TOY.red); ctx.beginPath(); ctx.moveTo(fx + 0.4, fy - 13); ctx.lineTo(fx + 8, fy - 11); ctx.lineTo(fx + 0.4, fy - 8); ctx.closePath(); ctx.fill(); }
+  if (floors >= 4) { for (const [u, v] of [[0.3, 0.3], [0.62, 0.34], [0.46, 0.62]]) { const [gx, gy] = P(x + 2.4 * u + 0.1, y + 2.4 * v + 0.1, h + 5); ball(ctx, gx, gy - 4, 4.4, GRASS.mid, GRASS.hi, GRASS.shade); } const [fx, fy] = P(x + 2.1, y + 0.4, h + 5); ctx.strokeStyle = '#fffaf0'; ctx.lineWidth = 1.8; ctx.beginPath(); ctx.moveTo(fx, fy); ctx.lineTo(fx, fy - 13); ctx.stroke(); ctx.fillStyle = C(TOY.red); ctx.beginPath(); ctx.moveTo(fx + 0.4, fy - 13); ctx.lineTo(fx + 8, fy - 11); ctx.lineTo(fx + 0.4, fy - 8); ctx.closePath(); ctx.fill(); }
   if (floors >= 8) { toyBox(ctx, x - 0.26, y - 0.26, 2.92, 2.92, 2.6, C('#f6c94f'), { z: h + 5, r: 5, gloss: 1, ao: false }); }
   if (q.kind === 'student') { const [gx, gy] = P(x + 0.3, y + 0.35, h + 5); ctx.fillStyle = C('#2fa6d6'); ctx.beginPath(); ctx.arc(gx, gy - 4, 4, 0, 6.3); ctx.fill(); ctx.fillStyle = C('#a4dc66'); ctx.beginPath(); ctx.arc(gx - 1, gy - 4.6, 1.8, 0, 6.3); ctx.fill(); for (let k = 0; k < 3; k++) { ctx.fillStyle = C(['#ff9cc2', '#ffd84d', '#7be0cf'][k]); rrect(ctx, gx + 5, gy - 2 - k * 2.4, 8, 2.4, 0.8); ctx.fill(); } }
   if (q.kind === 'broker') { onWall(ctx, L, (c) => { c.fillStyle = C('#2c2a56'); rrect(c, L.W * 0.1, -h * 0.2 - 5, L.W * 0.8, 6, 2); c.fill(); c.fillStyle = C('#6df0a0'); c.font = `800 4.6px ${FONT}`; c.textBaseline = 'middle'; c.fillText('AAPL 182.4  GOLD 2041  BRK 389', L.W * 0.13, -h * 0.2 - 2); }); }

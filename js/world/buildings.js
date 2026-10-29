@@ -2,12 +2,11 @@
 // Owner: T3 BUILDINGS (docs/RENDER_PLAN.md). A body is drawn into the prop's sprite once per rested zoom (sprites.js) and blitted; the live part draws what moves (smoke, blink, glow) and pushes the night's lights.
 // Detail is additive: the base is complete at every zoom, and the near and close marks are drawn with the alphas of the zoom the sprite is built for (parts.detailOf), so a building is a bright solid at the island
 // view and gains framed windows, shutters, tile courses, shingles, brick, curtains and flower boxes as you come in. Hit polygons are exactly the legacy drawers' (the same prism faces, from the same data).
-import { registerProp } from './stack.js';
 import { P, mix, clamp, h2 } from './iso.js';
 import { PAVE, LIGHT, METAL, GLASS, WOOD, BRICK, TOY } from './palette.js';
 import { castShadow } from './shadow.js';
 import { toyBox, toyRadius, toyTone, rampOf, wallOf, onWall, rrect, contourOf } from './solids.js';
-import { tank, columns, pediment, tintC, detailOf, facesOf, hitsOf, on, rgbaOf, windowGrid, archDoor, awning, plank, wallMaterial, roof, flatRoof, chimney, apron, lip, FONT, LITE, detailFor, zoomOf, contourW, lightOf, styleOf, windowGlow, fp, stage } from './parts.js';
+import { reg, tank, columns, pediment, tintC, detailOf, facesOf, hitsOf, on, rgbaOf, windowGrid, archDoor, awning, plank, wallMaterial, roof, flatRoof, chimney, apron, lip, FONT, LITE, detailFor, zoomOf, contourW, lightOf, styleOf, windowGlow, fp, stage } from './parts.js';
 import { hexRgb, seedOf, leftFace, smoke } from './props-common.js';
 
 const tone = toyTone;
@@ -28,14 +27,14 @@ function bldgBody(ctx, p, env) {
   const B = toyBox(ctx, gx, gy, w, d, h, S.wall, { r: R, contour: 0 });
   const L = wallOf(B.left), Rt = wallOf(B.right);
   ctx.save(); // everything on the walls stays inside the rounded silhouette
-  ctx.beginPath(); ctx.moveTo(B.sil[0][0], B.sil[0][1]); for (let i = 1; i < B.sil.length; i++) ctx.lineTo(B.sil[i][0], B.sil[i][1]); ctx.closePath(); ctx.clip();
+  ctx.beginPath(); ctx.moveTo(B.sil[0][0], B.sil[0][1]); for (let i = 1; i < B.sil.length; i++) ctx.lineTo(B.sil[i][0], B.sil[i][1]); ctx.closePath();
   wallMaterial(ctx, L, S.mat, S.wall, 'l', lv, seed); wallMaterial(ctx, Rt, S.mat, S.wall, 'r', lv, seed + 1);
   // the plinth, and the band under the roof
   const plinth = mix(S.wall, C(PAVE.joint), 0.55);
   for (const [wl, side] of [[L, 'l'], [Rt, 'r']]) onWall(ctx, wl, (c) => {
-    c.fillStyle = toyTone(plinth)[side]; c.fillRect(0, -3.6, wl.W, 3.6); c.fillStyle = rgbaOf('#ffffff', 0.25); c.fillRect(0, -3.6, wl.W, 1.2);
-    if (!gabled) { c.fillStyle = toyTone(S.trim)[side]; c.fillRect(0, -wl.H, wl.W, 3.2); c.fillStyle = rgbaOf('#4a3f88', 0.18); c.fillRect(0, -wl.H + 3.2, wl.W, 1.8); }
-    else { const gr = c.createLinearGradient(0, -wl.H, 0, -wl.H + 10); gr.addColorStop(0, rgbaOf('#4a3f88', 0.3)); gr.addColorStop(1, rgbaOf('#4a3f88', 0)); c.fillStyle = gr; c.fillRect(0, -wl.H, wl.W, 10); } // the shadow of the eave on the wall
+    c.fillStyle = toyTone(plinth)[side]; c.fillRect(wl.ins[0], -3.6, wl.W - wl.ins[0] - wl.ins[1], 3.6); c.fillStyle = rgbaOf('#ffffff', 0.25); c.fillRect(wl.ins[0], -3.6, wl.W - wl.ins[0] - wl.ins[1], 1.2);
+    if (!gabled) { c.fillStyle = toyTone(S.trim)[side]; c.fillRect(wl.ins[0], -wl.H, wl.W - wl.ins[0] - wl.ins[1], 3.2); c.fillStyle = rgbaOf('#4a3f88', 0.18); c.fillRect(wl.ins[0], -wl.H + 3.2, wl.W - wl.ins[0] - wl.ins[1], 1.8); }
+    else { const gr = c.createLinearGradient(0, -wl.H, 0, -wl.H + 10); gr.addColorStop(0, rgbaOf('#4a3f88', 0.3)); gr.addColorStop(1, rgbaOf('#4a3f88', 0)); c.fillStyle = gr; c.fillRect(wl.ins[0], -wl.H, wl.W - wl.ins[0] - wl.ins[1], 10); } // the shadow of the eave on the wall
   });
   ctx.restore();
   // the contour round the body, tone on tone
@@ -66,7 +65,7 @@ function bldgBody(ctx, p, env) {
   } else if (p.door) archDoor(ctx, L, { x: L.W * 0.5 - 4.6, w: 9.2, h: Math.min(18, h * 0.5), S: 'l', col: S.door, trim: S.trim, lv, seed });
   if (p.bars && on(lv[2])) onWall(ctx, L, (c) => { c.globalAlpha = lv[2]; c.fillStyle = rgbaOf('#2b8f86', 0.7); const cw = (L.W * 0.82) / cols; for (let i = 0; i < cols; i++) for (let k = 0; k < 3; k++) rrect(c, L.W * 0.09 + i * cw + cw * (0.27 + k * 0.23) - 1, -(foot + (top - foot) * 0.55), 2, (top - foot) * 0.4, 1) , c.fill(); c.globalAlpha = 1; });
   if (p.balc) onWall(ctx, L, (c) => { for (let j = 0; j < rows; j++) { const y = foot + (j * (top - foot)) / rows - 1.5; c.fillStyle = toyTone(S.trim)['l']; rrect(c, L.W * 0.05, -y - 3, L.W * 0.9, 3, 1.5); c.fill(); if (on(lv[2])) { c.globalAlpha = lv[2]; for (let x = L.W * 0.07; x < L.W * 0.93; x += 6) rrect(c, x, -y - 8, 1.8, 5, 0.9), c.fill(); c.globalAlpha = 1; } } });
-  if (p.band) onWall(ctx, L, (c) => { c.fillStyle = toyTone(S.acc)['l']; c.fillRect(0, -(h - 9), L.W, 5); });
+  if (p.band) onWall(ctx, L, (c) => { c.fillStyle = toyTone(S.acc)['l']; c.fillRect(L.ins[0], -(h - 9), L.W - L.ins[0] - L.ins[1], 5); });
   // the roof
   let rf = null;
   if (kind === 'gable' || kind === 'hip') {
@@ -188,7 +187,7 @@ export function farBlock(ctx, p, env) {
 }
 const bldgFar = farBlock;
 
-registerProp('bldg', { body: bldgBody, live: bldgLive, far: bldgFar, pad: [12, 22, 14, 8] });
+reg('bldg', { body: bldgBody, live: bldgLive, far: bldgFar, pad: [12, 22, 14, 8] });
 // (the 'shop' kind is not placed by any district: it keeps its legacy drawer until a kit uses it)
 
 export { bldgBody, chimneySmoke, roofKit };

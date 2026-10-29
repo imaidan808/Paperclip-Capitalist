@@ -166,12 +166,12 @@ kit('industrial', {
   hq: { col: '#dfe6f4', roof: 'saw', roofCol: '#8aa0c0', win: [3, 1], sign: 'SKILLS', mat: 'metal' }, depot: '#8aa0c0', lamp: '#fff1b0', tree: '#58704a',
   place(A) {
     const R = A.rest, y = A.pal[1];
-    if (R) A.add('factory', R[0], R[1] + 0.3, Math.min(R[2], 6), 4.0, 34, { col: '#b8c6de', acc: y, stacks: 2, seed: 1 });
-    if (!R) A.add('factory', 13.4, 1.0, 7, 4.2, 34, { col: '#b8c6de', acc: y, stacks: 3, seed: 2 });
+    if (R) A.add('factory', R[0], R[1] + 0.3, Math.min(R[2], 6), 4.0, 34, { col: '#f1f4fb', acc: y, stacks: 2, seed: 1 });
+    if (!R) A.add('factory', 13.4, 1.0, 7, 4.2, 34, { col: '#f1f4fb', acc: y, stacks: 3, seed: 2 });
     A.add('tank', 13.5, 12.8, 1.6, 1.6, 42, { col: '#d6dff0', acc: y });
     A.add('tank', 15.4, 12.8, 1.6, 1.6, 42, { col: '#a8b0ba', acc: y });
     A.add('stack', 20.2, 13.0, 0.9, 0.9, 80, { col: '#6a7480', acc: y });
-    if (A.NW) A.add('factory', 0.9, 0.8, 6.4, 4.2, 30, { col: '#b8c6de', acc: y, stacks: 2, seed: 3 });
+    if (A.NW) A.add('factory', 0.9, 0.8, 6.4, 4.2, 30, { col: '#f1f4fb', acc: y, stacks: 2, seed: 3 });
   },
   decals(A) {
     for (const q of [[0.5, 0.5], [13, 0.5], [0.5, 11], [13, 11]]) A.decal({ k: 'grid', x: q[0], y: q[1], w: 8.5, d: 6.5, step: 1.4, col: 'rgba(0,0,0,.18)', min: 0.7 });

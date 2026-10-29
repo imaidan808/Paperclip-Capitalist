@@ -1,20 +1,19 @@
 // The working buildings: the freight depot, the factory with its fat stacks, the scrap-yard shack, the server rack and the red barn. Owner: T3 BUILDINGS (docs/RENDER_PLAN.md).
 // V2 drawers of the 'static-bldg' layer on the toy kit; the same hit polygons as the legacy drawers (the prism faces from the same data), live parts for what moves (smoke, LEDs, fans, the vane).
-import { registerProp } from './stack.js';
 import { P, mix, clamp, h2 } from './iso.js';
 import { PAVE, METAL, WOOD } from './palette.js';
 import { toyBox, toyRadius, toyTone, rampOf, wallOf, onWall, rrect, contourOf } from './solids.js';
-import { facesOf, hitsOf, on, rgbaOf, windowGrid, archDoor, plank, wallMaterial, FONT, detailFor, zoomOf, contourW, styleOf, windowGlow, fp, stage, roof, tank, puffs, dome, lip } from './parts.js';
+import { reg, facesOf, hitsOf, on, rgbaOf, windowGrid, archDoor, plank, wallMaterial, FONT, detailFor, zoomOf, contourW, styleOf, windowGlow, fp, stage, roof, tank, puffs, dome, lip } from './parts.js';
 import { hexRgb, seedOf, leftFace } from './props-common.js';
 import { farBlock } from './buildings.js';
 
 const tone = toyTone;
 const CREAM = '#fff4de';
-const clipSil = (ctx, B) => { ctx.beginPath(); ctx.moveTo(B.sil[0][0], B.sil[0][1]); for (let i = 1; i < B.sil.length; i++) ctx.lineTo(B.sil[i][0], B.sil[i][1]); ctx.closePath(); ctx.clip(); };
+const clipSil = (ctx, B) => { ctx.beginPath(); ctx.moveTo(B.sil[0][0], B.sil[0][1]); for (let i = 1; i < B.sil.length; i++) ctx.lineTo(B.sil[i][0], B.sil[i][1]); ctx.closePath(); };
 const outline = (ctx, B, col, w, a = 0.42) => { if (!(w > 0)) return; ctx.save(); ctx.lineJoin = 'round'; ctx.strokeStyle = contourOf(col); ctx.lineWidth = w; ctx.globalAlpha = a; ctx.beginPath(); ctx.moveTo(B.sil[0][0], B.sil[0][1]); for (let i = 1; i < B.sil.length; i++) ctx.lineTo(B.sil[i][0], B.sil[i][1]); ctx.closePath(); ctx.stroke(); ctx.restore(); };
 
 // ---------------------------------------------------------------- the freight depot
-registerProp('depot', {
+reg('depot', {
   far: farBlock,
   pad: [10, 26, 12, 8],
   body(ctx, p, env) {
@@ -23,7 +22,7 @@ registerProp('depot', {
     stage(ctx, p, env, h + 8);
     const B = toyBox(ctx, gx, gy, w, d, h, wall, { r: toyRadius(w, d) * 0.9, gloss: 0.9 }), L = wallOf(B.left), Rt = wallOf(B.right);
     ctx.save(); clipSil(ctx, B); wallMaterial(ctx, L, 'metal', wall, 'l', lv, seed); wallMaterial(ctx, Rt, 'metal', wall, 'r', lv, seed + 1);
-    for (const [wl, side] of [[L, 'l'], [Rt, 'r']]) onWall(ctx, wl, (c) => { c.fillStyle = tone(mix(wall, C('#fffaf0'), 0.6))[side]; c.fillRect(0, -3.6, wl.W, 3.6); c.fillStyle = tone(C('#ffd02e'))[side]; c.fillRect(0, -wl.H * 0.62, wl.W, 2.6); }); ctx.restore(); // the plinth and a safety-yellow stripe
+    for (const [wl, side] of [[L, 'l'], [Rt, 'r']]) onWall(ctx, wl, (c) => { c.fillStyle = tone(mix(wall, C('#fffaf0'), 0.6))[side]; c.fillRect(wl.ins[0], -3.6, wl.W - wl.ins[0] - wl.ins[1], 3.6); c.fillStyle = tone(C('#ffd02e'))[side]; c.fillRect(wl.ins[0], -wl.H * 0.62, wl.W - wl.ins[0] - wl.ins[1], 2.6); }); ctx.restore(); // the plinth and a safety-yellow stripe
     outline(ctx, B, wall, contour);
     // three rounded roll-up doors with their slats, a hazard-striped bay and bumpers at the foot
     onWall(ctx, L, (c) => {
@@ -33,7 +32,7 @@ registerProp('depot', {
         c.fillStyle = tone(C('#9aa8c8')).l; rrect(c, x, -dh, dw, dh, 4); c.fill();
         c.fillStyle = rgbaOf('#ffffff', 0.38); for (let k = 1; k < 7; k++) c.fillRect(x + 1.5, -dh + (dh * k) / 7, dw - 3, 1.5);
         c.fillStyle = rgbaOf('#5c4c96', 0.2); c.fillRect(x, -dh * 0.5, dw, dh * 0.5);
-        c.save(); rrect(c, x, -5, dw, 5, 1.5); c.clip(); c.fillStyle = C('#ffd02e'); c.fillRect(x, -5, dw, 5); c.fillStyle = C('#3a2f5e'); for (let k = -1; k < 6; k++) { c.beginPath(); c.moveTo(x + k * 5, 0); c.lineTo(x + k * 5 + 2.6, 0); c.lineTo(x + k * 5 + 5.6, -5); c.lineTo(x + k * 5 + 3, -5); c.closePath(); c.fill(); } c.restore();
+        c.fillStyle = C('#ffd02e'); rrect(c, x, -5, dw, 5, 1.5); c.fill(); c.fillStyle = C('#3a2f5e'); c.beginPath(); for (let k = 0; k * 5 + 2.6 < dw - 1; k++) c.rect(x + 1.4 + k * 5, -4.2, Math.min(2.6, dw - 1.4 - k * 5), 3.4); c.fill(); // the hazard stripes of the bay
         c.fillStyle = tone(C('#3a2f5e')).l; rrect(c, x - 4.2, -8, 2.6, 6, 1.2); c.fill(); rrect(c, x + dw + 1.6, -8, 2.6, 6, 1.2); c.fill();
       }
     });
@@ -49,7 +48,7 @@ registerProp('depot', {
 
 // ---------------------------------------------------------------- the factory: saw-tooth roof, a yellow band, an arched works door, two fat striped stacks that smoke round puffs
 const stackAt = (p, i) => P(p.gx + p.w * (0.6 + i * 0.15), p.gy + p.d * 0.3, p.h);
-registerProp('factory', {
+reg('factory', {
   far: farBlock,
   pad: [12, 70, 14, 8],
   body(ctx, p, env) {
@@ -57,7 +56,7 @@ registerProp('factory', {
     stage(ctx, p, env, h + 30);
     const B = toyBox(ctx, gx, gy, w, d, h, wall, { r: toyRadius(w, d) * 0.9, gloss: 0.9 }), L = wallOf(B.left), Rt = wallOf(B.right), yellow = C('#ffd02e');
     ctx.save(); clipSil(ctx, B); wallMaterial(ctx, L, 'metal', wall, 'l', lv, seed); wallMaterial(ctx, Rt, 'metal', wall, 'r', lv, seed + 1);
-    for (const [wl, side] of [[L, 'l'], [Rt, 'r']]) onWall(ctx, wl, (c) => { c.fillStyle = tone(mix(wall, C('#fffaf0'), 0.5))[side]; c.fillRect(0, -3.6, wl.W, 3.6); c.fillStyle = tone(yellow)[side]; c.fillRect(0, -wl.H * 0.9, wl.W, wl.H * 0.12); c.fillStyle = rgbaOf('#ffffff', 0.3); c.fillRect(0, -wl.H * 0.9, wl.W, 1.5); }); ctx.restore();
+    for (const [wl, side] of [[L, 'l'], [Rt, 'r']]) onWall(ctx, wl, (c) => { c.fillStyle = tone(mix(wall, C('#fffaf0'), 0.5))[side]; c.fillRect(wl.ins[0], -3.6, wl.W - wl.ins[0] - wl.ins[1], 3.6); c.fillStyle = tone(yellow)[side]; c.fillRect(wl.ins[0], -wl.H * 0.9, wl.W - wl.ins[0] - wl.ins[1], wl.H * 0.12); c.fillStyle = rgbaOf('#ffffff', 0.3); c.fillRect(wl.ins[0], -wl.H * 0.9, wl.W - wl.ins[0] - wl.ins[1], 1.5); }); ctx.restore();
     outline(ctx, B, wall, contour);
     windowGrid(ctx, L, { cols: Math.max(3, Math.round(w * 1.3)), rows: 1, x0: L.W * 0.3, x1: L.W * 0.96, y0: h * 0.36, y1: h * 0.84, fw: 0.6, fh: 0.8, S: 'l', trim: CREAM, lit: night * 1.2, night, seed, lv });
     windowGrid(ctx, Rt, { cols: 2, rows: 1, x0: Rt.W * 0.12, x1: Rt.W * 0.88, y0: h * 0.36, y1: h * 0.84, fw: 0.6, fh: 0.8, S: 'r', trim: CREAM, lit: night * 1.2, night, seed: seed + 4, lv });
@@ -79,7 +78,7 @@ registerProp('factory', {
 
 // ---------------------------------------------------------------- the scrap-yard shack: patchwork corrugated panels, a slanted roof weighted with two tyres, a pipe chimney, a porthole, a string of bulbs
 const SH = { rust: '#e8955a', teal: '#43b8b0', cream: '#f2e6c8', roof: '#c9693d' };
-registerProp('shack', {
+reg('shack', {
   far: farBlock,
   pad: [12, 34, 14, 8],
   body(ctx, p, env) {
@@ -92,7 +91,7 @@ registerProp('shack', {
       onWall(ctx, wl, (c) => { // mismatched panels: teal and cream sheets nailed on over the rust
         const cols = [C(SH.teal), C(SH.cream), C('#e8c36a')];
         for (let k = 0; k < 4; k++) { const pw = wl.W * (0.2 + h2(sd, k) * 0.12), px = h2(sd, k + 7) * (wl.W - pw), ph = wl.H * (0.34 + h2(sd, k + 3) * 0.3), py = h2(sd, k + 11) * (wl.H - ph); c.fillStyle = tone(cols[k % 3])[side]; rrect(c, px, -py - ph, pw, ph, 2); c.fill(); c.fillStyle = rgbaOf('#ffffff', 0.18); for (let x = px + 3; x < px + pw - 2; x += 4.6) c.fillRect(x, -py - ph + 1, 2.2, ph - 2); c.fillStyle = rgbaOf('#4a3f88', 0.16); c.fillRect(px, -py - 1.4, pw, 1.4); }
-        c.fillStyle = tone(C('#9c6238'))[side]; c.fillRect(0, -3.6, wl.W, 3.6);
+        c.fillStyle = tone(C('#9c6238'))[side]; c.fillRect(wl.ins[0], -3.6, wl.W - wl.ins[0] - wl.ins[1], 3.6);
       });
     }
     ctx.restore(); outline(ctx, B, wall, contour);
@@ -136,7 +135,7 @@ function panels(ctx, wl, p, S, o) {
   });
   void lv;
 }
-registerProp('rack', {
+reg('rack', {
   far: farBlock,
   night: false,
   pad: [10, 24, 12, 8],
@@ -146,8 +145,8 @@ registerProp('rack', {
     const B = toyBox(ctx, gx, gy, w, d, h, wall, { r: toyRadius(w, d) * 0.9, gloss: 1 }), L = wallOf(B.left), Rt = wallOf(B.right);
     outline(ctx, B, wall, contour);
     panels(ctx, L, p, S, { cols: 3, rows, side: 'l', lv }); panels(ctx, Rt, p, S, { cols: 4, rows, side: 'r', lv });
-    onWall(ctx, L, (c) => { c.fillStyle = rgbaOf(accent, 0.8); c.fillRect(0, -L.H, L.W, 2.6); c.fillStyle = tone(C('#eef2ff')).l; rrect(c, L.W * 0.3, -4, L.W * 0.4, 3.4, 1.4); c.fill(); });
-    onWall(ctx, Rt, (c) => { c.fillStyle = rgbaOf(accent, 0.7); c.fillRect(0, -Rt.H, Rt.W, 2.6); });
+    onWall(ctx, L, (c) => { c.fillStyle = rgbaOf(accent, 0.8); c.fillRect(L.ins[0], -L.H, L.W - L.ins[0] - L.ins[1], 2.6); c.fillStyle = tone(C('#eef2ff')).l; rrect(c, L.W * 0.3, -4, L.W * 0.4, 3.4, 1.4); c.fill(); });
+    onWall(ctx, Rt, (c) => { c.fillStyle = rgbaOf(accent, 0.7); c.fillRect(Rt.ins[0], -Rt.H, Rt.W - Rt.ins[0] - Rt.ins[1], 2.6); });
     // the roof: a dark deck with two round fans and a cable bundle that bends down the back
     const top = toyBox(ctx, gx + 0.12, gy + 0.12, w - 0.24, d - 0.24, 3, mix(wall, C('#1c2146'), 0.55), { z: h, r: 3, gloss: 0.6, ao: false });
     for (const u of [0.3, 0.68]) { const [x, y] = P(gx + w * u, gy + d * 0.55, h + 3); ctx.fillStyle = rgbaOf('#10162e', 0.9); ctx.beginPath(); ctx.ellipse(x, y, 10.5, 5.4, 0, 0, 6.3); ctx.fill(); ctx.strokeStyle = tone(C('#dfe6f4')).t; ctx.lineWidth = 2; ctx.beginPath(); ctx.ellipse(x, y, 10.5, 5.4, 0, 0, 6.3); ctx.stroke(); }
@@ -192,7 +191,7 @@ const barnRoof = (ctx, p, z, C, lv) => {
   const r0 = G(-e, span / 2, z + rise), r1 = G(len + e, span / 2, z + rise); ctx.strokeStyle = R.light; ctx.lineWidth = 3.2; ctx.beginPath(); ctx.moveTo(r0[0], r0[1]); ctx.lineTo(r1[0], r1[1]); ctx.stroke(); ctx.strokeStyle = rgbaOf('#ffffff', 0.5); ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(r0[0], r0[1] - 0.9); ctx.lineTo(r1[0], r1[1] - 0.9); ctx.stroke();
   void lv; return { G, rise, kz, len, span };
 };
-registerProp('barn', {
+reg('barn', {
   far: farBlock,
   pad: [12, 44, 14, 8],
   body(ctx, p, env) {
@@ -200,7 +199,7 @@ registerProp('barn', {
     stage(ctx, p, env, h + 22, { m: 0.26 });
     const B = toyBox(ctx, gx, gy, w, d, h, wall, { r: toyRadius(w, d) * 0.7, gloss: 0.8 }), L = wallOf(B.left), Rt = wallOf(B.right);
     ctx.save(); clipSil(ctx, B); wallMaterial(ctx, L, 'boards', wall, 'l', lv, seed); wallMaterial(ctx, Rt, 'boards', wall, 'r', lv, seed + 1);
-    for (const [wl, side] of [[L, 'l'], [Rt, 'r']]) onWall(ctx, wl, (c) => { c.fillStyle = tone(trim)[side]; c.fillRect(0, -wl.H, 3.6, wl.H); c.fillRect(wl.W - 3.6, -wl.H, 3.6, wl.H); c.fillRect(0, -3.6, wl.W, 3.6); }); ctx.restore();
+    for (const [wl, side] of [[L, 'l'], [Rt, 'r']]) onWall(ctx, wl, (c) => { c.fillStyle = tone(trim)[side]; c.fillRect(0, -wl.H, 3.6, wl.H); c.fillRect(wl.W - 3.6, -wl.H, 3.6, wl.H); c.fillRect(wl.ins[0], -3.6, wl.W - wl.ins[0] - wl.ins[1], 3.6); }); ctx.restore();
     outline(ctx, B, wall, contour);
     // the big X-braced doors (the gable end faces the sun), then windows on the long shade side
     onWall(ctx, L, (c) => {

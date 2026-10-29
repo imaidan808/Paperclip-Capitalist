@@ -12,6 +12,7 @@ import { FOG_DIM } from './common.js';
 import { DIST } from './layout.js';
 import { themeRow } from './bstyle.js';
 import { castShadow } from './shadow.js';
+import { registerProp } from './stack.js';
 
 export const FONT = '"Nunito", "Arial Rounded MT Bold", "Trebuchet MS", "Segoe UI", system-ui, sans-serif';
 export const HAZE_C = '#a9c3e0';
@@ -53,36 +54,34 @@ export function onPlane(ctx, o, u, v, fn) {
 // ---------------------------------------------------------------- wall materials
 /** Paint a wall's material over its base colour. `c` is the wall's body colour, S 'l' (sun side) or 'r'. Clipped to the wall by the caller's wall clip; drawn in the wall's elevation. */
 export function wallMaterial(ctx, wl, mat, c, S, lv, seed = 0) {
-  const T = tone(c)[S], R = rampOf(c), W = wl.W, H = wl.H;
+  const T = tone(c)[S], R = rampOf(c), H = wl.H, xa = wl.ins[0], xb = wl.W - wl.ins[1], W = xb - xa; // no clip: everything stays between xa and xb, inside the wall's rounded outline
   onWall(ctx, wl, (g) => {
-    g.save(); g.beginPath(); g.rect(0, -H, W, H); g.clip();
     if (mat === 'brick') {
       const bh = 4.4, n = Math.ceil(H / bh), mortar = mix(BRICK.mortar, T, 0.35);
-      g.fillStyle = rgbaOf(mortar, 0.5); for (let k = 1; k < n; k++) g.fillRect(0, -k * bh - 0.6, W, 1.3);
-      g.fillStyle = rgbaOf(R.hi, 0.10); for (let k = 0; k < n; k += 2) g.fillRect(0, -(k + 1) * bh + 0.7, W, bh - 1.3);
-      if (on(lv[3])) { g.globalAlpha = lv[3]; g.fillStyle = rgbaOf(mortar, 0.5); g.beginPath(); for (let k = 0; k < n; k++) { const off = (k % 2) * 5; for (let x = off; x < W; x += 10) g.rect(x, -(k + 1) * bh + 0.7, 1.3, bh - 1.3); } g.fill(); g.globalAlpha = 1; }
+      g.fillStyle = rgbaOf(mortar, 0.5); g.beginPath(); for (let k = 1; k < n; k++) g.rect(xa, -k * bh - 0.6, W, 1.3); g.fill();
+      g.fillStyle = rgbaOf(R.hi, 0.10); g.beginPath(); for (let k = 0; k < n; k += 2) g.rect(xa, -Math.min(H, (k + 1) * bh) + 0.7, W, Math.min(bh, H - k * bh) - 1.3); g.fill();
+      if (on(lv[3])) { g.globalAlpha = lv[3]; g.fillStyle = rgbaOf(mortar, 0.5); g.beginPath(); for (let k = 0; k < n; k++) { const off = (k % 2) * 5; for (let x = xa + off; x < xb; x += 10) g.rect(x, -(k + 1) * bh + 0.7, 1.3, bh - 1.3); } g.fill(); g.globalAlpha = 1; }
     } else if (mat === 'boards') {
       const sw = 5.2, n = Math.ceil(W / sw);
-      g.fillStyle = rgbaOf(R.shade, 0.32); g.beginPath(); for (let k = 1; k < n; k++) g.rect(k * sw - 0.7, -H, 1.5, H); g.fill();
-      g.fillStyle = rgbaOf(R.hi, 0.12); g.beginPath(); for (let k = 0; k < n; k += 2) g.rect(k * sw + 0.5, -H, sw - 1.4, H); g.fill();
-      if (on(lv[3])) { g.globalAlpha = lv[3]; g.fillStyle = rgbaOf(R.deep, 0.35); g.beginPath(); for (let k = 0; k < n; k++) { const y = -(4 + hz(seed, k) * (H - 8)); g.rect(k * sw + 1.2, y, 1.6, 1.6); g.rect(k * sw + 1.2, y - 11, 1.6, 1.6); } g.fill(); g.globalAlpha = 1; }
+      g.fillStyle = rgbaOf(R.shade, 0.32); g.beginPath(); for (let k = 1; k < n; k++) g.rect(xa + k * sw - 0.7, -H, 1.5, H); g.fill();
+      g.fillStyle = rgbaOf(R.hi, 0.12); g.beginPath(); for (let k = 0; k < n; k += 2) g.rect(xa + k * sw + 0.5, -H, Math.min(sw - 1.4, xb - xa - k * sw), H); g.fill();
+      if (on(lv[3])) { g.globalAlpha = lv[3]; g.fillStyle = rgbaOf(R.deep, 0.35); g.beginPath(); for (let k = 0; k < n; k++) { const y = -(4 + hz(seed, k) * (H - 8)); g.rect(xa + k * sw + 1.2, y, 1.6, 1.6); g.rect(xa + k * sw + 1.2, y - 11, 1.6, 1.6); } g.fill(); g.globalAlpha = 1; }
     } else if (mat === 'metal') {
       const sw = 4.6, n = Math.ceil(W / sw);
-      g.fillStyle = rgbaOf('#ffffff', 0.18); g.beginPath(); for (let k = 0; k < n; k++) g.rect(k * sw, -H, 2.3, H); g.fill();
-      g.fillStyle = rgbaOf(R.shade, 0.22); g.beginPath(); for (let k = 0; k < n; k++) g.rect(k * sw + 2.3, -H, 2.3, H); g.fill();
+      g.fillStyle = rgbaOf('#ffffff', 0.18); g.beginPath(); for (let k = 0; k < n; k++) g.rect(xa + k * sw, -H, Math.min(2.3, xb - xa - k * sw), H); g.fill();
+      g.fillStyle = rgbaOf(R.shade, 0.22); g.beginPath(); for (let k = 0; k < n; k++) if (xa + k * sw + 2.3 < xb) g.rect(xa + k * sw + 2.3, -H, Math.min(2.3, xb - xa - k * sw - 2.3), H); g.fill();
     } else if (mat === 'stone') {
       const bh = 9, n = Math.ceil(H / bh);
-      g.fillStyle = rgbaOf(R.shade, 0.22); for (let k = 1; k < n; k++) g.fillRect(0, -k * bh - 0.7, W, 1.6);
-      if (on(lv[2])) { g.globalAlpha = lv[2]; g.beginPath(); for (let k = 0; k < n; k++) { const off = (k % 2) * 14; for (let x = off + 12; x < W; x += 28) g.rect(x, -(k + 1) * bh + 0.8, 1.6, bh - 1.6); } g.fill(); g.globalAlpha = 1; }
+      g.fillStyle = rgbaOf(R.shade, 0.22); g.beginPath(); for (let k = 1; k < n; k++) g.rect(xa, -k * bh - 0.7, W, 1.6); g.fill();
+      if (on(lv[2])) { g.globalAlpha = lv[2]; g.beginPath(); for (let k = 0; k < n; k++) { const off = (k % 2) * 14; for (let x = xa + off + 12; x < xb; x += 28) g.rect(x, -(k + 1) * bh + 0.8, 1.6, bh - 1.6); } g.fill(); g.globalAlpha = 1; }
     } else if (mat === 'glass') {
-      g.fillStyle = rgbaOf('#ffffff', 0.16); g.beginPath(); g.moveTo(W * 0.1, 0); g.lineTo(W * 0.3, 0); g.lineTo(W * 0.62, -H); g.lineTo(W * 0.42, -H); g.closePath(); g.fill();
-      g.fillStyle = rgbaOf('#ffffff', 0.1); g.beginPath(); g.moveTo(W * 0.38, 0); g.lineTo(W * 0.46, 0); g.lineTo(W * 0.78, -H); g.lineTo(W * 0.7, -H); g.closePath(); g.fill();
+      const q = (u0, u1, u2, u3, al) => { g.fillStyle = rgbaOf('#ffffff', al); g.beginPath(); g.moveTo(xa + W * u0, 0); g.lineTo(xa + W * u1, 0); g.lineTo(xa + W * u2, -H); g.lineTo(xa + W * u3, -H); g.closePath(); g.fill(); };
+      q(0.1, 0.3, 0.62, 0.42, 0.16); q(0.38, 0.46, 0.78, 0.7, 0.1);
     } else if (mat === 'plaster' && on(lv[3])) { // weathering blotches in the shade colour, hashed so a building always weathers the same way
       g.globalAlpha = lv[3] * 0.1; g.fillStyle = R.shade; g.beginPath();
-      for (let k = 0; k < 4; k++) { const x = hz(seed, k) * W, y = -(H * (0.2 + hz(seed, k + 9) * 0.6)); g.moveTo(x + 7, y); g.ellipse(x, y, 7 + hz(seed, k + 4) * 5, 3 + hz(seed, k + 2) * 3, 0, 0, 6.3); }
+      for (let k = 0; k < 4; k++) { const x = xa + (0.1 + hz(seed, k) * 0.8) * W, y = -(H * (0.2 + hz(seed, k + 9) * 0.6)); g.moveTo(x + 7, y); g.ellipse(x, y, 7 + hz(seed, k + 4) * 5, 3 + hz(seed, k + 2) * 3, 0, 0, 6.3); }
       g.fill(); g.globalAlpha = 1;
     }
-    g.restore();
   });
 }
 
@@ -257,10 +256,11 @@ export function roof(ctx, p, z, o) {
   const planeDetail = (pts, base, tilt) => { // courses of tiles as bands from eave to ridge on a plane [eaveA, eaveB, ridgeB, ridgeA]
     const [a, b, c, dd] = pts, hgt = Math.hypot((dd[0] + c[0]) / 2 - (a[0] + b[0]) / 2, (dd[1] + c[1]) / 2 - (a[1] + b[1]) / 2), n = clamp(Math.round(hgt / 4.6), 3, 14);
     const lerp2 = (p0, p1, t) => [p0[0] + (p1[0] - p0[0]) * t, p0[1] + (p1[1] - p0[1]) * t];
-    ctx.fillStyle = rgbaOf(tilt, 0.2);
-    for (let k = 1; k < n; k += 2) { const t0 = k / n, t1 = Math.min(1, (k + 0.62) / n), p0 = lerp2(a, dd, t0), p1 = lerp2(b, c, t0), p2 = lerp2(b, c, t1), p3 = lerp2(a, dd, t1); ctx.beginPath(); ctx.moveTo(p0[0], p0[1]); ctx.lineTo(p1[0], p1[1]); ctx.lineTo(p2[0], p2[1]); ctx.lineTo(p3[0], p3[1]); ctx.closePath(); ctx.fill(); }
-    ctx.fillStyle = rgbaOf(R.deep, 0.16);
-    for (let k = 1; k < n; k++) { const t0 = k / n, p0 = lerp2(a, dd, t0), p1 = lerp2(b, c, t0); ctx.beginPath(); ctx.moveTo(p0[0], p0[1]); ctx.lineTo(p1[0], p1[1]); ctx.lineTo(p1[0], p1[1] + 1.3); ctx.lineTo(p0[0], p0[1] + 1.3); ctx.closePath(); ctx.fill(); }
+    ctx.fillStyle = rgbaOf(tilt, 0.2); ctx.beginPath();
+    for (let k = 1; k < n; k += 2) { const t0 = k / n, t1 = Math.min(1, (k + 0.62) / n), p0 = lerp2(a, dd, t0), p1 = lerp2(b, c, t0), p2 = lerp2(b, c, t1), p3 = lerp2(a, dd, t1); ctx.moveTo(p0[0], p0[1]); ctx.lineTo(p1[0], p1[1]); ctx.lineTo(p2[0], p2[1]); ctx.lineTo(p3[0], p3[1]); ctx.closePath(); }
+    ctx.fill(); ctx.fillStyle = rgbaOf(R.deep, 0.16); ctx.beginPath();
+    for (let k = 1; k < n; k++) { const t0 = k / n, p0 = lerp2(a, dd, t0), p1 = lerp2(b, c, t0); ctx.moveTo(p0[0], p0[1]); ctx.lineTo(p1[0], p1[1]); ctx.lineTo(p1[0], p1[1] + 1.3); ctx.lineTo(p0[0], p0[1] + 1.3); ctx.closePath(); }
+    ctx.fill();
     const cl = on(lv[3]);
     if (cl && hgt > 12) { // individual shingles: a staggered row of rounded tabs along each course
       ctx.save(); ctx.globalAlpha = cl; onPlane(ctx, a, [b[0] - a[0], b[1] - a[1]], [dd[0] - a[0], dd[1] - a[1]], (g, lu, lvv) => {
@@ -303,7 +303,7 @@ export function roof(ctx, p, z, o) {
 
 /** A flat roof: a slab with a rounded rim over the footprint, with its own colour, a parapet ring, and the top face lit. Returns nothing; the caller adds roof furniture on it. */
 export function flatRoof(ctx, p, z, o) {
-  const { gx, gy, w, d } = p, e = o.e ?? 0.1, th = o.th ?? 4.5, f = toyBox(ctx, gx - e, gy - e, w + 2 * e, d + 2 * e, th, o.col, { z, r: Math.min(5, th * 1.1 + 1), contour: o.contour || 0, gloss: 0.8 });
+  const { gx, gy, w, d } = p, e = o.e ?? 0.1, th = o.th ?? 4.5, f = toyBox(ctx, gx - e, gy - e, w + 2 * e, d + 2 * e, th, o.col, { z, r: Math.min(5, th * 1.1 + 1), contour: o.contour || 0, gloss: 0.5 });
   const lv = o.lv || ALL_IN, R = rampOf(o.col), T = tone(o.col);
   // an inner sunken panel: the roof deck inside the parapet
   const m = 0.26, z1 = z + th, q = [P(gx + m, gy + m, z1), P(gx + w - m, gy + m, z1), P(gx + w - m, gy + d - m, z1), P(gx + m, gy + d - m, z1)];
@@ -337,7 +337,7 @@ export const LITE = Object.freeze([1, 0, 0, 0]);
 export const detailFor = (ctx, env) => (env.lite || env.far ? LITE : detailOf(ctx, env));
 export const zoomOf = (ctx, env) => (env.lod && env.lod.zoom) || (() => { try { return ctx.getTransform().a / Math.min(2, (typeof devicePixelRatio === 'number' && devicePixelRatio) || 2); } catch { return 1; } })();
 /** The width of the tone-on-tone contour in world pixels: 1.2 screen pixels at the middle zoom, 1.6 near and 2 close, never under 0.8 or over 3 world pixels. */
-export const contourW = (z, lv) => clamp((1.2 + 0.4 * lv[2] + 0.4 * lv[3]) / Math.max(z, 0.1), 0.8, 3);
+export const contourW = (z, lv) => clamp((1.2 + 0.4 * lv[2] + 0.4 * lv[3]) / Math.max(z, 0.1), 1.5, 3);
 export const lightOf = (env) => ({ night: env.night || 0, dusk: env.dusk || 0 });
 
 // ---------------------------------------------------------------- style: what a prop wears
@@ -363,7 +363,6 @@ export function stage(ctx, p, env, h, o = {}) {
   const { gx, gy, w, d } = p, C = (c) => tintC(c, env);
   apron(ctx, gx, gy, w, d, o.m ?? 0.22, C(PAVE.cream), o.a ?? 0.6);
   castShadow(ctx, gx, gy, w, d, h, lightOf(env), 0);
-  apron(ctx, gx, gy, w, d, 0.08, LIGHT.contact, 0.14);
 }
 
 // ---------------------------------------------------------------- stone: columns, pediments, round doors
@@ -445,5 +444,30 @@ export function puffs(ctx, x, y, t, n = 3, drift = 7, rise = 30) {
     ctx.fillStyle = `rgba(255,255,255,${0.82 * (1 - k)})`; ctx.beginPath(); ctx.arc(px, py, r, 0, 6.3); ctx.fill();
     ctx.fillStyle = `rgba(184,196,240,${0.5 * (1 - k)})`; ctx.beginPath(); ctx.arc(px + r * 0.2, py + r * 0.28, r * 0.74, 0, 6.3); ctx.fill();
   }
+}
+
+// ---------------------------------------------------------------- registering a kind with a cheap fallback
+let frameAt = -1e9, directs = 0;
+/**
+ * Register a building kind's V2 drawer (registerProp) with a budgeted direct draw: the sprite cache draws a prop straight onto the scene whenever it has no sprite to show yet (a view just opened, a zoom still moving),
+ * and a rich body drawn straight is dear on a software canvas. So at most two props a frame take the full drawing that way; the rest of that frame's stand a flat prism in their own colours (def.far, else `cheap`) for the
+ * few frames the sprites need to be built. With no OffscreenCanvas (a Node test) every draw is the full one.
+ */
+export function reg(kind, def, cheap) {
+  const live = def.live, far = def.far || cheap;
+  def.draw = (ctx, p, env) => {
+    if (typeof OffscreenCanvas !== 'undefined' && far && !env.forceFull) {
+      const now = performance.now(); if (now - frameAt > 8) { frameAt = now; directs = 0; }
+      if (++directs > 2) { const r = far(ctx, p, env); if (live) live(ctx, p, env); return r; }
+    }
+    const r = def.body(ctx, p, env); if (live) live(ctx, p, env); return r;
+  };
+  registerProp(kind, def); return def;
+}
+/** A ball of foliage, fruit or a bloom: a shade disc, the body disc a little up and to the left, a highlight; three fills and no clip (solids.puff, the same picture, clips a circle: dear in a software canvas). */
+export function ball(ctx, x, y, r, body, hi = '#ffffff', shd = '#4a3f88') {
+  r = Math.max(r, 1.5); ctx.fillStyle = shd; ctx.beginPath(); ctx.arc(x + r * 0.12, y + r * 0.14, r, 0, 6.3); ctx.fill();
+  ctx.fillStyle = body; ctx.beginPath(); ctx.arc(x - r * 0.06, y - r * 0.08, r * 0.9, 0, 6.3); ctx.fill();
+  const prev = ctx.globalAlpha; ctx.globalAlpha = prev * 0.5; ctx.fillStyle = hi; ctx.beginPath(); ctx.arc(x - r * 0.32, y - r * 0.36, r * 0.42, 0, 6.3); ctx.fill(); ctx.globalAlpha = prev;
 }
 export { wallOf, onWall, toyBox, toyTone, rampOf, contourOf, toHsl, fromHsl, shade, h2, mix, clamp, P, SKY, LIGHT };
