@@ -290,8 +290,8 @@ test('U4: the words, and the count of dials a run has drawn', () => {
 
 // ================================================================================ U5: the header stays in view
 test('U5: the Deal Room\'s header, which holds the Sound and Dial tone switches, is sticky from a laptop up, so the largest text size cannot scroll it away', () => {
-  const css = src('css/ui-deal.css'), at = css.indexOf('@media (min-width: 761px) {');
-  assert.ok(at > 0, 'a rule for the header at laptop width and up');
+  const css = src('css/ui-deal.css'), at = css.indexOf('@media (min-width: 761px) and (min-height: 561px) {'); // and 561 px high: a landscape phone (844x390) has no room to lose a fifth of its height, and the card test found the Hold button under the header there
+  assert.ok(at > 0, 'a rule for the header at laptop width and height and up');
   const block = css.slice(at, css.indexOf('\n}\n', at));
   assert.match(block, /\.deal-top \{[^}]*position: sticky;[^}]*top: 0;[^}]*z-index: 2;/, 'sticky at the top of the sheet');
   assert.match(block, /\.deal-top::before \{[^}]*background: var\(--panel\);/, 'on the sheet\'s own ground, so what scrolls under it is hidden, not shown through it');

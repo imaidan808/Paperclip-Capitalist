@@ -1,0 +1,230 @@
+diff --git a/dev/measure.js b/dev/measure.js
+index 2e851e6..57f59b2 100644
+--- a/dev/measure.js
++++ b/dev/measure.js
+@@ -336,4 +336,100 @@ export async function crossfadeDip(a, b, fade = AMB.CROSS) {
+   return { before, after, dip: Math.min(before, after) - lo, at: (win.indexOf(lo)) / 10 };
+ }
+ 
++
++// ================================================================================================================ sixth round: the engine itself, at any sample rate
++// The filters above are designed for 48 kHz (the `SR` of the calibration). The checks of this round run the REAL engine at 44.1 and 48 kHz, so they need the weightings at the context's own rate:
++// the K-weighting of BS.1770-4 and a 220 Hz Butterworth high-pass as the laptop's speaker, designed per rate (the A-weighting is the cascade above, built for the rate).
++
++/** BS.1770-4 K-weighting (a high shelf and a 38 Hz high-pass) designed at `sr`. At 48 kHz it is the table's constants to seven places. */
++function kCoefsAt(sr) {
++  const f0 = 1681.9744509555319, G = 3.999843853973347, Q = 0.7071752369554196, K = Math.tan(Math.PI * f0 / sr), Vh = 10 ** (G / 20), Vb = Vh ** 0.4996667741545416, a0 = 1 + K / Q + K * K;
++  const shelf = [[(Vh + Vb * K / Q + K * K) / a0, 2 * (K * K - Vh) / a0, (Vh - Vb * K / Q + K * K) / a0], [1, 2 * (K * K - 1) / a0, (1 - K / Q + K * K) / a0]];
++  const f1 = 38.13547087613982, Q1 = 0.5003270373253953, K1 = Math.tan(Math.PI * f1 / sr), c0 = 1 + K1 / Q1 + K1 * K1;
++  return [shelf, [[1, -2, 1], [1, 2 * (K1 * K1 - 1) / c0, (1 - K1 / Q1 + K1 * K1) / c0]]];
++}
++const hp2At = (x, fc, sr) => { const w = 2 * Math.PI * fc / sr, c = Math.cos(w), al = Math.sin(w) / (2 * Math.SQRT1_2), a0 = 1 + al; return biq(x, [(1 + c) / 2 / a0, -(1 + c) / a0, (1 + c) / 2 / a0], [1, -2 * c / a0, (1 - al) / a0]); };
++const bilinearAt = (b, a, sr) => { const k = 2 * sr, N = [b[0] * k * k + b[1] * k + b[2], -2 * b[0] * k * k + 2 * b[2], b[0] * k * k - b[1] * k + b[2]], D = [a[0] * k * k + a[1] * k + a[2], -2 * a[0] * k * k + 2 * a[2], a[0] * k * k - a[1] * k + a[2]]; return [N.map((v) => v / D[0]), D.map((v) => v / D[0])]; };
++const aCache = new Map();
++function aSectionsAt(sr) {
++  let c = aCache.get(sr);
++  if (!c) {
++    const sec = [bilinearAt([1, 0, 0], [1, 2 * W(20.598997), W(20.598997) ** 2], sr), bilinearAt([1, 0, 0], [1, W(107.65265) + W(737.86223), W(107.65265) * W(737.86223)], sr), bilinearAt([0, 0, W(12194.217) ** 2], [1, 2 * W(12194.217), W(12194.217) ** 2], sr)];
++    const w = 2 * Math.PI * 1000 / sr; let re = 1, im = 0; // the cascade's gain at 1 kHz, so the weighting reads 0 dB there
++    for (const [b, a] of sec) { const nr = b[0] + b[1] * Math.cos(w) + b[2] * Math.cos(2 * w), ni = -(b[1] * Math.sin(w) + b[2] * Math.sin(2 * w)), dr = a[0] + a[1] * Math.cos(w) + a[2] * Math.cos(2 * w), di = -(a[1] * Math.sin(w) + a[2] * Math.sin(2 * w)), q = dr * dr + di * di, hr = (nr * dr + ni * di) / q, hi = (ni * dr - nr * di) / q; [re, im] = [re * hr - im * hi, re * hi + im * hr]; }
++    c = { sec, norm: 1 / Math.hypot(re, im) }; aCache.set(sr, c);
++  }
++  return c;
++}
++/** The three weightings at `sr`: K-weighted, the laptop's high-pass, and A-weighting. `fast` is the loudest 125 ms exponential mean square of an already weighted signal, in dB. */
++export const wt = {
++  k: (x, sr) => kCoefsAt(sr).reduce((y, [b, a]) => biq(y, b, a), x),
++  hp: (x, sr, fc = LAPTOP_HZ) => hp2At(x, fc, sr),
++  a: (x, sr) => { const { sec, norm } = aSectionsAt(sr); let y = x; for (const [b, a] of sec) y = biq(y, b, a); return y.map((v) => v * norm); },
++  fast: (k, sr) => { const a = Math.exp(-1 / (0.125 * sr)); let m = 0, mx = 0; for (let i = 0; i < k.length; i++) { m = a * m + (1 - a) * k[i] * k[i]; if (m > mx) mx = m; } return 10 * Math.log10(Math.max(1e-12, mx)); },
++};
++/** The two Fast levels of a window the way the calibration reads them (K-weighted, and the quiet laptop: a 220 Hz high-pass, then A-weighting) and its peak, all at the window's own rate. */
++export function levelsAt(x, sr) {
++  const h = wt.hp(x, sr); let pk = 0; for (let i = 0; i < x.length; i++) { const v = Math.abs(x[i]); if (v > pk) pk = v; }
++  return { fastK: wt.fast(wt.k(x, sr), sr), fastA: wt.fast(wt.a(h, sr), sr), pk: db(pk) };
++}
++/** The mean square of a steady window through a weighting, in dB: for a tone that holds one level (the dial). */
++export const steadyDb = (y, from, to) => { let e = 0; for (let i = from; i < to; i++) e += y[i] * y[i]; return 10 * Math.log10(Math.max(1e-24, e / Math.max(1, to - from))); };
++
++/**
++ * The REAL engine (js/audio/engine.js) in an OfflineAudioContext at `sr`, stereo, with its own settings and a seeded random, so a sound is the same sound in two rigs. Calls made through `at(t, fn)` run
++ * at the first render quantum at or after t (suspend and resume), so the engine reads `currentTime` as a whole number of 128-frame quanta, exactly as it does in the page; calls made before `render()`
++ * run at currentTime 0, the moment after the context is made, which is the first sound of a page. `events` has the time each call really ran.
++ */
++export const ENGINE_DEFAULTS = { master: 70, mute: false, ui: true, game: true, ambient: false, ambientLevel: 70, dial: false, clockSounds: true, quiet: false, worldTicks: true };
++export function engineRig({ sr = 48000, lengthSec = 4, settings = {}, seed = 1, channels = 2 } = {}) {
++  const oc = new OfflineAudioContext(channels, Math.ceil(sr * lengthSec), sr), S = { ...ENGINE_DEFAULTS, ...settings }, events = [], timers = new Map();
++  let vnow = 0, tid = 0;
++  const audio = createAudio({ get: () => S, factory: () => oc, now: () => vnow, timers: { set: (f, ms) => { timers.set(++tid, { f, ms }); return tid; }, clear: (h) => timers.delete(h) }, random: rng(seed ^ 0x5bd1e995), measure: false });
++  audio.unlock();
++  const flushTimers = () => { for (const [h, t] of [...timers]) if (t.ms <= 0) { timers.delete(h); try { t.f(); } catch { /* a timer of the engine */ } } };
++  const api = {
++    oc, audio, sr, S, events,
++    at(tSec, fn) { events.push({ q: Math.ceil(tSec * sr / 128) * 128, fn }); },
++    async render() {
++      events.sort((a, b) => a.q - b.q);
++      for (let i = 1; i < events.length; i++) if (events[i].q <= events[i - 1].q) events[i].q = events[i - 1].q + 128;
++      for (const ev of events) oc.suspend(ev.q / sr).then(() => { vnow = 5000 + (ev.q / sr) * 1000; ev.t = ev.q / sr; try { ev.fn(audio, api); } catch (e) { ev.err = String((e && e.stack) || e); } flushTimers(); oc.resume(); });
++      const buf = await oc.startRendering();
++      api.errs = events.filter((e) => e.err).map((e) => e.err);
++      return buf;
++    },
++  };
++  return api;
++}
++/** First and last audible sample of a window (above -120 dBFS), in samples from its start: -1 for silence. */
++const audible = (L, R) => { const n = L.length; let s = -1, e = -1; for (let i = 0; i < n; i++) if (Math.abs(L[i]) > 1e-6 || Math.abs(R[i]) > 1e-6) { s = i; break; } for (let i = n - 1; i >= 0; i--) if (Math.abs(L[i]) > 1e-6 || Math.abs(R[i]) > 1e-6) { e = i; break; } return [s, e]; };
++
++/**
++ * The first sound after the context is made (sixth round, R3-1). Chrome's glue compressor is cold for its first 100 to 150 ms and takes up to 10 dB off a short sound that starts inside them
++ * (docs/AUDIO.md 3.7), and the page's first press creates the context and plays its tick in the same task. Each variant is played through the real engine twice, in two rigs that draw the same
++ * seeded voice: once at currentTime 0 (the first sound of a page) and once at 1.0 s; the level of the two (K-weighted Fast, the quiet laptop's A-weighted Fast, the peak) are compared and the
++ * time the first one is heard at is read. A third play, after `idle` seconds of silence, says whether a compressor that has gone quiet goes cold again.
++ * Returns [{ key, sr, first: { fastK, fastA, pk, at (ms) }, later: {...}, dK, dA, dPk, idle?: { dK, dA } }].
++ */
++export async function firstSound(sr, keys, { idle = 0 } = {}) {
++  const out = [];
++  for (const key of keys) {
++    const [id, v] = key.split('#'), dur = RECIPES[id].dur, seg = dur + 0.7, len = 1.0 + seg + 0.4 + (idle ? idle + seg : 0);
++    const play = (au) => au.play(id, { variant: v, poolIndex: 0, noCooldown: true });
++    const A = engineRig({ sr, lengthSec: len, seed: 5 }), B = engineRig({ sr, lengthSec: len, seed: 5 });
++    const ha = play(A.audio); // before any rendering: the context's currentTime is 0
++    B.at(1.0, play);
++    if (idle) B.at(1.0 + seg + 0.2 + idle, play);
++    const [ba, bb] = [await A.render(), await B.render()], cut = (b, from) => [b.getChannelData(0).subarray(Math.round(from * sr), Math.round((from + seg) * sr)), b.getChannelData(1).subarray(Math.round(from * sr), Math.round((from + seg) * sr))];
++    const m = (b, from) => { const [L, R] = cut(b, from), [s] = audible(L, R); if (s < 0) return null; const lv = levelsAt(L, sr); return { ...lv, at: Math.round(s / sr * 1000) }; };
++    const f = m(ba, 0), l = m(bb, 1.0);
++    if (!f || !l || !ha) { out.push({ key, sr, silent: true, played: !!ha }); continue; }
++    const row = { key, sr, first: f, later: l, dK: f.fastK - l.fastK, dA: f.fastA - l.fastA, dPk: f.pk - l.pk };
++    if (idle) { const i2 = m(bb, 1.0 + seg + 0.2 + idle); row.idle = i2 && { dK: i2.fastK - l.fastK, dA: i2.fastA - l.fastA }; }
++    out.push(row);
++  }
++  return out;
++}
++
+ export { IDS, firstVariant, dB };
+diff --git a/js/audio/engine.js b/js/audio/engine.js
+index 93d0737..65afe6b 100644
+--- a/js/audio/engine.js
++++ b/js/audio/engine.js
+@@ -5,11 +5,14 @@ import { voice, master, dB, hz, fadeIn, noiseBuffers, MAKEUP_FALLBACK, FAMILY_MS
+ import { RECIPES, IDS, layersFor, tierOf, firstVariant, variantsOf, cooldownOf, variantRank, trimFor, noiseAtFor, isMoment, PREEMPT, jitterOf } from './recipes.js';
+ import { createAmbient, oneShotLayers } from './ambient.js';
+ import { TRIMS } from './trims.js';
+-import { createResolverState, resolveBurst, gateClock, holdRelease, stateGate, catchingUp, recentPress } from './resolve.js';
++import { createResolverState, resolveBurst, gateClock, holdRelease, stateGate, catchingUp, recentPress, resetRun, dropHeld } from './resolve.js';
+ import { volumeGain, masterGain, CLASSROOM_DB } from './settings.js';
+ 
+ const PRI = { tiny: 1, medium: 2, loud: 3 };
+-export const LIMITS = { VOICES: 12, OSCILLATORS: 160, LEAD: 0.012, IDLE_MS: 60000, DUCK_REL: 600 };
++export const LIMITS = { VOICES: 12, OSCILLATORS: 160, LEAD: 0.012, WARM: 0.16, IDLE_MS: 60000, DUCK_REL: 600 };
++// WARM: the earliest a voice may start, in the context's own time. Chrome's glue compressor is cold for the first 100 to 150 ms of a context and takes up to 10 dB off a short sound that starts inside
++// them, whatever is fed to it first (docs/AUDIO.md 3.7, sixth round R3-1): the page's first press makes the context and plays its tick in the same task. A voice that would start earlier waits for
++// 160 ms of context time, where the loss is under half a dB; once the context is that old nothing waits for anything. A context that goes quiet for a minute is not cold again (measured).
+ const BUCKET_SPEC = { tiny: [8, 4], medium: [3, 3], loud: [1 / 1.2, 1], player: [6, 6] };
+ /** The pretend rewards of an Academy lesson are silent (4.1): its levels, XP and quests are a rehearsal saved nowhere. The money, the Deal Room and the acad.* sounds stay. */
+ export const SANDBOX_SILENT = new Set(['level.up', 'quest.complete', 'daily.done', 'achievement', 'reward.also', 'milestone', 'zone.open', 'skill.up', 'codex.unlock']);
+@@ -72,6 +75,8 @@ export function createAudio(cfg = {}) {
+   const silent = () => { const s = eff(); return s.mute || s.master <= 0; };
+   const playable = () => supported && !!ctx && unlocked && !hidden && ctx.state !== 'closed';
+   const ctxNow = () => ctx.currentTime;
++  /** Where a voice asked for now starts, in context time: LEAD from now, and never inside the compressor's warm-up (LIMITS.WARM). */
++  const startAt = () => Math.max(ctxNow() + LIMITS.LEAD, LIMITS.WARM);
+ 
+   // ---- the context, created on the first gesture
+   function measureMakeup() { // the compressor node's own gain depends on its settings and on the browser: measure it once with a 100 ms offline render (3.7)
+@@ -122,7 +127,7 @@ export function createAudio(cfg = {}) {
+     setTimeout: (f, ms) => timers.set(f, ms), clearTimeout: (h) => timers.clear(h),
+     enabled: () => eff().ambient && !silent(), running: () => playable(), dialogOpen: () => env.hold, lastMedium: () => lastMedium, lastMoment: () => lastMoment,
+     duck: (db) => { if (!nodes) return; const t = ctxNow(); nodes.ambBase.gain.cancelScheduledValues(t); nodes.ambBase.gain.setTargetAtTime(dB(db), t, db < 0 ? 0.1 : 0.17); },
+-    shot: (id, layers, pan) => { if (!nodes || !playable()) return; voice(ctx, nodes.ambLevel, layers, ctxNow() + LIMITS.LEAD, { seed: ++seedN, trim: TRIMS.oneShots?.[id] ?? 0, noiseAt: TRIMS.noiseAt?.[id], pan, jitterCents: 7 }); },
++    shot: (id, layers, pan) => { if (!nodes || !playable()) return; voice(ctx, nodes.ambLevel, layers, startAt(), { seed: ++seedN, trim: TRIMS.oneShots?.[id] ?? 0, noiseAt: TRIMS.noiseAt?.[id], pan, jitterCents: 7 }); },
+   });
+ 
+   // ---- gates shared by play and request
+@@ -244,7 +249,7 @@ export function createAudio(cfg = {}) {
+     wake();
+     const snapshot = { ...famLast }; // layer families do not stack: the later voice skips a layer whose family started inside its window, which is also the money group's rule for coins
+     const group = { id: main.id, variant: main.variant, tier: heavy.tier, startMs: t + extraDelay * 1000, endMs: t, voices: [], moment, osc: 0, spans: [], stopped: false };
+-    const startT = ctxNow() + LIMITS.LEAD;
++    const startT = startAt();
+     for (const m of plan) {
+       const k = Number.isInteger(m.opts.poolIndex) && m.opts.poolIndex >= 0 && m.opts.poolIndex < (m.e.pool || 1) ? m.opts.poolIndex : pickPool(m.e, m.id + '#' + m.variant); // poolIndex: a member asked for by name (the audition page)
+       let layers = layersFor(m.id, m.variant, m.opts.params, k);
+@@ -260,7 +265,7 @@ export function createAudio(cfg = {}) {
+       }
+       // The oscillator budget (3.3) counts what is alive at the same instant: this voice's built layers (not those it will leave out) against the spans of the voices already admitted, each from its
+       // own start (a second sentence at +500 ms or a tick at +2 s is not alive at the time of the first). Over it, the optional sparkle goes; a tiny sound that still does not fit is dropped.
+-      const startMs = t + (LIMITS.LEAD + shift) * 1000, mo = { secondary: m.opts.secondary, dull: m.opts.dull };
++      const startMs = t + (startT - ctxNow() + shift) * 1000, mo = { secondary: m.opts.secondary, dull: m.opts.dull };
+       let spans = spansOf(builtLayers(layers, skip, mo), startMs);
+       const total = (sp) => sp.reduce((n, x) => n + x[2], 0);
+       const over = (sp) => { // the plain sum is the quick answer; the sweep only runs when the sum is over
+@@ -462,7 +467,7 @@ export function createAudio(cfg = {}) {
+     ambient(state) { amb.set(state); },
+     dial: dialApi,
+     /** One ambient one-shot on demand, whatever the rate rule says: for the audition page. */
+-    playOneShot(id) { if (!playable() || !nodes) return null; return voice(ctx, nodes.ambLevel, oneShotLayers(id), ctxNow() + LIMITS.LEAD, { seed: ++seedN, trim: TRIMS.oneShots?.[id] ?? 0, noiseAt: TRIMS.noiseAt?.[id], jitterCents: 7 }); },
++    playOneShot(id) { if (!playable() || !nodes) return null; return voice(ctx, nodes.ambLevel, oneShotLayers(id), startAt(), { seed: ++seedN, trim: TRIMS.oneShots?.[id] ?? 0, noiseAt: TRIMS.noiseAt?.[id], jitterCents: 7 }); },
+     /** A level meter for the audition page: an analyzer on the output of the master chain (made on first use, so nothing runs for the game). */
+     meter() { if (!ctx || !chain) return null; if (!meterNode) { meterNode = ctx.createAnalyser(); meterNode.fftSize = 1024; chain.clip.connect(meterNode); const sink = ctx.createGain(); sink.gain.value = 0; meterNode.connect(sink); sink.connect(ctx.destination); } /* a silent tail keeps the analyser pulled */ return meterNode; },
+     /** Tell the engine the world it is in (speed, paused, busy, lag, sandbox, net worth...). */
+@@ -481,7 +486,9 @@ export function createAudio(cfg = {}) {
+       if (o.chain) dest = master(oc, { master: o.master ?? 1, makeup: 1 / (TRIMS.makeup || MAKEUP_FALLBACK) }).buses[e.bus];
+       return voice(oc, dest, layersFor(id, variant ?? firstVariant(id), o.params, o.k || 0), at, { seed: o.seed ?? 7, trim: trimFor(id, variant ?? firstVariant(id), o.k || 0) + (o.gainDb || 0), noiseAt: noiseAtFor(id, variant ?? firstVariant(id), o.k || 0), noJitter: true, jit: 0 });
+     },
+-    release(keepMs = 0) { api.stopAll(40, keepMs); amb.stop(0.3); queue = []; if (idleT != null) { timers.clear(idleT); idleT = null; } env.hold = false; env.sandbox = false; },
++    release(keepMs = 0) { api.stopAll(40, keepMs); amb.stop(0.3); queue = []; if (idleT != null) { timers.clear(idleT); idleT = null; } env.hold = false; env.sandbox = false; dropHeld(rs); }, // a game that is left takes its held coin with it: the sheet that would release it is gone, and `hold(false)` returns early when the hold is already off
++    /** A new run begins or the old one is over (WA-1): the resolver's run-scoped state goes back to a first run's (the door bells that teach the cue, the held coin, the gaps), the reward budget stays. Called by `wireGame` for a real game, not for an Academy lesson's sandbox. */
++    newRun() { resetRun(rs); },
+     /** Closed on pagehide. */
+     close() { api.release(); try { ctx?.close?.(); } catch { /* ignore */ } ctx = null; chain = null; nodes = null; unlocked = false; },
+     get supported() { return supported; },
+diff --git a/js/audio/resolve.js b/js/audio/resolve.js
+index 63ed6e4..896c1fa 100644
+--- a/js/audio/resolve.js
++++ b/js/audio/resolve.js
+@@ -16,6 +16,22 @@ export function createResolverState() {
+     holdNet: 0, holdAny: false, fastNet: 0, nextFast: 0, states: {}, sentences: 0, bursts: 0, maxSentences: 0 };
+ }
+ 
++/**
++ * What the resolver keeps for ONE RUN (sixth round, WA-1): the sums held while a dialog is open, the 16x coin, the door-bell count that teaches the cue ("the first three of a run always ring"), the
++ * day count of the 4x chime, the standing-state gates and the clocks of the cycle, buyer and urgent gaps. None of it may outlive the run it was counted in: a coin held under a dialog rang as a loud
++ * shower at the first dialog close of the NEXT run, and the three teaching bells were spent by a run (or an Academy lesson) before the real one. The reward budget (`lastFull`, `lastTick`, `lastDaily`,
++ * `lastFullLevel`) and the counters are NOT here: they are measured in real time and are the page's, so a fanfare that rang a few seconds ago still holds the next one back.
++ */
++export const RUN_FIELDS = ['holdNet', 'holdAny', 'fastNet', 'nextFast', 'buyers', 'days', 'states', 'lastCycle', 'lastBuyer', 'lastUrgent'];
++/** Put the run's fields back to a first run's, in place (the engine keeps the one object). Returns it. */
++export function resetRun(st) {
++  const fresh = createResolverState();
++  for (const k of RUN_FIELDS) st[k] = fresh[k];
++  return st;
++}
++/** Forget the sums held for a coin that will not be played: what a game that is left has held (the sheet that would have released them is gone with it). Returns the state. */
++export function dropHeld(st) { st.holdNet = 0; st.holdAny = false; st.fastNet = 0; return st; }
++
+ /** The player flag's window: a press or a world activation in the last 1500 ms. */
+ export const recentPress = (env, now) => now - (env.lastPress ?? -Infinity) < RULES.PRESS_MS;
+ /** Catch-up is lateness in real time, not virtual hours (3.4.5): more than 600 ms of game still to replay, a tab just back from hidden, or a rewind. A press in the last 1500 ms lifts it. */
+diff --git a/js/audio/wire.js b/js/audio/wire.js
+index 9f09ab0..aec6e52 100644
+--- a/js/audio/wire.js
++++ b/js/audio/wire.js
+@@ -510,10 +510,14 @@ export function wireGame(ctx) {
+     }));
+     if (typeof off === 'function') offs.push(off);
+   }
+-  audio.setEnv({ sandbox: !!g()?.sandbox });
++  const sandboxed = !!g()?.sandbox;
++  audio.setEnv({ sandbox: sandboxed });
++  // A real run starts with the resolver's run-scoped state of a first run (sixth round, WA-1): the door bells that teach the cue are the run's own, and nothing held by an earlier run or an Academy lesson
++  // is carried into it. A lesson's sandbox neither starts nor ends a run.
++  if (!sandboxed) audio.newRun?.();
+   roomCheck();
+   pushAmbient();
+-  return function unwire() { if (!alive && gamesWired === 0) return; alive = false; gamesWired = Math.max(0, gamesWired - 1); for (const off of offs) { try { off(); } catch { /* gone */ } } audio.release(KEEP_MS); };
++  return function unwire() { if (!alive && gamesWired === 0) return; alive = false; gamesWired = Math.max(0, gamesWired - 1); for (const off of offs) { try { off(); } catch { /* gone */ } } audio.release(KEEP_MS); if (!sandboxed) audio.newRun?.(); };
+ }
+ /** The one entry point for a screen that wants both layers: the page-wide one (once) and the game's. */
+ export function wireAudio(ctx, d) { initAudio(d); return wireGame(ctx); }
