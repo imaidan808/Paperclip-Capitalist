@@ -378,8 +378,10 @@ test('W-9 / U14: the faculty kit says what the link gains, what the room does an
   const kit = src('docs/FACULTY_KIT.md'), doc = src('docs/AUDIO.md');
   assert.match(kit, /the link gains `&sound=quiet`/); assert.ok(!/the link ends `\?sound=quiet`/.test(kit));
   // (sixth round, UX2: the class script is one that is true for every student, and a volume alone no longer exempts a student from the room's rule)
-  assert.match(kit, /Before class, one minute/); assert.match(kit, /tell them to press \*\*M\*\* now, or use headphones/); assert.match(kit, /you cannot see how a student's sound is set/); assert.match(kit, /moving the volume alone does not count/); assert.match(kit, /a shock you deploy to the cohort is a loud sound on every laptop at once/);
-  assert.match(kit, /Tick \*\*Quiet sound link\*\* \*before\* you press \*\*Copy student link\*\*/); assert.match(kit, /medium and loud ones are 8 dB lower/);
+  assert.match(kit, /Before class, one minute/); assert.match(kit, /tell them to press \*\*M\*\* now, or use headphones/); assert.match(kit, /you cannot see how a student's sound is set/); assert.match(kit, /moving the volume alone does not count/);
+  // (sixth round, UX3: the box is a choice of three, and a shock is a medium voice in Classroom, not "a loud sound on every laptop")
+  assert.match(kit, /a shock you deploy to the cohort is heard on every laptop at once/);
+  assert.match(kit, /Choose \*\*Quiet\*\* or \*\*Off\*\* under \*\*Sound in the student link\*\* \*before\* you press \*\*Copy student link\*\*/); assert.match(kit, /medium and loud ones are 8 dB lower/);
   assert.ok(!/Off by default in a room/.test(doc), 'row 88'); assert.match(doc, /On by default on the instructor's own screen \(nothing gates it/);
   assert.match(src('README.md'), /`js\/audio\/` is the generated sound layer/);
 });

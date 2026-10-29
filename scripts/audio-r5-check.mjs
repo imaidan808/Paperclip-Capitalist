@@ -74,9 +74,9 @@ try {
     ok(JSON.stringify(d) === '{"ui.tick":1}', 'W2-1: and only the tick rings (no ok for a copy that did not happen): ' + JSON.stringify(d));
     // the quiet box: the toast says what the link carries
     await p.eval(`document.execCommand = Document.prototype.execCommand; 1`);
-    await p.clickSel('input[data-change="linkquiet"]'); await sleep(300);
+    await p.clickSel('input[data-change="linksound"][value="quiet"]'); await sleep(300);
     await p.clickSel('[data-act="copylink"]'); await sleep(400);
-    ok((await toasts(p)).includes('Student link copied, with quiet sound.'), 'W2-1: with the quiet box ticked the toast says what the link carries: ' + JSON.stringify(await toasts(p)));
+    ok((await toasts(p)).includes('Student link copied, with quiet sound.'), 'W2-1: with Quiet chosen the toast says what the link carries: ' + JSON.stringify(await toasts(p)));
     ok(await p.eval(`window.__sel`) === link + '&sound=quiet', 'W2-1: and the link that was copied has the flag');
     // a clipboard that refuses (permission denied): the command is tried after it
     await p.eval(`Object.defineProperty(navigator, 'clipboard', { value: { writeText: () => Promise.reject(new Error('denied')) }, configurable: true }); window.__sel = null; 1`);

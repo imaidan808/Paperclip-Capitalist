@@ -162,7 +162,7 @@ const bursts = {
   const run = (calls) => { for (const [m, id, o] of calls) { if (m === 'countUp') audio.countUp(o ?? 0); else if (m === 'play') audio.play(id, o); else audio.request(id, o); } };
   const play = (speed) => {
     stop(); audio.unlock(); sync(); const st = newWireState(); audio.setEnv({ speed, paused: false, netWorth: 900 });
-    const hooks = { now: () => performance.now(), netWorth: () => 900, pan: () => 0, loansLeft: () => 1, cost: () => 0, poolDelayed: () => false };
+    const hooks = { now: () => performance.now(), netWorth: () => 900, pan: () => 0, loansLeft: () => 1, cost: () => 0, poolDelayed: () => false, quiet: () => A().quiet === true }; // (the bar's Classroom box: the minute asks for the softer reward and shock voices, as the game does in a room)
     for (const [at, kind, p] of MINUTE) timers.push(setTimeout(() => {
       try {
         if (kind === 'control') { audio.touch(); const c = controlFor(p); if (c) run([c]); } else if (kind === 'event') run(eventCalls(p, st, hooks)); else if (kind === 'note') run(noteCalls(p, st, hooks)); else if (kind === 'ui') run(uiCalls({ type: 'ui', ...p }, st, hooks));

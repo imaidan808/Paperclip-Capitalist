@@ -181,3 +181,33 @@ test('UX1: the gesture events are the five of UNLOCK_EVENTS, each listened to on
   assert.match(s, /for \(const t of UNLOCK_EVENTS\) document\.addEventListener\(t, unlock, opts\);/);
   p.done();
 });
+
+// ================================================================================ UX3: a link that is opened, with the real wiring
+const S = await import('../js/audio/settings.js');
+/** A page that booted on an instructor's link (what common.js does: remember the rule the address applies, then read the settings through the address). */
+function onLink(search) {
+  const p = install(), saved = { audio: { ...audioDefaults(), master: 80, v: 1 } };
+  wire.rememberLinkRule(p.kv, saved, search); p.deps.settings.audio = S.migrateAudio(saved, search);
+  p.before = S.migrateAudio(saved, '');
+  return p;
+}
+for (const [link, muted] of [['&sound=quiet', false], ['&sound=off', true]]) {
+  test(`UX3: a student who opens a ${link.slice(7)} link and never joins gets their own sound back at the first screen that is not the room's (a solo game)`, () => withRig(() => {
+    const p = onLink('?room=ABCD' + link);
+    assert.deepEqual([p.a().quiet, p.a().mute], [true, muted], 'the title is the link\'s: the instructor asked for it from the first screen');
+    const un = wire.wireGame(gameCtx()); // a game with no room: the first screen that is not the room's
+    assert.deepEqual(p.a(), p.before, 'exactly the sound they had'); assert.equal(p.kv.get(wire.BEFORE_ROOM), null);
+    assert.equal(p.toasts.length, 1, 'with one note'); assert.match(p.toasts[0][0], muted ? /^Sound is back to Full: the room turned it off only while you were in it\.$/ : /^Sound is back to Full: Classroom sound applies only in a room\.$/);
+    un(); p.done();
+  }));
+  test(`UX3: and at the Draft of a solo run (pendingRoom with no room); in a room the game leaves the link's rule alone, and the tick that finds the room gone gives it back`, () => withRig(() => {
+    const solo = onLink('?room=ABCD' + link);
+    assert.equal(wire.pendingRoom(undefined, solo.deps), 'left'); assert.deepEqual(solo.a(), solo.before); solo.done();
+    const p = onLink('?room=ABCD' + link), ctx = gameCtx(); ctx.S.roomInfo = { code: 'ABCD', role: 'student' };
+    const un = wire.wireGame(ctx);
+    assert.deepEqual([p.a().quiet, p.a().mute], [true, muted], 'in the room: the rule stays, nothing more is said'); assert.equal(p.toasts.length, 0);
+    ctx.S.roomInfo = null; ctx.S.emit('tick', {});
+    assert.deepEqual(p.a(), p.before, 'the room is gone: the sound is back'); assert.equal(p.toasts.length, 1);
+    un(); p.done();
+  }));
+}

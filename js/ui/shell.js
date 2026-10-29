@@ -18,7 +18,7 @@ import { hudHTML, trackerHTML, tickerHTML } from './hud.js';
 import { DRAWERS } from './drawers/index.js';
 import { openDeal } from './deal.js';
 import { createWorldView } from './worldview.js';
-import { audio, wireAudio, toggleMute } from '../audio/index.js';
+import { audio, wireAudio, toggleMute, softened } from '../audio/index.js';
 import { createCues } from './audiocues.js';
 import { Progress } from '../meta/progress.js';
 import { fmtMoney as money, fmtPct as pct } from '../market.js';
@@ -293,7 +293,7 @@ export function mountGame(root, S, hooks) {
         const msg = kind === 'quest' ? `Quest complete: ${def.title}` : kind === 'achievement' ? `Achievement: ${def.title}` : `Daily bounty done: ${def.title}`;
         toast(msg, 'good', undefined, { own: true }); sfx.level(); burst({ power: kind === 'achievement' && def.rarity === 'epic' ? 1.6 : 1 }); announce(msg);
         // the reward is one more request in the burst that caused it (a sale, a level): the collector (docs/AUDIO.md 3.4.2) picks what is heard
-        if (kind === 'quest') audio.request('quest.complete'); else if (kind === 'achievement') audio.request('achievement', { variant: ['common', 'rare', 'epic'].includes(def.rarity) ? def.rarity : 'common', meta: { rarity: def.rarity } }); else audio.request('daily.done');
+        if (kind === 'quest') audio.request('quest.complete'); else if (kind === 'achievement') audio.request(...softened('achievement', { variant: ['common', 'rare', 'epic'].includes(def.rarity) ? def.rarity : 'common', meta: { rarity: def.rarity } }, settings.audio?.quiet === true)); else audio.request('daily.done'); // (an epic one is a rare one in Classroom, `softened`)
       },
       onCodex(entry) { toast(`Codex unlocked: ${entry.title}`, 'info', undefined, { own: true }); sfx.blip(); audio.request('codex.unlock'); },
     });

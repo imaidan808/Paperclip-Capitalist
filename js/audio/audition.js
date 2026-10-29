@@ -5,6 +5,7 @@ import { whyDropped } from './settings.js';
 import { RECIPES } from './recipes.js';
 import { RULES, createResolverState } from './resolve.js';
 import { SANDBOX_SILENT } from './engine.js';
+import { softened } from './wire.js';
 
 const secs = (ms) => Math.max(1, Math.ceil(ms / 1000));
 
@@ -123,7 +124,8 @@ export async function pressBurst(audio, fn, o = {}) {
   const s0 = audio.stats(), before = { played: { ...s0.played }, dropped: { ...s0.dropped } }, bursts = new Set();
   // A fresh press is a clean slate: the budget is back and the last big moment has ended, and the sounds ask to skip the per-sound cooldown (a level-up rung 1 s ago by the last burst would otherwise be
   // dropped by its own 2 s cooldown) and to draw from the player's bucket, as a press does. Without the box the requests go to the collector exactly as the game sends them.
-  const req = (id, opts = {}) => audio.request(id, o.fresh ? { noCooldown: true, player: true, ...opts } : opts);
+  // With the Classroom rule on (the bar's box) a burst asks for what the game asks for in Classroom: the loud rewards and the shock alert in their softer voices (`softened`, sixth round, UX3).
+  const quiet = !!(o.a && o.a.quiet === true), req = (id, opts = {}) => { const [sid, sopts] = softened(id, opts, quiet); return audio.request(sid, o.fresh ? { noCooldown: true, player: true, ...sopts } : sopts); };
   const w0 = o.fresh ? '' : explainDrop('budget', o.a || {}, { id: 'level.up', now: now(), speed, rs: audio._resolver, voices: [] }), closed = /^Reward budget: the game rings/.test(w0); // read before the burst spends it
   fn(req);
   for (let t = 0; t < settle; t += 50) { await sleep(Math.min(50, settle - t)); const b = audio.stats().lastBurst; if (b) bursts.add(b); }

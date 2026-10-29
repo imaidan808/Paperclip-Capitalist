@@ -9,7 +9,7 @@
 // Node only: the real engine under a recording fake context, the real wiring and settings. The render half of R3-1 and R3-2 is scripts/audio-check.mjs (--first, --dial). Run: node --test tests/audio-r6.test.mjs
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { fakeContext, fakeClock } from './helpers/fakeaudio.mjs';
 import { createAudio, LIMITS } from '../js/audio/engine.js';
 import { RECIPES } from '../js/audio/recipes.js';
@@ -338,4 +338,171 @@ test('UX2: the faculty kit\'s class script is true for every student (press M no
   assert.ok(!/Sound is quiet in a room; press/.test(kit), 'and so did the script under Sound');
   assert.ok(!/the volume alone included, keeps their own/.test(kit), 'the volume is no longer such a setting');
   assert.match(kit, /Your own sound settings stay in this room/, 'the kit says what such a student is told');
+});
+
+// ================================================================================ UX3: Sound in the student link (Normal / Quiet / Off), and the softer voices of Classroom
+import { tierOf, variantsOf } from '../js/audio/recipes.js';
+import { Session } from '../js/session.js';
+import { instructorParts, LINK_SOUNDS, LINK_COPIED } from '../js/ui/instructor.js';
+const roomSession = (over = {}) => { const ses = new Session(); ses.mode = 'instructor'; ses.roomInfo = { code: 'ABCD', relay: '', role: 'instructor', ...over }; ses.room = { kind: 'local', state: 'open' }; return ses; };
+/** A page as it boots on an instructor's link: the saved settings, the address, the remembered rule (common.js does these two in this order), and the page layer's deps. */
+function bootOn(saved, search) {
+  const d = depsOf(), settings = { audio: { ...audioDefaults(), ...saved, v: 1 } };
+  wire.rememberLinkRule(d.kv, settings, search);
+  d.settings.audio = S.migrateAudio(settings, search);
+  return d;
+}
+const FULL80 = { master: 80 };
+test('UX3: Classroom plays the voice one tier down for the loud rewards and the shock alert; with the rule off a request is unchanged', () => {
+  const off = (id, o) => wire.softened(id, o, false), on = (id, o) => wire.softened(id, o, true);
+  const lv = { variant: 'l', meta: { level: 5 } };
+  assert.equal(off('level.up', lv)[1], lv, 'the same request, not a copy'); assert.equal(wire.softened('level.up', lv)[1], lv, 'the rule is off unless it is asked for');
+  assert.deepEqual(on('level.up', { meta: { level: 5 } }), ['level.up', { variant: 's', meta: { level: 5 } }]);
+  assert.equal(on('level.up', { variant: 'big', meta: { level: 10 } })[1].variant, 's', 'not even every fifth level is the big one');
+  assert.deepEqual(on('achievement', { variant: 'epic', meta: { rarity: 'epic' } }), ['achievement', { variant: 'rare', meta: { rarity: 'epic' } }]);
+  for (const v of ['common', 'rare']) assert.deepEqual(on('achievement', { variant: v }), ['achievement', { variant: v }], `${v} is already small`);
+  for (const n of [1, 2, 3]) assert.deepEqual(on('milestone', { variant: 'm' + n }), ['quest.complete', { variant: 'quest' }]);
+  assert.deepEqual(['tiktok', 'fed', 'tariff'].map((k) => on('alert.shock', { variant: k })[1].variant), ['viral', 'glut', 'glut']);
+  for (const v of ['viral', 'glut', 'scare']) assert.deepEqual(on('alert.shock', { variant: v }), ['alert.shock', { variant: v }], `${v} is already medium`);
+  for (const id of ['cash.in', 'sale.win', 'alert.margin-call', 'zone.open']) { const x = { variant: 'x' }; assert.equal(on(id, x)[1], x, `${id} is not one of them`); }
+  // the table is the sound map's own: every voice it returns exists, and for every loud variant of the four ids it returns one that is not loud
+  let loud = 0;
+  for (const id of ['level.up', 'achievement', 'milestone', 'alert.shock']) for (const v of variantsOf(id)) {
+    const [rid, ro] = on(id, { variant: v });
+    assert.ok(RECIPES[rid]?.variants[ro.variant], `${id}#${v} -> ${rid}#${ro.variant} exists`);
+    if (tierOf(id, v) === 'loud') { loud++; assert.notEqual(tierOf(rid, ro.variant), 'loud', `${id}#${v} (loud) must not stay loud in Classroom: ${rid}#${ro.variant} is ${tierOf(rid, ro.variant)}`); }
+  }
+  assert.ok(loud >= 7, `${loud} loud variants of those ids are softened (level l and big, epic, three milestones, three shocks)`);
+});
+test('UX3: the wiring asks for the softer voice only while the page\'s rule is on, for a level, a milestone, a shock and Market fatigue', () => {
+  const quiet = { quiet: () => true }, loud = { quiet: () => false };
+  const ev = (type, o) => wire.eventCalls({ type, ...o }, wire.newWireState(), quiet), full = (type, o) => wire.eventCalls({ type, ...o }, wire.newWireState(), loud);
+  assert.deepEqual(ev('level', { level: 5 }), [['request', 'level.up', { variant: 's', meta: { level: 5 } }]]);
+  assert.deepEqual(full('level', { level: 5 }), [['request', 'level.up', { meta: { level: 5 } }]], 'the rule off: the request it always was (the resolver chooses the voice)');
+  assert.deepEqual(wire.eventCalls({ type: 'level', level: 5 }, wire.newWireState(), {}), [['request', 'level.up', { meta: { level: 5 } }]], 'no hook, no rule');
+  assert.deepEqual(ev('milestone', { n: 2 }), [['request', 'quest.complete', { variant: 'quest' }]]); assert.deepEqual(full('milestone', { n: 2 }), [['request', 'milestone', { variant: 'm2' }]]);
+  assert.deepEqual(ev('shock', { kind: 'tiktok' }), [['request', 'alert.shock', { variant: 'viral' }]]); assert.deepEqual(ev('shock', { kind: 'fed' }), [['request', 'alert.shock', { variant: 'glut' }]]);
+  assert.deepEqual(full('shock', { kind: 'fed' }), [['request', 'alert.shock', { variant: 'fed' }]]); assert.deepEqual(ev('shock', { kind: 'scare' }), [['request', 'alert.shock', { variant: 'scare' }]]);
+  assert.deepEqual(wire.noteCalls({ text: 'Market fatigue in District 3.' }, wire.newWireState(), quiet), [['request', 'alert.shock', { variant: 'glut', state: 'fatigue' }]], 'the state sound is already the medium voice');
+  // and the engine plays what is asked: a level in Classroom is the medium run, not the fanfare
+  const t = rig({ quiet: true }); t.audio.setEnv({ lastPress: t.clock.now() });
+  for (const [m, id, o] of ev('level', { level: 5 })) t.audio[m](id, o);
+  t.clock.advance(60);
+  const plays = t.audio.stats().lastBurst.plays, voice = plays[0].mix[0];
+  assert.equal(voice[0], 'level.up'); assert.equal(voice[1].variant, 's', 'the everyday run'); assert.equal(tierOf('level.up', voice[1].variant), 'medium');
+  assert.equal(t.audio._resolver.lastFullLevel, -Infinity, 'and the 90 s window of the full fanfare is not spent by it');
+});
+test('UX3: no call site asks for a level, an epic achievement, a milestone or the shock alert except through softened()', () => {
+  const walk = (dir) => { const out = []; for (const f of readdirSync(new URL('../' + dir, import.meta.url))) { const p = dir + '/' + f, st = statSync(new URL('../' + p, import.meta.url)); if (st.isDirectory()) { if (f !== 'node_modules' && f !== 'audio-proto') out.push(...walk(p)); } else if (f.endsWith('.js')) out.push(p); } return out; };
+  const files = [...walk('js'), ...walk('dev')].filter((f) => !/js\/audio\/(recipes|trims|resolve|engine)\.js$/.test(f));
+  const bare = /\.(request|play|playMix)\(\s*['"](level\.up|alert\.shock|milestone|achievement)['"]|\[\s*['"](request|play)['"]\s*,\s*['"](level\.up|alert\.shock|milestone|achievement)['"]/;
+  for (const f of files) assert.ok(!bare.test(src(f)), `${f} asks for one of them without softened()`);
+  const w = src('js/audio/wire.js');
+  assert.equal((w.match(/soft\(hooks, 'level\.up'/g) || []).length, 1); assert.equal((w.match(/soft\(hooks, 'milestone'/g) || []).length, 1); assert.equal((w.match(/soft\(hooks, 'alert\.shock'/g) || []).length, 2, 'the shock event and Market fatigue');
+  assert.match(src('js/ui/shell.js'), /audio\.request\(\.\.\.softened\('achievement', \{[^}]*\}[^)]*settings\.audio\?\.quiet === true\)\)/, 'the shell\'s achievement request');
+  assert.match(src('js/audio/index.js'), /softened, rememberLinkRule/);
+  assert.match(src('js/audio/audition.js'), /softened\(id, opts, quiet\)/, 'the audition page\'s bursts'); assert.match(src('dev/sounds.js'), /quiet: \(\) => A\(\)\.quiet === true/, 'and its minute');
+});
+test('UX3: the three link values: Normal adds nothing, Quiet is Classroom as the room\'s rule applied early, Off is Classroom with Mute on; neither is the student\'s own choice, and neither raises a volume of 0', () => {
+  const at = (search, saved = FULL80) => S.migrateAudio({ audio: { ...audioDefaults(), ...saved, v: 1 } }, search);
+  const normal = at('?room=ABCD'), quiet = at('?room=ABCD&sound=quiet'), off = at('?room=ABCD&sound=off');
+  assert.deepEqual([normal.quiet, normal.mute, normal.touched], [false, false, false], 'Normal: nothing');
+  assert.deepEqual([quiet.quiet, quiet.mute, quiet.touched, quiet.clockSounds], [true, false, false, false], 'Quiet: Classroom, and the room\'s');
+  assert.deepEqual([off.quiet, off.mute, off.touched, off.clockSounds], [true, true, false, false], 'Off: Classroom with Mute on, and the room\'s (it used to be a permanent mute the student was taken to have chosen)');
+  for (const a of [quiet, off]) assert.equal(a.master, 80, 'the volume is the student\'s own');
+  assert.equal(at('?room=ABCD&sound=quiet', { master: 0 }).master, 0); assert.equal(at('?room=ABCD&sound=off', { master: 0 }).master, 0);
+  assert.equal(at('?sound=quiet', { master: 0 }).master, 0, 'no room in the link: still no raise (it is not a preset the student chose)');
+  // no room in the link (a lecture hall, a hand-made address): a choice made for the student, which stays
+  assert.deepEqual([at('?sound=quiet').quiet, at('?sound=quiet').touched], [true, true]); assert.deepEqual([at('?sound=off').mute, at('?sound=off').touched, at('?sound=off').quiet], [true, true, false]);
+  // a student who chose their own settings is not changed by any of them
+  for (const search of ['?room=ABCD&sound=quiet', '?room=ABCD&sound=off']) assert.deepEqual(S.migrateAudio({ audio: { ...audioDefaults(), touched: true, master: 90, v: 1 } }, search), { ...audioDefaults(), touched: true, master: 90 }, search);
+  assert.equal(at('?room=ABCD&sound=full').touched, true, 'Full is a choice made for the student, as it was');
+});
+test('UX3: a student under the Quiet link: told once, not "joined" again; leaving gives back exactly the sound they had', () => {
+  const d = bootOn(FULL80, '?room=ABCD&sound=quiet'), before = S.migrateAudio({ audio: { ...audioDefaults(), ...FULL80, v: 1 } }, '');
+  assert.deepEqual([d.settings.audio.quiet, d.settings.audio.mute], [true, false]); assert.equal(d.kv.get(wire.ROOM_RULE), 'quiet'); assert.deepEqual(d.kv.get(wire.BEFORE_ROOM), before, 'the link remembered what it replaced, at boot');
+  assert.equal(wire.pendingRoom({ code: 'ABCD' }, d), 'told', 'the Draft: the link had already applied the rule'); assert.deepEqual(d.toasts, [[wire.ROOM_TOAST, 'info']]);
+  assert.equal(wire.applyRoomRule(d, true), null, 'and the game\'s own check says nothing more');
+  assert.equal(wire.applyRoomRule(d, false), 'left'); assert.deepEqual(d.settings.audio, before, 'exactly what they had, nothing more and nothing less');
+  assert.deepEqual(d.toasts.at(-1), ['Sound is back to Full: Classroom sound applies only in a room.', 'info']); assert.equal(d.kv.get(wire.BEFORE_ROOM), null); assert.equal(d.kv.get(wire.ROOM_RULE), null);
+});
+test('UX3: a student under the Off link: muted only while they are in the room, told so, and the mute is given back on leaving; M turns sound on (Classroom) and that stays theirs', () => {
+  const d = bootOn(FULL80, '?room=ABCD&sound=off'), before = S.migrateAudio({ audio: { ...audioDefaults(), ...FULL80, v: 1 } }, '');
+  assert.deepEqual([d.settings.audio.quiet, d.settings.audio.mute, d.settings.audio.touched], [true, true, false]); assert.equal(d.kv.get(wire.ROOM_RULE), 'off');
+  assert.equal(wire.pendingRoom({ code: 'ABCD' }, d), 'told'); assert.deepEqual(d.toasts, [[wire.ROOM_OFF_TOAST, 'info']]);
+  assert.match(wire.ROOM_OFF_TOAST, /^Sound is off in this room, as your instructor chose\. Press M to turn it on \(Classroom, quieter\); your own sound comes back when you leave\.$/);
+  // they never press anything: leaving gives everything back, with one note
+  const stay = bootOn(FULL80, '?room=ABCD&sound=off'); wire.pendingRoom({ code: 'ABCD' }, stay);
+  assert.equal(wire.applyRoomRule(stay, false), 'left'); assert.deepEqual(stay.settings.audio, before); assert.deepEqual(stay.toasts.at(-1), ['Sound is back to Full: the room turned it off only while you were in it.', 'info']);
+  // they press M in the room: Classroom, unmuted, and the unmute is theirs
+  const r = S.toggleMute(d.settings.audio); assert.equal(r.changed, true); d.settings.audio = r.next;
+  assert.deepEqual([d.settings.audio.mute, d.settings.audio.quiet, d.settings.audio.touched], [false, true, true], 'in the quieter room, not in Full');
+  assert.equal(wire.applyRoomRule(d, false), 'left');
+  assert.deepEqual([d.settings.audio.mute, d.settings.audio.quiet, d.settings.audio.touched], [false, false, true], 'the Classroom the room put them in goes; what they did stays');
+  assert.equal(d.settings.audio.clockSounds, true); assert.equal(d.settings.audio.master, 80);
+});
+test('UX3: a student who joins a room whose link said nothing is put in Classroom by the room, and the Off link\'s join is told by the same path', () => {
+  const plain = depsOf(FULL80); assert.equal(wire.pendingRoom({ code: 'ABCD' }, plain), 'joined'); assert.deepEqual(plain.toasts, [[wire.ROOM_TOAST, 'info']]); assert.equal(plain.kv.get(wire.ROOM_RULE), 'quiet');
+  assert.equal(wire.applyRoomRule(plain, false), 'left'); assert.deepEqual(plain.settings.audio, { ...audioDefaults(), ...FULL80 });
+  // a join with the Off rule already on the settings (the link was followed by a page load that the saved settings carried)
+  const off = depsOf({ ...FULL80, quiet: true, mute: true, clockSounds: false }); assert.equal(wire.applyRoomRule(off, true), 'joined'); assert.equal(off.kv.get(wire.ROOM_RULE), 'off'); assert.deepEqual(off.toasts, [[wire.ROOM_OFF_TOAST, 'info']]);
+  assert.equal(wire.applyRoomRule(off, false), 'left'); assert.deepEqual([off.settings.audio.mute, off.settings.audio.quiet, off.settings.audio.clockSounds], [false, false, true]);
+  // a student who muted themselves (touched) is never unmuted by a room
+  const mine = depsOf({ ...FULL80, mute: true, touched: true }); assert.equal(wire.applyRoomRule(mine, true), null); assert.equal(mine.settings.audio.mute, true);
+});
+test('UX3: rememberLinkRule remembers a rule only when the address applied one to a student with no choice of their own, and never over one already remembered', () => {
+  const kv = () => depsOf().kv, saved = { audio: { ...audioDefaults(), ...FULL80, v: 1 } };
+  const q = kv(); assert.equal(wire.rememberLinkRule(q, saved, '?room=ABCD&sound=quiet'), 'quiet'); assert.equal(q.get(wire.ROOM_RULE), 'quiet');
+  const o = kv(); assert.equal(wire.rememberLinkRule(o, saved, '?room=ABCD&sound=off'), 'off'); assert.equal(o.get(wire.ROOM_RULE), 'off');
+  for (const search of ['', '?room=ABCD', '?room=ABCD&sound=full', '?sound=quiet', '?sound=off']) assert.equal(wire.rememberLinkRule(kv(), saved, search), null, `nothing for ${search || 'no address'}`);
+  assert.equal(wire.rememberLinkRule(kv(), { audio: { ...saved.audio, touched: true } }, '?room=ABCD&sound=off'), null, 'a student with a choice of their own');
+  assert.equal(wire.rememberLinkRule(o, saved, '?room=ABCD&sound=quiet'), null, 'and never over a rule that is remembered'); assert.equal(o.get(wire.ROOM_RULE), 'off');
+  assert.equal(wire.rememberLinkRule(null, saved, '?room=ABCD&sound=off'), null, 'no store, no throw');
+});
+test('UX3: leaving gives back exactly what the ROOM changed (under each link), and keeps what the student did', () => {
+  for (const [link, rule] of [['', 'quiet'], ['&sound=quiet', 'quiet'], ['&sound=off', 'off']]) {
+    const d = bootOn(FULL80, '?room=ABCD' + link); wire.pendingRoom({ code: 'ABCD' }, d);
+    // the student, in the room: moves the volume, turns Interface sounds off by hand, and raises the ambience level
+    d.settings.audio = { ...d.settings.audio, master: 40, ambientLevel: 20, ui: false, touched: true };
+    assert.equal(wire.applyRoomRule(d, false), 'left');
+    const a = d.settings.audio;
+    assert.equal(a.quiet, false, `${rule}: the room's rule is gone`); assert.equal(a.clockSounds, true, 'the clock sounds are back'); assert.equal(a.mute, false, 'and the room\'s mute');
+    assert.equal(a.ui, false, 'Interface sounds off by hand stays off'); assert.equal(a.master, 40); assert.equal(a.ambientLevel, 20); assert.equal(a.touched, true, 'a choice of the mix is a choice');
+  }
+  const same = S.leaveRoom({ ...audioDefaults() }, null); assert.equal(same, S.leaveRoom(same, null), 'nothing remembered, nothing changes');
+});
+test('UX3: the dashboard\'s Sound in the student link is three labelled radio buttons, Normal first and checked, and the link and the copy follow the choice', () => {
+  assert.deepEqual(LINK_SOUNDS.map((x) => [x.id, x.label, x.query]), [['normal', 'Normal', ''], ['quiet', 'Quiet', '&sound=quiet'], ['off', 'Off', '&sound=off']]);
+  assert.deepEqual(LINK_COPIED, { normal: 'Student link copied.', quiet: 'Student link copied, with quiet sound.', off: 'Student link copied, with sound off.' });
+  const link = (h) => (h.match(/data-link="([^"]+)"/) || [])[1].replace(/&amp;/g, '&'), qs = (l) => new URLSearchParams(l.slice(l.indexOf('?')));
+  for (const [id, want] of [['normal', null], ['quiet', 'quiet'], ['off', 'off']]) {
+    const h = instructorParts(roomSession(), { linkSound: id }).head;
+    assert.equal(qs(link(h)).get('sound'), want, `${id}: the link`); assert.equal(qs(link(h)).get('room'), 'ABCD');
+    assert.equal((h.match(/<input type="radio" name="linksound"/g) || []).length, 3, 'three radios in one group (the arrow keys move through it)');
+    assert.equal((h.match(/type="radio"[^>]* checked>/g) || []).length, 1, 'exactly one is chosen'); assert.match(h, new RegExp(`id="ls-${id}"[^>]* checked>`));
+    for (const x of LINK_SOUNDS) assert.match(h, new RegExp(`<input type="radio" name="linksound" id="ls-${x.id}" value="${x.id}" data-change="linksound" data-fid="ls-${x.id}" aria-describedby="ls-h"[^>]*><label for="ls-${x.id}"[^>]*>${x.label}</label>`), `${x.id}: a radio with its own label`);
+    assert.match(h, /<fieldset class="in-linksound"[^>]*><legend[^>]*>Sound in the student link<\/legend>/); assert.ok(/id="ls-h"/.test(h) && !/aria-hidden/.test(h.slice(h.indexOf('<fieldset'), h.indexOf('</fieldset>'))), 'the description is read, not hidden');
+    assert.equal(/data-sound="/.test(h), id !== 'normal'); if (id !== 'normal') assert.match(h, new RegExp(`data-act="copylink" data-link="[^"]+" data-sound="${id}">`));
+    assert.ok(h.indexOf('data-change="linksound"') < h.indexOf('data-act="copylink"'), 'choose, then copy');
+  }
+  assert.ok(instructorParts(roomSession(), { linkSound: 'off' }).head.includes(LINK_SOUNDS[2].hint) && instructorParts(roomSession(), {}).head.includes(LINK_SOUNDS[0].hint), 'the hint under it is the choice\'s own');
+  assert.equal(qs(link(instructorParts(roomSession({ relay: 'wss://r.example.edu' }), { linkSound: 'off' }).head)).get('relay'), 'wss://r.example.edu', 'with a relay too');
+  assert.ok(!/linkquiet|data-quiet|quietLink|> Quiet sound link</.test(src('js/ui/instructor.js')), 'the box is gone (a comment may still say what it was)');
+  assert.match(src('js/ui/instructor.js'), /linksound\(b\) \{ U\.linkSound = LINK_SOUNDS\.some\(\(x\) => x\.id === b\.value\) \? b\.value : 'normal'; render\(\); \}/);
+  // the control table: a radio is a change, heard as a select with its place in the group (a different tick for each)
+  assert.deepEqual(wire.controlFor({ act: 'linksound', kind: 'change', checkbox: false, index: 2 }), ['play', 'ui.select', { variant: 'i0', params: { i: 2 } }]);
+});
+test('UX3: the kit says what the link does and that Classroom is "less than half as loud, and still not silent", and the numbers are the engine\'s', () => {
+  const kit = src('docs/FACULTY_KIT.md'), comp = src('docs/COMPLIANCE.md');
+  assert.match(kit, /less than half as loud as Full, and still not silent/);
+  assert.match(kit, /\*\*Sound in the student link\.\*\* Beside \*\*Copy student link\*\* a choice of three: \*\*Normal\*\*/); assert.match(kit, /\*\*Off\*\* \(`&sound=off`\)/); assert.match(kit, /\*\*M\*\* turns sound on/);
+  assert.match(kit, /Choose \*\*Quiet\*\* or \*\*Off\*\* under \*\*Sound in the student link\*\* \*before\* you press \*\*Copy student link\*\*/);
+  assert.ok(!/Quiet sound link/.test(kit) && !/is a loud sound on every laptop at once/.test(kit), 'the old box and the old shock sentence');
+  assert.match(comp, /Sound in the student link/);
+  // 12.6 dB for a game sound and 10.6 for an interface sound, at the same volume, and 10 dB is half the loudness
+  const db = (x) => 20 * Math.log10(x), room = db(S.masterGain({ ...audioDefaults(), quiet: false }) / S.masterGain({ ...audioDefaults(), quiet: true }));
+  assert.ok(Math.abs(room - 4.64) < 0.01, `the headroom the room does not give back: ${room.toFixed(2)} dB`);
+  assert.ok(Math.abs(-S.CLASSROOM_DB.game + room - 12.6) < 0.05 && Math.abs(-S.CLASSROOM_DB.ui + room - 10.6) < 0.05, `${(-S.CLASSROOM_DB.game + room).toFixed(2)} and ${(-S.CLASSROOM_DB.ui + room).toFixed(2)} dB under Full`);
+  assert.ok(2 ** (-(-S.CLASSROOM_DB.ui + room) / 10) < 0.5, 'less than half the loudness, even for the interface (10 dB is half)');
+  assert.match(kit, /12\.6 and 10\.6 dB under Full/);
 });
