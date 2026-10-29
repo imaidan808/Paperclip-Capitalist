@@ -3,6 +3,8 @@
 import { BUYERS, ZONES } from '../config.js';
 import { P, box, shadow, ellipse, person, tone, shade, clamp, strHash } from './iso.js';
 import { LAYOUT, DIST, EDGES, zAt, polyAt, polyInfo } from './layout.js';
+import './vehicles.js'; // the V2 drawers of the truck and car layers register themselves too
+import './characters.js'; // the V2 drawers of the lead and player layers register themselves (stack.js registerLayer) and are used while those flags are v2
 
 const SHIRTS = ['#c0392b', '#2f80ed', '#27ae60', '#9b51e0', '#f2994a', '#16a085', '#d35400', '#8e44ad', '#2980b9', '#c0762b'];
 const HAIR = ['#2b1b10', '#7a3b12', '#c9a26a', '#555555', '#111111'];
