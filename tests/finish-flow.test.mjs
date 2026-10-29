@@ -299,8 +299,8 @@ test('the card follows into ANY open window, says what is behind it, and its hin
   assert.match(src, /announce\(`\$\{c\.finishing \? c\.say : `Step \$\{c\.index \+ 1\} of \$\{c\.total\}\. \$\{c\.say\}`\}\$\{said \? ` \$\{said\}` : ''\}`\)/, 'and so is a screen reader');
   assert.match(src, /if \(showMe && a\?\.kind === 'dom' && !ringEl\.hidden\) domEls\(a\.name\)\[0\]\?\.focus/, 'Show me moves the cursor only onto a control that has a frame');
   assert.match(src, /\(dlg\.el\.open && !\(cardEl && dlg\.el\.contains\(cardEl\)\)\)/, 'C reaches a card that lives in a window');
-  assert.match(css, /\.ac-coach\.compact :is\(\.ac-say, \.ac-hint, \.ac-look, \.ac-lost\) \{ display: none; \}[\s\S]{0,400}\.ac-coach\.compact :is\(\.ac-hint, \.ac-where\) \{ display: block;/, 'a compact card keeps the hint and the note');
-  assert.match(css, /@media \(max-height: 520px\) \{ \.ac-coach-in \{ max-height: calc\(100vh - 1rem\);/, 'a short window lets the card grow, so the hint and its buttons are not cut by the card\'s own scroll');
+  assert.match(css, /\.ac-coach\.slim :is\(\.ac-look, \.ac-where\) \{ display: none; \}/, 'a slim card keeps the words and the hint, and drops the notes under them'); assert.doesNotMatch(css, /\.ac-coach\.(compact|min)\b/, 'no card is drawn without the words');
+  assert.match(css, /\.ac-coach-in \{ max-height: calc\(100vh - 1rem\); max-height: calc\(100dvh - 1rem\); overflow: auto;/, 'the card is as tall as its words, up to the window, so the hint and its buttons are not cut by the card\'s own scroll');
   assert.match(css, /\.ac-coach \.ac-where \{/);
   assert.match(src, /Promise\.all\(\[import\('\.\/shell\.js'\), import\('\.\/deal\.js'\)\]\)/, 'the card asks the Deal Room what is on the table');
 });

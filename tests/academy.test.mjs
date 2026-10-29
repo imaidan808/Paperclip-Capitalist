@@ -105,7 +105,8 @@ test('world hits: a lead, lot or place by id, a crate by id or class, a plot by 
 test('card placer: it stays off an open drawer and off the dock icons', () => {
   const view = { w: 1100, h: 760 }, card = { w: 336, h: 181 }, drawer = { x: 610, y: 70, w: 480, h: 606 }, dock = { x: 450, y: 680, w: 200, h: 70 }, market = { x: 517, y: 689, w: 65, h: 54 };
   const clear = (at, r) => !A.rectsOverlap({ x: at.x, y: at.y, w: 336, h: 181 }, r);
-  const plain = A.placeCard(market, card, view, 14, 8, [dock]); assert.equal(plain.side, 'above'); assert.ok(clear(plain, dock) && clear(plain, market));
+  const stock = { x: 455, y: 689, w: 55, h: 54 }, codex = { x: 590, y: 689, w: 55, h: 54 }; // the buttons beside the target: the placer keeps off controls, not off the dock's plate they are on
+  const plain = A.placeCard(market, card, view, 14, 8, [stock, codex]); assert.equal(plain.side, 'above'); assert.ok(clear(plain, stock) && clear(plain, codex) && clear(plain, market));
   const crowded = A.placeCard(market, card, view, 14, 8, [drawer, dock]);
   assert.ok(clear(crowded, drawer) && clear(crowded, dock) && clear(crowded, market), 'nothing covered: ' + JSON.stringify(crowded));
   assert.ok(crowded.x >= 8 && crowded.y >= 8 && crowded.x + 336 <= 1092 && crowded.y + 181 <= 752);

@@ -114,10 +114,10 @@ test('F6, F5, R8: the card\'s buttons stick to its foot, a toast gives way to th
   assert.match(src, /classList\.contains\('bad'\)/, 'a toast that says an action failed is never dimmed');
 });
 
-test('F2, F3: the hire dialog may fold the card to its tab, and the HUD\'s buttons are controls the card keeps off, as the dock\'s are', () => {
+test('F2, F3: the hire dialog may fold the card to its tab (as every window may), and the HUD\'s buttons are controls the card keeps off, as the dock\'s are', () => {
   const src = read('js/ui/academy.js');
-  assert.match(src, /const foldRoom = host === dlg\.el && \(modal === 'deal' \|\| modal === 'hire'\), foldable = foldRoom && !confirm && !c\.stranded;/, 'a Deal Room and the hire dialog fold; the question "Skip this lesson?" and a closed lesson never do; a drawer\'s card is as it was');
-  assert.match(src, /if \(ctx\.el\.hud\) for \(const e of ctx\.el\.hud\.querySelectorAll\(CONTROLS\)\) add\(e, 2, 0, false, null, true\);/, 'every button of the HUD is a ctl');
+  assert.match(src, /const foldable = !confirm;/, 'a Deal Room, the hire dialog, a panel and the plain screen fold; only the question "Skip this lesson?" never does');
+  assert.match(src, /root = inDlg \? host : ctx\.el\.stage/); assert.match(src, /for \(const e of root\.querySelectorAll\(CONTROL_SELECTOR\)\)/, 'every button of the HUD (it is in the stage) is a ctl, with the dock\'s and the drawer\'s');
   assert.doesNotMatch(src, /for \(const part of \[ctx\.el\.tracker, ctx\.el\.ticker, ctx\.el\.hud,/, 'the HUD is not among the parts that count by area alone');
   assert.match(src, /if \(holding\(\) && layer\?\.isConnected\) \{ owed = true; return; \}/, 'F1: nothing about the card changes while a press is in flight, nor in the moment between a finger lifting and the click it makes');
   assert.match(src, /const holding = \(\) => pressing \|\| Date\.now\(\) < graceTo;/); assert.match(src, /document\.addEventListener\('click', pressClick, true\);/, 'the click lifts the hold before the handlers that follow it');
@@ -242,7 +242,11 @@ test('browser, the card\'s buttons stay in sight when its words scroll (844x390)
   { // F6: a window too short for the words: the card's own scroll must not cut the buttons
     const p = await lessonPage(br, 'm06', SIZES[0]);
     try {
-      await p.eval(`document.querySelector('.ac-coach-in').style.maxHeight = '92px'; document.querySelector('.ac-coach-in').scrollTop = 0`); await p.sleep(500);
+      // a card whose words would scroll is not a card the runner shows (it is the tab: `cut`), so the window that is too short for the words is the card the player OPENS from the tab: capped, opened, and the buttons must still be in sight
+      await p.eval(`document.querySelector('.ac-coach-in').style.maxHeight = '92px'`); await p.sleep(700);
+      assert.ok(await p.eval(`document.querySelector('.ac-coach').classList.contains('handle')`), 'a card whose words would scroll folds to its tab');
+      await p.eval(`document.querySelector('.ac-grab').click()`); await p.sleep(600);
+      await p.eval(`document.querySelector('.ac-coach-in').scrollTop = 0`);
       const g = await p.eval(`(()=>{ const ci=document.querySelector('.ac-coach-in'), q=ci.getBoundingClientRect(); return { scrolls: ci.scrollHeight > ci.clientHeight + 4, top: ci.scrollTop, buttons: [...ci.querySelectorAll('.ac-btns button')].map(x=>{ const r=x.getBoundingClientRect(); return { name:x.textContent.trim(), cut: r.bottom > q.bottom + 1 || r.top < q.top - 1 } }) } })()`);
       assert.ok(g.scrolls && g.top === 0, 'the card\'s words scroll inside it, from the top');
       assert.ok(g.buttons.length >= 2 && g.buttons.every((x) => !x.cut), `Show me and Skip lesson are inside the card's visible part, not below its scroll: ${JSON.stringify(g.buttons)}`);
@@ -254,12 +258,15 @@ test('browser, the card\'s buttons stay in sight when its words scroll (844x390)
       await tapAt(p, '[data-anchor="dock-market"]'); await atStep(p, 2);
       await tapAt(p, '[data-act="market-sell"]', 'Bree'); await until(p, `document.querySelector('dialog#dlg').open && !!document.querySelector('#dlg .deal')`, 'the Deal Room'); await p.sleep(800);
       const shape = () => p.eval(`(()=>{ const c=document.querySelector('.ac-coach'); return c.classList.contains('handle') ? 'handle' : 'card' })()`);
-      await p.eval(`document.querySelector('dialog#dlg').scrollTop = 0`); await p.sleep(500);
-      assert.equal(await shape(), 'card', 'at the top of the sheet the card is a card');
+      const scrollTo = async (st) => { await p.eval(`document.querySelector('dialog#dlg').scrollTop = ${st}`); await p.sleep(420); };
+      // where the sheet's controls leave the card a place it is the card; where they do not, it is the tab (in the strip). Find a position of each, the card first
+      let at = -1;
+      for (let st = 0; st <= 1200 && at < 0; st += 40) { await scrollTo(st); if ((await shape()) === 'card') at = st; }
+      assert.ok(at >= 0, 'the sheet has a position where the card is a card');
       await p.eval(`document.activeElement && document.activeElement.blur && document.activeElement.blur(); document.querySelector('dialog#dlg').focus()`); await p.key('c', { wait: 250 });
       assert.equal(await p.eval(`document.activeElement && document.activeElement.dataset.act`), 'ac-showme', 'C puts the cursor on the first button of the card');
       let folded = false;
-      for (let st = 40; st <= 1200 && !folded; st += 40) { await p.eval(`document.querySelector('dialog#dlg').scrollTop = ${st}`); await p.sleep(420); folded = (await shape()) === 'handle'; }
+      for (let st = at + 40; st <= 1200 && !folded; st += 40) { await scrollTo(st); folded = (await shape()) === 'handle'; }
       assert.ok(folded, 'the sheet has a position where the card is folded to its tab');
       await p.sleep(300);
       assert.equal(await p.eval(`document.activeElement && document.activeElement.dataset.act`), 'ac-expand', 'the cursor that was on Show me is on the tab, the one button the card shows: not on the page');

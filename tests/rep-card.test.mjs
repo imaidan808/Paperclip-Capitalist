@@ -35,43 +35,41 @@ const overlaps = (a, b) => a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h
 /** A fit() for chooseSize from a table of what each shape would hide, recording the shapes it was asked about. */
 const table = (t) => { const asked = []; const fit = (name) => { asked.push(name); return { t: name, cursor: false, target: false, n: 0, ...t[name] }; }; fit.asked = asked; return fit; };
 
-test('chooseSize: the old four sizes are what it asks for unless the Deal Room asks for more, and a clear one is kept', () => {
-  const f = table({ full: { n: 2 }, slim: { n: 2 }, compact: { n: 2 }, min: { n: 2 }, narrow: { n: 0 }, handle: { n: 0 } });
-  assert.equal(A.chooseSize(f).t, 'full', 'no option: the old rule, ties go to the larger card');
-  assert.deepEqual(f.asked, ['full', 'slim', 'compact', 'min'], 'and neither the narrow card nor the handle is ever asked for');
+test('chooseSize: full, slim and narrow are what it asks for (the sizes that keep the step\'s words), a clear one is kept, and the tab is asked for only when no size is clear', () => {
+  const f = table({ full: { n: 2 }, slim: { n: 2 }, narrow: { n: 2 }, handle: { n: 0 } });
+  assert.equal(A.chooseSize(f).t, 'full', 'a card that must be shown, none clear: the larger one, as ties always went');
+  assert.deepEqual(f.asked, ['full', 'slim', 'narrow'], 'and the tab is never asked for unless the card may fold');
   const g = table({ full: { n: 0 }, narrow: { n: 0 }, handle: { n: 0 } });
-  assert.equal(A.chooseSize(g, { handle: true, narrow: true }).t, 'full', 'a clear full card is kept');
+  assert.equal(A.chooseSize(g, { handle: true }).t, 'full', 'a clear full card is kept');
   assert.deepEqual(g.asked, ['full'], 'and nothing else is looked at');
 });
 
-test('chooseSize (narrow): between slim and compact, so the step\'s words are kept where a card of the usual width cannot stand', () => {
-  const f = table({ full: { n: 2 }, slim: { n: 2 }, narrow: { n: 0 }, compact: { n: 0 }, min: { n: 0 } });
-  assert.equal(A.chooseSize(f, { narrow: true }).t, 'narrow', 'the narrow card, which has the words, before the compact card, which has none');
-  assert.equal(A.chooseSize(table({ full: { n: 2 }, slim: { n: 2 }, narrow: { n: 1 }, compact: { n: 0 } }), { narrow: true }).t, 'compact', 'a narrow card that still covers a button loses to a compact one that does not');
-  assert.equal(A.chooseSize(table({ full: { n: 2 }, slim: { n: 0 } }), { narrow: true }).t, 'slim', 'and slim, clear, is taken first');
-  assert.deepEqual(A.CARD_SIZES, ['full', 'slim', 'compact', 'min'], 'the four sizes are as they were');
+test('chooseSize (narrow): after slim in every window, so the step\'s words are kept where a card of the usual width cannot stand', () => {
+  const f = table({ full: { n: 2 }, slim: { n: 2 }, narrow: { n: 0 } });
+  assert.equal(A.chooseSize(f).t, 'narrow', 'the narrow card, which has the words');
+  assert.equal(A.chooseSize(table({ full: { n: 2 }, slim: { n: 2 }, narrow: { n: 1 }, handle: { n: 0 } }), { handle: true }).t, 'handle', 'a narrow card that still covers a button loses to the tab, which covers none');
+  assert.equal(A.chooseSize(table({ full: { n: 2 }, slim: { n: 0 } })).t, 'slim', 'and slim, clear, is taken first');
+  assert.deepEqual(A.CARD_SIZES, ['full', 'slim'], 'the sizes are the two that have the words and the hint (the head-and-buttons shapes are gone)');
 });
 
-test('chooseSize (handle): the last resort, taken only when it hides less than the best card, and never over the keyboard\'s cursor', () => {
-  const crowded = { full: { n: 3 }, slim: { n: 3 }, compact: { n: 2 }, min: { n: 1 } };
+test('chooseSize (handle): taken whenever no size is clear, whatever the cards would hide, and a card whose words would scroll is not clear', () => {
+  const crowded = { full: { n: 3 }, slim: { n: 3 }, narrow: { n: 2 } };
   assert.equal(A.chooseSize(table({ ...crowded, handle: { n: 0 } }), { handle: true }).t, 'handle', 'no size is clear and the tab is: the tab');
-  assert.equal(A.chooseSize(table({ ...crowded, handle: { n: 0 } })).t, 'min', 'without the option the old rule: the card that covers the fewest');
-  assert.equal(A.chooseSize(table({ ...crowded, handle: { n: 1 } }), { handle: true }).t, 'min', 'a tie keeps the card: it has more to read');
-  assert.equal(A.chooseSize(table({ ...crowded, handle: { n: 2 } }), { handle: true }).t, 'min', 'the tab that covers more is not taken');
-  assert.equal(A.chooseSize(table({ ...crowded, handle: { n: 0, cursor: true } }), { handle: true }).t, 'min', 'a tab over the cursor is never taken');
-  assert.equal(A.chooseSize(table({ full: { cursor: true }, slim: { cursor: true }, compact: { cursor: true }, min: { cursor: true }, handle: { n: 0 } }), { handle: true }).t, 'handle', 'every card hides the cursor and the tab does not: the tab');
-  assert.equal(A.chooseSize(table({ full: { cursor: true }, slim: { cursor: true }, compact: { cursor: true }, min: { cursor: true }, handle: { cursor: true } }), { handle: true }).t, 'full', 'all of them hide it: the full card, as it always was');
-  assert.equal(A.chooseSize(table({ full: { target: true }, slim: { target: true }, compact: { target: true }, min: { target: true }, handle: { n: 0 } }), { handle: true }).t, 'handle', 'every card is over the control the step names: the tab, which is not');
-  assert.equal(A.chooseSize(table({ ...crowded, compact: { n: 0 } }), { handle: true }).t, 'compact', 'a card that is clear is taken before the tab is looked at');
+  assert.equal(A.chooseSize(table({ ...crowded, handle: { n: 0 } })).t, 'narrow', 'a card that must be shown: the one that covers the fewest');
+  assert.equal(A.chooseSize(table({ ...crowded, handle: { n: 2 } }), { handle: true }).t, 'handle', 'the tab is the answer to a crowd, whatever is in it (in a small window its place is the strip, which hides nothing)');
+  assert.equal(A.chooseSize(table({ full: { cursor: true }, slim: { cursor: true }, narrow: { cursor: true }, handle: { n: 0 } }), { handle: true }).t, 'handle', 'every card hides the cursor and the tab does not: the tab');
+  assert.equal(A.chooseSize(table({ full: { target: true }, slim: { target: true }, narrow: { target: true }, handle: { n: 0 } }), { handle: true }).t, 'handle', 'every card is over the control the step names: the tab, which is not');
+  assert.equal(A.chooseSize(table({ ...crowded, narrow: { n: 0 } }), { handle: true }).t, 'narrow', 'a card that is clear is taken before the tab is looked at');
+  assert.equal(A.chooseSize(table({ full: { cut: true }, slim: { cut: true }, narrow: { cut: true }, handle: { n: 0 } }), { handle: true }).t, 'handle', 'a card whose words would scroll inside it hides the hint from a player who is stuck: it is not clear');
+  assert.equal(A.chooseSize(table({ full: { cut: true }, slim: { n: 0 } }), { handle: true }).t, 'slim', 'a size whose words fit is taken');
 });
 
-test('chooseSize (handle): the tab is never taken over the cursor, whatever the cards cost, and the cursor outranks the control the step names', () => {
+test('chooseSize: where the card must be shown, the cursor outranks the control the step names, which outranks words that scroll, which outrank the buttons', () => {
   const hides = { cursor: true, n: 2 };
-  assert.equal(A.chooseSize(table({ full: hides, slim: hides, compact: hides, min: hides, handle: { cursor: true, n: 0 } }), { handle: true }).t, 'full', 'every card hides the cursor and the tab hides it too, though it covers fewer buttons: the tab is not taken (the full card, as it always was)');
-  // the cursor comes before the control the step names in the order of harm: every card hides the cursor (and not the control), the tab hides the control (and not the cursor): the tab
-  const card = { cursor: true }, tab = { target: true };
-  assert.equal(A.chooseSize(table({ full: card, slim: card, compact: card, min: card, handle: tab }), { handle: true }).t, 'handle', 'a card over the cursor is wrong wherever else it lands: the tab, even over the control the step names');
-  assert.equal(A.chooseSize(table({ full: { target: true }, slim: { target: true }, compact: { target: true }, min: { target: true }, handle: { cursor: true } }), { handle: true }).t, 'full', 'and the tab over the cursor is never taken for it');
+  assert.equal(A.chooseSize(table({ full: hides, slim: hides, narrow: hides })).t, 'full', 'every card hides the cursor: the full card, as it always was');
+  assert.equal(A.chooseSize(table({ full: { target: true }, slim: { cursor: true }, narrow: { cursor: true } })).t, 'full', 'a card over the cursor is wrong wherever else it lands: the one over the target instead');
+  assert.equal(A.chooseSize(table({ full: { cut: true }, slim: { n: 4 }, narrow: { n: 9 } })).t, 'slim', 'words that scroll cost more than buttons');
+  assert.equal(A.chooseSize(table({ full: { target: true }, slim: { cut: true, n: 0 }, narrow: { target: true } })).t, 'slim', 'and less than the control the step names');
 });
 
 test('chooseSize (words): a player who opened the card is shown the full card, wherever it covers least, and never the tab', () => {
@@ -162,7 +160,7 @@ function plan(R, scroll, { hint = false, fixed = true } = {}) {
   const controls = R.controls.map(([x, y, w, h, sticky]) => ({ x, y: sticky ? y : y - scroll, w, h }));
   const buttons = A.keepClear({ controls, clip: dlg });
   const keep = fixed ? buttons : buttons.map((r) => ({ ...r, ctl: false })); // `fixed: false` is the card before the fix: the room's buttons were rects to read, not controls
-  const sizes = hint ? { ...R.sizes, ...R.hint } : R.sizes;
+  const sizes = hint ? { ...R.sizes, ...R.hint, slim: R.hint.full } : R.sizes; // slim keeps the hint once it is due: it is the full card without the notes
   const fit = (t) => A.fitCard(t, { w: sizes[t][0], h: sizes[t][1] }, null, view, keep);
   const pick = A.chooseSize(fit, fixed ? { handle: true, narrow: true } : {});
   const box = { x: pick.p.x, y: pick.p.y, w: pick.s.w, h: pick.s.h };
@@ -217,12 +215,13 @@ test('the Deal Room, the lessons\' own words: where the reported controls are, t
 // the runner, the markup and the sheet
 // ====================================================================================================================================
 
-test('the runner counts every button of the room, folds to the tab only in a Deal Room or the hire dialog, and takes nothing from a screen reader', () => {
+test('the runner counts every control of the screen or the room, folds to the tab anywhere but at the question, and takes nothing from a screen reader', () => {
   const src = read('js/ui/academy.js'), css = read('css/ui-academy.css');
-  assert.match(src, /for \(const r of keepClear\(\{ controls: mine\.map\(\(e\) => e\.getBoundingClientRect\(\)\), clip: host\.getBoundingClientRect\(\) \}\)\) out\.push\(\{ \.\.\.r, focus: false \}\);/, 'the room\'s buttons are controls, cut to the sheet they scroll in');
-  assert.match(src, /const mine = \[\.\.\.host\.querySelectorAll\(CONTROLS\)\]\.filter\(\(e\) => e !== cardEl && !cardEl\?\.contains\(e\)\)/, 'every button, link, field and summary of the room, never the card\'s own');
-  assert.match(src, /const foldRoom = host === dlg\.el && \(modal === 'deal' \|\| modal === 'hire'\), foldable = foldRoom && !confirm && !c\.stranded;/, 'the tab is the Deal Room\'s and the hire dialog\'s (a room of buttons from edge to edge), and not for the question "Skip this lesson?" or a lesson that is closed');
-  assert.match(src, /chooseSize\(fit, \{ handle: foldable && !open, narrow: foldable, words: foldable && open \}\)/);
+  assert.match(src, /for \(const e of root\.querySelectorAll\(CONTROL_SELECTOR\)\) \{/, 'every control of the room (or of the game screen, when no room is open) is asked of the page');
+  assert.match(src, /add\(e, 2, 0, false, true\);/, 'each is a control the card keeps off (ctl), cut to the part of it that can be seen');
+  assert.match(src, /root = inDlg \? host : ctx\.el\.stage/, 'the room\'s own controls, never those of the screen behind it');
+  assert.match(src, /const foldable = !confirm;/, 'the tab is any card\'s last resort (a Deal Room of buttons from edge to edge, a phone\'s open panel, the plain screen), and not for the question "Skip this lesson?"');
+  assert.match(src, /chooseSize\(fit, \{ handle: foldable && !open, narrow: true, words: foldable && open \}\)/);
   assert.match(src, /dlg\.el\.addEventListener\('scroll', later, true\)/, 'the card looks again when the room\'s sheet scrolls'); assert.match(src, /dlg\.el\.removeEventListener\('scroll', later, true\)/, 'and lets go of it');
   assert.match(src, /\[\.\.\.\(cardEl\?\.querySelectorAll\('button'\) \|\| \[\]\)\]\.find\(\(b\) => b\.getClientRects\(\)\.length\)\?\.focus\(\)/, 'C reaches the first button the card shows: the tab, when it is folded');
   assert.match(src, /announce\('The lesson card is folded to a tab/, 'a fold is said, once a step');
@@ -238,13 +237,13 @@ test('coachHTML: the tab is a button that opens the card, the opened card has Fo
   const plain = AC.coachHTML(c, { title: 'x' });
   assert.doesNotMatch(plain, /ac-grab|ac-expand|ac-fold/, 'no tab and no fold button unless the Deal Room asks');
   const folded = AC.coachHTML(c, { title: 'x', fold: true });
-  assert.match(folded, /<button class="ac-grab" data-act="ac-expand" aria-expanded="false" title="Read the lesson card" aria-label="Lesson card, step 1 of 3\. Open it to read\.">Step 1 of 3<\/button>/, 'the tab is a button with a name, a title and the step');
+  assert.match(folded, /<button class="ac-grab" data-act="ac-expand" aria-expanded="false" title="Read the lesson card" aria-label="Lesson card, step 1 of 3\. Open it to read\."><b class="ac-gl">Step 1 of 3<\/b><span class="ac-gt">[^<]+<\/span><\/button>/, 'the tab is a button with a name, a title, the step and, for the strip, the gist of what the step says');
   assert.match(folded, /<p class="ac-say" id="ac-say">/, 'and the words are in the page for the screen reader');
   assert.doesNotMatch(folded, /ac-fold/, 'no Fold away on the tab');
-  assert.match(AC.coachHTML(c, { title: 'x', fold: true, hint: true }), /aria-label="Lesson card, step 1 of 3, with a hint\. Open it to read\.">Hint<\/button>/, 'with the hint on the tab says so');
+  assert.match(AC.coachHTML(c, { title: 'x', fold: true, hint: true }), /aria-label="Lesson card, step 1 of 3, with a hint\. Open it to read\."><b class="ac-gl">Hint<\/b><span class="ac-gt">[^<]*<\/span><\/button>/, 'with the hint on the tab says so, and carries the hint');
   const opened = AC.coachHTML(c, { title: 'x', fold: true, open: true });
   assert.match(opened, /<button class="btn sm ghost" data-act="ac-fold" aria-expanded="true">Fold away<\/button>/); assert.match(opened, /data-act="ac-showme"/, 'and the rest of the card');
-  assert.match(AC.coachHTML({ ...c, finishing: true }, { title: 'x', fold: true }), />Last step<\/button>/);
+  assert.match(AC.coachHTML({ ...c, finishing: true }, { title: 'x', fold: true }), /<b class="ac-gl">Last step<\/b>/);
   const evil = AC.coachHTML({ index: 0, total: 1, say: 's' }, { title: 'x', fold: true });
   assert.ok(!/undefined|NaN/.test(evil), 'no word of it is undefined');
 });
@@ -294,7 +293,7 @@ const SNAP = `(()=>{ const e=window.__t, card=document.querySelector('.ac-coach'
 /** What a finger does with the room's sheet: scrolls it until the control is in the middle of the part that can be seen (above the sticky foot), or only just in view; elsewhere the browser's own scrollIntoView. */
 const BRING = (way) => `(()=>{ const e=window.__t, d=document.querySelector('dialog#dlg'), STICKY='.deal-dock, .deal-foot, .deal-result > .row:last-child';
   if(!d.open||!d.contains(e)) { e.scrollIntoView({ block: ${JSON.stringify(way)}, inline: 'nearest' }); return; } if (e.closest(STICKY)) return;
-  const dr=d.getBoundingClientRect(), foots=[...d.querySelectorAll(STICKY)].filter(f=>f.getBoundingClientRect().height>0), top=dr.top, bottom=foots.length?Math.min(...foots.map(f=>f.getBoundingClientRect().top)):dr.bottom, r=e.getBoundingClientRect();
+  const dr=d.getBoundingClientRect(), foots=[...d.querySelectorAll(STICKY)].filter(f=>f.getBoundingClientRect().height>0), top=dr.top, bottom=Math.min(dr.bottom, ...foots.map(f=>f.getBoundingClientRect().top)), r=e.getBoundingClientRect();
   if (${JSON.stringify(way)}==='center') d.scrollTop += (r.top + r.height/2) - (top + bottom)/2; else if (r.top < top + 8) d.scrollTop += r.top - top - 8; else if (r.bottom > bottom - 8) d.scrollTop += r.bottom - bottom + 8; })()`;
 const MEASURE = `(()=>{ const e=window.__t, card=document.querySelector('.ac-coach'), r=e.getBoundingClientRect(), c=card.getBoundingClientRect();
   const ox=Math.max(0,Math.min(r.right,c.right)-Math.max(r.left,c.left)), oy=Math.max(0,Math.min(r.bottom,c.bottom)-Math.max(r.top,c.top)), cx=r.x+r.width/2, cy=r.y+r.height/2;
@@ -442,7 +441,7 @@ test('browser, lesson 5 (Fix It): "Careful: pay more, no timing" and Stop are ne
   assert.ok(log.length > 20, `${log.length} taps checked`);
 });
 
-test('browser, lesson 10 (Deal Day): "Check the serial", "Done reading", "Pass on this lot" and "Bid" are never under the card, with the hint and without', { ...SUITE, todo: 'known fault, open for the cloud pass: since the sound layer joined (the Deal Room header now holds the Sound and Dial tone switches, and the market sheet changed with it) the card at 640x360 is placed over "Lots 3" instead of folding to its tab' }, async () => {
+test('browser, lesson 10 (Deal Day): "Check the serial", "Done reading", "Pass on this lot" and "Bid" are never under the card, with the hint and without', SUITE, async () => {
   const b = await browser(), log = [];
   for (const sz of SIZES) {
     const p = await lessonPage(b, 'm10', sz), t = taps(p, log, `m10 ${sz.w}x${sz.h}`);
@@ -566,7 +565,7 @@ test('browser, the folded card: a real tap or the keyboard opens it, Fold away o
     const shape = () => p.eval(`(()=>{ const c=document.querySelector('.ac-coach'); return c.classList.contains('handle') ? 'handle' : 'card' })()`);
     // the sheet is scrolled until the angles fill it: no card stands clear of them, so the card is its tab
     let folded = false;
-    for (let st = 0; st <= 1200 && !folded; st += 40) { await p.eval(`document.querySelector('dialog#dlg').scrollTop = ${st}`); await p.sleep(420); folded = (await shape()) === 'handle'; }
+    for (let st = 0; st <= 1200 && !folded; st += 40) { await p.eval(`document.querySelector('dialog#dlg').scrollTop = ${st}`); await p.sleep(420); folded = (await shape()) === 'handle' && (await p.sleep(700), (await shape()) === 'handle'); } // a fold that holds: the sheet settles itself when it opens, and a card that is a tab for a moment is not the card this walk is about
     assert.ok(folded, 'the Pitch stage at 640x360 has a position where the card is folded to its tab');
     await p.sleep(400);
     const say = await p.eval(`(()=>{ const s=document.querySelector('.ac-coach .ac-say'), cs=getComputedStyle(s), r=s.getBoundingClientRect(); return { text: s.textContent, display: cs.display, visibility: cs.visibility, w: r.width, h: r.height, inTree: !s.closest('[hidden], [aria-hidden="true"], [inert]'), label: document.querySelector('.ac-coach').getAttribute('aria-labelledby') } })()`);
@@ -574,11 +573,12 @@ test('browser, the folded card: a real tap or the keyboard opens it, Fold away o
     assert.ok(say.display !== 'none' && say.visibility !== 'hidden' && say.inTree, `and not hidden from the accessibility tree (display ${say.display}, visibility ${say.visibility})`);
     assert.ok(say.w <= 2 && say.h <= 2, 'they are clipped to a pixel, not drawn over the room');
     assert.equal(say.label, 'ac-say', 'and the card is still named by them');
-    const tab = await p.eval(`(()=>{ const g=document.querySelector('.ac-coach .ac-grab'), r=g.getBoundingClientRect(); return { name: g.getAttribute('aria-label'), expanded: g.getAttribute('aria-expanded'), h: r.height, w: r.width, cx: r.x + r.width/2, cy: r.y + r.height/2, tag: g.tagName, lands: document.elementFromPoint(r.x + r.width/2, r.y + r.height/2) === g } })()`);
+    const tab = await p.eval(`(()=>{ const g=document.querySelector('.ac-coach .ac-grab'), r=g.getBoundingClientRect(); return { name: g.getAttribute('aria-label'), expanded: g.getAttribute('aria-expanded'), h: r.height, w: r.width, cx: r.x + r.width/2, cy: r.y + r.height/2, tag: g.tagName, lands: (h => h === g || g.contains(h))(document.elementFromPoint(r.x + r.width/2, r.y + r.height/2)) } })()`);
     assert.equal(tab.tag, 'BUTTON'); assert.match(tab.name, /^Lesson card, step 2 of 3\. Open it to read\.$/); assert.equal(tab.expanded, 'false'); assert.ok(tab.h >= 36 && tab.lands, `the tab is a button a thumb can hit (${Math.round(tab.w)}x${Math.round(tab.h)})`);
     assert.match(await p.eval(`document.querySelector('#live').textContent`), /The lesson card is folded to a tab so it does not cover the buttons\. Press C, then Enter, to open it\./, 'the fold was announced');
     // the keyboard: C reaches the tab, Enter opens the card, and the cursor is on Fold away
-    await p.eval(`document.activeElement && document.activeElement.blur && document.activeElement.blur(); document.querySelector('dialog#dlg').focus()`);
+    // (the cursor is left where it is: the card is placed clear of the control the keyboard is on, so moving the cursor away from it can unfold the card, which is the rule and not what this walk tests)
+    assert.equal(await shape(), 'handle', 'the card is still folded when the keyboard goes for it');
     await p.key('c', { wait: 200 });
     assert.equal(await p.eval(`document.activeElement && document.activeElement.dataset.act`), 'ac-expand', 'C jumps to the tab');
     await p.key('Enter', { wait: 700 });

@@ -37,7 +37,7 @@ test('the Deal Room: the focused Stop is brought into view, and the short window
   const src = read('js/ui/deal.js');
   // DESIGN CHANGE on purpose (tests/finish-flow.test.mjs): the one scrollIntoView for the Stop that was focused on arrival became a scroll after EVERY paint, for wherever the cursor is (the
   // next probe, Bid after a bid, the Stop of the second repair step, a stage's head), measured against the real foot instead of a guessed scroll-padding.
-  assert.match(src, /const reveal = \(d\) => \{ const a = doc\.activeElement; if \(a && a !== d && d\.contains\(a\)\) keepInView\(d, a, \{ sticky: STICKY \}\); \};/, 'a control the cursor is on is scrolled just into view (never the foot, which is sticky)');
+  assert.match(src, /const reveal = \(d\) => \{ const a = doc\.activeElement; if \(a && a !== d && d\.contains\(a\)\) keepInView\(d, a, \{ sticky: STICKY \}\); revealFoot\(d\); \};/, 'a control the cursor is on is scrolled just into view (never the foot, which is sticky), and the result\'s Continue row, which a sticky block can leave half cut off, is brought whole into view');
   assert.match(src, /else keepFocus\(d\);\n    reveal\(d\);/, 'after the cursor has been put back, whichever way it went');
   const css = read('css/ui-deal.css'), short = css.slice(css.indexOf('@media (max-height: 520px) and (min-width: 761px)'));
   const pad = short.match(/scroll-padding-bottom: ([\d.]+)rem/);
@@ -70,8 +70,8 @@ test('the Academy card: the layer is marked to be kept, the runner keeps clear o
   assert.match(src, /const hostFor = \(\) => \(dlg\.el\.open \? dlg\.el : ctx\.el\.overlay\)/);
   assert.match(src, /host === dlg\.el && !inDialog\(found\) \? null : found/, 'a step whose thing is not in the sheet gets no ring there');
   assert.match(src, /document\.addEventListener\('focusin', onFocus\)/); assert.match(src, /document\.removeEventListener\('focusin', onFocus\)/, 'and lets the listener go with the lesson');
-  assert.match(src, /compact: 'compact', min: 'compact min'/, 'and where no place is clear of it, the card shrinks (to its words, then to its head and buttons, then to its head and two buttons: tests/finish-repair.test.mjs)'); assert.match(src, /const pick = chooseSize\(fit, \{ handle: foldable && !open, narrow: foldable, words: foldable && open \}\);/, 'the size is chosen by one pure rule (chooseSize in js/ui/academy-sandbox.js: slim, compact, then min)'); assert.match(read('css/ui-academy.css'), /\.ac-coach\.compact :is\(\.ac-say, \.ac-hint, \.ac-look, \.ac-lost\) \{ display: none; \}/);
-  assert.match(src, /add\(f, 1000, 7, true\)/, 'the focused control outweighs everything else together, with room for its ring');
+  assert.match(src, /narrow: 'slim narrow', handle: 'handle'/, 'and where no place is clear of the controls, the card is smaller (slim, then narrow), and where none is clear at all it is its tab: every shape keeps the step\'s words (tests/academy-sweep.test.mjs)'); assert.match(src, /let pick = held === home && foldable && !open \? fit\(HANDLE_SIZE\) : chooseSize\(fit, \{ handle: foldable && !open, narrow: true, words: foldable && open \}\);/, 'the size is chosen by one pure rule (chooseSize in js/ui/academy-sandbox.js: full, slim, narrow, then the tab)'); assert.match(read('css/ui-academy.css'), /\.ac-coach\.slim :is\(\.ac-look, \.ac-where\) \{ display: none; \}/);
+  assert.match(src, /add\(f, 1000, 7, true, true\)/, 'the focused control outweighs everything else together, with room for its ring');
 });
 
 // ---------------------------------------------------------------- the dusk draw on a CPU-drawn canvas

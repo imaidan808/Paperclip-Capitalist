@@ -51,7 +51,7 @@ const FIND = (sel, re, nth = 0) => `(()=>{ const d=document.querySelector('dialo
 /** What a finger does with a window's sheet: scrolls it until the control is in the middle of the part that can be seen (above a sticky foot), elsewhere the browser's own scrollIntoView. */
 const BRING = `(()=>{ const e=window.__t, d=document.querySelector('dialog#dlg'), STICKY='.deal-dock, .deal-foot, .deal-result > .row:last-child, .cr-foot';
   if(!d.open||!d.contains(e)) { e.scrollIntoView({ block: 'center', inline: 'nearest' }); return; } if (e.closest(STICKY)) return;
-  const dr=d.getBoundingClientRect(), foots=[...d.querySelectorAll(STICKY)].filter(f=>f.getBoundingClientRect().height>0), top=dr.top, bottom=foots.length?Math.min(...foots.map(f=>f.getBoundingClientRect().top)):dr.bottom, r=e.getBoundingClientRect();
+  const dr=d.getBoundingClientRect(), foots=[...d.querySelectorAll(STICKY)].filter(f=>f.getBoundingClientRect().height>0), top=dr.top, bottom=Math.min(dr.bottom, ...foots.map(f=>f.getBoundingClientRect().top)), r=e.getBoundingClientRect();
   d.scrollTop += (r.top + r.height/2) - (top + bottom)/2; })()`;
 const AT = `(()=>{ const e=window.__t, b=e.getBoundingClientRect(), x=b.x+b.width/2, y=b.y+b.height/2, h=document.elementFromPoint(x,y); return { x, y, lands: !!h&&(e===h||e.contains(h)), hit: h ? h.tagName+'#'+h.id+'.'+String(h.className).slice(0,30) : 'nothing' } })()`;
 

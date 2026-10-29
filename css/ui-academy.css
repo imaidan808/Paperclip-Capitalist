@@ -29,18 +29,14 @@
 @keyframes ac-show { 0%, 100% { box-shadow: 0 0 0 100vmax rgba(5, 8, 14, .66), 0 0 0 1px rgba(5, 8, 14, .85), 0 0 0 0 rgba(255, 242, 122, .9); } 50% { box-shadow: 0 0 0 100vmax rgba(5, 8, 14, .66), 0 0 0 1px rgba(5, 8, 14, .85), 0 0 0 18px rgba(255, 242, 122, 0); } }
 /* The card is a frame that never clips: the caret on its edge sticks out past the border, so the frame has overflow visible and the words scroll in .ac-coach-in. */
 .ac-coach { position: fixed; left: 0; top: 0; width: min(21.5rem, calc(100vw - 1rem)); background: var(--panel); background: linear-gradient(180deg, var(--ac-top), var(--panel) 3.4rem); border: var(--bw) solid var(--gold); border-radius: 4px; box-shadow: 0 0 0 1px var(--bg), 6px 6px 0 rgba(0, 0, 0, .55), 0 14px 34px rgba(0, 0, 0, .5); pointer-events: auto; transition: transform .25s ease; --ac-top: color-mix(in srgb, var(--gold) 10%, var(--panel)); }
-.ac-coach-in { max-height: 60vh; overflow: auto; padding: .7rem .9rem .8rem; border-radius: 2px; }
+.ac-coach-in { max-height: calc(100vh - 1rem); max-height: calc(100dvh - 1rem); overflow: auto; padding: .7rem .9rem .8rem; border-radius: 2px; }
 .ac-coach:focus { outline: none; }
-/* When nothing is clear of the control the keyboard is on, the card is its head and its buttons (the words are still its name and the live region has read them): a phone on its side has no room for more */
-.ac-coach.compact :is(.ac-say, .ac-hint, .ac-look, .ac-lost) { display: none; } .ac-coach.compact .ac-coach-in { padding: .5rem .7rem .55rem; }
-/* ...but the two things that tell the player what to DO stay: the hint that arrives after 20 seconds and the note about a thing that is not on screen (below). A crowded window is where they are needed. */
-.ac-coach.compact :is(.ac-hint, .ac-where) { display: block; margin: .25rem 0 .45rem; }
-/* slim: the step's words and the buttons, without the notes under the words (a phone's drawer has buttons where the full card would stand) */
-.ac-coach.slim :is(.ac-hint, .ac-look, .ac-where) { display: none; }
-/* ...and when even that covers the control the keyboard is on, the card is only its head and its two buttons: a card over the cursor hides the one thing a keyboard player needs to see */
-.ac-coach.min :is(.ac-say, .ac-hint, .ac-look, .ac-lost, .ac-where), .ac-coach.min [data-act="ac-restart"] { display: none; }
-/* handle (a Deal Room only, js/ui/academy.js): where even the head-and-two-buttons card would cover a button of the room, the card folds to a one-line tab that opens it. The words stay in the page, clipped and not display: none, so a screen reader still has them. */
-.ac-coach.narrow { width: min(15rem, calc(100vw - 1rem)); } /* slim in a column: a phone on its side has an empty one beside the room's buttons (a Deal Room only) */
+/* The card's sizes (js/ui/academy-sandbox.js, chooseSize): the whole card; `slim`, the step's words, the hint once it is due and the buttons, without the notes under the words (a window's buttons are in the way of the
+   whole card); `narrow`, slim in a column 15rem wide. Every one of them says what the step says and has every button: a shape that dropped the words left a player who is stuck with a card that told them nothing,
+   so there is none. Where none stands clear of the controls the card is its tab (below), which stands in a place of its own. */
+.ac-coach.slim :is(.ac-look, .ac-where) { display: none; }
+/* handle (js/ui/academy.js): where no size of the card stands clear of the controls, the card folds to a one-line tab that opens it. The words and the hint stay in the page, clipped and not display: none, so a screen reader still has them. */
+.ac-coach.narrow { width: min(15rem, calc(100vw - 1rem)); } /* slim in a column: a phone on its side has an empty one beside the buttons */
 .ac-grab { display: none; }
 .ac-coach.handle { width: max-content; max-width: calc(100vw - 1rem); }
 .ac-coach.handle[data-side]::before { display: none; } /* one more attribute than the caret's own rules below (.ac-coach[data-side="below"]::before), so the tab has no caret and nothing is forced */
@@ -49,6 +45,12 @@
 .ac-coach.handle :is(.ac-say, .ac-hint, .ac-look, .ac-where, .ac-lost) { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; border: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .ac-coach.handle .ac-grab { display: flex; align-items: center; gap: .45rem; min-height: 2.5rem; padding: .3rem .7rem; border: 0; border-radius: 2px; background: transparent; color: var(--gold); font: inherit; font-size: .74rem; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; white-space: nowrap; cursor: pointer; }
 .ac-coach.handle .ac-grab::after { content: "\25B8"; }
+.ac-grab .ac-gt { display: none; } .ac-grab .ac-gl { font-weight: 700; }
+/* in the strip the tab has the strip's width and says what the step says, in one line: a player who is stuck reads the gist, or the hint, without a tap, and a tap opens the whole card */
+.ac-coach.handle.instrip { width: min(calc(100vw - 1rem), 46rem); }
+.ac-coach.handle.instrip .ac-grab { width: 100%; }
+.ac-coach.handle.instrip .ac-gt { display: block; flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 400; text-transform: none; letter-spacing: 0; color: var(--ink); font-size: .88rem; }
+.ac-coach.handle.instrip .ac-grab::after { margin-left: auto; }
 .ac-coach.handle .ac-grab:hover { background: color-mix(in srgb, var(--gold) 14%, transparent); }
 /* the caret is a turned square that carries the card's own colour at the edge it sits on (the lit top for "below", the plain panel elsewhere), so it joins the frame without a seam */
 .ac-coach::before { content: ""; position: absolute; display: none; width: 12px; height: 12px; background: var(--panel); border: var(--bw) solid var(--gold); transform: rotate(45deg); }
@@ -71,6 +73,26 @@
 /* a toast the card stands over (js/ui/academy.js, toastsYield): the card's words outrank it, and it is read out anyway. Its own opacity transition (styles.css) does the fade. */
 .toast.ac-under { opacity: 0; }
 .ac-btns .btn[aria-pressed="true"] { border-color: var(--gold); color: var(--gold); }
+
+/* ---- the strip: the card's own place in a small window. A tab has to stand somewhere that no control is, and in a window that is short or narrow (js/ui/academy-sandbox.js, smallWindow: under 44rem high or 46rem wide, in
+   the page's own rem) the layout keeps a strip along the bottom edge for it, for as long as a lesson is on screen: the gutter under the dock (--edge-b) is that much deeper, so the dock, the drawer, the ticker and the toasts all
+   stand above it, and a window (a <dialog>: the Deal Room, the hire dialog, the Cash breakdown, an alert) ends above it. The card is a floating card where a clear place exists and its tab in the strip where none does,
+   and nothing else can ever be under the tab. A large window has no strip (a clear place for the tab is always there) and its layout is the one it always was. */
+:root { --ac-strip: calc(var(--target) + var(--sp-3)); }
+html.ac-strip { --edge-b: calc(max(var(--sp-2), env(safe-area-inset-bottom, 0px)) + var(--ac-strip)); }
+html.ac-strip dialog#dlg { inset-block-end: var(--ac-strip); } /* its max-height is already 100dvh less --edge-t and --edge-b, and --edge-b has the strip in it */
+html.ac-strip dialog#dlg.deal { max-height: calc(100vh - var(--ac-strip) - .5rem); max-height: calc(100dvh - var(--ac-strip) - .5rem); }
+@media (max-width: 760px) { html.ac-strip dialog#dlg.deal { height: calc(100vh - var(--ac-strip)); height: calc(100dvh - var(--ac-strip)); max-height: calc(100vh - var(--ac-strip)); max-height: calc(100dvh - var(--ac-strip)); } }
+.ac-stripbox { position: fixed; left: 0; right: 0; bottom: 0; height: var(--ac-strip); visibility: hidden; pointer-events: none; } /* measured, never seen: how tall the strip is, in pixels, for the tab to be centred in it */
+
+/* A short window (a phone on its side, a laptop at 200%) has the card's own padding and the gaps between its parts tightened, so the words, the notes, the hint and the buttons fit the window at a large text size too. */
+@media (max-height: 520px) {
+  .ac-coach-in { padding: .5rem .8rem .6rem; }
+  .ac-coach .ac-say { margin: .2rem 0 .4rem; }
+  .ac-coach .ac-hint, .ac-coach .ac-look, .ac-coach .ac-where, .ac-coach .ac-lost { margin: .2rem 0 .4rem; padding: .25rem .5rem; }
+}
+/* While the strip is reserved the camera and list buttons (placed from the top, under the tracker) end above it, however tall the tracker is: the strip is the tab's, and nothing else may stand in it. */
+html.ac-strip .worldhost { --cam-top: min(max(calc(50% - var(--cam-h) / 2), calc(var(--trk-b) + var(--sp-2))), calc(100% - var(--edge-b) - var(--cam-h) - var(--sp-2) - var(--target))); }
 
 /* ---- the sheets after a win */
 .ac-sheet { position: fixed; inset: 0; z-index: 40; background: rgba(5, 8, 14, .8); display: grid; justify-items: center; align-items: start; overflow: auto; padding: 4vh .8rem; scroll-padding-block: .5rem; }
@@ -115,14 +137,12 @@
   .ac-intro > .row { gap: .5rem; }
   .ac-intro > .row .btn { min-height: 2.6rem; }
 }
-/* A short window (a phone on its side) cannot give the card a third of its height: the words, the 20-second hint and the buttons under them must not be cut off by the card's own scroll, so the
-   card may be as tall as the window leaves room for. (placeCard looks at the size it has and puts it where it hides the least.) */
-@media (max-height: 520px) { .ac-coach-in { max-height: calc(100vh - 1rem); max-height: calc(100dvh - 1rem); } }
+/* The card is as tall as its words, up to the window (.ac-coach-in above): a cap of a third or a half of the window cut the hint and the buttons off in a short one, and a card that scrolls inside itself shows a stuck player
+   half of what it says. js/ui/academy.js asks each size whether its words fit (`cut`), so a size whose words would scroll is not taken: the next one is, and then the tab. */
 @media (max-width: 760px) {
-  .ac-coach { width: calc(100vw - 1rem); } .ac-coach-in { max-height: 46vh; }
+  .ac-coach { width: calc(100vw - 1rem); }
   .ac-sheet { padding: 1vh .4rem; } .ac-sheet-in { padding: .8rem .85rem 1rem; }
 }
-@media (max-height: 520px) { .ac-coach-in { max-height: calc(100vh - 1rem); max-height: calc(100dvh - 1rem); } } /* after the phone rule: a phone on its side is both */
 @media (prefers-reduced-motion: reduce) { .ac-ring, .ac-ring.show, .ac-sheet-in, .ac-rw .chip { animation: none; } .ac-ring, .ac-coach { transition: none; } }
 :root[data-motion="reduce"] .ac-ring, :root[data-motion="reduce"] .ac-ring.show, :root[data-motion="reduce"] .ac-sheet-in, :root[data-motion="reduce"] .ac-rw .chip { animation: none; }
 :root[data-motion="reduce"] .ac-ring, :root[data-motion="reduce"] .ac-coach { transition: none; }

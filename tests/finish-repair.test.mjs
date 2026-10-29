@@ -302,28 +302,29 @@ test('the Quick buttons the lessons mean are named "Quick deal" in every step th
   for (const [id, step] of [['m01', 'student'], ['m05', 'fleet'], ['m07', 'buy'], ['m08', 'boutique'], ['m08', 'popup']]) assert.match(STEP(M(id), step).say, /Quick deal/, `${id} ${step}`);
 });
 
-test('A7: the card is placed again when the drawer scrolls, stays off the drawer\'s buttons, and slims down to the words when it cannot', () => {
+test('A7: the card is placed again when the drawer scrolls, stays off every control of the drawer, and slims down to the words and the hint when it cannot', () => {
   const src = read('js/ui/academy.js'), css = read('css/ui-academy.css');
   assert.match(src, /ctx\.el\.drawer\.addEventListener\('scroll', later, true\)/); assert.match(src, /ctx\.el\.drawer\.removeEventListener\('scroll', later, true\)/, 'and lets go of it');
-  assert.match(src, /for \(const e of body\.querySelectorAll\(CONTROLS\)\) add\(e, 2, 0, false, clip, true\)/, 'the drawer\'s visible controls count, clipped to the body they scroll in');
-  assert.match(src, /const TIERS = \{ full: '', slim: 'slim', compact: 'compact', min: 'compact min', narrow: 'slim narrow', handle: 'handle' \}/, 'the four sizes are as they were; the narrow card and the handle are the Deal Room\'s (tests/rep-card.test.mjs)');
-  assert.deepEqual(A.CARD_SIZES, ['full', 'slim', 'compact', 'min'], 'the slim card is tried first: it keeps the step\'s words');
-  assert.match(src, /const pick = chooseSize\(fit, \{ handle: foldable && !open, narrow: foldable, words: foldable && open \}\);/, 'and the runner asks for the size by one pure rule');
-  assert.match(css, /\.ac-coach\.slim :is\(\.ac-hint, \.ac-look, \.ac-where\) \{ display: none; \}/); assert.doesNotMatch(css, /\.ac-coach\.slim[^{]*\.ac-say/, 'the words stay');
+  assert.match(src, /for \(const e of root\.querySelectorAll\(CONTROL_SELECTOR\)\)/, 'every control of the screen counts: the drawer\'s title bar, its Close button and its tabs as much as the buttons in its body');
+  assert.match(src, /if \(a !== e && k\.c\) \{ x0 = Math\.max\(x0, k\.c\.x0\)/, 'each cut to the part of the drawer\'s body it can be seen in: a control scrolled out of it counts for nothing');
+  assert.match(src, /const TIERS = \{ full: '', slim: 'slim', narrow: 'slim narrow', handle: 'handle' \}/, 'the card, slim, narrow and the tab');
+  assert.deepEqual(A.CARD_SIZES, ['full', 'slim'], 'the slim card is tried first: it keeps the step\'s words, and its hint once it is due');
+  assert.match(src, /let pick = held === home && foldable && !open \? fit\(HANDLE_SIZE\) : chooseSize\(fit, \{ handle: foldable && !open, narrow: true, words: foldable && open \}\);/, 'and the runner asks for the size by one pure rule');
+  assert.match(css, /\.ac-coach\.slim :is\(\.ac-look, \.ac-where\) \{ display: none; \}/); assert.doesNotMatch(css, /\.ac-coach\.slim[^{]*\.ac-(say|hint)/, 'the words and the hint stay');
 });
 
 // ====================================================================================================================================
 // B1, B2: the keyboard
 // ====================================================================================================================================
 
-test('B1: the smallest card is its head and two buttons, so at 200% zoom it can stand clear of the Bid and Drop out buttons', () => {
-  const src = read('js/ui/academy.js'), css = read('css/ui-academy.css');
-  assert.match(css, /\.ac-coach\.min :is\(\.ac-say, \.ac-hint, \.ac-look, \.ac-lost, \.ac-where\), \.ac-coach\.min \[data-act="ac-restart"\] \{ display: none; \}/);
-  const sizes = (table) => A.chooseSize((t) => ({ t, ...table[t] }));
-  assert.equal(sizes({ full: { cursor: true, n: 0 }, slim: { cursor: true, n: 0 }, compact: { cursor: false, n: 0 }, min: { cursor: false, n: 0 } }).t, 'compact', 'a size is taken when it clears the cursor');
-  assert.equal(sizes({ full: { cursor: true, n: 0 }, slim: { cursor: true, n: 0 }, compact: { cursor: true, n: 0 }, min: { cursor: true, n: 0 } }).t, 'full', 'every size covers the cursor: the full card, as before');
-  assert.equal(sizes({ full: { cursor: true, n: 0 }, slim: { cursor: true, n: 0 }, compact: { cursor: false, n: 2 }, min: { cursor: false, n: 1 } }).t, 'min', 'of the sizes that clear it, the one over the fewest buttons');
-  assert.match(css, /\.ac-coach\.compact :is\(\.ac-say, \.ac-hint, \.ac-look, \.ac-lost\) \{ display: none; \}/, 'the compact card is still the one finish-flow holds');
+test('B1: no shape of the card drops its words, so at 200% zoom the card stands clear of the Bid and Drop out buttons or it is the tab', () => {
+  const css = read('css/ui-academy.css');
+  assert.doesNotMatch(css, /\.ac-coach\.(min|compact)\b/, 'the head-and-buttons shapes are gone: a card that said nothing left a player who is stuck with nothing to read');
+  const sizes = (table, o = {}) => A.chooseSize((t) => ({ t, ...table[t] }), o);
+  assert.equal(sizes({ full: { cursor: true, n: 0 }, slim: { cursor: false, n: 0 }, narrow: { cursor: false, n: 0 } }).t, 'slim', 'a size is taken when it clears the cursor');
+  assert.equal(sizes({ full: { cursor: true, n: 0 }, slim: { cursor: true, n: 0 }, narrow: { cursor: true, n: 0 } }).t, 'full', 'every size covers the cursor: the full card, as before');
+  assert.equal(sizes({ full: { cursor: true, n: 0 }, slim: { cursor: true, n: 0 }, narrow: { cursor: false, n: 2 }, handle: { n: 0 } }, { handle: true }).t, 'handle', 'a card that covers a button is not taken where the tab can be: it hides nothing');
+  assert.equal(sizes({ full: { cursor: true, n: 0 }, slim: { cursor: true, n: 0 }, narrow: { cursor: false, n: 2 } }).t, 'narrow', 'a card that must be shown takes the size that clears the cursor');
 });
 
 test('B2: a control the keyboard scrolls into view rests inside the window\'s edge, so its 5px ring is never cut', () => {
@@ -432,8 +433,8 @@ function pageModel(w, h, n = 2, pressedBtn = 'stock') {
     ...(f ? [{ x: f.x - pad, y: f.y - pad, w: f.w + 2 * pad, h: f.h + 2 * pad, wt: 1000, focus: true }] : [])];
   return { view: { w, h }, keep, buttons };
 }
-/** The card's four sizes at a window 640 wide (the page measured: 624 wide, full and slim 158.5 tall when the words run to three lines, compact and min 69.5). */
-const SIZES = { full: { w: 624, h: 158.5 }, slim: { w: 624, h: 158.5 }, compact: { w: 624, h: 69.5 }, min: { w: 624, h: 69.5 } };
+/** The card's sizes at a window 640 wide (the page measured: 624 wide, full and slim 158.5 tall when the words run to three lines; the narrow column 240 wide and about 230 tall; the tab 123 by 44). */
+const SIZES = { full: { w: 624, h: 158.5 }, slim: { w: 624, h: 158.5 }, narrow: { w: 240, h: 230 }, handle: { w: 123, h: 44 } };
 
 test('round 2 A1: placeCard never puts the card over the target while any place in the view is clear of it', () => {
   // a drawer that fills the view above the target, and a strip under it that is clear of everything but the target: the old weights (the target six times over, the drawer three times over a big area) took the strip
@@ -457,13 +458,14 @@ test('round 2 A1: placeCard never puts the card over the target while any place 
 });
 
 test('round 2 A1: chooseSize takes a smaller card before one that hides the control the step names, and weighs the cursor above the target above the buttons', () => {
-  const pick = (table) => A.chooseSize((t) => ({ t, cursor: false, target: false, n: 0, ...table[t] })).t;
+  const pick = (table, o) => A.chooseSize((t) => ({ t, cursor: false, target: false, n: 0, ...table[t] }), o).t;
   assert.equal(pick({}), 'full', 'a clear card stays full');
-  assert.equal(pick({ full: { target: true }, slim: { target: true }, compact: { target: false } }), 'compact', 'over the target at full size: a smaller card that is clear of it');
-  assert.equal(pick({ full: { target: true, n: 0 }, slim: { target: true, n: 0 }, compact: { target: false, n: 3 }, min: { target: false, n: 2 } }), 'min', 'the target outranks the buttons, and among the clear sizes the fewest buttons wins');
-  assert.equal(pick({ full: { target: true }, slim: { cursor: true }, compact: { cursor: true }, min: { cursor: true } }), 'full', 'the cursor outranks the target: a card that hides the keyboard is wrong wherever else it lands');
-  assert.equal(pick({ full: { n: 2 }, slim: { n: 2 }, compact: { n: 2 }, min: { n: 2 } }), 'full', 'a tie goes to the larger card: more of the words');
-  assert.equal(pick({ full: { target: true }, slim: { target: true }, compact: { target: true }, min: { target: true } }), 'full', 'no size is clear: the full card, as it was');
+  assert.equal(pick({ full: { target: true }, slim: { target: false } }), 'slim', 'over the target at full size: a smaller card that is clear of it');
+  assert.equal(pick({ full: { target: true, n: 0 }, slim: { target: true, n: 0 }, narrow: { target: false, n: 3 } }), 'narrow', 'the target outranks the buttons');
+  assert.equal(pick({ full: { target: true }, slim: { cursor: true }, narrow: { cursor: true } }), 'full', 'the cursor outranks the target: a card that hides the keyboard is wrong wherever else it lands');
+  assert.equal(pick({ full: { n: 2 }, slim: { n: 2 }, narrow: { n: 2 } }), 'full', 'a tie goes to the larger card: more of the words');
+  assert.equal(pick({ full: { target: true }, slim: { target: true }, narrow: { target: true } }), 'full', 'no size is clear: the full card, as it was');
+  assert.equal(pick({ full: { target: true }, slim: { target: true }, narrow: { target: true }, handle: {} }, { handle: true }), 'handle', 'and where the card may fold, the tab');
 });
 
 test('round 2 A1: on the lesson-1 page at 640x360 and 640x400 the card stands clear of every dock button a step can name, with the drawer open and the keyboard on the button just pressed', () => {
@@ -476,7 +478,7 @@ test('round 2 A1: on the lesson-1 page at 640x360 and 640x400 the card stands cl
           const sized = (t) => SIZES[t];
           const fit = (t) => { const s = sized(t), p = A.placeCard(spot, s, L.view, 14, 8, L.keep), box = { x: p.x, y: p.y, w: s.w, h: s.h }, cur = L.keep.find((r) => r.focus);
             return { t, s, p, cursor: !!cur && overlaps(box, cur), target: overlaps(box, spot), n: L.keep.filter((r) => r.ctl && overlaps(box, r)).length }; };
-          const got = A.chooseSize(fit), box = { x: got.p.x, y: got.p.y, w: got.s.w, h: got.s.h };
+          const got = A.chooseSize(fit, { handle: true }), box = { x: got.p.x, y: got.p.y, w: got.s.w, h: got.s.h };
           assert.ok(!got.target, `${w}x${h}, ${count} dock buttons, the step names ${target}: the ${got.t} card at ${Math.round(got.p.x)},${Math.round(got.p.y)} is over it`);
           assert.ok(!got.cursor, `${w}x${h}, ${target}: the card is over the keyboard's button`);
           assert.ok(box.x >= 0 && box.y >= 0 && box.x + box.w <= w + 1e-6 && box.y + box.h <= h + 1e-6, `${w}x${h}: the card is inside the window`);
@@ -488,9 +490,9 @@ test('round 2 A1: on the lesson-1 page at 640x360 and 640x400 the card stands cl
   assert.ok(n >= 60, `${n} placements held`);
   // the runner asks for the size by this rule, and counts the dock's buttons among the controls it keeps clear
   const src = read('js/ui/academy.js');
-  assert.match(src, /const fit = \(t\) => \{ setTier\(t\); return fitCard\(t, sizeOf\(\), spot, view, keep\); \};/, 'the runner weighs each size by the one pure rule (fitCard)');
-  { const spot = { x: 100, y: 100, w: 50, h: 50 }, view = { w: 400, h: 400 }, f = A.fitCard('full', { w: 400, h: 400 }, spot, view, []); assert.equal(f.target, true, 'fitCard says whether the card is over the target (a card as big as the view cannot miss it)'); assert.equal(A.fitCard('min', { w: 40, h: 40 }, spot, view, []).target, false, 'and that it is not, where it is clear'); }
-  assert.match(src, /for \(const e of ctx\.el\.dock\.querySelectorAll\(CONTROLS\)\) add\(e, 2, 0, false, null, true\)/, 'the dock\'s buttons are controls the card keeps off');
+  assert.match(src, /const fit = \(t\) => \{ setTier\(t\); return fitCard\(t, sizeOf\(\), spot, view, keep, strip, t !== HANDLE_SIZE && bodyEl\.scrollHeight > bodyEl\.clientHeight \+ 1\); \};/, 'the runner weighs each size by the one pure rule (fitCard)');
+  { const spot = { x: 100, y: 100, w: 50, h: 50 }, view = { w: 400, h: 400 }, f = A.fitCard('full', { w: 400, h: 400 }, spot, view, []); assert.equal(f.target, true, 'fitCard says whether the card is over the target (a card as big as the view cannot miss it)'); assert.equal(A.fitCard('slim', { w: 40, h: 40 }, spot, view, []).target, false, 'and that it is not, where it is clear'); }
+  assert.match(src, /add\(e, 2, 0, false, true\);/, 'every control of the screen, the dock\'s buttons among them, is one the card keeps off');
 });
 
 /** The deals of the lessons, played with the real Deal Room glue in a lesson's sandbox. */

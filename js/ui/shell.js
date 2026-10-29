@@ -49,6 +49,7 @@ export function mountGame(root, S, hooks) {
     S, U, g, hooks, dlg, el, esc, money, pct, $, $$, sfx, audio, burst, reduced, announce, setHTML, delegate,
     get progress() { return progress; },
     render: () => render(),
+    relayout() { measure(); fitToasts(); }, // the Academy's strip moves the dock without resizing it (css/ui-academy.css), and the pieces anchored to it are measured by size
     toast, queue, confirmBox, say,
     openDrawer, closeDrawer,
     deal: (spec) => openDeal(ctx, spec),

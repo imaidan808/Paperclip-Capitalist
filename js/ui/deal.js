@@ -449,7 +449,15 @@ export function createSession(ctx, run) {
   // the sticky foot, or above the top of a sheet that was scrolled for the last stage, was never brought into view: the next probe after one is used, the Stop of the second repair step,
   // Bid after a bid, a stage's own head after Continue. One scroll after every paint, wherever the cursor went (kept, moved to its neighbour or put on the stage head), brings it just in.
   const STICKY = '.deal-dock, .deal-foot, .deal-result > .row:last-child';
-  const reveal = (d) => { const a = doc.activeElement; if (a && a !== d && d.contains(a)) keepInView(d, a, { sticky: STICKY }); };
+  const reveal = (d) => { const a = doc.activeElement; if (a && a !== d && d.contains(a)) keepInView(d, a, { sticky: STICKY }); revealFoot(d); };
+  // The result's Continue row sticks to the foot of the sheet, but a sticky row is held inside the block it is in (css `.deal-result > .row:last-child`): while that block's top is still below the fold the row is
+  // cut off by the sheet's edge until the sheet has scrolled (it was half a Continue button at 640x360 once the Academy's strip made the sheet 50px shorter, and one that is off the bottom at the top of the sheet).
+  // keepInView leaves a sticky control alone as always in sight, which is true of a foot and not of this row, so the sheet is scrolled just far enough that the whole row is in.
+  const revealFoot = (d) => {
+    const row = d.querySelector('.deal-result > .row:last-child'); if (!row) return;
+    const q = row.getBoundingClientRect(), r = d.getBoundingClientRect(), k = d.offsetHeight > 0 && r.height > 0 ? r.height / d.offsetHeight : 1, foot = r.top + (d.clientTop + d.clientHeight) * k;
+    if (q.width > 0 && q.height > 0 && q.bottom > foot + 1) d.scrollTop += (q.bottom - foot) / k;
+  };
   const after = () => {
     const d = el();
     if (ses.focusHead) {
