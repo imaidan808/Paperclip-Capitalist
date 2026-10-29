@@ -9,6 +9,7 @@
 //   --fast       skip the master-chain renders (tier gaps and the pile-up)
 //   --pools      also render the other members of every pool (`id#variant@k`); the calibration, and the 32 plays of every variant (R1, R7), always include them
 //   --leak       only the start-click sweep (I1): every variant muted, started at the engine's real start times at 44.1 and 48 kHz
+//   --first      only the first sound of a context (R3-1): the real engine, a sound played at currentTime 0 against the same sound at 1 s, at 44.1 and 48 kHz
 //   --json file  write the full rows
 // Needs headless Chrome (scripts/cdp.mjs). Server on PORT (default 8401), Chrome on CDP (default 9901).
 import { createServer } from 'node:http';
@@ -50,7 +51,11 @@ const SPREAD_MAX = 2.5; // dB: the most the Fast level of a noisy sound moves wi
 const PLAY_PROBES = ['world.step#a', 'world.step#b', 'world.hover#t', 'ui.tick#light', 'ui.tick#full', 'ui.select#i0', 'ui.crate#pick1', 'haggle.move#small', 'cash.in#s', 'bid.raise#r1'];
 const PLAY_NOISE_SPREAD = 1.5, PLAY_JITTER_SPREAD = 2.5, PLAY_BIAS = 1.0; // dB: Fast spread over 32 plays with only the noise place and pitch varying, with the gain jitter too, and how far their median is from what the calibration measured
 const PAN_PROBES = ['ui.tick#full', 'sale.win#w', 'level.up#l', 'cash.out#m', 'alert.advance#l2', 'ui.refuse#r']; // total power at any pan is the total power at the centre
-
+// The first sound after the context is made (sixth round, R3-1): Chrome's glue compressor takes up to 9.8 dB off a short sound that starts inside its first 100 to 150 ms, and the first press of a page makes the
+// context and plays its tick in the same task. These are the sounds the review measured, played by the real engine at currentTime 0 and at 1 s.
+const FIRST_KEYS = ['ui.tick#light', 'ui.select#i0', 'world.step#a', 'ui.toggle#on', 'draft.pick#slot2', 'ui.ok#o', 'sale.win#w'];
+const FIRST_TOL = 1.0;  // dB: the first sound's K-weighted Fast level, the quiet laptop's and its peak, against the same sound at 1 s
+const FIRST_IDLE = 30;  // s of silence after which a compressor that has gone quiet must not be cold again
 
 /** The start-click sweep (I1): a muted voice leaves nothing but a leak. Runs at 44.1 and 48 kHz with the engine's own start times (js/audio/palette.js env(), fadeIn()). */
 async function leakCheck(call, pools) {
@@ -60,16 +65,48 @@ async function leakCheck(call, pools) {
   if (bad.length > 12) fail(`start click: ${bad.length - 12} more over ${LEAK_FLOOR} dBFS`);
 }
 
+/**
+ * The first sound after the context is made (R3-1): each sound the review named is played by the REAL engine in an OfflineAudioContext twice, once before the first render quantum (currentTime 0, which
+ * is where the page's first press plays its tick) and once at 1 s, from the same seeded voice; the two are read the way the calibration reads a sound (K-weighted Fast, the quiet laptop's Fast, the peak)
+ * and may not differ by more than FIRST_TOL. Also: the later sound is not delayed, the first is (the engine waits for the compressor, it does not play early and quiet), and a compressor that has gone quiet
+ * for FIRST_IDLE seconds does not go cold again. At 44.1 and 48 kHz.
+ */
+async function firstSoundCheck(call) {
+  const pad = (s, n) => String(s).padEnd(n);
+  for (const sr of [44100, 48000]) {
+    const rows = await call(`m.firstSound(${sr}, ${JSON.stringify(FIRST_KEYS)})`);
+    let worst = 0;
+    for (const r of rows) {
+      if (r.silent) { fail(`first sound: ${r.key} at ${sr} Hz ${r.played ? 'is silent' : 'was not played'}`); continue; }
+      worst = Math.max(worst, Math.abs(r.dK), Math.abs(r.dA), Math.abs(r.dPk));
+      console.log(`first sound at ${sr} Hz: ${pad(r.key, 17)} K Fast ${f1(r.dK).padStart(5)} dB, quiet-laptop Fast ${f1(r.dA).padStart(5)} dB, peak ${f1(r.dPk).padStart(5)} dB against the same sound at 1 s; heard ${r.first.at} ms after the context was made (${r.later.at} ms at 1 s)`);
+      const off = [['K-weighted Fast level', r.dK], ['quiet-laptop Fast level', r.dA], ['peak', r.dPk]].filter(([, d]) => Math.abs(d) > FIRST_TOL);
+      if (off.length) fail(`first sound: ${r.key} at ${sr} Hz, played at currentTime 0, is ${off.map(([what, d]) => `${f1(d)} dB in its ${what}`).join(', ')} from the same sound at 1 s (limit ${FIRST_TOL}): the glue compressor is cold${r.first.at < 150 ? ` and the sound starts after ${r.first.at} ms, inside its warm-up` : ''}`);
+      else if (r.first.at < 150) fail(`first sound: ${r.key} at ${sr} Hz played at currentTime 0 is heard after ${r.first.at} ms: a voice may not start before the compressor has warmed up (LIMITS.WARM, 160 ms of context time)`);
+      if (r.later.at > 40) fail(`first sound: ${r.key} at ${sr} Hz played at 1 s is heard ${r.later.at} ms late: only a sound inside the compressor's warm-up waits`);
+    }
+    console.log(`first sounds at ${sr} Hz: ${rows.length} sounds, the largest difference from the same sound at 1 s is ${f1(worst)} dB (limit ${FIRST_TOL})`);
+  }
+  const [x] = await call(`m.firstSound(48000, ['ui.tick#light'], { idle: ${FIRST_IDLE} })`);
+  if (x && x.idle) {
+    console.log(`after ${FIRST_IDLE} s of silence: ui.tick#light is ${f1(x.idle.dK)} dB (K-weighted Fast) and ${f1(x.idle.dA)} dB (quiet laptop) from the same sound at 1 s`);
+    if (Math.abs(x.idle.dK) > FIRST_TOL || Math.abs(x.idle.dA) > FIRST_TOL) fail(`first sound: after ${FIRST_IDLE} s of silence a sound is ${f1(x.idle.dK)} / ${f1(x.idle.dA)} dB from the same sound at 1 s: the compressor goes cold again`);
+  } else fail('first sound: the sound after a silence was not heard');
+}
+
 const srv = createServer(handler).listen(PORT, '127.0.0.1');
 const b = await launch(CDP);
 const fails = [], warns = [];
 const fail = (m) => fails.push(m), warn = (m) => warns.push(m);
 const f1 = (x) => (Math.round(x * 10) / 10).toFixed(1);
+/** The ends of a run that checks one thing only (--leak, --first). */
+const quit = (ok) => { b.close(); srv.close(); for (const f of fails) console.log(' -', f); console.log(fails.length ? fails.length + ' problems' : ok); process.exit(fails.length ? 1 : 0); };
 try {
   const p = await open(b, `http://127.0.0.1:${PORT}/dev/sounds.html?check=1`);
   const call = (expr) => p.eval(`(async()=>{const m=await import('/dev/measure.js');return JSON.stringify(await (${expr}))})()`).then(JSON.parse);
   const pools = args.has('--pools');
-  if (args.has('--leak')) { await leakCheck(call, pools); b.close(); srv.close(); for (const f of fails) console.log(' -', f); console.log(fails.length ? fails.length + ' problems' : 'no start clicks'); process.exit(fails.length ? 1 : 0); }
+  if (args.has('--leak')) { await leakCheck(call, pools); quit('no start clicks'); }
+  if (args.has('--first')) { await firstSoundCheck(call); quit('the first sound of a context is as loud as the same sound later'); }
   let trims = {};
   const makeup = await call('m.makeupGain()');
 
@@ -215,6 +252,9 @@ try {
 
   // ---- start clicks
   if (!args.has('--fast')) await leakCheck(call, pools);
+
+  // ---- the first sound after the context is made (R3-1): the real engine, through the master chain, at both sample rates
+  if (!args.has('--fast')) await firstSoundCheck(call);
 
   // ---- pan: a panned sound is as loud as a centred one (total power of both channels)
   for (const k of PAN_PROBES) {

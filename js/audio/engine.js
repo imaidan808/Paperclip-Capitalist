@@ -9,7 +9,12 @@ import { createResolverState, resolveBurst, gateClock, holdRelease, stateGate, c
 import { volumeGain, masterGain, CLASSROOM_DB } from './settings.js';
 
 const PRI = { tiny: 1, medium: 2, loud: 3 };
-export const LIMITS = { VOICES: 12, OSCILLATORS: 160, LEAD: 0.012, IDLE_MS: 60000, DUCK_REL: 600 };
+export const LIMITS = { VOICES: 12, OSCILLATORS: 160, LEAD: 0.012, WARM: 0.16, IDLE_MS: 60000, DUCK_REL: 600 };
+// LEAD: how far ahead of `currentTime` a voice is scheduled, so that nothing starts in the past. WARM: the earliest a voice may start, in the context's own time. Chrome's glue compressor is cold for the
+// first 100 to 150 ms after the context is made and takes up to 10 dB off a short sound that starts inside them, whatever was fed to it before (a -80 dBFS sine changed nothing: it is the time since the
+// compressor started, not what it heard; docs/AUDIO.md 3.7, sixth round R3-1). A key or a touch makes the context and plays its tick in the same task, 12 ms in, and that tick came out up to 9.8 dB quiet
+// (a mouse click's tick follows its pointerdown by 60 to 150 ms and lost 0.4 to 2.8). A voice that would start earlier waits for 160 ms of context time, where the loss is under half a dB; from then on
+// nothing waits for anything. A context that sat silent for 30 s was not cold again (an offline render; a suspended live context was not measured).
 const BUCKET_SPEC = { tiny: [8, 4], medium: [3, 3], loud: [1 / 1.2, 1], player: [6, 6] };
 /** The pretend rewards of an Academy lesson are silent (4.1): its levels, XP and quests are a rehearsal saved nowhere. The money, the Deal Room and the acad.* sounds stay. */
 export const SANDBOX_SILENT = new Set(['level.up', 'quest.complete', 'daily.done', 'achievement', 'reward.also', 'milestone', 'zone.open', 'skill.up', 'codex.unlock']);
@@ -72,6 +77,8 @@ export function createAudio(cfg = {}) {
   const silent = () => { const s = eff(); return s.mute || s.master <= 0; };
   const playable = () => supported && !!ctx && unlocked && !hidden && ctx.state !== 'closed';
   const ctxNow = () => ctx.currentTime;
+  /** Where a voice asked for at `now` starts, in context time: LEAD from now, and never inside the compressor's warm-up (LIMITS.WARM). */
+  const startAt = (now) => Math.max(now + LIMITS.LEAD, LIMITS.WARM);
 
   // ---- the context, created on the first gesture
   function measureMakeup() { // the compressor node's own gain depends on its settings and on the browser: measure it once with a 100 ms offline render (3.7)
@@ -122,7 +129,7 @@ export function createAudio(cfg = {}) {
     setTimeout: (f, ms) => timers.set(f, ms), clearTimeout: (h) => timers.clear(h),
     enabled: () => eff().ambient && !silent(), running: () => playable(), dialogOpen: () => env.hold, lastMedium: () => lastMedium, lastMoment: () => lastMoment,
     duck: (db) => { if (!nodes) return; const t = ctxNow(); nodes.ambBase.gain.cancelScheduledValues(t); nodes.ambBase.gain.setTargetAtTime(dB(db), t, db < 0 ? 0.1 : 0.17); },
-    shot: (id, layers, pan) => { if (!nodes || !playable()) return; voice(ctx, nodes.ambLevel, layers, ctxNow() + LIMITS.LEAD, { seed: ++seedN, trim: TRIMS.oneShots?.[id] ?? 0, noiseAt: TRIMS.noiseAt?.[id], pan, jitterCents: 7 }); },
+    shot: (id, layers, pan) => { if (!nodes || !playable()) return; voice(ctx, nodes.ambLevel, layers, startAt(ctxNow()), { seed: ++seedN, trim: TRIMS.oneShots?.[id] ?? 0, noiseAt: TRIMS.noiseAt?.[id], pan, jitterCents: 7 }); },
   });
 
   // ---- gates shared by play and request
@@ -244,7 +251,7 @@ export function createAudio(cfg = {}) {
     wake();
     const snapshot = { ...famLast }; // layer families do not stack: the later voice skips a layer whose family started inside its window, which is also the money group's rule for coins
     const group = { id: main.id, variant: main.variant, tier: heavy.tier, startMs: t + extraDelay * 1000, endMs: t, voices: [], moment, osc: 0, spans: [], stopped: false };
-    const startT = ctxNow() + LIMITS.LEAD;
+    const now0 = ctxNow(), startT = startAt(now0), lead = startT - now0; // `lead`: how far from now the voices really start: LEAD, or the rest of the compressor's warm-up for the first sound of a context
     for (const m of plan) {
       const k = Number.isInteger(m.opts.poolIndex) && m.opts.poolIndex >= 0 && m.opts.poolIndex < (m.e.pool || 1) ? m.opts.poolIndex : pickPool(m.e, m.id + '#' + m.variant); // poolIndex: a member asked for by name (the audition page)
       let layers = layersFor(m.id, m.variant, m.opts.params, k);
@@ -260,7 +267,7 @@ export function createAudio(cfg = {}) {
       }
       // The oscillator budget (3.3) counts what is alive at the same instant: this voice's built layers (not those it will leave out) against the spans of the voices already admitted, each from its
       // own start (a second sentence at +500 ms or a tick at +2 s is not alive at the time of the first). Over it, the optional sparkle goes; a tiny sound that still does not fit is dropped.
-      const startMs = t + (LIMITS.LEAD + shift) * 1000, mo = { secondary: m.opts.secondary, dull: m.opts.dull };
+      const startMs = t + (lead + shift) * 1000, mo = { secondary: m.opts.secondary, dull: m.opts.dull };
       let spans = spansOf(builtLayers(layers, skip, mo), startMs);
       const total = (sp) => sp.reduce((n, x) => n + x[2], 0);
       const over = (sp) => { // the plain sum is the quick answer; the sweep only runs when the sum is over
@@ -462,7 +469,7 @@ export function createAudio(cfg = {}) {
     ambient(state) { amb.set(state); },
     dial: dialApi,
     /** One ambient one-shot on demand, whatever the rate rule says: for the audition page. */
-    playOneShot(id) { if (!playable() || !nodes) return null; return voice(ctx, nodes.ambLevel, oneShotLayers(id), ctxNow() + LIMITS.LEAD, { seed: ++seedN, trim: TRIMS.oneShots?.[id] ?? 0, noiseAt: TRIMS.noiseAt?.[id], jitterCents: 7 }); },
+    playOneShot(id) { if (!playable() || !nodes) return null; return voice(ctx, nodes.ambLevel, oneShotLayers(id), startAt(ctxNow()), { seed: ++seedN, trim: TRIMS.oneShots?.[id] ?? 0, noiseAt: TRIMS.noiseAt?.[id], jitterCents: 7 }); },
     /** A level meter for the audition page: an analyzer on the output of the master chain (made on first use, so nothing runs for the game). */
     meter() { if (!ctx || !chain) return null; if (!meterNode) { meterNode = ctx.createAnalyser(); meterNode.fftSize = 1024; chain.clip.connect(meterNode); const sink = ctx.createGain(); sink.gain.value = 0; meterNode.connect(sink); sink.connect(ctx.destination); } /* a silent tail keeps the analyser pulled */ return meterNode; },
     /** Tell the engine the world it is in (speed, paused, busy, lag, sandbox, net worth...). */

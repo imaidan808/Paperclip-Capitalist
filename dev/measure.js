@@ -336,4 +336,100 @@ export async function crossfadeDip(a, b, fade = AMB.CROSS) {
   return { before, after, dip: Math.min(before, after) - lo, at: (win.indexOf(lo)) / 10 };
 }
 
+
+// ================================================================================================================ sixth round: the engine itself, at any sample rate
+// The filters above are designed for 48 kHz (the `SR` of the calibration). The checks of this round run the REAL engine at 44.1 and 48 kHz, so they need the weightings at the context's own rate:
+// the K-weighting of BS.1770-4 and a 220 Hz Butterworth high-pass as the laptop's speaker, designed per rate (the A-weighting is the cascade above, built for the rate).
+
+/** BS.1770-4 K-weighting (a high shelf and a 38 Hz high-pass) designed at `sr`. At 48 kHz it is the table's constants to seven places. */
+function kCoefsAt(sr) {
+  const f0 = 1681.9744509555319, G = 3.999843853973347, Q = 0.7071752369554196, K = Math.tan(Math.PI * f0 / sr), Vh = 10 ** (G / 20), Vb = Vh ** 0.4996667741545416, a0 = 1 + K / Q + K * K;
+  const shelf = [[(Vh + Vb * K / Q + K * K) / a0, 2 * (K * K - Vh) / a0, (Vh - Vb * K / Q + K * K) / a0], [1, 2 * (K * K - 1) / a0, (1 - K / Q + K * K) / a0]];
+  const f1 = 38.13547087613982, Q1 = 0.5003270373253953, K1 = Math.tan(Math.PI * f1 / sr), c0 = 1 + K1 / Q1 + K1 * K1;
+  return [shelf, [[1, -2, 1], [1, 2 * (K1 * K1 - 1) / c0, (1 - K1 / Q1 + K1 * K1) / c0]]];
+}
+const hp2At = (x, fc, sr) => { const w = 2 * Math.PI * fc / sr, c = Math.cos(w), al = Math.sin(w) / (2 * Math.SQRT1_2), a0 = 1 + al; return biq(x, [(1 + c) / 2 / a0, -(1 + c) / a0, (1 + c) / 2 / a0], [1, -2 * c / a0, (1 - al) / a0]); };
+const bilinearAt = (b, a, sr) => { const k = 2 * sr, N = [b[0] * k * k + b[1] * k + b[2], -2 * b[0] * k * k + 2 * b[2], b[0] * k * k - b[1] * k + b[2]], D = [a[0] * k * k + a[1] * k + a[2], -2 * a[0] * k * k + 2 * a[2], a[0] * k * k - a[1] * k + a[2]]; return [N.map((v) => v / D[0]), D.map((v) => v / D[0])]; };
+const aCache = new Map();
+function aSectionsAt(sr) {
+  let c = aCache.get(sr);
+  if (!c) {
+    const sec = [bilinearAt([1, 0, 0], [1, 2 * W(20.598997), W(20.598997) ** 2], sr), bilinearAt([1, 0, 0], [1, W(107.65265) + W(737.86223), W(107.65265) * W(737.86223)], sr), bilinearAt([0, 0, W(12194.217) ** 2], [1, 2 * W(12194.217), W(12194.217) ** 2], sr)];
+    const w = 2 * Math.PI * 1000 / sr; let re = 1, im = 0; // the cascade's gain at 1 kHz, so the weighting reads 0 dB there
+    for (const [b, a] of sec) { const nr = b[0] + b[1] * Math.cos(w) + b[2] * Math.cos(2 * w), ni = -(b[1] * Math.sin(w) + b[2] * Math.sin(2 * w)), dr = a[0] + a[1] * Math.cos(w) + a[2] * Math.cos(2 * w), di = -(a[1] * Math.sin(w) + a[2] * Math.sin(2 * w)), q = dr * dr + di * di, hr = (nr * dr + ni * di) / q, hi = (ni * dr - nr * di) / q; [re, im] = [re * hr - im * hi, re * hi + im * hr]; }
+    c = { sec, norm: 1 / Math.hypot(re, im) }; aCache.set(sr, c);
+  }
+  return c;
+}
+/** The three weightings at `sr`: K-weighted, the laptop's high-pass, and A-weighting. `fast` is the loudest 125 ms exponential mean square of an already weighted signal, in dB. */
+export const wt = {
+  k: (x, sr) => kCoefsAt(sr).reduce((y, [b, a]) => biq(y, b, a), x),
+  hp: (x, sr, fc = LAPTOP_HZ) => hp2At(x, fc, sr),
+  a: (x, sr) => { const { sec, norm } = aSectionsAt(sr); let y = x; for (const [b, a] of sec) y = biq(y, b, a); return y.map((v) => v * norm); },
+  fast: (k, sr) => { const a = Math.exp(-1 / (0.125 * sr)); let m = 0, mx = 0; for (let i = 0; i < k.length; i++) { m = a * m + (1 - a) * k[i] * k[i]; if (m > mx) mx = m; } return 10 * Math.log10(Math.max(1e-12, mx)); },
+};
+/** The two Fast levels of a window the way the calibration reads them (K-weighted, and the quiet laptop: a 220 Hz high-pass, then A-weighting) and its peak, all at the window's own rate. */
+export function levelsAt(x, sr) {
+  const h = wt.hp(x, sr); let pk = 0; for (let i = 0; i < x.length; i++) { const v = Math.abs(x[i]); if (v > pk) pk = v; }
+  return { fastK: wt.fast(wt.k(x, sr), sr), fastA: wt.fast(wt.a(h, sr), sr), pk: db(pk) };
+}
+/** The mean square of a steady window through a weighting, in dB: for a tone that holds one level (the dial). */
+export const steadyDb = (y, from, to) => { let e = 0; for (let i = from; i < to; i++) e += y[i] * y[i]; return 10 * Math.log10(Math.max(1e-24, e / Math.max(1, to - from))); };
+
+/**
+ * The REAL engine (js/audio/engine.js) in an OfflineAudioContext at `sr`, stereo, with its own settings and a seeded random, so a sound is the same sound in two rigs. Calls made through `at(t, fn)` run
+ * at the first render quantum at or after t (suspend and resume), so the engine reads `currentTime` as a whole number of 128-frame quanta, exactly as it does in the page; calls made before `render()`
+ * run at currentTime 0, the moment after the context is made, which is the first sound of a page. `events` has the time each call really ran.
+ */
+export const ENGINE_DEFAULTS = { master: 70, mute: false, ui: true, game: true, ambient: false, ambientLevel: 70, dial: false, clockSounds: true, quiet: false, worldTicks: true };
+export function engineRig({ sr = 48000, lengthSec = 4, settings = {}, seed = 1, channels = 2 } = {}) {
+  const oc = new OfflineAudioContext(channels, Math.ceil(sr * lengthSec), sr), S = { ...ENGINE_DEFAULTS, ...settings }, events = [], timers = new Map();
+  let vnow = 0, tid = 0;
+  const audio = createAudio({ get: () => S, factory: () => oc, now: () => vnow, timers: { set: (f, ms) => { timers.set(++tid, { f, ms }); return tid; }, clear: (h) => timers.delete(h) }, random: rng(seed ^ 0x5bd1e995), measure: false });
+  audio.unlock();
+  const flushTimers = () => { for (const [h, t] of [...timers]) if (t.ms <= 0) { timers.delete(h); try { t.f(); } catch { /* a timer of the engine */ } } };
+  const api = {
+    oc, audio, sr, S, events,
+    at(tSec, fn) { events.push({ q: Math.ceil(tSec * sr / 128) * 128, fn }); },
+    async render() {
+      events.sort((a, b) => a.q - b.q);
+      for (let i = 1; i < events.length; i++) if (events[i].q <= events[i - 1].q) events[i].q = events[i - 1].q + 128;
+      for (const ev of events) oc.suspend(ev.q / sr).then(() => { vnow = 5000 + (ev.q / sr) * 1000; ev.t = ev.q / sr; try { ev.fn(audio, api); } catch (e) { ev.err = String((e && e.stack) || e); } flushTimers(); oc.resume(); });
+      const buf = await oc.startRendering();
+      api.errs = events.filter((e) => e.err).map((e) => e.err);
+      return buf;
+    },
+  };
+  return api;
+}
+/** First and last audible sample of a window (above -120 dBFS), in samples from its start: -1 for silence. */
+const audible = (L, R) => { const n = L.length; let s = -1, e = -1; for (let i = 0; i < n; i++) if (Math.abs(L[i]) > 1e-6 || Math.abs(R[i]) > 1e-6) { s = i; break; } for (let i = n - 1; i >= 0; i--) if (Math.abs(L[i]) > 1e-6 || Math.abs(R[i]) > 1e-6) { e = i; break; } return [s, e]; };
+
+/**
+ * The first sound after the context is made (sixth round, R3-1). Chrome's glue compressor is cold for its first 100 to 150 ms and takes up to 10 dB off a short sound that starts inside them
+ * (docs/AUDIO.md 3.7), and the page's first press creates the context and plays its tick in the same task. Each variant is played through the real engine twice, in two rigs that draw the same
+ * seeded voice: once at currentTime 0 (the first sound of a page) and once at 1.0 s; the level of the two (K-weighted Fast, the quiet laptop's A-weighted Fast, the peak) are compared and the
+ * time the first one is heard at is read. A third play, after `idle` seconds of silence, says whether a compressor that has gone quiet goes cold again.
+ * Returns [{ key, sr, first: { fastK, fastA, pk, at (ms) }, later: {...}, dK, dA, dPk, idle?: { dK, dA } }].
+ */
+export async function firstSound(sr, keys, { idle = 0 } = {}) {
+  const out = [];
+  for (const key of keys) {
+    const [id, v] = key.split('#'), dur = RECIPES[id].dur, seg = dur + 0.7, len = 1.0 + seg + 0.4 + (idle ? idle + seg : 0);
+    const play = (au) => au.play(id, { variant: v, poolIndex: 0, noCooldown: true });
+    const A = engineRig({ sr, lengthSec: len, seed: 5 }), B = engineRig({ sr, lengthSec: len, seed: 5 });
+    const ha = play(A.audio); // before any rendering: the context's currentTime is 0
+    B.at(1.0, play);
+    if (idle) B.at(1.0 + seg + 0.2 + idle, play);
+    const [ba, bb] = [await A.render(), await B.render()], cut = (b, from) => [b.getChannelData(0).subarray(Math.round(from * sr), Math.round((from + seg) * sr)), b.getChannelData(1).subarray(Math.round(from * sr), Math.round((from + seg) * sr))];
+    const m = (b, from) => { const [L, R] = cut(b, from), [s] = audible(L, R); if (s < 0) return null; const lv = levelsAt(L, sr); return { ...lv, at: Math.round(s / sr * 1000) }; };
+    const f = m(ba, 0), l = m(bb, 1.0);
+    if (!f || !l || !ha) { out.push({ key, sr, silent: true, played: !!ha }); continue; }
+    const row = { key, sr, first: f, later: l, dK: f.fastK - l.fastK, dA: f.fastA - l.fastA, dPk: f.pk - l.pk };
+    if (idle) { const i2 = m(bb, 1.0 + seg + 0.2 + idle); row.idle = i2 && { dK: i2.fastK - l.fastK, dA: i2.fastA - l.fastA }; }
+    out.push(row);
+  }
+  return out;
+}
+
 export { IDS, firstVariant, dB };

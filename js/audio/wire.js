@@ -322,8 +322,8 @@ const roomAsked = () => {
 const pageState = { repayF: null, bids: 0 };
 /** A dialog that closes within this long of a press that played a sound of its own is closed by that press: the press is the voice (fourth round, W-4). Escape and a click on the backdrop play no press sound, so they still get the close. */
 const PRESS_CLOSES_MS = 250;
-/** Leaving a game stops its voices, except one that began in the last 150 ms: the press that left (Open debrief, Leave) has its own tick, and a 40 ms fade cut it to a blip (fourth round, W-4). */
-const KEEP_MS = 150;
+/** Leaving a game stops its voices, except one that began in the last 150 ms: the press that left (Open debrief, Leave) has its own tick, and a 40 ms fade cut it to a blip (fourth round, W-4). It is more than the longest a voice waits for the compressor to warm up (LIMITS.WARM less LEAD, 148 ms), so that tick is still kept if it is the first sound of the page. */
+export const KEEP_MS = 150;
 /** Is a game's wiring installed? While it is, the five legacy names of common.js are no-ops (8.4): the events speak for themselves. Before any game is wired (the title, the draft) they still play. */
 export const wired = () => gamesWired > 0;
 /** A test hook: forget the page-wide layer, so a test can install it again with its own stand-ins. */
