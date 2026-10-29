@@ -25,7 +25,7 @@ function farDraw(ctx, p, env) {
 const KEEP_FAR = new Set(['board', 'bank', 'ipo', 'tower', 'crane', 'gantry', 'rentrow', 'exchange', 'hall', 'ship', 'gate', 'lookout']);
 /** Draw one prop: through its sprite when it is a layer and the cache can serve it, else straight onto the scene. env.hz carries the prop's haze for the length of the call. */
 export function drawProp(ctx, p, env) {
-  if (env.far && !KEEP_FAR.has(p.t)) return farDraw(ctx, p, env);
+  if (env.far && !KEEP_FAR.has(p.t)) { const fv = propV2(p.t); return fv && fv.far ? fv.far(ctx, p, env) : farDraw(ctx, p, env); } // a V2 kind may bring its own cheap island view (def.far)
   const prev = env.hz; env.hz = hazeAt(p.z || 0);
   try {
     const v = propV2(p.t); // the V2 drawer of this kind, when its owner has registered one and flagged it (stack.js): the same path, with its own definition

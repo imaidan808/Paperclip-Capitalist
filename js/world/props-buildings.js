@@ -4,6 +4,10 @@
 import { P, box, quad, quadN, windows, shadow, cyl, ellipse, tone, shade, mix, diamond, h2, snowA, sootA } from './iso.js';
 import { solid, contact, seams } from './shading.js';
 import { tint, body, glow, hot, fp, FONT, lite, hexRgb, seedOf, leftFace, rightFace, stroke, strip, windowGlow, smoke, faceText, sign, signLeft, neonSign, DRAW, layer } from './props-common.js';
+import './buildings.js'; // the V2 drawers of these kinds (registerProp): used while the 'static-bldg' layer is flagged v2
+import './bldg-civic.js';
+import './bldg-works.js';
+import './bldg-small.js';
 
 // ---------------------------------------------------------------- roofs
 /** A rooftop vent or air-conditioning unit or two on a flat roof, placed by the building's own hash. */

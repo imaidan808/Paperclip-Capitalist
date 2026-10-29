@@ -4,6 +4,7 @@ import { PIPE } from '../config.js';
 import { P, box, quad, shadow, cyl, tone, shade, clamp, diamond, facePoint, windows } from './iso.js';
 import { DIST, PLOTS } from './layout.js';
 import { PIP_ZOOM } from './common.js';
+import './plots.js'; // the V2 drawers of the 'plot' and 'pipe' layers (registerLayer): used while those flags are v2
 
 export const plotMethods = {
   drawPlot(ctx, e) {
