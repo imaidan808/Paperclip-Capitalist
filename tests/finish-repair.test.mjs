@@ -714,7 +714,8 @@ test('browser A3, A4, A7: a tap lands on the Market\'s Sell button at 360x640 wh
     await until(p, `document.querySelector('.ac-where') && /Press See the result to finish the deal/.test(document.querySelector('.ac-where').innerText)`, 'the note that names See the result');
     assert.ok(await p.eval(`[...document.querySelectorAll('dialog#dlg button')].some(b=>/^See the result$/.test(b.textContent.trim()))`), 'and the room has that button');
     // the card stays off what the lesson asks to be read: the footer's cells, the seller's reply and the result line (measured once the card has stopped moving)
-    await until(p, `(()=>{const c=document.querySelector('.ac-coach'); const r=c.getBoundingClientRect(); const k=[r.x,r.y,r.width,r.height].join(); const same=window.__ck===k; window.__ck=k; return same})()`, 'the card at rest');
+    // at rest: unchanged for 700 ms, so the card's beat (every 200 ms) and its hold after a press (350 ms) have both passed: two reads a moment apart can agree while the card is still waiting to be placed for what the click changed
+    await until(p, `(()=>{const c=document.querySelector('.ac-coach'); const r=c.getBoundingClientRect(); const k=[r.x,r.y,r.width,r.height].join(), n=Date.now(), w=window.__ck; if(!w||w.k!==k){window.__ck={k,since:n}; return false} return n-w.since>=700})()`, 'the card at rest');
     const over = await p.eval(`(()=>{const c=document.querySelector('.ac-coach').getBoundingClientRect(); return [...document.querySelectorAll('.deal .bubble, .deal-stage .callout, .deal-score > div')].map(e=>{const r=e.getBoundingClientRect(); return Math.max(0,Math.min(r.right,c.right)-Math.max(r.left,c.left))*Math.max(0,Math.min(r.bottom,c.bottom)-Math.max(r.top,c.top))}).reduce((a,x)=>a+x,0)})()`);
     assert.equal(over, 0, 'no pixel of the result line, the seller\'s reply or the footer\'s cells is under the card');
   } finally { await p.close(); }
