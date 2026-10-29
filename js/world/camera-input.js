@@ -17,10 +17,10 @@
 export const LINE_PX = 16;             // a line of a wheel that scrolls by lines, in pixels
 export const DEFAULT_PAGE_PX = 800;    // the height of a "page" of wheel when the caller does not say
 export const NOTCH_MIN_PX = 50;        // a whole-number deltaY of at least this, with no deltaX, is a mouse wheel's notch (a trackpad's deltas are small or fractional)
-export const NOTCH_PX = 120;           // a notch and a half is a notch and a half; below one notch, an event is still one whole step
+export const NOTCH_PX = 120;           // a notch event counts as its delta over this many notches, never fewer than one (even a small one is a whole step) and at most MAX_NOTCHES
 export const MAX_NOTCHES = 3;          // a fast-spun wheel's biggest event counts as this many notches
 export const MOUSE_STEP = 1.16;        // the zoom of one notch
-export const TRACKPAD_RATE = 0.0025;   // natural-log zoom per pixel of a two-finger scroll
+export const TRACKPAD_RATE = 0.0015;   // natural-log zoom per pixel of a two-finger scroll: a gentle slide of 150 px is a quarter more, a swipe of 800 px with its momentum is three times
 export const PINCH_RATE = 0.01;        // natural-log zoom per unit of a pinch's deltaY: a pinch follows the fingers
 export const MAX_EVENT_FACTOR = 1.6;   // the most one event may zoom by, either way
 export const ZOOM_TAU = 0.09;          // seconds: the easing's time constant. 86% of a notch is done in 180 ms, and the last of it is snapped at SETTLE_LN

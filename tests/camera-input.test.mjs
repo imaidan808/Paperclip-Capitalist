@@ -5,7 +5,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { Game } from '../js/engine.js';
 import {
-  LINE_PX, MOUSE_STEP, MAX_EVENT_FACTOR, ZOOM_TAU, SETTLE_LN, MOUSE, PINCH, TRACKPAD,
+  LINE_PX, MOUSE_STEP, TRACKPAD_RATE, PINCH_RATE, MAX_EVENT_FACTOR, ZOOM_TAU, SETTLE_LN, MOUSE, PINCH, TRACKPAD,
   STREAM_GAP_MS, clampFactor, normalizeWheel, wheelZoomFactor, zoomFactor, gestureZoomFactor, easeZoom, ZoomInput,
 } from '../js/world/camera-input.js';
 
@@ -73,6 +73,10 @@ test('a two-finger scroll zooms smoothly and gently: small deltas make small ste
   assert.ok(f(3.7) < 1 && f(3.7) > 0.988);
   near(f(-3.7) * f(3.7), 1, 1e-12);
   assert.ok(f(-30.5) < 1.1, 'a quick scroll frame is still not a jump');
+  // what a hand makes of it: a gentle slide is a clear but modest zoom, a medium swipe with its momentum about three times, a hard flick nearly everything the range has
+  const dist = (px, n = 40) => { let z = 1; for (let i = 0; i < n; i++) z *= f(-px / n); return z; };
+  assert.ok(dist(150) > 1.15 && dist(150) < 1.6, `150 px: ${dist(150)}`); assert.ok(dist(800) > 2 && dist(800) < 5, `800 px: ${dist(800)}`); assert.ok(dist(2000) > 8, `2000 px: ${dist(2000)}`);
+  assert.ok(TRACKPAD_RATE >= 0.001 && TRACKPAD_RATE <= 0.003 && PINCH_RATE === 0.01);
   // the same distance of scrolling is much gentler than a pinch of the same delta, and than a notch of 100 px
   assert.ok(wheelZoomFactor({ deltaY: -48.5 }) < MOUSE_STEP);
   assert.ok(f(-5.5) < wheelZoomFactor({ ctrlKey: true, deltaY: -5.5 }));
@@ -130,7 +134,7 @@ test('a momentum tail of ever smaller deltas cannot run the zoom away', () => {
   assert.ok(clamp(z * wheelZoomFactor({ deltaY: 6.5 })) < hi, 'one opposite event moves it at once: nothing wound up behind the end');
   // a short tail that does not reach the end adds up to exactly what its distance says: a total scroll of D px is a zoom of e^(-D * rate), no more
   let zz = 1, total = 0; for (let i = 0; i < 80; i++) { const dy = -(6.25 * 0.9 ** i); total += dy; zz *= wheelZoomFactor({ deltaY: dy }); }
-  near(zz, Math.exp(-total * 0.0025), 1e-9, 'a gentle tail is exactly proportional'); assert.ok(zz > 1 && zz < 1.2);
+  near(zz, Math.exp(-total * TRACKPAD_RATE), 1e-9, 'a gentle tail is exactly proportional'); assert.ok(zz > 1 && zz < 1.2);
   // a fuzz of random events, junk included, never leaves the range
   let seed = 7; const rnd = () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 2 ** 32);
   z = 1; const pick = [NaN, Infinity, -Infinity, undefined, 1e308, -1e308, 0];
@@ -211,13 +215,13 @@ test('ZoomInput: with easing off (reduced motion, or no loop to drive it) a notc
 
 test('ZoomInput: a notch-sized event inside a trackpad\'s gesture belongs to the gesture; after a pause it is a notch', () => {
   assert.equal(normalizeWheel({ deltaY: 96 }).guess, true, 'a whole 96 is a notch by its size'); assert.equal(normalizeWheel({ deltaMode: 1, deltaY: 3 }).guess, false, 'by line the device is certain');
-  assert.equal(zoomFactor(-96, TRACKPAD), Math.exp(96 * 0.0025)); assert.equal(zoomFactor(NaN, MOUSE), 1); assert.equal(zoomFactor(undefined, PINCH), 1);
+  assert.equal(zoomFactor(-96, TRACKPAD), Math.exp(96 * TRACKPAD_RATE)); assert.equal(zoomFactor(NaN, MOUSE), 1); assert.equal(zoomFactor(undefined, PINCH), 1);
   let t = 1000; const ev = (dy, extra = {}) => ({ deltaY: dy, offsetX: 100, offsetY: 100, timeStamp: (t += 16), ...extra });
   // a flick: it ramps up through small deltas, then sends whole numbers over 50 with no deltaX, which alone look like notches
   const a = fakeHost({ z: 0.5 }); const za = new ZoomInput(a.host);
   za.wheel(ev(-6.5)); za.wheel(ev(-31.25)); const z1 = a.h.z; assert.equal(za.pending, false);
-  za.wheel(ev(-96)); assert.equal(za.pending, false, 'applied at once, not eased'); near(a.h.z, z1 * Math.exp(96 * 0.0025), 1e-12, 'by the scroll rule');
-  const z2 = a.h.z; za.wheel(ev(-120)); za.wheel(ev(-104)); near(a.h.z, z2 * Math.exp(224 * 0.0025), 1e-12, 'and the rest of the flick'); assert.equal(za.pending, false);
+  za.wheel(ev(-96)); assert.equal(za.pending, false, 'applied at once, not eased'); near(a.h.z, z1 * Math.exp(96 * TRACKPAD_RATE), 1e-12, 'by the scroll rule');
+  const z2 = a.h.z; za.wheel(ev(-120)); za.wheel(ev(-104)); near(a.h.z, z2 * Math.exp(224 * TRACKPAD_RATE), 1e-12, 'and the rest of the flick'); assert.equal(za.pending, false);
   za.wheel(ev(-3, { deltaMode: 1 })); assert.equal(za.pending, true, 'a wheel that scrolls by lines is a wheel, even then');
   // a pause ends the gesture
   const b = fakeHost(); const zb = new ZoomInput(b.host);
@@ -238,7 +242,7 @@ test('ZoomInput: a notch-sized event inside a trackpad\'s gesture belongs to the
 test('ZoomInput: a pinch and a trackpad scroll are applied at once, and end an ease that was under way', () => {
   const { h, host } = fakeHost(); const zi = new ZoomInput(host);
   zi.wheel({ ctrlKey: true, deltaY: -4.5, offsetX: 10, offsetY: 20 }); near(h.z, Math.exp(0.045), 1e-12); assert.equal(zi.pending, false);
-  zi.wheel({ deltaY: -3.5, offsetX: 10, offsetY: 20 }); near(h.z, Math.exp(0.045) * Math.exp(3.5 * 0.0025), 1e-12);
+  zi.wheel({ deltaY: -3.5, offsetX: 10, offsetY: 20 }); near(h.z, Math.exp(0.045) * Math.exp(3.5 * TRACKPAD_RATE), 1e-12);
   zi.wheel({ deltaY: -100, offsetX: 1, offsetY: 2 }); assert.ok(zi.pending);
   const before = h.z; zi.wheel({ ctrlKey: true, deltaY: 2.2, offsetX: 1, offsetY: 2 });
   assert.equal(zi.pending, false, 'the pinch took over'); near(h.z, before * Math.exp(-0.022), 1e-12);
@@ -362,7 +366,7 @@ test('a trackpad\'s two-finger scroll and a pinch zoom about the pointer at once
   const { w } = await world(); w.running = true;
   const px = 640, py = 90, p = worldAt(w, px, py); let z = w.cam.z;
   let r = wheel(w, { deltaY: -12.75, offsetX: px, offsetY: py }); assert.equal(r.prevented, true);
-  near(w.cam.z, z * Math.exp(12.75 * 0.0025), 1e-12, 'a scroll of 12.75 px'); assert.equal(w.zin.pending, false, 'applied the moment it arrives'); z = w.cam.z;
+  near(w.cam.z, z * Math.exp(12.75 * TRACKPAD_RATE), 1e-12, 'a scroll of 12.75 px'); assert.equal(w.zin.pending, false, 'applied the moment it arrives'); z = w.cam.z;
   r = wheel(w, { ctrlKey: true, deltaY: -3.25, offsetX: px, offsetY: py }); assert.equal(r.prevented, true);
   near(w.cam.z, z * Math.exp(0.0325), 1e-12, 'a pinch of 3.25'); assert.equal(w.zin.pending, false);
   const [sx, sy] = screenOf(w, p); assert.ok(Math.abs(sx - px) < 1 && Math.abs(sy - py) < 1, 'the point under the fingers stayed');
