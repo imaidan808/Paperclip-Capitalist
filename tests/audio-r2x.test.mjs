@@ -122,7 +122,7 @@ test('A1: the instructor\'s settings button says Display and sound, and Copy stu
   assert.equal(qs(link(off)).get('room'), 'ABCD'); assert.equal(qs(link(off)).get('sound'), null, 'by default the link is the link it always was');
   assert.equal(qs(link(on)).get('room'), 'ABCD'); assert.equal(qs(link(on)).get('sound'), 'quiet');
   assert.match(on, /<input type="radio" name="linksound" id="ls-quiet" value="quiet" data-change="linksound"[^>]* checked>/); assert.ok(!/id="ls-normal"[^>]* checked>/.test(on)); assert.match(off, /id="ls-normal"[^>]* checked>/, 'Normal is the default');
-  assert.match(on, /<label for="ls-quiet"[^>]*>Quiet<\/label>/, 'a labelled native radio'); assert.match(on, /<legend[^>]*>Sound in the student link<\/legend>/);
+  assert.match(on, /<label for="ls-quiet"[^>]*>Quiet<\/label>/, 'a labeled native radio'); assert.match(on, /<legend[^>]*>Sound in the student link<\/legend>/);
   assert.match(src('js/ui/instructor.js'), /linksound\(b\) \{ U\.linkSound = LINK_SOUNDS\.some\(\(x\) => x\.id === b\.value\) \? b\.value : 'normal'; render\(\); \}/, 'and the choice redraws the link');
   const S2 = roomSession(); S2.roomInfo = { code: 'ABCD', relay: 'wss://r.example.edu', role: 'instructor' };
   const relay = instructorParts(S2, { linkSound: 'quiet' }).head;

@@ -389,6 +389,6 @@ test('Appendix G exists, answers every finding, and says which were not taken as
   const doc = src('docs/AUDIO.md'), from = doc.indexOf('## Appendix G.'), to = doc.indexOf('## Appendix H.'), g = doc.slice(from, to > from ? to : undefined); // Appendix H (the fifth round) follows it
   for (const id of ['R1', 'R2', 'R3', 'R4', 'R5', 'R6', 'R7', 'R8', 'W-1', 'W-2', 'W-3', 'W-4', 'W-5', 'W-6', 'W-7', 'W-8', 'W-9', 'B1', 'B2', 'U1', 'U2', 'U3', 'U4', 'U5', 'U6', 'U7', 'U8', 'U9', 'U10', 'U11', 'U12', 'U13', 'U14', 'U15']) assert.ok(g.includes(id), id + ' is in Appendix G');
   assert.match(g, /\*\*Not as reported\.\*\*/); assert.match(g, /The remedy proposed \(-1\.5 dB when panned\) was measured and is worse/); assert.match(g, /### G\.3 What only ears can say/);
-  assert.match(doc, /Revision 6 \(2026-10-29, the fourth repair round\)/); assert.match(doc, /Appendix D, E, F, G and H the five repair rounds/);
+  assert.match(doc, /Revision 6 \(2026-10-29, the fourth repair round\)/); assert.match(doc, /Appendix D, E, F, G, H and I the six repair rounds/); // the sixth round added Appendix I to the list (it said "G and H the five" before)
   assert.ok(!/10 dB lower, interface 6 dB lower/.test(doc), 'the Classroom figure is 8 everywhere'); assert.ok(!/game 10\b/.test(src('scripts/audio-check.mjs')));
 });

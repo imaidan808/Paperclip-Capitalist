@@ -472,7 +472,7 @@ test('UX3: leaving gives back exactly what the ROOM changed (under each link), a
   }
   const same = S.leaveRoom({ ...audioDefaults() }, null); assert.equal(same, S.leaveRoom(same, null), 'nothing remembered, nothing changes');
 });
-test('UX3: the dashboard\'s Sound in the student link is three labelled radio buttons, Normal first and checked, and the link and the copy follow the choice', () => {
+test('UX3: the dashboard\'s Sound in the student link is three labeled radio buttons, Normal first and checked, and the link and the copy follow the choice', () => {
   assert.deepEqual(LINK_SOUNDS.map((x) => [x.id, x.label, x.query]), [['normal', 'Normal', ''], ['quiet', 'Quiet', '&sound=quiet'], ['off', 'Off', '&sound=off']]);
   assert.deepEqual(LINK_COPIED, { normal: 'Student link copied.', quiet: 'Student link copied, with quiet sound.', off: 'Student link copied, with sound off.' });
   const link = (h) => (h.match(/data-link="([^"]+)"/) || [])[1].replace(/&amp;/g, '&'), qs = (l) => new URLSearchParams(l.slice(l.indexOf('?')));
@@ -495,7 +495,7 @@ test('UX3: the dashboard\'s Sound in the student link is three labelled radio bu
 });
 test('UX3: the kit says what the link does and that Classroom is "less than half as loud, and still not silent", and the numbers are the engine\'s', () => {
   const kit = src('docs/FACULTY_KIT.md'), comp = src('docs/COMPLIANCE.md');
-  assert.match(kit, /less than half as loud as Full, and still not silent/);
+  assert.match(kit, /less than half as loud, and still not silent/, 'the words the instructor can use');
   assert.match(kit, /\*\*Sound in the student link\.\*\* Beside \*\*Copy student link\*\* a choice of three: \*\*Normal\*\*/); assert.match(kit, /\*\*Off\*\* \(`&sound=off`\)/); assert.match(kit, /\*\*M\*\* turns sound on/);
   assert.match(kit, /Choose \*\*Quiet\*\* or \*\*Off\*\* under \*\*Sound in the student link\*\* \*before\* you press \*\*Copy student link\*\*/);
   assert.ok(!/Quiet sound link/.test(kit) && !/is a loud sound on every laptop at once/.test(kit), 'the old box and the old shock sentence');
