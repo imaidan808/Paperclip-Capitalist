@@ -23,6 +23,10 @@
 //   --full            also keep NAME.full.png, the page as a person sees it (HUD, dock and buttons over the world)
 //   --reverse         shoot in reverse order (a build must give the same pictures whichever order they are taken in)
 //   --perf            after the shots, time a frame (pc.world.draw() and the canvas's raster) at each shot's camera, still and with the camera moving so the ground cache cannot be used, and size the offscreen bitmaps: written to perf.json
+//   --hits 24         also write NAME.hits.json for each shot: what world.pick() answers at every 24th css pixel of the picture (rows of runs: [index into `legend`, count]; index 0 is "nothing"), so a build's hit testing can be compared with another's
+//                     (node scripts/world-hits.mjs A_DIR B_DIR: the share of points that answer differently). Presentation work must leave it as it was.
+//   --exact-hits      with --hits: answer from the camera's exact numbers, as adcd991 did (the art build rounds the picture's translation to whole device pixels and answers from that, so a click lands on what is drawn: a
+//                     point within half a device pixel of a hit shape's edge can differ). With it, the two builds' grids must be the same, point for point (tests/world-hits.test.mjs).
 //   --list            print the names of the chosen shots, one a line, and stop (no browser)
 //   --debug           also keep the entities' places in the manifest (to find what differs between two runs)
 //   --cdp 9503        the Chrome debugging port (each Chrome needs its own port; it is killed at the end)
@@ -49,7 +53,7 @@ const argv = process.argv.slice(2), arg = (k, d) => { const i = argv.indexOf('--
 const O = {
   base: String(arg('base', 'http://localhost:8090')), out: arg('out', ''), dsf: +arg('dsf', 2), w: +arg('w', 1440), h: +arg('h', 900), set: String(arg('set', 'all')), hour: +arg('hour', 8), t: +arg('t', 1200000),
   motion: String(arg('motion', 'frozen')), seed: +arg('seed', 20260101), gameHour: +arg('game-hour', 3), draws: +arg('draws', 2), maxDraws: +arg('max-draws', 24), full: !!arg('full', false), reverse: !!arg('reverse', false),
-  cdp: +arg('cdp', 9503), debug: !!arg('debug', false), perf: !!arg('perf', false), canvasDpr: String(arg('canvas-dpr', 'native')), perks: String(arg('perks', 'trades,pro')),
+  cdp: +arg('cdp', 9503), hits: +arg('hits', 0), exactHits: !!arg('exact-hits', false), debug: !!arg('debug', false), perf: !!arg('perf', false), canvasDpr: String(arg('canvas-dpr', 'native')), perks: String(arg('perks', 'trades,pro')),
 };
 if (!O.out || O.out === true) { console.error('usage: node scripts/world-shots.mjs --base http://localhost:8503 --out DIR [--dsf 2] [--set all|quick|pan|tod|names] [--hour 8] (see the head of this file)'); process.exit(2); }
 if (!['frozen', 'reduced'].includes(O.motion)) { console.error('--motion is frozen or reduced'); process.exit(2); }
@@ -126,7 +130,7 @@ const PAGE = String.raw`(() => {
     const w = pc.world, html = document.documentElement;
     R.seed = o.seed;
     w.stop();                                                  // no frame loop: nothing changes except by hand
-    const SP = await import('/js/world/sprites.js'); SP.setBuildBudget(1e9, 6, 100); SP.setSpriteFade(0); // sprites are built in a few milliseconds a frame; here all at once, and an exact sprite replaces its stand-in at once (no 120 ms fade), so no picture waits on the clock
+    const SP = await import('/js/world/sprites.js'); SP.setBuildBudget(1e9, 6, 100); SP.setSpriteFade?.(0); // (the baseline build, adcd991, has no fade to stop) sprites are built in a few milliseconds a frame; here all at once, and an exact sprite replaces its stand-in at once (no 120 ms fade), so no picture waits on the clock
     w.gcBudget = [1e9, 1e9]; w.gcRest = 0; w.gcFade = 0;                                   // the ground's chunks likewise: every chunk of a view is baked in its first draw
     if (o.dpr) { w.targetDpr = () => o.dpr; w.resize(); }     // pin the canvas density (a software-drawn canvas would be capped by the game)
     if (w.light) w.light.perFrame = 99;                        // every light layer in the first draw, not one a frame
@@ -162,6 +166,28 @@ const PAGE = String.raw`(() => {
     const px = (c) => (c ? (c.c ? c.c.width * c.c.height : c.width * c.height) || 0 : 0);
     const light = w.light ? sum([...Object.values(w.light.big || {}), ...Object.values(w.light.src || {})].map(px)) : 0;
     return { still: spread(still), pan: spread(pan), memoryMpx: { main: +(w.cv.width * w.cv.height / 1e6).toFixed(2), ground: +(((w.gc && w.gc.bytes) || px(w.gc)) / (w.gc && w.gc.bytes ? 4 : 1) / 1e6).toFixed(2), light: +(light / 1e6).toFixed(2), sprites: +(S.stats.pixels / 1e6).toFixed(2) }, sprites: { ...S.stats } };
+  };
+  /** What the world's own hit test answers on a grid of css pixels, as runs per row: the picture must be drawn already (hits are recorded while drawing). */
+  R.hits = (step, exact) => {
+    const w = pc.world, legend = ['-'], idx = new Map([['-', 0]]), rows = [];
+    // exact: ask the question with the camera's own numbers. The art build draws from a translation rounded to whole device pixels and answers from that same rounded origin (so a click lands on what is drawn); the build before it
+    // answered from the exact camera. With exact, both answer from the exact camera and the grids differ only if a hit shape (its place, size or order) does.
+    const own = exact && typeof w.origin === 'function' && typeof w.renderScale === 'function';
+    if (own) { w.origin = (out = [0, 0]) => { out[0] = w.W / 2 - w.cam.x * w.cam.z; out[1] = w.H / 2 - w.cam.y * w.cam.z; return out; }; w.renderScale = () => w.dpr * w.cam.z; }
+    try {
+    for (let y = step / 2; y < w.H; y += step) {
+      const row = []; let last = -1, n = 0;
+      for (let x = step / 2; x < w.W; x += step) {
+        let h = null; try { h = w.pick(x, y); } catch (e) { h = null; }
+        const k = h ? h.kind + ':' + h.id : '-';
+        if (!idx.has(k)) { idx.set(k, legend.length); legend.push(k); }
+        const i = idx.get(k);
+        if (i === last) n++; else { if (n) row.push([last, n]); last = i; n = 1; }
+      }
+      if (n) row.push([last, n]); rows.push(row);
+    }
+    } finally { if (own) { delete w.origin; delete w.renderScale; } }
+    return { step, w: w.W, h: w.H, legend, rows, exact: !!own };
   };
   R.shoot = async (s, o) => {
     const w = pc.world, T = s.t == null ? o.t : s.t; // a shot may be drawn at a clock time of its own (the drift pair)
@@ -212,6 +238,7 @@ try {
     const png = Buffer.from(r.png.slice(r.png.indexOf(',') + 1), 'base64'); delete r.png;
     writeFileSync(`${O.out}/${s.name}.png`, png);
     if (O.full) await p.shot(`${O.out}/${s.name}.full.png`);
+    if (O.hits > 0) writeFileSync(`${O.out}/${s.name}.hits.json`, JSON.stringify(await p.eval(`__rig.hits(${O.hits}, ${O.exactHits})`)));
     const row = { name: s.name, sets: s.sets, file: `${s.name}.png`, hour: s.hour ?? O.hour, requested: s.fit ? { fit: true } : { x: Math.round(s.at[0]), y: Math.round(s.at[1]), z: s.z }, ...r, bytes: png.length, sha256: createHash('sha256').update(png).digest('hex').slice(0, 16) };
     if (s.panFrom) row.panFrom = s.panFrom;
     if (s.zoomFrom) row.zoomFrom = s.zoomFrom;
