@@ -107,7 +107,8 @@ body:has(.stage) { background-image: none; overflow: hidden; overscroll-behavior
 .ibtn[aria-pressed="true"] { border-color: var(--gold); color: var(--gold); }
 
 /* ---- goal tracker and news ticker. The tracker's width is a variable so a layout can say how wide it is (--trk-w) and an open side drawer can say how much it may take (--trk-cap). ---- */
-.trackerhost { --trk-w: min(20rem, calc(100% - var(--edge-l) - var(--edge-r))); --trk-cap: 100%; position: absolute; z-index: var(--z-aux); left: var(--edge-l); top: calc(var(--hud-h) + var(--sp-1)); width: min(var(--trk-w), var(--trk-cap)); }
+.trackerhost { --trk-w: min(20rem, calc(100% - var(--edge-l) - var(--edge-r))); --trk-cap: 100%; position: absolute; z-index: var(--z-aux); left: var(--edge-l); top: calc(var(--hud-h) + var(--sp-1)); width: min(var(--trk-w), var(--trk-cap)); max-height: calc(100% - var(--hud-h) - var(--sp-1) - var(--edge-b)); display: flex; } /* it ends above the bottom edge and the strip a lesson's card stands in (--edge-b): at the largest text beside a drawer its title wraps into a narrow column and was 114px tall, 22px into the strip, under the card's tab */
+.trackerhost > .tracker { min-height: 0; max-height: 100%; overflow: hidden; }
 .tracker { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "lb ct" "ti ti" "ds ds" "br br"; gap: .15rem var(--sp-2); align-items: baseline; width: 100%; padding: var(--sp-2) var(--sp-3); background: var(--plate); border: 1px solid var(--line); border-left: 4px solid var(--gold); border-radius: var(--r-2); box-shadow: var(--elev-2); color: var(--ink); font: inherit; text-align: left; cursor: pointer; }
 .tracker small { font-size: var(--t-micro); text-transform: uppercase; letter-spacing: .1em; line-height: var(--lh-tight); }
 .tracker .tk-lb { grid-area: lb; color: var(--gold); } .tracker .tk-ct { grid-area: ct; color: var(--mute); text-transform: none; letter-spacing: 0; }

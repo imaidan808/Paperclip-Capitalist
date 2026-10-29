@@ -4,12 +4,16 @@
 //       there and takes a tap. The full matrix is `node scripts/academy-sweep.mjs --level full`.
 //   M3  the largest text at the shortest windows (844x390 with a finger and 640x360 with a mouse, lessons 1 and 4): the card the player opens from its tab shows its words AND its hint, in the wide shape where the full
 //       card is taller than the window (the full card's hint was 42% on the screen, the rest behind the card's own scroll)
+//   M4  the goal tracker ends above the strip a lesson's card stands in: at the largest text, beside an open drawer, 640x360 (it was 114px tall, 22px into the strip, under the card's tab)
 //   M2  the sweep sees what it is there to see: a card put over the dock is reported as covering it (an instrument that cannot fail proves nothing).
 //   PB-1  with a panel open a real tap at the middle of its Close button lands on the Close button and closes the panel, not on the card (768x1024, 640x360, 360x640).
 //   PB-3  with a panel open and the hint due the player can read the words and the hint: on the card, or by a tap on the tab that says Hint (640x360, lesson 10, Market).
 // Chrome is needed (skipped without it, or with PC_NO_BROWSER=1). Run: node --test tests/academy-matrix.test.mjs
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { join, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { BROWSER, browser, lessonPage, tapAt, atStep, hint, until, closePage, sleep, closeCash } from './helpers/lessonpage.mjs';
 import { judge, sweepLesson, startEnv, SIZES, lessonPage as sweepPage } from '../scripts/academy-sweep.mjs';
 
@@ -42,6 +46,18 @@ test('M3: at the largest text size in a short window the card the player opens s
     const bad = rows.filter((r) => r.faults.length);
     assert.equal(bad.length, 0, `${bad.length} of ${rows.length} cells have a fault:\n` + bad.slice(0, 12).map((r) => `  ${r.lesson} ${r.size} ${r.mode} step ${r.step + 1} ${r.state} [${r.variant}] ${r.shape}: ${r.faults.map((f) => `${f.type} (${f.detail})`).join(', ')}`).join('\n'));
     assert.ok(open.some((r) => /\bwide\b/.test(r.shape)), `the wide shape was used where the full card is taller than the window (${[...new Set(open.map((r) => r.shape))].join(', ')})`);
+  } finally { await env.close(); }
+});
+
+test('M4: at the largest text beside an open drawer the goal tracker ends above the strip, so the tab in it covers nothing (lesson 3 at 640x360, the Stock panel)', SUITE, async () => {
+  const css = readFileSync(join(dirname(fileURLToPath(import.meta.url)), '..', 'css/shell.css'), 'utf8');
+  assert.match(css, /\.trackerhost \{[^}]*max-height: calc\(100% - var\(--hud-h\) - var\(--sp-1\) - var\(--edge-b\)\);/, 'the sheet: the tracker host ends above --edge-b (the bottom edge and the strip)');
+  const env = await startEnv();
+  try {
+    const rows = await sweepLesson(env, 'm03', size('640x360'), 'mouse', { level: 'std', states: ['drawer:stock'], variants: ['xl'] });
+    assert.ok(rows.length >= 8, `${rows.length} cells`);
+    const bad = rows.filter((r) => r.faults.length);
+    assert.equal(bad.length, 0, `${bad.length} of ${rows.length} cells have a fault:\n` + bad.slice(0, 8).map((r) => `  step ${r.step + 1} [${r.variant}] ${r.shape}: ${r.faults.map((f) => `${f.type} (${f.detail})`).join(', ')}`).join('\n'));
   } finally { await env.close(); }
 });
 
