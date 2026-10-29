@@ -1,7 +1,7 @@
 // The layer stack (js/world/stack.js): the table of layers, the flags that choose a legacy or a V2 drawer, and the runner. The default build runs every legacy drawer.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { LAYERS, FLAGS, IMPLS, registerLayer, setFlag, setFlags, slotFor, layerInfo, runLayer } from '../js/world/stack.js';
+import { LAYERS, FLAGS, IMPLS, registerLayer, registerProp, propV2, propKindsV2, staticLayerOf, BUILDING_KINDS, setFlag, setFlags, slotFor, layerInfo, runLayer } from '../js/world/stack.js';
 import { World } from '../js/world/world.js';
 
 /** A stand-in world: it records the method each legacy adapter calls and the spaces the runner sets. */
@@ -60,4 +60,29 @@ test('flags can be set from an address-style string; unknown ids and impls are s
   setFlags('all:legacy'); for (const L of LAYERS) assert.equal(FLAGS[L.id], 'legacy');
   assert.deepEqual(setFlags(''), []); assert.deepEqual(setFlags(null), []);
   reset();
+});
+
+test('the static props are two layers, one per owner, over one frame: T3 draws the 18 building kinds, T4 every other kind, and statics.js (T5) stays the shared frame', () => {
+  const b = layerInfo('static-bldg'), p = layerInfo('static-prop'); assert.equal(b.owner, 'T3'); assert.equal(p.owner, 'T4'); assert.equal(b.bridge, 'T5'); assert.equal(p.bridge, 'T5'); assert.equal(layerInfo('static'), undefined, 'the one row is gone from the table');
+  assert.equal(BUILDING_KINDS.size, 18); for (const t of ['bldg', 'tower', 'shop', 'rentrow']) assert.equal(staticLayerOf(t), 'static-bldg', t);
+  for (const t of ['tree', 'lamp', 'crane', 'autos', 'containers', 'gate', 'nonsense', undefined, 'constructor']) assert.equal(staticLayerOf(t), 'static-prop', String(t));
+  reset(); const w = fakeWorld(); runLayer('static', w, {}, {}, { t: 'tower' }); assert.deepEqual(w.calls.map((c) => c[0]), ['drawStatic'], 'the engine\'s one call goes through the frame, whichever layer the kind is in');
+  w.calls.length = 0; runLayer('static', w, {}, {}, undefined); assert.equal(w.calls.length, 1, 'a missing subject is a prop of no kind, not an error');
+});
+test('a whole-layer V2 drawer cannot be registered for a static layer (its kinds are registered one at a time); the sea\'s V2 must be world space, as the table says', () => {
+  assert.throws(() => registerLayer('static-bldg', () => {}), /registerProp/); assert.throws(() => registerLayer('static-prop', () => {}, 'world'), /registerProp/);
+  assert.equal(layerInfo('sea').v2space, 'world'); assert.throws(() => registerLayer('sea', () => {}, 'screen'), /world space/); assert.throws(() => registerLayer('sea', () => {}, 'inherit'), /world space/);
+  assert.equal(layerInfo('grade').v2space, undefined, 'a layer whose V2 keeps the legacy space says nothing'); registerLayer('grade', () => {}, 'world'); reset();
+});
+test('registerProp: a kind has a V2 drawer only while ITS layer is flagged v2; the other owner\'s flag and kinds are untouched; a bad registration throws', () => {
+  reset(); const f = () => null;
+  assert.throws(() => registerProp('', f), /name/); assert.throws(() => registerProp('tower', 'no'), /function/); assert.throws(() => registerProp('tower', {}), /function/); assert.throws(() => registerProp(7, f), /name/);
+  registerProp('tower', f); registerProp('lamp', { body: () => [[[0, 0]]] });
+  assert.ok(propKindsV2().includes('tower') && propKindsV2().includes('lamp'));
+  assert.equal(propV2('tower'), undefined, 'registered, not flagged: legacy'); assert.equal(propV2('lamp'), undefined);
+  setFlag('static-bldg', 'v2'); assert.equal(typeof propV2('tower').draw, 'function'); assert.equal(propV2('lamp'), undefined, 'T4\'s kinds do not follow T3\'s flag'); assert.equal(propV2('shop'), undefined, 'a building kind with no registration stays legacy');
+  setFlag('static-prop', 'v2'); const lamp = propV2('lamp'); assert.equal(typeof lamp.body, 'function'); assert.equal(typeof lamp.draw, 'function', 'a layer definition gets the plain body-then-live drawer'); assert.deepEqual(lamp.draw({}, {}, {}), [[[0, 0]]]);
+  setFlag('static-bldg', 'legacy'); assert.equal(propV2('tower'), undefined, 'flipping back restores the legacy drawer'); assert.equal(typeof propV2('lamp').body, 'function');
+  assert.deepEqual(setFlags('static-bldg:v2'), ['static-bldg'], 'the address flag names the layer'); assert.equal(typeof propV2('tower').draw, 'function');
+  assert.deepEqual(setFlags('all:legacy'), LAYERS.map((l) => l.id));   assert.equal(propV2('tower'), undefined); reset();
 });

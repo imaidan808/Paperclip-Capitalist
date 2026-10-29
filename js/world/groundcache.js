@@ -3,6 +3,7 @@
 import { LAYOUT } from './layout.js';
 import { surface } from './gfx.js';
 import { groundKey } from './stack.js';
+export { CHUNK_PX, chunkWorld, chunkBytes, chunksTouched, groundBytes, chunksFor } from './chunks.js'; // the chunk cache's arithmetic (tests/world-ledger.test.mjs holds the memory ledger to it)
 
 export const groundCacheMethods = {
   /**

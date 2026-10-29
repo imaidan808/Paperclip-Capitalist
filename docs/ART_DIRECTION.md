@@ -369,7 +369,7 @@ MUST: the sea colour is a function of the distance from the nearest shore, measu
 
 Between stops the colour is `mix` with a smoothstep; the shoal-to-shallow shelf is a visibly softer, brighter band 0.6 tile wide (it is the "turquoise ring" the eye reads as a beach shelf). The depth bitmap carries 5% extra saturation over the first 3 tiles so the shallows glow.
 
-Hint: rasterise the island silhouette (land tiles at their heights plus cliff walls down to the waterline) into a 1/10 scale mask in world pixels, take a two-pass chamfer distance transform with y doubled, and paint the colour ramp into one world-space bitmap covering `LAYOUT.bounds` plus 1,400 wpx on every side (about 1,330 x 810 texels, 4.3 MB at 4 bytes), built once, lazily, in slices. It is drawn with one `drawImage` under the camera transform with smoothing on; a flat `SEA.sea` fill stands in until it is ready. Lakes, bays and rivers are in the silhouette as water, so they get shoal edges and a deeper middle automatically. Because it is measured from the drawn silhouette, a cliff coast's waterline is the wall's base, where the foam and shoal begin.
+Hint (revised after review): rasterise the island silhouette (land tiles at their heights plus cliff walls down to the waterline) into a 1/10 scale mask in world pixels and take an exact Euclidean distance transform of it (Felzenszwalb and Huttenlocher, two passes, y doubled: a chamfer metric has a few percent of angular error and shows as an octagon at the finest zoom), built once, lazily, in slices. Extract contours of that one field with marching squares, Chaikin-smooth them twice and keep them as `Path2D` chunks in world pixels. **Draw the depth as flat fills of the bands between 24 contour levels, each band overlapping its neighbour by one device pixel, never as a bitmap drawn to the window**: a one-texel-to-ten-world-pixel bitmap is a 13.5 times smoothed upscale, which costs 9.4 ms of a window at density 1.5 against 1.0 for a 1:1 copy (RENDER_PLAN section 6, `scripts/diag/unitcost.mjs`). The shoal and shallow bands, the foam line and the wave levels come from the same contours, so they are crisp at every zoom and agree to the pixel. Lakes, bays and rivers are in the silhouette as water, so they get shoal edges and a deeper middle automatically. Because it is measured from the drawn silhouette, a cliff coast's waterline is the wall's base, where the foam and shoal begin.
 
 MUST: no screen-space gradient, no strip stretched over the window, no screen-space sea layer of any kind. The horizon haze of 5.10 is drawn in world space too.
 
@@ -378,7 +378,7 @@ MUST: no screen-space gradient, no strip stretched over the window, no screen-sp
 The sea has six layers of motif on top of the depth colour (numbered below). All are intentional cartoon shapes, laid out in world space, repeated seamlessly by hashing, never lines of sine.
 
 1. **Wave bands** (follow the shore). Soft, slightly lighter ribbons that run parallel to the coast at distances 2, 4, 6, 8, 10, 12, 14, 17, 20, 24, 28 and 34 tiles (twelve levels). Each is a broken ribbon: long dashes 60 to 140 wpx (hashed, rounded caps, fixed in world space) with gaps of 40 to 90 wpx; width `max(6 wpx, 1.8 spx / zoom)` of `SEA.crest` at 0.45 over a 2.4 x wider soft underband of the same colour at 0.12. Three ridges travel shoreward at once, each crossing all twelve levels in 24 s, so the brightness of level k is `b_k = min(1, sum over r of tri(k - u_r(t)))` with `u_r = (12 - 12 x frac(t / 24 s) + 4 r) mod 12`, `tri(x) = max(0, 1 - |x|)`, and both strokes' alphas (0.45 core, 0.12 under-band) are multiplied by `b_k`. That cross-fade makes the bands appear to roll in without any line moving relative to the world. At rest (reduced motion) `t = 0`. Hint: the twelve levels are iso-contours of the same distance field, extracted once with marching squares and smoothed (Chaikin, twice), stored as `Path2D` in world pixels, chunked by 1,024 wpx cells and drawn only for chunks in view.
-2. **Crests** (the motif). A lens: two arcs meeting at tapering tips, length `14 + 0.9 d` wpx (max 26), 3 wpx thick at the middle, `SEA.crest` at 0.55, long axis parallel to the local shoreline (perpendicular to the depth gradient). Hashed on a world grid of 6 x 6 tile cells, 0 to 2 per cell, positions and orientation from `h2(cellX, cellY, k)`. Eight pre-rotated sprites, two mirrored.
+2. **Crests** (the motif). A lens: two arcs meeting at tapering tips, length `14 + 0.9 d` wpx (max 26), 3 wpx thick at the middle, and never smaller on the screen than 14 spx long and 3 spx thick (so the world size is `max(14 + 0.9 d, 14 / zoom)` and `max(3, 3 / zoom)`: at the 0.5 gate a lens of 3 x 14 wpx would be 1.5 x 7 spx, the size of the dashes the author dislikes; curls are at least 8 spx across and glints at least 3), `SEA.crest` at 0.55, long axis parallel to the local shoreline (perpendicular to the depth gradient). Hashed on a world grid of 6 x 6 tile cells, 0 to 2 per cell, positions and orientation from `h2(cellX, cellY, k)`. Eight pre-rotated sprites, two mirrored.
 3. **Curls** (the accent). A foam curl: a 270 degree arc 7 to 10 wpx across ending in a round dot, `SEA.foam` at 0.8, one per 3 cells on average, only where `d` is between 1 and 12 tiles. They sit in the shallows near the shore and a few near boats.
 4. **Glints and rings** (the sparkle). A four-point star 3 to 6 wpx (`#ffffff`) twinkling over 2.4 to 4.0 s, at most 40 on screen, placed in the sun side of crests (upper left of each crest); and expanding rings (two concentric ellipses flattened 2:1, `SEA.ring`) spawned near boats, jetties, the harbor, the fountain and at random in cells, one per 6 s per ring source, radius 4 to 16 wpx over 2.4 s.
 
@@ -387,11 +387,13 @@ Seamlessness. Cells are hashed from world coordinates only, so the pattern never
 5. **Sheen** (the big light). Two large soft diagonal light bands (`#ffffff` at 0.07 and `#6a8fe0` at 0.06, each 30 to 60 tiles wide) drifting across the water plane at one tile per 9 s, so the sea has a slow breathing of light that is independent of the camera. At rest they stand at their `t = 0` place.
 6. **Caustics** (close only, in the shoal and shallow bands). Dappled light: 3 to 4 round blobs 5 to 9 wpx in `SEA.caustic` at 0.20, drifting 6 wpx per 5 s, in a fixed world pattern.
 
+At far zoom the wave bands are wider than they are long and the picture leans on the depth bands, the foam and the sheen, not on strokes (a stroke costs about 8 ms per megapixel; at most 10,000 device pixels of band length are stroked a frame, and the sheen is two or three flat translucent bands, never a gradient fill, which is 7.6 ms).
+
 LOD of the sea (7.2): far has depth colour, three wave levels (4, 10, 20 tiles, widened), the foam line and the sheen; mid adds all twelve levels and the crests; near adds curls, glints and rings; close adds caustics and a second, finer foam trail.
 
 ### 5.3 Anchored and alive: how it is verified
 
-MUST, and checked by a test (Appendix B): with motion frozen (reduced motion, or `vt = 0`), the sea pixels of a second capture, taken with the camera moved by `(dx, dy)` wpx at zoom `z`, equal the first capture shifted by `(-dx z, -dy z)` spx to within 1 dpx, for any crest, curl or foam scallop that is in both frames and away from labels and the screen-space haze. With motion on, the same crest is displaced by the camera shift plus at most the drift (sheen 1 tile per 9 s, ridges as above): drift never exceeds 0.1 tile per second. Capture the same scene twice at two camera positions a few hundred pixels apart and match a named crest or foam curl by hand as the eyeball check.
+MUST, and checked by exit code (`node scripts/world-metrics.mjs DIR --anchor` exits 0 only when every pair of the rig's `--set pan` is anchored: the pan pair, the zoom pair with the detail compared at matching world scales, and the drift pair drawn 2 s apart; 1 for a sea that stayed on the screen, 2 when it proved nothing): with motion frozen (reduced motion, or `vt = 0`), the sea pixels of a second capture, taken with the camera moved by `(dx, dy)` wpx at zoom `z`, equal the first capture shifted by `(-dx z, -dy z)` spx to within 1 dpx, for any crest, curl or foam scallop that is in both frames and away from labels and the screen-space haze. With motion on, the same crest is displaced by the camera shift plus at most the drift (sheen 1 tile per 9 s, ridges as above): drift never exceeds 0.1 tile per second. Capture the same scene twice at two camera positions a few hundred pixels apart and match a named crest or foam curl by hand as the eyeball check.
 
 ### 5.4 The coast and the foam line
 
@@ -439,7 +441,7 @@ MUST: the island does not look pasted on. Three effects, all in world space:
 
 ### 5.10 The horizon haze at the map's edge
 
-The sea does not end at the window. Beyond `LAYOUT.bounds` it continues as sea in world space (the draw area is extended 1,400 wpx past the bounds) and fades into haze. Haze is a function of world position, so it slides with the map: from the bounds outward the sea mixes toward `SKY.horizon` (`#fdf3dc` warmed with `#cfeaf4` in the cooler half) with `a = smoothstep(0, 1, distanceBeyondBounds / 1400) x 0.85`, plus a vertical term that thickens with world `y` above the island (farther away: `a += smoothstep(bounds.y0 - 200, bounds.y0 - 1400, y) x 0.35`). At the fit zoom the window shows more than the bounds, so a viewer sees the island in turquoise, then blue, then a warm pale haze to the edge. No black vignette, no navy foot (the old `paintVignette` and `bakeAir` foot are retired).
+The sea does not end at the window. Beyond `LAYOUT.bounds` it continues as sea in world space (the draw area is extended 1,400 wpx past the bounds) and fades into haze. The sea FILLS THE VIEW with the haze colour first (one `fillRect` under the world transform), and whatever is finite (the depth fills, the haze's own ramp, a bitmap of any kind) is drawn over that fill, so no pixel of the opaque canvas is ever left unpainted: a phone's 390 x 844 fit view shows 8,962 world pixels beyond the bounds above and below, a tablet's 768 x 1024 shows 4,500, and 1,400 is only enough at 1440 x 900. `world-metrics.mjs DIR --unpainted` on the `--set extent` shots at those sizes is the check. Haze is a function of world position, so it slides with the map: from the bounds outward the sea mixes toward `SKY.horizon` (`#fdf3dc` warmed with `#cfeaf4` in the cooler half) with `a = smoothstep(0, 1, distanceBeyondBounds / 1400) x 0.85`, plus a vertical term that thickens with world `y` above the island (farther away: `a += smoothstep(bounds.y0 - 200, bounds.y0 - 1400, y) x 0.35`). At the fit zoom the window shows more than the bounds, so a viewer sees the island in turquoise, then blue, then a warm pale haze to the edge. No black vignette, no navy foot (the old `paintVignette` and `bakeAir` foot are retired).
 
 ### 5.11 Other water: lakes, rivers, the harbor basin
 
@@ -447,7 +449,7 @@ Every body of water, including the `water` decal in the harbor block and the lak
 
 ### 5.12 What the sea costs
 
-Every layer is baked or batched: the depth colour is one `drawImage`; wave bands are at most 24 strokes of cached `Path2D` chunks in view; motifs are blits (at most about 600 per frame at mid zoom, 1,100 at near, drawn from cached sprites); glints at most 40; rings at most 12; sheen is one or two `fillRect`s of a cached gradient. Water must cost at most 3 ms of the frame at working zoom with a moving camera and 2 ms at rest, in the measurement of Appendix A. The offscreen bitmaps are in the memory budget of Appendix A (the depth bitmap 4.3 MB).
+Measured, not assumed (RENDER_PLAN section 6; every figure at density 1.5, the contract): the sea and the shore cost 3.5 ms at the working zoom (3.9 moving), not the 2.0 of the first plan, whose legacy gradient strip alone is 1.9. The depth bands are flat fills (about 1.0 ms of a window of water), the wave bands at most 10,000 device pixels of stroke (0.8), motifs are small blits at 2.5 microseconds each (a window's 300 to 600: 0.75 to 1.5), the foam ribbon, swash and cliff skirts are drawn live by the ground's live layer (0.8 ms, not in the cache: they breathe), and the sheen and haze are flat translucent bands (0.4). Never a full-window bitmap scaled per frame (9.4 ms) or a full-window gradient (7.6). The contour paths are 2 MB of `Path2D` (there is no depth bitmap); memory is Appendix A.2.
 
 ## 6. Fog and clouds over locked districts
 
@@ -457,9 +459,9 @@ The author's words: "singular patches of blurred dots." The replacement is a ban
 
 MUST: a continuous, layered, readable cloud cover over each locked district: one connected mass with one coherent outline, a flat base sitting on the ground and a domed, puffy top.
 
-- **Coverage.** The bank covers at least 85% of the district footprint (the `fp` rectangle plus its skirt) as one mass. Every puff overlaps at least two neighbours by at least 35% of its radius. Gaps are allowed only at the bank's rim and as one or two small "windows" (see 6.4) near the gate. No isolated puff in the interior, ever.
-- **Puffs.** A puff is a flat-shaded circle: body `#f7f9ff`, a belly crescent `#c3d1f2` (a circle offset down-right, clipped to the body), a top crescent `#ffffff` (a circle offset up-left, clipped), a rim 1.5 wpx `#e9f0ff`. Radii 22 to 64 wpx. No radial gradients, no blur, no 30%-alpha smudges.
-- **Rows.** The bank is 3 rows of puffs in depth, back to front: a back row (largest, radius 44 to 64, slightly raised, `#e3ebfb` body so it recedes), a middle row (radius 32 to 52) and a front row (radius 22 to 40, the lowest and widest, the lit row). Rows are offset by half a puff so the silhouette scallops. Count: `n = clamp(round(footprintTiles / 14), 14, 42)` puffs, so a 22 x 18 block gets about 28.
+- **Coverage.** The bank covers at least 85% of the district footprint (the `fp` rectangle, as its outline on the screen) as one mass, measured as the area of the union of the puffs against the outline (`coverage()` in `js/world/cloudbank.js`, sampled every 12 world pixels). Every puff overlaps at least two neighbours by at least 35% of the smaller radius of the pair. `tests/world-cloudbank.test.mjs` holds all of this on the sixteen real footprints: 96 to 99.6% covered, one connected mass, no puff with fewer than two neighbours. Gaps are allowed only at the bank's rim and as one or two small "windows" (see 6.4) near the gate. No isolated puff in the interior, ever.
+- **Puffs.** A puff is a flat-shaded circle: body `#f7f9ff`, a belly crescent `#c3d1f2` (a circle offset down-right, clipped to the body), a top crescent `#ffffff` (a circle offset up-left, clipped), a rim 1.5 wpx `#e9f0ff`. The radius is a share of the footprint's width on the screen, `0.042 x (w + d) x 32` wpx (54 for the Scrap Yard, 78 for the Campus, 102 for Farmland; clamped to 40 to 125), so a big district gets big puffs. No radial gradients, no blur, no 30%-alpha smudges.
+- **Tiers.** The bank is 3 tiers of puffs in depth, back to front, each a band of rows of a hex lattice (rows 0.87 spacings apart, offset by half a puff so the silhouette scallops, spacing 1.5 radii): a back tier (largest, 1.15 of the base radius, raised by 0.30 of it, `#e3ebfb` body so it recedes), a middle tier (1.0, raised 0.12) and a front tier (0.85, the lowest, the lit one). Each row runs 0.4 radius past the outline so the bank has a rounded rim. Count: 80 to 90 puffs for any district (the radius grows with the footprint, so the count stays about the same; the rule is 40 to 150). The first sizing, `n = clamp(round(footprintTiles / 14), 14, 42)` puffs of radius 22 to 64, could not meet the coverage rule: a hex packing with 35% overlap answers for 2.36 r^2 a puff, so 28 puffs of 64 cover 68% of the Scrap Yard and 42 cover 27% of Farmland (twelve of the sixteen districts sat at the cap of 42).
 - **Base.** A flat-bottomed ribbon of belly colour (`#aebfe8`, rounded rectangle, 0.55 puff-radius tall) under the front row, so the bank reads as sitting on the ground, with a soft contact shadow below it on the land.
 - **Silhouette.** The union of puffs is the outline: a scalloped top edge, rounded ends, and a flat base. Squint at the capture: it reads as a loaf of cloud over the district, with the same outline at far, mid and near zoom.
 
@@ -485,12 +487,12 @@ The cloud is the first cue; the cues stay redundant: the gate (barrier, raised b
 
 | Band | What the bank is |
 |---|---|
-| far (under 0.30) | one pre-rendered cloud-bank sprite per district (three silhouette variants, 512 x 256 px, scaled to the footprint), no drift, with its ground shadow; one blit per locked district (15 at the start) |
-| mid (0.30 to 0.70) | the individual puffs as blits from a puff sprite sheet (the body, belly and top crescents baked into 6 sizes), drifting; cloud shadows; ghost buildings |
-| near (0.70 to 1.40) | as mid plus thin ground mist (a lighter flat ribbon of `#f2f5ff` at 0.18 in the bank's lower rim, 12 wpx tall), the windows, sparkle motes in sun gaps |
+| far (under 0.30) | one pre-rendered cloud-bank silhouette per district (three variants, 512 x 256 px, blitted scaled to the footprint), no drift, with its ground shadow; one blit per locked district (15 at the start) |
+| mid (0.30 to 0.70) | the COARSE bank (`bankScale` 1.6: about 35 puffs a district, one outline) drawn live as flat fills, per puff, back to front: bobbing, cloud shadows, ghost buildings; cross-faded with the fine bank over 0.60 to 0.80 |
+| near (0.70 to 1.40) | the fine bank (about 85 puffs) live, plus thin ground mist (a lighter flat ribbon of `#f2f5ff` at 0.18 in the bank's lower rim, 12 wpx tall), the windows, sparkle motes in sun gaps |
 | close (1.40 and over) | as near plus 8 to 14 small fraying puffs (radius 8 to 14) at the rim and a visible second rim line between puffs (a 1.5 wpx belly-coloured seam where puffs overlap) |
 
-Cloud sprites are 6 sizes x 1 sheet, at most about 3 MB. The bank is drawn after the props of its district and over them (as `drawFog` does now), in world space under the camera transform, never in screen space. A bank that is not in view costs nothing. The puff count is bounded at 42 per district and at most 5 locked banks are in view at near zoom.
+Cost (measured, `scripts/diag/cloudcost.mjs`, density 1.5): a live puff is three path fills (a body disc and two crescent paths: no clip, no gradient, no sprite) at about 27 microseconds and 1.2 ms per megapixel of fill, so a bank costs `bankMs` = 0.027 ms per puff in view plus 1.2 ms per megapixel: 6.6 ms for the Campus bank filling a window at zoom 1.2 (the legacy fog is 15.6), 4.3 ms for the Scrap Yard at 0.9, 12.3 ms for the thirteen banks in view at 0.3, 0.4 ms at the coast where a sliver of one is in view. A puff sprite blitted scaled is 3.9 ms per megapixel against 0.5 for the fill, a half-density bank scaled to the window is 9.4 ms, and puffs batched into one path are 1.4 to 1.5 times slower than filled one by one; none of them is used. There is no sprite sheet (the cloud memory is the three far silhouettes, 1.6 MB). The bank is drawn after the props of its district and over them (as `drawFog` does now), in world space under the camera transform, never in screen space. A bank that is not in view costs nothing. The puff count is 40 to 150 per district and at most 5 locked banks are in view at near zoom.
 
 ## 7. The level-of-detail ladder
 
@@ -694,7 +696,7 @@ A critic looks at a 1440 x 900 capture at device scale 2 (the evidence set: `coa
 
 ### A.1 How performance is judged
 
-The method is `scripts/perf.mjs`'s with one correction, because Canvas 2D in headless Chrome returns from `draw()` before the pixels are rastered: a bare `performance.now()` around `draw()` reads 0.4 to 3.4 ms at the median and means nothing (the cost lands later, in a flush, as 100 to 600 ms spikes). Force the flush: after each `w.draw()` call `w.ctx.getImageData(0, 0, 1, 1)` and time the pair. Method: headless Chrome 156, `--disable-gpu` (software raster, which is the stricter machine), viewport 1440 x 900, device scale factor 2 (the world caps itself at 1.5 on a CPU-drawn canvas, so the canvas is 2160 x 1350), a real game started through the draft screen at day 0, `pc.world` as the handle, `focusZone(1)` then `zoomBy(...)` to the zoom wanted, three draws to settle, then the median of 120 timed draws. "Still" is a camera that does not move (the ground cache is valid). "Moving" adds `cam.x += 0.7` before every draw (the ground is drawn directly, which is what a pan costs).
+The method is `scripts/world-budget.mjs` (RENDER_PLAN section 6 is the contract and the block of scenes; this section is where the baseline came from). It is `scripts/perf.mjs`'s with one correction, because Canvas 2D in headless Chrome returns from `draw()` before the pixels are rastered: a bare `performance.now()` around `draw()` reads 0.4 to 3.4 ms at the median and means nothing (the cost lands later, in a flush, as 100 to 600 ms spikes). Force the flush: after each `w.draw()` call `w.ctx.getImageData(0, 0, 1, 1)` and time the pair. Method: headless Chrome 156, `--disable-gpu` (software raster, which is the stricter machine), viewport 1440 x 900, device scale factor 2 (the world caps itself at 1.5 on a CPU-drawn canvas, so the canvas is 2160 x 1350: every millisecond in this document is at that density; the shot rig pins the canvas to 2, where the same scenes read 1.55 to 1.8 times dearer, so a rig `--perf` number is never compared with a ceiling), a real game started through the draft screen at day 0, `pc.world` as the handle, `focusZone(1)` then `zoomBy(...)` to the zoom wanted, three draws to settle, then the median of 120 timed draws. "Still" is a camera that does not move (the ground cache is valid). "Moving" adds `cam.x += 0.7` before every draw (the ground is drawn directly, which is what a pan costs).
 
 Baseline at `adcd991`, this machine, 2026-10-28 (milliseconds per frame, median; noise is about plus or minus 10%, so re-measure `adcd991` in the same session before judging a change):
 
@@ -717,16 +719,17 @@ The sprite cache already shows the shape of the working set: at the working zoom
 | Holder | MB | Note |
 |---|---|---|
 | main canvas | 21 | the visible canvas |
-| ground cache (`gc`) | 21 | the still-camera copy of terrain, roads and decals (now including the sea) |
-| light layers | 42 | `day` and `mix`; `night` and `shafts` are transient and released after 20 s idle (existing) |
-| sprites | 48 | 12 million pixels (`SPRITE_BUDGET` must fall from 22 million at dpr 1 and its 1.5 x growth to this; overlays count) |
-| sea depth bitmap | 4.3 | one world-space bitmap, built once, lazily |
-| patterns, wave chunks, tufts | 2 | small cached tiles and `Path2D`s |
-| cloud sprites | 3 | six sizes in one sheet |
+| ground chunks | 40 | chunks of 384 DEVICE pixels (0.59 MB each; 54 at most in a window, 31.9 MB at rest, a quarter more while the zoom changes), so the memory does not depend on the zoom (chunks of 1,024 world pixels would be 387 MB at 2.4) |
+| light layers | 31 | `day` full size, `mix` half size, a reserve for the transient `night` tile; `shafts` transient and released after 20 s idle (existing) |
+| sprites | 48 | 12 million pixels at dsf 2 (`SPRITE_BUDGET` 8 million at density 1, times the cache's own growth of 1.5; today 22 million, T5 lowers it; overlays count) |
+| sea contour paths | 2 | 24 depth levels and the wave levels as `Path2D`; there is no depth bitmap |
+| foam and tuft caches | 1.5 | small cached tiles |
+| cloud silhouettes | 1.6 | three far-zoom banks; the live banks hold no memory |
 | labels | 6 | the existing label sprites |
-| total | 147.3 | limit 160, headroom 12.7 |
+| shadow stamps | 0.5 | one cached sprite per colour |
+| total | 151.6 | limit 160, headroom 8.4 (RENDER_PLAN's render-memory block sums to 151.1 and `tests/world-ledger.test.mjs` holds it under 155) |
 
-`World.release()` and `detach()` must give every one of these back. Where there is no `OffscreenCanvas` (the Node tests) every layer falls back to direct drawing as today.
+`World.release()` and `detach()` must give every one of these back (`registerReleaser`, `releaseAll`). Where there is no `OffscreenCanvas` (the Node tests) every layer falls back to direct drawing as today.
 
 ### A.3 Allowed and forbidden techniques
 
@@ -858,8 +861,9 @@ Allowed: baked offscreen bitmaps in world space; `Path2D` in world pixels; cache
     "top": "#ffffff",
     "rim": "#e9f0ff",
     "base": "#aebfe8",
-    "puffsMin": 14,
-    "puffsMax": 42,
+    "puffsMin": 40,
+    "puffsMax": 150,
+    "radiusShareOfSpan": 0.042,
     "coverageMin": 0.85,
     "rowOpacity": [
       0.9,
@@ -870,18 +874,22 @@ Allowed: baked offscreen bitmaps in world space; `Path2D` in world pixels; cache
   "memoryMB": {
     "limit": 160,
     "mainCanvas": 21,
-    "groundCache": 21,
-    "lightLayers": 42,
+    "groundChunks": 40,
+    "lightLayers": 31,
     "sprites": 48,
-    "seaDepthBitmap": 4.3,
-    "patterns": 2,
-    "cloudSprites": 3,
-    "labels": 6
+    "seaContourPaths": 2,
+    "foamAndTufts": 1.5,
+    "cloudSprites": 1.6,
+    "labels": 6,
+    "shadowStamps": 0.5
   },
   "perf": {
     "ceilingFactor": 1.25,
     "finestMaxMs": 24,
+    "method": "scripts/world-budget.mjs: software raster, 1440 x 900 at dsf 2, the world's own density (1.5), median of 120 draws with a readback",
     "baselineStillMs": {
+      "0.3": 22.7,
+      "0.5": 26.1,
       "0.9": 9.7,
       "1.0": 14.5,
       "1.2": 20.9,
@@ -889,6 +897,8 @@ Allowed: baked offscreen bitmaps in world space; `Path2D` in world pixels; cache
       "2.4": 17.7
     },
     "baselineMovingMs": {
+      "0.3": 34,
+      "0.5": 37.2,
       "0.9": 17.2,
       "1.0": 24.7,
       "1.2": 32.2,
@@ -896,14 +906,20 @@ Allowed: baked offscreen bitmaps in world space; `Path2D` in world pixels; cache
       "2.4": 20.3
     },
     "ceilingStillMs": {
+      "0.3": 28.4,
+      "0.5": 32.6,
       "0.9": 12.1,
       "1.0": 18.1,
-      "1.2": 26.1
+      "1.2": 26.1,
+      "1.8": 19.4
     },
     "ceilingMovingMs": {
+      "0.3": 42.5,
+      "0.5": 46.5,
       "0.9": 21.5,
       "1.0": 30.9,
-      "1.2": 40.3
+      "1.2": 40.3,
+      "1.8": 23.9
     }
   },
   "districts": {
@@ -1090,7 +1106,7 @@ This is the suggested split so parallel work does not collide. Files are new unl
 | `js/world/sea.js` (new) | depth bitmap, wave levels, motifs, sheen, haze, island shadow | `seaRamp`, `motifsInCell(i, j)`, `waveAlpha(k, t)`, `hazeAt(x, y)`, the distance transform |
 | `js/world/coast.js` (new) | smooth shoreline, foam, beach band, cliff faces | `smoothCoast(mask)` (no retreat over protected tiles, at most 12 wpx), `foamPath`, `beachWeight(d)` |
 | `js/world/terrain.js` (new) | the vertex colour field and dressing placement | `terrainColour(i, j)`, `dressingAt(tx, ty)` (no marks on roads, pads or props) |
-| `js/world/clouds.js` (new) | banks, puffs, shadows, dissolve | `bankPuffs(district)` (coverage at least 85%, every puff overlaps two, count 14 to 42), `dissolveAt(t, d)` |
+| `js/world/clouds.js` (new) | banks, puffs, shadows, dissolve | `bankPuffs(fp, z, scale)` (coverage at least 85% of the real footprint, every puff overlaps two, count 40 to 150; written in `cloudbank.js`), `dissolveAt(t, d)` |
 | `js/world/figures.js` (new) | the doll, accessories, faces, noticing | `lookOf`, `accessoryFor(buyer)`, `noticing(player, buyer)` |
 | `js/world/iso.js`, `shading.js`, `props.js`, `kits.js`, `layout.js`, `lighting.js`, `world.js`, `fx.js` (edited) | per section 9 | existing tests, updated where they pin the old look (say so in the commit message) |
 

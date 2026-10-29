@@ -2,6 +2,7 @@
 // Owner: T2 ATMOSPHERE (docs/RENDER_PLAN.md).
 import { P } from './iso.js';
 import { DIST } from './layout.js';
+export { BANK, bankPuffs, bankScale, bankMs, coverage, structure } from './cloudbank.js'; // the bank's geometry (docs/RENDER_PLAN.md T2): the V2 drawer is built on it, tests/world-cloudbank.test.mjs holds it to the plan
 
 export const cloudMethods = {
   /** Mist over locked districts and over one that is opening: a soft dark pool centred on the district, thickest at its heart, with slow banks of cloud (lighting.js). */

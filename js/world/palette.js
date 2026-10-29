@@ -75,12 +75,14 @@ export const personLook = (h) => ({ shirt: PEOPLE.shirts[h % PEOPLE.shirts.lengt
 // ---------------------------------------------------------------- 2.1 the face model, and the veil
 const faceMemo = new Map();
 /**
- * A prism's three face colours from its body colour `c` (replaces iso.tone): top lifted a little towards warm cream, the sun-side left face a touch darker and warmer, the shade-side
- * right face darker and pulled towards violet-blue. { t, l, r } like tone(), and as shared and frozen: never change it.
+ * A prism's three face colours from its body colour `c` (replaces iso.tone): the top lifted towards warm cream, the sun-side left face darker and a touch warmer, the shade-side right face darker again
+ * and pulled towards violet-blue. { t, l, r } like tone(), and as shared and frozen: never change it. The steps are what makes a pastel box read as a solid at a glance: the luma falls by at least 15% from the
+ * top to the left face and by at least 15% from the left face to the right one for every plaster, tile, brick, metal, wood and toy colour (tests/world-palette.test.mjs; the first version stepped only 8 to
+ * 14% from top to left, so a cream wall and its roof read as one plane).
  */
 export function faceTone(c) {
   let v = faceMemo.get(c);
-  if (v === undefined) { v = Object.freeze({ t: mix(c, '#fff7dc', 0.10), l: mix(shade(c, 0.92), '#ffd9a8', 0.05), r: mix(shade(c, 0.76), '#5a52a8', 0.16) }); if (faceMemo.size > 3000) faceMemo.clear(); faceMemo.set(c, v); }
+  if (v === undefined) { v = Object.freeze({ t: mix(c, '#fff7dc', 0.18), l: mix(shade(c, 0.84), '#ffd9a8', 0.04), r: mix(shade(c, 0.68), '#5a52a8', 0.18) }); if (faceMemo.size > 3000) faceMemo.clear(); faceMemo.set(c, v); }
   return v;
 }
 const veilMemo = new Map();

@@ -9,8 +9,10 @@
 //   --dsf 2           device scale factor of the page; the world canvas is pinned to it (min(dsf, 2)), so a headless Chrome whose canvas is CPU-drawn (and which the game would cap at 1.5) draws what a GPU Mac draws.
 //                     --canvas-dpr app keeps the game's own choice instead
 //   --w 1440 --h 900  the window in css pixels
-//   --set all|quick|pan|tod|NAME,NAME   which shots (default all). quick: island-far, start-mid, coast-west, sea-open, fog-near, start-close. tod: the three scenes at hours 8, 13, 19 and 23.
-//                     pan: the same sea seen from two cameras 300 by 160 css px apart, and at two zooms (what world-metrics.mjs --anchor reads)
+//   --set all|quick|pan|tod|extent|NAME,NAME   which shots (default all: the 27 of the baseline). quick: island-far, start-mid, coast-west, sea-open, fog-near, start-close. tod: the three scenes at hours 8, 13, 19 and 23.
+//                     pan: the same sea seen from two cameras 300 by 160 css px apart, at two zooms, and from two cameras at two clock times 2 s apart (what world-metrics.mjs --anchor reads: pan, zoom and drift pairs)
+//                     extent: the whole island at fit, in the world and in map mode (island-far, island-map): shoot it at --w 390 --h 844 and --w 768 --h 1024 and run world-metrics.mjs DIR --unpainted, so a sea that
+//                     ends where its bitmap ends shows (an opaque canvas leaves black there). The shots marked optional (the drift pair, island-map) are in their sets only, never in `all`.
 //   --hour 8          the clock hour of day (0 to 23) every shot is lit for; the game's clock is 8 at the start. The tod shots ignore it. Under --motion reduced the light is always plain day.
 //   --t 1200000       the animation clock in ms every shot is drawn at (pc.world.t and vt): waves, glints, smoke, dust and the traffic stand at this moment. Change it to see another phase.
 //   --motion frozen   frozen (default): the page runs normally but the world's clock is stopped at --t, so animated things are drawn at one fixed phase.
@@ -21,6 +23,7 @@
 //   --full            also keep NAME.full.png, the page as a person sees it (HUD, dock and buttons over the world)
 //   --reverse         shoot in reverse order (a build must give the same pictures whichever order they are taken in)
 //   --perf            after the shots, time a frame (pc.world.draw() and the canvas's raster) at each shot's camera, still and with the camera moving so the ground cache cannot be used, and size the offscreen bitmaps: written to perf.json
+//   --list            print the names of the chosen shots, one a line, and stop (no browser)
 //   --debug           also keep the entities' places in the manifest (to find what differs between two runs)
 //   --cdp 9503        the Chrome debugging port (each Chrome needs its own port; it is killed at the end)
 //
@@ -59,7 +62,7 @@ let coastGx = 0; while (coastGx < 80 && !LAYOUT.isLand(coastGx, 112)) coastGx++;
 const COAST = at(coastGx, 112, 0), WEST_SAND = at(coastGx, 118, 0), SOUTH_SAND = at(23, 126.8, 0), LAKE = at(88, 74, 0), FERRY = at(141, 15, 0); // pale sand lies along the west coast (row 116 to 119) and the south coast (row 126)
 const shift = ([x, y], dx, dy) => [x + dx, y + dy];
 const SHOTS = [
-  { name: 'island-far', sets: ['quick'], fit: true },
+  { name: 'island-far', sets: ['quick', 'extent'], fit: true },
   { name: 'island-mid', sets: [], z: 0.3, at: shift(COAST, -400, 0) },
   { name: 'coast-west', sets: ['quick'], z: 1.0, at: shift(WEST_SAND, 180, 10) },
   { name: 'sea-open', sets: ['quick'], z: 0.5, at: LAKE },
@@ -75,21 +78,27 @@ const SHOTS = [
   { name: 'sea-pan-a', sets: ['pan'], z: 0.5, at: LAKE },
   { name: 'sea-pan-b', sets: ['pan'], z: 0.5, at: shift(LAKE, 300 / 0.5, 160 / 0.5), panFrom: 'sea-pan-a' },
   { name: 'sea-zoom-1', sets: ['pan'], z: 0.6, at: shift(LAKE, 0, 120) },
-  { name: 'sea-zoom-2', sets: ['pan'], z: 1.2, at: shift(LAKE, 0, 120) },
+  { name: 'sea-zoom-2', sets: ['pan'], z: 1.2, at: shift(LAKE, 0, 120), zoomFrom: 'sea-zoom-1' },
+  // the same pan with the clock running: the second shot is drawn 2 s after the first (the sea may have drifted, by at most 0.1 tile a second); optional: not in `all`
+  { name: 'sea-drift-a', sets: ['pan'], optional: true, z: 0.5, at: LAKE },
+  { name: 'sea-drift-b', sets: ['pan'], optional: true, z: 0.5, at: shift(LAKE, 300 / 0.5, 160 / 0.5), panFrom: 'sea-drift-a', dt: 2000 },
+  // the fit view in map mode (the cards and names the map draws over the island); optional
+  { name: 'island-map', sets: ['extent'], optional: true, fit: true, map: true },
   // this one opens district 10 in the game state, so it always runs last
   { name: 'city-close', sets: [], z: 1.4, at: atDistrict(10), unlock: [10] },
 ];
 const ALL = new Set(SHOTS.map((s) => s.name));
 const pick = (spec) => {
-  if (spec === 'all') return SHOTS;
+  if (spec === 'all') return SHOTS.filter((s) => !s.optional);
   const want = new Set(spec.split(',').map((x) => x.trim()).filter(Boolean)), out = SHOTS.filter((s) => want.has(s.name) || s.sets.some((k) => want.has(k)));
-  for (const n of want) if (!ALL.has(n) && !['quick', 'tod', 'pan'].includes(n)) { console.error(`unknown shot or set "${n}". shots: ${[...ALL].join(', ')}`); process.exit(2); }
+  for (const n of want) if (!ALL.has(n) && !['quick', 'tod', 'pan', 'extent'].includes(n)) { console.error(`unknown shot or set "${n}". shots: ${[...ALL].join(', ')}`); process.exit(2); }
   return out;
 };
 let chosen = pick(O.set);
 if (O.motion === 'reduced') chosen = chosen.filter((s) => !s.hour); // reduced motion is plain day: no time-of-day shots
 const plain = chosen.filter((s) => !s.unlock), opens = chosen.filter((s) => s.unlock);
 const order = [...(O.reverse ? [...plain].reverse() : plain), ...opens];
+if (arg('list', false)) { console.log(order.map((s) => s.name).join('\n')); process.exit(0); } // --list: the shots the options choose, one a line, and no browser (tests/world-metrics.test.mjs holds `all` to the baseline's 27)
 
 // ------------------------------------------------------------------------------------------------------------------------------ the page's side
 // Everything below runs in the page. It touches only the world's own presentation state (the frame loop, clocks, the canvas density) and, for city-close, opens a district through the engine's own method.
@@ -152,14 +161,17 @@ const PAGE = String.raw`(() => {
     return { still: spread(still), pan: spread(pan), memoryMpx: { main: +(w.cv.width * w.cv.height / 1e6).toFixed(2), ground: +(px(w.gc) / 1e6).toFixed(2), light: +(light / 1e6).toFixed(2), sprites: +(S.stats.pixels / 1e6).toFixed(2) }, sprites: { ...S.stats } };
   };
   R.shoot = async (s, o) => {
-    const w = pc.world;
-    if (s.hour != null && !o.reduced) R.light(s.hour, o.t); else if (!o.reduced) R.light(o.hour, o.t);
+    const w = pc.world, T = s.t == null ? o.t : s.t; // a shot may be drawn at a clock time of its own (the drift pair)
+    if (s.hour != null && !o.reduced) R.light(s.hour, T); else if (!o.reduced) R.light(o.hour, T);
+    if (s.map) { w.setMode('map'); w.camTo = null; }
     if (s.fit) w.fit(false); else w.goTo(s.x, s.y, s.z, false);
-    w.dirty = true; w.t = w.vt = w.env.t = o.t;
+    w.dirty = true; w.t = w.vt = w.env.t = T;
     R.draw(); await sleep(130);                                // the first draw tells the sprite cache the zoom has changed; it builds nothing until the zoom has rested
     let prev = '', same = 0, n = 1, h = '';
     while (n < o.maxDraws) { R.draw(); n++; h = R.canvasHash(w.cv); if (h === prev) same++; else same = 0; prev = h; if (same >= 2 && n >= o.draws) break; }
-    return { draws: n, stable: same >= 2, hash: h, cam: { x: w.cam.x, y: w.cam.y, z: w.cam.z }, canvas: { w: w.cv.width, h: w.cv.height, dpr: w.dpr, css: [w.W, w.H] }, night: +w.night.toFixed(3), dusk: +w.dusk.toFixed(3), png: w.cv.toDataURL('image/png') };
+    const shot = { draws: n, stable: same >= 2, hash: h, t: T, cam: { x: w.cam.x, y: w.cam.y, z: w.cam.z }, canvas: { w: w.cv.width, h: w.cv.height, dpr: w.dpr, css: [w.W, w.H] }, night: +w.night.toFixed(3), dusk: +w.dusk.toFixed(3), png: w.cv.toDataURL('image/png') };
+    if (s.map) { w.setMode('world'); w.camTo = null; }
+    return shot;
   };
 })()`;
 const seedJS = (seed, wall) => `(() => { let a = ${seed >>> 0}; Math.random = () => { a = (a + 0x6d2b79f5) >>> 0; let t = Math.imul(a ^ (a >>> 15), a | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; Date.now = () => ${wall}; })();`;
@@ -193,12 +205,14 @@ try {
   for (const s of order) {
     if (s.unlock) { manifest.notes.push(`${s.name} opened district ${s.unlock.join(', ')} in the game state before it was drawn; it is the last shot`); await p.eval(`__rig.unlock(${JSON.stringify(s.unlock)}, ${JSON.stringify(o)})`); }
     const cam = s.fit ? { fit: true } : { x: s.at[0], y: s.at[1], z: s.z };
-    const r = await p.eval(`__rig.shoot(${JSON.stringify({ ...cam, hour: s.hour })}, ${JSON.stringify(o)})`);
+    const r = await p.eval(`__rig.shoot(${JSON.stringify({ ...cam, hour: s.hour, map: s.map, t: s.dt == null ? undefined : O.t + s.dt })}, ${JSON.stringify(o)})`);
     const png = Buffer.from(r.png.slice(r.png.indexOf(',') + 1), 'base64'); delete r.png;
     writeFileSync(`${O.out}/${s.name}.png`, png);
     if (O.full) await p.shot(`${O.out}/${s.name}.full.png`);
     const row = { name: s.name, sets: s.sets, file: `${s.name}.png`, hour: s.hour ?? O.hour, requested: s.fit ? { fit: true } : { x: Math.round(s.at[0]), y: Math.round(s.at[1]), z: s.z }, ...r, bytes: png.length, sha256: createHash('sha256').update(png).digest('hex').slice(0, 16) };
     if (s.panFrom) row.panFrom = s.panFrom;
+    if (s.zoomFrom) row.zoomFrom = s.zoomFrom;
+    if (s.map) row.map = true;
     manifest.shots.push(row);
     console.log(`${s.name.padEnd(26)} cam ${Math.round(r.cam.x)},${Math.round(r.cam.y)} z ${r.cam.z.toFixed(3)}  draws ${r.draws}${r.stable ? '' : ' UNSTABLE'}  ${r.canvas.w}x${r.canvas.h}  ${r.hash}`);
   }

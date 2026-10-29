@@ -8,6 +8,9 @@
 //   palette(img)                 hue histogram, mean saturation and brightness of the water, the land and the whole frame
 //   diffImages(a, b, {exclude})  mean absolute difference and the share of pixels that differ by more than a threshold (the visible-difference score between two shots)
 //   anchorScore(a, b, shift)     whether the water moved with the camera: how well B's water matches A's, displaced by the camera's move, against not displaced
+//   driftScore(a, b, shift, max) the same with the clock running: B's water matches A's displaced by the camera's move plus a residual of at most `max` pixels (the water's own drift)
+//   scaleScore(a, b, map)        whether the water scaled with the camera: B's water against A's mapped through the zoom (x' = k x + tx), the detail compared at matching world scales
+//   unpainted(img, o)            pixels the picture never painted (black, or transparent): a sea that ends where its bitmap ends leaves them
 //   fnv1a(data)                  a hash of the pixels, to say two shots are the same picture
 // Colours are compared as the largest difference in any of R, G, B (0 to 255), the same number a person would call "a 12 out of 255 difference".
 
@@ -254,8 +257,13 @@ export function diffImages(a, b, o = {}) {
  * `anchored` when the shifted match is good and clearly better than the still one, `inconclusive` when the water has too little detail to tell, else the water stayed on the screen.
  */
 export function anchorScore(a, b, shift, o = {}) {
+  const P = anchorPrep(a, b, o); if (P.error) return P;
+  return anchorAt(P, shift[0], shift[1]);
+}
+/** What anchorScore works out once for a pair of pictures (the water in both, away from the shore, and the detail of each), so a search over many shifts does it once. */
+function anchorPrep(a, b, o = {}) {
   if (a.width !== b.width || a.height !== b.height) return { error: 'size mismatch' };
-  const { width: w, height: h } = a, [dx, dy] = shift, r = o.r ?? 6, stride = o.stride ?? 2, minEnergy = o.minEnergy ?? 0.6, W = w + 1;
+  const { width: w, height: h } = a, r = o.r ?? 6, stride = o.stride ?? 2, minEnergy = o.minEnergy ?? 0.6, W = w + 1;
   const inner = (m) => { // the water at least r + 2 px from anything that is not water (a shore, a pier, a boat moves with the world whatever the water does: it must not decide the verdict)
     const dry = new Float64Array(w * h); for (let i = 0; i < dry.length; i++) dry[i] = m[i] ? 0 : 1;
     const ii = integral(dry, w, h), k = r + 2, out = new Uint8Array(w * h);
@@ -269,7 +277,11 @@ export function anchorScore(a, b, shift, o = {}) {
     for (let y = r; y < h - r; y++) for (let x = r; x < w - r; x++) out[y * w + x] = L[y * w + x] - boxSum(ii, W, x - r, y - r, x + r, y + r) / ((2 * r + 1) * (2 * r + 1));
     return out;
   };
-  const ha = hp(a), hb = hp(b);
+  return { w, h, r, stride, minEnergy, ma, mb, ha: hp(a), hb: hp(b) };
+}
+/** The verdict of anchorScore for one shift (dx, dy) of a prepared pair. */
+function anchorAt(P, dx, dy) {
+  const { w, h, r, stride, minEnergy, ma, mb, ha, hb } = P;
   let sab = 0, saa = 0, sbb = 0, sas = 0, sss = 0, n = 0;
   for (let y = r; y < h - r; y += stride) for (let x = r; x < w - r; x += stride) {
     const xs = x + dx, ys = y + dy; if (xs < r || ys < r || xs >= w - r || ys >= h - r) continue;
@@ -280,4 +292,72 @@ export function anchorScore(a, b, shift, o = {}) {
   const energy = Math.sqrt(sbb / n), shifted = sab / Math.sqrt(saa * sbb || 1), still = sas / Math.sqrt(sss * sbb || 1);
   const inconclusive = energy < minEnergy, anchored = !inconclusive && shifted >= 0.5 && shifted > still + 0.15;
   return { samples: n, energy: +energy.toFixed(3), shifted: +shifted.toFixed(3), still: +still.toFixed(3), anchored, inconclusive };
+}
+
+/**
+ * Did the water move with the world while the clock ran? As anchorScore, but B's water is allowed to have drifted from where the camera's move alone puts it: the best match is searched within
+ * `max` device pixels of the shifted place and a margin beyond it (one pixel steps), and the water is anchored when that best match is good (0.5), clearly better than no move at all, and no further than `max` away.
+ * The art direction allows the sea a drift of 0.1 tile (4.5 world pixels) a second: `max` is that times the time between the shots, the zoom and the density, and a pixel or two for the raster.
+ * Returns { samples, energy, shifted (the best correlation), still, residual [dx, dy], anchored, inconclusive }.
+ */
+export function driftScore(a, b, shift, max, o = {}) {
+  const P = anchorPrep(a, b, o); if (P.error) return P;
+  const reach = Math.ceil(max) + (o.margin ?? 6); // the search goes a few pixels past the allowance, so a drift that is too big is FOUND too big and not mistaken for the best match inside the allowance
+  let best = null, still = null;
+  for (let ey = -reach; ey <= reach; ey++) for (let ex = -reach; ex <= reach; ex++) {
+    const r = anchorAt(P, shift[0] + ex, shift[1] + ey);
+    if (r.inconclusive) { if (!best) best = { ...r, residual: [ex, ey] }; continue; }
+    if (!best || best.inconclusive || r.shifted > best.shifted) best = { ...r, residual: [ex, ey] };
+    still = r.still;
+  }
+  if (!best) return { samples: 0, inconclusive: true, anchored: false, reason: 'no search window' };
+  if (best.inconclusive) return best;
+  const within = Math.hypot(best.residual[0], best.residual[1]) <= max + 1e-9, anchored = best.shifted >= 0.5 && best.shifted > (still ?? best.still) + 0.15 && within;
+  return { samples: best.samples, energy: best.energy, shifted: best.shifted, still: +(still ?? best.still).toFixed(3), residual: best.residual, withinAllowance: within, anchored, inconclusive: false };
+}
+
+/**
+ * Did the water scale with the camera? A and B are pictures of the same world from two zooms: a point at (x, y) in A is at (k x + tx, k y + ty) in B (`map`). The fine detail is compared at matching WORLD
+ * scales (B's luminance minus its mean over a box `r` wide, A's over a box `r / k` wide: a crest that is 10 pixels long in A is 10 k in B), over the pixels that are water in both, where A's value is read at the
+ * point B's pixel maps back to. A sea painted in screen space does not scale: its detail stays one size at both zooms and the match is poor. Returns { samples, energy, scaled (the correlation with the
+ * mapping), unscaled (the correlation with the pictures laid over each other, which a screen-fixed texture would win), anchored, inconclusive }.
+ */
+export function scaleScore(a, b, map, o = {}) {
+  if (a.width !== b.width || a.height !== b.height) return { error: 'size mismatch' };
+  const { width: w, height: h } = a, { k, tx, ty } = map, rB = o.r ?? 12, rA = Math.max(2, Math.round(rB / k)), stride = o.stride ?? 3, minEnergy = o.minEnergy ?? 0.5, W = w + 1;
+  const inner = (m, r) => { const dry = new Float64Array(w * h); for (let i = 0; i < dry.length; i++) dry[i] = m[i] ? 0 : 1; const ii = integral(dry, w, h), q = r + 2, out = new Uint8Array(w * h); for (let y = q; y < h - q; y++) for (let x = q; x < w - q; x++) if (m[y * w + x] && boxSum(ii, W, x - q, y - q, x + q, y + q) === 0) out[y * w + x] = 1; return out; };
+  const hp = (img, r) => { const L = new Float64Array(w * h); for (let i = 0, p = 0; i < L.length; i++, p += 4) L[i] = luma(img.data, p); const ii = integral(L, w, h), out = new Float32Array(w * h); for (let y = r; y < h - r; y++) for (let x = r; x < w - r; x++) out[y * w + x] = L[y * w + x] - boxSum(ii, W, x - r, y - r, x + r, y + r) / ((2 * r + 1) * (2 * r + 1)); return out; };
+  const ma = inner(o.maskA || waterMask(a), rA), mb = inner(o.maskB || waterMask(b), rB), ha = hp(a, rA), hb = hp(b, rB), hbA = hp(b, rA); // (hbA: B at A's box size, for the unscaled comparison of like with like)
+  let sab = 0, saa = 0, sbb = 0, sas = 0, sss = 0, sbb2 = 0, n = 0;
+  for (let y = rB; y < h - rB; y += stride) for (let x = rB; x < w - rB; x += stride) {
+    const xa = Math.round((x - tx) / k), ya = Math.round((y - ty) / k); if (xa < rA || ya < rA || xa >= w - rA || ya >= h - rA) continue;
+    const i = y * w + x, j = ya * w + xa; if (!mb[i] || !ma[j] || !ma[i]) continue;
+    const vb = hb[i], va = ha[j], vs = ha[i], vb2 = hbA[i]; sab += vb * va; sbb += vb * vb; saa += va * va; sas += vb2 * vs; sss += vs * vs; sbb2 += vb2 * vb2; n++;
+  }
+  if (n < 400) return { samples: n, inconclusive: true, anchored: false, reason: 'not enough water in both pictures' };
+  const energy = Math.sqrt(sbb / n), scaled = sab / Math.sqrt(saa * sbb || 1), unscaled = sas / Math.sqrt(sss * sbb2 || 1), inconclusive = energy < minEnergy, anchored = !inconclusive && scaled >= 0.5 && scaled > unscaled + 0.15;
+  return { samples: n, energy: +energy.toFixed(3), scaled: +scaled.toFixed(3), unscaled: +unscaled.toFixed(3), anchored, inconclusive };
+}
+
+/**
+ * Pixels a picture never painted: fully transparent, or black (all of R, G, B at or under `black`, 8 by default). An opaque canvas that is not painted all over shows black there, so a sea that ends where its
+ * bitmap ends does it; the island's own palette has no pure black. Only a SOLID area counts: a black pixel is unpainted when a block of (2 r + 1) pixels square (r = 8, 17) of black stands on it, so the dark strokes
+ * and the fat letters of a label drawn over the world (the map's region names) are not mistaken for a hole, and a band along a window's edge is (a block at the image's edge is judged by the part of it that is inside).
+ * Returns { count, share, worst: { x0, y0, x1, y1 } | null (the bounding box of the unpainted pixels) }.
+ */
+export function unpainted(img, o = {}) {
+  const { width: w, height: h, data } = img, black = o.black ?? 8, r = o.r ?? 8, W = w + 1, dark = new Float64Array(w * h);
+  for (let i = 0, p = 0; i < dark.length; i++, p += 4) dark[i] = data[p + 3] === 0 || (data[p] <= black && data[p + 1] <= black && data[p + 2] <= black) ? 1 : 0;
+  const ii = integral(dark, w, h), core = new Float64Array(w * h), full = (r + 1) * (r + 1);
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    if (!dark[y * w + x]) continue;
+    const x0 = Math.max(0, x - r), x1 = Math.min(w - 1, x + r), y0 = Math.max(0, y - r), y1 = Math.min(h - 1, y + r), area = (x1 - x0 + 1) * (y1 - y0 + 1);
+    if (area >= full && boxSum(ii, W, x0, y0, x1, y1) === area) core[y * w + x] = 1;
+  }
+  const ic = integral(core, w, h); let count = 0, x0 = w, y0 = h, x1 = -1, y1 = -1;
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    if (!dark[y * w + x] || !boxSum(ic, W, Math.max(0, x - r), Math.max(0, y - r), Math.min(w - 1, x + r), Math.min(h - 1, y + r))) continue;
+    count++; if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y;
+  }
+  return { count, share: +(count / (w * h)).toFixed(6), worst: count ? { x0, y0, x1, y1 } : null };
 }

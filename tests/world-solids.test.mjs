@@ -4,14 +4,15 @@ import assert from 'node:assert/strict';
 import { recCtx, thinnestStroke, callNames } from './helpers/recctx.mjs';
 import { bevelRadius, minLine, roundedPoly, roundedBox, capsule, puff, outlineOf } from '../js/world/solids.js';
 import { EDGE_WPX } from '../js/world/shadow.js';
-import { box, P } from '../js/world/iso.js';
+import { box, P, mix } from '../js/world/iso.js';
 import { faceTone, LIGHT } from '../js/world/palette.js';
 
 const near = (a, b, e = 1e-9) => assert.ok(Math.abs(a - b) <= e, `${a} is not ${b}`);
 
-test('the bevel radius is a tenth of the shorter side in world pixels, never under 1.5 and never over 4', () => {
-  near(EDGE_WPX, Math.hypot(32, 16)); near(bevelRadius(1, 1), 3.5777, 1e-3); assert.equal(bevelRadius(0.2, 0.2), 1.5); assert.equal(bevelRadius(3, 3), 4); assert.equal(bevelRadius(5, 0.5), bevelRadius(0.5, 5));
-  for (let w = 0.1; w < 6; w += 0.1) for (const d of [0.2, 1, 3]) { const r = bevelRadius(w, d); assert.ok(r >= 1.5 && r <= 4); }
+test('the bevel radius is a tenth of the shorter side in world pixels, never under 3 and never over 12: a crate is a 3.6 pixel fillet, a hall 9, a tower 11', () => {
+  near(EDGE_WPX, Math.hypot(32, 16)); near(bevelRadius(1, 1), 3.5777, 1e-3); assert.equal(bevelRadius(0.2, 0.2), 3); near(bevelRadius(3, 3), 10.733, 1e-3); assert.equal(bevelRadius(4, 4), 12); assert.equal(bevelRadius(5, 0.5), bevelRadius(0.5, 5));
+  near(bevelRadius(2.4, 2.7), 8.587, 1e-3);
+  for (let w = 0.1; w < 6; w += 0.1) for (const d of [0.2, 1, 3]) { const r = bevelRadius(w, d); assert.ok(r >= 3 && r <= 12); }
 });
 
 test('the thinnest line is 1.5 world pixels, and never under 1.25 screen pixels', () => {
@@ -38,13 +39,19 @@ test('roundedBox answers the faces box() answers for the same prism, so hit shap
   }
 });
 
-test('roundedBox clips to a rounded outline, balances save and restore, draws a rim, a corner strip and an AO band, and no stroke is under 1.5 world pixels', () => {
+test('roundedBox clips to a rounded outline, balances save and restore, rounds the three inner edges (a fillet down the front, a chamfer along the top, an AO band at the foot) and no stroke is under 1.5 world pixels', () => {
   const { ctx, log } = recCtx(); roundedBox(ctx, 2, 2, 2, 2, 30, '#ffc8d0');
   assert.equal(log.clips, 1); assert.equal(log.depth, 0); assert.equal(log.minDepth, 0);
   assert.ok(callNames(log).filter((n) => n === 'quadraticCurveTo').length >= 6);
-  const styles = log.strokes.map((s) => s.style); assert.ok(styles.includes(LIGHT.rim) && styles.includes(LIGHT.ao));
+  const styles = log.strokes.map((s) => s.style), t = faceTone('#ffc8d0'); assert.ok(styles.includes(LIGHT.rim) && styles.includes(LIGHT.ao), 'the sun streak and the AO band');
+  assert.ok(styles.includes(mix(t.t, t.l, 0.5)) && styles.includes(mix(t.t, t.r, 0.5)), 'a chamfer band on each front top edge, in the colour between the top and the wall');
+  assert.ok(callNames(log).includes('fillRect') && log.rects.some((r) => r.w > 4 && r.h > 20), 'a fillet strip down the front corner, as wide as the corner is round');
   assert.ok(thinnestStroke(log) >= 1.5, `a stroke of ${thinnestStroke(log)}`);
-  const none = recCtx(); roundedBox(none.ctx, 2, 2, 2, 2, 30, '#ffc8d0', { rim: false, ao: false, edge: true }); assert.equal(none.log.strokes.length, 0, 'the extras can be switched off');
+  // the bevel is a band as wide as the radius, not a hairline: the chamfer strokes are at least a pixel and a half and scale with the fillet, and every band is wider than the old 1.5 and 3 pixel ones
+  const wide = (r) => { const q = recCtx(); roundedBox(q.ctx, 2, 2, 3.3, 3.3, 90, '#ffc8d0', r ? { r } : {}); return q.log.strokes.map((s) => s.lw); };
+  assert.ok(Math.max(...wide()) >= 12, 'at a hall\'s radius the widest band is 12 world pixels or more'); assert.ok(Math.max(...wide(3)) < Math.max(...wide(12)), 'the bands follow the radius');
+  const none = recCtx(); roundedBox(none.ctx, 2, 2, 2, 2, 30, '#ffc8d0', { rim: false, ao: false, edge: false }); assert.equal(none.log.strokes.length, 0, 'the extras can be switched off'); assert.equal(none.log.rects.length, 0);
+  const flat = recCtx(); roundedBox(flat.ctx, 2, 2, 2, 2, 5, '#ffc8d0'); assert.equal(flat.log.rects.length, 0, 'a prism under 8 pixels tall (a kerb) has no fillet and no foot band'); assert.equal(flat.log.depth, 0);
   const alphaIn = recCtx(); alphaIn.ctx.globalAlpha = 0.5; roundedBox(alphaIn.ctx, 2, 2, 2, 2, 30, '#ffc8d0'); near(alphaIn.state.globalAlpha, 0.5);
   for (const s of alphaIn.log.strokes) assert.ok(s.alpha <= 0.5 + 1e-9, 'extras are drawn under the caller\'s own alpha');
 });

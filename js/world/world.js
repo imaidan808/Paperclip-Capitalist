@@ -13,7 +13,7 @@ import { LAYOUT, DIST, SPOTS, PLOTS, SCENERY, BW, BD, zAt, zoneAt } from './layo
 import { Fx } from './fx.js';
 import { Lighting, dayTargets } from './lighting.js';
 import { Labels } from './labels.js';
-import { surface, softwareRaster } from './gfx.js';
+import { surface, softwareRaster, releaseAll } from './gfx.js';
 import { clearSprites, setSpriteBudget } from './sprites.js';
 import { FAR_ZOOM, FOG_DIM, money } from './common.js';
 import { runLayer } from './stack.js';
@@ -110,7 +110,7 @@ export class World {
    */
   release() {
     this.gc = null; this.gcValid = false; this.gcSeen = 0; this.waterGr = null; this.seaStrip = undefined; this.seaKey = -1;
-    this.light.release(); this.labels.release(); clearSprites(); releaseShadows();
+    this.light.release(); this.labels.release(); clearSprites(); releaseShadows(); releaseAll(); // (releaseAll: every holder a module registered through gfx.js's registerReleaser)
   }
   start() { if (this.running) return; this.running = true; this.last = performance.now(); this.raf = requestAnimationFrame((t) => this.frame(t)); }
   stop() { this.running = false; cancelAnimationFrame(this.raf); }

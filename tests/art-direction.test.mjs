@@ -149,10 +149,10 @@ test('the memory budget adds up under the limit and the performance ceilings fol
   assert.equal(limit, 160);
   assert.ok(total <= limit, `the holders total ${total} MB, over ${limit}`);
   assert.ok(limit - total >= 5, 'some headroom is kept');
-  assert.ok(Math.abs(parts.mainCanvas - 20.7) < 1 && Math.abs(parts.groundCache - 20.7) < 1, 'a full-window layer at dsf 2 is 20.7 MB');
+  assert.ok(Math.abs(parts.mainCanvas - 20.7) < 1, 'a full-window layer at dsf 2 is 20.7 MB'); assert.ok(Math.abs(parts.groundChunks - 39.8) < 1, 'the ground is chunks of device pixels: 54 chunks of 0.59 MB, a quarter more at the peak of a zoom (js/world/chunks.js)');
   const P = K.perf;
   assert.equal(P.ceilingFactor, 1.25); assert.equal(P.finestMaxMs, 24);
-  for (const z of ['0.9', '1.0', '1.2']) {
+  for (const z of ['0.3', '0.5', '0.9', '1.0', '1.2', '1.8']) {
     assert.ok(Math.abs(P.ceilingStillMs[z] - P.baselineStillMs[z] * P.ceilingFactor) <= 0.06, `still ceiling at ${z}`);
     assert.ok(Math.abs(P.ceilingMovingMs[z] - P.baselineMovingMs[z] * P.ceilingFactor) <= 0.06, `moving ceiling at ${z}`);
   }

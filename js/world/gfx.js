@@ -80,3 +80,74 @@ export function stampGlow(ctx, rgb, x, y, r, a, squash = 1) {
   ctx.drawImage(s, x - r, y - r * squash, r * 2, r * 2 * squash);
   return true;
 }
+
+// ---------------------------------------------------------------- the pixel ledger, the releasers and the time-slicer (docs/RENDER_PLAN.md section 3)
+// Three small interfaces every track's caches use, so the 160 MB ceiling is a number the world can read and a test can hold, and so a bitmap is never kept past the screen that wanted it.
+
+/** The ceiling for canvas pixels the world may hold at a density of 2 (MB of 4 bytes a pixel): the main canvas, every offscreen surface, every sprite. */
+export const LEDGER_LIMIT_MB = 160;
+const LEDGER = new Map();
+/**
+ * The pixel ledger. A cache that holds canvas pixels says so under a name of its own: `ledger.register('sea.rings', bytes)` when it makes or resizes its surface (replacing what it said before), `ledger.release(name)`
+ * when it gives them back. `bytes` is width x height x 4 (`ledger.bytesOf(w, h)`); a cache of many surfaces registers the sum. A name is the module's own ('ground.chunks', 'light.day', 'sprites'): one holder, one name.
+ */
+export const ledger = {
+  /** Say what a holder holds now (bytes; 0 or less gives it back). Answers the holder's bytes. */
+  register(name, bytes) {
+    if (typeof name !== 'string' || !name) throw new TypeError('a ledger holder has a name');
+    const b = Number.isFinite(bytes) && bytes > 0 ? Math.round(bytes) : 0;
+    if (b) LEDGER.set(name, b); else LEDGER.delete(name);
+    return b;
+  },
+  release(name) { return LEDGER.delete(name); },
+  /** Bytes held by every holder, or by one. */
+  total(name) { if (name !== undefined) return LEDGER.get(name) || 0; let t = 0; for (const b of LEDGER.values()) t += b; return t; },
+  /** [name, bytes] for every holder, the largest first. */
+  entries() { return [...LEDGER.entries()].sort((a, b) => b[1] - a[1]); },
+  /** The bytes of a w x h surface (4 bytes a pixel). */
+  bytesOf: (w, h) => Math.max(0, Math.ceil(w)) * Math.max(0, Math.ceil(h)) * 4,
+  clear() { LEDGER.clear(); },
+  /** Is the ledger under the ceiling (in MB, 1 MB = 1,000,000 bytes, as the plan's tables count)? */
+  within: (limitMb = LEDGER_LIMIT_MB) => ledger.total() <= limitMb * 1e6,
+};
+
+const RELEASERS = new Set();
+/**
+ * Register a function World.release() calls when the world gives its bitmaps back (the screen went away, or the page is being torn down). A module that keeps surfaces, sprites, paths or chunks of its own
+ * registers its releaser once, when it loads; the function drops them and tells the ledger. Answers an unregister function. A releaser that throws does not stop the others.
+ */
+export function registerReleaser(fn) {
+  if (typeof fn !== 'function') throw new TypeError('a releaser is a function');
+  RELEASERS.add(fn); return () => RELEASERS.delete(fn);
+}
+/** Call every registered releaser (World.release does). Answers how many ran. */
+export function releaseAll() {
+  let n = 0;
+  for (const fn of [...RELEASERS]) { try { fn(); n++; } catch { /* one holder failing to let go must not strand the rest */ } }
+  return n;
+}
+
+/**
+ * Run a long build in slices, so a frame is never held by it. `job` is a generator function (or an iterator): each `yield` is a point where the work may stop; the slicer runs it until `ms` milliseconds
+ * have gone, then goes on in the next idle moment (requestIdleCallback where there is one, else a timer). Answers { done: Promise (resolves when the job ends, or with `false` when it was cancelled), cancel() }.
+ * `o`: { ms: 4 (the slice), now: () => ms (a clock, for tests), later: (fn) => void (the scheduler, for tests) }. A job that throws rejects `done`. The slicer allocates nothing per step but the iterator result.
+ */
+export function slice(job, o = {}) {
+  const it = typeof job === 'function' ? job() : job, ms = o.ms ?? 4, now = o.now || (() => (typeof performance !== 'undefined' ? performance.now() : Date.now()));
+  const later = o.later || ((fn) => (typeof requestIdleCallback === 'function' ? requestIdleCallback(fn, { timeout: 250 }) : setTimeout(fn, 0)));
+  let off = false, resolve, reject; const done = new Promise((a, b) => { resolve = a; reject = b; });
+  const run = () => {
+    if (off) { resolve(false); return; }
+    const end = now() + ms;
+    try {
+      for (;;) {
+        const r = it.next(); if (r.done) { resolve(true); return; }
+        if (off) { resolve(false); return; }
+        if (now() >= end) break;
+      }
+    } catch (err) { reject(err); return; }
+    later(run);
+  };
+  later(run);
+  return { done, cancel() { off = true; } };
+}

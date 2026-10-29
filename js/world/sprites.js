@@ -88,7 +88,7 @@ export function drawSprite(ctx, p, env, layer) {
   const fl = (env.lite ? 1 : 0) | (env.crunch ? 2 : 0);
   let arr = STORE.get(p), e = null, near = null, other = null;
   if (arr) for (let i = 0; i < arr.length; i++) {
-    const c = arr[i]; if (c.fl !== fl) continue;
+    const c = arr[i]; if (c.fl !== fl || c.L !== layer) continue; // (a sprite belongs to the layer definition that drew it: a flag flipped between legacy and V2 never serves the other's picture)
     const dk = Math.abs(c.key - key), close = Math.abs(c.dq - dq) <= 2 && Math.abs(c.nq - nq) <= 1; // one step of evening or three of fog off: close enough for a frame or two
     if (dk === 0) {
       if (c.dq === dq && c.nq === nq) { e = c; break; }
@@ -141,6 +141,6 @@ function build(ctx, p, env, layer, key, dq, nq, fl) {
   try { polys = layer.body(g, p, benv) || null; } catch (err) { try { cv.width = 0; } catch { /* nothing to free */ } throw err; }
   // an OffscreenCanvas hands its pixels over as an immutable bitmap, the cheapest thing to blit (a canvas source is re-checked for changes at every draw)
   let img = cv; if (typeof cv.transferToImageBitmap === 'function') { try { img = cv.transferToImageBitmap(); } catch { img = cv; } }
-  return { p, img, w, h, s, x0, y0, key, dq, nq, fl, polys, last: 0 };
+  return { p, img, w, h, s, x0, y0, key, dq, nq, fl, polys, last: 0, L: layer };
 }
 const ZERO = [0, 0, 0, 0];

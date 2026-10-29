@@ -2,6 +2,8 @@
 // plaster, boards), contact shadow, and the thin blue haze that pales high ground. Built on iso.js's box(); props.js and kits call these, nothing else does.
 // What it never does: move or resize anything (every effect stays inside the faces it is given), read game state, or use Math.random (texture comes from hashes).
 // The sun is at the upper left: left faces are lit, right faces shaded, cast shadows run towards +gx (see iso.js).
+// Owner: T5 RASTER QUALITY, FROZEN LEGACY (docs/RENDER_PLAN.md section 7), like iso.js: the four props-*.js files import `solid`, props-common.js imports `hazed` and props.js `hazeAt`, so no art track edits it.
+// T3 and T4 write their V2 drawers on solids.js's roundedBox and migrate off `solid` at their own pace; T5 deletes this module when nothing imports it.
 import { box, diamond, quadN, facePoint, mix, snowA, sootA, inkA, h2, clamp } from './iso.js';
 
 /** The air colour distant or high things fade towards. */

@@ -60,6 +60,12 @@ test('the face model: the top is lifted, the sun side stays light and warm, the 
   }
 });
 
+test('the face model steps in value: at least 15% of luma from the top to the left face and from the left to the right face, for every plaster, tile, brick, metal, wood, grass and toy colour', () => {
+  const all = [...Object.values(PAL.PLASTER), ...Object.values(PAL.TILE), ...Object.values(PAL.METAL).filter((h) => luma(h) < 0.95), ...Object.values(PAL.TOY), PAL.BRICK.mid, PAL.GRASS.mid, PAL.WOOD.mid, ...Object.values(PAL.CRATE_TAGS).filter((h) => luma(h) < 0.9)];
+  assert.ok(all.length > 50);
+  for (const c of all) { const f = PAL.faceTone(c), t = luma(f.t), l = luma(f.l), r = luma(f.r); assert.ok((t - l) / t >= 0.15, `${c}: top to left ${(((t - l) / t) * 100).toFixed(1)}%`); assert.ok((l - r) / l >= 0.15, `${c}: left to right ${(((l - r) / l) * 100).toFixed(1)}%`); }
+});
+
 test('veiled: a locked district keeps its colour and its light (never darker than a twentieth), and a free one is untouched', () => {
   const colours = hexesOf({ a: PAL.GRASS, b: PAL.SAND, c: PAL.ROAD, d: PAL.TILE, e: PAL.TOY, f: PAL.DISTRICT_DAY, g: PAL.PLASTER });
   for (const c of colours) { const v = PAL.veiled(c, 1); assert.ok(luma(v) >= luma(c) - 0.05, `${c} -> ${v} is darker`); assert.equal(PAL.veiled(c, 0), c); }

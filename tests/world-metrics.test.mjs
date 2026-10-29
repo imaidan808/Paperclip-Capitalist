@@ -8,7 +8,7 @@ import { mkdtempSync, writeFileSync, mkdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { decodePng, encodePng } from '../scripts/lib/png.mjs';
-import { seamScan, coastJag, bandPattern, palette, diffImages, anchorScore, waterMask, isWater, fnv1a, hsv } from '../scripts/lib/imagemetrics.mjs';
+import { seamScan, coastJag, bandPattern, palette, diffImages, anchorScore, driftScore, scaleScore, unpainted, waterMask, isWater, fnv1a, hsv } from '../scripts/lib/imagemetrics.mjs';
 
 const img = (w, h, f) => { const data = new Uint8Array(w * h * 4); for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) { const [r, g, b] = f(x, y), o = (y * w + x) * 4; data[o] = r; data[o + 1] = g; data[o + 2] = b; data[o + 3] = 255; } return { width: w, height: h, data }; };
 const put = (im, x, y, c) => { if (x < 0 || y < 0 || x >= im.width || y >= im.height) return; const o = (y * im.width + x) * 4; im.data[o] = c[0]; im.data[o + 1] = c[1]; im.data[o + 2] = c[2]; };
@@ -184,6 +184,33 @@ test('anchoring: a shore that moves with the camera does not make screen-fixed w
   const r = anchorScore(A, B, [dx, dy]); assert.ok(!r.anchored, JSON.stringify(r));
 });
 
+test('drift: water that moved with the camera AND drifted a little is anchored within the allowed residual and not outside it; water fixed to the screen is not', () => {
+  const W = 320, H = 240, dx = 37, dy = 19, ex = 4, ey = -3; // the camera moves by (dx, dy) and the sea itself has drifted by (ex, ey) in the meantime
+  const A = img(W, H, (x, y) => sea(x, y)), B = img(W, H, (x, y) => sea(x + dx + ex, y + dy + ey));
+  const ok = driftScore(A, B, [dx, dy], 6); assert.ok(ok.anchored && ok.shifted > 0.9, JSON.stringify(ok)); assert.deepEqual(ok.residual, [ex, ey], 'it finds the drift');
+  const tight = driftScore(A, B, [dx, dy], 2); assert.ok(!tight.anchored, 'a drift beyond the bound is not anchored: ' + JSON.stringify(tight));
+  const stuck = driftScore(A, img(W, H, (x, y) => sea(x, y)), [dx, dy], 6); assert.ok(!stuck.anchored && !stuck.inconclusive, JSON.stringify(stuck));
+  assert.ok(driftScore(img(W, H, () => [30, 70, 110]), img(W, H, () => [30, 70, 110]), [dx, dy], 3).inconclusive, 'flat water cannot say');
+  assert.ok(driftScore(A, img(10, 10, () => [0, 0, 0]), [0, 0], 1).error);
+});
+// a world texture seen at two zooms: the same world features, k times larger in B; plus the finer detail only the closer zoom can show
+const seaZ = sea; // (the same few waves; seen at twice the zoom each is twice as long)
+test('zoom: water that scaled with the camera is anchored; water that stayed one size on the screen is not', () => {
+  const W = 360, H = 260, kk = 2, cx = W / 2, cy = H / 2, at = (z) => (x, y) => seaZ((x - cx) / z, (y - cy) / z);
+  const A = img(W, H, (x, y) => at(1)(x, y)), B = img(W, H, (x, y) => at(kk)(x, y));
+  const ok = scaleScore(A, B, { k: kk, tx: cx * (1 - kk), ty: cy * (1 - kk) }, { r: 12 }); assert.ok(ok.anchored && ok.scaled > 0.8 && ok.unscaled < 0.5, JSON.stringify(ok));
+  const stuck = scaleScore(A, img(W, H, (x, y) => at(1)(x, y)), { k: kk, tx: cx * (1 - kk), ty: cy * (1 - kk) }, { r: 12 }); assert.ok(!stuck.anchored && !stuck.inconclusive && stuck.unscaled > 0.9, JSON.stringify(stuck));
+  assert.ok(scaleScore(img(W, H, () => [30, 70, 110]), img(W, H, () => [30, 70, 110]), { k: 2, tx: 0, ty: 0 }).inconclusive); assert.ok(scaleScore(A, img(8, 8, () => [0, 0, 0]), { k: 2, tx: 0, ty: 0 }).error);
+});
+test('unpainted: a pixel nothing painted (black or transparent) is counted and boxed; a plain picture has none', () => {
+  const clean = img(100, 60, (x) => (x < 50 ? WATER : GREEN)); assert.deepEqual(unpainted(clean), { count: 0, share: 0, worst: null });
+  const holed = img(100, 60, (x) => (x < 50 ? WATER : GREEN)); for (let y = 40; y < 60; y++) for (let x = 10; x < 30; x++) put(holed, x, y, [0, 0, 0]); const u = unpainted(holed);
+  assert.equal(u.count, 400); assert.deepEqual(u.worst, { x0: 10, y0: 40, x1: 29, y1: 59 }); assert.equal(u.share, +(400 / 6000).toFixed(6));
+  const clear = img(30, 30, () => [200, 200, 200]); for (let i = 0; i < 30 * 30; i++) clear.data[i * 4 + 3] = 0; assert.equal(unpainted(clear).count, 900, 'transparent counts'); assert.equal(unpainted(img(30, 30, () => [9, 9, 9])).count, 0, 'a dark colour is not black');
+  const label = img(200, 80, (x) => (x < 100 ? WATER : GREEN)); for (let x = 20; x < 180; x++) for (let y = 30; y < 35; y++) put(label, x, y, [0, 0, 0]); for (let y = 10; y < 70; y++) put(label, 100, y, [0, 0, 0]); assert.equal(unpainted(label).count, 0, 'black label strokes up to sixteen pixels thick are not a hole');
+  const band = img(200, 80, (x) => (x < 100 ? WATER : GREEN)); for (let y = 70; y < 80; y++) for (let x = 0; x < 200; x++) put(band, x, y, [0, 0, 0]); assert.equal(unpainted(band).count, 2000, 'a band along the window\'s edge is');
+});
+
 // ---------------------------------------------------------------------------------------------------------------------------- the scripts, without a browser
 const script = (name) => fileURLToPath(new URL(`../scripts/${name}`, import.meta.url));
 const run = (name, ...args) => spawnSync(process.execPath, [script(name), ...args], { encoding: 'utf8', timeout: 60000 });
@@ -211,7 +238,40 @@ test('scripts: world-metrics measures a folder, compares two, and reads the wate
   const P = folder({ 'sea-pan-a': img(W, H, (x, y) => sea(x, y)), 'sea-pan-b': img(W, H, (x, y) => sea(x + dx, y + dy)) }, { shots: [{ name: 'sea-pan-a', canvas: cv }, { name: 'sea-pan-b', canvas: cv, panFrom: 'sea-pan-a', shiftDevicePx: [dx, dy] }] });
   const Q = folder({ 'sea-pan-a': img(W, H, (x, y) => sea(x, y)), 'sea-pan-b': img(W, H, (x, y) => sea(x, y)) }, { shots: [{ name: 'sea-pan-a', canvas: cv }, { name: 'sea-pan-b', canvas: cv, panFrom: 'sea-pan-a', shiftDevicePx: [dx, dy] }] });
   try {
-    const ok = JSON.parse(run('world-metrics.mjs', P, '--anchor').stdout); assert.equal(ok.summary.anchored, 1, JSON.stringify(ok));
-    const stuck = JSON.parse(run('world-metrics.mjs', Q, '--anchor').stdout); assert.equal(stuck.summary.anchored, 0, JSON.stringify(stuck)); assert.equal(stuck.summary.inconclusive, 0);
+    const ro = run('world-metrics.mjs', P, '--anchor'), ok = JSON.parse(ro.stdout); assert.equal(ok.summary.anchored, 1, JSON.stringify(ok)); assert.equal(ro.status, 0, 'an anchored sea exits 0'); assert.equal(ok.summary.verdict, 'pass');
+    const rs = run('world-metrics.mjs', Q, '--anchor'), stuck = JSON.parse(rs.stdout); assert.equal(stuck.summary.anchored, 0, JSON.stringify(stuck)); assert.equal(stuck.summary.inconclusive, 0); assert.equal(rs.status, 1, 'a sea that stayed on the screen exits 1'); assert.equal(stuck.summary.failed, 1); assert.match(stuck.summary.verdict, /FAIL/);
   } finally { rmSync(P, { recursive: true, force: true }); rmSync(Q, { recursive: true, force: true }); }
+});
+test('scripts: world-metrics --anchor exits 2 when it proves nothing (no pair, no manifest, water too flat), and checks the drift pair and the zoom pair with the manifest\'s clock and zoom', () => {
+  const W = 320, H = 240, cv = { w: W, h: H, css: [W, H] }, flat = img(W, H, () => [30, 70, 110]);
+  const F = folder({ 'sea-pan-a': flat, 'sea-pan-b': flat }, { shots: [{ name: 'sea-pan-a', canvas: cv }, { name: 'sea-pan-b', canvas: cv, panFrom: 'sea-pan-a', shiftDevicePx: [10, 5] }] });
+  const N = folder({ a: flat }, { shots: [{ name: 'a', canvas: cv }] }), M = folder({ a: flat });
+  try {
+    const rf = run('world-metrics.mjs', F, '--anchor'); assert.equal(rf.status, 2, rf.stdout); assert.equal(JSON.parse(rf.stdout).summary.inconclusive, 1);
+    const rn = run('world-metrics.mjs', N, '--anchor'); assert.equal(rn.status, 2); assert.match(JSON.parse(rn.stdout).summary.verdict, /nothing to judge/);
+    assert.equal(run('world-metrics.mjs', M, '--anchor').status, 2, 'no manifest');
+  } finally { for (const d of [F, N, M]) rmSync(d, { recursive: true, force: true }); }
+  // a drift pair: the second shot drawn 2 s later, the sea 3 device pixels further on than the camera alone puts it, at zoom 0.5 and dsf 1: the allowance is 0.1 tile a second = 4.525 x 0.5 x 2 + 2 raster = 6.5 px
+  const dx = 37, dy = 19, ex = 3, cam = (x, y, z) => ({ x, y, z });
+  const man = (dt) => ({ shots: [{ name: 'sea-drift-a', canvas: cv, t: 0, cam: cam(0, 0, 0.5) }, { name: 'sea-drift-b', canvas: cv, t: dt, panFrom: 'sea-drift-a', shiftDevicePx: [dx, dy], cam: cam(0, 0, 0.5) }] });
+  const D = folder({ 'sea-drift-a': img(W, H, (x, y) => sea(x, y)), 'sea-drift-b': img(W, H, (x, y) => sea(x + dx + ex, y + dy)) }, man(2000)), E = folder({ 'sea-drift-a': img(W, H, (x, y) => sea(x, y)), 'sea-drift-b': img(W, H, (x, y) => sea(x + dx + 12, y + dy)) }, man(2000));
+  try {
+    const rd = run('world-metrics.mjs', D, '--anchor'), jd = JSON.parse(rd.stdout); assert.equal(rd.status, 0, rd.stdout); assert.equal(jd.anchored['sea-drift-a -> sea-drift-b'].kind, 'pan with the clock running'); assert.ok(Math.abs(jd.anchored['sea-drift-a -> sea-drift-b'].maxDriftDevicePx - 6.525) < 0.01);
+    assert.equal(run('world-metrics.mjs', E, '--anchor').status, 1, 'a drift beyond 0.1 tile a second fails');
+  } finally { rmSync(D, { recursive: true, force: true }); rmSync(E, { recursive: true, force: true }); }
+  // a zoom pair: both pictures of one world, the camera centred, at zoom 1 and 2
+  const cx = W / 2, cy = H / 2, at = (z) => (x, y) => seaZ((x - cx) / z, (y - cy) / z), zm = [{ name: 'sea-zoom-1', canvas: cv, cam: cam(0, 0, 0.6) }, { name: 'sea-zoom-2', canvas: cv, zoomFrom: 'sea-zoom-1', cam: cam(0, 0, 1.2) }];
+  const Z = folder({ 'sea-zoom-1': img(W, H, (x, y) => at(1)(x, y)), 'sea-zoom-2': img(W, H, (x, y) => at(2)(x, y)) }, { shots: zm }), S = folder({ 'sea-zoom-1': img(W, H, (x, y) => at(1)(x, y)), 'sea-zoom-2': img(W, H, (x, y) => at(1)(x, y)) }, { shots: zm });
+  try {
+    const rz = run('world-metrics.mjs', Z, '--anchor'); assert.equal(rz.status, 0, rz.stdout); assert.equal(JSON.parse(rz.stdout).anchored['sea-zoom-1 -> sea-zoom-2'].kind, 'zoom');
+    assert.equal(run('world-metrics.mjs', S, '--anchor').status, 1, 'a sea that stayed one size when the zoom doubled fails');
+  } finally { rmSync(Z, { recursive: true, force: true }); rmSync(S, { recursive: true, force: true }); }
+});
+test('scripts: world-metrics --unpainted exits 1 when any shot has a pixel nothing painted; world-shots --list says `all` is the baseline\'s 27 shots, and the optional ones are in their sets only', () => {
+  const hole = img(120, 80, (x) => (x < 60 ? WATER : GREEN)); for (let y = 60; y < 80; y++) for (let x = 0; x < 120; x++) put(hole, x, y, [0, 0, 0]);
+  const G = folder({ fine: img(120, 80, (x) => (x < 60 ? WATER : GREEN)) }), B = folder({ fine: img(120, 80, (x) => (x < 60 ? WATER : GREEN)), hole });
+  try { const rg = run('world-metrics.mjs', G, '--unpainted'); assert.equal(rg.status, 0); const rb = run('world-metrics.mjs', B, '--unpainted'); assert.equal(rb.status, 1); assert.equal(JSON.parse(rb.stdout).shots.hole.count, 2400); assert.equal(JSON.parse(rb.stdout).summary.withUnpainted, 1); } finally { rmSync(G, { recursive: true, force: true }); rmSync(B, { recursive: true, force: true }); }
+  const list = (...a) => run('world-shots.mjs', '--out', tmpdir() + '/pc-never', '--list', ...a).stdout.trim().split('\n');
+  const all = list(); assert.equal(all.length, 27, 'the default set is the baseline\'s 27 shots, so a zero-diff run still compares like with like'); for (const n of ['sea-drift-a', 'sea-drift-b', 'island-map']) assert.ok(!all.includes(n), n);
+  assert.deepEqual(list('--set', 'extent'), ['island-far', 'island-map']); assert.deepEqual(list('--set', 'pan'), ['sea-pan-a', 'sea-pan-b', 'sea-zoom-1', 'sea-zoom-2', 'sea-drift-a', 'sea-drift-b']);
 });
