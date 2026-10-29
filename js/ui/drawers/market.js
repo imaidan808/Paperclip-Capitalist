@@ -348,7 +348,7 @@ export default {
       },
       'market-verify'(el) {
         const r = g().verifyLead(el.dataset.lead);
-        if (!r.ok) ctx.say(r); else ctx.toast(r.msg, r.scam ? 'warn' : 'good');
+        if (!r.ok) ctx.say(r); else { ctx.toast(r.msg, r.scam ? 'warn' : 'good'); ctx.audio?.play?.('deal.verify', { variant: r.scam ? 'bad' : 'ok' }); } // what the check found is shown in the toast: the Deal Room's verify sound
         ctx.render();
       },
       'market-look'(el) {

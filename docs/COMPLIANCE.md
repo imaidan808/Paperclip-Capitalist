@@ -26,6 +26,19 @@ This repository is a **static web app plus an optional message relay**. It is bu
 | Retention schedule (30/90 days, 24 h breach notification) | Process, not code | Write into the contract and the ops runbook. The server-side data model in `docs/ARCHITECTURE.md` is designed so each element can be purged on that schedule. |
 | Authoritative server for tamper resistance | Not implemented | Today clients are trusted (fine for a class, not for an exam). The planned server runs the same `engine.js` and validates trades. |
 
+## Sound (WCAG 2.2: 1.4.2 Audio Control, 2.1.4, never the only cue)
+The sound layer (`docs/AUDIO.md`) is generated in the browser: no audio files, nothing recorded, settings stored only in the student's browser. Status, self-assessed:
+
+| Requirement | Status | Detail |
+|---|---|---|
+| Nothing plays by itself | Implemented | The title is silent and no audio context exists until the first press; a browser that blocks audio, or has none, leaves the game fully playable. |
+| 1.4.2: audio that runs longer than 3 s has a control | Implemented | The only sounds that can run longer than 3 s without a press are the ambient bed and the repair dial tone. Both are opt-in (off until the student switches them on) and off in the Classroom preset. Mute, key **M** and the speaker button stop them in every window; the Deal Room, where the tone runs, has a Sound toggle and a Dial tone switch of its own. |
+| 2.1.4: a single-key shortcut | Implemented | Key M can be switched off under Display and sound; the speaker button stays. |
+| Classroom (a room is not thirty laptops playing coins) | Implemented | A student who joins a room gets the quieter Classroom preset from the Join press, with one note, what the room changed is restored on leaving, with one note, while what the student changed themselves stays; a student's own sound settings are never overridden. The instructor's **Quiet sound link** can add `?sound=quiet` to the student link. |
+| Sound is never the only cue | Implemented, self-assessed | Every sound has a visual or written counterpart (`docs/AUDIO.md` section 9). The one skill game that depends on timing, the repair dial, has **Careful: pay more, no timing**, a slider under reduced motion and an optional tone for players who cannot see it. |
+| Announcements while a dialog is open | Implemented, checked in Chrome's accessibility tree | A live region outside a modal dialog is not in the tree, so what is said while the Deal Room or the settings are open is said inside them. Not yet run with NVDA, JAWS or VoiceOver: a human audit is still needed. |
+| Listening on laptop speakers, Safari and Firefox | Not verified | Levels are measured by program; the ear is a person's job (`docs/AUDIO.md` 10.5). |
+
 ## Data inventory (this build)
 | Element | Where | Retention | Removal |
 |---|---|---|---|

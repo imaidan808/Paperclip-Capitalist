@@ -100,12 +100,13 @@ assets/           share.png, favicon.svg, apple-touch-icon.png; assets/src/ hold
 css/              styles.css (the tokens, WCAG-tested) and one sheet per panel
 js/               config.js (every economy number), engine.js (the simulation, no DOM), session.js (clock, rooms, gradebook),
                   data/ (districts, assets, buyers, Backgrounds), play/ (the five skill games), meta/ (Codex, quests, Academy),
-                  world/ (the 2.5D renderer), ui/ (the screens and drawers)
+                  world/ (the 2.5D renderer), audio/ (the generated sound layer: Web Audio, no audio files; docs/AUDIO.md is its contract),
+                  ui/ (the screens and drawers)
 server/           relay.mjs (the optional classroom relay) and static.mjs (the local file server)
-dev/              world-harness.html and .js, the 2.5D world on its own (a developer's page, never published)
+dev/              world-harness.html and .js, the 2.5D world on its own, and sounds.html, the sound audition page (developer pages, never published)
 scripts/          stage.mjs and preload.mjs (the Pages artifact), cdp.mjs, boot.mjs, shots.mjs and perf.mjs (headless Chrome drivers)
 tests/            the suite, and the bot and harness scripts (bot.mjs, calibrate.mjs, balance.mjs, tune.mjs)
-docs/             FACULTY_KIT.md, ARCHITECTURE.md, COMPLIANCE.md, BALANCE.md, V2_DESIGN.md
+docs/             FACULTY_KIT.md, ARCHITECTURE.md, COMPLIANCE.md, BALANCE.md, V2_DESIGN.md, AUDIO.md
 .github/workflows/pages.yml
 ```
 

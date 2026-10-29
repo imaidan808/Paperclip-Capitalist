@@ -16,6 +16,24 @@ const own = (o, k) => typeof k === 'string' && Object.prototype.hasOwnProperty.c
 const topZone = (st) => Math.min(ZONE_COUNT, Math.max(1, Math.round(st?.zones) || 1));
 const perksOf = (st) => (Array.isArray(st?.perks) ? st.perks.filter((id) => own(PERKS, id)) : []);
 
+/**
+ * Put `text` on the clipboard where the page can (fifth round, W2-1). The async clipboard exists only on a secure origin (https, localhost): on plain http at a LAN address, which is how a shared lab
+ * runs `server/static.mjs` with HOST=0.0.0.0, `navigator.clipboard` is undefined and Copy student link did nothing at all. There the older command still works from a click: a read-only field
+ * holds the text, is selected, copied and removed, and the cursor goes back to where it was. Resolves true when it was copied and false when nothing could; it never throws. `env` is for a test.
+ */
+export async function copyText(text, env = globalThis) {
+  const nav = env && env.navigator, doc = env && env.document;
+  try { if (nav && nav.clipboard && typeof nav.clipboard.writeText === 'function') { await nav.clipboard.writeText(text); return true; } } catch { /* refused (a permission) or throws: the command below may still work */ }
+  try {
+    if (!doc || typeof doc.createElement !== 'function' || typeof doc.execCommand !== 'function' || !doc.body) return false;
+    const t = doc.createElement('textarea'), was = doc.activeElement;
+    t.value = text; t.setAttribute('readonly', ''); t.setAttribute('aria-hidden', 'true'); t.style.cssText = 'position:fixed;top:0;left:-9999px;opacity:0';
+    doc.body.appendChild(t); t.select(); t.setSelectionRange?.(0, String(text).length);
+    let ok = false; try { ok = !!doc.execCommand('copy'); } finally { t.remove(); was?.focus?.({ preventScroll: true }); }
+    return ok;
+  } catch { return false; }
+}
+
 /** Two small icons for a student's Backgrounds, each named for assistive technology. */
 export const bgIcons = (st) => {
   const ids = perksOf(st);
@@ -107,11 +125,13 @@ export function instructorParts(S, U) {
   const recovering = S.recovering === true, off = recovering ? ' aria-disabled="true"' : '';
   const lobby = !recovering && S.clock.paused && hour < 1;
   const room = S.roomInfo || { code: '', relay: '' };
-  const link = `${typeof location !== 'undefined' ? location.origin + location.pathname : ''}?room=${room.code}${room.relay ? '&relay=' + encodeURIComponent(room.relay) : ''}`;
+  const link = `${typeof location !== 'undefined' ? location.origin + location.pathname : ''}?room=${room.code}${room.relay ? '&relay=' + encodeURIComponent(room.relay) : ''}${U.quietLink ? '&sound=quiet' : ''}`; // `sound=quiet`: students who open it start in Classroom sound (docs/AUDIO.md 7.1); never over a sound setting a student has changed
   const dist = distribution(students), drafted = draftCounts(students), here = U.zone && ZONES[U.zone] ? U.zone : busiest(dist);
 
   const head = `<div class="grow"><h1 tabindex="-1" style="margin:0;font-size:1.3rem">Instructor dashboard</h1><span class="small mute">Room <b class="mono gold" style="font-size:1.2rem">${esc(room.code)}</b> &middot; ${S.room?.kind === 'relay' ? 'relay server (' + esc(S.room.state) + ')' : 'this browser only (students join from other tabs of this browser with Copy student link; other devices need a relay)'} &middot; <b>${onlineN}</b> student${onlineN === 1 ? '' : 's'} online${real.length > onlineN ? ' (' + (real.length - onlineN) + ' away)' : ''}${S.demo ? ' + ' + S.demo + ' demo' : ''}</span></div>
-      <button class="btn sm ghost" data-act="copylink" data-link="${esc(link)}">Copy student link</button><button class="btn sm ghost" data-act="settings">Access</button><button class="btn sm danger" data-act="close">Close room</button>`;
+      <div class="in-quietlink" style="display:grid;gap:.15rem;max-width:12.5rem"><label class="row" style="color:var(--ink);margin:0"><input type="checkbox" data-change="linkquiet" data-fid="lq" aria-describedby="lq-h"${U.quietLink ? ' checked' : ''}> Quiet sound link</label><span class="tiny mute" id="lq-h">Adds &amp;sound=quiet: students start in Classroom sound, only while they are in the room.</span></div>
+      <button class="btn sm ghost" data-act="copylink" data-link="${esc(link)}"${U.quietLink ? ' data-quiet="1"' : ''}>Copy student link</button>
+      <button class="btn sm ghost" data-act="settings">Display and sound</button><button class="btn sm danger" data-act="close">Close room</button>`;
 
   const events = Object.values(EVENTS).map((e) => `<option value="${e.id}" ${U.ev === e.id ? 'selected' : ''}>${esc(e.name)}</option>`).join('') + Object.entries(ALGO_EVENTS).map(([k, e]) => `<option value="${k}" ${U.ev === k ? 'selected' : ''}>${esc(e.name)} (algorithmic)</option>`).join('');
   const c1 = `
@@ -170,7 +190,7 @@ export function gradebookCSV(S) {
 }
 
 export function mountInstructor(root, S, hooks) {
-  const U = { zone: null, bg: 'all', ev: 'fed', when: '0', replace: true };
+  const U = { zone: null, bg: 'all', ev: 'fed', when: '0', replace: true, quietLink: false };
   root.innerHTML = `<header class="panel row" id="ih"></header><div class="gap" id="ikeep"></div><div class="gap main"><div class="col" id="icol1"></div><div class="col" id="icol2"></div></div><section class="panel gap" id="igrade"></section>`;
   const el = { head: $('#ih'), keep: $('#ikeep'), c1: $('#icol1'), c2: $('#icol2'), grade: $('#igrade') };
 
@@ -183,7 +203,8 @@ export function mountInstructor(root, S, hooks) {
     settings() { settingsDialog(); },
     close() { hooks.onClose(); },
     copykey() { copyRecovery(S, { write: (t) => navigator.clipboard.writeText(t), say: toast }); },
-    copylink(b) { navigator.clipboard?.writeText(b.dataset.link).then(() => toast('Student link copied.', 'good'), () => toast(b.dataset.link, 'info', 9000)); },
+    linkquiet(b) { U.quietLink = !!b.checked; render(); }, // the student link carries ?sound=quiet, or not
+    copylink(b) { copyText(b.dataset.link).then((ok) => (ok ? toast(b.dataset.quiet ? 'Student link copied, with quiet sound.' : 'Student link copied.', 'good') : toast(`Could not copy it by itself. The student link is ${b.dataset.link}`, 'info', 9000))); }, // the box comes first and the toast says what the link carries: copying before ticking left a link without the flag, and nothing said so. With no way to copy the link is in the words, for nine seconds
     start() { S.clock.set({ hour: 0, paused: false }); S._sendClock(); render(); toast('Simulation started.', 'good'); },
     pause() { S.setPaused(!S.clock.paused); },
     speed(b) { S.setSpeed(+b.dataset.v); },

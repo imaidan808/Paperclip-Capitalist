@@ -9,6 +9,7 @@ import { mountAcademy, claimPendingRewards } from './ui/academy.js';
 import { mountGame } from './ui/shell.js';
 import { mountInstructor, FOLLOW_NOTE, RECOVER_WAIT_SECONDS } from './ui/instructor.js';
 import { mountDebrief } from './ui/debrief.js';
+import { pendingRoom } from './audio/index.js';
 
 const S = new Session();
 window.pc = { S }; // handy for classroom demos and debugging in the console
@@ -80,7 +81,7 @@ const screens = {
           <button class="btn ghost big" data-act="academy">${academyDone ? 'Replay the Academy' : 'Try the Academy (10 short missions)'}</button>
         </div>
         <div class="choices">
-          <section class="panel"><h2>Join a classroom</h2><label for="jc">Room code from your instructor</label><input id="jc" maxlength="8" autocomplete="off" style="text-transform:uppercase" value="${esc(room)}">
+          <section class="panel" data-room-panel><h2>Join a classroom</h2><label for="jc">Room code from your instructor</label><input id="jc" maxlength="8" autocomplete="off" style="text-transform:uppercase" value="${esc(room)}">
             <details class="gap"><summary class="small">Relay server (only if your instructor gave you one)</summary><label for="jr" class="gap">Relay URL</label><input id="jr" placeholder="wss://relay.example.edu" value="${esc(relay)}"></details>
             <button class="btn gap" data-act="join">Join</button></section>
           <section class="panel"><h2>Instructor</h2><p class="small mute">Create a room, set the pace, deploy shocks and export grades. With no relay, students join from other tabs of this browser (each tab is its own founder); students on other devices need a relay.</p>
@@ -117,6 +118,7 @@ const screens = {
 
   // The Background draft: two of twelve, a specialty, an alias. Begin starts the run, then the Academy on a first visit.
   setup() {
+    pendingRoom(pending?.room); // a student with a room code is in the room for sound from the Draft on: Begin is pressed by the whole class at once (docs/AUDIO.md 7.1)
     const m = mountDraft(root, S, {
       room: pending?.room,
       handle: S.draftHandle(pending?.room), // (a student tab that is about to be a founder of its own does not start with the alias another founder of this browser last used)
@@ -140,7 +142,7 @@ const screens = {
         return false; // (the draft's Begin works again; nothing has started)
       },
     });
-    cleanup = () => m.destroy();
+    cleanup = () => { m.destroy(); if (S.roomInfo?.role !== 'student') pendingRoom(null); }; // leaving the Draft any way but joining (Back) puts the earlier sound settings back
   },
 
   // The Academy mounts its own sandbox; done or skipped, it is not shown again by itself.
@@ -163,7 +165,7 @@ const screens = {
       onDebrief: () => go('debrief'),
       onAcademy: (id) => openAcademy(() => go('game'), typeof id === 'string' ? id : undefined),
       onJoin: (room) => { S.reset(); pending = { room }; go('setup'); },
-      onReset: () => { S.reset(); pending = null; go('title'); },
+      onReset: () => { S.reset(); pending = null; pendingRoom(null); go('title'); }, // Start over leaves the room for certain: the Classroom rule is given back now, not at the next Draft
     });
     cleanup = () => m.destroy();
   },

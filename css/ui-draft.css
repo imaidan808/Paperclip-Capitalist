@@ -7,6 +7,7 @@
 .dr-head { display: grid; gap: .4rem; }
 .dr-head h1 { margin: 0; color: var(--gold); text-shadow: 3px 3px 0 rgba(0, 0, 0, .9); font-size: clamp(1.6rem, 4vw, 2.3rem); }
 .dr-head h1:focus { outline: none; }
+.dr-tools { margin: 0; justify-self: start; }
 .dr-lede { max-width: 54rem; margin: 0; color: var(--ink); }
 .dr-layout { display: grid; grid-template-columns: minmax(0, 1fr) 24rem; gap: 1.1rem; align-items: start; margin-top: .9rem; }
 .dr-main { display: grid; gap: 1rem; min-width: 0; }
@@ -65,6 +66,9 @@
 /* the bar along the foot: always in reach */
 .dr-actions { position: sticky; bottom: 0; z-index: 3; display: flex; flex-wrap: wrap; align-items: center; gap: .7rem; margin: 1rem -1rem -.9rem; padding: .7rem 1rem; background: var(--panel); border-top: var(--bw) solid var(--gold); }
 .dr-need { min-width: 0; } .dr-notice { flex-basis: 100%; }
+/* the notes about sound land above the bar, not on it: a toast at the corner hid the Begin button's label for its 3.5 seconds on a laptop-size window (the bar is about 4.6rem tall; on a phone the need line takes a row of its own) */
+body:has(.dr-actions) #toasts { bottom: calc(max(.5rem, env(safe-area-inset-bottom, 0px)) + 4.9rem); }
+@media (max-width: 640px) { body:has(.dr-actions) #toasts { bottom: calc(max(.5rem, env(safe-area-inset-bottom, 0px)) + 8.6rem); } }
 
 @media (max-width: 640px) {
   .dr-card { padding: .6rem .65rem .65rem; gap: .35rem; } .dr-card:nth-child(n) { transform: none; } .dr-card:hover, .dr-card[data-on="1"] { transform: none; }

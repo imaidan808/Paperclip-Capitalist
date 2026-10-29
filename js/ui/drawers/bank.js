@@ -215,7 +215,7 @@ export default {
       },
       'bank-exit'(el) {
         const game = g(), k = el.dataset.k, q = game.exitQuote(k), m = ctx.money;
-        if (!q.ok) { ctx.toast(q.msg, 'bad'); return; }
+        if (!q.ok) { ctx.toast(q.msg, 'bad', undefined, { refusal: true }); return; }
         ctx.confirmBox(k === 'ipo' ? 'Go public (IPO)?' : 'Sell the business?', `<dl class="kv"><dt>Cash</dt><dd>${m(game.s.cash)}</dd><dt>Assets and managers (book)</dt><dd>${m(q.hard)}</dd><dt>Going-concern premium (${+((k === 'ipo' ? 10 : 6) * game.B.exitMult).toFixed(1)}x average daily profit of ${m(q.avg)})</dt><dd>${m(q.premium)}</dd><dt>Brokerage ${Math.round(FEES.exitBrokerage * 100)}%</dt><dd class="red">-${m(q.brokerage)}</dd><dt>Debt repaid</dt><dd class="red">-${m(game.debt())}</dd><div class="sep"></div><dt>You receive in 48 hours</dt><dd class="gold">${m(q.proceeds)}</dd><dt>Score locked at</dt><dd class="green">${q.eeiIfNow.toFixed(2)}</dd><dt>Score if you play on (today)</dt><dd>${game.eei().toFixed(2)}</dd></dl><p class="small mute">This ends your run and locks the score. Nothing is undone.</p>`, 'Exit now', () => { ctx.say(game.exit(k)); }, true);
       },
       'bank-ledger'() { const B = ST(ctx); B.ledger = !B.ledger; ctx.render(); },

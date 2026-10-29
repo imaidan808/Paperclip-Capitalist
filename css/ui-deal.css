@@ -14,6 +14,14 @@ dialog.deal:focus-visible { outline-offset: -4px; } /* the sheet fills a phone's
 .deal-top { display: flex; align-items: center; gap: .6rem .8rem; flex-wrap: wrap; padding: .1rem 0 .1rem .75rem; border-left: 6px solid var(--za, var(--gold)); }
 .deal-top h2 { flex: 1 1 14rem; margin: 0; text-transform: none; font-size: 1.2rem; letter-spacing: .01em; overflow-wrap: anywhere; }
 .deal-top h2:focus { outline: none; }
+/* The header holds the Sound and Dial tone switches, and at the largest text size the stage is taller than the window: focus lands on Stop, the sheet scrolls to it and the header went off the top, with
+   the switches the stage's own words point at (fifth round, U5: y = -118 at 1366 by 768, text size XL). From a laptop up it sticks to the top of the sheet; a phone's is three rows tall and scrolls with it.
+   Its ground is the sheet's own, and it also covers the padding above it, so what scrolls under it is hidden and not shown through it. A control brought into view rests under it, not behind it. */
+@media (min-width: 761px) {
+  .deal-top { position: sticky; top: 0; z-index: 2; isolation: isolate; }
+  .deal-top::before { content: ""; position: absolute; z-index: -1; inset: -2rem 0 -.5rem 0; background: var(--panel); }
+  dialog.deal { scroll-padding-top: 4rem; }
+}
 .deal-zone { display: inline-flex; align-items: center; gap: .35rem; padding: .2rem .65rem; border: 1px solid color-mix(in srgb, var(--za, var(--gold)) 70%, var(--line)); border-radius: 99px; background: var(--panel2); color: var(--ink); font-size: .8rem; white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
 .deal-assist { display: inline-flex; align-items: center; gap: .4rem; margin: 0; padding: .2rem .65rem; border: 1px solid var(--line); border-radius: 99px; color: var(--ink); font-size: .82rem; cursor: pointer; background: var(--panel2); }
 .deal-assist:hover:not(:has(input:disabled)) { border-color: var(--gold); }
@@ -273,3 +281,9 @@ dialog.deal:focus-visible { outline-offset: -4px; } /* the sheet fills a phone's
 :root[data-motion="reduce"] dialog.deal, :root[data-motion="reduce"] .deal-result .rtitle, :root[data-motion="reduce"] .rhead, :root[data-motion="reduce"] .rlines, :root[data-motion="reduce"] .rver,
 :root[data-motion="reduce"] .vbar i, :root[data-motion="reduce"] .xp, :root[data-motion="reduce"] .lesson { animation: none; }
 :root[data-motion="reduce"] .angle, :root[data-motion="reduce"] .angle:hover:not(:disabled), :root[data-motion="reduce"] .angle.on { transform: none; }
+
+/* the header's switches (Sound, Dial tone): the pressed one is filled at the edge and ticked, so "on" and "off" are not two commands in one style */
+.deal-tog .tb { margin-left: .2em; font-weight: 800; text-transform: uppercase; font-size: .78em; letter-spacing: .04em; opacity: .8; }
+.deal-tog[aria-pressed="true"] { border-color: var(--gold); box-shadow: inset 0 0 0 1px var(--gold); }
+.deal-tog[aria-pressed="true"] .tb { opacity: 1; color: var(--gold); }
+.deal-tog[aria-pressed="true"] .tb::before { content: "\2713\00a0"; }

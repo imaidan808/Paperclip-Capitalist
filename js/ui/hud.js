@@ -2,7 +2,8 @@
 // Pure builders: (ctx) -> HTML. Interaction is data-act attributes handled in shell.js.
 import { PERKS, TOTAL_DAYS, xpForLevel } from '../config.js';
 import { fmtMoney as money } from '../market.js';
-import { esc } from './common.js';
+import { esc, settings } from './common.js';
+import { audio, speakerState, audioDefaults } from '../audio/index.js';
 
 const lvlBase = xpForLevel; // the engine's level curve (config.js)
 
@@ -19,6 +20,16 @@ export function playerCard(ctx) {
     <span class="who"><b>${esc(s.handle)}</b><small>${s.xp - lo} / ${hi - lo} XP${s.points ? ` <span class="pt">${s.points} point${s.points === 1 ? '' : 's'} to spend</span>` : ''}</small></span></button>`;
 }
 
+// The speaker button (docs/AUDIO.md 7.3): pressed means sound is ON, so its name is always "Sound" and a screen reader says "Sound, toggle button, pressed". Left out where Web Audio does not exist.
+const SPEAKER = '<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false"><path d="M2 6h3l4-3v10l-4-3H2z" fill="currentColor"/>';
+const SPEAKER_ON = SPEAKER + '<path d="M11 5.5a3.5 3.5 0 010 5M12.5 3.5a6 6 0 010 9" fill="none" stroke="currentColor" stroke-width="1.5"/></svg>';
+const SPEAKER_OFF = SPEAKER + '<path d="M11.5 6l3.5 4M15 6l-3.5 4" fill="none" stroke="currentColor" stroke-width="1.5"/></svg>';
+export function speakerHTML() {
+  if (!audio.supported) return '';
+  const { on, title } = speakerState(settings.audio || audioDefaults()); // pressed only when something can be heard: at volume 0 the speaker is not "on"
+  return `<button class="ibtn" data-act="sound" data-fid="hud-sound" aria-pressed="${on}" aria-label="Sound" title="${title}">${on ? SPEAKER_ON : SPEAKER_OFF}</button>`;
+}
+
 export function hudHTML(ctx) {
   const { S, U } = ctx, g = ctx.g(), s = g.s, nw = g.netWorth(), prev = U.prev || {};
   const fl = (k, v) => (prev[k] == null || Math.abs(v - prev[k]) < 0.005 ? '' : v > prev[k] ? ' up' : ' down');
@@ -31,10 +42,10 @@ export function hudHTML(ctx) {
   return `${playerCard(ctx)}
     <div class="res" role="group" aria-label="Your numbers">
       <button class="rs${fl('cash', s.cash)}" data-anchor="hud-cash" data-act="breakdown" data-k="cash" data-fid="r-cash"><small>Cash</small><b class="mono gold">${money(s.cash)}</b></button>
-      <button class="rs${fl('nw', nw)}" data-anchor="hud-networth" data-act="breakdown" data-k="nw" data-fid="r-nw"><small>Net worth</small><b class="mono">${money(nw)}</b></button>
+      <button class="rs${fl('nw', nw)}${s.insolvent ? ' neg' : ''}" data-anchor="hud-networth" data-act="breakdown" data-k="nw" data-fid="r-nw"><small>Net worth</small><b class="mono">${money(nw)}</b></button>
       <button class="rs" data-anchor="hud-day" data-act="breakdown" data-k="day" data-fid="r-day"><small>Day</small><b class="mono">${g.day}<span class="mute">/${TOTAL_DAYS}</span></b><span class="bar" role="progressbar" aria-label="Game progress" aria-valuemin="0" aria-valuemax="${TOTAL_DAYS}" aria-valuenow="${g.day}"><i data-bar="day"></i></span></button>
     </div>
-    <div class="ctl">${room}${clock}<button class="ibtn" data-act="help" aria-label="Help">?</button><button class="ibtn" data-act="menu" aria-label="Menu">☰</button></div>`;
+    <div class="ctl">${room}${clock}${speakerHTML()}<button class="ibtn" data-act="help" aria-label="Help">?</button><button class="ibtn" data-act="menu" aria-label="Menu">☰</button></div>`;
 }
 
 /** The current objective: an Academy mission while the player is learning, otherwise the lowest-district active quest. */
