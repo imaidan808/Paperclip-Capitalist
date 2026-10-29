@@ -80,8 +80,8 @@ test('F2: the sizes docs/ARCHITECTURE.md quotes are the shipped tree\'s, not the
   close(num(s[2]), kb(m.title.raw), 'title screen JavaScript'); close(num(s[3]), kb(m.title.gz), 'title screen gzipped'); close(num(s[5]), kb(m.rest.raw), 'the rest, JavaScript'); close(num(s[6]), kb(m.rest.gz), 'the rest, gzipped');
 });
 
-test('F3: the closing paragraph of BALANCE.md holds only what is still open, with the draft screen\'s real figures', () => {
-  const md = read('docs/BALANCE.md'), i = md.indexOf('Open, and for the owner of the file named'), p = md.slice(i, md.indexOf('## Decisions the spec left open'));
+test('F3: the closing paragraph of BALANCE.md holds only what is still open, with the draft screen\'s real figures (closed in the leftovers round, one question left: tests/leftovers.test.mjs)', () => {
+  const md = read('docs/BALANCE.md'), i = md.indexOf('The Draft screen and the wreck price: closed'), p = md.slice(i, md.indexOf('## Decisions the spec left open'));
   assert.ok(i > 0, 'the paragraph is there');
   assert.doesNotMatch(p, /price the wreck at its as-is value, which is the price at Ops 1/, 'the Codex and the Academy now state the open market\'s price (commit 3940256)');
   assert.doesNotMatch(p, /British spelling of "neighbor"/, '"neighbor" is the American form');
@@ -143,13 +143,15 @@ test('F6: the faculty kit\'s recovery flow names the controls the dashboard and 
   assert.match(parts.keep, /Keep this room/); assert.match(parts.keep, /Show the recovery code/); assert.match(parts.keep, /Copy the recovery code/);
 });
 
-test('F7: the Ops blurb promises what Ops does: cheaper sound lots, but a dearer wreck', () => {
+test('F7: the Ops blurb promises what Ops does: cheaper working lots, but a dearer wreck (and the rest of it is held in tests/leftovers.test.mjs)', () => {
   assert.doesNotMatch(SKILLS.ops.blurb, /lower sourcing prices/);
-  assert.match(SKILLS.ops.blurb, /lower prices on sound lots/);
+  assert.match(SKILLS.ops.blurb, /lower prices on working lots \(wrecks ask more as your Ops rises\)/);
   // the engine: a sound lot gets cheaper with Ops (97% of its value at Ops 1, 2.5 points less each level, never under 84%), a wreck dearer (1.00 times its as-is value at Ops 1, 1.21 at Ops 2)
   const lot = (ops) => Math.max(ECON.lotDiscLo, ECON.lotDiscHi - 0.025 * (ops - 1)), wreck = (ops) => Math.max(ECON.brokenLo, 1 - ECON.brokenSlope * (ops - 1));
   assert.ok(lot(4) < lot(1) && wreck(4) > wreck(1), 'the two prices move opposite ways with Ops');
-  assert.match(read('js/engine.js'), /Math\.max\(ECON\.lotDiscLo, ECON\.lotDiscHi - 0\.025 \* \(ops - 1\)\) : Math\.max\(ECON\.brokenLo, 1 - ECON\.brokenSlope \* \(ops - 1\)\)/, 'and that is the engine\'s own line');
+  // ...and that is the engine's own rule: since the leftovers round the lot generator and the draft screen both read it from one function (market.js `lotShare`)
+  assert.match(read('js/engine.js'), /let disc = lotShare\(ops, cond\);/, 'the engine prices a lot with the shared rule');
+  assert.match(read('js/market.js'), /Math\.max\(ECON\.lotDiscLo, ECON\.lotDiscHi - LOT_STEP \* \(ops - 1\)\) : Math\.max\(ECON\.brokenLo, 1 - ECON\.brokenSlope \* \(ops - 1\)\)/, 'and that is the rule');
 });
 
 test('F8: the README layout names every top-level folder the repository tracks, dev/ included', () => {

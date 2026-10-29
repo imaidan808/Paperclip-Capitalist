@@ -5,7 +5,7 @@ import {
   PERKS, perkMods, ASSETS, BUYERS, PIPE, PIPE_RULES, pipeScale, pipeMargin, pipeOverhead, UPGRADES, CLIENTS, LOANS, AUDIT_THEMES, AUDIT, EVENTS, ALGO_EVENTS, WARN_LEAD, FRESH, SWAPS, DELIVERY_FLOOR,
 } from './config.js';
 import {
-  clamp, creativity, creativityBand, saturation, eei as eeiCalc, fmvVariance, restoreQuality, repairCostFor, fitOf, fitMult,
+  clamp, creativity, creativityBand, saturation, eei as eeiCalc, fmvVariance, restoreQuality, repairCostFor, lotShare, fitOf, fitMult,
   nicheKey, assetFMV, demandMult, priceMult, speedMult, obviousBuyer, utilityIn, demandOf, truthMult, FAKE_VALUE,
 } from './market.js';
 import { step as rngStep, hash01 } from './rng.js';
@@ -540,7 +540,7 @@ export class Game {
     const asset = { cls, cond, quality: 1, wear: 1 };
     const asIs = assetFMV(asset, z, this.mods(), this.crowd(cls, z));
     const ops = this.lvl('ops');
-    let disc = cond === 'ok' ? Math.max(ECON.lotDiscLo, ECON.lotDiscHi - 0.025 * (ops - 1)) : Math.max(ECON.brokenLo, 1 - ECON.brokenSlope * (ops - 1));
+    let disc = lotShare(ops, cond); // market.js: a working lot gets cheaper with Ops, a wreck dearer
     if (cond === 'broken') disc *= (1 - this.P.brokenDiscount) * (1 + ECON.brokenTop * Math.max(0, z - ECON.brokenFrom)); // and the sellers of wrecks in the top districts know what a repaired crate fetches
     if (asIs < Z.scale * 0.6) disc *= 1 - (this.P.lotDiscount || 0); // small lots (the Side-Hustler)
     if (Z.rules.gray) disc *= 1 - (this.P.lotDiscountGray || 0); // gray markets (the Second-Chance Hustler)

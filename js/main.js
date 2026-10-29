@@ -1,10 +1,10 @@
 // Entry point: routes between screens and runs the tick loop. Everything runs in the browser; nothing is sent anywhere
 // unless the player joins a classroom room (and then only pseudonymous game numbers).
 // Screens: title -> setup (the Background draft) -> academy (first run only) -> game -> debrief; instructor is its own branch.
-import { Session, Clock, kv, cleanOwner } from './session.js';
+import { Session, Clock, kv, cleanOwner, describeSave } from './session.js';
 import { roomCode, cleanCode } from './net.js';
 import { $, esc, delegate, applySettings, initDialog, settingsDialog, dlg, toast } from './ui/common.js';
-import { mountDraft } from './ui/draft.js';
+import { mountDraft, replaceRunHTML } from './ui/draft.js';
 import { mountAcademy, claimPendingRewards } from './ui/academy.js';
 import { mountGame } from './ui/shell.js';
 import { mountInstructor, FOLLOW_NOTE, RECOVER_WAIT_SECONDS } from './ui/instructor.js';
@@ -122,11 +122,18 @@ const screens = {
       onBack: () => { pending = null; go('title'); },
       onBegin({ perks, specialty, handle }) {
         const room = pending?.room;
-        if (room) S.joinRoom({ ...room, role: 'student', handle: handle || undefined });
-        S.startGame({ perks, specialty, handle });
-        claimPendingRewards(S.game); // lessons played from the title screen wait until there is a run to pay
-        pending = null;
-        if (kv.get('academyDone')) enter(); else openAcademy(() => go('game'));
+        const begin = () => {
+          if (room) S.joinRoom({ ...room, role: 'student', handle: handle || undefined });
+          S.startGame({ perks, specialty, handle });
+          claimPendingRewards(S.game); // lessons played from the title screen wait until there is a run to pay
+          pending = null;
+          if (kv.get('academyDone')) enter(); else openAcademy(() => go('game'));
+        };
+        // There is one save slot, so this writes over a run saved in this browser (a solo run, or a classroom's): say so first, and name it. Keeping it leaves the draft as it was.
+        const old = describeSave(kv.get('save'));
+        if (!old) { begin(); return; }
+        askReplace(old, room, begin);
+        return false; // (the draft's Begin works again; nothing has started)
       },
     });
     cleanup = () => m.destroy();
@@ -170,6 +177,13 @@ const screens = {
 };
 
 function enter() { go('game'); }
+
+/** Begin would replace the run saved in this browser (docs/ARCHITECTURE.md, "Open decisions"): a dialog that names it, with the safe answer under the cursor. */
+function askReplace(old, room, begin) {
+  const d = dlg.open(replaceRunHTML(old, room), { label: 'Replace your saved run?' });
+  d.querySelector('[data-close]').onclick = () => dlg.close();
+  d.querySelector('[data-replace]').onclick = () => { dlg.close(); begin(); };
+}
 
 /** `owner`: a recovery code pasted to take a running room back (another device, or storage that was cleared). That room's clock is the class's, not ours, so the session waits to hear it (Session.recovering). */
 function startInstructor(code, relay, fresh, saved, owner) {

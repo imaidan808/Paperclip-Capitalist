@@ -1,5 +1,5 @@
 // Pure economic formulas. No state, no DOM: these are the equations students are graded on.
-import { ASSETS, BUYERS, ZONES, CM, BROKEN_FACTOR, TOTAL_DAYS } from './config.js';
+import { ASSETS, BUYERS, ZONES, CM, ECON, BROKEN_FACTOR, TOTAL_DAYS } from './config.js';
 import { demandOf } from './data/schema.js';
 
 export { demandOf };
@@ -60,6 +60,15 @@ export function gini(values) {
 /** Ops: broken-asset restoration quality and repair cost. Reproduces the Broken Fleet Van example (high Ops ~ $20, Ops 1 = $1,200 and half the value). */
 export const restoreQuality = (ops) => 0.5 + 0.5 * Math.min(1, Math.max(0, ops - 1) / 4);
 export const repairCostFor = (base, ops, mult = 1) => base * Math.pow(0.42, Math.max(0, ops - 1)) * mult;
+
+/**
+ * Ops and the price a lot is posted at, as a share of the value it is posted against (the one rule the engine's lot generator and the draft screen's stock-cost trait both read).
+ * A working lot ('ok') is posted at ECON.lotDiscHi of its fair value at Ops 1 and LOT_STEP less for each level, never under ECON.lotDiscLo. A broken one is posted at
+ * max(brokenLo, 1 - brokenSlope x (Ops - 1)) of its as-is value; the slope is negative on purpose (sellers of wrecks ask for the repair upside), so a wreck costs MORE as Ops rises.
+ * (The district premium for wrecks past district 12 and the Backgrounds' discounts are applied by the engine on top of this.)
+ */
+export const LOT_STEP = 0.025;
+export const lotShare = (ops, cond) => (cond === 'ok' ? Math.max(ECON.lotDiscLo, ECON.lotDiscHi - LOT_STEP * (ops - 1)) : Math.max(ECON.brokenLo, 1 - ECON.brokenSlope * (ops - 1)));
 
 /** Fit between a buyer and an asset's tags, 0..1. */
 export function fitOf(cls, buyerId) {

@@ -1,4 +1,4 @@
-// The finish round for the screens: the follow-ups the engine track asked for (docs/BALANCE.md, "Open, and for the owners of the files named").
+// The finish round for the screens: the follow-ups the engine track asked for (docs/BALANCE.md, "The Draft screen and the wreck price", which was the "Open" note then).
 //   1. The Stock drawer's repair estimate is the repair bench's own (js/deal.js benchQuote): "up to $X", and Repair is shut, with the reason beside it, when the cash does not reach it.
 //   2. The instructor can see and copy the room's recovery code, is told the live room runs only from this browser unless it is saved, and the title screen has a "Resume as instructor" form.
 //   3. The Draft screen's "buyer flow" counts a bigger buyer budget (leadBudget) at the weight the engine gives it.
