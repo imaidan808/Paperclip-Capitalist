@@ -4,7 +4,7 @@
 // What it never does: choose where anything stands (layout.js and kits.js do), change game state, or use Math.random (all variation is hashed from the prop's own position).
 import { P, box, ellipse } from './iso.js';
 import { hazeAt } from './shading.js';
-import { drawSprite } from './sprites.js';
+import { drawSprite, drawOverlays } from './sprites.js';
 import { propV2 } from './stack.js';
 import { DRAW, LAYER, tint, body, hot, smoke, sign, signLeft } from './props-common.js';
 import { roof } from './props-buildings.js';
@@ -30,13 +30,13 @@ export function drawProp(ctx, p, env) {
   try {
     const v = propV2(p.t); // the V2 drawer of this kind, when its owner has registered one and flagged it (stack.js): the same path, with its own definition
     if (v) {
-      if (v.body) { const polys = drawSprite(ctx, p, env, v); if (polys !== undefined) { if (v.live) v.live(ctx, p, env); return polys; } }
+      if (v.body) { const polys = drawSprite(ctx, p, env, v); if (polys !== undefined) { if (v.detail) drawOverlays(ctx, p, env, v); if (v.live) v.live(ctx, p, env); return polys; } }
       return v.draw(ctx, p, env);
     }
     const f = DRAW[p.t], L = LAYER[p.t];
     if (L && f === L.draw) { // a layer that nobody has replaced: serve its static body from the cache
       const polys = drawSprite(ctx, p, env, L);
-      if (polys !== undefined) { if (L.live) L.live(ctx, p, env); return polys; }
+      if (polys !== undefined) { if (L.detail) drawOverlays(ctx, p, env, L); if (L.live) L.live(ctx, p, env); return polys; }
     }
     return f ? f(ctx, p, env) : farDraw(ctx, p, env);
   } finally { env.hz = prev; }

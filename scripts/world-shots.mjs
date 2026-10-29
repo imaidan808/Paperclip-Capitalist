@@ -124,7 +124,8 @@ const PAGE = String.raw`(() => {
     const w = pc.world, html = document.documentElement;
     R.seed = o.seed;
     w.stop();                                                  // no frame loop: nothing changes except by hand
-    (await import('/js/world/sprites.js')).setBuildBudget(1e9, 6, 100); // sprites are built in a few milliseconds a frame; here all at once, so no picture waits on the clock
+    const SP = await import('/js/world/sprites.js'); SP.setBuildBudget(1e9, 6, 100); SP.setSpriteFade(0); // sprites are built in a few milliseconds a frame; here all at once, and an exact sprite replaces its stand-in at once (no 120 ms fade), so no picture waits on the clock
+    w.gcBudget = [1e9, 1e9];                                   // the ground's chunks likewise: every chunk of a view is baked in its first draw
     if (o.dpr) { w.targetDpr = () => o.dpr; w.resize(); }     // pin the canvas density (a software-drawn canvas would be capped by the game)
     if (w.light) w.light.perFrame = 99;                        // every light layer in the first draw, not one a frame
     const before = html.dataset.motion; html.dataset.motion = 'reduce'; // walk everything to where it is going (the calm path moves fast and makes no dust)
@@ -158,7 +159,7 @@ const PAGE = String.raw`(() => {
     w.cam.x = x0; w.cam.y = y0;
     const px = (c) => (c ? (c.c ? c.c.width * c.c.height : c.width * c.height) || 0 : 0);
     const light = w.light ? sum([...Object.values(w.light.big || {}), ...Object.values(w.light.src || {})].map(px)) : 0;
-    return { still: spread(still), pan: spread(pan), memoryMpx: { main: +(w.cv.width * w.cv.height / 1e6).toFixed(2), ground: +(px(w.gc) / 1e6).toFixed(2), light: +(light / 1e6).toFixed(2), sprites: +(S.stats.pixels / 1e6).toFixed(2) }, sprites: { ...S.stats } };
+    return { still: spread(still), pan: spread(pan), memoryMpx: { main: +(w.cv.width * w.cv.height / 1e6).toFixed(2), ground: +(((w.gc && w.gc.bytes) || px(w.gc)) / (w.gc && w.gc.bytes ? 4 : 1) / 1e6).toFixed(2), light: +(light / 1e6).toFixed(2), sprites: +(S.stats.pixels / 1e6).toFixed(2) }, sprites: { ...S.stats } };
   };
   R.shoot = async (s, o) => {
     const w = pc.world, T = s.t == null ? o.t : s.t; // a shot may be drawn at a clock time of its own (the drift pair)

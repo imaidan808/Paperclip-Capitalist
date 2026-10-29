@@ -17,12 +17,12 @@
 export const OPAQUE = 250;
 
 /**
- * Close the gaps in the alpha plane of straight RGBA `data` (w x h): see the head of this file. `o.scratch` may hand in a Uint8Array of w x h as `a` to be reused between calls. The one pixel ring at the bitmap's edge is never
+ * Close the gaps in the alpha plane of straight RGBA `data` (w x h): see the head of this file. `o.min` (128) is the lowest alpha of a pixel that counts as a crack: a more transparent gap is a real one and stays. `o.scratch` may hand in a Uint8Array of w x h as `a` (and `flags`) to be reused between calls. The one pixel ring at the bitmap's edge is never
  * written (a chunk keeps a bleed there). Returns how many pixels were raised.
  */
 const BLOCK = 16;
 export function closeAlpha(data, w, h, o = {}) {
-  const n = w * h; if (!(w > 4 && h > 4) || data.length < n * 4) return 0;
+  const n = w * h, lo = o.min ?? 128; // a pixel with alpha under `lo` is a real gap, not a crack (a crack between two shapes that share an edge keeps at least 0.75 of the colour); `min: 0` fills any gap if (!(w > 4 && h > 4) || data.length < n * 4) return 0;
   const A = o.scratch?.a?.length >= n ? o.scratch.a : new Uint8Array(n), bw = Math.ceil(w / BLOCK), bh = Math.ceil(h / BLOCK), flags = o.scratch?.flags?.length >= bw * bh ? o.scratch.flags : new Uint8Array(bw * bh);
   flags.fill(0, 0, bw * bh);
   // one pass: the alpha plane, and for each block whether it holds an opaque pixel (1) and a not-opaque one (2)
@@ -39,7 +39,7 @@ export function closeAlpha(data, w, h, o = {}) {
       for (let y = y0; y < y1; y++) {
         const r = y * w;
         for (let x = x0; x < x1; x++) {
-          const i = r + x; if (A[i] >= OPAQUE) continue;
+          const i = r + x; if (A[i] >= OPAQUE || A[i] < lo) continue;
           let v = 0, src = -1;
           const l1 = A[i - 1], r1 = A[i + 1], u1 = A[i - w], d1 = A[i + w];
           if (l1 >= OPAQUE) { if (r1 >= OPAQUE) { v = l1 < r1 ? l1 : r1; src = i - 1; } else { const r2 = A[i + 2]; if (r2 >= OPAQUE) { v = l1 < r2 ? l1 : r2; src = i - 1; } } }

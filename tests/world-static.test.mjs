@@ -164,7 +164,7 @@ test('sprites: a sprite is built at the scale it is shown at, so the blit is a s
   sprites.setBuildBudget(Infinity); sprites.clearSprites(); let bodies = 0; const layer = { body: () => { bodies++; return null; } }, p = prop({ gx: 4 });
   for (const sc of [1.3, 1.3002]) { const c = rec(sc); sprites.drawSprite(c.ctx, p, env(), layer); await sleep(110); sprites.drawSprite(c.ctx, p, env(), layer); const di = c.log.calls.filter((x) => x[0] === 'drawImage'); assert.ok(di.length >= 1); assert.equal(di.at(-1).length, 4, 'drawImage(image, x, y): no resize'); }
   assert.equal(bodies, 1, 'a hair of difference in the scale is the same sprite');
-  const c = rec(1.6); sprites.drawSprite(c.ctx, p, env(), layer); await sleep(110); sprites.drawSprite(c.ctx, p, env(), layer); assert.equal(bodies, 2, 'a real change of zoom builds again');
+  const c = rec(3); sprites.drawSprite(c.ctx, p, env(), layer); await sleep(110); sprites.drawSprite(c.ctx, p, env(), layer); assert.equal(bodies, 2, 'a real change of zoom builds again (a zoom with no stand-in within the window: drawn directly while it moves, built at rest)');
 });
 
 // ---------------------------------------------------------------- the sprite box holds the whole body

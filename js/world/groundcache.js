@@ -28,9 +28,10 @@ export const groundCacheMethods = {
    */
   groundPass(ctx, view) {
     const { W, H, dpr } = this, cam = this.cam, k = this.gcKey;
-    if (!this.cacheOK() || this.revealing()) { this.gcSeen = 0; this.gcValid = false; k[6] = -1; this.drawGround(ctx, view, 0); return; } // a district is opening, or there is no canvas to bake into: the ground is drawn directly, as it always was
+    if (!this.cacheOK() || this.revealing()) { this.gcSeen = 0; this.gcValid = false; k[6] = -1; this.moving = !(k[0] === cam.x && k[1] === cam.y && k[2] === cam.z); k[0] = cam.x; k[1] = cam.y; k[2] = cam.z; this.drawGround(ctx, view, 0); return; } // a district is opening, or there is no canvas to bake into: the ground is drawn directly, as it always was
     const moved = !(k[0] === cam.x && k[1] === cam.y && k[2] === cam.z && k[3] === W && k[4] === H && k[5] === dpr);
     if (moved) { k[0] = cam.x; k[1] = cam.y; k[2] = cam.z; k[3] = W; k[4] = H; k[5] = dpr; this.gcSeen = 0; } else this.gcSeen++;
+    this.moving = moved; // (the loop reads it: a camera that moves draws every refresh)
     const gk = groundKey(this); k[6] = this.unlockHash; k[7] = gk;
     let store = this.gc; if (!(store instanceof ChunkCache)) { if (store) this.gc = null; store = this.gc = new ChunkCache('ground.chunks'); }
     if (store.setVer((Math.imul(this.unlockHash | 0, 31) + gk) | 0)) this.gcValid = false;

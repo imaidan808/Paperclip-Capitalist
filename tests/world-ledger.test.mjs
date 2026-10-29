@@ -27,9 +27,10 @@ test('the ledger: holders register what they hold under a name of their own, rep
 });
 
 test('releasers: every registered function is called by releaseAll, in turn, and one that throws does not strand the rest', () => {
+  const held = releaseAll(); // (the modules that hold bitmaps register their own releaser when they load: sprites.js does, so the count is theirs plus ours)
   const calls = []; const off1 = registerReleaser(() => calls.push('a')); registerReleaser(() => { throw new Error('a holder that cannot let go'); }); const off3 = registerReleaser(() => calls.push('c'));
-  assert.equal(releaseAll(), 2, 'two ran; the one that threw is not counted'); assert.deepEqual(calls, ['a', 'c']);
-  off1(); off3(); calls.length = 0; assert.equal(releaseAll(), 0, 'the throwing one is still registered and still throws, quietly'); assert.deepEqual(calls, []);
+  assert.equal(releaseAll(), held + 2, 'two of ours ran; the one that threw is not counted'); assert.deepEqual(calls, ['a', 'c']);
+  off1(); off3(); calls.length = 0; assert.equal(releaseAll(), held, 'the throwing one is still registered and still throws, quietly'); assert.deepEqual(calls, []);
   assert.throws(() => registerReleaser('no'), /function/);
 });
 

@@ -25,10 +25,11 @@ test('two cracks that cross are both closed, the crossing pixel included', () =>
   closeAlpha(d, W, H); assert.equal(countCracks(d, W, H), 0); assert.equal(alphaAt(d, 32, 40), 255, 'the pixel where they cross');
 });
 
-test('a crack that has no colour at all (alpha 0) borrows its neighbours\' colour', () => {
+test('a crack that has no colour at all (alpha 0) borrows its neighbours\' colour when asked to fill any gap; by default a gap that transparent is a real one', () => {
   const d = plane((x) => (x === 32 ? [0, 0, 0, 0] : [10, 200, 30, 255]));
-  closeAlpha(d, W, H); const i = (20 * W + 32) * 4;
+  closeAlpha(d, W, H, { min: 0 }); const i = (20 * W + 32) * 4;
   assert.equal(d[i + 3], 255); assert.deepEqual([d[i], d[i + 1], d[i + 2]], [10, 200, 30]);
+  const slit = plane((x) => (x === 32 ? [0, 0, 0, 0] : [10, 200, 30, 255])); closeAlpha(slit, W, H); assert.equal(alphaAt(slit, 32, 20), 0, 'a transparent slit (a gap between two pickets) is left alone by default');
 });
 
 test('a gap of three pixels is a real feature and stays; so does the coast, a soft tail and a corner of the silhouette', () => {

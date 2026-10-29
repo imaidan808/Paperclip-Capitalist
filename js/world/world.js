@@ -15,6 +15,7 @@ import { Lighting, dayTargets } from './lighting.js';
 import { Labels } from './labels.js';
 import { surface, softwareRaster, releaseAll } from './gfx.js';
 import { snapTranslation } from './chunks.js';
+import { SLOW_MS, FAST_MS, GOV_WAIT, GOV_DOWN, judge } from './governor.js';
 import { clearSprites, setSpriteBudget } from './sprites.js';
 import { FAR_ZOOM, FOG_DIM, money } from './common.js';
 import { runLayer } from './stack.js';
@@ -38,8 +39,7 @@ import { overlayMethods } from './overlay.js';
 import { mapMethods } from './mapmode.js';
 export { FAR_ZOOM };                                                                  // below this zoom the world draws plain blocks and dots (common.js)
 
-export const SLOW_MS = 22, FAST_MS = 16; // quality governor: a smoothed frame cost over SLOW_MS steps quality down, under FAST_MS steps it back up
-const GOV_WAIT = 10, GOV_DOWN = 3;         // frames of good cost before one step back up (it doubles while the picture keeps tipping over), frames of bad cost before one step down
+export { SLOW_MS, FAST_MS };               // quality governor (governor.js): a smoothed frame cost over SLOW_MS steps quality down, under FAST_MS steps it back up
 const SOFT_DPR = 1.5;                      // the most pixel density a CPU-drawn canvas gets: every full-window layer is a pass over all its pixels, and 1.5 has 44% fewer of them than 2
 const BY_KEY = (a, b) => a.key - b.key;
 const NOFX = Object.freeze({ dim: 0, fog: 0, lights: 0 });
@@ -74,7 +74,7 @@ export class World {
     this.decals = new Map();                                                                      // per district: its animated decals (water, pulses) drawn live over the cached ground
     this.player = { x: 0, y: 0, path: [], zone: 1, moving: false, dir: 1, speed: 16, placed: false };
     this.zpip = new Uint8Array(3 * (Math.max(...LAYOUT.ids) + 1));                                // per district: pipelines running, paused, starved (for the whole-island pips)
-    this.env = { t: 0, night: 0, wind: 1, dim: 0, surge: false, crunch: false, tariff: false, far: false, lite: false, locked: false, zoff: 0, lights: this.lights };
+    this.env = { t: 0, night: 0, wind: 1, dim: 0, tier: 0, surge: false, crunch: false, tariff: false, far: false, lite: false, locked: false, zoff: 0, lights: this.lights };
     this.reveal = {}; this.far = false;
     this.running = false; this.dirty = true; this.pointers = new Map(); this.drag = null; this.hitsLabel = {};
     this.bindInput();
@@ -391,7 +391,7 @@ export class World {
     this.draw();
     this.dirty = false; G.prev = ts;
     this.govern(performance.now() - t0, gap);
-    this.fps = this.slow > 4 ? 15 : this.slow > 2 ? 20 : 30;
+    this.fps = this.slow > 4 ? 15 : this.slow > 2 ? 20 : 30; if (this.moving && this.slow < 3) this.fps = 60; // the 30 fps cap is for a still camera's idle motion: a camera that moves draws every refresh while the machine keeps up (docs/RENDER_PLAN.md section 5, DIAGNOSIS P4)
     this.lite = this.slow > 2;
     if (Math.abs(this.targetDpr() - this.dpr) > 0.01) this.resize();
   }
@@ -407,8 +407,7 @@ export class World {
   govern(cost, gap) {
     const G = this.gov;
     if (this.warm > 0) { this.warm--; return; }
-    const late = gap > (1000 / this.fps) * 2.2;
-    G.cost += ((late ? Math.max(cost, SLOW_MS + 4) : cost) - G.cost) * 0.2;
+    G.cost += (judge(cost, gap, this.fps) - G.cost) * 0.2; // (the second signal: a frame that arrives late for the loop's own target counts as slow however cheap its drawing was; governor.js)
     if (G.cost > SLOW_MS) {
       G.good = 0;
       if (++G.bad >= GOV_DOWN && this.slow < 6) { G.bad = 0; this.slow++; if (this.t - G.upAt < 6000) G.wait = Math.min(G.wait * 2, GOV_WAIT * 40); }
@@ -465,7 +464,7 @@ export class World {
   draw() {
     const ctx = this.ctx, { W, H } = this, cam = this.cam, map = this.mode === 'map';
     this.hits.length = 0; this.overlay.length = 0; this.lights.length = 0; this.env.lights = this.lights;
-    this.far = cam.z < FAR_ZOOM; this.env.far = this.far; this.env.lite = this.lite; this.env.lod = lodOf(cam.z, this.lod);
+    this.far = cam.z < FAR_ZOOM; this.env.far = this.far; this.env.lite = this.lite; this.env.tier = this.slow; this.env.lod = lodOf(cam.z, this.lod);
     const view = this.view || (this.view = { x0: 0, x1: 0, y0: 0, y1: 0 });
     view.x0 = cam.x - W / 2 / cam.z - 80; view.x1 = cam.x + W / 2 / cam.z + 80; view.y0 = cam.y - H / 2 / cam.z - 260; view.y1 = cam.y + H / 2 / cam.z + 80;
     runLayer('sea', this, ctx, view); this.toWorld(ctx);

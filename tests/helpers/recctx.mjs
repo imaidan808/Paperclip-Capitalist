@@ -19,7 +19,7 @@ export function recCtx() {
         else if (k === 'restore') { log.depth--; log.minDepth = Math.min(log.minDepth, log.depth); Object.assign(o, stack.pop() || {}); }
         else if (k === 'stroke') log.strokes.push({ lw: o.lineWidth, style: o.strokeStyle, alpha: o.globalAlpha });
         else if (k === 'fill') log.fills.push({ style: o.fillStyle, alpha: o.globalAlpha });
-        else if (k === 'fillRect') { log.rects.push({ w: args[2], h: args[3] }); log.fills.push({ style: o.fillStyle, alpha: o.globalAlpha }); }
+        else if (k === 'fillRect') { log.rects.push({ x: args[0], y: args[1], w: args[2], h: args[3] }); log.fills.push({ style: o.fillStyle, alpha: o.globalAlpha }); }
         else if (k === 'clip') log.clips++;
         else if (k === 'drawImage') log.images++;
       };
