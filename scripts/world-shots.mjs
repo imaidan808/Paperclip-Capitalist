@@ -9,7 +9,7 @@
 //   --dsf 2           device scale factor of the page; the world canvas is pinned to it (min(dsf, 2)), so a headless Chrome whose canvas is CPU-drawn (and which the game would cap at 1.5) draws what a GPU Mac draws.
 //                     --canvas-dpr app keeps the game's own choice instead
 //   --w 1440 --h 900  the window in css pixels
-//   --set all|quick|pan|tod|extent|NAME,NAME   which shots (default all: the 27 of the baseline). quick: island-far, start-mid, coast-west, sea-open, fog-near, start-close. tod: the three scenes at hours 8, 13, 19 and 23.
+//   --set all|quick|pan|tod|extent|seq|NAME,NAME   which shots (default all: the 27 of the baseline). seq: the start district's crossing at zoom 0.5, 0.7, 1.0, 1.4, 2.0 and 2.4 (the progression of detail; optional, not in `all`). quick: island-far, start-mid, coast-west, sea-open, fog-near, start-close. tod: the three scenes at hours 8, 13, 19 and 23.
 //                     pan: the same sea seen from two cameras 300 by 160 css px apart, at two zooms, and from two cameras at two clock times 2 s apart (what world-metrics.mjs --anchor reads: pan, zoom and drift pairs)
 //                     extent: the whole island at fit, in the world and in map mode (island-far, island-map): shoot it at --w 390 --h 844 and --w 768 --h 1024 and run world-metrics.mjs DIR --unpainted, so a sea that
 //                     ends where its bitmap ends shows (an opaque canvas leaves black there). The shots marked optional (the drift pair, island-map) are in their sets only, never in `all`.
@@ -84,6 +84,8 @@ const SHOTS = [
   { name: 'sea-drift-b', sets: ['pan'], optional: true, z: 0.5, at: shift(LAKE, 300 / 0.5, 160 / 0.5), panFrom: 'sea-drift-a', dt: 2000 },
   // the fit view in map mode (the cards and names the map draws over the island); optional
   { name: 'island-map', sets: ['extent'], optional: true, fit: true, map: true },
+  // the progression: one place (the start district's crossing) at six zooms, for judging how detail comes in as the camera goes closer (set `seq`; optional, so not in `all`)
+  ...[0.5, 0.7, 1.0, 1.4, 2.0, 2.4].map((zz) => ({ name: `seq-z${String(zz).replace('.', '')}`, sets: ['seq'], optional: true, z: zz, at: at(DIST[1].cx, DIST[1].cy, DIST[1].z) })),
   // this one opens district 10 in the game state, so it always runs last
   { name: 'city-close', sets: [], z: 1.4, at: atDistrict(10), unlock: [10] },
 ];
@@ -91,7 +93,7 @@ const ALL = new Set(SHOTS.map((s) => s.name));
 const pick = (spec) => {
   if (spec === 'all') return SHOTS.filter((s) => !s.optional);
   const want = new Set(spec.split(',').map((x) => x.trim()).filter(Boolean)), out = SHOTS.filter((s) => want.has(s.name) || s.sets.some((k) => want.has(k)));
-  for (const n of want) if (!ALL.has(n) && !['quick', 'tod', 'pan', 'extent'].includes(n)) { console.error(`unknown shot or set "${n}". shots: ${[...ALL].join(', ')}`); process.exit(2); }
+  for (const n of want) if (!ALL.has(n) && !['quick', 'tod', 'pan', 'extent', 'seq'].includes(n)) { console.error(`unknown shot or set "${n}". shots: ${[...ALL].join(', ')}`); process.exit(2); }
   return out;
 };
 let chosen = pick(O.set);

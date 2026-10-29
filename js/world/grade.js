@@ -51,13 +51,13 @@ function bakeHaze(g, w, h) {
   g.clearRect(0, 0, w, h);
   g.fillStyle = lin(g, 0, 0, 0, h, [[0, 'rgba(236,244,255,0.46)'], [0.3, 'rgba(226,238,252,0.24)'], [0.6, 'rgba(222,236,252,0)'], [1, 'rgba(222,236,252,0)']]); g.fillRect(0, 0, w, h);
 }
-/** Night: a periwinkle moonlit air from the top, a soft lift over everything so the picture is never murky, and a plum vignette at the corners. */
+/** Night: a periwinkle moonlit air from the top (a thin one: a thick wash lifted the whole picture to day), and a plum vignette that closes in from the edges so the lamps' pools and the lit windows stand against a darker ground. */
 function bakeNight(g, w, h) {
   g.clearRect(0, 0, w, h);
-  g.fillStyle = lin(g, 0, 0, 0, h, [[0, 'rgba(158,174,252,0.26)'], [0.4, 'rgba(140,156,240,0.12)'], [1, 'rgba(112,120,214,0.06)']]); g.fillRect(0, 0, w, h);
+  g.fillStyle = lin(g, 0, 0, 0, h, [[0, 'rgba(158,174,252,0.15)'], [0.4, 'rgba(140,156,240,0.06)'], [1, 'rgba(112,120,214,0.03)']]); g.fillRect(0, 0, w, h);
   g.save(); g.translate(w * 0.7, h * 0.08); g.scale(w / h, 1); const m = g.createRadialGradient(0, 0, 0, 0, 0, h * 0.7); m.addColorStop(0, 'rgba(210,222,255,0.16)'); m.addColorStop(1, 'rgba(210,222,255,0)'); g.fillStyle = m; g.fillRect(-h, -h, h * 2, h * 2); g.restore();
   g.save(); g.translate(w / 2, h * 0.5); g.scale(w / h, 1);
-  const R = h * 0.82, gr = g.createRadialGradient(0, 0, R * 0.5, 0, 0, R); gr.addColorStop(0, 'rgba(60,56,120,0)'); gr.addColorStop(1, 'rgba(60,56,120,0.2)');
+  const R = h * 0.82, gr = g.createRadialGradient(0, 0, R * 0.34, 0, 0, R); gr.addColorStop(0, 'rgba(50,46,112,0)'); gr.addColorStop(0.6, 'rgba(50,46,112,0.12)'); gr.addColorStop(1, 'rgba(50,46,112,0.4)');
   g.fillStyle = gr; g.fillRect(-h * 3, -h * 3, h * 6, h * 6); g.restore();
 }
 /** Gold: the evening's rose sky across the top and the low sun's glow in the upper left, over everything a little warm. */

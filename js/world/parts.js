@@ -264,10 +264,10 @@ export function roof(ctx, p, z, o) {
     const cl = on(lv[3]);
     if (cl && hgt > 12) { // individual shingles: a staggered row of rounded tabs along each course
       ctx.save(); ctx.globalAlpha = cl; onPlane(ctx, a, [b[0] - a[0], b[1] - a[1]], [dd[0] - a[0], dd[1] - a[1]], (g, lu, lvv) => {
-        const tw = 7.5, rowH = lvv / n; g.fillStyle = rgbaOf(R.hi, 0.22); g.beginPath();
+        const tw = 7.5, rowH = lvv / n; g.fillStyle = rgbaOf(R.hi, 0.16); g.beginPath();
         for (let k = 0; k < n; k++) for (let x = (k % 2) * tw * 0.5; x < lu; x += tw) { g.moveTo(x + 0.8, k * rowH + 1.2); g.lineTo(x + tw - 0.8, k * rowH + 1.2); g.lineTo(x + tw - 0.8, k * rowH + rowH * 0.55); g.quadraticCurveTo(x + tw / 2, k * rowH + rowH * 0.95, x + 0.8, k * rowH + rowH * 0.55); g.closePath(); }
-        g.fill(); g.fillStyle = rgbaOf(R.deep, 0.2); g.beginPath();
-        for (let k = 0; k < n; k++) for (let x = (k % 2) * tw * 0.5; x < lu; x += tw) { g.rect(x + tw - 0.9, k * rowH + 1.5, 1, rowH * 0.7); }
+        g.fill(); g.fillStyle = rgbaOf(R.deep, 0.1); g.beginPath(); // the joints between tabs: 1.8 pixels wide and faint (a 1-pixel joint at 0.2 beat against the pixel grid and read as diagonal hatching)
+        for (let k = 0; k < n; k++) for (let x = (k % 2) * tw * 0.5; x < lu; x += tw) { g.rect(x + tw - 1.2, k * rowH + 1.5, 1.8, rowH * 0.7); }
         g.fill();
       }); ctx.restore();
     }
@@ -332,6 +332,8 @@ export function apron(ctx, gx, gy, w, d, m, col, a = 0.7) {
   for (let i = 0; i < 4; i++) { const p0 = pts[(i + 3) % 4], p1 = pts[i], p2 = pts[(i + 1) % 4], l0 = Math.hypot(p0[0] - p1[0], p0[1] - p1[1]), l2 = Math.hypot(p2[0] - p1[0], p2[1] - p1[1]), t0 = Math.min(r, l0 / 2) / l0, t2 = Math.min(r, l2 / 2) / l2; const s = [p1[0] + (p0[0] - p1[0]) * t0, p1[1] + (p0[1] - p1[1]) * t0], q = [p1[0] + (p2[0] - p1[0]) * t2, p1[1] + (p2[1] - p1[1]) * t2]; if (i) ctx.lineTo(s[0], s[1]); else ctx.moveTo(s[0], s[1]); ctx.quadraticCurveTo(p1[0], p1[1], q[0], q[1]); }
   ctx.closePath(); ctx.fillStyle = col; ctx.fill(); ctx.restore();
 }
+/** The paver apron under a building as a laid slab and not a ghost: a darker edge a hair wider than the body (so it has a lip) under the body at a stronger alpha. */
+export function slab(ctx, gx, gy, w, d, m, col, a = 0.8) { apron(ctx, gx, gy, w, d, m + 0.05, typeof col === 'string' && col[0] === '#' ? mix(col, '#b79f78', 0.3) : col, a * 0.55); apron(ctx, gx, gy, w, d, m, col, Math.min(0.95, a + 0.15)); }
 export const LITE = Object.freeze([1, 0, 0, 0]);
 /** The detail alphas for this build: none of the near and close marks when the quality governor or the island view says lite. */
 export const detailFor = (ctx, env) => (env.lite || env.far ? LITE : detailOf(ctx, env));
@@ -355,13 +357,13 @@ export const fp = (f, u, v) => { const bx = f[0][0] + (f[1][0] - f[0][0]) * u, b
 export function windowGlow(env, p, face, scale = 1) {
   if (!env.lights || env.night < 0.3 || env.lite || env.far) return;
   const [x, y] = fp(face, 0.5, 0.5);
-  env.lights.push({ wx: x, wy: y - env.zoff, r: clamp((p.w * 14 + 16) * scale, 28, 62), c: '255,208,130', a: 0.2 * env.night });
+  env.lights.push({ wx: x, wy: y - env.zoff, r: clamp((p.w * 14 + 16) * scale, 28, 62), c: '255,208,130', a: 0.34 * env.night });
 }
 
 /** The ground a building stands on and the shadow it throws: a paver apron round the footprint, the cast shadow (h is the height the shadow is cast from: the walls and a share of the roof), a thin contact ring. */
 export function stage(ctx, p, env, h, o = {}) {
   const { gx, gy, w, d } = p, C = (c) => tintC(c, env);
-  apron(ctx, gx, gy, w, d, o.m ?? 0.22, C(PAVE.cream), o.a ?? 0.6);
+  slab(ctx, gx, gy, w, d, o.m ?? 0.22, C(PAVE.cream), o.a ?? 0.7);
   castShadow(ctx, gx, gy, w, d, h, lightOf(env), 0);
 }
 

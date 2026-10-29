@@ -24,9 +24,9 @@ shared('crane', {
     cast(g, p, 100, env, 0.8); stampSoft(g, x + 8, y + 3, 32, 11, 0.2); stand(g, x, y + 1, 20, 8);
     for (const dx of [-18, 7]) rr(g, x + dx, y - 5, 12, 6.4, 2.4, col(METAL.steelMid, env));
     const Lp = (t) => [x - 15 + 10 * t, y - 2 - 110 * t], Rp = (t) => [x + 15 - 10 * t, y - 2 - 110 * t]; // the lattice between the legs: diagonals, alternating
-    for (let i = 0; i < 5; i++) { const a = i % 2 ? Rp(i / 5) : Lp(i / 5), b = i % 2 ? Lp((i + 1) / 5) : Rp((i + 1) / 5); bar(g, a[0], a[1], b[0], b[1], 3.4, c('shade')); }
+    for (let i = 0; i < 5; i++) { const a = i % 2 ? Rp(i / 5) : Lp(i / 5), b = i % 2 ? Lp((i + 1) / 5) : Rp((i + 1) / 5); bar(g, a[0], a[1], b[0], b[1], 4.8, c('shade')); }
     bar(g, x + 15, y - 2, x + 5, top, 7.6, c('deep')); bar(g, x - 15, y - 2, x - 5, top, 7.6, c('shade')); g.globalAlpha *= 0.55; bar(g, x - 16.4, y - 4, x - 6.4, top + 2, 2.4, c('hi')); g.globalAlpha /= 0.55;
-    for (let i = 1; i < 5; i++) { const t = i / 5, xl = x - 15 + 10 * t, xr = x + 15 - 10 * t; bar(g, xl, y - 112 * t, xr, y - 112 * t - 2, 3.4, c('shade')); }
+    for (let i = 1; i < 5; i++) { const t = i / 5, xl = x - 15 + 10 * t, xr = x + 15 - 10 * t; bar(g, xl, y - 112 * t, xr, y - 112 * t - 2, 4.6, c('shade')); }
     const jy = top - 4; // the jib: a fat arm out to the left with a striped tip, a counterweight to the right, the cab on the mast
     bar(g, x - 72, jy, x + 26, jy, 7.6, c('mid')); bar(g, x - 72, jy - 1.8, x + 26, jy - 1.8, 2.6, c('hi'));
     for (let i = 0; i < 4; i++) bar(g, x - 70 + i * 5, jy, x - 66 + i * 5, jy, 7.8, i % 2 ? col('#fffaf0', env) : col(TOY.red, env));

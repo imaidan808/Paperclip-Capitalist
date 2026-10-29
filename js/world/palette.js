@@ -41,7 +41,7 @@ export const GRADE = Object.freeze({ day: '#ffffff', dusk: '#ffd0a0', night: '#8
 
 // ---------------------------------------------------------------- 2.4 districts: the daylight palette of all sixteen, keyed by the theme in js/data
 export const DISTRICT_DAY = Object.freeze({
-  scrap: { ground: '#d4c070', walk: '#eddfbb', accent: '#f08a3c', accent2: '#5b8bd0' }, market: { ground: '#f5b98a', walk: '#f3dec0', accent: '#ffc93c', accent2: '#36b5a8' },
+  scrap: { ground: '#f1cd8e', walk: '#f3e2c1', accent: '#f08a3c', accent2: '#5b8bd0' }, market: { ground: '#f5b98a', walk: '#f3dec0', accent: '#ffc93c', accent2: '#36b5a8' },
   campus: { ground: '#eab5a4', walk: '#f1ddc5', accent: '#38c06f', accent2: '#fff0d2' }, pawn: { ground: '#8fdcd0', walk: '#e1e4cd', accent: '#f2c14a', accent2: '#ff6fae' },
   metro: { ground: '#a9bfdc', walk: '#e6dfcf', accent: '#4aa6ff', accent2: '#e8f2ff' }, estate: { ground: '#dcb0d2', walk: '#efdccd', accent: '#f6e8c8', accent2: '#e8c56a' },
   auto: { ground: '#b0b8d6', walk: '#e7dece', accent: '#ff5a47', accent2: '#f4f6fb' }, harbor: { ground: '#a3bbd9', walk: '#e5dece', accent: '#ff9a2e', accent2: '#2f5fa8' },

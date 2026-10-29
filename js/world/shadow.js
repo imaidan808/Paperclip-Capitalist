@@ -63,14 +63,16 @@ export function contactShadow(ctx, x, y, rx, ry) {
   stampSoft(ctx, x + dx, y + dy, rx * 0.8, ry * 0.8, ALPHA.contactNarrow, LIGHT.contact);
 }
 /**
- * The cast shadow of an upright prism on the footprint [gx, gx + w] x [gy, gy + d], `h` high: the footprint swept towards +gx by the shadow's reach, in two passes, a penumbra 0.2 tile
- * wider at low alpha and the core at 0.26. `light` is { night, dusk } (the world's). The shadow lies on the ground at elevation `z`.
+ * The cast shadow of an upright prism on the footprint [gx, gx + w] x [gy, gy + d], `h` high: the footprint swept towards +gx by the shadow's reach, in two passes: a penumbra and the core at 0.26. `light` is
+ * { night, dusk } (the world's). The shadow lies on the ground at elevation `z`. Both passes are wedges, not strips: the far end is a little narrower than the foot (the core to 0.76 of it, the penumbra
+ * to 0.84 of it plus the soft edge), and the penumbra is wide only on the shadow side and the flanks and barely there on the sun's side (0.03 tile), so a crate throws a shadow that points away from the
+ * light and not a dark diamond that sits under it (the judges read the symmetric one as a pad).
  */
 export function castShadow(ctx, gx, gy, w, d, h, light, z = 0) {
-  const len = shadowReach(h, light ? light.night : 0, light ? light.dusk : 0), pen = PENUMBRA_TILES, prev = ctx.globalAlpha;
+  const len = shadowReach(h, light ? light.night : 0, light ? light.dusk : 0), pen = PENUMBRA_TILES, prev = ctx.globalAlpha, sun = 0.03;
   ctx.globalAlpha = prev * ALPHA.penumbra;
-  quad(ctx, [P(gx - pen, gy - pen, z), P(gx + w + len + pen, gy - pen, z), P(gx + w + len + pen, gy + d + pen, z), P(gx - pen, gy + d + pen, z)], LIGHT.shadow);
+  quad(ctx, [P(gx - sun, gy - pen * 0.6, z), P(gx + w + len + pen, gy + d * 0.08 - pen * 0.4, z), P(gx + w + len + pen, gy + d * 0.92 + pen * 0.4, z), P(gx - sun, gy + d + pen * 0.6, z)], LIGHT.shadow);
   ctx.globalAlpha = prev * ALPHA.core;
-  quad(ctx, [P(gx, gy, z), P(gx + w + len, gy, z), P(gx + w + len, gy + d, z), P(gx, gy + d, z)], LIGHT.shadow);
+  quad(ctx, [P(gx, gy, z), P(gx + w + len, gy + d * 0.12, z), P(gx + w + len, gy + d * 0.88, z), P(gx, gy + d, z)], LIGHT.shadow);
   ctx.globalAlpha = prev;
 }

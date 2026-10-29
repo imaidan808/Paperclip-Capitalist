@@ -135,21 +135,44 @@ function panels(ctx, wl, p, S, o) {
   });
   void lv;
 }
+/** Which of four server houses a rack is, from where it stands (the same house every time): 0 two fans on the roof, 1 one big fan and an aerial, 2 a row of solar panels, 3 a plant room and a dish. Exported for tests/world-buildings.test.mjs. */
+export const rackVariant = (p) => ((((p.seed | 0) * 7 + ((p.gx * 3 + p.gy * 5) | 0)) % 4) + 4) % 4;
+const RACK_TINT = ['#7b88d8', '#6a9fe4', '#9f86e6', '#5db8cf'], RACK_COLS = [[3, 4], [2, 3], [3, 3], [4, 4]];
+/** The fans that turn live on a rack's roof, as [u] positions along the roof (none for the solar roof and the plant room). */
+export const rackFans = (v) => (v === 0 ? [0.3, 0.68] : v === 1 ? [0.5] : []);
+function rackRoof(ctx, p, v, C, h) {
+  const { gx, gy, w, d } = p, accent = C(p.acc || '#22d9ee');
+  if (v === 0 || v === 1) {
+    for (const u of rackFans(v)) { const [x, y] = P(gx + w * u, gy + d * 0.55, h + 3), k = v === 1 ? 1.25 : 1; ctx.fillStyle = rgbaOf('#10162e', 0.9); ctx.beginPath(); ctx.ellipse(x, y, 10.5 * k, 5.4 * k, 0, 0, 6.3); ctx.fill(); ctx.strokeStyle = tone(C('#dfe6f4')).t; ctx.lineWidth = 2.4; ctx.beginPath(); ctx.ellipse(x, y, 10.5 * k, 5.4 * k, 0, 0, 6.3); ctx.stroke(); }
+    if (v === 1) { const [x, y] = P(gx + w * 0.82, gy + d * 0.3, h + 3); ctx.fillStyle = tone(C('#c9d2f0')).l; ctx.fillRect(x - 1.8, y - 22, 3.6, 22); ctx.fillStyle = tone(C('#c9d2f0')).r; ctx.fillRect(x + 0.2, y - 22, 1.6, 22); ctx.fillStyle = rgbaOf(accent, 1); ctx.beginPath(); ctx.arc(x, y - 23.4, 3, 0, 6.3); ctx.fill(); ctx.fillStyle = rgbaOf('#ffffff', 0.7); ctx.beginPath(); ctx.arc(x - 0.9, y - 24.4, 1, 0, 6.3); ctx.fill(); }
+  } else if (v === 2) { // three tilted solar panels in a row: a pale frame, a blue field, light bars
+    for (let i = 0; i < 3; i++) {
+      const u = 0.16 + i * 0.28, a = P(gx + w * u, gy + d * 0.22, h + 3), b = P(gx + w * (u + 0.22), gy + d * 0.22, h + 3), c2 = P(gx + w * (u + 0.22), gy + d * 0.8, h + 8), e = P(gx + w * u, gy + d * 0.8, h + 8);
+      ctx.fillStyle = tone(C('#eef2ff')).l; ctx.beginPath(); ctx.moveTo(a[0], a[1] + 1.4); ctx.lineTo(b[0], b[1] + 1.4); ctx.lineTo(c2[0], c2[1] + 1.4); ctx.lineTo(e[0], e[1] + 1.4); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = C('#3d68c8'); ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.lineTo(c2[0], c2[1]); ctx.lineTo(e[0], e[1]); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = rgbaOf('#bcd4ff', 0.5); ctx.beginPath(); for (let q = 1; q < 4; q++) { const t = q / 4, m0 = [a[0] + (e[0] - a[0]) * t, a[1] + (e[1] - a[1]) * t], m1 = [b[0] + (c2[0] - b[0]) * t, b[1] + (c2[1] - b[1]) * t]; ctx.moveTo(m0[0], m0[1] - 1); ctx.lineTo(m1[0], m1[1] - 1); ctx.lineTo(m1[0], m1[1] + 0.8); ctx.lineTo(m0[0], m0[1] + 0.8); ctx.closePath(); } ctx.fill();
+    }
+  } else { // a plant room (a small rounded box) and a dish on a post
+    const box = toyBox(ctx, gx + w * 0.14, gy + d * 0.5, w * 0.4, d * 0.34, 9, mix(C(p.col || '#7b88d8'), C('#eef2ff'), 0.35), { z: h + 3, r: 2.4, ao: false, gloss: 0.6 });
+    void box; const [x, y] = P(gx + w * 0.74, gy + d * 0.45, h + 3);
+    ctx.fillStyle = tone(C('#c9d2f0')).r; ctx.fillRect(x - 1.6, y - 12, 3.2, 12); ctx.fillStyle = tone(C('#f4f6fb')).l; ctx.beginPath(); ctx.ellipse(x, y - 15, 9, 6.4, -0.5, 0, 6.3); ctx.fill(); ctx.fillStyle = tone(C('#c9d2f0')).r; ctx.beginPath(); ctx.ellipse(x + 0.8, y - 14.4, 6.6, 4.6, -0.5, 0, 6.3); ctx.fill(); ctx.fillStyle = rgbaOf(accent, 1); ctx.beginPath(); ctx.arc(x + 3, y - 18, 1.8, 0, 6.3); ctx.fill();
+  }
+}
 reg('rack', {
   far: farBlock,
   night: false,
   pad: [4, 4, 4, 4],
   body(ctx, p, env) {
-    const lv = detailFor(ctx, env), zm = zoomOf(ctx, env), { gx, gy, w, d, h } = p, S = styleOf({ ...p, col: p.col }, env), C = S.C, seed = seedOf(p), wall = C(p.col || '#7b88d8'), contour = contourW(zm, lv), rows = Math.max(3, Math.round(h / 7)), accent = C(p.acc || '#22d9ee');
+    const lv = detailFor(ctx, env), zm = zoomOf(ctx, env), { gx, gy, w, d, h } = p, S = styleOf({ ...p, col: p.col }, env), C = S.C, seed = seedOf(p), v = rackVariant(p), wall = v ? mix(C(p.col || '#7b88d8'), C(RACK_TINT[v]), 0.6) : C(p.col || '#7b88d8'), contour = contourW(zm, lv), rows = Math.max(3, Math.round(h / 7)), accent = C(p.acc || '#22d9ee');
     stage(ctx, p, env, h + 8);
     const B = toyBox(ctx, gx, gy, w, d, h, wall, { r: toyRadius(w, d) * 0.9, gloss: 1 }), L = wallOf(B.left), Rt = wallOf(B.right);
     outline(ctx, B, wall, contour);
-    panels(ctx, L, p, S, { cols: 3, rows, side: 'l', lv }); panels(ctx, Rt, p, S, { cols: 4, rows, side: 'r', lv });
+    panels(ctx, L, p, S, { cols: RACK_COLS[v][0], rows, side: 'l', lv }); panels(ctx, Rt, p, S, { cols: RACK_COLS[v][1], rows, side: 'r', lv });
     onWall(ctx, L, (c) => { c.fillStyle = rgbaOf(accent, 0.8); c.fillRect(L.ins[0], -L.H, L.W - L.ins[0] - L.ins[1], 2.6); c.fillStyle = tone(C('#eef2ff')).l; rrect(c, L.W * 0.3, -4, L.W * 0.4, 3.4, 1.4); c.fill(); });
     onWall(ctx, Rt, (c) => { c.fillStyle = rgbaOf(accent, 0.7); c.fillRect(Rt.ins[0], -Rt.H, Rt.W - Rt.ins[0] - Rt.ins[1], 2.6); });
     // the roof: a dark deck with two round fans and a cable bundle that bends down the back
     const top = toyBox(ctx, gx + 0.12, gy + 0.12, w - 0.24, d - 0.24, 3, mix(wall, C('#1c2146'), 0.55), { z: h, r: 3, gloss: 0.6, ao: false });
-    for (const u of [0.3, 0.68]) { const [x, y] = P(gx + w * u, gy + d * 0.55, h + 3); ctx.fillStyle = rgbaOf('#10162e', 0.9); ctx.beginPath(); ctx.ellipse(x, y, 10.5, 5.4, 0, 0, 6.3); ctx.fill(); ctx.strokeStyle = tone(C('#dfe6f4')).t; ctx.lineWidth = 2; ctx.beginPath(); ctx.ellipse(x, y, 10.5, 5.4, 0, 0, 6.3); ctx.stroke(); }
+    rackRoof(ctx, p, v, C, h);
     const c0 = P(gx + w * 0.12, gy + d * 0.2, h + 3), c1 = P(gx + w * 0.12, gy + d * 0.85, h + 3);
     ctx.strokeStyle = tone(C('#5a52a8')).l; ctx.lineWidth = 4; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.beginPath(); ctx.moveTo(c0[0], c0[1]); ctx.quadraticCurveTo(c0[0] - 8, (c0[1] + c1[1]) / 2 - 8, c1[0], c1[1]); ctx.stroke();
     ctx.strokeStyle = rgbaOf('#ffffff', 0.3); ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(c0[0], c0[1] - 1); ctx.quadraticCurveTo(c0[0] - 8, (c0[1] + c1[1]) / 2 - 9, c1[0], c1[1] - 1); ctx.stroke();
@@ -166,9 +189,9 @@ reg('rack', {
         ctx.fill();
       }
     };
-    lit(lf, 3, 0); lit(rf, 4, 3);
+    const cols = RACK_COLS[rackVariant(p)]; lit(lf, cols[0], 0); lit(rf, cols[1], 3);
     // the fans: a blade cross turning (still at rest)
-    for (const u of [0.3, 0.68]) { const [x, y] = P(p.gx + p.w * u, p.gy + p.d * 0.55, p.h + 3), a = (env.t || 0) / 6000 * Math.PI * 2; ctx.strokeStyle = '#b8c4ec'; ctx.lineWidth = 2.4; ctx.lineCap = 'round'; ctx.beginPath(); for (let k = 0; k < 4; k++) { const an = a + (k * Math.PI) / 2; ctx.moveTo(x, y); ctx.lineTo(x + Math.cos(an) * 8.2, y + Math.sin(an) * 4.2); } ctx.stroke(); ctx.fillStyle = '#eef2ff'; ctx.beginPath(); ctx.ellipse(x, y, 1.8, 1, 0, 0, 6.3); ctx.fill(); }
+    for (const u of rackFans(rackVariant(p))) { const [x, y] = P(p.gx + p.w * u, p.gy + p.d * 0.55, p.h + 3), a = (env.t || 0) / 6000 * Math.PI * 2, k = rackVariant(p) === 1 ? 1.25 : 1; ctx.strokeStyle = '#b8c4ec'; ctx.lineWidth = 2.6; ctx.save(); ctx.translate(x, y); ctx.scale(k, k); ctx.translate(-x, -y); ctx.lineCap = 'round'; ctx.beginPath(); for (let q = 0; q < 4; q++) { const an = a + (q * Math.PI) / 2; ctx.moveTo(x, y); ctx.lineTo(x + Math.cos(an) * 8.2, y + Math.sin(an) * 4.2); } ctx.stroke(); ctx.fillStyle = '#eef2ff'; ctx.beginPath(); ctx.ellipse(x, y, 1.8, 1, 0, 0, 6.3); ctx.fill(); ctx.restore(); }
     if (!(env.lite || env.far)) { const [x, y] = P(p.gx + p.w / 2, p.gy + p.d, p.h * 0.5); env.lights?.push({ wx: x, wy: y - env.zoff, r: 46, c: hexRgb(p.acc || '#22d9ee'), a: 0.3 }); }
   },
 });

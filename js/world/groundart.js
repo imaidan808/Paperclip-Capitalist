@@ -3,12 +3,13 @@
 // Owner: T1 TERRAIN, COAST AND WATER (docs/RENDER_PLAN.md). Each is a layer of stack.js (`shore`, `terrain`, `roads`, `blocks`), registered here and drawn into a ground chunk (groundchunks.js) by the ground pass: they draw only
 // from their arguments and the world's state, never from the camera, and every mark is a filled shape (nothing is stroked thinner than 1.5 world pixels).
 import { registerLayer } from './stack.js';
-import { LAYOUT, DIST, EDGES, zAt, BW, BD, GW, GH } from './layout.js';
-import { ROAD, PAVE, SAND, WOOD, LIGHT, SEA, TOY, GRASS, BLOOM, groundSet, veiled } from './palette.js';
+import { LAYOUT, DIST, EDGES, zAt, isRoad, BW, BD, GW, GH } from './layout.js';
+import { ROAD, PAVE, SAND, WOOD, LIGHT, SEA, TOY, GRASS, BLOOM, ROCK, ROCKHI, groundSet, veiled } from './palette.js';
 import { mix, clamp, h2 } from './iso.js';
+import { smooth as smoothstep, vnoise } from './noise.js';
 import { bakeBase } from './rasterbase.js';
-import { surface } from './gfx.js';
-import { LATTICE } from './noise.js';
+import { drawStage, paintFringe, tonesOf, tuft, gridRange } from './groundmat.js';
+import { plantTree, bush, rock } from './nature.js';
 import { decalV2 } from './decalart.js';
 import { VEIL } from './terrainfield.js';
 
@@ -28,108 +29,86 @@ function drawShore(ctx, view, env, w, a) {
   if (ch.img) ctx.putImageData(ch.img, 0, 0);
 }
 registerLayer('shore', drawShore, 'inherit', () => 1);
-// ---------------------------------------------------------------- the terrain's dressing: tufts and flowers
+// ---------------------------------------------------------------- the terrain's dressing: grass, flowers, bushes, rocks and trees
 const TUFT = [GRASS.hi, GRASS.shade, GRASS.deep, GRASS.coolShade];
 const zOn = (gx, gy) => { const { ZV, VW } = LAYOUT, x = clamp(gx, 0, GW - 1e-6), y = clamp(gy, 0, GH - 1e-6), i = x | 0, j = y | 0, fx = x - i, fy = y - j; return (ZV[j * VW + i] * (1 - fx) + ZV[j * VW + i + 1] * fx) * (1 - fy) + (ZV[(j + 1) * VW + i] * (1 - fx) + ZV[(j + 1) * VW + i + 1] * fx) * fy; };
+const BUSH_GREENS = [GRASS.mid, GRASS.lawn, GRASS.light, GRASS.lawnShade], ROCK_TONES = [ROCK.light, ROCKHI.light, ROCK.mid];
 /**
- * `terrain`: the dressing laid on the baked ground, near and close only (it fades in with the level of detail, so nothing pops): small tufts of three curved blades in three greens and the odd cluster of
- * flowers, hashed per tile, never on a road, a block, a pad or within a tile and a half of the coast. At most 1,500 marks in a chunk; it is baked with the chunk, so a pan never draws it.
+ * What a meadow tile holds, as a pure function of the tile and of how green its neighbourhood is (`grove`, 0..1 from a slow noise): 0 nothing, 1 a bush, 2 a rock, 3 a tree. Trees come in groves and bushes
+ * along them, so a wood is a wood and a meadow is a meadow; the numbers are the share of tiles, held by tests/world-groundmat.test.mjs (a bush in about one tile in ten, a tree in about one in twelve inside a grove).
+ */
+export function dressingOf(i, j, grove) {
+  const u = h2(i * 3 + 7, j * 5 + 11);
+  if (u < 0.012 + 0.16 * grove * grove) return 3;
+  if (u < 0.06 + 0.16 * grove) return 1;
+  if (u < 0.078 + 0.16 * grove) return 2;
+  return 0;
+}
+/**
+ * `terrain`: the grass laid on the baked ground, near and close: clumps of blades in three greens and the odd cluster of flowers, never on a block, a slope or within a tile and a half of the coast. The bushes, rocks and
+ * trees of the meadows are `drawPlants`, below. Baked with the chunk, so a pan draws none of it. At most 1,500 grass marks in a chunk.
  */
 function drawTerrain(ctx, view, env, w, a) {
   const ch = a && a.chunk, lod = env.lod ? env.lod.detail : null; if (!ch || !lod || lod[2] < 0.04) return;
-  const T = ch.scene.terr, { land, core } = LAYOUT, VW = LAYOUT.VW;
-  let a0 = 1e9, a1 = -1e9, b0 = 1e9, b1 = -1e9;
-  for (const [x, y] of [[view.x0, view.y0], [view.x1, view.y0], [view.x0, view.y1], [view.x1, view.y1]]) for (const zz of [0, 60]) { const u = x / 64 + (y + zz) / 32, v = (y + zz) / 32 - x / 64; a0 = Math.min(a0, u); a1 = Math.max(a1, u); b0 = Math.min(b0, v); b1 = Math.max(b1, v); }
-  const per = 0.7 + 1.1 * lod[3]; let budget = 1500; ctx.globalAlpha = lod[2] * 0.9;
-  for (let j = Math.max(0, Math.floor(b0)); j <= Math.min(GH - 1, Math.ceil(b1)) && budget > 0; j++) for (let i = Math.max(0, Math.floor(a0)); i <= Math.min(GW - 1, Math.ceil(a1)); i++) {
-    const k = j * GW + i; if (!land[k] || core[k]) continue;
-    const kv = j * VW + i; if (T.inl[kv] > -1.5 || T.inl[kv + 1] > -1.5 || T.inl[kv + VW] > -1.5 || T.inl[kv + VW + 1] > -1.5) continue; // the beach and the coast keep their own look
+  const T = ch.scene.terr, { land, core } = LAYOUT, VW = LAYOUT.VW, [i0, i1, j0, j1] = gridRange(view, 90, 1, [GW, GH]), near = lod[2], close = lod[3], per = 0.9 + 1.5 * close; let budget = 1500;
+  for (let s = i0 + j0; s <= i1 + j1 && budget > 0; s++) for (let j = Math.max(j0, s - i1); j <= Math.min(j1, s - i0); j++) {
+    const i = s - j, k = j * GW + i; if (!land[k] || core[k] || !openMeadow(T, i, j, VW, -1.5, 4.5)) continue;
     const n = per + h2(i, j + 4000) * per, cnt = (n | 0) + (h2(i + 91, j) < n - (n | 0) ? 1 : 0);
+    ctx.globalAlpha = near * 0.92;
     for (let q = 0; q < cnt; q++) {
-      const gx = i + h2(i * 7 + q, j * 3 + 17), gy = j + h2(i * 5 + 3, j * 11 + q * 5 + 1); if (LAYOUT.footAt(gx, gy)) continue;
+      const gx = i + h2(i * 7 + q, j * 3 + 17), gy = j + h2(i * 5 + 3, j * 11 + q * 5 + 1); if (LAYOUT.footAt(gx, gy) && !outsideBlock(gx, gy)) continue;
       const z = zOn(gx, gy), x = px(gx, gy), y = py(gx, gy, z), hh = h2(i * 13 + q, j * 29 + 5);
-      if (hh > 0.86 - 0.06 * lod[3]) { // a few flowers in a small cluster
-        const c = [BLOOM.white, BLOOM.butter, BLOOM.pink, BLOOM.lilac][(hh * 97 | 0) % 4];
-        ctx.fillStyle = c; ctx.beginPath(); for (let f = 0; f < 3; f++) { const fx = x + (h2(i + f, j * 3) - 0.5) * 7, fy = y + (h2(i * 3, j + f) - 0.5) * 3.5; ctx.moveTo(fx + 1.5, fy); ctx.arc(fx, fy, 1.5, 0, 6.2832); } ctx.fill(); budget -= 3; continue;
+      if (hh > 0.86 - 0.06 * close) { // a few flowers in a small cluster
+        ctx.fillStyle = [BLOOM.white, BLOOM.butter, BLOOM.pink, BLOOM.lilac][(hh * 97 | 0) % 4]; ctx.beginPath(); for (let f = 0; f < 3; f++) { const fx = x + (h2(i + f, j * 3) - 0.5) * 7, fy = y + (h2(i * 3, j + f) - 0.5) * 3.5; ctx.moveTo(fx + 1.5, fy); ctx.arc(fx, fy, 1.5, 0, 6.2832); } ctx.fill(); budget -= 3; continue;
       }
-      const col = TUFT[(hh * 31 | 0) % 4], hgt = 5 + hh * 3.4; ctx.fillStyle = col; ctx.beginPath(); // a tuft: three blades, each a leaning, tapering triangle
-      for (let bl = -1; bl <= 1; bl++) { const bx = x + bl * 1.7, lean = bl * 1.5 + (hh - 0.5) * 2; ctx.moveTo(bx - 0.9, y); ctx.lineTo(bx + lean, y - hgt * (bl === 0 ? 1 : 0.78)); ctx.lineTo(bx + 0.9, y); ctx.closePath(); }
-      ctx.fill(); budget -= 3;
+      ctx.fillStyle = TUFT[(hh * 31 | 0) % 4]; ctx.beginPath(); tuft(ctx, x, y, hh); if (hh > 0.4) tuft(ctx, x + 4.2 + hh * 2, y + 1.4, 1 - hh, 4 + hh * 2.5); ctx.fill(); budget -= 6; // a clump: one tuft and, beside it, a smaller one
     }
+    ctx.globalAlpha = 1;
   }
   ctx.globalAlpha = 1;
 }
-registerLayer('terrain', drawTerrain, 'inherit', () => 1);
-
-// ---------------------------------------------------------------- shapes in the ground plane
-/** A rounded rectangle in grid units at height z, as a path (corner arcs of five segments). */
-function rrect(ctx, x, y, w, d, r, z) {
-  r = Math.min(r, w / 2, d / 2); ctx.moveTo(px(x + r, y), py(x + r, y, z));
-  const arc = (cx, cy, a0) => { for (let i = 0; i <= 5; i++) { const a = a0 + (i / 5) * (Math.PI / 2), gx = cx + Math.cos(a) * r, gy = cy + Math.sin(a) * r; ctx.lineTo(px(gx, gy), py(gx, gy, z)); } };
-  arc(x + w - r, y + r, -Math.PI / 2); arc(x + w - r, y + d - r, 0); arc(x + r, y + d - r, Math.PI / 2); arc(x + r, y + r, Math.PI); ctx.closePath();
-}
-const fillRR = (ctx, x, y, w, d, r, z, c, a = 1) => { ctx.beginPath(); rrect(ctx, x, y, w, d, r, z); ctx.globalAlpha = a; ctx.fillStyle = c; ctx.fill(); ctx.globalAlpha = 1; };
-const quadPath = (ctx, x, y, w, d, z) => { ctx.moveTo(px(x, y), py(x, y, z)); ctx.lineTo(px(x + w, y), py(x + w, y, z)); ctx.lineTo(px(x + w, y + d), py(x + w, y + d, z)); ctx.lineTo(px(x, y + d), py(x, y + d, z)); ctx.closePath(); };
-const fillQuad = (ctx, x, y, w, d, z, c) => { ctx.beginPath(); ctx.moveTo(px(x, y), py(x, y, z)); ctx.lineTo(px(x + w, y), py(x + w, y, z)); ctx.lineTo(px(x + w, y + d), py(x + w, y + d, z)); ctx.lineTo(px(x, y + d), py(x, y + d, z)); ctx.closePath(); ctx.fillStyle = c; ctx.fill(); };
-
-// ---------------------------------------------------------------- the districts' blocks
-let GRAIN;
-/** A 64 x 64 tile of fine speckle (light and violet-dark specks at a few percent), made once: laid over a block it gives plaza, asphalt and dirt a weathered surface. It is a pattern in world space, so it runs on across chunks. */
-function grainPattern(ctx) {
-  if (GRAIN !== undefined) return GRAIN;
-  GRAIN = null;
-  try {
-    const f = surface(64, 64); if (!f || typeof ImageData !== 'function' || typeof ctx.createPattern !== 'function') return GRAIN;
-    const img = f.g.createImageData(64, 64), d = img.data;
-    for (let i = 0; i < 64 * 64; i++) { const h = LATTICE[(i * 7 + 13) & 65535], dark = h < 0.5, a = Math.abs(h - 0.5) * 2; d[i * 4] = dark ? 74 : 255; d[i * 4 + 1] = dark ? 63 : 247; d[i * 4 + 2] = dark ? 136 : 220; d[i * 4 + 3] = Math.round(a * a * 46); }
-    f.g.putImageData(img, 0, 0); GRAIN = ctx.createPattern(f.c, 'repeat') || null;
-  } catch { GRAIN = null; /* a context without patterns: the blocks are drawn without the grain */ }
-  return GRAIN;
+/** Is the meadow tile (i, j) open ground: no corner within `coast` tiles of the sea (negative inland), and no corner more than `rise` pixels from the others (a slope is rock, not meadow)? */
+function openMeadow(T, i, j, VW, coast, rise) {
+  const kv = j * VW + i, ia = T.inl[kv], ib = T.inl[kv + 1], ic = T.inl[kv + VW], id = T.inl[kv + VW + 1]; if (ia > coast || ib > coast || ic > coast || id > coast) return false; // the beach and the coast keep their own look
+  const za = T.z[kv], zb = T.z[kv + 1], zc = T.z[kv + VW], zd = T.z[kv + VW + 1]; return Math.max(za, zb, zc, zd) - Math.min(za, zb, zc, zd) <= rise;
 }
 /**
- * Each district's block as a little stage: a soft violet contact shadow on the terrain towards the shade side, the block in its daylight ground with a lighter rim, the sidewalks in cream, the avenue and the
- * cross street as kerbed asphalt, the stash yard in its own tone with a light border, then its decals and its crosswalks. A locked district's colours are veiled, never darkened.
+ * The meadows' bushes, rocks and trees, painted AFTER the districts' blocks (the `blocks` layer calls this at its end): a tree standing in front of a block is in front of its rim and its shadow, which a tree baked
+ * under the block's layer was not (its crown was cut by the cream rim). Back to front, from the mid zoom, in grove and meadow, never on a road, a footprint's scenery or a slope or within two and a half tiles of the coast.
+ */
+export function drawPlants(ctx, view, env, w, a) {
+  const ch = a && a.chunk, lod = env.lod ? env.lod.detail : null; if (!ch || !lod || lod[1] < 0.03) return;
+  const T = ch.scene.terr, { land, core } = LAYOUT, VW = LAYOUT.VW, [i0, i1, j0, j1] = gridRange(view, 90, 1, [GW, GH]), mid = lod[1];
+  for (let s = i0 + j0; s <= i1 + j1; s++) for (let j = Math.max(j0, s - i1); j <= Math.min(j1, s - i0); j++) {
+    const i = s - j, k = j * GW + i; if (!land[k] || core[k] || !openMeadow(T, i, j, VW, -2.6, 4.5)) continue;
+    const grove = smoothstep(0.46, 0.74, vnoise(i * 0.075 + 5, j * 0.075 + 2)), what = dressingOf(i, j, grove); if (!what) continue;
+    const gx = i + 0.2 + h2(i * 11 + 1, j * 7) * 0.6, gy = j + 0.2 + h2(i * 5, j * 13 + 3) * 0.6; if (LAYOUT.footAt(gx, gy) || isRoad(gx, gy)) continue;
+    const z = zOn(gx, gy), x = px(gx, gy), y = py(gx, gy, z), hh = h2(i * 17 + 3, j * 19 + 5);
+    ctx.globalAlpha = mid;
+    if (what === 3) plantTree(ctx, x, y, z > 26 || hh < 0.22 ? 'pine' : 'round', 0.78 + hh * 0.5, (hh * 997) | 0);
+    else if (what === 1) bush(ctx, x, y, 7 + hh * 5, BUSH_GREENS[(hh * 31 | 0) % 4], hh > 0.7 ? BLOOM[['pink', 'butter', 'white', 'lilac'][(hh * 13 | 0) % 4]] : null);
+    else rock(ctx, x, y, 4 + hh * 5, ROCK_TONES[(hh * 29 | 0) % 3]);
+  }
+  ctx.globalAlpha = 1;
+}
+/** Is the point outside every district's block (the stage's own rectangle) though it may lie in its footprint? Grass grows in the apron round a block but not on it. */
+function outsideBlock(gx, gy) { for (const id of LAYOUT.ids) { const D = DIST[id]; if (gx >= D.ox - 0.3 && gx < D.ox + D.w + 0.3 && gy >= D.oy - 0.3 && gy < D.oy + D.d + 0.3) return false; } return true; }
+registerLayer('terrain', drawTerrain, 'inherit', () => 1);
+
+// ---------------------------------------------------------------- the districts' blocks
+/**
+ * Each district's block as a little stage: a soft shadow, a plinth, a cream rim, dirt with patches and pebbles, bevelled pavers, asphalt with worn edges, patches and cracks, raised kerbs, the stash's slab, the kit's
+ * decals, and a fringe of grass where the stage meets the meadow. The materials are groundmat.js's; a locked district's colours are veiled, never darkened. Docs/ART_DIRECTION.md 4.5, 5.9.
  */
 function drawBlocks(ctx, view, env, w, a) {
-  const detail = env.lod ? env.lod.detail : [1, 1, 1, 1];
+  const detail = env.lod ? env.lod.detail : [1, 1, 1, 1], land = LAYOUT.land, free = (gx, gy) => !LAYOUT.footAt(gx, gy) && zAt(gx, gy) > 0;
   for (const id of LAYOUT.ids) {
     const D = DIST[id], b = D.bb; if (!(b[2] > view.x0 && b[0] < view.x1 && b[3] + 200 > view.y0 && b[1] < view.y1 + 200)) continue;
-    const S = setOf(D), k = lockedOf(w, id) ? 1 : 0, z = D.z, ox = D.ox, oy = D.oy, v = (c) => V(c, k);
-    // the contact shadow of the stage on the ground round it (three soft steps, towards +gx)
-    for (let i = 3; i >= 1; i--) fillRR(ctx, ox - 0.5 + i * 0.28, oy - 0.5 + i * 0.12, BW + 1 + i * 0.22, BD + 1 + i * 0.3, 1.6, z, LIGHT.shadow, 0.045);
-    for (const g of D.ground) {
-      if (g.kind === 'block') { fillRR(ctx, g.x, g.y, g.w, g.d, 0.9, z, v(S.ground)); fillRR(ctx, g.x + 0.32, g.y + 0.32, g.w - 0.64, g.d - 0.64, 0.7, z, v(S.hi), 0.16); }
-      else if (g.kind === 'walk') fillQuad(ctx, g.x, g.y, g.w, g.d, z, v(S.walk));
-    }
-    if (detail[2] > 0.05) { // near: joints between the sidewalk's pavers, a tile each (drawn before the roads, which cover the middle of the walk's band)
-      ctx.fillStyle = v(PAVE.joint); ctx.globalAlpha = 0.6 * detail[2]; ctx.beginPath();
-      for (const g of D.ground) if (g.kind === 'walk') { for (let i = 1; i < g.w; i++) quadPath(ctx, g.x + i - 0.035, g.y, 0.07, g.d, z); for (let j = 1; j < g.d; j++) quadPath(ctx, g.x, g.y + j - 0.035, g.w, 0.07, z); }
-      ctx.fill(); ctx.globalAlpha = 1;
-    }
-    // the roads: kerb colour first for both, then the asphalt inset, so the two streets meet in a crossing with kerb returns
-    const roads = D.ground.filter((g) => g.kind === 'road'), kb = 0.2, kerb = v(S.kerb), asph = v(S.asphalt);
-    for (const g of roads) fillQuad(ctx, g.x, g.y, g.w, g.d, z, kerb);
-    for (const g of roads) { const horiz = g.w > g.d; fillQuad(ctx, g.x + (horiz ? 0 : kb), g.y + (horiz ? kb : 0), g.w - (horiz ? 0 : 2 * kb), g.d - (horiz ? 2 * kb : 0), z, asph); }
-    // the centre dashes and the crossing's bars (painted bands, 0.2 tile at the least)
-    ctx.fillStyle = v(ROAD.dash); ctx.beginPath();
-    for (let x = ox + 0.4; x < ox + BW - 1; x += 1.7) { if (x > ox + 8.2 && x < ox + 13.4) continue; ctx.moveTo(px(x, oy + 8.88), py(x, oy + 8.88, z)); ctx.lineTo(px(x + 0.9, oy + 8.88), py(x + 0.9, oy + 8.88, z)); ctx.lineTo(px(x + 0.9, oy + 9.12), py(x + 0.9, oy + 9.12, z)); ctx.lineTo(px(x, oy + 9.12), py(x, oy + 9.12, z)); ctx.closePath(); }
-    for (let y = oy + 0.4; y < oy + BD - 0.6; y += 1.7) { if (y > oy + 6.4 && y < oy + 11.6) continue; ctx.moveTo(px(ox + 10.88, y), py(ox + 10.88, y, z)); ctx.lineTo(px(ox + 11.12, y), py(ox + 11.12, y, z)); ctx.lineTo(px(ox + 11.12, y + 0.9), py(ox + 11.12, y + 0.9, z)); ctx.lineTo(px(ox + 10.88, y + 0.9), py(ox + 10.88, y + 0.9, z)); ctx.closePath(); }
-    ctx.fill();
-    ctx.fillStyle = v(ROAD.zebra); ctx.beginPath();
-    for (let q = 0; q < 5; q++) {
-      const u = 0.28 + q * 0.34;
-      for (const x of [ox + 8.3, ox + 13.1]) { ctx.moveTo(px(x, oy + 8 + u - 0.1), py(x, oy + 8 + u - 0.1, z)); ctx.lineTo(px(x + 0.6, oy + 8 + u - 0.1), py(x + 0.6, oy + 8 + u - 0.1, z)); ctx.lineTo(px(x + 0.6, oy + 8 + u + 0.1), py(x + 0.6, oy + 8 + u + 0.1, z)); ctx.lineTo(px(x, oy + 8 + u + 0.1), py(x, oy + 8 + u + 0.1, z)); ctx.closePath(); }
-      for (const y of [oy + 6.4, oy + 11.1]) { ctx.moveTo(px(ox + 10.2 + u - 0.1, y), py(ox + 10.2 + u - 0.1, y, z)); ctx.lineTo(px(ox + 10.2 + u + 0.1, y), py(ox + 10.2 + u + 0.1, y, z)); ctx.lineTo(px(ox + 10.2 + u + 0.1, y + 0.6), py(ox + 10.2 + u + 0.1, y + 0.6, z)); ctx.lineTo(px(ox + 10.2 + u - 0.1, y + 0.6), py(ox + 10.2 + u - 0.1, y + 0.6, z)); ctx.closePath(); }
-    }
-    ctx.fill();
-    for (const g of D.ground) if (g.kind === 'pad') { fillRR(ctx, g.x, g.y, g.w, g.d, 0.5, z, v(S.pad)); fillRR(ctx, g.x + 0.12, g.y + 0.12, g.w - 0.24, g.d - 0.24, 0.4, z, v(S.hi), 0.28); fillRR(ctx, g.x + 0.3, g.y + 0.3, g.w - 0.6, g.d - 0.6, 0.3, z, v(S.pad)); }
-    const gp = grainPattern(ctx);
-    if (gp) { ctx.fillStyle = gp; ctx.globalAlpha = 0.85; ctx.beginPath(); rrect(ctx, ox, oy, BW, BD, 0.9, z); ctx.fill(); ctx.globalAlpha = 1; } // a weathered surface
-    if (detail[2] > 0.05) { // near and close: two manholes on the avenue
-      if (detail[3] > 0.05) for (const mx of [ox + 4.6, ox + 16.8]) { ctx.globalAlpha = detail[3]; ctx.fillStyle = v(ROAD.manhole); ctx.beginPath(); ctx.ellipse(px(mx, oy + 8.5), py(mx, oy + 8.5, z), 0.3 * HW * 1.42, 0.3 * HH * 1.42, 0, 0, 6.2832); ctx.fill(); ctx.fillStyle = v(ROAD.light); ctx.beginPath(); ctx.ellipse(px(mx, oy + 8.5), py(mx, oy + 8.5, z) - 0.6, 0.2 * HW * 1.42, 0.2 * HH * 1.42, 0, 0, 6.2832); ctx.fill(); ctx.globalAlpha = 1; }
-    }
-    for (const d of D.decals) if (a.zoom >= (d.min ?? 0.3)) decalV2(ctx, d, z, k, S, detail);
+    const S = setOf(D), k = lockedOf(w, id) ? 1 : 0, z = D.z;
+    drawStage(ctx, view, D, S, k, detail, (c, d) => decalV2(c, d, z, k, S, detail), a.zoom);
+    paintFringe(ctx, view, D, z, detail, tonesOf(D, S, k), (gx, gy) => land[(gy | 0) * GW + (gx | 0)] === 1, free);
   }
+  drawPlants(ctx, view, env, w, a);
 }
 registerLayer('blocks', drawBlocks, 'inherit', () => 1);
 

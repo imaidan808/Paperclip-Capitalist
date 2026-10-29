@@ -2,7 +2,7 @@
 // This file is the front door: the drawers live in props-buildings.js (T3), props-street.js, props-nature.js and props-actors.js (T4) on top of the frozen helpers in props-common.js (T5);
 // drawProp, farDraw and the far-view rule stay here (T5); drawProp asks the stack for a kind's V2 drawer first (stack.js registerProp). What the art draws: buildings, ground props and machines in one lighting model (sun upper left, see iso.js and shading.js).
 // What it never does: choose where anything stands (layout.js and kits.js do), change game state, or use Math.random (all variation is hashed from the prop's own position).
-import { P, box, ellipse } from './iso.js';
+import { P, box, ellipse, luma, mix } from './iso.js';
 import { hazeAt } from './shading.js';
 import { drawSprite, drawOverlays } from './sprites.js';
 import { propV2 } from './stack.js';
@@ -21,7 +21,8 @@ export { DRAW };
 const FAR_TONE = Object.assign(Object.create(null), { crates: TILE.mustard, cart: TILE.mustard, scrap: METAL.steelLight, tires: TILE.slate, barrel: TILE.terracotta, containers: TILE.teal, autos: TILE.terracotta, tank: METAL.steelLight, silo: METAL.corrugated, stack: METAL.corrugated, dome: PLASTER.cream, dish: METAL.steelHi, windmill: PLASTER.cream, fence: PLASTER.butter, bench: PLASTER.butter, bollard: PLASTER.butter, lamp: METAL.steelLight, hay: TILE.thatch, planter: PLASTER.mint, hedge: PLASTER.mint, pillar: PLASTER.cream, statue: PLASTER.lilac, fountain: PLASTER.sky, forsale: PLASTER.rose, billboard: PLASTER.rose, polesign: PLASTER.rose });
 const FAR_DEFAULT = METAL.steelLight;
 function farDraw(ctx, p, env) {
-  const c = p.col || p.color || p.hull || p.acc || FAR_TONE[p.t] || FAR_DEFAULT;
+  let c = p.col || p.color || p.hull || p.acc || FAR_TONE[p.t] || FAR_DEFAULT;
+  if (typeof c === 'string' && c[0] === '#' && luma(c) < 0.45) c = mix(FAR_TONE[p.t] || '#f4e8cf', c, 0.2); // a kit's dark colour (a fence's, a lamp's) is the toy tone of its kind at the island view, never a black line across a district
   if (p.t === 'tree' || p.t === 'topiary') { ellipse(ctx, ...P(p.gx, p.gy, p.h * 0.6), 8, 7, tint(p.c || '#3f8a4a', env)); return null; }
   const f = box(ctx, p.gx, p.gy, p.w, p.d, Math.max(4, p.h), body(c, env));
   return p.hot ? hot(f) : null;

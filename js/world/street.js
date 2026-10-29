@@ -22,15 +22,16 @@ function lampBody(g, p, env, globe, h) {
   const [x, y] = P(p.gx, p.gy), pole = col(POLE, env), top = y - h;
   shadowOf(g, p, h, 0.2, 0.2, env); stand(g, x, y, 6, 2.8);
   drum(g, x, y, 5.4, 4.6, pole, { ribs: [0.55], ribCol: shade(pole, 0.82) });
-  poly(g, [[x - 2, y - 4], [x + 2, y - 4], [x + 1.6, top + 5], [x - 1.6, top + 5]], shd(pole)); poly(g, [[x - 2, y - 4], [x + 0.6, y - 4], [x + 0.5, top + 5], [x - 1.6, top + 5]], pole);
-  g.globalAlpha *= 0.5; poly(g, [[x - 1.7, y - 5], [x - 0.9, y - 5], [x - 0.8, top + 6], [x - 1.4, top + 6]], hi(pole, 0.8)); g.globalAlpha /= 0.5;
+  poly(g, [[x - 3.1, y - 4], [x + 3.1, y - 4], [x + 2.2, top + 5], [x - 2.2, top + 5]], shd(pole)); poly(g, [[x - 3.1, y - 4], [x + 0.9, y - 4], [x + 0.7, top + 5], [x - 2.2, top + 5]], pole); // a stout tapered shaft (6 pixels at the foot), not a stick
+  rr(g, x - 4.4, y - 11.5, 8.8, 3.2, 1.6, shd(pole)); rr(g, x - 4.4, y - 11.5, 7.6, 2.6, 1.3, pole); // a collar above the foot
+  g.globalAlpha *= 0.5; poly(g, [[x - 2.6, y - 5], [x - 1.4, y - 5], [x - 1.1, top + 6], [x - 1.9, top + 6]], hi(pole, 0.8)); g.globalAlpha /= 0.5;
   rr(g, x - 4.4, top + 4.4, 8.8, 3.2, 1.6, shd(pole)); rr(g, x - 4.4, top + 4.4, 7.6, 2.6, 1.3, pole);
   ball(g, x, top - 0.4, 5.9, globe); rr(g, x - 3.4, top - 7.6, 6.8, 2.8, 1.4, shd(pole)); rr(g, x - 3.4, top - 7.6, 5.6, 2.2, 1.1, pole);
   return [x, top];
 }
 shared('lamp', {
   body(g, p, env) { lampBody(g, p, env, col(mix('#fff6dc', p.col ? lifted(p.col, 0.7) : '#ffe9a8', 0.3), env), 30); return null; },
-  live(ctx, p, env) { if (env.night > 0.05) { const [x, y] = P(p.gx, p.gy); ball(ctx, x, y - 30.4, 5.9, '#fff3c4'); glowAt(ctx, '255,233,168', x, y - 30.4, 20, 0.5 * env.night); } },
+  live(ctx, p, env) { if (env.night > 0.05) { const [x, y] = P(p.gx, p.gy); ball(ctx, x, y - 30.4, 5.9, '#fff3c4'); glowAt(ctx, '255,233,168', x, y - 30.4, 26, 0.7 * env.night); } },
   vary: ['col'], ext: [9, 9, 10, 10],
 });
 shared('neonlamp', {
@@ -56,10 +57,10 @@ shared('fence', {
     const along = !p.dirY, len = along ? p.w : p.d, n = Math.max(3, Math.round(len / 0.36) + 1), c0 = lifted(p.col || '#e9e2d0', 0.78), c = col(along ? c0 : mix(c0, '#d8cfe0', 0.18), env), h = clamp(p.h || 16, 12, 20), pst = col(mix(c0, WOOD.light, 0.35), env);
     const at = (u, z = 0) => (along ? P(p.gx + len * u, p.gy + p.d / 2, z) : P(p.gx + p.w / 2, p.gy + len * u, z)), a = at(0), b = at(1);
     stampSoft(g, (a[0] + b[0]) / 2 + 5, (a[1] + b[1]) / 2 + 3, Math.abs(b[0] - a[0]) / 2 + 8, Math.abs(b[1] - a[1]) / 2 + 6, 0.18);
-    for (const rh of [4.4, 11]) { bar(g, a[0], a[1] - rh, b[0], b[1] - rh, 3.2, shd(c)); bar(g, a[0], a[1] - rh - 0.6, b[0], b[1] - rh - 0.6, 2, hi(c, 0.35)); }
+    for (const rh of [4.6, 11.4]) { bar(g, a[0], a[1] - rh, b[0], b[1] - rh, 4.4, shd(c)); bar(g, a[0], a[1] - rh - 0.7, b[0], b[1] - rh - 0.7, 2.8, hi(c, 0.35)); } // two chunky rails
     const posts = Math.max(2, Math.round(len / 1.5) + 1), gap = 0.55 / (n - 1);
-    for (let i = 0; i < n; i++) { const u = i / (n - 1); let onPost = false; for (let k = 0; k < posts; k++) if (Math.abs(u - k / (posts - 1)) < gap) onPost = true; if (onPost) continue; const [x, y] = at(u); rr(g, x - 1.75, y - h, 3.5, h, 1.75, shd(c)); rr(g, x - 1.75, y - h, 2.7, h - 0.5, 1.75, c); g.globalAlpha *= 0.4; rr(g, x - 1.2, y - h + 1.5, 0.9, h - 3, 0.45, '#fffbe6'); g.globalAlpha /= 0.4; }
-    for (let i = 0; i < posts; i++) { const [x, y] = at(i / (posts - 1)); post(g, x, y, h + 2.6, 5, pst, true); }
+    for (let i = 0; i < n; i++) { const u = i / (n - 1); let onPost = false; for (let k = 0; k < posts; k++) if (Math.abs(u - k / (posts - 1)) < gap) onPost = true; if (onPost) continue; const [x, y] = at(u); rr(g, x - 2.4, y - h, 4.8, h, 2.4, shd(c)); rr(g, x - 2.4, y - h, 3.7, h - 0.5, 2.4, c); g.globalAlpha *= 0.4; rr(g, x - 1.6, y - h + 1.6, 1.2, h - 3.2, 0.6, '#fffbe6'); g.globalAlpha /= 0.4; }
+    for (let i = 0; i < posts; i++) { const [x, y] = at(i / (posts - 1)); post(g, x, y, h + 3.2, 6.8, pst, true); }
     return null;
   }, vary: ['col', 'dirY'], ext: [6, 8, 6, 6],
 });

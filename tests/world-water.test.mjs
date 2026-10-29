@@ -89,11 +89,12 @@ test('decal colours are read for daylight: a dark kit colour is lifted towards c
   assert.notEqual(tone('#d4c070', 1), tone('#d4c070', 0), 'veiled'); assert.ok(luma(tone('#d4c070', 1)) >= luma('#d4c070') - 0.03, 'never darker');
 });
 
-test('the swash breathes on the beaches only while motion is on: nothing at rest, soft strokes with a phase that runs along the coast, none thinner than 1.5, none at tier 3, none far out', () => {
+test('the swash breathes on the beaches only while motion is on: nothing at rest, filled outlines (one a stretch, no joints) whose width follows a phase that runs along the coast, none thinner than 1.5, none at tier 3, none far out', () => {
   const view = { x0: -4800, x1: -3000, y0: 1800, y1: 3200 };
   const sw = (t, zoom = 1, tier = 0) => { const r = recCtx(); drawSwash(r.ctx, view, zoom, t, tier); return r; };
   assert.equal(sw(0).log.calls.length, 0, 'at rest the baked foam is the picture'); assert.equal(sw(3, 1, 3).log.calls.length, 0); assert.equal(sw(3, 0.3).log.calls.length, 0);
-  const r = sw(2.5), strokes = r.log.strokes; assert.ok(strokes.length > 8, `${strokes.length} strokes on the beaches in view`); assert.ok(thinnestStroke(r.log) >= 1.5); assert.equal(r.log.depth, 0);
-  const alphas = new Set(strokes.map((s) => s.alpha.toFixed(2))); assert.ok(alphas.size > 4, 'the phase differs along the coast');
-  const a = sw(2.5).log.strokes.map((s) => s.alpha.toFixed(3)).join(), b = sw(2.5 + 6.5).log.strokes.map((s) => s.alpha.toFixed(3)).join(); assert.equal(a, b, 'the breath has a period of 6.5 seconds');
+  const r = sw(2.5); assert.ok(r.log.fills.length > 8, `${r.log.fills.length} fills on the beaches in view`); assert.equal(r.log.strokes.length, 0, 'the first version stroked a stretch of 0.7 tile at a time and every joint showed: now an outline'); assert.equal(r.log.depth, 0);
+  const widthsAt = (t) => { const out = []; let cur = []; for (const c of sw(t).log.calls) { if (c[0] === 'moveTo') cur = [[c[1], c[2]]]; else if (c[0] === 'lineTo') cur.push([c[1], c[2]]); else if (c[0] === 'fill') { const n = cur.length / 2, w = []; for (let i = 0; i < n; i++) w.push(Math.hypot(cur[i][0] - cur[cur.length - 1 - i][0], cur[i][1] - cur[cur.length - 1 - i][1])); out.push(w); } } return out; };
+  const w = widthsAt(2.5); const all = w.flat(); assert.ok(all.every((x) => x >= 0), 'no outline folds'); assert.ok(new Set(all.map((x) => x.toFixed(1))).size > 10, 'the width differs along the coast');
+  const a = JSON.stringify(widthsAt(2.5).map((q) => q.map((x) => Math.round(x)))), b = JSON.stringify(widthsAt(2.5 + 6.5).map((q) => q.map((x) => Math.round(x)))); assert.equal(a, b, 'the breath has a period of 6.5 seconds');
 });

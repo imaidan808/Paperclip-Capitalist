@@ -124,15 +124,21 @@ export function seaPass(buf, W, H, S, ox, oy, sc, skipLand = false) {
 const RK = new Float64Array(3);
 /**
  * The colour of a rock face at height `z` (pixels above the sea) and across position `xs` (the screen's x in tiles, gx - gy: the same on a wall and on the steep ground above it, so the layers run on
- * from one to the other): wavy strata nine pixels thick, stepping light to shade, sandstone below 40 pixels and lilac rock above, a line between layers never under 1.5 world pixels. Written into RK.
+ * from one to the other): wavy strata nine pixels thick, stepping light to shade, sandstone below 40 pixels and lilac rock above. Between two layers a darker seam (never under 1.5 world pixels, anti-aliased to
+ * `aa`, the world pixels one device pixel covers) and, just above it, a pale lip of the ledge. Everything is interpolated (the grain, the seam's wobble), so no texel is larger than a device pixel at any zoom. Written into RK.
  */
-function rockAt(sc, z, xs, wpxLine) {
-  const bt = 9, wob = (lnoise(xs * 1.3, z * 0.035 + 3) - 0.5) * 5, q = (z + wob) / bt, k = Math.floor(q), fr = q - k, hi = z > 46 ? 1 : z < 34 ? 0 : (z - 34) / 12, t = clamp(1 - z / 100, 0, 1) * 0.75 + (k % 3) * 0.08;
+function rockAt(sc, z, xs, wpxLine, aa) {
+  const bt = 9, wob = (vnoise(xs * 1.1, z * 0.03 + 3) - 0.5) * 6, q = (z + wob) / bt, k = Math.floor(q), fr = q - k, hi = z > 46 ? 1 : z < 34 ? 0 : (z - 34) / 12, t = clamp(1 - z / 100, 0, 1) * 0.75 + (k % 3) * 0.08;
   const rl = sc.rockLight, rs = sc.rockShade, hl = sc.rockHi, hs = sc.rockHiShade, st = sc.strata;
   let r = rl[0] + (rs[0] - rl[0]) * t, g = rl[1] + (rs[1] - rl[1]) * t, b = rl[2] + (rs[2] - rl[2]) * t;
   if (hi > 0) { const hr = hl[0] + (hs[0] - hl[0]) * t, hg = hl[1] + (hs[1] - hl[1]) * t, hb = hl[2] + (hs[2] - hl[2]) * t; r += (hr - r) * hi; g += (hg - g) * hi; b += (hb - b) * hi; }
-  const grain = cellNoise(Math.floor(xs * 14), Math.floor(z * 0.9)) * 0.1; r += r * grain; g += g * grain; b += b * grain;
-  if (fr * bt < wpxLine && k > 0) { r += (st[0] - r) * 0.62; g += (st[1] - g) * 0.62; b += (st[2] - b) * 0.62; }
+  const fine = clamp((1 / aa - 0.4) / 1.2, 0, 1), grain = (lnoise(xs * 8 + 5, z * 0.42 + 11) - 0.5) * 0.15 + (lnoise(xs * 27 + 3, z * 1.5) - 0.5) * 0.06 * fine; r += r * grain; g += g * grain; b += b * grain;
+  if (k > 0) {
+    const d = fr * bt, c = clamp((wpxLine - d) / aa * 0.5 + 0.5, 0, 1);                                  // the seam
+    const lip = clamp((d - wpxLine) / aa * 0.5 + 0.5, 0, 1) * (1 - clamp((d - wpxLine - 2.6) / aa * 0.5 + 0.5, 0, 1)); // the pale lip of the ledge above it
+    if (lip > 0) { const m = 0.22 * lip; r += (255 - r) * m; g += (244 - g) * m; b += (214 - b) * m; }
+    if (c > 0) { const m = 0.62 * c; r += (st[0] - r) * m; g += (st[1] - g) * m; b += (st[2] - b) * m; }
+  }
   RK[0] = r; RK[1] = g; RK[2] = b;
 }
 
@@ -191,9 +197,8 @@ export function landRaster(W, H, S, ox, oy, sc, view) {
 export function landShade(buf, W, H, S, sc) {
   if (!LAND_N) return;
   const ids = IDS, fine = sc.coast.fine, fd = fine.d, fnx = fine.nx, fox = fine.ox, foy = fine.oy, sandMid = sc.sandMid, sandLight = sc.sandLight, wet = sc.wet, wetSheen = sc.wetSheen, lip = sc.lip, foam = sc.foam;
-  const GK = clamp(25 * S / 2.4, 2, 24), grainAmp = 0.07 * clamp(GK * 2.4 / (25 * S) * (S > 0.5 ? 1 : S * 2), 0.3, 1);
   const fineAt = (gx, gy) => { const u = (gx - fox) * FS - 0.5, v = (gy - foy) * FS - 0.5, a = Math.floor(u), b = Math.floor(v), tx = u - a, ty = v - b, i = b * fnx + a; return (fd[i] * (1 - tx) + fd[i + 1] * tx) * (1 - ty) + (fd[i + fnx] * (1 - tx) + fd[i + fnx + 1] * tx) * ty; };
-  const pxTile = 25 * S; let last = 0;
+  const pxTile = 25 * S, aaW = 1 / S, fineAmt = smooth(0.35, 1.2, S); let last = 0;
   let r0 = 0, rx = 0, ry = 0, g0 = 0, gxx = 0, gyy = 0, b0 = 0, bx = 0, by = 0, x0 = 0, xx = 0, xy = 0, y0 = 0, yx = 0, yy = 0, z0 = 0, zx = 0, zy = 0, isDeep = 0, steepT = 0, flT = 0;
   for (let py = 0; py < H; py++) {
     const yc = py + 0.5;
@@ -203,13 +208,14 @@ export function landShade(buf, W, H, S, sc) {
       const xc = px + 0.5;
       let r = r0 + xc * rx + yc * ry, g = g0 + xc * gxx + yc * gyy, b = b0 + xc * bx + yc * by;
       const gx = x0 + xc * xx + yc * xy, gy = y0 + xc * yx + yc * yy;
-      let gr = cellNoise(Math.floor(gx * GK), Math.floor(gy * GK)) * grainAmp;
-      if (g > r + 6 && isDeep === 1) gr += cellNoise(Math.floor((gx - gy) * GK * 1.5), Math.floor((gx + gy) * GK * 0.4) + 977) * grainAmp * 0.9; // grass: blade-long streaks, standing upright on the screen
+      // tone: a patch a third of a tile across and a finer one, and on grass blade-long streaks standing upright on the screen; all interpolated, so no texel is ever larger than a device pixel (the first grain was a hashed cell, 24 to a tile: blocks of 5 device pixels at the finest zoom)
+      let gr = (lnoise(gx * 2.7 + 3, gy * 2.7) - 0.5) * 0.12 + (lnoise(gx * 9.5, gy * 9.5 + 7) - 0.5) * 0.08 * fineAmt;
+      if (g > r + 6 && isDeep === 1) gr += (lnoise((gx - gy) * 13 + 40, (gx + gy) * 2.6) - 0.5) * 0.1 * fineAmt;
       r += r * gr; g += g * gr; b += b * gr;
       let alpha = 1; const steep = steepT;
       const z = steep > 4.6 || isDeep === 0 ? z0 + xc * zx + yc * zy : 0;
       if (steep > 4.6) { // a cliff face: the strata of the rock by height, lit by which way the slope looks
-        const w = steep >= 9.5 ? 1 : (steep - 4.6) / 4.9, fl = flT; rockAt(sc, z, gx - gy, 1.5);
+        const w = steep >= 9.5 ? 1 : (steep - 4.6) / 4.9, fl = flT; rockAt(sc, z, gx - gy, 1.5, aaW);
         let rr = RK[0], rg = RK[1], rb = RK[2]; if (fl > 0) { rr += (255 - rr) * 0.1 * fl; rg += (240 - rg) * 0.1 * fl; rb += (200 - rb) * 0.1 * fl; } else { rr += (92 - rr) * -0.22 * fl; rg += (76 - rg) * -0.22 * fl; rb += (150 - rb) * -0.22 * fl; }
         r += (rr - r) * w; g += (rg - g) * w; b += (rb - b) * w;
       }
@@ -219,10 +225,12 @@ export function landShade(buf, W, H, S, sc) {
         if (inland < 2.2) {
           const nb = lnoise(gx * 1.7 + 9, gy * 1.7) - 0.5, low = z >= 5.2 ? 0 : z <= 2.4 ? 1 : smooth(5.2, 2.4, z); // low ground is beach; a cliff top is not
           if (low > 0) {
-            const edge = 1.25 + nb * 1.1, sand = low * (1 - smooth(edge - 0.4, edge + 0.12, inland));
-            if (sand > 0) { const t = smooth(0.3, 1.3, inland), sn = (lnoise(gx * GK * 0.8, gy * GK * 0.8) - 0.5) * 0.11, sr = (sandMid[0] + (sandLight[0] - sandMid[0]) * t) * (1 + sn), sg = (sandMid[1] + (sandLight[1] - sandMid[1]) * t) * (1 + sn), sb = (sandMid[2] + (sandLight[2] - sandMid[2]) * t) * (1 + sn); r += (sr - r) * sand; g += (sg - g) * sand; b += (sb - b) * sand; }
-            const wt = low * (1 - smooth(0.2, 0.36 + nb * 0.08, inland)); // the wet edge of the sand, darker, with a sheen along its outer half
-            if (wt > 0) { r += (wet[0] - r) * wt * 0.85; g += (wet[1] - g) * wt * 0.85; b += (wet[2] - b) * wt * 0.85; }
+            // the sand's inland edge is a crisp, ragged line (a few device pixels of soft) with a darker rim of grass on the far side of it; the grain of the sand is per pixel and the clumps in it a fine interpolated noise
+            const jit = (lnoise(gx * 15 + 3, gy * 15) - 0.5) * 0.16, edge = 1.25 + nb * 1.1 + jit, sand = low * (1 - smooth(edge - 0.05, edge + 0.05, inland));
+            if (sand > 0) { const t = smooth(0.3, 1.3, inland), sn = (lnoise(gx * 21, gy * 21 + 5) - 0.5) * 0.09 * fineAmt + cellNoise(px * 3 + 1, py * 5 + 2) * 0.06, sr = (sandMid[0] + (sandLight[0] - sandMid[0]) * t) * (1 + sn), sg = (sandMid[1] + (sandLight[1] - sandMid[1]) * t) * (1 + sn), sb = (sandMid[2] + (sandLight[2] - sandMid[2]) * t) * (1 + sn); r += (sr - r) * sand; g += (sg - g) * sand; b += (sb - b) * sand; }
+            const rim = low * clamp(1 - Math.abs(inland - (edge + 0.1)) / 0.09, 0, 1) * 0.24; if (rim > 0) { r += (lip[0] - r) * rim; g += (lip[1] - g) * rim; b += (lip[2] - b) * rim; }
+            const wt = low * (1 - smooth(0.05, 0.7 + nb * 0.14, inland)); // the wet edge of the sand: darker towards the water, a gradient and not a band, with a sheen along its outer half
+            if (wt > 0) { r += (wet[0] - r) * wt * 0.62; g += (wet[1] - g) * wt * 0.62; b += (wet[2] - b) * wt * 0.62; }
             const sh = low * clamp(1 - Math.abs(inland - 0.3) / 0.1, 0, 1) * 0.35; if (sh > 0) { r += (wetSheen[0] - r) * sh; g += (wetSheen[1] - g) * sh; b += (wetSheen[2] - b) * sh; }
           }
           const lipW = (1 - low) * (1 - smooth(0.02, 0.3, inland)) * 0.4 * (steep > 3 ? 0 : 1); // the rounded lip where the meadow rolls over a cliff top
@@ -291,7 +299,7 @@ export function wallPass(buf, W, H, S, ox, oy, sc) {
   const Wl = sc.walls; if (!Wl || !Wl.n) return;
   const wx0 = ox - 4, wy0 = oy - 100, wx1 = ox + W / S + 4, wy1 = oy + H / S + 4, a = Wl.a, sx = (x) => (x - ox) * S, sy = (y) => (y - oy) * S, ao = sc.ao;
   const shade = (o, xs, v, hh, lit) => {
-    const hAbs = Math.max(0, v * hh); rockAt(sc, hAbs, xs, 1.5);
+    const hAbs = Math.max(0, v); rockAt(sc, hAbs, xs, 1.5, 1 / S); // v is the height above the waterline itself (see `put`): interpolated as one plane, so the strata are straight on a wall whose top and foot are not parallel (the product of two interpolated numbers kinked along the quad's diagonal)
     let r = RK[0], g = RK[1], b = RK[2];
     if (lit > 0) { r += (255 - r) * 0.1 * lit; g += (240 - g) * 0.1 * lit; b += (200 - b) * 0.1 * lit; } else { r += (92 - r) * -0.22 * lit; g += (76 - g) * -0.22 * lit; b += (150 - b) * -0.22 * lit; }
     const q = 1 - smooth(0, 5, hAbs); if (q > 0) { r += (ao[0] - r) * q * 0.3; g += (ao[1] - g) * q * 0.3; b += (ao[2] - b) * q * 0.3; } // the foot of the wall, in shadow
@@ -302,7 +310,7 @@ export function wallPass(buf, W, H, S, ox, oy, sc) {
     if (Math.max(x0, x1) < wx0 || Math.min(x0, x1) > wx1 || Math.max(yb0, yb1) < wy0 || Math.min(yb0, yb1) - Math.max(z0, z1) > wy1) continue;
     const ax = sx(x0), bx = sx(x1), fa = sy(yb0), fb = sy(yb1), ta = sy(yb0 - z0 - 2), tb = sy(yb1 - z1 - 2), u0 = x0 / 32, u1 = x1 / 32, l0 = a[q + 4], l1 = a[q + 9];
     // vertices: top0 (v 1), top1, foot1 (v 0), foot0; attributes xs, v, height, light
-    const put = (n, u, v, hh, lit) => { WA[n * 6] = u; WA[n * 6 + 1] = v; WA[n * 6 + 2] = hh + 2; WA[n * 6 + 3] = lit; };
+    const put = (n, u, v, hh, lit) => { WA[n * 6] = u; WA[n * 6 + 1] = v * (hh + 2); WA[n * 6 + 2] = hh + 2; WA[n * 6 + 3] = lit; };
     put(0, u0, 1, z0, l0); put(1, u1, 1, z1, l1); put(2, u1, 0, z1, l1); scan(W, H, ax, ta, bx, tb, bx, fb, shade);
     put(0, u0, 1, z0, l0); put(1, u1, 0, z1, l1); put(2, u0, 0, z0, l0); scan(W, H, ax, ta, bx, fb, ax, fa, shade);
   }

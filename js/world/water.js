@@ -95,28 +95,43 @@ export function drawMotifs(ctx, view, zoom, t, lod, tier = 0) {
 const BEACH = new WeakMap();
 /** For one ring of the coast: for each point, is the ground there a beach (under 2.5 pixels high)? A cliff has no swash: the sea does not run up a wall. */
 function beachFlags(ring) { let f = BEACH.get(ring); if (!f) { const n = ring.length / 2; f = new Uint8Array(n); for (let i = 0; i < n; i++) f[i] = zAt(ring[2 * i], ring[2 * i + 1]) < 2.5 ? 1 : 0; BEACH.set(ring, f); } return f; }
+const RING_DATA = new WeakMap();
+/** One ring of the coast as screen-space arrays: the point (x, y), the unit normal (nx, ny), the arc length in tiles (arc) and the beach flags, made once. */
+function ringData(ring) {
+  let d = RING_DATA.get(ring); if (d) return d;
+  const n = ring.length / 2, x = new Float32Array(n), y = new Float32Array(n), nx = new Float32Array(n), ny = new Float32Array(n), arc = new Float32Array(n);
+  for (let i = 0; i < n; i++) { x[i] = (ring[2 * i] - ring[2 * i + 1]) * HWd; y[i] = (ring[2 * i] + ring[2 * i + 1]) * HHd; if (i) arc[i] = arc[i - 1] + Math.hypot(ring[2 * i] - ring[2 * i - 2], ring[2 * i + 1] - ring[2 * i - 1]); }
+  for (let i = 0; i < n; i++) { const a = (i + n - 1) % n, b = (i + 1) % n, tx = x[b] - x[a], ty = y[b] - y[a], l = Math.hypot(tx, ty) || 1; nx[i] = -ty / l; ny[i] = tx / l; }
+  d = { n, x, y, nx, ny, arc, fl: beachFlags(ring) }; RING_DATA.set(ring, d); return d;
+}
+/** The breath of the swash at a point of the coast `arc` tiles along it, 0..1: a period of 6.5 seconds whose phase runs along the beach (0.12 of a cycle a tile). */
+export const breathAt = (t, arc) => 0.5 + 0.5 * Math.sin(TAU * (t / 6.5 + arc * 0.12));
+/** The width, in world pixels, of a swash band at a point: `base` plus `amp` times the breath, never under 1.5 (nothing is a hairline), and tapering to a point over the first and last `TAPER` points of a run. */
+export const swashWidth = (base, amp, breath, k, run) => Math.max(1.5, base + amp * breath) * Math.min(1, (k + 1) / TAPER, (run - k) / TAPER);
+const TAPER = 5, MAXRUN = 70, SWASH_WIDE = mix(SEA.shoal, SEA.foam, 0.5);
 /**
- * Along every beach in view, a film of foam that advances and retreats over 6.5 seconds, its phase running along the coast (0.12 of a cycle a tile) so the swash travels down the beach: a soft wide
- * band of shoal colour under a narrower white one, a stretch of 0.7 tile at a time. The baked ground holds the foam line at mid swash, which is the whole picture at rest; this is only drawn while
- * motion is on, and not at all at tier 3 and over. Strokes are never under 1.5 world pixels.
+ * Along every beach in view, a film of foam that advances and retreats over 6.5 seconds, its phase running along the coast so the swash travels down the beach: a wide soft band of shoal colour under a
+ * narrower white one. Each band is ONE filled outline per stretch of beach, its width following the breath at every point of the coast (the first version stroked a stretch of 0.7 tile at a time with its
+ * own width and opacity, and every joint between two stretches showed as a step along the sand). The baked ground holds the foam line at mid swash, which is the whole picture at rest; this is only drawn
+ * while motion is on, and not at all at tier 3 and over. Widths are never under 1.5 world pixels.
  */
 export function drawSwash(ctx, view, zoom, t, tier = 0) {
   if (!t || tier >= 3 || zoom < 0.45) return;
-  const rings = coastOf().rings; let arc = 0;
-  ctx.save(); ctx.lineCap = 'butt'; ctx.lineJoin = 'round'; // butt ends and short stretches: no bumps where two meet
+  const rings = coastOf().rings; ctx.save();
+  const band = (d, a, b, base, amp, col, alpha, ph) => {
+    const run = b - a + 1; ctx.beginPath();
+    for (let i = a; i <= b; i++) { const w = swashWidth(base, amp, breathAt(t, d.arc[i] + ph), i - a, run) / 2; (i === a ? ctx.moveTo : ctx.lineTo).call(ctx, d.x[i] + d.nx[i] * w, d.y[i] + d.ny[i] * w); }
+    for (let i = b; i >= a; i--) { const w = swashWidth(base, amp, breathAt(t, d.arc[i] + ph), i - a, run) / 2; ctx.lineTo(d.x[i] - d.nx[i] * w, d.y[i] - d.ny[i] * w); }
+    ctx.closePath(); ctx.globalAlpha = alpha; ctx.fillStyle = col; ctx.fill();
+  };
+  let ri = 0;
   for (const ring of rings) {
-    const n = ring.length / 2, fl = beachFlags(ring);
-    let i = 0;
+    const d = ringData(ring), n = d.n, ph = (ri++) * 0.37; let i = 0;
     while (i < n) {
-      const gx = ring[2 * i], gy = ring[2 * i + 1], x = (gx - gy) * HWd, y = (gx + gy) * HHd;
-      let j = i, len = 0; for (; j + 1 < n && len < 0.7; j++) len += Math.hypot(ring[2 * j + 2] - ring[2 * j], ring[2 * j + 3] - ring[2 * j + 1]);
-      if (fl[i] && x > view.x0 - 90 && x < view.x1 + 90 && y > view.y0 - 90 && y < view.y1 + 90) {
-        const breath = 0.5 + 0.5 * Math.sin(TAU * (t / 6.5 + arc * 0.12)); ctx.beginPath(); ctx.moveTo(x, y);
-        for (let q = i + 1; q <= j; q++) ctx.lineTo((ring[2 * q] - ring[2 * q + 1]) * HWd, (ring[2 * q] + ring[2 * q + 1]) * HHd);
-        ctx.strokeStyle = SEA.shoal; ctx.globalAlpha = 0.16 + 0.2 * breath; ctx.lineWidth = Math.max(1.5, 7 + 8 * breath); ctx.stroke();
-        ctx.strokeStyle = SEA.foam; ctx.globalAlpha = 0.25 + 0.4 * breath; ctx.lineWidth = Math.max(1.5, 2.2 + 3 * breath); ctx.stroke();
-      }
-      arc += len; i = Math.max(j, i + 1);
+      if (!d.fl[i] || d.x[i] < view.x0 - 90 || d.x[i] > view.x1 + 90 || d.y[i] < view.y0 - 90 || d.y[i] > view.y1 + 90) { i++; continue; }
+      let j = i; while (j + 1 < n && j - i < MAXRUN && d.fl[j + 1] && d.x[j + 1] > view.x0 - 90 && d.x[j + 1] < view.x1 + 90 && d.y[j + 1] > view.y0 - 90 && d.y[j + 1] < view.y1 + 90) j++;
+      if (j > i) { band(d, i, j, 7, 8, SWASH_WIDE, 0.26, ph); band(d, i, j, 2.2, 3, SEA.foam, 0.52, ph); }
+      i = j + 1 < n && j - i >= MAXRUN ? j : j + 1; // a run cut at MAXRUN goes on from its last point, so the two outlines share it
     }
   }
   ctx.restore();

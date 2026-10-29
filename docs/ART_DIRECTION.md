@@ -115,7 +115,7 @@ The district's identity hue comes from `palette[0]` in the data (`js/data/tier*.
 
 | # | Theme | District | Data ground / accent | DAY ground | walk | accent | accent 2 | Roofs | Mood |
 |---|---|---|---|---|---|---|---|---|---|
-| 1 | `scrap` | The Scrap Yard | #5b5b1f / #b5651d | `#d4c070` | `#eddfbb` | `#f08a3c` | `#5b8bd0` | rust corrugated | sun-baked junkyard: ochre dirt, rust, cornflower blue, crane yellow |
+| 1 | `scrap` | The Scrap Yard | #5b5b1f / #b5651d | `#f1cd8e` | `#f3e2c1` | `#f08a3c` | `#5b8bd0` | rust corrugated | sun-baked junkyard: ochre dirt, rust, cornflower blue, crane yellow |
 | 2 | `market` | Flea Market Row | #c4571a / #ffc93c | `#f5b98a` | `#f3dec0` | `#ffc93c` | `#36b5a8` | striped canvas | bazaar of scalloped awnings: tomato, marigold, teal, pink on peach cobbles |
 | 3 | `campus` | Campus Quad | #9b3b2f / #2f9e5b | `#eab5a4` | `#f1ddc5` | `#38c06f` | `#fff0d2` | slate-blue on brick | red-brick halls round a bright lawn quad: brick, cream trim, emerald |
 | 4 | `pawn` | Pawn District | #0e6f6b / #e3b341 | `#8fdcd0` | `#e1e4cd` | `#f2c14a` | `#ff6fae` | flat, neon trim | mint-teal shopfronts with gold lettering and pink or cyan neon edging |
@@ -924,8 +924,8 @@ Allowed: baked offscreen bitmaps in world space; `Path2D` in world pixels; cache
   },
   "districts": {
     "scrap": {
-      "ground": "#d4c070",
-      "walk": "#eddfbb",
+      "ground": "#f1cd8e",
+      "walk": "#f3e2c1",
       "accent": "#f08a3c",
       "accent2": "#5b8bd0"
     },

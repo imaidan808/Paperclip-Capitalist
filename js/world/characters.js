@@ -12,7 +12,7 @@ import { BUYERS } from '../config.js';
 import { zAt } from './layout.js';
 import { P, strHash, h2, clamp } from './iso.js';
 import { PEOPLE, TOY, INK, GRASS, BLOOM, WOOD, METAL, personLook } from './palette.js';
-import { mix, shade, hi, shd, disc, rr, bar, poly, stand, FONT } from './toys.js';
+import { mix, shade, hi, shd, disc, rr, bar, poly, stand, stampSoft, FONT } from './toys.js';
 
 // ---------------------------------------------------------------- what a buyer wears
 const FAMILIES = [
@@ -145,19 +145,20 @@ const SKIN_SH = (c) => mix(shade(c, 0.86), '#e0907a', 0.18);
 export function drawDoll(g, x, y, s, K, A) {
   g.save(); g.translate(x, y); g.scale(s, s);
   const R = K.role || {}, st = K.step, bob = K.bob, pants = K.pants, shirt = K.shirt, skin = K.skin;
-  stand(g, 0.4, 0.5, 8.4, 3.6);
+  stampSoft(g, 5, 1.1, 12.5, 4.6, 0.24); stand(g, 0.4, 0.5, 8.8, 3.8); // a soft shadow thrown away from the sun and a dark contact patch: a doll stands on the ground
   if (R.item === 'backpack') backpack(g, K);
   const covered = COVERS.has(R.head);
   hairBack(g, covered && K.style === 'bun' ? 'short' : K.style, K.hair, K);
   // legs and shoes (the step swings them; a stub lifts its foot as it passes)
   for (const [i, sx] of [[0, -1], [1, 1]]) {
     const sw = st ? Math.sin(st + i * Math.PI) : 0, lift = st ? Math.max(0, Math.cos(st + i * Math.PI)) * 1.8 : 0, lx = sx * 3 + sw * 2.6 * K.dir * 0.8;
-    rr(g, lx - 2.2, -8.6 - lift * 0.4, 4.4, 8.2 - lift, 2, i ? shd(pants) : pants); disc(g, lx + K.dir * 0.4, -1.6 - lift, 3.5, 2.1, i ? '#3a2f5e' : '#4a3f78'); disc(g, lx + K.dir * 0.6 - 0.8, -2.4 - lift, 1.5, 0.8, '#7a6aa8');
+    rr(g, lx - 2.7, -8.6 - lift * 0.4, 5.4, 8.2 - lift, 2.6, i ? shd(pants) : pants); g.globalAlpha *= 0.35; rr(g, lx - 1.9, -8.2 - lift * 0.4, 1.5, 6.2 - lift, 0.75, hi(pants, 0.8)); g.globalAlpha /= 0.35; // a round leg with a lit strip
+    disc(g, lx + K.dir * 0.5, -1.7 - lift, 4.3, 2.5, i ? '#3a2f5e' : '#4a3f78'); disc(g, lx + K.dir * 0.7 - 0.9, -2.6 - lift, 1.8, 0.9, '#7a6aa8'); disc(g, lx + K.dir * 0.5, -0.5 - lift, 4.0, 1.0, '#fffaf0'); // a shoe with a pale sole
   }
   const by = -bob; // the body rides the bob
   // back arm
-  const armA = K.arm, aw = (a) => 3.7 + 0 * a;
-  const arm = (sx, ang, front) => { const sxp = sx * 6.4, sy = -19.4 + by, L = 8.4, ex = sxp + sx * 0.8 + Math.sin(ang) * L, ey = sy + Math.cos(ang) * L; bar(g, sxp, sy, ex, ey, aw(0), front ? shirt : shade(shirt, 0.84)); disc(g, ex, ey + 0.8, 2.1, 2.1, skin); return [ex, ey]; };
+  const armA = K.arm, aw = (a) => 4.4 + 0 * a;
+  const arm = (sx, ang, front) => { const sxp = sx * 6.4, sy = -19.4 + by, L = 8.4, ex = sxp + sx * 0.8 + Math.sin(ang) * L, ey = sy + Math.cos(ang) * L; bar(g, sxp, sy, ex, ey, aw(0), front ? shirt : shade(shirt, 0.84)); disc(g, sxp, sy + 0.4, 2.9, 2.9, front ? shirt : shade(shirt, 0.84)); disc(g, ex, ey - 0.4, 2.6, 2.3, shade(shirt, 0.8)); disc(g, ex, ey + 1, 2.3, 2.3, skin); return [ex, ey]; }; // a sleeve with a shoulder and a cuff, and a hand
   const waveA = K.wave ? -2.6 + Math.sin(K.wave) * 0.5 : null;
   arm(-K.dir, st ? Math.sin(st) * 0.7 * K.dir : 0.14, false);
   // torso: a chunky bean, cool shade at the lower right
