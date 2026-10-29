@@ -32,14 +32,20 @@ async function page(query, { reduced = false, play = true } = {}) {
   return { p, slot };
 }
 const toasts = (p) => p.eval(`[...document.querySelectorAll('#toasts .toast')].map(t=>t.textContent)`);
+/** What the engine has played so far, by id, and what a stretch of the page added to it: the integration check that nothing plays twice (a click, a toast and the code that raised it are three ways to ring one sound). */
+const playedOf = (p) => p.eval(`(async()=>{ const { audio } = await import('/js/audio/index.js'); return { ...audio.stats().played }; })()`);
+const added = (a, c) => { const o = {}; for (const k of new Set([...Object.keys(a), ...Object.keys(c)])) { const d = (c[k] || 0) - (a[k] || 0); if (d) o[k] = d; } return o; };
 
 try {
   // ============================================================ A1: a class that joins by code
   {
     const { p, slot } = await page('&room=ABCD', { play: false });
     ok(JSON.stringify(await p.eval(settingsOf)).includes('"quiet":false'), 'A1: a first visit is not in Classroom');
+    const pl0 = await playedOf(p);
     await p.clickSel('[data-act="join"]'); await sleep(700);
     ok(await p.eval(`!!document.querySelector('#sf')`), 'A1: Join opens the Draft');
+    const joined = added(pl0, await playedOf(p));
+    ok(JSON.stringify(joined) === '{"ui.tick":1}', 'A1: the Join press and the room\'s note play one tick between them, and the note (info) rings nothing: ' + JSON.stringify(joined));
     const a = await p.eval(settingsOf);
     ok(a.quiet === true, 'A1: the Classroom rule is on while the Draft is open (before Begin, where the loud fanfare is)');
     const t = await toasts(p);
@@ -51,7 +57,10 @@ try {
     await p.clickSel('[data-act="join"]'); await sleep(500);
     for (const id of ['trades', 'pro']) { await p.eval(`document.querySelector('.dr-in[value="${id}"]').click()`); await sleep(100); }
     const before = await p.eval(`(async()=>{ const {audio}=await import('/js/audio/index.js'); return audio.stats().played['draft.begin']||0; })()`);
+    const pl1 = await playedOf(p);
     await p.clickSel('#dr-begin'); await sleep(2500);
+    const begun = added(pl1, await playedOf(p));
+    ok(begun['draft.begin'] === 1 && !begun['ui.ok'] && !begun['ui.nudge'] && !begun['ui.tick'], 'A1: Begin plays the fanfare once and nothing over it (no click tick, no toast ok): ' + JSON.stringify(begun));
     ok(await p.eval(`!!document.querySelector('#stage')`), 'A1: Begin starts the run (a room: the Academy is already done here)');
     ok((await p.eval(settingsOf)).quiet === true, 'A1: still Classroom in the game');
     const t2 = await toasts(p);
@@ -121,7 +130,10 @@ try {
     ok(mine.ignored === false && mine.role.value === 'status', 'A4: the region inside the sheet is in the tree, as a status');
     ok(/Prefer to listen/.test((stopN.description && stopN.description.value) || ''), 'A4: Stop\'s accessible description is the line: ' + ((stopN.description && stopN.description.value) || '').slice(0, 80));
     // the switch, for real: a click turns the tone on and the real tone starts at once
+    const pl2 = await playedOf(p);
     await p.clickSel('[data-deal="dialtone"]'); await sleep(400);
+    const switched = added(pl2, await playedOf(p));
+    ok(JSON.stringify(switched) === '{"ui.toggle":1}', 'A4: one press of the Dial tone switch plays its own toggle once (the page-wide click table leaves it alone): ' + JSON.stringify(switched));
     const on = await p.eval(`(async()=>{ const { audio } = await import('/js/audio/index.js'); const c = await import('/js/ui/common.js'); const x = document.querySelector('[data-deal="dialtone"]'); return { pressed: x.getAttribute('aria-pressed'), text: x.textContent.trim(), dial: c.settings.audio.dial, active: audio.dial.active, state: audio.state, focus: document.activeElement === x, ear: document.getElementById('dial-ear')?.textContent, said: document.querySelector('#dlg [data-say="status"]')?.textContent }; })()`);
     ok(on.pressed === 'true' && /Dial tone on/.test(on.text) && on.dial === true, 'A4: the switch is pressed and the setting is on: ' + JSON.stringify({ pressed: on.pressed, dial: on.dial }));
     ok(on.active === true, 'A4: the real tone is running, started at once while the marker moves (engine ' + on.state + ')');
