@@ -20,14 +20,14 @@ What a player does: drafts two of twelve Backgrounds (each has a real-world basi
 
 ## What stays on the device
 
-- A run, its settings and the Academy's progress are saved in the browser's own storage (localStorage keys that start with `pc.`). Nothing else is stored, and there are no cookies.
+- A run, its settings and the Academy's progress are saved in the browser's own storage (localStorage keys that start with `pc.`). A student tab in a room between the tabs of one browser also keeps the name of its own slot in the tab's sessionStorage (one entry, `pc.tab`). Nothing else is stored, and there are no cookies.
 - There are no accounts, no analytics, no tracking and no third-party requests: no fonts, scripts or images come from another host.
 - "Start over" in the menu deletes the current run from this browser. The Founder ID, the alias, the identity key, the settings, the Academy's progress and any debrief notes stay until the site's data is cleared in the browser, which deletes everything the game kept.
 
 ## Privacy model
 
 - The game asks for an alias, not a name. The only identifiers are a random Founder ID and the alias the student chooses.
-- Nothing is sent anywhere unless a student joins a classroom room. Rooms between tabs of one browser use the browser's BroadcastChannel and never leave the browser.
+- Nothing is sent anywhere unless a student joins a classroom room. Rooms between tabs of one browser use the browser's BroadcastChannel and never leave the browser (each student's tab is its own founder; another browser or computer needs the relay).
 - A room on many devices uses an optional relay server that the instructor runs (a WebSocket forwarder, `server/relay.mjs` in the repository). It then sees the room code, the Founder ID, a random secret that proves the ID is the same browser, the alias and the game numbers in each message. It keeps the latest snapshot per student in memory only, writes nothing to disk and never logs what a message holds.
 - The instructor's gradebook export is a CSV of Founder IDs and aliases that the instructor downloads. No student data is held by this site.
 

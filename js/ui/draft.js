@@ -198,14 +198,15 @@ export function actionsHTML(st) {
 
 /**
  * The question asked when Begin would replace the run saved in this browser. There is one save slot, so a new run (solo, or in a classroom: "Join" only opens this screen) writes over the saved one; `run` is
- * `describeSave()` of it, `room` the classroom being joined, if any. It names both, and the safe answer has the cursor.
+ * `describeSave()` of it, `room` the classroom being joined, if any. It names both, and the safe answer has the cursor. `where`: whose it is: this browser's, or this tab's own (a student tab in a room between the tabs of one
+ * browser keeps its run apart, js/identity.js).
  */
-export function replaceRunHTML(run, room = null) {
+export function replaceRunHTML(run, room = null, where = 'This browser') {
   const names = (run.perks || []).filter((id) => own(PERKS, id)).map((id) => PERKS[id].name);
   const saved = `${run.handle ? `<b>${esc(run.handle)}</b>` : 'your founder'}, day ${finite(run.day)}${names.length ? ` (${esc(list(names))})` : ''}${run.room ? `, in room <b class="mono">${esc(run.room)}</b>` : ''}`;
   const next = room && room.code ? `a new run in room <b class="mono">${esc(room.code)}</b>` : 'a new solo run';
   return `<h2 tabindex="-1">Replace your saved run?</h2>
-    <p>This browser has a saved run: ${saved}. Beginning ${next} replaces it, and it cannot be brought back.</p>
+    <p>${esc(where)} has a saved run: ${saved}. Beginning ${next} replaces it, and it cannot be brought back.</p>
     <div class="row gap"><button class="btn ghost" data-close autofocus>Keep my saved run</button><button class="btn danger" data-replace>Replace it and begin</button></div>`;
 }
 
@@ -235,8 +236,8 @@ export function draftHTML(st) {
 
 // ---------------------------------------------------------------- the live screen
 /** Mounts the draft into `root`. `onBegin({ perks, specialty, handle })` is called once; `onBack()` returns to the title. */
-export function mountDraft(root, S, { room = null, onBegin, onBack } = {}) {
-  let st = draftInit({ handle: S.handle, room });
+export function mountDraft(root, S, { room = null, handle, onBegin, onBack } = {}) {
+  let st = draftInit({ handle: handle ?? S.handle, room });
   let begun = false;
   root.innerHTML = draftHTML(st);
   const form = $('#sf', root), grid = $('.dr-grid', root), tray = $('#dr-tray', root), spec = $('#dr-spec', root), bar = $('#dr-actions', root);
