@@ -8,6 +8,7 @@ import { SCENERY, LAYOUT } from '../js/world/layout.js';
 import { DRAW, drawProp, layerOf } from '../js/world/props.js';
 import { solid, hazeAt } from '../js/world/shading.js';
 import * as sprites from '../js/world/sprites.js';
+import { setFlag } from '../js/world/stack.js';
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 /** A recording 2D context: calls and fill styles are logged; getTransform answers a plain scale a. */
@@ -43,7 +44,10 @@ test('colour helpers are memoised but give exactly what the plain arithmetic giv
   assert.equal(mix('#102030', '#f0e0d0', 0.37), plain.mix('#102030', '#f0e0d0', 0.37));
   assert.equal(hex(300, -5, 127.6), '#ff0080', 'channels clamp and round');
   const t = tone('#3366aa'); assert.deepEqual({ ...t }, { t: '#3366aa', l: shade('#3366aa', 0.8), r: shade('#3366aa', 0.6) }); assert.equal(tone('#3366aa'), t, 'the same object every time'); assert.ok(Object.isFrozen(t));
-  assert.equal(fogged('#445566', 0), '#445566'); assert.notEqual(fogged('#445566', 0.5), '#445566'); assert.equal(fogged('#445566', 0.5), mix(mix('#445566', gray('#445566'), 0.75), '#121826', 0.25));
+  assert.equal(fogged('#445566', 0), '#445566');
+  setFlag('clouds', 'legacy'); try { assert.notEqual(fogged('#445566', 0.5), '#445566'); assert.equal(fogged('#445566', 0.5), mix(mix('#445566', gray('#445566'), 0.75), '#121826', 0.25), 'the legacy fog darkens'); } finally { setFlag('clouds', 'v2'); }
+  const sum = (c) => rgb(c).reduce((a, b) => a + b, 0); // pins the new intent: while the clouds layer is V2 a colour under cloud is veiled (lighter, toward the cloud), never darkened
+  assert.ok(sum(fogged('#445566', 0.5)) > sum('#445566'), 'under the new cloud a colour is veiled, not darkened');
 });
 
 // ---------------------------------------------------------------- shadow
@@ -164,7 +168,7 @@ test('sprites: a sprite is built at the scale it is shown at, so the blit is a s
   sprites.setBuildBudget(Infinity); sprites.clearSprites(); let bodies = 0; const layer = { body: () => { bodies++; return null; } }, p = prop({ gx: 4 });
   for (const sc of [1.3, 1.3002]) { const c = rec(sc); sprites.drawSprite(c.ctx, p, env(), layer); await sleep(110); sprites.drawSprite(c.ctx, p, env(), layer); const di = c.log.calls.filter((x) => x[0] === 'drawImage'); assert.ok(di.length >= 1); assert.equal(di.at(-1).length, 4, 'drawImage(image, x, y): no resize'); }
   assert.equal(bodies, 1, 'a hair of difference in the scale is the same sprite');
-  const c = rec(1.6); sprites.drawSprite(c.ctx, p, env(), layer); await sleep(110); sprites.drawSprite(c.ctx, p, env(), layer); assert.equal(bodies, 2, 'a real change of zoom builds again');
+  const c = rec(3); sprites.drawSprite(c.ctx, p, env(), layer); await sleep(110); sprites.drawSprite(c.ctx, p, env(), layer); assert.equal(bodies, 2, 'a real change of zoom builds again (a zoom with no stand-in within the window: drawn directly while it moves, built at rest)');
 });
 
 // ---------------------------------------------------------------- the sprite box holds the whole body
@@ -230,12 +234,13 @@ test('every prop type draws, in every light, and a layered prop answers the same
   }
   assert.ok(layered >= 6);
 });
-test('drawProp: a replaced drawer is honoured, and a drawer that throws still puts the haze back', () => {
-  const p = SCENERY.find((q) => q.t === 'scrap'), orig = DRAW.scrap, e = env();
+test('drawProp: a replaced drawer is honoured, and a drawer that throws still puts the haze back (the legacy dispatch: both static layers flagged legacy, as the V2 kinds registered by the art tracks would answer first)', () => {
+  setFlag('static-prop', 'legacy'); setFlag('static-bldg', 'legacy'); try { const p = SCENERY.find((q) => q.t === 'scrap'), orig = DRAW.scrap, e = env();
   DRAW.scrap = () => { throw new Error('boom'); };
   try { assert.throws(() => drawProp(rec().ctx, p, e), /boom/); assert.equal(e.hz, undefined); } finally { DRAW.scrap = orig; }
   const b = SCENERY.find((q) => q.t === 'bldg'), orig2 = DRAW.bldg; let called = 0; DRAW.bldg = () => { called++; return null; };
   try { drawProp(rec().ctx, b, e); drawProp(rec().ctx, b, e); assert.equal(called, 2, 'the replacement ran, not the cached body'); } finally { DRAW.bldg = orig2; }
+  } finally { setFlag('static-prop', 'v2'); setFlag('static-bldg', 'v2'); }
 });
 test('haze grows with the height of the ground and stays thin; solids keep the corners box() gives', () => {
   assert.ok(hazeAt(0) < hazeAt(50) && hazeAt(50) < hazeAt(100) && hazeAt(1000) <= 0.09);

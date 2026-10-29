@@ -89,6 +89,9 @@ export function box(ctx, gx, gy, w, d, h, c, o = {}) {
   const z0 = o.z || 0, z1 = z0 + h;
   const A = P(gx, gy, z1), B = P(gx + w, gy, z1), C = P(gx + w, gy + d, z1), D = P(gx, gy + d, z1);
   const B0 = P(gx + w, gy, z0), C0 = P(gx + w, gy + d, z0), D0 = P(gx, gy + d, z0);
+  // the silhouette first (DIAGNOSIS S1): the three faces share edges, and where two anti-aliased faces meet the pixel gets 0.5 + 0.5 x 0.5 of coverage, so a quarter of what is behind shows as a hairline. A hexagon in the
+  // lit face's colour under them leaves nothing to show through (the seam pixel is a blend of two faces and the underlay, never of the ground)
+  ctx.beginPath(); ctx.moveTo(A[0], A[1]); ctx.lineTo(B[0], B[1]); ctx.lineTo(B0[0], B0[1]); ctx.lineTo(C0[0], C0[1]); ctx.lineTo(D0[0], D0[1]); ctx.lineTo(D[0], D[1]); ctx.closePath(); ctx.fillStyle = c.l; ctx.fill();
   quad(ctx, [D, C, C0, D0], c.l, o.line);
   quad(ctx, [C, B, B0, C0], c.r, o.line);
   quad(ctx, [A, B, C, D], c.t, o.line);

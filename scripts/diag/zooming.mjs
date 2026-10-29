@@ -1,7 +1,7 @@
 // What does a frame cost while the zoom itself is changing every frame (a trackpad pinch)? Day-1 state and 60 bot days, software raster, flush-inclusive.
 import { boot, view, SCEN } from './lib.mjs';
 const days = +(process.argv[2] || 0);
-const app = await boot({ dsf: 2, gpu: false, days }); const { p } = app;
+const app = await boot({ dsf: 2, gpu: process.env.GPU === '1', days }); const { p } = app;
 try {
   await p.eval(`(async()=>{ window.__S=await import('/js/world/sprites.js'); })()`);
   const rows = [];

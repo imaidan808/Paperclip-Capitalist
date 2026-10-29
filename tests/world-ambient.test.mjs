@@ -72,6 +72,6 @@ test('the particles are round: coins that turn, stars for sparks, soft dust and 
   const idle = recCtx(); paintParticles(idle.ctx, world()); assert.equal(idle.log.calls.length, 0, 'an empty pool costs nothing');
 });
 
-test('the V2 weather, field and particles layers are registered in screen space and are used only while flagged', () => {
-  for (const id of ['weather', 'field', 'particles']) { assert.equal(slotFor(id).impl, 'legacy', `${id}: the default build is still the old air`); setFlag(id, 'v2'); try { assert.equal(slotFor(id).impl, 'v2'); assert.equal(slotFor(id).space, 'screen'); } finally { setFlag(id, 'legacy'); } }
+test('the V2 weather, field and particles layers are registered in screen space, are the default build\'s, and are used only while flagged', () => {
+  for (const id of ['weather', 'field', 'particles']) { assert.equal(slotFor(id).impl, 'v2', `${id}: the default build is the new air`); assert.equal(slotFor(id).space, 'screen'); setFlag(id, 'legacy'); try { assert.equal(slotFor(id).impl, 'legacy'); } finally { setFlag(id, 'v2'); } }
 });

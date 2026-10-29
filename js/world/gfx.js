@@ -9,11 +9,12 @@ export const hasOffscreen = () => typeof OffscreenCanvas === 'function';
  * An offscreen 2D surface of w x h device pixels as { c, g } (canvas, context), or null when there is no OffscreenCanvas.
  * A surface is a bitmap in memory (tens of megabytes at window size): make one for a thing that lasts and paint it again in place when it changes. Never one per frame or per
  * step of the light (the sea did that: about 22 full-window bitmaps a day/night turn, each 8 to 10 ms to fill on a CPU-drawn canvas; it is one 1 x 256 strip now, see World.drawWater).
+ * `opts` are the context's own options ({ willReadFrequently: true } makes a CPU-backed surface that getImageData reads without a GPU round trip: the ground chunks that are sealed after they are drawn).
  */
-export function surface(w, h) {
+export function surface(w, h, opts) {
   if (!hasOffscreen()) return null;
   try {
-    const c = new OffscreenCanvas(Math.max(1, Math.ceil(w)), Math.max(1, Math.ceil(h))), g = c.getContext('2d');
+    const c = new OffscreenCanvas(Math.max(1, Math.ceil(w)), Math.max(1, Math.ceil(h))), g = opts ? c.getContext('2d', opts) : c.getContext('2d');
     return g ? { c, g } : null;
   } catch { return null; }
 }

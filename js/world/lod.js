@@ -46,3 +46,10 @@ export function lodOf(zoom, out) {
   o.zoom = zoom; o.index = i; o.band = BANDS[i]; o.blend = d[i]; o.level = d[1] + d[2] + d[3]; o.nominalIndex = n; o.nominal = BANDS[n];
   return o;
 }
+
+/**
+ * The far/full crossfade of the props that have a far version (a plain block) and a full one: 0 below `far - FAR_BLEND`, 1 above `far + FAR_BLEND`, smooth between, a pure function of the zoom so a pinch fades the island's props
+ * from blocks to buildings and back and nothing pops at the threshold (the old rule switched every prop at once at FAR_ZOOM). `far` is the threshold (common.js FAR_ZOOM, 0.42 until the tracks' far drawers go and it becomes 0.30).
+ */
+export const FAR_BLEND = 0.04;
+export const farMix = (zoom, far = 0.42) => smooth((zoom - (far - FAR_BLEND)) / (2 * FAR_BLEND));

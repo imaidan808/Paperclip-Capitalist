@@ -37,12 +37,12 @@ export const overlayMethods = {
    * Sizes are worked out from the text's length: close enough to keep two labels apart, and free of any measuring.
    */
   drawOverlay(ctx) {
-    const { W, H } = this, cam = this.cam, z = cam.z, s = qs(clamp(z, 0.75, 1.25)), ox = W / 2 - cam.x * z, oy = H / 2 - cam.y * z, ov = this.overlay, R = this.ovRects || (this.ovRects = new Float64Array(4 * 320));
+    const { W, H } = this, cam = this.cam, z = cam.z, s = qs(clamp(z, 0.75, 1.25)), org = this.origin(), ox = org[0], oy = org[1], kz = this.renderScale() / this.dpr, ov = this.overlay, R = this.ovRects || (this.ovRects = new Float64Array(4 * 320));
     this.labels.setDpr(this.dpr);
     const tags = this.mode === 'world' && z < 0.8;
     let nr = tags ? this.planZoneTags(R) : (this.tagN = 0); const nt = nr, quiet = W < NARROW && nt >= CROWD; // the first `nt` rectangles are the name tags
     for (let i = ov.length - 1; i >= 0; i--) {
-      const o = ov[i]; o.px = o.wx * z + ox; o.py = o.wy * z + oy; o.on = !(o.px < -80 || o.px > W + 80 || o.py < -40 || o.py > H + 40);
+      const o = ov[i]; o.px = o.wx * kz + ox; o.py = o.wy * kz + oy; o.on = !(o.px < -80 || o.px > W + 80 || o.py < -40 || o.py > H + 40);
       if (!o.on) continue;
       const wd = (o.k === 'chip' ? o.n * 6.7 + 14 : o.k === 'tag' ? o.n * 6.8 + 30 : o.k === 'bub' ? o.n * 6.8 + 32 : o.k === 'icon' ? 24 : 58) * s, ht = (o.k === 'bub' ? 28 : o.k === 'icon' ? 24 : o.k === 'tag' ? 20 : o.k === 'bar' ? 11 : 18) * s;
       if (o.lo && tags && (quiet || hitsAny(R, nt, o.px - wd / 2, o.py - ht / 2, o.px + wd / 2, o.py + ht / 2))) { o.on = false; continue; } // a passing note never covers a name tag

@@ -103,3 +103,5 @@ export const hazed = (c, k) => (k > 0.004 ? mix(c, HAZE, k) : c);
 
 // The rounded solids that replace `solid` call by call (T3, docs/RENDER_PLAN.md): re-exported here so the one place a building's form is shaded names its successor.
 export { roundedBox, bevelRadius } from './solids.js';
+// The crisp-edge tools (crisp.js, T5): lineFor, snapWorld, crispRect, sealedFaces, contourFill, inflate, contourWidth and the rest. Re-exported here, beside the rounded solids, so a drawer finds the two kinds of tool in one place.
+export * from './crisp.js';

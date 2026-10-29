@@ -204,26 +204,28 @@ test('on the map, cards that would overlap are pushed apart and kept on the scre
 });
 
 // ---------------------------------------------------------------- the ground cache
-test('the ground is drawn once for a still camera and stamped after that; anything that changes it draws it again', async () => { await withLegacy(async () => {
+test('the ground is stamped from chunks of the exact scale: a still camera bakes them, later frames only stamp, and anything that changes them bakes again (pins the chunk cache of docs/RENDER_PLAN.md section 5; it pinned the one full-window copy)', async () => { await withLegacy(async () => {
   const g = newGame(3); openTo(g, 3);
   const log = stubDom(1000, 640); installOffscreen(log);
   const { World } = await import('../js/world/world.js');
   const session = { game: g, clock: { now: () => g.s.hour, paused: true, speed: 1 } };
   const w = new World({ session, ui: { zone: 1, sel: new Set() }, activate: noop, hover: noop });
   w.host = { getBoundingClientRect: () => ({ width: 1000, height: 640 }) }; w.resize(); w.sync(); w.placePlayer();
-  let direct = 0, cachedPart = 0, live = 0; const dg = w.drawGround.bind(w); w.drawGround = (c, v, mode = 0) => { if (mode === 0) direct++; else if (mode === 1) cachedPart++; else live++; dg(c, v, mode); };
-  w.focusZone(1, false); w.draw(); assert.equal(direct, 1, 'the first frame at a camera is drawn directly (the camera may be moving)'); assert.equal(cachedPart, 0);
-  w.draw(); assert.equal(cachedPart, 1, 'the second, with the camera still, builds the copy'); assert.equal(live, 1, 'and draws what moves on top');
-  w.draw(); w.draw(); assert.equal(cachedPart, 1, 'later frames only stamp it'); assert.equal(live, 3); assert.equal(direct, 1);
-  const ops = (n) => { log.n = 0; for (let i = 0; i < n; i++) w.draw(); return log.n / n; };
-  const stamped = ops(3); w.cam.x += 1; const moving = ops(1);
-  assert.ok(stamped < moving * 0.8, `a stamped frame issues fewer drawing calls than a moving one: ${stamped} against ${moving}`);
-  w.draw(); w.draw(); const before = cachedPart; w.cam.z *= 1.01; w.draw(); w.draw(); assert.equal(cachedPart, before + 1, 'a zoom makes a new copy');
-  const b2 = cachedPart; document.documentElement.dataset.motion = 'reduce'; openTo(g, 4); w.sync(); w.draw(); w.draw(); assert.equal(cachedPart, b2 + 1, 'a district opening makes a new copy'); document.documentElement.dataset.motion = 'auto';
-  const b3 = cachedPart; w.resize(); w.draw(); w.draw(); assert.equal(cachedPart, b3 + 1, 'a resize makes a new copy');
-  const b4 = cachedPart, d4 = direct; document.documentElement.dataset.motion = 'auto'; w.reveal[2] = { t0: w.t, dur: 2600 }; w.draw(); w.draw(); assert.equal(cachedPart, b4, 'no copy while a district is opening (its fog is moving)'); assert.ok(direct > d4, 'it is drawn directly then');
+  let direct = 0, still = 0, live = 0; const dg = w.drawGround.bind(w); w.drawGround = (c, v, mode = 0) => { if (mode === 0) direct++; else if (mode === 1) still++; else live++; dg(c, v, mode); };
+  w.gcRest = 0; w.gcFade = 0; // (the scale must rest 90 ms before chunks are baked at it; a test that draws in a loop says it has)
+  const settle = (n = 80) => { for (let i = 0; i < n; i++) { w.draw(); if (w.gcValid) break; } return w.gcValid; };
+  w.focusZone(1, false); w.draw(); assert.ok(w.gc && w.gc.size > 0, 'the first frame bakes at least one chunk (progress is guaranteed)'); assert.equal(direct, 0, 'and no frame draws the whole ground directly while chunks can be made'); assert.equal(live, 1, 'what moves is drawn live over them');
+  assert.ok(settle(), 'a still camera bakes every visible chunk'); const baked = w.gc.stats.baked, cells = w.gc.size;
+  still = 0; w.draw(); w.draw(); w.draw(); assert.equal(w.gc.stats.baked, baked, 'later frames only stamp'); assert.equal(still, 0, 'the ground layers are not called'); assert.equal(live, live, '');
+  w.cam.x += 1; w.draw(); w.draw(); assert.ok(w.gc.stats.baked - baked <= 3, 'a one pixel pan bakes at most the cells its edge uncovers: ' + (w.gc.stats.baked - baked));
+  const snap0 = w.snap.slice(); assert.ok(Number.isInteger(snap0[0]) && Number.isInteger(snap0[1]), 'the camera translation is whole device pixels: ' + snap0);
+  w.cam.x += 700; w.clampCam(); const b1 = w.gc.stats.baked; settle(); assert.ok(w.gc.stats.baked > b1, 'a pan of a window bakes the cells it reveals');
+  const b2 = w.gc.stats.baked; w.gcBudget = [0, 0]; w.cam.z *= 1.01; w.draw(); assert.ok(w.gc.stats.stale > 0, 'a zoom is first shown from the chunks of the scale before (when the frame has no time to bake them all)'); w.gcBudget = null; settle(); assert.ok(w.gc.stats.baked > b2, 'and a new scale is baked once the zoom rests'); assert.equal(w.gc.size <= 80, true, 'the store is capped: ' + w.gc.size);
+  const sizeBefore = w.gc.size; document.documentElement.dataset.motion = 'reduce'; openTo(g, 4); w.sync(); w.draw(); assert.ok(w.gc.size < sizeBefore, 'a district opening drops every chunk (the ground it shows has changed)'); settle(); document.documentElement.dataset.motion = 'auto';
+  const b3 = w.gc.stats.baked; w.resize(); settle(); assert.equal(w.gc.stats.baked, b3, 'a resize keeps the chunks: they are cut by scale, not by window');
+  const d4 = direct; w.reveal[2] = { t0: w.t, dur: 2600 }; w.draw(); w.draw(); assert.ok(direct > d4, 'a district that is opening is drawn directly (its fog moves)');
   delete w.reveal[2];
-  assert.deepEqual(faults(w), []); delete globalThis.OffscreenCanvas;
+  assert.deepEqual(faults(w), []); w.release(); assert.equal(w.gc, null, 'release gives the chunks back'); delete globalThis.OffscreenCanvas;
   });
 });
 
@@ -243,7 +245,7 @@ test('the cached ground puts every moving decal on top: water and pulses are dra
   w.host = { getBoundingClientRect: () => ({ width: 1000, height: 640 }) }; w.resize(); w.sync(); w.placePlayer();
   const kinds = []; const dd = w.drawDecal.bind(w); w.drawDecal = (c, d, z, k, part = 0) => { kinds.push(d.k + ':' + part); dd(c, d, z, k, part); };
   let id = 0; for (const z of [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]) if (DIST[z].decals.some((d) => d.k === 'water' || d.k === 'pulse')) { id = z; break; }
-  assert.ok(id, 'some district has a moving decal'); w.focusZone(id, false); w.draw(); w.draw(); kinds.length = 0; w.draw();
+  assert.ok(id, 'some district has a moving decal'); w.gcRest = 0; w.focusZone(id, false); for (let i = 0; i < 80 && !w.gcValid; i++) w.draw(); w.draw(); kinds.length = 0; w.draw();
   assert.ok(kinds.length > 0 && kinds.every((k) => k.endsWith(':2')), 'a stamped frame draws only the live part of the moving decals: ' + [...new Set(kinds)].join());
   delete globalThis.OffscreenCanvas;
   });

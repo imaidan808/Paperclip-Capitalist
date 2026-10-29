@@ -1,4 +1,4 @@
-// The layer stack (js/world/stack.js): the table of layers, the flags that choose a legacy or a V2 drawer, and the runner. The default build runs every legacy drawer.
+// The layer stack (js/world/stack.js): the table of layers, the flags that choose a legacy or a V2 drawer, and the runner. The default build runs every V2 drawer (the merged art tracks); ?layers=all:legacy is the old picture.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { LAYERS, FLAGS, IMPLS, registerLayer, registerProp, propV2, propKindsV2, staticLayerOf, BUILDING_KINDS, setFlag, setFlags, slotFor, layerInfo, runLayer } from '../js/world/stack.js';
@@ -11,15 +11,15 @@ function fakeWorld() {
   return new Proxy(w, { get: (o, k) => (k in o ? o[k] : (...a) => { calls.push([String(k), ...a]); }) });
 }
 const reset = () => { for (const L of LAYERS) setFlag(L.id, 'legacy'); };
-/** The layers whose V2 drawer is the default build's (the T1 ground and sea: stack.js V2_DEFAULT). Everything else starts legacy. */
-const V2_AT_START = new Set(['sea', 'shore', 'terrain', 'roads', 'blocks', 'livedecals']);
+/** Every layer's flag is v2 in the default build (stack.js V2_DEFAULT: the merged art tracks). The two static layers (bridge: T5) have no whole-layer drawer: their V2 is per kind (registerProp), so their slot stays the frame's. */
+const V2_AT_START = new Set(LAYERS.map((l) => l.id));
 
-test('the table: every layer has a unique id, an owner T1 to T5, a space and a stage; and the build starts with the T1 ground and sea on V2 and every other flag on legacy', () => {
+test('the table: every layer has a unique id, an owner T1 to T5, a space and a stage; and the build starts with every flag on v2', () => {
   const ids = LAYERS.map((l) => l.id);
   assert.equal(new Set(ids).size, ids.length);
   for (const L of LAYERS) {
     assert.match(L.owner, /^T[1-5]$/, L.id); assert.ok(['screen', 'world', 'inherit'].includes(L.space), L.id); assert.ok(['sea', 'ground', 'things', 'air', 'screen'].includes(L.stage), L.id); assert.equal(typeof L.legacy, 'function');
-    assert.equal(FLAGS[L.id], V2_AT_START.has(L.id) ? 'v2' : 'legacy', `${L.id} must start as ${V2_AT_START.has(L.id) ? 'v2' : 'legacy'}`); assert.equal(slotFor(L.id).impl, V2_AT_START.has(L.id) ? 'v2' : 'legacy'); assert.equal(layerInfo(L.id), L);
+    assert.equal(FLAGS[L.id], V2_AT_START.has(L.id) ? 'v2' : 'legacy', `${L.id} must start as ${V2_AT_START.has(L.id) ? 'v2' : 'legacy'}`); assert.equal(slotFor(L.id).impl, L.bridge ? 'legacy' : 'v2', `${L.id}: a layer with its own V2 drawer runs it; a bridged static layer is drawn per kind`); assert.equal(layerInfo(L.id), L);
   }
   assert.deepEqual([...IMPLS], ['legacy', 'v2']);
 });
@@ -50,7 +50,7 @@ test('a V2 drawer is used only while its flag says v2, with the space it asked f
   assert.equal(setFlag('sea', 'v2'), 'v2'); w.calls.length = 0;
   runLayer('sea', w, {}, {}, 'subject'); assert.deepEqual(seen, [['v2 sea', 'env', 'subject']]); assert.deepEqual(w.calls, ['toWorld'], 'the V2 sea is drawn in world space');
   assert.equal(setFlag('sea', 'legacy'), 'legacy'); w.calls.length = 0; runLayer('sea', w, {}, {}); assert.equal(w.calls[0], 'toScreen');
-  setFlag('grade', 'v2'); assert.equal(slotFor('grade').impl, 'legacy', 'a layer with no V2 stays legacy even when flagged');
+  setFlag('static-bldg', 'v2'); assert.equal(slotFor('static-bldg').impl, 'legacy', 'a layer with no whole-layer V2 stays legacy even when flagged (its kinds register one by one)');
   assert.throws(() => setFlag('sea', 'v3'), /legacy or v2/); assert.throws(() => setFlag('nope', 'v2'), /no layer/);
   reset();
 });

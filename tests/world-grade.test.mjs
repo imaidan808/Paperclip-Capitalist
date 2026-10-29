@@ -85,8 +85,8 @@ test('every hour is bright enough: the tint over the world\'s own colours keeps 
 });
 
 test('the V2 grade layer is registered in screen space and one Grade is made for each world', () => {
-  assert.equal(slotFor('grade').impl, 'legacy', 'the default build is still the old grade'); setFlag('grade', 'v2');
-  try { assert.equal(slotFor('grade').impl, 'v2'); assert.equal(slotFor('grade').space, 'screen'); } finally { setFlag('grade', 'legacy'); }
+  assert.equal(slotFor('grade').impl, 'v2', 'the default build is the new grade'); assert.equal(slotFor('grade').space, 'screen'); setFlag('grade', 'legacy');
+  try { assert.equal(slotFor('grade').impl, 'legacy'); } finally { setFlag('grade', 'v2'); }
   const w = { light: { perFrame: 3 } }, g = gradeOf(w); assert.strictEqual(gradeOf(w), g); assert.equal(g.perFrame, 3); assert.notStrictEqual(gradeOf({}), g); assert.ok(releaseAll() >= 0);
 });
 

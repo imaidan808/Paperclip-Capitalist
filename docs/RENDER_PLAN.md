@@ -263,7 +263,7 @@ What follows from them, and what the tracks may and may not do. **A bank of clou
   ],
   "spritePixelsAtDsf2": 12000000,
   "spriteBudgetBase": 8000000,
-  "spriteBudgetNow": 22000000
+  "spriteBudgetNow": 8000000
 }
 ```
 
@@ -361,7 +361,11 @@ Why the splits fall where they do. `kits.js` is T3's because it names the buildi
     "iso.js",
     "shading.js",
     "props.js",
-    "props-common.js"
+    "props-common.js",
+    "chunkcache.js",
+    "seal.js",
+    "governor.js",
+    "crisp.js"
   ],
   "later": {
     "camera-input.js": "T5"
