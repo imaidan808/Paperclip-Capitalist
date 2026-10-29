@@ -256,7 +256,7 @@ test('coachHTML: the tab is a button that opens the card, the opened card has Fo
 // scrolled so the control is in the middle of it, or only just in view), the card is given time to settle (it looks again every 200 ms and glides for 250), and then two things are measured and asserted:
 // the card covers none of the control (0%), and the element under the point of the tap is the control. The hint is made due by moving the clock the Academy reads (performance.now) 30 seconds on.
 
-const CHROME = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+const { CHROME } = await import('../scripts/chrome.mjs');
 const BROWSER = !process.env.PC_NO_BROWSER && existsSync(CHROME);
 const freePort = async () => { const { createServer } = await import('node:net'); return new Promise((res) => { const s = createServer(); s.listen(0, '127.0.0.1', () => { const p = s.address().port; s.close(() => res(p)); }); }); };
 let shared = null;

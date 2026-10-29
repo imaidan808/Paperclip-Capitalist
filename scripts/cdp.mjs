@@ -4,13 +4,14 @@
 import { spawn } from "node:child_process";
 import { writeFileSync, mkdtempSync, rmSync, mkdirSync } from "node:fs";
 import { tmpdir } from "node:os";
-const CH = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
+import { CHROME as CH, chromeArgs } from "./chrome.mjs"; // the Chrome this machine has (CHROME_BIN names one): scripts/chrome.mjs
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 export async function launch(port = 9333) {
   const base = process.env.CHROME_PROFILES || tmpdir();
   mkdirSync(base, { recursive: true });
   const dir = mkdtempSync(base + "/pl-chrome-");
-  const proc = spawn(CH, ["--headless=new", "--disable-gpu", "--hide-scrollbars", "--no-first-run", `--remote-debugging-port=${port}`, `--user-data-dir=${dir}`, "about:blank"], { stdio: "ignore" });
+  if (!CH) throw new Error("No Chrome or Chromium found: set CHROME_BIN to one (scripts/chrome.mjs looks for the usual places)");
+  const proc = spawn(CH, [...chromeArgs(), `--remote-debugging-port=${port}`, `--user-data-dir=${dir}`, "about:blank"], { stdio: "ignore" });
   for (let i = 0; i < 60; i++) { try { const r = await fetch(`http://127.0.0.1:${port}/json/version`); if (r.ok) break; } catch {} await sleep(150); }
   return { port, close: () => { try { proc.kill("SIGKILL"); } catch {} setTimeout(() => { try { rmSync(dir, { recursive: true, force: true }); } catch {} }, 700); } };
 }

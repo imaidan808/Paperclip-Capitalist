@@ -12,13 +12,14 @@ export const BASE = process.env.DIAG_BASE || 'http://localhost:8090';
 export const CDP = +(process.env.DIAG_CDP || 9333);
 export const OUT = process.env.DIAG_OUT || tmpdir() + '/render-diag';
 mkdirSync(OUT, { recursive: true });
-const CH = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+import { CHROME as CH, chromeArgs } from '../chrome.mjs';
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 async function launchChrome(port, gpu) {
   const dir = mkdtempSync(tmpdir() + '/pl-chrome-');
-  const args = ['--headless=new', '--hide-scrollbars', '--no-first-run', `--remote-debugging-port=${port}`, `--user-data-dir=${dir}`, 'about:blank'];
-  if (!gpu) args.splice(1, 0, '--disable-gpu');
+  if (!CH) throw new Error('No Chrome or Chromium found: set CHROME_BIN to one (scripts/chrome.mjs)');
+  const args = [...chromeArgs(), `--remote-debugging-port=${port}`, `--user-data-dir=${dir}`, 'about:blank'];
+  if (gpu) args.splice(args.indexOf('--disable-gpu'), 1);
   const proc = spawn(CH, args, { stdio: 'ignore' });
   for (let i = 0; i < 60; i++) { try { const r = await fetch(`http://127.0.0.1:${port}/json/version`); if (r.ok) break; } catch {} await sleep(150); }
   return { port, pid: proc.pid, close: () => { // the browser's helpers outlive it: end every process of this one profile, by PID (never pkill)

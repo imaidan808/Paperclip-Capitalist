@@ -4,10 +4,8 @@
 //   await tapAt(p, '[data-anchor="dock-crew"]');       the control brought into view the way a finger does it, checked to be what is under the point, then pressed with the real mouse
 // The page is waited for as the NEW document (a marker on the old one), never by a sleep. PC_NO_BROWSER=1 or a missing Chrome: `BROWSER` is false and the tests skip.
 import assert from 'node:assert/strict';
-import { existsSync } from 'node:fs';
-
-export const CHROME = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
-export const BROWSER = !process.env.PC_NO_BROWSER && existsSync(CHROME);
+import { CHROME, BROWSER } from '../../scripts/chrome.mjs';
+export { CHROME, BROWSER };
 /** Two phones and a desktop window at 200% zoom, the sizes the audit measured at; `touch`: a coarse pointer (buttons grow to 44px), which is how a phone sees the page. */
 export const SIZES = [
   { name: '844x390', w: 844, h: 390, dsf: 2, mobile: true, touch: true },

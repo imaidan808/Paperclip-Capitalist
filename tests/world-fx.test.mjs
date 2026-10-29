@@ -294,6 +294,7 @@ test('reduced motion is a still picture: a frame drawn on demand a quarter secon
   try {
     let asked = 0; const raf = globalThis.requestAnimationFrame; globalThis.requestAnimationFrame = () => { asked++; return asked; };
     w.running = true; w.raf = 0; w.vis = true; w.warm = 0; w.slow = 0; w.camTo = null; w.player.path.length = 0;
+    const govern = w.govern.bind(w); w.govern = (cost, gap) => govern(1, gap); // the cost of drawing is the machine's, not the rule's: pinned to 1 ms (a draw in Node on a slow runner takes over SLOW_MS and would step the tier down), so only the gap between frames is judged here
     let ts = 1000; w.last = 0; w.dirty = true; asked = 0; let draws = 0; const d = w.draw.bind(w); w.draw = () => { draws++; d(); };
     for (let i = 0; i < 40; i++) { w.dirty = true; w.last = 0; w.frame(ts += 240); w.gov.cost = Math.max(w.gov.cost, 0); } // the game's clock marks the picture dirty about four times a second: each redraw is a frame on demand, 240 ms after the one before
     assert.equal(draws, 40, 'each is drawn'); assert.equal(w.slow, 0, 'and none is slow: the gap between on-demand frames is not a late frame'); assert.equal(w.gov.prev, 0, 'the previous frame is not remembered as a continuous one');

@@ -769,7 +769,7 @@ test('V2_DESIGN.md keeps the contract and adds an "As built" appendix whose numb
 // 7. The staged site, run in headless Chrome
 // ====================================================================================================================================
 
-const CHROME = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'; // the path scripts/cdp.mjs launches
+const { CHROME } = await import('../scripts/chrome.mjs'); // the Chrome scripts/cdp.mjs launches
 const freePort = () => new Promise((res) => { const s = netServer(); s.listen(0, '127.0.0.1', () => { const p = s.address().port; s.close(() => res(p)); }); });
 
 test('the staged site, served as Pages serves it, boots in Chrome: no console error, no failed request, the title screen, a game, the Academy, and the 404 page', { timeout: 150000 }, async (t) => {

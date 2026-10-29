@@ -12,7 +12,7 @@ import { createServer } from 'node:http';
 import { createServer as net } from 'node:net';
 import { fileURLToPath } from 'node:url';
 
-const CHROME = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', BROWSER = !process.env.PC_NO_BROWSER && existsSync(CHROME);
+const { CHROME } = await import('../scripts/chrome.mjs'), BROWSER = !process.env.PC_NO_BROWSER && existsSync(CHROME);
 const freePort = () => new Promise((res) => { const s = net(); s.listen(0, '127.0.0.1', () => { const p = s.address().port; s.close(() => res(p)); }); });
 const SCRIPT = fileURLToPath(new URL('../scripts/world-raster.mjs', import.meta.url));
 

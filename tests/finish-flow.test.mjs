@@ -319,7 +319,7 @@ test('openDealOf: what is on the table, as ids, for the card; null when no Deal 
 // Walks sell, buy, auction and repair deals with Tab, Shift+Tab, Enter and Space at 390x844, 360x640, 844x390, 1024x768 and 200% zoom (640x360 at two device pixels to the CSS pixel), and checks
 // after EVERY press that the control the cursor is on is fully visible: its ring inside the sheet's visible band (above the sticky foot, below the top edge), inside the viewport, and not
 // covered. PC_VIEWPORTS=844x390,640x360@2 narrows it; PC_CDP is the DevTools port (default 9801). Needs Google Chrome (scripts/cdp.mjs). It takes a few minutes for the whole matrix.
-const CHROME = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+const { CHROME } = await import('../scripts/chrome.mjs');
 const BROWSER = process.env.PC_BROWSER === '1' && existsSync(CHROME);
 const VIEWPORTS = (process.env.PC_VIEWPORTS || '390x844,360x640,844x390,1024x768,640x360@2').split(',').map((v) => { const [wh, dsf = '1'] = v.split('@'), [w, h] = wh.split('x'); return { w: +w, h: +h, dsf: +dsf, name: v }; });
 /** In the page: where the cursor is, and whether it is fully visible. Anything but { ok: true } is a fault; the Tab that wraps past the dialog to the browser's own chrome is not one. */

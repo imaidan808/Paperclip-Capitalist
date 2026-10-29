@@ -290,7 +290,7 @@ test('L7: main.js asks before it starts a run over a saved one, and the draft\'s
   assert.match(read('docs/ARCHITECTURE.md'), /Keep both: park the solo run under a second key/);
 });
 
-const CHROME = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+const { CHROME } = await import('../scripts/chrome.mjs');
 const freePort = () => new Promise((res) => { const s = netServer(); s.listen(0, '127.0.0.1', () => { const p = s.address().port; s.close(() => res(p)); }); });
 
 test('L7: in Chrome, Join then Begin over a saved solo run asks first; Keep leaves the save and the draft; Replace begins in the room and writes the new run', { timeout: 120000 }, async (t) => {

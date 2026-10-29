@@ -824,7 +824,7 @@ test('a Safari gesture that reports 0,0 in a window whose canvas fills it goes a
 // ================================================================ the browser: what only the real page's structure shows
 // The wheel and gesture listeners are on the canvas, which has no children, and the HUD, the drawers, the dialogs and the camera buttons are elements above it: so their wheel never
 // reaches the canvas. The stand-in tests above hold the code; this holds the structure, in headless Chrome (skipped where there is no Chrome, or with PC_NO_BROWSER=1).
-const CHROME = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+const { CHROME } = await import('../scripts/chrome.mjs');
 const BROWSER = !process.env.PC_NO_BROWSER && existsSync(CHROME);
 const freePort = () => new Promise((res) => { const s = netServer(); s.listen(0, '127.0.0.1', () => { const p = s.address().port; s.close(() => res(p)); }); });
 

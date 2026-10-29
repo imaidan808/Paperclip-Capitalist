@@ -179,7 +179,7 @@ test('who measures: dlg on open and on resize, the Crew dialog after it repaints
 });
 
 // ------------------------------------------------------------------ 3: the real keyboard
-const CHROME = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+const { CHROME } = await import('../scripts/chrome.mjs');
 const BROWSER = !process.env.PC_NO_BROWSER && existsSync(CHROME);
 const ALL = [{ name: '1024x768', w: 1024, h: 768, dsf: 1, mobile: false }, { name: '844x390@3', w: 844, h: 390, dsf: 3, mobile: true }, { name: '360x640@3', w: 360, h: 640, dsf: 3, mobile: true }, { name: '640x360@2', w: 640, h: 360, dsf: 2, mobile: true }];
 const VIEWPORTS = process.env.PC_FEET_VIEWPORTS ? ALL.filter((v) => process.env.PC_FEET_VIEWPORTS.split(',').includes(v.name)) : ALL;

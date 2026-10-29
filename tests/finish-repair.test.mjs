@@ -567,7 +567,7 @@ test('round 2 A2: the sale card says what "the crate\'s value" is: the market va
 // The browser half: the faults that only a real window shows (real clicks, real Tab, real layout)
 // ====================================================================================================================================
 
-const CHROME = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+const { CHROME } = await import('../scripts/chrome.mjs');
 const BROWSER = !process.env.PC_NO_BROWSER && existsSync(CHROME);
 const freePort = async () => { const { createServer } = await import('node:net'); return new Promise((res) => { const s = createServer(); s.listen(0, '127.0.0.1', () => { const p = s.address().port; s.close(() => res(p)); }); }); };
 let shared = null;
