@@ -46,17 +46,42 @@ export function presetOf(a) {
   return 'custom';
 }
 /**
- * Off mutes. Every other preset is a request to hear something, so it unmutes and puts the volume at 70: a menu that left Mute on and snapped back to "Off" after the player chose Full was a trap
- * (the only way out was a different control). Returns a new object.
+ * Off mutes. Every other preset is a request to hear something, so it unmutes: a menu that left Mute on and snapped back to "Off" after the player chose Full was a trap (the only way out was a
+ * different control). The volume is the player's own and stays where they put it (a player who turned it down to 30 and chose "Classroom (quieter)" must not get a louder game); only a volume of
+ * 0, which would make "Full" silent, goes to 70. Returns a new object.
  */
 export function applyPreset(a, name) {
   const next = { ...a, touched: true };
   if (name === 'off') next.mute = true;
-  else if (PRESETS[name]) { Object.assign(next, PRESETS[name]); next.master = 70; next.mute = false; }
+  else if (PRESETS[name]) { Object.assign(next, PRESETS[name]); next.mute = false; if (!(next.master > 0)) next.master = 70; }
   return next;
 }
 /** Can anything be heard at all? Not muted, not at volume 0, and at least one of the two buses on. */
 export const audible = (a) => !a.mute && a.master > 0 && (a.ui || a.game);
+/**
+ * The one switch of the speaker button, key M and the Deal Room's toggle: what the settings, the words and the "ok" are after a press. Pure. It is truthful about what the press does:
+ * sound that can be heard is muted; sound that is muted is unmuted, and at volume 0 that is brought back to 70 (the rule of a preset; an "on" that nobody can hear is a broken speaker to the player)
+ * and said ("Sound on at 70 percent."); with Interface and Game both off there is nothing to mute and nothing a speaker can turn on, so nothing changes and the words say why.
+ * Returns { next, said, hears, changed }: `hears` is whether the "ok" of unmuting can be heard.
+ */
+export function toggleMute(a) {
+  const mute = a.mute === true, master = Number.isFinite(+a.master) ? +a.master : 70, ui = a.ui !== false, game = a.game !== false; // a missing field is the default
+  if (!mute && master > 0) {
+    if (!ui && !game) return { next: a, said: 'Interface sounds and game sounds are both off. Turn one on under Display and sound.', hears: false, changed: false };
+    return { next: { ...a, mute: true, touched: true }, said: 'Sound off.', hears: false, changed: true };
+  }
+  const raised = !(master > 0), next = { ...a, mute: false, touched: true, master: raised ? 70 : master };
+  const said = raised ? 'Sound on at 70 percent.' : !ui && !game ? 'Sound on, but interface sounds and game sounds are both off.' : 'Sound on.';
+  return { next, said, hears: ui || game, changed: true };
+}
+/** The speaker button's state in words: pressed only when something can be heard, and a title that says what a press does (7.3). */
+export function speakerState(a) {
+  const master = Number.isFinite(+a.master) ? +a.master : 70;
+  if (a.mute === true) return { on: false, title: 'Sound is off. Press to turn on (M)' };
+  if (!(master > 0)) return { on: false, title: 'Volume is at 0. Press to turn it up (M)' };
+  if (a.ui === false && a.game === false) return { on: false, title: 'Interface sounds and game sounds are both off (Display and sound)' };
+  return { on: true, title: 'Sound is on. Press to mute (M)' };
+}
 /** `?sound=off|quiet|full`, read before the first save and only while `touched` is false. An instructor can put it in the student link. */
 function fromAddress(a, search) {
   if (a.touched || !search) return a;
@@ -199,6 +224,24 @@ export function whyQuiet(a) {
   if (!a.ui && !a.game) return 'Interface sounds and game sounds are both off: switch one on to hear the test.';
   return '';
 }
+/**
+ * Why a press on the audition page, or any play, was not heard: the engine's drop reason (`audio.stats().dropped`) in words, from the settings that caused it. Used by dev/sounds.js; a person
+ * who presses a card and hears nothing is told which rule held it back, and never has to guess that the button or the sound is broken.
+ */
+export function whyDropped(reason, a, info = {}) {
+  const bus = info.bus === 'ui' ? 'Interface' : 'Game';
+  switch (reason) {
+    case 'mute': return a.mute ? 'Mute is on.' : 'Volume is at 0.';
+    case 'bus': return (info.id === 'world.hover' || info.id === 'world.step') && a.worldTicks === false ? 'World ticks are off.' : `${bus} sounds are off.`;
+    case 'quiet': return 'The Classroom rule leaves out tiny game sounds.';
+    case 'locked': return 'The audio engine is not running yet (press anywhere once), or the tab is hidden.';
+    case 'bucket': return 'Too many sounds in the last moment; wait a second.';
+    case 'cooldown': return 'The same sound just played (its cooldown, or a refusal repeated within 2 seconds).';
+    case 'cap': return 'Twelve sounds are already playing.';
+    case 'osc': return 'Too many oscillators are alive at once.';
+    default: return reason ? `The engine held it back (${reason}).` : 'The engine returned nothing.';
+  }
+}
 /** The test sound: a click, then the warning, then coins, so the last thing heard is the good one. */
 export const TEST_STEPS = [[0, 'ui.tick', { variant: 'full' }], [600, 'alert.advance', { variant: 'l1' }], [1300, 'cash.in', { size: 'm' }]];
 export const TEST_MS = 1300 + 900;
@@ -245,6 +288,8 @@ export function bindAudioSettings(root, deps) {
     for (const [ms, id, o] of TEST_STEPS) setTimeout(() => audio.play?.(id, o), ms);
     setTimeout(() => { testing = false; }, TEST_MS);
   };
-  const off = audio.on?.((what) => { if (!root.isConnected) { off?.(); return; } if (what === 'state' || what === 'mute' || what === 'settings') { const st = root.querySelector('#s-status'); if (st) st.textContent = statusText(A(), audio.state); } });
+  // Key M, the speaker button and the Deal Room's switch change the settings while the section is open: every control follows, not only the status line (a Mute box that stayed unchecked under
+  // "Sound is off." made the next click on it do the opposite of what it said)
+  const off = audio.on?.((what) => { if (!root.isConnected) { off?.(); return; } if (what === 'state' || what === 'mute' || what === 'settings') refresh(); });
   return { redraw: refresh };
 }

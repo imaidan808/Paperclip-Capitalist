@@ -97,7 +97,7 @@ test('migrateAudio: defaults, old saves, junk, the address and the presets', () 
 });
 test('joining a room applies Classroom and leaving puts the earlier values back', () => {
   const a = { ...audioDefaults(), master: 55 };
-  const j = joinRoom(a); assert.ok(j.next.quiet && j.next.master === 70 && !j.next.touched);
+  const j = joinRoom(a); assert.ok(j.next.quiet && j.next.master === 55 && !j.next.touched, 'the Classroom rule is not a volume: the player\'s own stays');
   assert.deepEqual(leaveRoom(j.next, j.before), { ...a }, 'restored');
   assert.deepEqual(leaveRoom({ ...j.next, master: 30 }, j.before).master, 30, 'not when a setting was changed meanwhile');
   assert.equal(joinRoom({ ...a, touched: true }), null, 'never for a player who touched a sound setting');

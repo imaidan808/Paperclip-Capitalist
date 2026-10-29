@@ -1,7 +1,7 @@
 // The engine (docs/AUDIO.md section 3 and 8.2): one AudioContext for the page, the buses and the master chain, the voice manager, rank-aware cooldowns, token buckets, ducking, the collector,
 // the settings sync, the ambient bed and the repair dial tone. Nothing here touches the DOM, and the context comes from an injected factory, so a recording fake context tests all of it in
 // Node. With Web Audio missing, or any failure, `state` is 'unsupported' and every method returns without throwing. With sound idle there is no timer and no frame callback.
-import { voice, master, dB, hz, MAKEUP_FALLBACK, FAMILY_MS, keptPartials, moneySize } from './palette.js';
+import { voice, master, dB, hz, MAKEUP_FALLBACK, FAMILY_MS, layerSpans, isGhost, moneySize } from './palette.js';
 import { RECIPES, IDS, layersFor, tierOf, firstVariant, variantsOf, cooldownOf, variantRank, trimFor, isMoment, PREEMPT } from './recipes.js';
 import { createAmbient, oneShotLayers } from './ambient.js';
 import { TRIMS } from './trims.js';
@@ -20,7 +20,23 @@ function makeBucket([rate, burst]) {
   const refill = (t) => (last == null ? tokens : Math.min(burst, tokens + (t - last) / 1000 * rate));
   return { can: (t) => refill(t) >= 1, take(t) { tokens = refill(t); last = t; if (tokens >= 1) { tokens -= 1; return true; } return false; }, tokens: () => tokens };
 }
-const oscCount = (layers) => layers.reduce((n, L) => n + (L.k === 'tone' ? (L.uni ? L.uni[0] : 1) + (L.vib ? 1 : 0) : L.k === 'bank' ? keptPartials(L).length : 1 + (L.am ? 2 : 0)), 0);
+/** The layers a voice really builds: `voice()` leaves out a layer whose family is in `skip`, a texture layer of a secondary voice and a ding of a dull one. The oscillator budget counts these. */
+const builtLayers = (layers, skip, o) => layers.filter((L) => !(L.fam && skip.has(L.fam)) && !(o.secondary && isGhost(L)) && !(o.dull && L.ding));
+/** The spans ([from, to, count], in ms of the page's clock) of a voice that starts at `startMs`. */
+const spansOf = (layers, startMs) => layers.flatMap(layerSpans).map(([a, b, n]) => [startMs + a * 1000, startMs + b * 1000, n]);
+/**
+ * The most oscillators alive at one instant when `mine` is added to `others` (docs/AUDIO.md 3.3), looking only at the instants when `mine` has any alive: a sound that starts when the others
+ * have ended does not share the budget with them, however long the group they belong to is. Spans that end where another begins do not overlap.
+ */
+function peakAlive(others, mine) {
+  const ev = [];
+  for (const [a, b, n] of others) ev.push([a, n, 0], [b, -n, 0]);
+  for (const [a, b, n] of mine) ev.push([a, n, 1], [b, -n, 1]);
+  ev.sort((x, y) => x[0] - y[0] || x[1] - y[1]); // at one instant the ends come before the starts
+  let o = 0, m = 0, pk = 0;
+  for (const [, n, own] of ev) { if (own) m += n; else o += n; if (m > 0 && o + m > pk) pk = o + m; }
+  return pk;
+}
 const clamp = (x, lo, hi) => Math.min(hi, Math.max(lo, x));
 const DEFAULT_SETTINGS = { master: 70, mute: false, ui: true, game: true, ambient: false, ambientLevel: 70, dial: false, clockSounds: true, quiet: false, worldTicks: true };
 
@@ -122,12 +138,14 @@ export function createAudio(cfg = {}) {
     const t = nowMs();
     for (let i = voices.length - 1; i >= 0; i--) if (voices[i].endMs <= t) voices.splice(i, 1);
   }
-  const liveOsc = () => voices.reduce((n, v) => n + v.osc, 0);
+  /** What the voices already admitted keep alive inside [from, to] (a group that is stopped has had its spans cut short by `stopGroup`). */
+  const spansIn = (from, to, extra) => { const out = []; for (const g of voices) for (const sp of g.spans) if (sp[0] < to && sp[1] > from) out.push(sp); for (const sp of extra) if (sp[0] < to && sp[1] > from) out.push(sp); return out; };
   function stopGroup(g, fadeSec) {
     if (!g || g.stopped) return;
     g.stopped = true;
     for (const v of g.voices) { try { v.stop(ctxNow(), fadeSec); } catch { /* gone */ } }
     g.endMs = Math.min(g.endMs, nowMs() + fadeSec * 1000 + 30);
+    for (const sp of g.spans) sp[1] = Math.min(sp[1], g.endMs); // a stopped voice's oscillators are alive for its fade and no longer
   }
   function duck(bus, tier, depthDb, holdMs, atkMs = 40, relMs = LIMITS.DUCK_REL) { // the deepest active duck on a node wins; ducks are not summed
     const node = bus === 'amb' ? nodes.ambDuck : nodes[bus]?.[tier];
@@ -170,6 +188,7 @@ export function createAudio(cfg = {}) {
     const reason = gate(mainE, mainId, mainOpts);
     if (reason) return drop(reason);
     const plan = ms.map(([id, o]) => { const e = RECIPES[id], opts = { ...base, ...o }, variant = variantFor(e, id, opts); return { id, e, opts, variant, tier: tierOf(id, variant) }; });
+    const mainPan = Number.isFinite(+mainOpts.pan) ? clamp(+mainOpts.pan, -1, 1) : 0; // the members of one mix share the cause's place unless they have their own
     const heavy = plan.reduce((a, b) => (PRI[b.tier] > PRI[a.tier] ? b : a));
     const main = plan[0];
     // per-sound cooldown, with the rank rule (3.4.3): a higher rank inside the cooldown of a lower variant plays and stops it; equal or lower is dropped
@@ -212,7 +231,7 @@ export function createAudio(cfg = {}) {
     if (replace) stopGroup(replace, 0.08);
     wake();
     const snapshot = { ...famLast }; // layer families do not stack: the later voice skips a layer whose family started inside its window, which is also the money group's rule for coins
-    const group = { id: main.id, variant: main.variant, tier: heavy.tier, startMs: t + extraDelay * 1000, endMs: t, voices: [], moment, osc: 0, stopped: false };
+    const group = { id: main.id, variant: main.variant, tier: heavy.tier, startMs: t + extraDelay * 1000, endMs: t, voices: [], moment, osc: 0, spans: [], stopped: false };
     const startT = ctxNow() + LIMITS.LEAD;
     for (const m of plan) {
       const k = Number.isInteger(m.opts.poolIndex) && m.opts.poolIndex >= 0 && m.opts.poolIndex < (m.e.pool || 1) ? m.opts.poolIndex : pickPool(m.e, m.id + '#' + m.variant); // poolIndex: a member asked for by name (the audition page)
@@ -227,19 +246,31 @@ export function createAudio(cfg = {}) {
         if (recentHeads.some((h) => h.f === head.f)) shift += 0.03 + random() * 0.015;
         recentHeads.push({ f: head.f, t });
       }
-      const osc = oscCount(layers);
-      if (liveOsc() + group.osc + osc > LIMITS.OSCILLATORS) { skip.add('sparkle'); layers = layers.filter((L) => L.fam !== 'sparkle'); if (m.tier === 'tiny') continue; }
+      // The oscillator budget (3.3) counts what is alive at the same instant: this voice's built layers (not those it will leave out) against the spans of the voices already admitted, each from its
+      // own start (a second sentence at +500 ms or a tick at +2 s is not alive at the time of the first). Over it, the optional sparkle goes; a tiny sound that still does not fit is dropped.
+      const startMs = t + (LIMITS.LEAD + shift) * 1000, mo = { secondary: m.opts.secondary, dull: m.opts.dull };
+      let spans = spansOf(builtLayers(layers, skip, mo), startMs);
+      const total = (sp) => sp.reduce((n, x) => n + x[2], 0);
+      const over = (sp) => { // the plain sum is the quick answer; the sweep only runs when the sum is over
+        const others = spansIn(Math.min(...sp.map((x) => x[0])), Math.max(...sp.map((x) => x[1])), group.spans);
+        return total(sp) + total(others) > LIMITS.OSCILLATORS && peakAlive(others, sp) > LIMITS.OSCILLATORS;
+      };
+      if (spans.length && over(spans)) {
+        skip.add('sparkle'); layers = layers.filter((L) => L.fam !== 'sparkle'); spans = spansOf(builtLayers(layers, skip, mo), startMs);
+        if (m.tier === 'tiny' && spans.length && over(spans)) { drop('osc'); continue; }
+      }
+      const osc = total(spans);
       const s = eff();
       let gainDb = (m.opts.gainDb || 0) + refuseDb + (m.opts.where === 'elsewhere' ? -8 : m.opts.where === 'offscreen' ? -4 : 0);
       if (s.quiet) gainDb += m.e.bus === 'ui' ? -6 : -10;
       const lp = m.opts.where === 'elsewhere' ? 2500 : m.opts.where === 'offscreen' ? 3500 : m.opts.lp || 0;
       const bus = m.e.bus, dest = m.opts.noDuck || m.tier === 'loud' || bus === 'amb' ? chain.buses[bus] : nodes[bus][m.tier];
-      const pan = Number.isFinite(+m.opts.pan) ? clamp(+m.opts.pan, -1, 1) : 0;
+      const pan = Number.isFinite(+m.opts.pan) ? clamp(+m.opts.pan, -1, 1) : mainPan; // the coins and the streak of a sale sound where the sale does (3.6); a member that must stay centred says `pan: 0`
       let v;
       try {
         v = voice(ctx, dest, layers, startT + shift, { seed: ++seedN, trim: trimFor(m.id, m.variant, k), gainDb, pan, jit: sharedJitter(t), skip, secondary: m.opts.secondary, dull: m.opts.dull, lp });
       } catch (e) { logOnce('recipe ' + m.id, e); continue; }
-      group.voices.push(v); group.osc += osc;
+      group.voices.push(v); group.osc += osc; group.spans.push(...spans);
       for (const fam of v.fams) famLast[fam] = t;
       group.endMs = Math.max(group.endMs, t + (v.end - ctxNow()) * 1000);
       const ckey = m.e.perVariant ? m.id + '#' + m.variant : m.id;
@@ -404,7 +435,7 @@ export function createAudio(cfg = {}) {
     setAmbientLevel(v) { const a = get(); if (a) a.ambientLevel = clamp(Math.round((+v || 0) / 5) * 5, 0, 100); api.sync(); },
     setDial(on) { const a = get(); if (a) a.dial = !!on; api.sync(); },
     setClockSounds(on) { const a = get(); if (a) a.clockSounds = !!on; api.sync(); },
-    applyPreset(name) { const a = get(); if (!a) return; const P = { full: { ui: true, game: true, ambient: false, dial: false, clockSounds: true, quiet: false }, classroom: { ui: true, game: true, ambient: false, dial: false, clockSounds: false, quiet: true }, interface: { ui: true, game: false, ambient: false, dial: false, clockSounds: true, quiet: false } }; if (name === 'off') a.mute = true; else if (P[name]) Object.assign(a, P[name], { master: 70, mute: false }); a.touched = true; api.sync(); },
+    applyPreset(name) { const a = get(); if (!a) return; const P = { full: { ui: true, game: true, ambient: false, dial: false, clockSounds: true, quiet: false }, classroom: { ui: true, game: true, ambient: false, dial: false, clockSounds: false, quiet: true }, interface: { ui: true, game: false, ambient: false, dial: false, clockSounds: true, quiet: false } }; if (name === 'off') a.mute = true; else if (P[name]) { Object.assign(a, P[name], { mute: false }); if (!(a.master > 0)) a.master = 70; } a.touched = true; api.sync(); }, // the volume is the player's own (settings.js applyPreset)
     /** The clock-sound hold (3.4.5): true while a dialog, the Deal Room or a lesson is open; false plays the one summed coin. */
     hold(on) {
       on = !!on;

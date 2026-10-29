@@ -3,7 +3,7 @@
 import { PERKS, TOTAL_DAYS, xpForLevel } from '../config.js';
 import { fmtMoney as money } from '../market.js';
 import { esc, settings } from './common.js';
-import { audio } from '../audio/index.js';
+import { audio, speakerState, audioDefaults } from '../audio/index.js';
 
 const lvlBase = xpForLevel; // the engine's level curve (config.js)
 
@@ -26,8 +26,8 @@ const SPEAKER_ON = SPEAKER + '<path d="M11 5.5a3.5 3.5 0 010 5M12.5 3.5a6 6 0 01
 const SPEAKER_OFF = SPEAKER + '<path d="M11.5 6l3.5 4M15 6l-3.5 4" fill="none" stroke="currentColor" stroke-width="1.5"/></svg>';
 export function speakerHTML() {
   if (!audio.supported) return '';
-  const on = !(settings.audio && settings.audio.mute);
-  return `<button class="ibtn" data-act="sound" data-fid="hud-sound" aria-pressed="${on}" aria-label="Sound" title="${on ? 'Sound is on. Press to mute (M)' : 'Sound is off. Press to turn on (M)'}">${on ? SPEAKER_ON : SPEAKER_OFF}</button>`;
+  const { on, title } = speakerState(settings.audio || audioDefaults()); // pressed only when something can be heard: at volume 0 the speaker is not "on"
+  return `<button class="ibtn" data-act="sound" data-fid="hud-sound" aria-pressed="${on}" aria-label="Sound" title="${title}">${on ? SPEAKER_ON : SPEAKER_OFF}</button>`;
 }
 
 export function hudHTML(ctx) {

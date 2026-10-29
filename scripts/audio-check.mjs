@@ -132,6 +132,13 @@ try {
     for (const [pan, d] of Object.entries(pw)) if (Math.abs(d) > 0.1) fail(`pan: ${k} at pan ${pan} is ${f1(d)} dB from the same sound at the centre (an equal-power law is flat to 0.1 dB)`);
   }
 
+  // ---- pan of a mix: a sale at the buyer's place (the coins and the streak ride in its mix) is on that side as far as the equal-power law says, not only its first voice
+  for (const pan of [0.3, 0.6, -0.6]) {
+    const got = await call(`m.saleBalance(${pan})`), law = 20 * Math.log10(Math.tan((pan + 1) * Math.PI / 4));
+    console.log(`sale at pan ${pan}: right minus left ${got == null ? 'none' : f1(got)} dB (the law: ${f1(law)})`);
+    if (got == null || Math.abs(got - law) > 2) fail(`pan: a sale at pan ${pan} is ${got == null ? 'silent' : f1(got) + ' dB right minus left, the law says ' + f1(law)} (the coins and the streak must share the sale's place, 3.6)`);
+  }
+
   // ---- by tier
   console.log('\nby tier (active level dB; peak dBFS; length ms):');
   for (const tier of ['tiny', 'medium', 'loud', 'amb']) {

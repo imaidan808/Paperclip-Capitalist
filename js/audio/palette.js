@@ -124,6 +124,17 @@ export function layer(ctx, out, L, T0, o) {
   throw new Error('unknown layer ' + L.k);
 }
 
+/**
+ * When the oscillators (and noise sources) of one layer are alive, relative to the voice's start: a list of [from, to, count] in seconds. A bank gives one entry per partial, since each partial
+ * ends at its own time. This is what the engine's oscillator budget counts (docs/AUDIO.md 3.3): what is alive at the same instant, not what a voice would hold if it were played all at once.
+ */
+export function layerSpans(L) {
+  const t = L.t || 0, a = Math.max(MIN_ATTACK, L.a ?? 0.003), h = L.h ?? 0, d = L.d ?? 0.2;
+  if (L.k === 'tone') return [[t, t + a + h + d + 0.03, (L.uni ? L.uni[0] : 1) + (L.vib ? 1 : 0)]];
+  if (L.k === 'bank') return keptPartials(L).map(([, , pd]) => [t, t + a + pd + 0.03, 1]);
+  return [[t, t + a + h + d + 0.03, 1 + (L.am ? 2 : 0)]];
+}
+
 /** An equal-power panner passes a centred mono voice at -3.01 dB per side; the voice gain adds that back, so total power is the same at every pan (and the same as with no panner). */
 export const PAN_COMP_DB = 20 * Math.log10(Math.SQRT2);
 
@@ -214,8 +225,15 @@ export const pair = (a, b, t = 0, gap = 0.12, g = 0.4, d = 0.3) => [gls(a, t, g,
 /**
  * The mid body of a refusal or a loss (docs/AUDIO.md 2.2): a laptop speaker has nothing under 150 Hz, so a "no" that lives in the lows is not heard. A sine at D4 (A3 is 220 Hz, under the line) and a knock
  * bandpassed at 300 to 600 Hz put at least 40% of the energy above 250 Hz without touching the low taps that make it read as a "no".
+ * `from`: a loss FALLS, and the falling taps (D3, A2) are under what a laptop plays, so the body carries the fall where it can be heard: the sine steps down from `from` to `note` (A4 to D4 is
+ * a fifth, F#4 to D4 a third) in the time the taps take to fall. Without `from` the body is one held note (a neutral "no", or a body in a sound that is not a loss).
  */
-export const body = (t = 0, g = 0.5, note = 'D4', d = 0.12) => [{ k: 'tone', f: note, t, a: 0.004, d: d * 1.4, g: g * 2 }, { k: 'noise', c: 'pink', t, a: 0.002, d: d * 0.6, g: g * 3, bp: [440, 0.9], main: true }];
+export const body = (t = 0, g = 0.5, note = 'D4', d = 0.12, from = null) => [
+  ...(from
+    ? [{ k: 'tone', f: from, t, a: 0.004, d: d * 0.6, g: g * 1.6 }, { k: 'tone', f: note, t: t + d * 0.45, a: 0.004, d: d * 1.1, g: g * 2 }]
+    : [{ k: 'tone', f: note, t, a: 0.004, d: d * 1.4, g: g * 2 }]),
+  { k: 'noise', c: 'pink', t, a: 0.002, d: d * 0.6, g: g * 3, bp: [440, 0.9], main: true },
+];
 
 // ---- sizing money (2.4): coins carry the size of the sum, on a log scale. The thresholds are the table's: $41, $1,780 and $75,000, and a deal worth a fifth of everything you have is a step bigger.
 export const MONEY_STEPS = [41, 1780, 75000];

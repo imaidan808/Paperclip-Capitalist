@@ -317,7 +317,7 @@ test('a student who joins a room gets Classroom with one toast, the earlier valu
   const toastsSeen = [], d = { settings: { audio: { ...audioDefaults(), master: 55 } }, kv, save: () => {}, toast: (m, l) => toastsSeen.push([m, l]) };
   pageKv.clear();
   assert.equal(wire.applyRoomRule(d, true), 'joined');
-  assert.equal(d.settings.audio.quiet, true); assert.equal(d.settings.audio.master, 70); assert.equal(d.settings.audio.touched, false);
+  assert.equal(d.settings.audio.quiet, true); assert.equal(d.settings.audio.master, 55, 'the volume stays where the player put it'); assert.equal(d.settings.audio.touched, false);
   assert.deepEqual(toastsSeen, [[wire.ROOM_TOAST, 'info']]); assert.ok(kv.get(wire.BEFORE_ROOM));
   assert.equal(wire.applyRoomRule(d, true), null, 'once'); assert.equal(toastsSeen.length, 1);
   assert.equal(wire.applyRoomRule(d, false), 'left');

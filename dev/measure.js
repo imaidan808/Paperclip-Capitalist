@@ -4,6 +4,7 @@
 import { voice, master, MAKEUP_FALLBACK, GLUE, dB } from '../js/audio/palette.js';
 import { RECIPES, IDS, variantsOf, tierOf, layersFor, firstVariant } from '../js/audio/recipes.js';
 import { ONE_SHOTS, BED_CASES, buildBed, oneShotLayers } from '../js/audio/ambient.js';
+import { createAudio } from '../js/audio/engine.js';
 
 export const SR = 48000;
 const biq = (x, b, a) => { const y = new Float32Array(x.length); let x1 = 0, x2 = 0, y1 = 0, y2 = 0; for (let i = 0; i < x.length; i++) { const v = b[0] * x[i] + b[1] * x1 + b[2] * x2 - a[1] * y1 - a[2] * y2; x2 = x1; x1 = x[i]; y2 = y1; y1 = v; y[i] = v; } return y; };
@@ -129,6 +130,19 @@ export async function panPower(id, v, pans = [0, 0.02, 0.3, 0.6, 1, -0.6]) {
     out[pan] = 10 * Math.log10(Math.max(1e-20, p) / Math.max(1e-20, ref));
   }
   return out;
+}
+/**
+ * A sale at `pan` through the real engine (its mix, so the coins and the streak ride with it) into a stereo context with the whole master chain: the right channel's power minus the left's, in dB.
+ * An equal-power law puts tan((pan + 1) pi / 4) between the two channels of one voice, and the members of a mix share the cause's place (docs/AUDIO.md 3.6), so the whole burst follows the law.
+ */
+export async function saleBalance(pan, coin = 'xl', rung = 6) {
+  const oc = new OfflineAudioContext(2, SR * 3, SR), settings = { master: 50, mute: false, ui: true, game: true, ambient: false, dial: false, clockSounds: true, quiet: false, worldTicks: true };
+  const audio = createAudio({ get: () => settings, factory: () => oc, now: () => 1000, timers: { set: () => 0, clear() {} }, random: () => 0.5, measure: false });
+  audio.unlock();
+  const played = audio.playMix([['sale.win', { variant: 'w', pan, player: true }], ['cash.in', { size: coin, gainDb: -4 }], ['streak', { params: { n: rung }, gainDb: coin === 'xl' ? 5 : 0 }]], {});
+  if (!played) return null;
+  const b = await oc.startRendering(), pw = [0, 1].map((c) => { const d = b.getChannelData(c); let p = 0; for (let i = 0; i < d.length; i++) p += d[i] * d[i]; return p; });
+  return 10 * Math.log10(Math.max(1e-20, pw[1]) / Math.max(1e-20, pw[0]));
 }
 /** The compressor node's own gain at the glue settings, for a quiet (-30 dBFS) sine: the master chain's makeup undoes exactly this. */
 export async function makeupGain() {

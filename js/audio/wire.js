@@ -6,7 +6,7 @@
 // RULE OF THE GAME: sound never carries hidden information. Nothing here reads `buy.fake`, `inspect.caught`, a lot's truth, a rival's limit or an auction's `surplus`.
 import { audio } from './instance.js';
 import { moneySize } from './palette.js';
-import { joinRoom, leaveRoom, HINT_PAGE_TEXT } from './settings.js';
+import { joinRoom, leaveRoom, toggleMute, HINT_PAGE_TEXT } from './settings.js';
 import { ZONES } from '../config.js';
 
 const calls = (...c) => c.filter(Boolean);
@@ -305,9 +305,10 @@ export function initAudio(d = {}) {
   document.addEventListener('keydown', guard((e) => {
     if ((e.key !== 'm' && e.key !== 'M') || e.ctrlKey || e.metaKey || e.altKey || e.repeat || isField(e.target)) return;
     const a = A(); if (!deps.settings?.audio || a.mKey === false) return; // the shortcut can be switched off (a single-key shortcut with no way out fails WCAG 2.1.4); the speaker button stays
-    deps.settings.audio = { ...a, mute: !a.mute, touched: true }; deps.save?.();
-    deps.announce?.(deps.settings.audio.mute ? 'Sound off.' : 'Sound on.');
-    if (!deps.settings.audio.mute) { audio.unlock(); audio.play('ui.ok'); }
+    const r = toggleMute(a); // the same switch as the speaker button and the Deal Room's: at volume 0 "on" brings the volume back and says so, and nothing claims a sound nobody can hear
+    if (r.changed) { deps.settings.audio = r.next; deps.save?.(); }
+    deps.announce?.(r.said);
+    if (r.changed && !r.next.mute) { audio.unlock(); if (r.hears) audio.play('ui.ok'); }
   }), opts);
   // 4. the control table
   const info = (el, kind, e) => {
@@ -376,6 +377,7 @@ export function initAudio(d = {}) {
     new MutationObserver(guard((recs) => {
       for (const r of recs) for (const n of r.addedNodes) {
         if (!n.classList || !n.classList.contains('toast')) continue;
+        if (n.dataset && n.dataset.snd) continue; // a toast whose own code plays its sound, or on purpose none (a reward the resolver keeps quiet at speed): the fallback must not ring over that
         const lvl = n.classList.contains('good') ? 'good' : n.classList.contains('warn') ? 'warn' : n.classList.contains('bad') ? 'bad' : 'info';
         const refusal = lvl === 'bad' && !!n.dataset && n.dataset.refusal === '1'; // only a toast that `say(r)` raised for a refused action: an SLA penalty, an overdraft and a news item are states, whoever pressed what a moment ago
         // A toast is the fallback of 3.4.6: it is heard only when nothing else spoke for the same cause. The cause's own sound is a request, which the collector plays one macrotask later, so the toast

@@ -17,7 +17,7 @@ import { hudHTML, trackerHTML, tickerHTML } from './hud.js';
 import { DRAWERS } from './drawers/index.js';
 import { openDeal } from './deal.js';
 import { createWorldView } from './worldview.js';
-import { audio, wireAudio } from '../audio/index.js';
+import { audio, wireAudio, toggleMute } from '../audio/index.js';
 import { createCues } from './audiocues.js';
 import { Progress } from '../meta/progress.js';
 import { fmtMoney as money, fmtPct as pct } from '../market.js';
@@ -239,9 +239,10 @@ export function mountGame(root, S, hooks) {
     pause() { S.setPaused(!S.clock.paused); },
     sound() { // the speaker button: the same switch as key M (js/audio/wire.js), whose sound it plays itself (muting is silent, unmuting is a small "ok")
       const a = settings.audio; if (!a) return;
-      settings.audio = { ...a, mute: !a.mute, touched: true }; applySettings();
-      announce(settings.audio.mute ? 'Sound off.' : 'Sound on.');
-      if (!settings.audio.mute) { audio.unlock(); audio.play('ui.ok'); }
+      const r = toggleMute(a); // at volume 0 "on" brings the volume back and says so; with both buses off nothing changes and the words say why
+      if (r.changed) { settings.audio = r.next; applySettings(); }
+      announce(r.said);
+      if (r.changed && !r.next.mute) { audio.unlock(); if (r.hears) audio.play('ui.ok'); }
       render();
     },
     speed(b) { S.setSpeed(+b.value); },
@@ -287,11 +288,11 @@ export function mountGame(root, S, hooks) {
     progress = new Progress(g(), {
       onComplete(kind, def) {
         const msg = kind === 'quest' ? `Quest complete: ${def.title}` : kind === 'achievement' ? `Achievement: ${def.title}` : `Daily bounty done: ${def.title}`;
-        toast(msg, 'good'); sfx.level(); burst({ power: kind === 'achievement' && def.rarity === 'epic' ? 1.6 : 1 }); announce(msg);
+        toast(msg, 'good', undefined, { own: true }); sfx.level(); burst({ power: kind === 'achievement' && def.rarity === 'epic' ? 1.6 : 1 }); announce(msg);
         // the reward is one more request in the burst that caused it (a sale, a level): the collector (docs/AUDIO.md 3.4.2) picks what is heard
         if (kind === 'quest') audio.request('quest.complete'); else if (kind === 'achievement') audio.request('achievement', { variant: ['common', 'rare', 'epic'].includes(def.rarity) ? def.rarity : 'common', meta: { rarity: def.rarity } }); else audio.request('daily.done');
       },
-      onCodex(entry) { toast(`Codex unlocked: ${entry.title}`, 'info'); sfx.blip(); audio.request('codex.unlock'); },
+      onCodex(entry) { toast(`Codex unlocked: ${entry.title}`, 'info', undefined, { own: true }); sfx.blip(); audio.request('codex.unlock'); },
     });
     g().onEvent = (evt) => {
       progress.onEvent(evt);

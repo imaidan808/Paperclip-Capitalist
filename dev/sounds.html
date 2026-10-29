@@ -12,6 +12,7 @@
   .chip { align-self: flex-start; font-size: .75rem; padding: 1px 8px; border-radius: 999px; border: 1px solid #3d4757; } .chip.loud { border-color: #ffc247; color: #ffc247; } .chip.medium { border-color: #5cd6ff; color: #5cd6ff; } .chip.tiny { color: #9aa7b4; }
   .meaning { color: #e6edf3; } .trig summary { cursor: pointer; color: #9aa7b4; font-size: .85rem; } .trig p { font-size: .85rem; color: #9aa7b4; margin: 4px 0 0; }
   button.all { background: #1f2a1f; } button.pair { text-align: left; }
+  .card.silent, button.silent { border-color: #ff6b6b; } .why { margin: 0; color: #ff9b9b; font-size: .85rem; } .why:empty { display: none; }
   label { display: inline-flex; gap: 8px; align-items: center; margin-right: 16px; } .mute { color: #9aa7b4; }
   #bar { position: sticky; top: 0; background: #0d1117; padding: 8px 0; border-bottom: 1px solid #30363d; z-index: 2; }
   #meter { width: 220px; height: 14px; background: #161b22; border: 1px solid #3d4757; border-radius: 3px; position: relative; overflow: hidden; }
@@ -30,6 +31,7 @@
     <label>Ambient level <input id="ambvol" type="range" min="0" max="100" step="5" value="70" aria-label="Ambient level"></label>
     <label><input id="quiet" type="checkbox"> Classroom rule</label>
     <button id="stop" type="button">Stop everything</button>
+    <button id="reset" type="button">Reset to Full</button>
   </div>
   <div class="row"><span>Level</span><div id="meter" role="meter" aria-label="Output level" aria-valuemin="-60" aria-valuemax="0"><i></i><b title="-3 dBFS"></b></div><span id="db">-inf dB</span><span id="state" class="mute" role="status"></span></div>
 </div>

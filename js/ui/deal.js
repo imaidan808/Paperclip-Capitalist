@@ -11,7 +11,7 @@ import { fmtMoney as money, fmtPct } from '../market.js';
 import { startRun, modelOf, tForPos, STAGE_LABEL } from '../deal.js';
 import { pos as dialPos } from '../play/repair.js';
 import { countUp } from './polish.js';
-import { audio } from '../audio/index.js';
+import { audio, toggleMute, audible } from '../audio/index.js';
 import { settings as appSettings, applySettings } from './common.js';
 
 const num = (x, d = 0) => (Number.isFinite(x) ? x : d);
@@ -395,7 +395,7 @@ export function createSession(ctx, run) {
   /** Chooses the sounds of a move and plays them. A fault in choosing them is the sound's, never the deal's. */
   const plan = (key, action, o) => { try { play(soundsFor(key, action, o)); } catch { /* sound is optional */ } };
   const stopSounds = () => { for (const h of timers) clearTimeout(h); timers.clear(); clearTimeout(ses.toneT); if (typeof ses.offMute === 'function') ses.offMute(); ses.offMute = null; };
-  ses.sound = () => !(appSettings.audio && appSettings.audio.mute === true);
+  ses.sound = () => { const a = appSettings.audio; return !a || audible(a); }; // on only when something can be heard (a volume of 0 is not "on")
   ses.toneWanted = () => { const a = appSettings.audio || {}; return a.dial === true && a.mute !== true && a.quiet !== true; };
   const tone = (p, z) => { const st = toneStep(ses.tone, p, z.lo, z.hi); if (st) { ses.tone = st; try { eng().dial.update(st.pos, z.lo, z.hi); } catch { /* the tone is an addition */ } } };
   const toneOn = () => { try { const d = eng().dial; ses.toneOn = !!(d && typeof d.start === 'function' && d.start()); } catch { ses.toneOn = false; } ses.tone = null; return ses.toneOn; };
@@ -508,7 +508,7 @@ export function createSession(ctx, run) {
     drop() { go({ type: 'drop' }); },
     stop() { const r = stopAt(); if (r.gone) { result(); return; } plan('fix', { type: 'stop' }, { r, acc: r.ok ? lastAcc() : NaN }); say(r); after1(); paint(); },
     careful() { stopDial(); go({ type: 'careful' }); },
-    sound() { const a = appSettings.audio || {}, mute = a.mute !== true; appSettings.audio = { ...a, mute, touched: true }; try { applySettings(); } catch { /* no page: a test */ } ctx.announce?.(mute ? 'Sound off.' : 'Sound on.'); if (!mute) one({ hear: ['ui.toggle', { variant: 'on' }] }); paint(); }, // the room's own switch; key M does the same anywhere
+    sound() { const r = toggleMute(appSettings.audio || {}); if (r.changed) { appSettings.audio = r.next; try { applySettings(); } catch { /* no page: a test */ } } ctx.announce?.(r.said); if (r.changed && r.hears) one({ hear: ['ui.toggle', { variant: 'on' }] }); paint(); }, // the room's own switch; key M does the same anywhere
   };
   const changes = {
     assist(b) { const on = !!b.checked; kv.set('assist', on); run.setAssist(on); paint(); },

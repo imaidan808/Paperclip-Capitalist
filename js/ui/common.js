@@ -46,12 +46,13 @@ export function announce(msg, assertive = false) {
   el.textContent = '';
   setTimeout(() => { el.textContent = msg; }, 30);
 }
-export function toast(msg, level = 'info', ms = 4200, o = {}) { // o.refusal: the toast answers an action the engine refused (say(r)); the sound layer plays its "no" for those and for no other bad toast
+export function toast(msg, level = 'info', ms = 4200, o = {}) { // o.refusal: the toast answers an action the engine refused (say(r)); the sound layer plays its "no" for those and for no other bad toast. o.own: its sound is requested by the code that raised it (a reward: the resolver may keep it quiet), so the toast's fallback "ok" stays out
   const box = $('#toasts');
   if (box) {
     const t = document.createElement('div');
     t.className = 'toast ' + level;
     if (o && o.refusal) t.dataset.refusal = '1';
+    if (o && o.own) t.dataset.snd = 'own';
     t.textContent = msg;
     box.appendChild(t);
     while (box.children.length > 4) box.firstChild.remove();

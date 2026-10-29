@@ -11,7 +11,7 @@ this file says how it is built and where the engine chose differently from the d
 | `ambient.js` | the 16 beds, 4 modifiers, 18 one-shots, and the controller (crossfade, night/rain/wealth, one timer chain, the rate rule) |
 | `resolve.js` | the collector's resolver (two sentences per burst, the reward budget, merges), the clock gates, state sounds, the hold, catch-up. Pure |
 | `engine.js` | `createAudio()`: the context, buses and chain, voices and stealing, rank-aware cooldowns, token buckets, ducking, the ambient bed, the dial tone, hidden-tab and idle handling |
-| `settings.js` | `settings.audio`: defaults, migration, presets, the Sound section of the settings dialog |
+| `settings.js` | `settings.audio`: defaults, migration, presets, the one mute switch (`toggleMute`, `speakerState`), the Sound section of the settings dialog, `whyDropped` |
 | `wire.js` | `initAudio()` (page-wide), `wireGame(ctx)` (per game), `wireAudio(ctx)` (both), and the pure tables `eventCalls`, `noteCalls`, `uiCalls`, `dealCalls`, `controlFor` |
 | `instance.js`, `index.js` | the one engine of the page; the public face and `legacySfx` |
 
@@ -24,7 +24,9 @@ lengths, brightness, the mid body, the ladders, the beds and the tier gaps throu
 - `moneySize` uses the table's thresholds ($41, $1,780, $75,000), not the log formula in the prototype (they differ by under 1%; the table is what the tests quote).
 - The legacy `sfx.*` names become no-ops only while a game is wired (`wireGame`), not as soon as `initAudio()` has run, so the title and the draft keep their sounds until the shell calls `wireGame`.
 - Pool members are calibrated one by one (`id#variant@k` in `trims.js`): the pitch of a pool member changes how loud it reads.
-- The body of the refusal and loss family uses a sine D4 (A3 is 220 Hz, under the 250 Hz line) and a knock at 440 Hz; every variant of the family measures at least 40% above 250 Hz.
+- The body of the refusal and loss family uses a sine that steps down to D4 (A4 to D4 for a failure, F#4 to D4 for a gentle "no"; A3 is 220 Hz, under the 250 Hz line) and a knock at 440 Hz, so the fall of a loss is in the band a laptop plays; every variant of the family measures at least 40% above 250 Hz.
+- The oscillator budget (160) counts what is alive at the same instant, each layer from its voice's real start (`layerSpans`, `peakAlive`), and a loss is counted (`dropped.osc`). The members of a mix share the cause's pan.
+- A preset leaves the volume alone; the speaker button, key M and the Deal Room's switch are one rule (`toggleMute`), and "pressed" means something can be heard (`speakerState`).
 - The queued moment is played by scheduling it after the current one (never later than 500 ms), not by a timer.
 - Wired by `v2/audio-wire` (the shell's side): `shell.js` calls `wireAudio(ctx)` once per mounted game and takes it down in `destroy`; it emits the `ui` events `close-drawer`, `zone` and `lead`
   (`js/ui/audiocues.js`: a baseline first, so a new district or a returning tab rings nothing), reports the Progress rewards as requests, and has the speaker button's act. `js/ui/worldsound.js`
