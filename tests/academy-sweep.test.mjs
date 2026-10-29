@@ -184,8 +184,14 @@ test('chooseSize: the first size that stands clear of the cursor, the target and
   assert.equal(A.chooseSize(fits({ full: { cursor: true }, slim: { n: 2 }, narrow: { n: 5 } })).t, 'slim', 'never over the cursor while one size is not');
   assert.equal(A.chooseSize(fits({ full: { n: 2 }, slim: { n: 2 }, narrow: { n: 2 } })).t, 'full', 'a tie goes to the larger card');
   assert.equal(A.chooseSize(fits({ full: { cursor: true }, slim: { cursor: true }, narrow: { cursor: true } })).t, 'full', 'every size over the cursor: the full card, as it always was');
-  // the card the player opened: only the full card, wherever it covers least, never the tab
+  // the card the player opened: the full card, wherever it covers least, never the tab
   order.length = 0; assert.equal(A.chooseSize(rec({ full: { n: 4 } }), { handle: true, words: true }).t, 'full'); assert.deepEqual(order, ['full']);
+  // ... and in a window too short for its words (they would scroll inside it and hide the hint): the same words across the strip's width, then that without the notes; where none fits, the shortest, as it scrolls
+  order.length = 0; assert.equal(A.chooseSize(rec({ full: { n: 4, cut: true }, wide: { n: 4 } }), { handle: true, words: true }).t, 'wide'); assert.deepEqual(order, ['full', 'wide'], 'the narrow card is not the player\'s: it is taller');
+  order.length = 0; assert.equal(A.chooseSize(rec({ full: { cut: true }, wide: { cut: true } }), { handle: true, words: true }).t, 'wideslim'); assert.deepEqual(order, ['full', 'wide', 'wideslim']);
+  order.length = 0; assert.equal(A.chooseSize(rec({ full: { cut: true }, wide: { cut: true }, wideslim: { cut: true } }), { handle: true, words: true }).t, 'wideslim'); assert.deepEqual(order, ['full', 'wide', 'wideslim', 'wideslim'], 'none fits: the shortest, scrolling');
+  assert.equal(A.chooseSize(fits({ full: { cut: true, cursor: true }, wide: { cursor: true } }), { handle: false, words: true }).t, 'wide', 'covering is theirs to ask for; the words behind a scroll are not');
+  assert.deepEqual(A.OPEN_SIZES, ['full', 'wide', 'wideslim'], 'the shapes of the card the player opened');
 });
 
 test('fitCard: the tab in the strip hides nothing, whatever the room is made of; anywhere else it is placed like a card', () => {

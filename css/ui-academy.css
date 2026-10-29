@@ -37,6 +37,7 @@
 .ac-coach.slim :is(.ac-look, .ac-where) { display: none; }
 /* handle (js/ui/academy.js): where no size of the card stands clear of the controls, the card folds to a one-line tab that opens it. The words and the hint stay in the page, clipped and not display: none, so a screen reader still has them. */
 .ac-coach.narrow { width: min(15rem, calc(100vw - 1rem)); } /* slim in a column: a phone on its side has an empty one beside the buttons */
+.ac-coach.wide { width: min(46rem, calc(100vw - 1rem)); } /* the card the player opened, where the full one is taller than the window: the same words across the strip's width (`wide slim` drops the notes too) */
 .ac-grab { display: none; }
 .ac-coach.handle { width: max-content; max-width: calc(100vw - 1rem); }
 .ac-coach.handle[data-side]::before { display: none; } /* one more attribute than the caret's own rules below (.ac-coach[data-side="below"]::before), so the tab has no caret and nothing is forced */

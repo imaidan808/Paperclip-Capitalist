@@ -2,6 +2,8 @@
 //   M1  the matrix (scripts/academy-sweep.mjs), two sizes by four lessons: every lesson step, in every state the player can put the game in (no panel, each panel, each Deal Room stage, the hire dialog), as the card
 //       arrives and with the 20-second hint, with a mouse and with a finger: no card covers a control, the step's words and the hint are on the screen or one tap away in a named tab, every button of the card is
 //       there and takes a tap. The full matrix is `node scripts/academy-sweep.mjs --level full`.
+//   M3  the largest text at the shortest windows (844x390 with a finger and 640x360 with a mouse, lessons 1 and 4): the card the player opens from its tab shows its words AND its hint, in the wide shape where the full
+//       card is taller than the window (the full card's hint was 42% on the screen, the rest behind the card's own scroll)
 //   M2  the sweep sees what it is there to see: a card put over the dock is reported as covering it (an instrument that cannot fail proves nothing).
 //   PB-1  with a panel open a real tap at the middle of its Close button lands on the Close button and closes the panel, not on the card (768x1024, 640x360, 360x640).
 //   PB-3  with a panel open and the hint due the player can read the words and the hint: on the card, or by a tap on the tab that says Hint (640x360, lesson 10, Market).
@@ -27,6 +29,19 @@ test('M1: the cut-down matrix, 360x640 with a finger and 640x360 with a mouse by
     assert.ok(rows.some((r) => /^drawer:/.test(r.state)) && rows.some((r) => /^deal:/.test(r.state)) && rows.some((r) => r.state === 'hire') && rows.some((r) => /^hint/.test(r.variant)), 'drawers, a Deal Room, the hire dialog and the hint were all visited');
     const bad = rows.filter((r) => r.faults.length);
     assert.equal(bad.length, 0, `${bad.length} of ${rows.length} cells have a fault:\n` + bad.slice(0, 12).map((r) => `  ${r.lesson} ${r.size} ${r.mode} step ${r.step + 1} ${r.state} [${r.variant}] ${r.shape}: ${r.faults.map((f) => `${f.type} (${f.detail})`).join('; ')}`).join('\n'));
+  } finally { await env.close(); }
+});
+
+test('M3: at the largest text size in a short window the card the player opens shows all of its words and its hint, across the strip\'s width where it must (lessons 1 and 4, 844x390 and 640x360)', SUITE, async () => {
+  const env = await startEnv();
+  try {
+    const rows = [];
+    for (const [id, mode] of [['844x390', 'touch'], ['640x360', 'mouse']]) for (const lesson of ['m01', 'm04']) rows.push(...await sweepLesson(env, lesson, size(id), mode, { level: 'std', states: ['plain'], variants: ['xl'] }));
+    const open = rows.filter((r) => r.variant === 'xl+open');
+    assert.ok(open.length >= 4, `the card was opened from its tab in ${open.length} cells`);
+    const bad = rows.filter((r) => r.faults.length);
+    assert.equal(bad.length, 0, `${bad.length} of ${rows.length} cells have a fault:\n` + bad.slice(0, 12).map((r) => `  ${r.lesson} ${r.size} ${r.mode} step ${r.step + 1} ${r.state} [${r.variant}] ${r.shape}: ${r.faults.map((f) => `${f.type} (${f.detail})`).join(', ')}`).join('\n'));
+    assert.ok(open.some((r) => /\bwide\b/.test(r.shape)), `the wide shape was used where the full card is taller than the window (${[...new Set(open.map((r) => r.shape))].join(', ')})`);
   } finally { await env.close(); }
 });
 

@@ -216,6 +216,11 @@ const CARET = 11; // how far the caret on the card's edge reaches past the edge,
 export const CARD_SIZES = ['full', 'slim'];
 /** slim in a column 15rem wide (css `narrow`): it stands in an empty column beside a window's buttons (a phone on its side, a panel's strip) where a card of the usual width cannot. Tried after slim, in every window. */
 export const NARROW_SIZE = 'narrow';
+/**
+ * The shapes of the card the player opened, tried in this order (css `wide`): the whole card; then the same words in a card as wide as the strip (the room a short window has is sideways: at the largest text the full
+ * card's words and hint are taller than a phone on its side, and across 46rem they are not); then that without the notes under the words (`slim`). The first whose words fit without scrolling inside it is shown.
+ */
+export const OPEN_SIZES = ['full', 'wide', 'wideslim'];
 /** The last shape: a one-line tab (css `handle`) that opens the card on a tap. It is not one of the sizes: it is where the card goes when no size of it stands clear. In a small window it stands in the strip the layout reserves (`smallWindow`, css), which nothing else can be in. */
 export const HANDLE_SIZE = 'handle';
 const harmOf = (f) => [f.cursor ? 1 : 0, f.target ? 1 : 0, f.cut ? 1 : 0, f.n | 0]; // what a placement costs, in the order that matters: the keyboard's cursor hidden, the control the step names hidden, words that scroll inside the card (`cut`), the buttons covered
@@ -227,14 +232,17 @@ const lessHarm = (a, b) => { const x = harmOf(a), y = harmOf(b); for (let i = 0;
  * where none is, the card is its tab (`handle: true`), which a tap opens. The tab is the card's own place and hides nothing; it is the answer to a crowded window, whatever is in the crowd.
  *   handle: the card may fold. False for the card that asks "Skip this lesson?" (the player has just pressed Skip lesson, and the question must stay where the answer is) and for a card the player has opened.
  *   narrow: try the narrow card too, after slim (on by default).
- *   words:  the player has opened the card to read it (or has asked to skip): only the full card is shown (the words, the hint and the notes), wherever it covers least, and never the tab: they asked, and they can fold it away.
+ *   words:  the player has opened the card to read it (or has asked to skip): the full card is shown (the words, the hint and the notes), wherever it covers least, and never the tab: they asked, and they can fold it away.
+ *           A window too short for all of it (a phone on its side at the largest text) gets the same words wider (OPEN_SIZES: wide, then wide without the notes) rather than a full card whose own scroll hides the
+ *           hint: the first whose words fit without scrolling, and the last (the shortest), scrolling, only where none does.
  * When a card must be shown and none is clear (`handle` false) the least harm wins in this order: never over the keyboard's cursor (a card that hides it is wrong wherever else it lands), then never over the
  * control the step names (a card that says "open Market" over Market cannot be obeyed with a mouse or a finger), then the fewest buttons, a tie going to the larger card (more of the words). A card every
  * size of which hides the cursor is the full one. Returns what `fit` returned for the size chosen.
  */
 export function chooseSize(fit, { handle = false, narrow = true, words = false } = {}) {
   const clean = (f) => !f.cursor && !f.target && !f.n && !f.cut;
-  const sizes = words ? [CARD_SIZES[0]] : narrow ? [...CARD_SIZES, NARROW_SIZE] : CARD_SIZES.slice();
+  const sizes = narrow ? [...CARD_SIZES, NARROW_SIZE] : CARD_SIZES.slice();
+  if (words) { for (const t of OPEN_SIZES) { const f = fit(t); if (!f.cut) return f; } return fit(OPEN_SIZES[OPEN_SIZES.length - 1]); } // the player's own card: where it covers least, but never with its words behind its own scroll if another shape shows them all
   let pick = null;
   for (const t of sizes) {
     const f = fit(t);
