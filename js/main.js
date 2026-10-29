@@ -83,7 +83,7 @@ const screens = {
           <section class="panel"><h2>Join a classroom</h2><label for="jc">Room code from your instructor</label><input id="jc" maxlength="8" autocomplete="off" style="text-transform:uppercase" value="${esc(room)}">
             <details class="gap"><summary class="small">Relay server (only if your instructor gave you one)</summary><label for="jr" class="gap">Relay URL</label><input id="jr" placeholder="wss://relay.example.edu" value="${esc(relay)}"></details>
             <button class="btn gap" data-act="join">Join</button></section>
-          <section class="panel"><h2>Instructor</h2><p class="small mute">Create a room, set the pace, deploy shocks and export grades. Students on the same browser can join as extra tabs; add a relay for real classes.</p>
+          <section class="panel"><h2>Instructor</h2><p class="small mute">Create a room, set the pace, deploy shocks and export grades. With no relay, students join from other tabs of this browser (each tab is its own founder); students on other devices need a relay.</p>
             <label for="ir">Relay URL (optional)</label><input id="ir" placeholder="wss://relay.example.edu" value="${esc(relay)}">
             <div class="row gap"><button class="btn" data-act="instr">Create a room</button>${instr ? `<button class="btn ghost" data-act="instr-resume">Reopen room ${esc(instr.code)}</button>` : ''}</div>
             ${instrKey ? `<details class="gap"><summary class="small">Recovery code for room ${esc(instr.code)}</summary><p class="small mute">Keep it somewhere safe. With the room code it lets you run this room from another device, or after this browser has forgotten it.</p><p class="mono" id="ik-show" tabindex="0">${esc(instrKey)}</p></details>` : ''}
@@ -119,9 +119,13 @@ const screens = {
   setup() {
     const m = mountDraft(root, S, {
       room: pending?.room,
+      handle: S.draftHandle(pending?.room), // (a student tab that is about to be a founder of its own does not start with the alias another founder of this browser last used)
       onBack: () => { pending = null; go('title'); },
       onBegin({ perks, specialty, handle }) {
         const room = pending?.room;
+        // A student who joins a room between the tabs of this browser is a founder of their own: this tab takes its own Founder ID and its own saved run (js/identity.js), before the saved run is looked at (it is looked for
+        // in this tab's own slot, so the browser's other tabs' runs are never offered for replacing) and before the room is joined (a room hears the ID the tab joins with).
+        if (room) S.takeTabIdentity(room);
         const begin = () => {
           if (room) S.joinRoom({ ...room, role: 'student', handle: handle || undefined });
           S.startGame({ perks, specialty, handle });
@@ -129,7 +133,7 @@ const screens = {
           pending = null;
           if (kv.get('academyDone')) enter(); else openAcademy(() => go('game'));
         };
-        // There is one save slot, so this writes over a run saved in this browser (a solo run, or a classroom's): say so first, and name it. Keeping it leaves the draft as it was.
+        // There is one save slot for a founder, so this writes over the run saved for it (a solo run, or a classroom's): say so first, and name it. Keeping it leaves the draft as it was.
         const old = describeSave(kv.get('save'));
         if (!old) { begin(); return; }
         askReplace(old, room, begin);
@@ -180,7 +184,7 @@ function enter() { go('game'); }
 
 /** Begin would replace the run saved in this browser (docs/ARCHITECTURE.md, "Open decisions"): a dialog that names it, with the safe answer under the cursor. */
 function askReplace(old, room, begin) {
-  const d = dlg.open(replaceRunHTML(old, room), { label: 'Replace your saved run?' });
+  const d = dlg.open(replaceRunHTML(old, room, kv.tab.isOwn() ? 'This tab' : 'This browser'), { label: 'Replace your saved run?' });
   d.querySelector('[data-close]').onclick = () => dlg.close();
   d.querySelector('[data-replace]').onclick = () => { dlg.close(); begin(); };
 }
@@ -214,10 +218,11 @@ function keepRecoveryCode(code) {
 // ---- the heartbeat
 setInterval(() => {
   S.tick();
+  kv.tab.touch(); // (a tab that is a founder of its own keeps its claim on the slot fresh, so a copy of the tab is told from a refresh of it: js/identity.js)
   if (S.mode === 'instructor' && S.roomInfo && Date.now() % 5000 < 260) kv.set('instr', { code: S.roomInfo.code, relay: S.roomInfo.relay, clock: S.clock.toJSON(), difficulty: S.difficulty, ghosts: S.ghosts, algo: S.algo });
 }, 250);
 document.addEventListener('visibilitychange', () => { if (!document.hidden) S.tick(); else S.save(true); });
-addEventListener('pagehide', () => S.save(true));
+addEventListener('pagehide', () => { S.save(true); kv.tab.release(); });
 
 // ---- boot
 if (S.game == null && kv.get('save') && params.get('resume') === '1') { if (tryResume()) enter(); else go('title'); } else go('title');

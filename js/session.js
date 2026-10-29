@@ -16,20 +16,15 @@
 import { Game } from './engine.js';
 import { Cohort, makeSynth, synthSnapshot, synthFlags, median, cleanSnap, cleanClock, cleanInject, cleanOffer, cleanAsset, cleanDifficulty, cleanId, DEFAULT_DIFFICULTY, num, text, nwCeiling } from './cohort.js';
 import { Room, cleanCode } from './net.js';
+import { openTab, makeKv } from './identity.js';
 import { SEC_PER_HOUR, TOTAL_HOURS, TOTAL_DAYS, EEI_FLOOR_DEFAULT, ASSETS, ZONES, SWAPS, EVENTS } from './config.js';
 import { hash01 } from './rng.js';
 import { eei as eeiCalc, clamp, demandOf, fmvVariance } from './market.js';
 
-const slot = new URLSearchParams(typeof location !== 'undefined' ? location.search : '').get('slot') || 'main';
-const K = (n) => `pc.${n}.${slot}`;
-export const kv = {
-  get(n) { try { return JSON.parse(localStorage.getItem(K(n))); } catch { return null; } },
-  set(n, v) { try { localStorage.setItem(K(n), JSON.stringify(v)); return true; } catch { return false; } },
-  del(n) { try { localStorage.removeItem(K(n)); } catch { /* noop */ } },
-  /** Text stored as it is (a checkpoint is already JSON: encoding it again would escape every quote). */
-  getRaw(n) { try { return localStorage.getItem(K(n)); } catch { return null; } },
-  setRaw(n, v) { try { localStorage.setItem(K(n), v); return true; } catch { return false; } },
-};
+/** The storage the whole page reads and writes, in the keyspaces of this tab (js/identity.js): the browser's `main`, or the slot the address names, until a student tab joins a local room and takes a slot of its own. The page's
+ *  localStorage is looked up at each use, not once: a test swaps it, and a private window may refuse it. */
+export const kv = makeKv(openTab({ search: typeof location !== 'undefined' ? location.search : '', local: () => globalThis.localStorage, session: () => globalThis.sessionStorage }), () => globalThis.localStorage);
+
 /**
  * A saved run, as it is named to the player before something replaces it (the draft's Begin writes the one save slot: docs/ARCHITECTURE.md, "Open decisions"). Null for a save that `restore()` would
  * refuse (a save from the three-profile game has no Backgrounds): nothing is lost by replacing one that cannot be played. Never throws, whatever the storage holds.
@@ -103,7 +98,9 @@ const newKey = () => {
 export const cleanOwner = (x) => { const t = typeof x === 'string' ? x.replace(/[\s-]/g, '').toLowerCase() : ''; return /^[0-9a-f]{32}$/.test(t) ? t : null; };
 
 export class Session {
-  constructor() {
+  /** `store`: where this session keeps its founder and its run (the page's `kv`; a test gives each fake tab its own, see js/identity.js). */
+  constructor({ kv: store = kv } = {}) {
+    this.kv = store;
     this.mode = 'solo';              // solo | student | instructor
     this.game = null;
     this.clock = new Clock({ speed: 1 });
@@ -129,12 +126,33 @@ export class Session {
     this.timers = { snap: 0, clock: 0 };
     this.t = { snap: 0, save: 0, clock: 0, refresh: 0, cohort: 0, roster: 0 };
     this.refreshMs = new URLSearchParams(typeof location !== 'undefined' ? location.search : '').get('refresh') ? +new URLSearchParams(location.search).get('refresh') * 1000 : 60000;
-    this.pid = kv.get('pid') || (() => { const p = rid(); kv.set('pid', p); return p; })();
-    this.key = (() => { const k = kv.get('key'); if (typeof k === 'string' && /^[A-Za-z0-9_-]{16,64}$/.test(k)) return k; const n = newKey(); kv.set('key', n); return n; })();
-    this.handle = kv.get('handle') || '';
+    this._loadIdentity();
     this.npc = { id: 'NPC-PARTNER', handle: 'Practice Partner', skills: { ops: 1, growth: 6, fintech: 2 }, n: 0, paid: { day: -1, cash: 0 } };
     this.worldSeed = 'solo';
   }
+
+  /** Who this tab's founder is: the Founder ID, the relay key and the alias it last played under, from the keyspace the tab plays in (js/identity.js). Made and kept the first time. */
+  _loadIdentity() {
+    this.pid = this.kv.get('pid') || (() => { const p = rid(); this.kv.set('pid', p); return p; })();
+    this.key = (() => { const k = this.kv.get('key'); if (typeof k === 'string' && /^[A-Za-z0-9_-]{16,64}$/.test(k)) return k; const n = newKey(); this.kv.set('key', n); return n; })();
+    this.handle = this.kv.get('handle') || '';
+  }
+  /**
+   * A student who joins a room between the tabs of one browser (no relay) is a founder of their own: a tab that has no slot of its own yet takes one, and with it a Founder ID, a key, an alias and a saved run that are not
+   * those of the browser's other tabs (js/identity.js). Without it the tab would be the instructor's own Founder ID, and the instructor would drop every message it sent. Called when the student begins, before the saved
+   * run is looked at and before the room is joined; not for a relay room (the relay binds an ID to its browser's key: the same ID in a new tab is the same student), not for an address that names a slot (`?slot=`: the
+   * person chose), not for a tab that has one already, and not while a run or a room is open. True when the founder changed.
+   */
+  takeTabIdentity(room) {
+    if (!this.willTakeTab(room) || this.game || this.room) return false;
+    if (!this.kv.tab.take()) return false;
+    this._loadIdentity();
+    return true;
+  }
+  /** Whether `takeTabIdentity(room)` would make this tab a founder of its own: a local room (no relay address), no slot in the address, no slot taken yet. */
+  willTakeTab(room) { return !!room && !room.relay && !!this.kv.tab?.canTake(); }
+  /** The alias the Background draft starts with. A tab about to become a founder of its own starts with none: the one in the browser's keyspace is another founder's. */
+  draftHandle(room) { return this.willTakeTab(room) ? '' : this.handle; }
 
   // ---- events
   on(fn) { this.listeners.add(fn); return () => this.listeners.delete(fn); }
@@ -143,7 +161,7 @@ export class Session {
   // ---- lifecycle
   startGame({ perks = [], specialty, handle, speed = 1 }) {
     this.handle = handle || 'Founder-' + this.pid.slice(3);
-    kv.set('handle', this.handle);
+    this.kv.set('handle', this.handle);
     if (this.mode === 'solo') { this.clock = new Clock({ speed }); this.worldSeed = 'solo-' + Math.floor(Math.random() * 1e6); }
     // In a room the clock is the class's: until it has been heard the game stands at the clock's hour (0), and rebases onto the room's hour when it arrives (_rebase).
     const startHour = Math.floor(this.clock.now());
@@ -165,7 +183,7 @@ export class Session {
     g.env.peerClosed = (pid) => { const f = this.peers.get(pid)?.snap?.flags; return f?.over === true || f?.exiting === true; }; // a royalty is not sent to a founder whose run is over, or who is selling the business (48 hours in which nothing is taken): they would refuse it and the money would be lost
   }
   restore() {
-    const d = kv.get('save');
+    const d = this.kv.get('save');
     if (!d || d.v !== 1 || !d.state || d.state.v !== 2 || !Array.isArray(d.state.perks)) return false; // a save from the three-profile game cannot be opened: it has no Backgrounds
     this.mode = d.mode === 'student' ? 'student' : 'solo';
     this.worldSeed = typeof d.worldSeed === 'string' && d.worldSeed ? d.worldSeed : 'solo';
@@ -202,10 +220,10 @@ export class Session {
     this.t.save = now;
     // (`delivering` is a swap this side has committed to and not heard acknowledged: it must outlive a reload, or the proposer's recall would be answered `free` for a crate that is already gone from here)
     const delivering = this.mode === 'student' && this.delivering.size ? [...this.delivering].slice(-MAX_SETTLED) : undefined;
-    kv.set('save', { v: 1, mode: this.mode, worldSeed: this.worldSeed, difficulty: this.mode === 'student' ? this.difficulty : undefined, clock: this.clock.toJSON(), room: this.roomInfo, state: this.game.s, delivering, savedAt: now });
+    this.kv.set('save', { v: 1, mode: this.mode, worldSeed: this.worldSeed, difficulty: this.mode === 'student' ? this.difficulty : undefined, clock: this.clock.toJSON(), room: this.roomInfo, state: this.game.s, delivering, savedAt: now });
   }
   reset() {
-    kv.del('save'); this._clearCkpt(); this.leaveRoom(); this.game = null; this.mode = 'solo'; this.clock = new Clock({ speed: 1 });
+    this.kv.del('save'); this._clearCkpt(); this.leaveRoom(); this.game = null; this.mode = 'solo'; this.clock = new Clock({ speed: 1 });
     this.peers.clear(); this.incoming = []; this.sent.clear(); this.accepting.clear(); this.delivering.clear(); this.settled.clear(); this.flags = []; this.rewindReport.clear(); this.injected.clear(); this.cohort.setPeers([]);
   }
 
@@ -257,7 +275,7 @@ export class Session {
   leaveRoom() {
     const closing = this.mode === 'instructor' && this.room;
     this._closeRoom();
-    if (closing) kv.del('roster');
+    if (closing) this.kv.del('roster');
     if (this.mode !== 'solo') this.mode = 'solo';
     if (!this.clockAdopted && this.game) this.clock.set({ hour: this.game.s.hour, paused: false, speed: 1 }); // the class clock never came: the solo run keeps running
     this.clockAdopted = true; this.clockHeard = true;
@@ -266,9 +284,9 @@ export class Session {
   }
   /** The owner token of an instructor's room: 32 hex characters, made here the first time the room is opened and kept in this browser beside the room's code. A pasted one (any spacing or dashes) replaces it. */
   _ownerFor(code, pasted) {
-    const all = kv.get('owners'), owners = isObj(all) ? all : {};
+    const all = this.kv.get('owners'), owners = isObj(all) ? all : {};
     const given = cleanOwner(pasted), token = given || (typeof owners[code] === 'string' && cleanOwner(owners[code])) || newKey();
-    if (owners[code] !== token) { owners[code] = token; kv.set('owners', owners); }
+    if (owners[code] !== token) { owners[code] = token; this.kv.set('owners', owners); }
     return token;
   }
   /** What the instructor keeps to run this room from another device, or after this browser forgets it: the owner token in groups of four. Null when this is not an instructor's room. */
@@ -279,7 +297,7 @@ export class Session {
   }
   /** The same for a room this browser made, by its code (the title screen shows it beside "Reopen room"). Null for a code this browser never opened as an instructor. */
   recoveryCodeFor(code) {
-    const all = kv.get('owners'), t = isObj(all) && typeof code === 'string' && Object.prototype.hasOwnProperty.call(all, code) ? cleanOwner(all[code]) : null;
+    const all = this.kv.get('owners'), t = isObj(all) && typeof code === 'string' && Object.prototype.hasOwnProperty.call(all, code) ? cleanOwner(all[code]) : null;
     return t ? t.replace(/(.{4})(?=.)/g, '$1-') : null;
   }
   /** A recovered room has heard the class's hour (or waited long enough): from here on it keeps the clock. The class's dials (difficulty, herd, events) are the room's own and come back at their defaults. */
@@ -511,24 +529,24 @@ export class Session {
     let changed = false;
     for (const d of keep) {
       if (this.ckDays.has(d) || this.ckSkip.has(d)) continue;
-      if (kv.setRaw('ck.' + d, g.ckpt.get(d))) { this.ckDays.add(d); changed = true; } else this.ckSkip.add(d); // storage is full: do not try this day again every quarter second
+      if (this.kv.setRaw('ck.' + d, g.ckpt.get(d))) { this.ckDays.add(d); changed = true; } else this.ckSkip.add(d); // storage is full: do not try this day again every quarter second
     }
-    for (const d of [...this.ckDays]) if (!keep.includes(d)) { kv.del('ck.' + d); this.ckDays.delete(d); changed = true; }
-    if (changed) kv.set('ckdays', { pid: g.s.pid, seed: g.s.seed, days: [...this.ckDays] });
+    for (const d of [...this.ckDays]) if (!keep.includes(d)) { this.kv.del('ck.' + d); this.ckDays.delete(d); changed = true; }
+    if (changed) this.kv.set('ckdays', { pid: g.s.pid, seed: g.s.seed, days: [...this.ckDays] });
   }
   _loadCkpt(state) {
-    const rec = kv.get('ckdays');
+    const rec = this.kv.get('ckdays');
     this.ckDays = new Set();
     if (!rec || rec.pid !== state.pid || rec.seed !== state.seed || !Array.isArray(rec.days)) return;
     for (const d of rec.days) {
-      const raw = Number.isInteger(d) && d >= 0 && d <= Math.floor(state.hour / 24) ? kv.getRaw('ck.' + d) : null;
+      const raw = Number.isInteger(d) && d >= 0 && d <= Math.floor(state.hour / 24) ? this.kv.getRaw('ck.' + d) : null;
       if (typeof raw === 'string' && raw[0] === '{') { this.game.ckpt.set(d, raw); this.ckDays.add(d); }
     }
   }
   _clearCkpt() {
-    const rec = kv.get('ckdays');
-    for (const d of new Set([...this.ckDays, ...(Array.isArray(rec?.days) ? rec.days : [])])) kv.del('ck.' + d);
-    kv.del('ckdays'); this.ckDays = new Set(); this.ckSkip = new Set();
+    const rec = this.kv.get('ckdays');
+    for (const d of new Set([...this.ckDays, ...(Array.isArray(rec?.days) ? rec.days : [])])) this.kv.del('ck.' + d);
+    this.kv.del('ckdays'); this.ckDays = new Set(); this.ckSkip = new Set();
   }
 
   // ---- the instructor's roster survives a reload of the dashboard
@@ -536,10 +554,10 @@ export class Session {
     if (!this.rosterDirty || !this.roomInfo || wall - this.t.roster < 10000) return;
     this.t.roster = wall; this.rosterDirty = false;
     const peers = [...this.peers.values()].filter((p) => p.role === 'student' && p.snap).map((p) => ({ pid: p.pid, handle: p.handle, seen: p.seen, snap: { ...p.snap, inventory: [] } }));
-    kv.set('roster', { code: this.roomInfo.code, peers, shocks: [...this.injected] });
+    this.kv.set('roster', { code: this.roomInfo.code, peers, shocks: [...this.injected] });
   }
   _loadRoster(code) {
-    const r = kv.get('roster');
+    const r = this.kv.get('roster');
     if (!isObj(r) || r.code !== code || !Array.isArray(r.peers)) return;
     if (Array.isArray(r.shocks)) for (const e of r.shocks.slice(0, 200)) if (Array.isArray(e)) this._noteShock(e[0], e[1]); // the shocks this instructor sent survive a reload of the dashboard
     for (const e of r.peers.slice(0, MAX_PEERS)) {
