@@ -16,6 +16,22 @@ export function createResolverState() {
     holdNet: 0, holdAny: false, fastNet: 0, nextFast: 0, states: {}, sentences: 0, bursts: 0, maxSentences: 0 };
 }
 
+/**
+ * What the resolver keeps for ONE RUN (sixth round, WA-1): the sums held while a dialog is open, the 16x coin, the door-bell count that teaches the cue ("the first three of a run always ring"), the
+ * day count of the 4x chime, the standing-state gates and the clocks of the cycle, buyer and urgent gaps. None of it may outlive the run it was counted in: a coin held under a dialog rang as a loud
+ * shower at the first dialog close of the NEXT run, and the three teaching bells were spent by a run (or an Academy lesson) before the real one. The reward budget (`lastFull`, `lastTick`, `lastDaily`,
+ * `lastFullLevel`) and the counters are NOT here: they are measured in real time and are the page's, so a fanfare that rang a few seconds ago still holds the next one back.
+ */
+export const RUN_FIELDS = ['holdNet', 'holdAny', 'fastNet', 'nextFast', 'buyers', 'days', 'states', 'lastCycle', 'lastBuyer', 'lastUrgent'];
+/** Put the run's fields back to a first run's, in place (the engine keeps the one object). Returns it. */
+export function resetRun(st) {
+  const fresh = createResolverState();
+  for (const k of RUN_FIELDS) st[k] = fresh[k];
+  return st;
+}
+/** Forget the sums held for a coin that will not be played: what a game that is left has held (the sheet that would have released them is gone with it). Returns the state. */
+export function dropHeld(st) { st.holdNet = 0; st.holdAny = false; st.fastNet = 0; return st; }
+
 /** The player flag's window: a press or a world activation in the last 1500 ms. */
 export const recentPress = (env, now) => now - (env.lastPress ?? -Infinity) < RULES.PRESS_MS;
 /** Catch-up is lateness in real time, not virtual hours (3.4.5): more than 600 ms of game still to replay, a tab just back from hidden, or a rewind. A press in the last 1500 ms lifts it. */

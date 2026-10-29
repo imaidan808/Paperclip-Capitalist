@@ -118,7 +118,7 @@ test('the real app: every module main.js reaches exists, the later screens are i
   for (const m of ['js/ui/shell.js', 'js/ui/academy.js', 'js/ui/instructor.js', 'js/ui/debrief.js', 'js/world/world.js', 'js/deal.js']) assert.ok(g.dynamic.includes(m) && !g.static.includes(m), `${m} is loaded when a screen opens, not before the first one`);
   assert.ok(g.dynamic.includes('js/play/haggle.js') && g.dynamic.includes('js/play/auction.js') && g.edges['js/deal.js'].statics.includes('js/play/haggle.js') && g.edges['js/ui/academy.js'].statics.includes('js/meta/academy.js'), 'the Deal Room\'s games are deal.js\'s static imports and the lessons the Academy\'s (tests/finish-repair.test.mjs V5): nothing waits on an import() while it evaluates');
   const all = walkDir(join(ROOT, 'js')).filter((f) => f.endsWith('.js')).map((f) => 'js/' + f);
-  assert.deepEqual(all.filter((f) => !g.modules.includes(f)), ['js/audio/audition.js', 'js/meta/ids.js'], 'a module nothing imports is either dead or the tests\' alone: say which in this list'); // audition.js is the audition page's alone (dev/sounds.html, never published); it sits in js/audio/ so the page and the tests reach the engine by one path, and is staged with the folder: moving it under dev/ is a small open item
+  assert.deepEqual(all.filter((f) => !g.modules.includes(f)), ['js/meta/ids.js'], 'a module nothing imports is either dead or the tests\' alone: say which in this list'); // (the audition page's helper, audition.js, was the second until the sixth round: it is dev/audition.js now, beside the one page that uses it, and is not in js/ at all)
   assert.ok(!/js\/meta\/ids\.js/.test(Object.values(g.edges).flatMap((e) => [...e.statics, ...e.dynamics]).join(' ')));
 });
 

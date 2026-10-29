@@ -1,6 +1,6 @@
 // Shared UI plumbing: DOM helpers, focus-safe rendering, announcements, dialogs, settings, sound and pixel fx.
 import { kv } from '../session.js';
-import { audio, bindSettings, initAudio, legacySfx, migrateAudio, mirrorFlat, audioSettingsHTML, bindAudioSettings } from '../audio/index.js';
+import { audio, bindSettings, initAudio, legacySfx, migrateAudio, mirrorFlat, audioSettingsHTML, bindAudioSettings, rememberLinkRule } from '../audio/index.js';
 export { fmtMoney as money, fmtPct as pct, fmtX as xfmt } from '../market.js';
 
 export const $ = (s, r = document) => r.querySelector(s);
@@ -11,7 +11,9 @@ export const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ESC[c]);
 // ---- settings (contrast, motion, text size, sound). Stored locally only. `settings.audio` holds the sound settings (js/audio/settings.js, docs/AUDIO.md 7.1); `sound`, `vol`, `sfxUi`, `sfxGame`
 // and `ambient` mirror it, and an older save that only knows `sound` is migrated (a player who turned sound off stays silent). `?sound=off|quiet|full` is read before the first save.
 export const settings = Object.assign({ contrast: 'normal', motion: 'auto', size: 'm', sound: true }, kv.get('settings') || {});
-settings.audio = migrateAudio(settings, typeof location !== 'undefined' ? location.search : '');
+const AT = typeof location !== 'undefined' ? location.search : '';
+rememberLinkRule(kv, settings, AT); // a room rule the link applies (quiet, or off) is remembered before the first save and before `settings.audio` is replaced, so a student who never joins is given their own sound back
+settings.audio = migrateAudio(settings, AT);
 mirrorFlat(settings);
 bindSettings(settings);
 export function applySettings() {

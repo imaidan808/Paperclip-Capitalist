@@ -17,7 +17,7 @@ import * as D from '../js/deal.js';
 import * as UI from '../js/ui/deal.js';
 import { audio as page } from '../js/audio/index.js';
 import { createAudio } from '../js/audio/engine.js';
-import { audioDefaults, migrateAudio, audioSettingsHTML } from '../js/audio/settings.js';
+import { audioDefaults, migrateAudio, audioSettingsHTML, ownSoundText } from '../js/audio/settings.js';
 import * as wire from '../js/audio/wire.js';
 import { dialInfo, dialEarText, dialShortText, dialAnnounceText, dialSwitchHTML, toggleDial, tellOnce, _resetTold } from '../js/audio/dialtone.js';
 import { instructorParts } from '../js/ui/instructor.js';
@@ -50,9 +50,10 @@ test('A1: a pending join (the Draft with a room code) is a room for sound: Class
   // joining again after Back: told again, because the rule changed again
   assert.equal(wire.pendingRoom({ code: 'ABCD' }, d), 'joined'); assert.equal(d.toasts.length, 3);
 });
-test('A1: a player who has changed a sound setting by hand keeps it, and a player already in Classroom is told once per room', () => {
+test('A1: a player who has changed a sound setting by hand keeps it (and, since the sixth round, UX2, is told so once), and a player already in Classroom is told once per room', () => {
   const mine = deps({ touched: true, master: 90 });
-  assert.equal(wire.pendingRoom({ code: 'ABCD' }, mine), null); assert.equal(mine.settings.audio.quiet, false); assert.equal(mine.settings.audio.master, 90); assert.equal(mine.toasts.length, 0);
+  assert.equal(wire.pendingRoom({ code: 'ABCD' }, mine), 'told', 'it was null and silent: a student whose own mix stays met the room\'s fanfares with nothing said'); assert.equal(mine.settings.audio.quiet, false); assert.equal(mine.settings.audio.master, 90);
+  assert.deepEqual(mine.toasts, [[ownSoundText(mine.settings.audio), 'info']], 'one note, with what stays'); assert.equal(wire.pendingRoom({ code: 'ABCD' }, mine), null, 'once for this room'); assert.equal(mine.toasts.length, 1);
   const q = deps({ quiet: true, touched: true }); // the link said ?sound=quiet, or they chose it
   assert.equal(wire.pendingRoom({ code: 'ABCD' }, q), 'told'); assert.deepEqual(q.toasts, [[wire.ROOM_TOAST, 'info']], 'a quiet game is never an unexplained one');
   assert.equal(wire.pendingRoom({ code: 'ABCD' }, q), null, 'once for this room'); assert.equal(q.toasts.length, 1);
@@ -113,18 +114,18 @@ function roomSession() {
   const S = new Session(); S.mode = 'instructor'; S.roomInfo = { code: 'ABCD', relay: '', role: 'instructor' }; S.room = { kind: 'local', state: 'open' };
   return S;
 }
-test('A1: the instructor\'s settings button says Display and sound, and Copy student link has a quiet-sound option that puts ?sound=quiet in the link', () => {
-  const S = roomSession(), off = instructorParts(S, {}).head, on = instructorParts(S, { quietLink: true }).head;
+test('A1: the instructor\'s settings button says Display and sound, and Copy student link has a Sound choice (Normal, Quiet, Off; it was a quiet-sound box until the sixth round, UX3) that puts ?sound=quiet in the link', () => {
+  const S = roomSession(), off = instructorParts(S, {}).head, on = instructorParts(S, { linkSound: 'quiet' }).head;
   assert.ok(!/>Access</.test(off), 'the button was called Access, which no one looks under for sound');
   assert.match(off, /data-act="settings">Display and sound</, 'what every other entry point to the same dialog says');
   const link = (h) => (h.match(/data-link="([^"]+)"/) || [])[1].replace(/&amp;/g, '&'), qs = (l) => new URLSearchParams(l.slice(l.indexOf('?')));
   assert.equal(qs(link(off)).get('room'), 'ABCD'); assert.equal(qs(link(off)).get('sound'), null, 'by default the link is the link it always was');
   assert.equal(qs(link(on)).get('room'), 'ABCD'); assert.equal(qs(link(on)).get('sound'), 'quiet');
-  assert.match(on, /<input type="checkbox" data-change="linkquiet"[^>]* checked>/); assert.ok(!/data-change="linkquiet"[^>]* checked>/.test(off));
-  assert.match(on, /<label[^>]*>[^<]*<input type="checkbox" data-change="linkquiet"[^>]*> Quiet sound link<\/label>/, 'a labelled native checkbox');
-  assert.match(src('js/ui/instructor.js'), /linkquiet\(b\) \{ U\.quietLink = !!b\.checked; render\(\); \}/, 'and the box redraws the link');
+  assert.match(on, /<input type="radio" name="linksound" id="ls-quiet" value="quiet" data-change="linksound"[^>]* checked>/); assert.ok(!/id="ls-normal"[^>]* checked>/.test(on)); assert.match(off, /id="ls-normal"[^>]* checked>/, 'Normal is the default');
+  assert.match(on, /<label for="ls-quiet"[^>]*>Quiet<\/label>/, 'a labeled native radio'); assert.match(on, /<legend[^>]*>Sound in the student link<\/legend>/);
+  assert.match(src('js/ui/instructor.js'), /linksound\(b\) \{ U\.linkSound = LINK_SOUNDS\.some\(\(x\) => x\.id === b\.value\) \? b\.value : 'normal'; render\(\); \}/, 'and the choice redraws the link');
   const S2 = roomSession(); S2.roomInfo = { code: 'ABCD', relay: 'wss://r.example.edu', role: 'instructor' };
-  const relay = instructorParts(S2, { quietLink: true }).head;
+  const relay = instructorParts(S2, { linkSound: 'quiet' }).head;
   assert.equal(qs(link(relay)).get('relay'), 'wss://r.example.edu'); assert.equal(qs(link(relay)).get('sound'), 'quiet', 'with a relay too');
 });
 test('A1: the link flag is read at boot and never over a sound setting the student has made; with none, it is what they start with', () => {
@@ -149,7 +150,7 @@ test('A1: the docs tell an instructor what the room does with sound, what the li
     assert.match(t, /^#{2,3} Sound/m, `${name} has a Sound section`);
     for (const w of [/Classroom/, /\bM\b/, /opt-in|switched on by the player|off until/i, /dial tone/i, /never the only cue|never the only way/i]) assert.match(t, w, `${name}: ${w}`);
   }
-  assert.match(kit, /\?sound=quiet/); assert.match(kit, /Quiet sound link/); assert.match(kit, /Display and sound/);
+  assert.match(kit, /\?sound=quiet/); assert.match(kit, /Sound in the student link/); assert.match(kit, /Display and sound/);
   assert.match(comp, /1\.4\.2/);
 });
 
@@ -391,11 +392,11 @@ test('U10: the Deal Room\'s switches are named by the words on them; their state
   assert.match(src('css/ui-deal.css'), /\.deal-tog\[aria-pressed="true"\] \{ border-color: var\(--gold\); box-shadow: inset 0 0 0 1px var\(--gold\); \}/);
   assert.match(src('css/ui-deal.css'), /\.deal-tog\[aria-pressed="true"\] \.tb::before \{ content: "\\2713/, 'a tick on the pressed one');
 });
-test('U6: the dashboard\'s Quiet sound box comes before Copy student link, the copy says what it carries, and the link is the room\'s rule applied early (it is put back when the student leaves)', () => {
-  const S = roomSession(), off = instructorParts(S, {}).head, on = instructorParts(S, { quietLink: true }).head;
-  assert.ok(off.indexOf('data-change="linkquiet"') < off.indexOf('data-act="copylink"'), 'tick, then copy');
-  assert.match(on, /data-act="copylink" data-link="[^"]+" data-quiet="1">/); assert.ok(!/data-quiet=/.test(off));
-  assert.match(src('js/ui/instructor.js'), /b\.dataset\.quiet \? 'Student link copied, with quiet sound\.' : 'Student link copied\.'/);
+test('U6: the dashboard\'s Sound in the student link comes before Copy student link, the copy says what it carries, and the link is the room\'s rule applied early (it is put back when the student leaves)', () => {
+  const S = roomSession(), off = instructorParts(S, {}).head, on = instructorParts(S, { linkSound: 'quiet' }).head;
+  assert.ok(off.indexOf('data-change="linksound"') < off.indexOf('data-act="copylink"'), 'choose, then copy');
+  assert.match(on, /data-act="copylink" data-link="[^"]+" data-sound="quiet">/); assert.ok(!/data-sound=/.test(off));
+  assert.match(src('js/ui/instructor.js'), /LINK_COPIED\[b\.dataset\.sound\] \|\| LINK_COPIED\.normal/); assert.match(src('js/ui/instructor.js'), /quiet: 'Student link copied, with quiet sound\.'/);
   // the link with a room: untouched, quiet; joining remembers the earlier values and leaving puts them back
   const a = migrateAudio({ audio: { ...audioDefaults(), master: 55, v: 1 } }, '?room=ABCD&sound=quiet');
   assert.equal(a.quiet, true); assert.equal(a.touched, false); assert.equal(a.master, 55);

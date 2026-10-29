@@ -2,9 +2,9 @@
 // `legacySfx`, the five names the game has always called (`sfx.kaching()`...). The legacy names are thin aliases: while the wiring is installed they are no-ops for every known call site, so a
 // call that has not been migrated yet cannot double an event's sound or contradict it; they play only when no wiring is installed (the Node tests, a page without audio).
 import { audio, bindSettings } from './instance.js';
-import { initAudio, wireGame, wireAudio, wired, pendingRoom } from './wire.js';
+import { initAudio, wireGame, wireAudio, wired, pendingRoom, softened, rememberLinkRule } from './wire.js';
 
-export { audio, bindSettings, initAudio, wireGame, wireAudio, wired, pendingRoom };
+export { audio, bindSettings, initAudio, wireGame, wireAudio, wired, pendingRoom, softened, rememberLinkRule };
 export { migrateAudio, mirrorFlat, audioDefaults, audioSettingsHTML, bindAudioSettings, presetOf, applyPreset, joinRoom, leaveRoom, sanitizeAudio, PRESETS, PRESET_NAMES, statusText, audible, whyQuiet, whyDropped, toggleMute, speakerState, syncAudioSettings } from './settings.js';
 export { moneySize } from './palette.js';
 export { RECIPES, IDS } from './recipes.js';

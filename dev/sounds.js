@@ -5,7 +5,7 @@ import { audio, bindSettings, migrateAudio } from '../js/audio/index.js';
 import { RECIPES, IDS, variantsOf, tierOf } from '../js/audio/recipes.js';
 import { BED_IDS, ONE_SHOTS } from '../js/audio/ambient.js';
 import { eventCalls, noteCalls, uiCalls, controlFor, newWireState } from '../js/audio/wire.js';
-import { explainDrop, ambientWhy, oneShotWhy, dialWhy, pressBurst, describeMinute, blindDeck, blindScore, BLIND_KINDS } from '../js/audio/audition.js';
+import { explainDrop, ambientWhy, oneShotWhy, dialWhy, pressBurst, describeMinute, blindDeck, blindScore, BLIND_KINDS } from './audition.js';
 import { SECTIONS, PAIRS, LADDERS, MINUTE } from './sections.js';
 
 const settings = { audio: migrateAudio({}, location.search) };
@@ -115,7 +115,7 @@ for (const S of SECTIONS) {
   const row = el('div', 'row', null, sec);
   for (const id of IDS) { const e = RECIPES[id]; if (!e.pool) continue; for (const v of variantsOf(id)) for (let k = 0; k < e.pool; k++) { const b = el('button', null, `${id} / ${v} / member ${k + 1}`, row); b.dataset.tier = tierOf(id, v); b.onclick = () => hear(id, v, { poolIndex: k }, b); } } }
 // ---- the repair dial tone
-{ const sec = el('section', 'grp', null, app); el('h2', null, 'Repair dial tone', sec); el('p', 'mute', 'The marker\'s place is the pitch (low left, high right); inside the green zone (40 to 60%) the tone gains an octave and a shimmer and rises 3 dB.', sec);
+{ const sec = el('section', 'grp', null, app); el('h2', null, 'Repair dial tone', sec); el('p', 'mute', 'The marker\'s place is the pitch (low left, high right); inside the green zone (40 to 60%) the tone gains an octave and a shimmer and rises (by up to 2.5 dB). Each note has a level of its own: the low ones are lifted over the high ones because a quiet laptop takes 9 dB more off D4 than off D6 (docs/AUDIO.md 4.5).', sec);
   const row = el('div', 'row', null, sec); const s = el('input', null, null, row); s.type = 'range'; s.min = 0; s.max = 100; s.value = 20; s.setAttribute('aria-label', 'Marker place');
   const on = el('button', null, 'Start the tone', row), off = el('button', null, 'Stop', row);
   const note = el('p', 'why', '', sec);
@@ -162,7 +162,7 @@ const bursts = {
   const run = (calls) => { for (const [m, id, o] of calls) { if (m === 'countUp') audio.countUp(o ?? 0); else if (m === 'play') audio.play(id, o); else audio.request(id, o); } };
   const play = (speed) => {
     stop(); audio.unlock(); sync(); const st = newWireState(); audio.setEnv({ speed, paused: false, netWorth: 900 });
-    const hooks = { now: () => performance.now(), netWorth: () => 900, pan: () => 0, loansLeft: () => 1, cost: () => 0, poolDelayed: () => false };
+    const hooks = { now: () => performance.now(), netWorth: () => 900, pan: () => 0, loansLeft: () => 1, cost: () => 0, poolDelayed: () => false, quiet: () => A().quiet === true }; // (the bar's Classroom box: the minute asks for the softer reward and shock voices, as the game does in a room)
     for (const [at, kind, p] of MINUTE) timers.push(setTimeout(() => {
       try {
         if (kind === 'control') { audio.touch(); const c = controlFor(p); if (c) run([c]); } else if (kind === 'event') run(eventCalls(p, st, hooks)); else if (kind === 'note') run(noteCalls(p, st, hooks)); else if (kind === 'ui') run(uiCalls({ type: 'ui', ...p }, st, hooks));
@@ -225,6 +225,20 @@ const bursts = {
 
 // ---- contents: the page is 14,000 px of cards in seventeen groups
 { const toc = $('toc'); let n = 0; for (const sec of app.querySelectorAll('section.grp')) { const h = sec.querySelector('h2'); if (!h) continue; if (!sec.id) sec.id = 'g-x' + (++n); const a = el('a', null, h.textContent.replace(/\s*\(.*$/, ''), toc); a.href = '#' + sec.id; } }
+// ---- the bar: its real height is the page's scroll offset, and its options fold away (sixth round, UX4). Every contents link scrolled its section's heading, blurb and "Play all" button under the 160px sticky
+// bar (302px of an 844px phone), and the author landed on card tails and scrolled up each time. The offset is read from the bar itself, never a number: sounds.html says `html { scroll-padding-top: calc(var(--bar-h) + 8px) }`
+// and this writes --bar-h, again whenever the bar changes size (the options fold, a long status line wraps, the window narrows). The volume, Mute and Stop stay in view when the rest is folded.
+{ const bar = $('bar'), opts = $('opts'), toggle = $('opts-toggle'), root = document.documentElement;
+  const fit = () => { try { if (bar && root && root.style && typeof bar.getBoundingClientRect === 'function') root.style.setProperty('--bar-h', Math.ceil(bar.getBoundingClientRect().height) + 'px'); } catch { /* a page with no layout (a test's stand-in) */ } };
+  fit();
+  if (bar && typeof ResizeObserver !== 'undefined') new ResizeObserver(fit).observe(bar);
+  if (toggle && opts) {
+    let open = !(typeof matchMedia === 'function' && matchMedia('(max-width: 640px)').matches); // a phone starts with the options folded: with them the bar is 351px of an 844px window, without them 174
+    const apply = () => { toggle.setAttribute('aria-expanded', String(open)); opts.hidden = !open; fit(); };
+    toggle.onclick = () => { open = !open; apply(); };
+    apply();
+  }
+}
 // ---- the meter
 const meter = $('meter').firstElementChild, dbEl = $('db'), buf = new Float32Array(1024);
 let peakHold = -99;

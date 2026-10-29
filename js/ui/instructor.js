@@ -12,6 +12,18 @@ export const PRESETS = [
   ['One week: 90 days in 7 days', (2160 * SEC_PER_HOUR) / (7 * 86400)],
   ['Four-week module: 90 days in 28 days', (2160 * SEC_PER_HOUR) / (28 * 86400)],
 ];
+/**
+ * The sound a student link asks for (sixth round, UX3; it was one checkbox, "Quiet sound link"): Normal adds nothing, Quiet adds `&sound=quiet`, Off adds `&sound=off`. Both are the ROOM's rule applied
+ * early (js/audio/settings.js `fromAddress`): a student gets it while they are in the room and their own sound back on leaving, and a student who has chosen a sound setting of their own keeps it. The
+ * hint is what the choice does, in words an instructor can use; Classroom is "less than half as loud, and still not silent" (12.6 dB under Full for a game sound at any volume, 10.6 for an interface sound).
+ */
+export const LINK_SOUNDS = [
+  { id: 'normal', label: 'Normal', query: '', hint: 'Adds nothing. A student who joins is put in Classroom sound by the room, as always.' },
+  { id: 'quiet', label: 'Quiet', query: '&sound=quiet', hint: 'Adds &amp;sound=quiet: students start in Classroom sound, less than half as loud and still not silent, only while they are in the room.' },
+  { id: 'off', label: 'Off', query: '&sound=off', hint: 'Adds &amp;sound=off: students start muted, only while they are in the room. They press M to turn sound on (Classroom), and their own comes back when they leave.' },
+];
+/** What the toast says when the link is copied: it names what the link carries (the choice comes before the copy, and copying first left a link without it and nothing said so). */
+export const LINK_COPIED = { normal: 'Student link copied.', quiet: 'Student link copied, with quiet sound.', off: 'Student link copied, with sound off.' };
 const realPerDay = (speed) => { const s = 168 / speed; return s < 120 ? Math.round(s) + ' seconds' : s < 7200 ? Math.round(s / 60) + ' minutes' : (s / 3600).toFixed(1) + ' hours'; };
 const own = (o, k) => typeof k === 'string' && Object.prototype.hasOwnProperty.call(o, k);
 const topZone = (st) => Math.min(ZONE_COUNT, Math.max(1, Math.round(st?.zones) || 1));
@@ -123,12 +135,15 @@ export function instructorParts(S, U) {
   const recovering = S.recovering === true, off = recovering ? ' aria-disabled="true"' : '';
   const lobby = !recovering && S.clock.paused && hour < 1;
   const room = S.roomInfo || { code: '', relay: '' };
-  const link = `${typeof location !== 'undefined' ? location.origin + location.pathname : ''}?room=${room.code}${room.relay ? '&relay=' + encodeURIComponent(room.relay) : ''}${U.quietLink ? '&sound=quiet' : ''}`; // `sound=quiet`: students who open it start in Classroom sound (docs/AUDIO.md 7.1); never over a sound setting a student has changed
+  const ls = LINK_SOUNDS.find((x) => x.id === U.linkSound) || LINK_SOUNDS[0];
+  const link = `${typeof location !== 'undefined' ? location.origin + location.pathname : ''}?room=${room.code}${room.relay ? '&relay=' + encodeURIComponent(room.relay) : ''}${ls.query}`; // `sound=quiet` or `sound=off`: students who open it start in Classroom sound, or muted, while they are in the room (docs/AUDIO.md 7.1); never over a sound setting a student has chosen
   const dist = distribution(students), drafted = draftCounts(students), here = U.zone && ZONES[U.zone] ? U.zone : busiest(dist);
 
   const head = `<div class="grow"><h1 tabindex="-1" style="margin:0;font-size:1.3rem">Instructor dashboard</h1><span class="small mute">Room <b class="mono gold" style="font-size:1.2rem">${esc(room.code)}</b> &middot; ${S.room?.kind === 'relay' ? 'relay server (' + esc(S.room.state) + ')' : 'this browser only (students join from other tabs of this browser with Copy student link; other devices need a relay)'} &middot; <b>${onlineN}</b> student${onlineN === 1 ? '' : 's'} online${real.length > onlineN ? ' (' + (real.length - onlineN) + ' away)' : ''}${S.demo ? ' + ' + S.demo + ' demo' : ''}</span></div>
-      <div class="in-quietlink" style="display:grid;gap:.15rem;max-width:12.5rem"><label class="row" style="color:var(--ink);margin:0"><input type="checkbox" data-change="linkquiet" data-fid="lq" aria-describedby="lq-h"${U.quietLink ? ' checked' : ''}> Quiet sound link</label><span class="tiny mute" id="lq-h">Adds &amp;sound=quiet: students start in Classroom sound, only while they are in the room.</span></div>
-      <button class="btn sm ghost" data-act="copylink" data-link="${esc(link)}"${U.quietLink ? ' data-quiet="1"' : ''}>Copy student link</button>
+      <fieldset class="in-linksound" style="display:grid;gap:.15rem;max-width:15rem;margin:0;padding:0;border:0;min-width:0"><legend style="color:var(--ink);padding:0;font-size:.82rem">Sound in the student link</legend>
+        <div class="row" style="gap:.15rem .35rem">${LINK_SOUNDS.map((x) => `<input type="radio" name="linksound" id="ls-${x.id}" value="${x.id}" data-change="linksound" data-fid="ls-${x.id}" aria-describedby="ls-h"${x.id === ls.id ? ' checked' : ''}><label for="ls-${x.id}" style="color:var(--ink);margin:0 .6rem 0 0">${x.label}</label>`).join('')}</div>
+        <span class="tiny mute" id="ls-h">${ls.hint}</span></fieldset>
+      <button class="btn sm ghost" data-act="copylink" data-link="${esc(link)}"${ls.id === 'normal' ? '' : ` data-sound="${ls.id}"`}>Copy student link</button>
       <button class="btn sm ghost" data-act="settings">Display and sound</button><button class="btn sm danger" data-act="close">Close room</button>`;
 
   const events = Object.values(EVENTS).map((e) => `<option value="${e.id}" ${U.ev === e.id ? 'selected' : ''}>${esc(e.name)}</option>`).join('') + Object.entries(ALGO_EVENTS).map(([k, e]) => `<option value="${k}" ${U.ev === k ? 'selected' : ''}>${esc(e.name)} (algorithmic)</option>`).join('');
@@ -188,7 +203,7 @@ export function gradebookCSV(S) {
 }
 
 export function mountInstructor(root, S, hooks) {
-  const U = { zone: null, bg: 'all', ev: 'fed', when: '0', replace: true, quietLink: false };
+  const U = { zone: null, bg: 'all', ev: 'fed', when: '0', replace: true, linkSound: 'normal' };
   root.innerHTML = `<header class="panel row" id="ih"></header><div class="gap" id="ikeep"></div><div class="gap main"><div class="col" id="icol1"></div><div class="col" id="icol2"></div></div><section class="panel gap" id="igrade"></section>`;
   const el = { head: $('#ih'), keep: $('#ikeep'), c1: $('#icol1'), c2: $('#icol2'), grade: $('#igrade') };
 
@@ -201,8 +216,8 @@ export function mountInstructor(root, S, hooks) {
     settings() { settingsDialog(); },
     close() { hooks.onClose(); },
     copykey() { copyRecovery(S, { write: (t) => navigator.clipboard.writeText(t), say: toast }); },
-    linkquiet(b) { U.quietLink = !!b.checked; render(); }, // the student link carries ?sound=quiet, or not
-    copylink(b) { copyText(b.dataset.link).then((ok) => (ok ? toast(b.dataset.quiet ? 'Student link copied, with quiet sound.' : 'Student link copied.', 'good') : toast(`Could not copy it by itself. The student link is ${b.dataset.link}`, 'info', 9000))); }, // the box comes first and the toast says what the link carries: copying before ticking left a link without the flag, and nothing said so. With no way to copy the link is in the words, for nine seconds
+    linksound(b) { U.linkSound = LINK_SOUNDS.some((x) => x.id === b.value) ? b.value : 'normal'; render(); }, // the student link carries nothing, ?sound=quiet or ?sound=off
+    copylink(b) { copyText(b.dataset.link).then((ok) => (ok ? toast(LINK_COPIED[b.dataset.sound] || LINK_COPIED.normal, 'good') : toast(`Could not copy it by itself. The student link is ${b.dataset.link}`, 'info', 9000))); }, // the box comes first and the toast says what the link carries: copying before ticking left a link without the flag, and nothing said so. With no way to copy the link is in the words, for nine seconds
     start() { S.clock.set({ hour: 0, paused: false }); S._sendClock(); render(); toast('Simulation started.', 'good'); },
     pause() { S.setPaused(!S.clock.paused); },
     speed(b) { S.setSpeed(+b.dataset.v); },

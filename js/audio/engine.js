@@ -5,11 +5,16 @@ import { voice, master, dB, hz, fadeIn, noiseBuffers, MAKEUP_FALLBACK, FAMILY_MS
 import { RECIPES, IDS, layersFor, tierOf, firstVariant, variantsOf, cooldownOf, variantRank, trimFor, noiseAtFor, isMoment, PREEMPT, jitterOf } from './recipes.js';
 import { createAmbient, oneShotLayers } from './ambient.js';
 import { TRIMS } from './trims.js';
-import { createResolverState, resolveBurst, gateClock, holdRelease, stateGate, catchingUp, recentPress } from './resolve.js';
+import { createResolverState, resolveBurst, gateClock, holdRelease, stateGate, catchingUp, recentPress, resetRun, dropHeld } from './resolve.js';
 import { volumeGain, masterGain, CLASSROOM_DB } from './settings.js';
 
 const PRI = { tiny: 1, medium: 2, loud: 3 };
-export const LIMITS = { VOICES: 12, OSCILLATORS: 160, LEAD: 0.012, IDLE_MS: 60000, DUCK_REL: 600 };
+export const LIMITS = { VOICES: 12, OSCILLATORS: 160, LEAD: 0.012, WARM: 0.16, IDLE_MS: 60000, DUCK_REL: 600 };
+// LEAD: how far ahead of `currentTime` a voice is scheduled, so that nothing starts in the past. WARM: the earliest a voice may start, in the context's own time. Chrome's glue compressor is cold for the
+// first 100 to 150 ms after the context is made and takes up to 10 dB off a short sound that starts inside them, whatever was fed to it before (a -80 dBFS sine changed nothing: it is the time since the
+// compressor started, not what it heard; docs/AUDIO.md 3.7, sixth round R3-1). A key or a touch makes the context and plays its tick in the same task, 12 ms in, and that tick came out up to 9.8 dB quiet
+// (a mouse click's tick follows its pointerdown by 60 to 150 ms and lost 0.4 to 2.8). A voice that would start earlier waits for 160 ms of context time, where the loss is under half a dB; from then on
+// nothing waits for anything. A context that sat silent for 30 s was not cold again (an offline render; a suspended live context was not measured).
 const BUCKET_SPEC = { tiny: [8, 4], medium: [3, 3], loud: [1 / 1.2, 1], player: [6, 6] };
 /** The pretend rewards of an Academy lesson are silent (4.1): its levels, XP and quests are a rehearsal saved nowhere. The money, the Deal Room and the acad.* sounds stay. */
 export const SANDBOX_SILENT = new Set(['level.up', 'quest.complete', 'daily.done', 'achievement', 'reward.also', 'milestone', 'zone.open', 'skill.up', 'codex.unlock']);
@@ -39,6 +44,27 @@ function peakAlive(others, mine) {
   return pk;
 }
 const clamp = (x, lo, hi) => Math.min(hi, Math.max(lo, x));
+
+// ---- the repair dial tone's level (docs/AUDIO.md 4.5, sixth round R3-2). The marker's place 0 to 1 is quantized to these eleven notes.
+export const DIAL_NOTES = ['D4', 'E4', 'F#4', 'A4', 'B4', 'D5', 'E5', 'F#5', 'A5', 'B5', 'D6'];
+// The tone was one level, -33 dBFS at the peak, a flat sine, and the two listeners of the calibration hear a sine of one level very differently across its range: the quiet laptop (a 220 Hz high-pass and
+// the A-weighting of the ear at a low level) takes 8 dB more off D4 than off D6, so the low notes sat 3 to 12 dB under the quietest tiny sound there (the tone has no recipe and no level check looked at it).
+// Its level is now a gain per note, and `scripts/audio-check.mjs --dial` holds every note, steady, in the green zone and out of it, within 3 dB of the tiny tier's median under both models, at 44.1 and 48 kHz.
+//   BASE   the peak of the fundamental at D6 out of the zone (it was -33: the tone is 2.2 dB louder everywhere, because at D6 it was 4.7 dB under the tiny median on a flat speaker and 2.9 on the laptop);
+//   TILT   what each lower note adds to it, tapering to 0 at D6: not the whole 9 dB that would make the laptop level, because the flat speaker would then hear D4 above the tiny sounds;
+//   RISE   what the zone adds to the fundamental (it was 3 dB for every note): less at the lowest four, where the tilt has lifted the tone to the top of the flat speaker's window and the octave partial
+//          and the shimmer that the zone also adds carry the "now" (they are 1.6 to 3.8 dB louder to the laptop at every note).
+// Each is a table, so that nothing in a note's level has to be computed, and a gain is reached with the same 20 ms time constant as before (no step, no click). The peak of the loudest note, in the zone at D4,
+// is about -21 dBFS: far under the tiny ceiling of -6.
+export const DIAL_BASE_DB = -30.8;
+export const DIAL_TILT_DB = [6.6, 5.7, 4.5, 3.0, 2.2, 1.4, 1.1, 0.9, 0.7, 0.4, 0];
+export const DIAL_RISE_DB = [-1.0, -0.2, 1.0, 2.5, 2.5, 2.5, 2.5, 2.5, 2.5, 2.5, 2.5];
+/** The gain of the tone's fundamental, in dB, for note `i` of DIAL_NOTES, in the green zone or out of it. */
+export const dialGainDb = (i, inZone) => DIAL_BASE_DB + DIAL_TILT_DB[i] + (inZone ? DIAL_RISE_DB[i] : 0);
+// The zone's glass shimmer is A5. At A4 the octave partial is A5 already and at A5 the fundamental is: two oscillators on one pitch add by the phase between them, which the history of the glide decides
+// and nothing in the game controls, so the zone at those two notes was 1.2 dB louder or quieter to the laptop from one repair to the next. The shimmer is left out where its pitch is already in the tone.
+const SHIMMER_HZ = hz('A5');
+export const sharesShimmer = (f) => Math.abs(f - SHIMMER_HZ) < 1 || Math.abs(2 * f - SHIMMER_HZ) < 1;
 const DEFAULT_SETTINGS = { master: 70, mute: false, ui: true, game: true, ambient: false, ambientLevel: 70, dial: false, clockSounds: true, quiet: false, worldTicks: true };
 
 /**
@@ -72,6 +98,8 @@ export function createAudio(cfg = {}) {
   const silent = () => { const s = eff(); return s.mute || s.master <= 0; };
   const playable = () => supported && !!ctx && unlocked && !hidden && ctx.state !== 'closed';
   const ctxNow = () => ctx.currentTime;
+  /** Where a voice asked for at `now` starts, in context time: LEAD from now, and never inside the compressor's warm-up (LIMITS.WARM). */
+  const startAt = (now) => Math.max(now + LIMITS.LEAD, LIMITS.WARM);
 
   // ---- the context, created on the first gesture
   function measureMakeup() { // the compressor node's own gain depends on its settings and on the browser: measure it once with a 100 ms offline render (3.7)
@@ -122,7 +150,7 @@ export function createAudio(cfg = {}) {
     setTimeout: (f, ms) => timers.set(f, ms), clearTimeout: (h) => timers.clear(h),
     enabled: () => eff().ambient && !silent(), running: () => playable(), dialogOpen: () => env.hold, lastMedium: () => lastMedium, lastMoment: () => lastMoment,
     duck: (db) => { if (!nodes) return; const t = ctxNow(); nodes.ambBase.gain.cancelScheduledValues(t); nodes.ambBase.gain.setTargetAtTime(dB(db), t, db < 0 ? 0.1 : 0.17); },
-    shot: (id, layers, pan) => { if (!nodes || !playable()) return; voice(ctx, nodes.ambLevel, layers, ctxNow() + LIMITS.LEAD, { seed: ++seedN, trim: TRIMS.oneShots?.[id] ?? 0, noiseAt: TRIMS.noiseAt?.[id], pan, jitterCents: 7 }); },
+    shot: (id, layers, pan) => { if (!nodes || !playable()) return; voice(ctx, nodes.ambLevel, layers, startAt(ctxNow()), { seed: ++seedN, trim: TRIMS.oneShots?.[id] ?? 0, noiseAt: TRIMS.noiseAt?.[id], pan, jitterCents: 7 }); },
   });
 
   // ---- gates shared by play and request
@@ -244,7 +272,7 @@ export function createAudio(cfg = {}) {
     wake();
     const snapshot = { ...famLast }; // layer families do not stack: the later voice skips a layer whose family started inside its window, which is also the money group's rule for coins
     const group = { id: main.id, variant: main.variant, tier: heavy.tier, startMs: t + extraDelay * 1000, endMs: t, voices: [], moment, osc: 0, spans: [], stopped: false };
-    const startT = ctxNow() + LIMITS.LEAD;
+    const now0 = ctxNow(), startT = startAt(now0), lead = startT - now0; // `lead`: how far from now the voices really start: LEAD, or the rest of the compressor's warm-up for the first sound of a context
     for (const m of plan) {
       const k = Number.isInteger(m.opts.poolIndex) && m.opts.poolIndex >= 0 && m.opts.poolIndex < (m.e.pool || 1) ? m.opts.poolIndex : pickPool(m.e, m.id + '#' + m.variant); // poolIndex: a member asked for by name (the audition page)
       let layers = layersFor(m.id, m.variant, m.opts.params, k);
@@ -260,7 +288,7 @@ export function createAudio(cfg = {}) {
       }
       // The oscillator budget (3.3) counts what is alive at the same instant: this voice's built layers (not those it will leave out) against the spans of the voices already admitted, each from its
       // own start (a second sentence at +500 ms or a tick at +2 s is not alive at the time of the first). Over it, the optional sparkle goes; a tiny sound that still does not fit is dropped.
-      const startMs = t + (LIMITS.LEAD + shift) * 1000, mo = { secondary: m.opts.secondary, dull: m.opts.dull };
+      const startMs = t + (lead + shift) * 1000, mo = { secondary: m.opts.secondary, dull: m.opts.dull };
       let spans = spansOf(builtLayers(layers, skip, mo), startMs);
       const total = (sp) => sp.reduce((n, x) => n + x[2], 0);
       const over = (sp) => { // the plain sum is the quick answer; the sweep only runs when the sum is over
@@ -355,8 +383,8 @@ export function createAudio(cfg = {}) {
     } catch (e) { logOnce('request', e); return false; }
   }
 
-  // ---- the repair dial tone (4.5): the one sound that is not a recipe; it follows a value
-  const NOTES = ['D4', 'E4', 'F#4', 'A4', 'B4', 'D5', 'E5', 'F#5', 'A5', 'B5', 'D6'];
+  // ---- the repair dial tone (4.5): the one sound that is not a recipe; it follows a value. Its level by note is DIAL_BASE_DB, DIAL_TILT_DB and DIAL_RISE_DB (above).
+  const NOTES = DIAL_NOTES;
   let dial = null;
   const dialApi = {
     start() {
@@ -365,7 +393,7 @@ export function createAudio(cfg = {}) {
         const t = ctxNow(), g = ctx.createGain(), main = ctx.createOscillator(), oct = ctx.createOscillator(), shim = ctx.createOscillator(), og = ctx.createGain(), sg = ctx.createGain();
         main.type = 'sine'; oct.type = 'sine'; shim.type = 'sine';
         main.frequency.value = hz(NOTES[0]); oct.frequency.value = hz(NOTES[0]) * 2; shim.frequency.value = hz('A5');
-        fadeIn(g.gain, t, 0.03, dB(-33)); // 6 dB under a tiny sound (-36 dB active level; a sine's peak is 3 dB over its level)
+        fadeIn(g.gain, t, 0.03, dB(dialGainDb(0, false))); // the tone starts on D4 (the marker's first place) and the first update moves it to the note it is on
         og.gain.value = 0.0001; sg.gain.value = 0.0001;
         main.connect(g); oct.connect(og); shim.connect(sg); og.connect(g); sg.connect(g); g.connect(chain.buses.game);
         for (const o of [main, oct, shim]) o.start(t);
@@ -373,15 +401,15 @@ export function createAudio(cfg = {}) {
         return true;
       } catch (e) { logOnce('dial', e); dial = null; return false; }
     },
-    /** pos: the marker's place 0 to 1; lo and hi: the green zone. Left is low, right is high; in the zone the tone gains an octave partial and a glass shimmer and rises 3 dB. */
+    /** pos: the marker's place 0 to 1; lo and hi: the green zone. Left is low, right is high; in the zone the tone gains an octave partial and a glass shimmer and rises (DIAL_RISE_DB). */
     update(pos, lo, hi) {
       if (!dial || !ctx) return;
       try {
-        const t = ctxNow(), p = clamp(Number.isFinite(+pos) ? +pos : 0, 0, 1), f = hz(NOTES[Math.round(p * (NOTES.length - 1))]);
+        const t = ctxNow(), p = clamp(Number.isFinite(+pos) ? +pos : 0, 0, 1), i = Math.round(p * (NOTES.length - 1)), f = hz(NOTES[i]);
         const inZone = Number.isFinite(+lo) && Number.isFinite(+hi) && p >= lo && p <= hi;
         dial.main.frequency.setTargetAtTime(f, t, 0.035 / 3); dial.oct.frequency.setTargetAtTime(f * 2, t, 0.035 / 3);
-        dial.og.gain.setTargetAtTime(inZone ? 0.35 : 0.0001, t, 0.02); dial.sg.gain.setTargetAtTime(inZone ? 0.18 : 0.0001, t, 0.02);
-        dial.g.gain.setTargetAtTime(dB(inZone ? -30 : -33), t, 0.02);
+        dial.og.gain.setTargetAtTime(inZone ? 0.35 : 0.0001, t, 0.02); dial.sg.gain.setTargetAtTime(inZone && !sharesShimmer(f) ? 0.18 : 0.0001, t, 0.02);
+        dial.g.gain.setTargetAtTime(dB(dialGainDb(i, inZone)), t, 0.02); // the level follows the note with the same 20 ms as the zone's: no step, no click
       } catch { /* the tone is an addition */ }
     },
     stop(fade = 0.015) {
@@ -462,7 +490,7 @@ export function createAudio(cfg = {}) {
     ambient(state) { amb.set(state); },
     dial: dialApi,
     /** One ambient one-shot on demand, whatever the rate rule says: for the audition page. */
-    playOneShot(id) { if (!playable() || !nodes) return null; return voice(ctx, nodes.ambLevel, oneShotLayers(id), ctxNow() + LIMITS.LEAD, { seed: ++seedN, trim: TRIMS.oneShots?.[id] ?? 0, noiseAt: TRIMS.noiseAt?.[id], jitterCents: 7 }); },
+    playOneShot(id) { if (!playable() || !nodes) return null; return voice(ctx, nodes.ambLevel, oneShotLayers(id), startAt(ctxNow()), { seed: ++seedN, trim: TRIMS.oneShots?.[id] ?? 0, noiseAt: TRIMS.noiseAt?.[id], jitterCents: 7 }); },
     /** A level meter for the audition page: an analyzer on the output of the master chain (made on first use, so nothing runs for the game). */
     meter() { if (!ctx || !chain) return null; if (!meterNode) { meterNode = ctx.createAnalyser(); meterNode.fftSize = 1024; chain.clip.connect(meterNode); const sink = ctx.createGain(); sink.gain.value = 0; meterNode.connect(sink); sink.connect(ctx.destination); } /* a silent tail keeps the analyser pulled */ return meterNode; },
     /** Tell the engine the world it is in (speed, paused, busy, lag, sandbox, net worth...). */
@@ -481,7 +509,9 @@ export function createAudio(cfg = {}) {
       if (o.chain) dest = master(oc, { master: o.master ?? 1, makeup: 1 / (TRIMS.makeup || MAKEUP_FALLBACK) }).buses[e.bus];
       return voice(oc, dest, layersFor(id, variant ?? firstVariant(id), o.params, o.k || 0), at, { seed: o.seed ?? 7, trim: trimFor(id, variant ?? firstVariant(id), o.k || 0) + (o.gainDb || 0), noiseAt: noiseAtFor(id, variant ?? firstVariant(id), o.k || 0), noJitter: true, jit: 0 });
     },
-    release(keepMs = 0) { api.stopAll(40, keepMs); amb.stop(0.3); queue = []; if (idleT != null) { timers.clear(idleT); idleT = null; } env.hold = false; env.sandbox = false; },
+    release(keepMs = 0) { api.stopAll(40, keepMs); amb.stop(0.3); queue = []; if (idleT != null) { timers.clear(idleT); idleT = null; } env.hold = false; env.sandbox = false; dropHeld(rs); }, // a game that is left takes its held coin with it: the sheet that would release it is gone, and `hold(false)` returns early when the hold is already off (WA-1)
+    /** A real game is wired or has been left (WA-1): the resolver's run-scoped state goes back to a first run's (the door bells that teach the cue, the held coin, the gaps); the reward budget stays. Not for an Academy lesson's sandbox: `wireGame` does not call it. */
+    newRun() { resetRun(rs); },
     /** Closed on pagehide. */
     close() { api.release(); try { ctx?.close?.(); } catch { /* ignore */ } ctx = null; chain = null; nodes = null; unlocked = false; },
     get supported() { return supported; },

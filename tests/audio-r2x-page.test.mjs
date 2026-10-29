@@ -59,7 +59,10 @@ class El {
 const bar = {}; // the elements dev/sounds.html declares
 for (const [id, tag, o] of [['vol', 'input', { type: 'range', value: '70' }], ['mute', 'input', { type: 'checkbox' }], ['ui', 'input', { type: 'checkbox', checked: true }], ['game', 'input', { type: 'checkbox', checked: true }],
   ['world', 'input', { type: 'checkbox', checked: true }], ['amb', 'input', { type: 'checkbox' }], ['ambvol', 'input', { type: 'range', value: '70' }], ['quiet', 'input', { type: 'checkbox' }], ['mono', 'input', { type: 'checkbox' }], ['lap', 'input', { type: 'checkbox' }], ['toc', 'nav', {}],
-  ['stop', 'button', {}], ['reset', 'button', {}], ['state', 'span', {}], ['app', 'div', {}], ['meter', 'div', {}], ['db', 'span', {}]]) { const e = new El(tag); e.id = id; Object.assign(e, o); bar[id] = e; }
+  ['stop', 'button', {}], ['reset', 'button', {}], ['state', 'span', {}], ['app', 'div', {}], ['meter', 'div', {}], ['db', 'span', {}],
+  ['bar', 'div', {}], ['opts', 'div', {}], ['opts-toggle', 'button', {}]]) { const e = new El(tag); e.id = id; Object.assign(e, o); bar[id] = e; }
+bar.bar.getBoundingClientRect = () => ({ height: bar.opts.hidden ? 91.4 : 139.2 }); // the sticky bar's real height: it is smaller with its options folded (sixth round, UX4)
+const docEl = { style: { props: {}, setProperty(k, v) { this.props[k] = v; } } };
 bar.meter.append(new El('i'));
 let page; // the page's own handle: window.audioAudition = { audio, settings, say }
 const press = async (btn, ms = 90000) => { assert.equal(typeof btn.onclick, 'function', 'a button with nothing behind it'); const r = btn.onclick(); await advance(ms); if (r && r.then) await Promise.race([r, tick()]); }; // (a run of sounds waits on the clock: it is the clock that is moved, not the promise that is waited for)
@@ -75,7 +78,7 @@ async function loadPage() {
   globalThis.clearTimeout = (h) => { const i = V.q.findIndex((t) => t.h === h); if (i >= 0) V.q.splice(i, 1); };
   globalThis.AudioContext = function AudioContext() { return fakeContext({ sampleRate: 8000 }); };
   globalThis.location = { search: '?check=1' }; globalThis.window = globalThis; globalThis.requestAnimationFrame = () => 0;
-  globalThis.document = { hidden: false, getElementById: (id) => bar[id] || null, createElement: (t) => new El(t), addEventListener() {} };
+  globalThis.document = { hidden: false, documentElement: docEl, getElementById: (id) => bar[id] || null, createElement: (t) => new El(t), addEventListener() {} };
   await import('../dev/sounds.js');
   page = globalThis.audioAudition;
   return page;
@@ -154,7 +157,7 @@ test('A3: EVERY button of the page, in every configuration of the bar, either so
   // count the ambient one-shots that really start (they return nothing to the page's statistics)
   page.shots = 0; const orig = page.audio.playOneShot; page.audio.playOneShot = (id) => { const v = orig.call(page.audio, id); if (v) page.shots++; return v; };
   const problems = [];
-  const skip = new Set(['stop', 'reset']); // checked on their own below
+  const skip = new Set(['stop', 'reset', 'opts-toggle']); // checked on their own below (the fold of the bar's options is not a sound)
   for (const [cfg, set] of Object.entries(CONFIGS)) {
     const bs = buttons().filter((b) => !skip.has(b.id) && !inBlind(b)), t0 = Date.now(); let n = 0; // (the blind round names nothing and is tested on its own below)
     for (const b of bs) {
@@ -261,5 +264,14 @@ test('U12: the blind round: twenty sounds that name nothing, five of each kind, 
   const done = text(); assert.match(done, /Gain against loss: \d+ of 10 right/); assert.match(done, /target is 90%/); assert.match(done, /All four kinds: \d+ of 20/);
   const table = kids(live()).find((e) => e.tagName === 'TABLE'); assert.equal(kids(table).length, 21, 'a key to all twenty, after the round');
   assert.ok(/\d+ of 10 right/.test(done) && rows(live()).some((b) => /Another round/.test(label(b))));
+});
+test('UX4 (sixth round): the bar\'s scroll offset is its real height, written as --bar-h at load and again when the options fold; the fold is a toggle with aria-expanded and a folded box keeps its value (the Chrome half is tests/audio-r6-page.test.mjs)', () => {
+  const t = bar['opts-toggle'], opts = bar.opts;
+  assert.equal(typeof t.onclick, 'function'); assert.equal(t.attrs['aria-expanded'], 'true', 'open on a window with no phone rule'); assert.ok(!opts.hidden);
+  assert.equal(docEl.style.props['--bar-h'], '140px', 'written at load from the bar\'s own height (139.2, rounded up so the offset is never short)');
+  bar.quiet.checked = true; t.onclick();
+  assert.equal(t.attrs['aria-expanded'], 'false'); assert.equal(opts.hidden, true); assert.equal(docEl.style.props['--bar-h'], '92px', 'and again when the options fold (91.4)');
+  assert.equal(bar.quiet.checked, true, 'a folded box keeps its value: the page reads the boxes by id'); bar.quiet.checked = false;
+  t.onclick(); assert.equal(t.attrs['aria-expanded'], 'true'); assert.equal(opts.hidden, false); assert.equal(docEl.style.props['--bar-h'], '140px');
 });
 test('(clean up) the virtual clock is put back', () => { restore(); assert.equal(globalThis.setTimeout, real.setTimeout); });

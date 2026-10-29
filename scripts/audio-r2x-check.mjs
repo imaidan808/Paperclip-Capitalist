@@ -82,10 +82,18 @@ try {
     ok(btn === 'Display and sound', 'A1: the instructor\'s settings button says Display and sound: ' + btn);
     const link0 = await p.eval(`document.querySelector('[data-act="copylink"]').dataset.link`);
     ok(/\?room=[A-Z0-9]+/.test(link0) && !/sound=/.test(link0), 'A1: the student link is the link it was: ' + link0);
-    await p.clickSel('input[data-change="linkquiet"]'); await sleep(300);
+    await p.clickSel('input[data-change="linksound"][value="quiet"]'); await sleep(300);
     const link1 = await p.eval(`document.querySelector('[data-act="copylink"]').dataset.link`);
-    ok(/&sound=quiet$/.test(link1), 'A1: with Quiet sound link ticked the link carries ?sound=quiet: ' + link1);
-    ok(await p.eval(`document.querySelector('input[data-change="linkquiet"]').checked && document.activeElement === document.querySelector('input[data-change="linkquiet"]')`), 'A1: the box keeps the cursor through the redraw');
+    ok(/&sound=quiet$/.test(link1), 'A1: with Quiet chosen under Sound in the student link the link carries ?sound=quiet: ' + link1);
+    ok(await p.eval(`(()=>{ const q = document.querySelector('input[data-change="linksound"][value="quiet"]'); return q.checked && document.activeElement === q; })()`), 'A1: the radio keeps the cursor through the redraw');
+    // sixth round, UX3: the arrow key moves through the group (a native radio group), the link follows, and the cursor is still on the chosen radio after the redraw
+    await p.key('ArrowRight'); await sleep(300);
+    const link2 = await p.eval(`document.querySelector('[data-act="copylink"]').dataset.link`);
+    ok(/&sound=off$/.test(link2), 'UX3: ArrowRight chooses Off and the link carries ?sound=off: ' + link2);
+    ok(await p.eval(`(()=>{ const o = document.querySelector('input[data-change="linksound"][value="off"]'); return o.checked && document.activeElement === o && document.querySelector('[data-act="copylink"]').dataset.sound === 'off'; })()`), 'UX3: the chosen radio keeps the cursor, and the copy knows what it carries');
+    await p.key('ArrowLeft'); await sleep(200); await p.key('ArrowLeft'); await sleep(300);
+    ok(!/sound=/.test(await p.eval(`document.querySelector('[data-act="copylink"]').dataset.link`)), 'UX3: back on Normal the link carries nothing');
+    await p.clickSel('input[data-change="linksound"][value="quiet"]'); await sleep(300);
     await p.clickSel('[data-act="settings"]'); await sleep(400);
     ok(await p.eval(`document.querySelector('#dlg h2')?.textContent`) === 'Display and sound', 'A1: the dialog it opens is titled Display and sound');
     ok(!errors(p).length, 'A1: no console error (instructor): ' + errors(p).join(' | ').slice(0, 200));
@@ -250,9 +258,9 @@ try {
     const { p } = await page('', { play: false });
     await p.clickSel('[data-act="instr"]'); await sleep(900);
     await p.eval(`document.querySelector('#dlg [data-close]')?.click()`); await sleep(300);
-    ok(await p.eval(`(()=>{ const a = document.querySelector('input[data-change="linkquiet"]'), c = document.querySelector('[data-act="copylink"]'); return !!(a.compareDocumentPosition(c) & Node.DOCUMENT_POSITION_FOLLOWING); })()`), 'U6: the Quiet sound link box comes before Copy student link');
-    await p.clickSel('input[data-change="linkquiet"]'); await sleep(300);
-    ok(await p.eval(`document.querySelector('[data-act="copylink"]').dataset.quiet === '1'`), 'U6: and the copy knows what it carries');
+    ok(await p.eval(`(()=>{ const a = document.querySelector('input[data-change="linksound"]'), c = document.querySelector('[data-act="copylink"]'); return !!(a.compareDocumentPosition(c) & Node.DOCUMENT_POSITION_FOLLOWING); })()`), 'U6: the Sound in the student link choice comes before Copy student link');
+    await p.clickSel('input[data-change="linksound"][value="quiet"]'); await sleep(300);
+    ok(await p.eval(`document.querySelector('[data-act="copylink"]').dataset.sound === 'quiet'`), 'U6: and the copy knows what it carries');
     await p.close();
   }
 
