@@ -29,7 +29,7 @@ export const FOLLOW_SECONDS = 60;
 /** How long a room taken back waits to hear the class's clock before it starts paused (js/session.js `RECOVER_WAIT_MS`, 15 000 ms; tests/finish-repair.test.mjs holds the two together). */
 export const RECOVER_WAIT_SECONDS = 15;
 /** Where the grading rubric is: docs/ is not published with the site, so the dashboard links to the file in the repository. */
-export const KIT_URL = 'https://github.com/imaidan808/paperclip-capitalist/blob/main/docs/FACULTY_KIT.md';
+export const KIT_URL = 'https://github.com/imaidan808/Paperclip-Capitalist/blob/main/docs/FACULTY_KIT.md';
 /** The one sentence the dashboard and the title screen both say about that wait. */
 export const FOLLOW_NOTE = `Students follow your new Founder ID once the old one has been silent for about a minute, not at once. Wait that long before you change the pace, deploy a shock or rewind, because until then they ignore it.`;
 

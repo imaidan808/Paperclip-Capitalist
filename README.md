@@ -2,7 +2,7 @@
 
 A free browser game for university entrepreneurship courses. You start with **one paperclip and $0** and trade your way up through sixteen districts over a virtual **90-day** run, learning asset valuation and arbitrage, working capital, customer acquisition cost against lifetime value, negotiation and macro risk by doing them. A class shares one economy, so the obvious deal gets crowded and the Creativity Engine punishes the herd.
 
-Play it at **https://imaidan808.github.io/paperclip-capitalist/**. It is a folder of static files that runs entirely in the browser: no build step, no dependencies, no accounts, no tracking.
+Play it at **https://imaidan808.github.io/Paperclip-Capitalist/**. It is a folder of static files that runs entirely in the browser: no build step, no dependencies, no accounts, no tracking.
 
 ## What it is
 
@@ -28,13 +28,13 @@ Play it at **https://imaidan808.github.io/paperclip-capitalist/**. It is a folde
 
 ```bash
 npm start            # the source tree on http://localhost:8080 (server/static.mjs: no dependencies, this machine only)
-npm run preview      # stages the site and serves it as GitHub Pages does, on http://localhost:8081/paperclip-capitalist/
+npm run preview      # stages the site and serves it as GitHub Pages does, on http://localhost:8081/Paperclip-Capitalist/
 npm run stage        # stages the site into a folder and checks it (the workflow runs this with the folder _site)
 npm run preload      # prints the <link rel="modulepreload"> lines of the staged page
 npm run relay        # the optional classroom relay (npm install --prefix server, once, first)
 ```
 
-`npm start` serves the source tree for development. `npm run preview` is the one to open before a release, because it is built by the same script as the published site and answers the way Pages does: under `/paperclip-capitalist/`, with the site's own 404 page for an address that is not a file, and with gzip.
+`npm start` serves the source tree for development. `npm run preview` is the one to open before a release, because it is built by the same script as the published site and answers the way Pages does: under `/Paperclip-Capitalist/`, with the site's own 404 page for an address that is not a file, and with gzip.
 
 ## Test it
 
@@ -62,7 +62,7 @@ npm run tune -- '{"urgentK":2}' trades,pro 4   # days to districts 5, 9, 13 and 
 
 1. Create a repository and push this folder to `main`.
 2. In **Settings, Pages**, set the source to **GitHub Actions**.
-3. `.github/workflows/pages.yml` runs on every push to `main`: it runs the whole suite, stops if any test is marked `todo`, then runs `node scripts/stage.mjs _site`, which builds exactly what is served and checks it hangs together, and uploads that folder. The site appears at `https://<user>.github.io/<repo>/`. If the address is not `https://imaidan808.github.io/paperclip-capitalist/`, change it in `scripts/stage.mjs` and in `index.html`, `404.html`, `robots.txt`, `sitemap.xml` and `llms.txt` (the launch test lists every place).
+3. `.github/workflows/pages.yml` runs on every push to `main`: it runs the whole suite, stops if any test is marked `todo`, then runs `node scripts/stage.mjs _site`, which builds exactly what is served and checks it hangs together, and uploads that folder. The site appears at `https://<user>.github.io/<repo>/`. If the address is not `https://imaidan808.github.io/Paperclip-Capitalist/`, change it in `scripts/stage.mjs` and in `index.html`, `404.html`, `robots.txt`, `sitemap.xml` and `llms.txt` (the launch test lists every place). The address is case-sensitive: the repository is spelled `Paperclip-Capitalist`, the same address with the name in lower case is a 404 on the real host, so `scripts/stage.mjs` refuses to stage a site that writes it any other way and `tests/site-address.test.mjs` reads every file of the repository for it.
 
 What is published is an allowlist, not a copy of the repository: `index.html` with one `<link rel="modulepreload">` per module (so the browser fetches the module tree at once instead of one depth at a time), `404.html`, `robots.txt`, `sitemap.xml`, `llms.txt`, `assets/` (the share image and the icons), the stylesheets the page links, and the modules `js/main.js` imports. `tests/`, `server/`, `docs/`, `scripts/`, hidden files and anything nothing imports are never staged. [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) describes the pipeline.
 
