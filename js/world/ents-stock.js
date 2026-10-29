@@ -5,6 +5,7 @@ import { P, box, shadow, ellipse, tone, shade, mix, clamp, facePoint } from './i
 import { zAt } from './layout.js';
 import { stampGlow } from './gfx.js';
 import { money } from './common.js';
+import './stock.js'; // the V2 drawers of the lot and asset layers register themselves (stack.js registerLayer) and are used while those flags are v2
 
 const TAG_COLOR = { tool: '#a0a6ad', office: '#d9d2c0', prestige: '#7a5fb0', paper: '#e8e2cc', retro: '#b07a3a', electronics: '#4a8fb0', vehicle: '#b0493a', consumer: '#c45f7a', trend: '#ff3da8', scrap: '#6b5a4a', industrial: '#8a7a62', training: '#46a06a', digital: '#7be3ff', b2b: '#5a6fb0', franchise: '#e8cd6a', infra: '#6a5fa0',
   food: '#d98a3a', farm: '#8aa84a', bulk: '#9a8a6a', marine: '#3a8ab0', collectible: '#c9a227', luxury: '#b88adf', fashion: '#e06aa0', ip: '#9b6dff', media: '#d04aa8', realty: '#c47a5a', finance: '#4aa87a', energy: '#e0c030', medical: '#e0e8f0', home: '#b09070', outdoor: '#5a9a5a', gem: '#7ae0d0' };

@@ -3,6 +3,7 @@
 import { P, blob, ellipse, tree, snowA } from './iso.js';
 import { solid } from './shading.js';
 import { tint, body, lite, stroke, DRAW } from './props-common.js';
+import './nature.js'; // the V2 drawers of these kinds register themselves (stack.js registerProp) and are used while the static-prop layer is flagged v2
 
 Object.assign(DRAW, {
   tree(ctx, p, env) { tree(ctx, p.gx, p.gy, p.s || 1, Math.sin(env.t / 900 + (p.seed || 0)) * 2 * env.wind, tint(p.c || '#2f7d4b', env)); return null; },

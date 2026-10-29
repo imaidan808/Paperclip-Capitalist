@@ -3,6 +3,8 @@
 import { P, box, quad, windows, shadow, blob, cyl, ellipse, lamp, tone, shade, h2, roundRect, snowA, sootA, inkA } from './iso.js';
 import { solid } from './shading.js';
 import { tint, body, glow, hot, fp, FONT, lite, hexRgb, stroke, strip, signLeft, DRAW } from './props-common.js';
+import './street.js'; // the V2 drawers of these kinds register themselves (stack.js registerProp) and are used while the static-prop layer is flagged v2
+import './yard.js';
 
 Object.assign(DRAW, {
   gate(ctx, p, env) { // what cuts a locked district off: a barrier across the road, a raised bridge leaf, or a ferry that is not running

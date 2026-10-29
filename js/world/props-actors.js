@@ -3,6 +3,7 @@
 import { P, box, quad, quadN, windows, shadow, blob, cyl, ellipse, tone, shade, snowA, sootA } from './iso.js';
 import { solid } from './shading.js';
 import { tint, body, glow, fp, lite, stroke, strip, smoke, DRAW, layer } from './props-common.js';
+import './industry.js'; // the V2 drawers of these kinds register themselves (stack.js registerProp) and are used while the static-prop layer is flagged v2
 
 Object.assign(DRAW, {
   crane(ctx, p, env) {
