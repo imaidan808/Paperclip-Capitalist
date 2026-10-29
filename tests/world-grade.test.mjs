@@ -71,6 +71,11 @@ test('the multiply tint is only there when the hour is not plain day: none at no
   const [gr, gg, gb] = rgb(GRADE.dusk), peak = tintFor(0.27, 1, false).match(/\d+/g).map(Number); assert.ok(peak[1] <= 225 && peak[2] <= 195 && peak[0] > peak[2] + 30, 'a golden evening is a clear gold: ' + peak); const pure = tintFor(0, 1, false).match(/\d+/g).map(Number); assert.ok(pure[1] >= gg - 2 && pure[2] >= gb - 2 && pure[2] <= gb + 12, 'with no night in it the multiply is the art direction\'s #ffd0a0'); void gr;
 });
 
+test('the blue hour is a colour, not a grey: the tint through the middle of the evening is rose-violet with a spread of at least 40 between its channels, and the gold wash gives way to it', () => {
+  for (const [n, d] of [[0.45, 0.9], [0.55, 0.75], [0.62, 0.6], [0.67, 0.5]]) { const v = tintFor(n, d, false).match(/\d+/g).map(Number); assert.ok(Math.max(...v) - Math.min(...v) >= 40, `${n},${d}: ${v}`); assert.ok(v[2] >= v[1] && v[0] >= v[1] - 12, 'rose and violet, not green'); }
+  const early = airSteps(0.27, 1, false, 1, false, false), late = airSteps(0.67, 0.5, false, 1, false, false); assert.equal(early.gq, GOLD_STEPS); assert.ok(late.gq < GOLD_STEPS * 0.5 * 0.9, `the gold wash is thin by the blue hour (${late.gq})`);
+});
+
 test('every hour is bright enough: the tint over the world\'s own colours keeps the mean luma of a night at 0.34 or more, and the evening and morning are lighter than that', () => {
   const world_ = [GRASS.mid, ROAD.mid, SAND.mid, PLASTER.cream, TILE.terracotta, SEA.sea, GRASS.shade, SEA.deep];
   const mean = (tint) => { const m = tint ? tint.match(/\d+/g).map(Number) : [255, 255, 255]; return world_.reduce((a, c) => { const [r, g, b] = rgb(c); return a + (0.3 * r * m[0] / 255 + 0.59 * g * m[1] / 255 + 0.11 * b * m[2] / 255) / 255; }, 0) / world_.length; };

@@ -28,7 +28,7 @@ export const hazeAt = (zoom) => 1 - smooth((zoom - 0.2) / 0.5);
 export function airSteps(night, dusk, crunch, zoom, calm, lite, out = {}) {
   const day = (1 - night) * (crunch ? 0.6 : 1), nt = clamp(night * (1 - 0.55 * clamp(dusk, 0, 1)) + (crunch ? 0.3 : 0), 0, 1); // the golden hour is warm: the blue of the night keeps back while the dusk is high
   out.dq = day > 0.02 ? Math.round(day * STEPS) : 0; out.nq = nt > 0.02 ? Math.round(nt * STEPS) : 0;
-  out.gq = dusk > 0.03 && !crunch ? Math.round(clamp(dusk, 0, 1) * GOLD_STEPS) : 0;
+  out.gq = dusk > 0.03 && !crunch ? Math.round(clamp(dusk, 0, 1) * GOLD_STEPS * (1 - 0.7 * smooth((night - 0.35) / 0.4))) : 0; // the gold wash gives way to the blue hour's own colour once the night is half in
   out.sq = dusk > 0.05 && !calm && !crunch && !lite ? Math.round(clamp(dusk, 0, 1) * SHAFT_STEPS) : 0;
   out.hq = Math.round(hazeAt(zoom) * HAZE_STEPS * (1 - night * 0.7));
   return out;
