@@ -1,7 +1,7 @@
 // The Academy card's matrix sweep: the proof the coach card is judged by.
 //
 //   node scripts/academy-sweep.mjs [--level quick|std|full] [--lessons 1,2,5] [--sizes 360x640,844x390] [--modes mouse,touch] [--jobs 2] [--steps 0,1] [--states plain,drawer:market]
-//                                  [--variants base,hint] [--cell-ms 420000: how long one lesson's state may take before it is a sweep-error; a busy machine needs more] [--frames N: wait N animation frames after each change, as a page does; the default lays the page out at once] [--json out.json] [--faults 40] [--port N] [--base http://host:port]
+//                                  [--variants base,hint] [--cell-ms 150000: how long one lesson's state may take before it is tried again on a fresh page, and then reported as a sweep-error; a busy machine needs more] [--frames N: wait N animation frames after each change, as a page does; the default lays the page out at once] [--json out.json] [--faults 40] [--port N] [--base http://host:port]
 //
 // For every lesson (1 to 10) and every step (the last card, after the final step, included), at every window size (1280x800, 1024x768, 768x1024, 844x390, 640x360, 360x640), with a mouse and with a
 // finger (a coarse pointer: every button grows to 44px), in every state the player can put the game in (no panel, each panel the lesson can open at the top and at the foot of its scroll, each Deal
@@ -185,9 +185,13 @@ export async function sweepLesson(env, lesson, size, mode, o = {}) {
     for (const id of ids) {
       if (/^deal:\w+:result$/.test(id)) { await p.close().catch(() => {}); p = await lessonPage(env, lesson, size, mode); } // a finished deal spends the sandbox: the next state starts on a fresh lesson
       const vars = (o.variants || variantsFor(level, id)).filter((v) => VARIANTS.includes(v));
-      let res;
-      try { res = await withTimeout(p.eval(`__sw.batch(__ac, ${JSON.stringify(id)}, ${JSON.stringify(stepList)}, ${JSON.stringify(vars)}, ${JSON.stringify({ frames: o.frames || 0 })})`), +o['cell-ms'] || 420000, `${lesson} ${size.id} ${mode} ${id}`); }
-      catch (e) { rows.push({ lesson, size: size.id, mode, state: id, step: -1, variant: '-', faults: [{ type: 'sweep-error', detail: String(e.message || e).slice(0, 200) }] }); await p.close().catch(() => {}); p = await lessonPage(env, lesson, size, mode); continue; }
+      // a cell that hangs (a page that never answers: it happens on one cell in tens of thousands, and the same cell run alone takes four seconds) is tried once more on a fresh page before it is a sweep-error
+      let res = null, failure = null;
+      for (let attempt = 0; attempt < 2 && !res; attempt++) {
+        try { res = await withTimeout(p.eval(`__sw.batch(__ac, ${JSON.stringify(id)}, ${JSON.stringify(stepList)}, ${JSON.stringify(vars)}, ${JSON.stringify({ frames: o.frames || 0 })})`), +o['cell-ms'] || 150000, `${lesson} ${size.id} ${mode} ${id}`); }
+        catch (e) { failure = e; await p.close().catch(() => {}); p = await lessonPage(env, lesson, size, mode); }
+      }
+      if (!res) { rows.push({ lesson, size: size.id, mode, state: id, step: -1, variant: '-', faults: [{ type: 'sweep-error', detail: String(failure.message || failure).slice(0, 200) }] }); continue; }
       if (res.skipped) continue;
       for (const m of res.cells) {
         const faults = judge(m);
