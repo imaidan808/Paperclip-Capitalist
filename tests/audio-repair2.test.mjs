@@ -185,9 +185,9 @@ test('the gains the fall is measured against still climb, and the losses that fe
 });
 test('every variant of the map still has its notes in key (the body\'s new step is D major pentatonic) and a unison body is still available for the sounds that are not losses', () => {
   const body = layersFor('ui.refuse', 'r').filter((L) => L.k === 'tone' && hz(L.f) >= 250);
-  assert.deepEqual(body.map((L) => L.f).sort(), ['A4', 'D4']);
+  assert.deepEqual(body.map((L) => L.f).sort(), ['A4', 'D5'], 'the body steps from D5 to A4: a quiet laptop plays 440 and 587 Hz 3 and 5 dB better than 294 (Appendix F, I2)');
   const held = layersFor('deal.result', 'info').filter((L) => L.k === 'tone' && hz(L.f) >= 250);
-  assert.deepEqual(held.map((L) => L.f), ['D4'], 'a neutral card keeps its held body');
+  assert.deepEqual(held.map((L) => L.f), ['A4'], 'a neutral card keeps its held body');
 });
 
 // ================================================================================ W1: a reward the resolver keeps quiet is not rung by its toast

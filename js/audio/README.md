@@ -5,9 +5,9 @@ this file says how it is built and where the engine chose differently from the d
 
 | File | What |
 |---|---|
-| `palette.js` | the key (D major pentatonic), the shared noise, the layer renderer (`voice`), the instruments (marimba, glass, bell, coin, wood, thump, paper, swoosh, stamp, brass, horn, click, sparkle, the mid `body` of a refusal), `moneySize`, the master chain and its soft clip |
+| `palette.js` | the key (D major pentatonic), the shared noise (built in the frequency domain, one realisation at 48 kHz for every device), the layer renderer (`voice`), the instruments (marimba, glass, bell, coin, wood, thump, paper, swoosh, stamp, brass, horn, click, sparkle, the mid `body` of a refusal), `moneySize`, the master chain and its soft clip |
 | `recipes.js` | the 90 ids and 188 variants as data (`RECIPES`), with class, player flag, rank and cooldown tables; trims come from `trims.js` |
-| `trims.js` | calibrated trims in dB, written by `node scripts/audio-check.mjs --calibrate --pools`; never edited by hand |
+| `trims.js` | calibrated trims in dB and the places in the noise of the sounds that need them (`noiseAt`), written by `node scripts/audio-check.mjs --calibrate --pools` (the arithmetic is `scripts/audio-calib.mjs`, tested in `tests/audio-calibration.test.mjs`); never edited by hand |
 | `ambient.js` | the 16 beds, 4 modifiers, 18 one-shots, and the controller (crossfade, night/rain/wealth, one timer chain, the rate rule) |
 | `resolve.js` | the collector's resolver (two sentences per burst, the reward budget, merges), the clock gates, state sounds, the hold, catch-up. Pure |
 | `engine.js` | `createAudio()`: the context, buses and chain, voices and stealing, rank-aware cooldowns, token buckets, ducking, the ambient bed, the dial tone, hidden-tab and idle handling |
@@ -24,7 +24,9 @@ lengths, brightness, the mid body, the ladders, the beds and the tier gaps throu
 - `moneySize` uses the table's thresholds ($41, $1,780, $75,000), not the log formula in the prototype (they differ by under 1%; the table is what the tests quote).
 - The legacy `sfx.*` names become no-ops only while a game is wired (`wireGame`), not as soon as `initAudio()` has run, so the title and the draft keep their sounds until the shell calls `wireGame`.
 - Pool members are calibrated one by one (`id#variant@k` in `trims.js`): the pitch of a pool member changes how loud it reads.
-- The body of the refusal and loss family uses a sine that steps down to D4 (A4 to D4 for a failure, F#4 to D4 for a gentle "no"; A3 is 220 Hz, under the 250 Hz line) and a knock at 440 Hz, so the fall of a loss is in the band a laptop plays; every variant of the family measures at least 40% above 250 Hz.
+- The body of the refusal and loss family uses a sine that steps down to A4 (D5 to A4 for a failure, A4 to F#4 for a gentle "no"; D4 at 294 Hz is 7 dB under 1 kHz for a quiet laptop and was the reason the family sat under its tier) and a knock at 440 Hz, so the fall of a loss is in the band a laptop plays; every variant of the family measures at least 40% above 250 Hz.
+- The volume is a power of 1.5 (not a square) times a headroom of 4.6 dB that sits ahead of the glue compressor and the soft clip, so the default (70) is unity and 100 is 4.6 dB above it (`volumeGain`, `HEADROOM`, `masterGain` in `settings.js`; docs/AUDIO.md 3.2). The Classroom rule has no headroom.
+- The calibration balances every sound between two models of a listener, the K-weighted one and a quiet laptop (a 220 Hz high-pass, then A-weighting), and holds the tiers apart under both (`node scripts/audio-check.mjs`, docs/AUDIO.md Appendix F).
 - The oscillator budget (160) counts what is alive at the same instant, each layer from its voice's real start (`layerSpans`, `peakAlive`), and a loss is counted (`dropped.osc`). The members of a mix share the cause's pan.
 - A preset leaves the volume alone; the speaker button, key M and the Deal Room's switch are one rule (`toggleMute`), and "pressed" means something can be heard (`speakerState`).
 - The queued moment is played by scheduling it after the current one (never later than 500 ms), not by a timer.

@@ -2,18 +2,33 @@
 // touches the dialog it is given. The source of truth is `settings.audio`; the flat keys `sound`, `vol`, `sfxUi`, `sfxGame` and `ambient` mirror it for anything that reads them.
 
 export const AUDIO_V = 1;
+// ---- the volume taper and the headroom (docs/AUDIO.md 3.2 and Appendix F, A2)
+/** The default volume, in percent of the slider. */
+export const DEFAULT_MASTER = 70;
+/** The taper of the volume slider and of the ambience slider: gain = (v / 100) ** 1.5. The square it replaced put 5% at -52 dB and 20% at -28 dB (a dead bottom third, below which a tick was inaudible); the power of 1.5 puts them at -39 and -21. */
+export const VOLUME_CURVE = 1.5;
+export const volumeGain = (v) => (Math.max(0, Math.min(100, Number.isFinite(+v) ? +v : 0)) / 100) ** VOLUME_CURVE;
+/**
+ * The headroom: a fixed gain between the volume slider and the glue compressor, so that the slider's DEFAULT puts the loud tier exactly at its -3 dBFS ceiling (the level the old chain reached only at
+ * 100%) and the slider above the default drives the compressor and the soft clip, which keep the output under -3 dBFS whatever is played. +4.64 dB at the default of 70. The Classroom rule has none:
+ * a room is not made louder by it.
+ */
+export const HEADROOM = 1 / volumeGain(DEFAULT_MASTER);
+export const HEADROOM_DB = 20 * Math.log10(HEADROOM);
+/** The master gain for the settings: the taper, the headroom (not in Classroom), 0 when muted. */
+export const masterGain = (a) => (a.mute ? 0 : volumeGain(a.master) * (a.quiet ? 1 : HEADROOM));
 /** The one-time note of the first minute (7.4): in the game, where the speaker button is, and on the title and in the Draft, where there is none yet. */
 export const HINT_TEXT = 'Sound effects are on. Press M or the speaker button to mute them.';
 export const HINT_PAGE_TEXT = 'Sound effects are on. Press M to mute them, or change them under Display and sound.';
 export function audioDefaults() {
   return {
     v: AUDIO_V,
-    master: 70,        // 0 to 100, step 5. Gain = (master / 100) ** 2, so 70 is -6 dB
+    master: DEFAULT_MASTER, // 0 to 100, step 5. Gain = (master / 100) ** 1.5 times the headroom (+4.6 dB), so 70 is unity and 100 is +4.6 dB (the soft clip keeps it under -3 dBFS)
     mute: false,
     ui: true,          // interface sounds: clicks, panels, dialogs, toggles, sliders, toasts
     game: true,        // the game and the world: sales, coins, the Deal Room's moves, alerts, progress
     ambient: false,    // the bed. Off until the player turns it on (it is unsolicited)
-    ambientLevel: 70,  // 0 to 100, gain = (v / 100) ** 2 on top of the ambient bus
+    ambientLevel: 70,  // 0 to 100, gain = (v / 100) ** 1.5 on top of the ambient bus
     dial: false,       // the repair dial tone (4.5). Off until the player turns it on
     clockSounds: true, // buyers arriving, the new day, managers' coins, freight arriving, cash settling, a mentor's tip (3.4.5). Off in Classroom
     quiet: false,      // the Classroom rule (3.2): tiny game sounds off, medium and loud 10 dB lower, interface 6 dB lower, ambient, dial and clock sounds off
@@ -134,13 +149,16 @@ export function leaveRoom(a, before) {
 
 // ---- the Sound section (7.2)
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+/** Below this volume (percent) the status line says so: the taper puts 20% at -21 dB, which a laptop at a typical system volume does not play as more than a whisper. */
+export const VERY_QUIET = 25;
 /** What is true about the sound right now, in words: it never says "on" for a state in which nothing can be heard. */
 export function statusText(a, state) {
   if (state === 'unsupported') return 'This browser cannot play sound; everything in the game still works.';
   if (a.mute) return 'Sound is off.';
   if (a.master <= 0) return 'Volume is at 0: you will hear nothing.';
   if (!a.ui && !a.game) return 'Interface sounds and game sounds are both off: you will hear nothing.';
-  const on = state === 'running' ? 'Sound is on. Your browser started audio after your first click.' : 'Sound is on. Your browser starts audio after your first click.';
+  const quiet = a.master < VERY_QUIET ? ` The volume is very quiet (${a.master} percent): raise it if you hear little.` : '';
+  const on = (state === 'running' ? 'Sound is on. Your browser started audio after your first click.' : 'Sound is on. Your browser starts audio after your first click.') + quiet;
   return a.game ? (a.ui ? on : on + ' Interface sounds are off.') : on + ' Game sounds are off: coins and alerts are silent.';
 }
 /** The helper line beside a row: why it is off, or what it does. */

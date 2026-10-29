@@ -129,7 +129,7 @@ test('settings gate every bus', () => {
   const q = rig({ quiet: true }); assert.equal(q.audio.play('world.hover'), null, 'tiny game sounds are not played in Classroom'); assert.ok(q.audio.play('sale.win'));
   const c = rig({ clockSounds: false }); c.audio.request('day.turn', { clock: true }); c.clock.flush(); assert.equal(c.audio.stats().played['day.turn'], undefined);
   const m = rig(); m.audio.setMute(true); assert.equal(m.audio.play('ui.tick'), null); assert.equal(m.audio.chain.master.gain.calls.at(-1)[1], 0, 'the master gain goes to 0');
-  m.audio.setMute(false); m.audio.setMaster(50); assert.ok(Math.abs(m.audio.chain.master.gain.calls.at(-1)[1] - 0.25) < 1e-9, 'volume 50 is a gain of 0.25');
+  m.audio.setMute(false); m.audio.setMaster(50); assert.ok(Math.abs(m.audio.chain.master.gain.calls.at(-1)[1] - 0.6036) < 1e-3, 'volume 50 is a gain of 0.60: (50 / 100) ** 1.5 times the headroom of 1.707 (it was 0.25)');
 });
 test('every voice has an attack ramp of 0.4 ms or more and an exponential release (no clicks)', () => {
   const t = rig({}, { ctx: { sampleRate: 8000 } });

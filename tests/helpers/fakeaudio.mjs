@@ -16,7 +16,7 @@ export function fakeContext({ sampleRate = 8000, state = 'suspended', failResume
     const n = { kind, out: [], started: null, stopped: null, ...extra };
     n.params = {}; for (const [k, v] of Object.entries(params)) { n.params[k] = new Param(v); n[k] = n.params[k]; }
     n.connect = (d) => { n.out.push(d); return d; }; n.disconnect = () => { n.out = []; };
-    n.start = (t = 0) => { n.started = t; }; n.stop = (t = 0) => { n.stopped = t; };
+    n.start = (t = 0, offset) => { n.started = t; n.offset = offset; }; n.stop = (t = 0) => { n.stopped = t; };
     ctx.nodes.push(n); return n;
   };
   ctx.createGain = () => mk('gain', { gain: 1 });

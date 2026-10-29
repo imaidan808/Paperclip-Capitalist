@@ -135,9 +135,9 @@ test('a loss or a refusal does not climb', () => {
 });
 test('the insolvent slide stops above 150 Hz and the rival\'s dropout falls a fourth, not a tone', () => {
   const slide = layersFor('alert.insolvent', 'i').find((L) => L.k === 'tone' && L.f2);
-  assert.ok(hz(slide.f2) >= 146 && hz(slide.f2) < hz(slide.f), 'D4 to D3');
+  assert.ok(hz(slide.f2) >= 146 && hz(slide.f2) < hz(slide.f), 'A4 to D3');
   const out = layersFor('bid.rival', 'out').find((L) => L.f2);
-  assert.equal(Math.round(12 * Math.log2(hz(out.f) / hz(out.f2))), 5, 'D4 to A3, a fourth');
+  assert.equal(Math.round(12 * Math.log2(hz(out.f) / hz(out.f2))), 5, 'D5 to A4, a fourth');
 });
 test('the duration compensation is a smooth curve: +5.5 dB for the shortest tick down to -1 dB for the longest, never a step', () => {
   assert.equal(durationComp(30), 5.5); assert.equal(durationComp(360), 0); assert.ok(durationComp(900) <= -0.9);

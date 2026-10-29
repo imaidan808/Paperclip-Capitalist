@@ -24,28 +24,82 @@ export function rng(seed) { // mulberry32
   return () => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
 }
 
-// ---- shared noise: white, pink, brown, 2.5 s, RMS 0.25, made once per context from a fixed seed; the loop seam is cross-faded
+// ---- shared noise: white, pink, brown, 2.5 s, RMS 0.25, made once per context from a fixed seed.
+// The noise is built in the frequency domain (Appendix F, I3). A buffer of plain random samples is stationary only on average: the energy a 40 ms window of it puts through a 600 Hz band varies by
+// +-1 dB from one window to the next (about 20 independent values in the window), so a footstep, which is exactly that, came out 5 to 7 dB apart from one play to the next and the loudest 3 dB over
+// its tier's ceiling. Here every block of 512 frames (10 ms) has the SAME magnitude spectrum, set by the colour, and a random phase in every bin; the blocks overlap by half under a sine window
+// (power-complementary: the sum of the squared windows is 1) and wrap round the end, so the buffer loops with no seam and no cross-fade. The energy in any band is then the same in every block, and a
+// window of a few blocks sees almost the same energy wherever it is laid. The sound is still noise: no bin repeats a phase.
+const NOISE_BLOCK = { white: 512, pink: 512, brown: 1024 }; // brown's energy is low, so its blocks are longer to reach it (47 Hz a bin); the others are short, to be even over a few milliseconds
+const NOISE_SHAPE = { white: () => 1, pink: (f) => 1 / Math.sqrt(f), brown: (f) => 1 / Math.sqrt(1 + (f / 150) ** 2) }; // magnitude by frequency: flat, -3 dB per octave, flat to 150 Hz and then -6 dB per octave
+const TW = new Map(); // twiddle tables by block length
+function twiddles(n) {
+  let t = TW.get(n);
+  if (!t) { t = { c: new Float64Array(n / 2), s: new Float64Array(n / 2) }; for (let k = 0; k < n / 2; k++) { t.c[k] = Math.cos(2 * Math.PI * k / n); t.s[k] = -Math.sin(2 * Math.PI * k / n); } TW.set(n, t); }
+  return t;
+}
+function fftInPlace(re, im) { // radix 2, forward
+  const n = re.length, { c, s } = twiddles(n);
+  for (let i = 1, j = 0; i < n; i++) { let bit = n >> 1; for (; j & bit; bit >>= 1) j ^= bit; j ^= bit; if (i < j) { let t = re[i]; re[i] = re[j]; re[j] = t; t = im[i]; im[i] = im[j]; im[j] = t; } }
+  for (let len = 2; len <= n; len <<= 1) {
+    const half = len >> 1, step = n / len;
+    for (let i = 0; i < n; i += len) {
+      for (let k = 0, w = 0; k < half; k++, w += step) {
+        const a = i + k, b = a + half, tr = re[b] * c[w] - im[b] * s[w], ti = re[b] * s[w] + im[b] * c[w];
+        re[b] = re[a] - tr; im[b] = im[a] - ti; re[a] += tr; im[a] += ti;
+      }
+    }
+  }
+}
+const PH = 4096, PH_COS = new Float64Array(PH), PH_SIN = new Float64Array(PH); // phases come from a table: the noise needs a random angle, not a precise one
+for (let i = 0; i < PH; i++) { PH_COS[i] = Math.cos(2 * Math.PI * i / PH); PH_SIN[i] = Math.sin(2 * Math.PI * i / PH); }
+/** One colour of the noise: n frames (a whole number of hops), the random source `r`. Two blocks go through one complex transform (the real part is one block, the imaginary part the other). */
+function flatNoise(n, sr, color, r) {
+  const N = NOISE_BLOCK[color], H = N >> 1, hops = Math.ceil(n / H), total = hops * H, out = new Float64Array(total);
+  const mag = new Float64Array(N / 2); let power = 0;
+  for (let k = 1; k < N / 2; k++) { mag[k] = NOISE_SHAPE[color](k * sr / N); power += mag[k] * mag[k]; }
+  const c = 1 / Math.sqrt(2 * power); // x[n] = sum of 2 a cos(..) has the power of 2 a^2 a bin: this makes the RMS of one block 1
+  for (let k = 1; k < N / 2; k++) mag[k] *= c;
+  const win = new Float64Array(N); for (let i = 0; i < N; i++) win[i] = Math.sin(Math.PI * (i + 0.5) / N);
+  const re = new Float64Array(N), im = new Float64Array(N);
+  for (let b = 0; b < hops; b += 2) {
+    const two = b + 1 < hops;
+    for (let k = 1; k < N / 2; k++) {
+      const p1 = (r() * PH) | 0, x1 = mag[k] * PH_COS[p1], y1 = mag[k] * PH_SIN[p1]; // block b's bin k
+      let x2 = 0, y2 = 0; if (two) { const p2 = (r() * PH) | 0; x2 = mag[k] * PH_COS[p2]; y2 = mag[k] * PH_SIN[p2]; } // block b + 1's
+      re[k] = x1 - y2; im[k] = y1 + x2; re[N - k] = x1 + y2; im[N - k] = x2 - y1; // Z = X1 + i X2 with both spectra conjugate-symmetric
+    }
+    re[0] = im[0] = re[N >> 1] = im[N >> 1] = 0;
+    fftInPlace(re, im);
+    for (let i = 0; i < N; i++) { let o = b * H + i; if (o >= total) o -= total; out[o] += re[i] * win[i]; }
+    if (two) for (let i = 0; i < N; i++) { let o = (b + 1) * H + i; if (o >= total) o -= total; out[o] += im[i] * win[i]; }
+  }
+  return out;
+}
+let NOISE_DATA = null; // made once for the page, whatever the number of contexts (an offline render makes one for every sound it measures)
+function noiseData() {
+  if (NOISE_DATA) return NOISE_DATA;
+  const sr = NOISE_RATE, r = rng(0xC0FFEE), H = NOISE_BLOCK.brown >> 1, n = Math.ceil(Math.round(sr * 2.5) / H) * H, data = { n };
+  for (const color of ['white', 'pink', 'brown']) {
+    const x = flatNoise(n, sr, color, r), d = new Float32Array(n);
+    let s = 0; for (let i = 0; i < n; i++) s += x[i] * x[i];
+    const k = 0.25 / Math.sqrt(s / n || 1);
+    for (let i = 0; i < n; i++) d[i] = x[i] * k;
+    data[color] = d;
+  }
+  return (NOISE_DATA = data);
+}
+/** The noise is made at one rate whatever the context's, so a noise offset names the same burst on every device (the browser resamples a buffer of another rate as it plays it). */
+export const NOISE_RATE = 48000;
 export function noiseBuffers(ctx) {
   if (ctx._nb) return ctx._nb;
-  const sr = ctx.sampleRate, n = Math.round(sr * 2.5), r = rng(0xC0FFEE), f = Math.round(sr * 0.12);
-  const W = ctx.createBuffer(1, n, sr), P = ctx.createBuffer(1, n, sr), B = ctx.createBuffer(1, n, sr);
-  const w = W.getChannelData(0), p = P.getChannelData(0), b = B.getChannelData(0);
-  let b0 = 0, b1 = 0, b2 = 0, b3 = 0, b4 = 0, b5 = 0, b6 = 0, last = 0;
-  for (let i = 0; i < n; i++) {
-    const x = r() * 2 - 1; w[i] = x;
-    b0 = 0.99886 * b0 + x * 0.0555179; b1 = 0.99332 * b1 + x * 0.0750759; b2 = 0.969 * b2 + x * 0.153852; b3 = 0.8665 * b3 + x * 0.3104856; b4 = 0.55 * b4 + x * 0.5329522; b5 = -0.7616 * b5 - x * 0.016898;
-    p[i] = b0 + b1 + b2 + b3 + b4 + b5 + b6 + x * 0.5362; b6 = x * 0.115926;
-    last = (last + 0.02 * x) / 1.02; b[i] = last * 3.5;
-  }
-  for (const buf of [W, P, B]) {
-    const d = buf.getChannelData(0); let s = 0;
-    for (let i = 0; i < n; i++) s += d[i] * d[i];
-    const k = 0.25 / Math.sqrt(s / n || 1);
-    for (let i = 0; i < n; i++) d[i] *= k;
-    for (let i = 0; i < f; i++) { const a = i / f; d[i] = d[i] * a + d[n - f + i] * (1 - a); } // seam: the first f samples now lead on from the last f
-  }
-  return (ctx._nb = { white: W, pink: P, brown: B, loopEnd: (n - f) / sr, len: n / sr });
+  const data = noiseData(), n = data.n, bufs = {};
+  for (const color of ['white', 'pink', 'brown']) { const buf = ctx.createBuffer(1, n, NOISE_RATE); buf.getChannelData(0).set(data[color]); bufs[color] = buf; }
+  return (ctx._nb = { white: bufs.white, pink: bufs.pink, brown: bufs.brown, loopEnd: n / NOISE_RATE, len: n / NOISE_RATE });
 }
+/** Where in the noise the i-th noise layer of a voice starts when the voice was given a chosen offset `at` (seconds): each layer a fixed step further on, so two layers of one colour are not the same noise. */
+export const noiseStep = 0.2173;
+export const noiseOffset = (at, i, loopEnd) => (at + i * noiseStep) % loopEnd;
 
 // ---- envelopes: linear attack (0.4 ms at least, so nothing clicks), optional hold, exponential decay to -60 dB. Returns the time the voice is silent.
 // A gain node's own value is 1, and an event at time T applies from the first frame at or after T: when T falls on a sample boundary and a rounding hair after the frame's own time (the engine's
@@ -87,7 +141,7 @@ export const isGhost = (L) => L.k === 'noise' && !L.main;
 /**
  * One layer of a recipe, scheduled at time T (seconds in the context's clock). Returns the time the layer is silent.
  * k: tone | bank | noise. Common: t (offset), g (peak), a (attack), h (hold), d (decay to -60 dB), hp/lp/bp = [f0, Q, f1?], fam (layer family), ding (no register ding when dull).
- * o: { r: random source, jit: cents shared by the voice, srcs: array that collects every started source (to stop the voice early) }
+ * o: { r: random source, jit: cents shared by the voice, srcs: array that collects every started source (to stop the voice early), at: a chosen noise offset in seconds or null, ni: noise layers started so far }
  */
 export function layer(ctx, out, L, T0, o) {
   const T = T0 + (L.t || 0) + (L.tj ? (o.r() * 2 - 1) * 0.004 : 0), a = Math.max(MIN_ATTACK, L.a ?? 0.003), h = L.h ?? 0, d = L.d ?? 0.2, g = L.g ?? 1;
@@ -130,7 +184,7 @@ export function layer(ctx, out, L, T0, o) {
       gain.connect(am); head = am;
     }
     chain(ctx, head, L, T, a + h + d * 0.6, out);
-    src.connect(gain); src.start(T, o.r() * (nb.loopEnd - 0.5)); src.stop(end + 0.03); srcs?.push(src);
+    src.connect(gain); src.start(T, o.at != null ? noiseOffset(o.at, o.ni++, nb.loopEnd) : o.r() * (nb.loopEnd - 0.5)); src.stop(end + 0.03); srcs?.push(src); // a voice given offsets plays its noise from one of them (see js/audio/trims.js)
     return end;
   }
   throw new Error('unknown layer ' + L.k);
@@ -152,7 +206,8 @@ export const PAN_COMP_DB = 20 * Math.log10(Math.SQRT2);
 
 /**
  * Plays a recipe's layers into `dest` at T0.
- * o: { seed, trim (dB), gainDb, pan, jitterCents, noJitter, lp (a voice-wide lowpass, Hz), skip (Set of layer families to leave out), secondary (no texture layers), dull (no ding layers) }
+ * o: { seed, trim (dB), gainDb, pan, jitterCents, noJitter, lp (a voice-wide lowpass, Hz), skip (Set of layer families to leave out), secondary (no texture layers), dull (no ding layers),
+ *       noiseAt (a list of noise offsets in seconds, validated by the calibration: the voice plays its noise from one of them, picked by its seed, instead of from a random place) }
  * Returns { end (when everything is silent), gain (the voice gain), srcs, fams (the families it played), stop(t, fadeSec) }.
  */
 export function voice(ctx, dest, layers, T0, o = {}) {
@@ -167,7 +222,7 @@ export function voice(ctx, dest, layers, T0, o = {}) {
   if (lp) { const q = ctx.createBiquadFilter(); q.type = 'lowpass'; q.frequency.value = lp; vg.connect(q); tail = q; }
   if (panner) { panner.pan.value = Number.isFinite(+o.pan) ? Math.max(-1, Math.min(1, +o.pan)) : 0; tail.connect(panner); panner.connect(dest); } else tail.connect(dest);
   let end = T0;
-  const srcs = [], fams = new Set(), oo = { r, jit, srcs };
+  const srcs = [], fams = new Set(), oo = { r, jit, srcs, at: o.noiseAt && o.noiseAt.length ? o.noiseAt[Math.min(o.noiseAt.length - 1, Math.floor(r() * o.noiseAt.length))] : null, ni: 0 };
   for (const L of layers) {
     if (L.fam && o.skip?.has(L.fam)) continue;
     if (o.secondary && isGhost(L)) continue;
@@ -218,7 +273,9 @@ export const mar = (f, t = 0, g = 0.6, d = 0.35, x = {}) => ({ k: 'bank', f, t, 
 export const gls = (f, t = 0, g = 0.5, d = 0.9, x = {}) => ({ k: 'bank', f, t, a: 0.001, g, p: [[1, 1, d], [2.01, 0.42, d * 0.6], [3.02, 0.24, d * 0.4], [4.05, 0.1, d * 0.25]], ...x });
 export const bellL = (f, t = 0, g = 0.5, d = 1.2, x = {}) => ({ k: 'bank', f, t, a: 0.001, g, p: [[1, 1, d], [2, 0.6, d * 0.7], [3, 0.45, d * 0.5], [4.01, 0.3, d * 0.35], [5.02, 0.12, d * 0.2]], ...x });
 export const click = (t = 0, g = 0.25, f = 3200, q = 1.4, d = 0.01) => ({ k: 'noise', c: 'white', t, a: 0.0004, d, g: g * 4, bp: [Math.min(f, 3400), q] });
-export const wood = (f, t = 0, g = 0.5, d = 0.05) => [{ k: 'tone', f, t, a: 0.0008, d, g }, click(t, g * 0.5, 2400, 1.2, 0.012)];
+/** A wood knock: a short sine and a click. Below about 350 Hz (D4 is 294) a quiet laptop plays the sine 7 dB under what a flat speaker does, and the knock would be a bass thump that only the K-weighted ear hears: it carries its octave at six tenths of its level (docs/AUDIO.md Appendix F, I2). */
+export const octaveUp = (n) => (typeof n === 'string' ? n.replace(/-?\d$/, (d) => String(+d + 1)) : n * 2);
+export const wood = (f, t = 0, g = 0.5, d = 0.05) => [{ k: 'tone', f, t, a: 0.0008, d, g }, ...(hz(f) < 350 ? [{ k: 'tone', f: octaveUp(f), t, a: 0.0008, d: d * 0.8, g: g * 0.6 }] : []), click(t, g * 0.5, 2400, 1.2, 0.012)];
 export const thump = (f0, f1, t = 0, g = 0.7, d = 0.16, x = {}) => ({ k: 'tone', f: f0, f2: f1, gl: d * 0.55, t, a: 0.002, d, g, th: 1, fam: 'thump', ...x });
 export const paper = (t = 0, d = 0.14, g = 0.3, f0 = 1800, f1 = 5200, x = {}) => ({ k: 'noise', c: 'pink', t, a: 0.012, d, g: g * 4, bp: [f0, 0.9, f1], am: [29, 0.6], ...x });
 export const swoosh = (t, d, f0, f1, g = 0.25) => ({ k: 'noise', c: 'pink', t, a: d * 0.4, d: d * 0.6, g: g * 3.4, bp: [f0, 0.8, f1] });
@@ -235,16 +292,20 @@ export const arp = (notes, step, mk, t0 = 0) => notes.map((n, i) => mk(n, t0 + i
 export const ticks = (n, t0, gap, g = 0.2, f = 3600) => Array.from({ length: n }, (_, i) => click(t0 + i * gap, g, f + (i % 3) * 300, 1.6, 0.008));
 export const pair = (a, b, t = 0, gap = 0.12, g = 0.4, d = 0.3) => [gls(a, t, g, d), gls(b, t + gap, g, d)]; // the two-tone of a warning: a falling minor third
 /**
- * The mid body of a refusal or a loss (docs/AUDIO.md 2.2): a laptop speaker has nothing under 150 Hz, so a "no" that lives in the lows is not heard. A sine at D4 (A3 is 220 Hz, under the line) and a knock
- * bandpassed at 300 to 600 Hz put at least 40% of the energy above 250 Hz without touching the low taps that make it read as a "no".
- * `from`: a loss FALLS, and the falling taps (D3, A2) are under what a laptop plays, so the body carries the fall where it can be heard: the sine steps down from `from` to `note` (A4 to D4 is
- * a fifth, F#4 to D4 a third) in the time the taps take to fall. Without `from` the body is one held note (a neutral "no", or a body in a sound that is not a loss).
+ * The mid body of a refusal or a loss (docs/AUDIO.md 2.2): a laptop speaker has nothing under 150 Hz, so a "no" that lives in the lows is not heard. A sine at A4 (440 Hz) and a knock bandpassed at 440 Hz put
+ * at least 40% of the energy above 250 Hz without touching the low taps that make it read as a "no".
+ * `from`: a loss FALLS, and the falling taps (D3, A2) are under what a laptop plays, so the body carries the fall where it can be heard: the sine steps down from `from` to `note` (D5 to A4 is a fifth, A4
+ * to F#4 a third) in the time the taps take to fall. Without `from` the body is one held note (a neutral "no", or a body in a sound that is not a loss).
+ * `knock`: the share of the noise knock. A loud alert that is held under its level by its peak (-3 dBFS) takes a body with most of its knock taken out and the sines (which have a crest factor of 3 dB, not 12)
+ * raised, so that its level under a quiet laptop can rise without its peak.
+ * The body sits at 370 to 590 Hz and not lower (it was D4, 294 Hz, until the third repair round): at the level of a quiet laptop (about 40 phon, A-weighted after the speaker's high-pass) 294 Hz is 7 dB
+ * under 1 kHz and 440 Hz is 4, so a body at D4 made every loss 4 to 7 dB quieter than its tier on the device it was written for (Appendix F, I2).
  */
-export const body = (t = 0, g = 0.5, note = 'D4', d = 0.12, from = null) => [
+export const body = (t = 0, g = 0.5, note = 'A4', d = 0.12, from = null, knock = 1) => [
   ...(from
     ? [{ k: 'tone', f: from, t, a: 0.004, d: d * 0.6, g: g * 1.6 }, { k: 'tone', f: note, t: t + d * 0.45, a: 0.004, d: d * 1.1, g: g * 2 }]
     : [{ k: 'tone', f: note, t, a: 0.004, d: d * 1.4, g: g * 2 }]),
-  { k: 'noise', c: 'pink', t, a: 0.002, d: d * 0.6, g: g * 3, bp: [440, 0.9], main: true },
+  { k: 'noise', c: 'pink', t, a: 0.002, d: d * 0.6, g: g * 3 * knock, bp: [440, 0.9], main: true },
 ];
 
 // ---- sizing money (2.4): coins carry the size of the sum, on a log scale. The thresholds are the table's: $41, $1,780 and $75,000, and a deal worth a fifth of everything you have is a step bigger.

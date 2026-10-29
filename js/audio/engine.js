@@ -1,11 +1,12 @@
 // The engine (docs/AUDIO.md section 3 and 8.2): one AudioContext for the page, the buses and the master chain, the voice manager, rank-aware cooldowns, token buckets, ducking, the collector,
 // the settings sync, the ambient bed and the repair dial tone. Nothing here touches the DOM, and the context comes from an injected factory, so a recording fake context tests all of it in
 // Node. With Web Audio missing, or any failure, `state` is 'unsupported' and every method returns without throwing. With sound idle there is no timer and no frame callback.
-import { voice, master, dB, hz, fadeIn, MAKEUP_FALLBACK, FAMILY_MS, layerSpans, isGhost, moneySize } from './palette.js';
-import { RECIPES, IDS, layersFor, tierOf, firstVariant, variantsOf, cooldownOf, variantRank, trimFor, isMoment, PREEMPT } from './recipes.js';
+import { voice, master, dB, hz, fadeIn, noiseBuffers, MAKEUP_FALLBACK, FAMILY_MS, layerSpans, isGhost, moneySize } from './palette.js';
+import { RECIPES, IDS, layersFor, tierOf, firstVariant, variantsOf, cooldownOf, variantRank, trimFor, noiseAtFor, isMoment, PREEMPT } from './recipes.js';
 import { createAmbient, oneShotLayers } from './ambient.js';
 import { TRIMS } from './trims.js';
 import { createResolverState, resolveBurst, gateClock, holdRelease, stateGate, catchingUp, recentPress } from './resolve.js';
+import { volumeGain, masterGain } from './settings.js';
 
 const PRI = { tiny: 1, medium: 2, loud: 3 };
 export const LIMITS = { VOICES: 12, OSCILLATORS: 160, LEAD: 0.012, IDLE_MS: 60000, DUCK_REL: 600 };
@@ -94,12 +95,13 @@ export function createAudio(cfg = {}) {
     for (const bus of ['ui', 'game']) for (const tier of ['tiny', 'medium']) nodes[bus][tier].connect(chain.buses[bus]);
     nodes.ambLevel.connect(nodes.ambBase); nodes.ambBase.connect(nodes.ambDuck); nodes.ambDuck.connect(chain.buses.amb);
     applyGains(true);
+    try { noiseBuffers(ctx); } catch (e) { logOnce('noise', e); } // the shared noise (about 40 ms of work) is made at the first gesture, not by the first sound
     measureMakeup();
   }
   function applyGains(instant) {
     if (!ctx || !chain) return;
     const s = eff(), t = ctxNow();
-    const mg = s.mute ? 0 : (s.master / 100) ** 2, al = (s.ambientLevel / 100) ** 2;
+    const mg = masterGain(s), al = volumeGain(s.ambientLevel); // the volume's taper and the headroom ahead of the compressor (docs/AUDIO.md 3.2, A2); the ambience has the taper only
     if (instant) { chain.master.gain.value = mg; nodes.ambLevel.gain.value = al; } else { chain.master.gain.setTargetAtTime(mg, t, 0.02); nodes.ambLevel.gain.setTargetAtTime(al, t, 0.03); }
   }
   function wake() { // after 60 s idle the context is suspended; the next play resumes it
@@ -120,7 +122,7 @@ export function createAudio(cfg = {}) {
     setTimeout: (f, ms) => timers.set(f, ms), clearTimeout: (h) => timers.clear(h),
     enabled: () => eff().ambient && !silent(), running: () => playable(), dialogOpen: () => env.hold, lastMedium: () => lastMedium, lastMoment: () => lastMoment,
     duck: (db) => { if (!nodes) return; const t = ctxNow(); nodes.ambBase.gain.cancelScheduledValues(t); nodes.ambBase.gain.setTargetAtTime(dB(db), t, db < 0 ? 0.1 : 0.17); },
-    shot: (id, layers, pan) => { if (!nodes || !playable()) return; voice(ctx, nodes.ambLevel, layers, ctxNow() + LIMITS.LEAD, { seed: ++seedN, trim: TRIMS.oneShots?.[id] ?? 0, pan, jitterCents: 7 }); },
+    shot: (id, layers, pan) => { if (!nodes || !playable()) return; voice(ctx, nodes.ambLevel, layers, ctxNow() + LIMITS.LEAD, { seed: ++seedN, trim: TRIMS.oneShots?.[id] ?? 0, noiseAt: TRIMS.noiseAt?.[id], pan, jitterCents: 7 }); },
   });
 
   // ---- gates shared by play and request
@@ -268,7 +270,7 @@ export function createAudio(cfg = {}) {
       const pan = Number.isFinite(+m.opts.pan) ? clamp(+m.opts.pan, -1, 1) : mainPan; // the coins and the streak of a sale sound where the sale does (3.6); a member that must stay centred says `pan: 0`
       let v;
       try {
-        v = voice(ctx, dest, layers, startT + shift, { seed: ++seedN, trim: trimFor(m.id, m.variant, k), gainDb, pan, jit: sharedJitter(t), skip, secondary: m.opts.secondary, dull: m.opts.dull, lp });
+        v = voice(ctx, dest, layers, startT + shift, { seed: ++seedN, trim: trimFor(m.id, m.variant, k), noiseAt: noiseAtFor(m.id, m.variant, k), gainDb, pan, jit: sharedJitter(t), skip, secondary: m.opts.secondary, dull: m.opts.dull, lp });
       } catch (e) { logOnce('recipe ' + m.id, e); continue; }
       group.voices.push(v); group.osc += osc; group.spans.push(...spans);
       for (const fam of v.fams) famLast[fam] = t;
@@ -449,7 +451,7 @@ export function createAudio(cfg = {}) {
     ambient(state) { amb.set(state); },
     dial: dialApi,
     /** One ambient one-shot on demand, whatever the rate rule says: for the audition page. */
-    playOneShot(id) { if (!playable() || !nodes) return null; return voice(ctx, nodes.ambLevel, oneShotLayers(id), ctxNow() + LIMITS.LEAD, { seed: ++seedN, trim: TRIMS.oneShots?.[id] ?? 0, jitterCents: 7 }); },
+    playOneShot(id) { if (!playable() || !nodes) return null; return voice(ctx, nodes.ambLevel, oneShotLayers(id), ctxNow() + LIMITS.LEAD, { seed: ++seedN, trim: TRIMS.oneShots?.[id] ?? 0, noiseAt: TRIMS.noiseAt?.[id], jitterCents: 7 }); },
     /** A level meter for the audition page: an analyzer on the output of the master chain (made on first use, so nothing runs for the game). */
     meter() { if (!ctx || !chain) return null; if (!meterNode) { meterNode = ctx.createAnalyser(); meterNode.fftSize = 1024; chain.clip.connect(meterNode); const sink = ctx.createGain(); sink.gain.value = 0; meterNode.connect(sink); sink.connect(ctx.destination); } /* a silent tail keeps the analyser pulled */ return meterNode; },
     /** Tell the engine the world it is in (speed, paused, busy, lag, sandbox, net worth...). */
@@ -466,7 +468,7 @@ export function createAudio(cfg = {}) {
       const at = o.at ?? (o.chain ? 0.6 : 0.01);
       let dest = oc.destination;
       if (o.chain) dest = master(oc, { master: o.master ?? 1, makeup: 1 / (TRIMS.makeup || MAKEUP_FALLBACK) }).buses[e.bus];
-      return voice(oc, dest, layersFor(id, variant ?? firstVariant(id), o.params, o.k || 0), at, { seed: o.seed ?? 7, trim: trimFor(id, variant ?? firstVariant(id), o.k || 0) + (o.gainDb || 0), noJitter: true, jit: 0 });
+      return voice(oc, dest, layersFor(id, variant ?? firstVariant(id), o.params, o.k || 0), at, { seed: o.seed ?? 7, trim: trimFor(id, variant ?? firstVariant(id), o.k || 0) + (o.gainDb || 0), noiseAt: noiseAtFor(id, variant ?? firstVariant(id), o.k || 0), noJitter: true, jit: 0 });
     },
     release() { api.stopAll(40); amb.stop(0.3); queue = []; if (idleT != null) { timers.clear(idleT); idleT = null; } env.hold = false; env.sandbox = false; },
     /** Closed on pagehide. */
