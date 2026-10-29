@@ -61,6 +61,8 @@ export const chunkKey = (sk, i, j) => (sk * 4096 + (i + 2048)) * 4096 + (j + 204
  * a frame (measured: a pinch out from 1.6 fell to 24 ms with the narrow window and the direct cells it brought). Returns k, or 0 when it is not.
  */
 export const STALE_UP = 1.5, STALE_DOWN = 0.7;
-export const staleRatio = (a0, a) => { const k = a / a0; return k <= STALE_UP && k >= STALE_DOWN ? k : 0; };
+/** A chunk baked for a zoom in motion (coarse: baked at about half the scale of the zoom when the zoom goes in, so a third of the chunks cover a window) stands in over a wider window, up to 3.2 times magnified and down to 0.5: soft for the moment the zoom lasts, and the exact scale is baked the moment it rests. */
+export const COARSE_UP = 3.2, COARSE_DOWN = 0.5;
+export const staleRatio = (a0, a, coarse = false) => { const k = a / a0; return (coarse ? k <= COARSE_UP && k >= COARSE_DOWN : k <= STALE_UP && k >= STALE_DOWN) ? k : 0; };
 /** How many chunks the cache may hold: what the window touches, plus a third for the stale ones that stand in while a zoom settles and the cells a zoom out reveals, plus two. The memory table of docs/RENDER_PLAN.md is this number x 0.59 MB (the window touches at most 54 at dsf 2; a real window is 40 to 48). */
 export const chunkCap = (w, h, dpr) => Math.ceil(chunksTouched(w, h, dpr) * 1.35) + 2;

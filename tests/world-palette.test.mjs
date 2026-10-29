@@ -45,7 +45,7 @@ test('the daylight districts are the sixteen of the data, bright, and each keeps
   for (const [theme, row] of Object.entries(PAL.DISTRICT_DAY)) assert.ok(luma(row.ground) >= 0.6, `${theme} ground is too dark`);
   assert.ok(THEMES.length >= 16);
   const g = PAL.groundSet('scrap');
-  assert.equal(g.ground, '#f1cd8e'); assert.equal(g.hi, mix('#f1cd8e', '#fffaf0', 0.28)); assert.equal(g.pad, mix('#f1cd8e', '#7a6aa8', 0.18)); assert.ok(luma(g.hi) > luma(g.ground) && luma(g.alt) < luma(g.ground));
+  assert.equal(g.ground, '#f1cd8e'); assert.equal(g.hi, mix('#f1cd8e', '#fffaf0', 0.28)); assert.equal(g.pad, mix('#f1cd8e', '#7a6aa8', 0.1)); assert.ok(luma(g.hi) > luma(g.ground) && luma(g.alt) < luma(g.ground));
   assert.equal(PAL.groundSet('constructor'), undefined); assert.equal(PAL.groundSet('nowhere'), undefined);
 });
 

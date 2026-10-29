@@ -42,6 +42,10 @@ test('cellsFor: the cells of the scale\'s grid a world rectangle touches, each 3
   const keys = new Set(); for (let i = -100; i < 100; i += 7) for (let j = -100; j < 100; j += 3) keys.add(chunkKey(1234, i, j)); assert.equal(keys.size, 29 * 67, 'keys never collide');
 });
 
+test('staleRatio of a coarse chunk (baked while the zoom moves): up to 3.2 times magnified and down to 0.5, and the default window is unchanged', () => {
+  assert.ok(staleRatio(1, 3.2, true) > 0 && staleRatio(1, 0.5, true) > 0); assert.equal(staleRatio(1, 3.3, true), 0); assert.equal(staleRatio(1, 0.49, true), 0); assert.equal(staleRatio(1, 2, false), 0);
+});
+
 test('staleRatio: a chunk stands in within 1.5 up and 1 / 0.7 down, never more', () => {
   assert.ok(staleRatio(1, 1.5) > 0 && staleRatio(1, 0.7) > 0 && staleRatio(1, 1) === 1); assert.equal(staleRatio(1, 1.51), 0); assert.equal(staleRatio(1, 0.69), 0);
   assert.ok(chunkCap(1440, 900, 2) >= chunksTouched(1440, 900, 2) * 1.35 && chunkCap(1440, 900, 2) <= Math.ceil(chunksTouched(1440, 900, 2) * 1.35) + 2);

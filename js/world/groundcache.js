@@ -20,6 +20,10 @@ export { CHUNK_PX, chunkWorld, chunkBytes, chunksTouched, groundBytes, chunksFor
 export const BAKE_MS_STILL = 10, BAKE_MS_MOVING = 3.5;
 /** The V2 ground's chunks are dearer to bake (a base painted per pixel, 3 to 13 ms each in Node), so a frame may spend more on them: still, moving. A chunk that nothing stands in for is baked whatever the budget, one a frame at the least. */
 export const V2_BAKE_MS = [14, 9];
+/** While the zoom changes a frame bakes one chunk (the first is always baked) and no more than this many milliseconds of them: a pinch must never stall on the base. */
+export const ZOOM_BAKE_MS = 2.5;
+/** A stand-in magnified by more than this is drawn without smoothing while the zoom moves (a scaled, smoothed blit costs 3.2 ms a megapixel on a CPU-drawn canvas, a plain one about a third of it): the exact scale replaces it as soon as the zoom rests. */
+export const NEAREST_ABOVE = 1.6;
 /** The scale must stand still this long (ms) before chunks are baked at it: while it changes every frame, stale chunks and direct cells stand in. */
 export const ZOOM_REST_MS = 90;
 /** An exact chunk baked over the stand-in that was showing there fades in over this many ms (a zoom that comes to rest: the soft picture sharpens, a stride that changed does not pop). Never under Calm, Off and reduced motion. */
@@ -44,7 +48,7 @@ export const groundCacheMethods = {
     const ver = (Math.imul(this.unlockHash | 0, 31) + gk) | 0;
     if (v2 ? store.markStale(ver) : store.setVer(ver)) this.gcValid = false;
     const a = this.renderScale(), sk = scaleKey(a), snap = this.snap || (this.snap = [0, 0]); snapTranslation(W, H, dpr, cam.x, cam.y, a, snap);
-    const now = performance.now(); if (a !== this.gcA) { this.gcA = a; this.gcAt = now; }
+    const now = performance.now(); if (a !== this.gcA) { this.gcUp = a > (this.gcA ?? a) ? 1 : this.gcUp === 1 && a === this.gcA ? 1 : a < (this.gcA ?? a) ? 0 : this.gcUp; this.gcA = a; this.gcAt = now; }
     const zooming = now - (this.gcAt ?? -1e9) < (this.gcRest ?? ZOOM_REST_MS); // the scale is changing (a pinch, a wheel, a glide): nothing is baked at a scale that is gone in the next frame; stand-ins and direct cells cover the window, and the exact scale is baked once it rests
     const e = snap[0], f = snap[1], cw = this.cv.width, ch = this.cv.height;
     const win = this.gcWin || (this.gcWin = { x0: 0, x1: 0, y0: 0, y1: 0 }); win.x0 = -e / a; win.x1 = (cw - e) / a; win.y0 = -f / a; win.y1 = (ch - f) / a;
@@ -55,18 +59,18 @@ export const groundCacheMethods = {
     const miss = this.gcMiss || (this.gcMiss = []); miss.length = 0; let have = 0;
     const cx = (cw / 2 - e) / (a * 1), cy = (ch / 2 - f) / (a * 1), s = cells.s;
     for (let j = cells.j0; j <= cells.j1; j++) for (let i = cells.i0; i <= cells.i1; i++) { const c0 = store.map.get(chunkKey(sk, i, j)); if (c0 && !c0.stale) have++; else miss.push(i, j); }
-    let baked = 0; const all = v2 && (rig || store.size === 0);
+    let baked = 0; const all = v2 && rig; // (the shot rig bakes the whole window at once; a real start bakes it over a few frames, the first chunk of a frame always and then the frame's budget, so the first screen is never a 450 ms freeze)
     if (miss.length) {
       const pts = []; for (let n = 0; n < miss.length; n += 2) pts.push([miss[n], miss[n + 1], Math.hypot((miss[n] + 0.5) * s - cx, (miss[n + 1] + 0.5) * s - cy)]); pts.sort((p, q) => p[2] - q[2]);
-      const budget = this.gcSeen >= 1 ? (this.gcBudget?.[0] ?? (v2 ? V2_BAKE_MS[0] : BAKE_MS_STILL)) : (this.gcBudget?.[1] ?? (v2 ? V2_BAKE_MS[1] : BAKE_MS_MOVING)), t0 = performance.now(); miss.length = 0; // (all: the first ground, and the shot rig, bake the whole window at once) // (this.gcBudget: a test's own milliseconds [still, moving])
+      const budget = zooming ? (this.gcBudget?.[1] ?? ZOOM_BAKE_MS) : this.gcSeen >= 1 ? (this.gcBudget?.[0] ?? (v2 ? V2_BAKE_MS[0] : BAKE_MS_STILL)) : (this.gcBudget?.[1] ?? (v2 ? V2_BAKE_MS[1] : BAKE_MS_MOVING)), t0 = performance.now(); miss.length = 0; // (all: the first ground, and the shot rig, bake the whole window at once) // (this.gcBudget: a test's own milliseconds [still, moving])
       if (zooming || fadeMs > 0) store.standIns(a, sk, now);
-      const ab = Math.round(Math.pow(2, Math.round(Math.log2(a) * 4) / 4) * 1e5) / 1e5, sb = CHUNK_PX / ab; // the quarter-octave bucket: what is baked while the scale moves is baked here, so the frames of one stretch of a zoom share their chunks
+      const ab = Math.round(Math.pow(2, Math.round(Math.log2(a) * 4) / 4 - (this.gcUp ? 0.9 : 0)) * 1e5) / 1e5, sb = CHUNK_PX / ab; // the quarter-octave bucket, a zoom IN bakes at 0.54 of the scale it is at (a chunk of 3.4 times the world area, so a third of the chunks cover the window, and the per-pixel base costs a third; magnified 1.9 to 3.2 times while the zoom lasts), a zoom OUT at the scale it is at (shrunk to a half); the frames of one stretch of a zoom share their chunks
       for (const [i, j] of pts) {
         const ok = all || baked === 0 || performance.now() - t0 < budget;
         if (!zooming) { if (ok) { const c = store.bake(draw, a, i, j, dpr); if (c) { baked++; if (fadeMs > 0 && !c.empty && store.covered((i + 0.5) * s, (j + 0.5) * s)) c.fadeEnd = performance.now() + fadeMs; continue; } } } // (a chunk baked where a stand-in was showing fades in over it)
         else { // while the scale changes a cell is baked only when nothing stands in for it (the cells a zoom out reveals), at the bucket scale: that chunk stands in for the next frames of the zoom, and costs a bake once where a direct draw costs every frame
           const mx = (i + 0.5) * s, my = (j + 0.5) * s;
-          if (!store.covered(mx, my) && ok) { const c = store.bake(draw, ab, Math.floor(mx / sb), Math.floor(my / sb), dpr); if (c) { baked++; store.standIns(a, sk); } }
+          if (!store.covered(mx, my) && ok) { const c = store.bake(draw, ab, Math.floor(mx / sb), Math.floor(my / sb), dpr, true); if (c) { baked++; store.standIns(a, sk); } }
         }
         miss.push(i, j);
       }
@@ -85,7 +89,7 @@ export const groundCacheMethods = {
         for (const c of L) {
           const kk = a / c.a, dx = c.i * CHUNK_PX * kk + e, dy = c.j * CHUNK_PX * kk + f, sz = CHUNK_PX * kk;
           if (dx + sz + kk < 0 || dy + sz + kk < 0 || dx - kk > cw || dy - kk > ch) continue;
-          c.last = ++store.tick; if (c.empty || store.hidden(c, sk, s)) continue; ctx.drawImage(c.img, dx - kk * 0.5, dy - kk * 0.5, sz + kk, sz + kk); // (a pixel larger than its cell, so scaled neighbours overlap and never leave a hairline)
+          c.last = ++store.tick; if (c.empty || store.hidden(c, sk, s)) continue; ctx.imageSmoothingEnabled = kk < NEAREST_ABOVE; ctx.drawImage(c.img, dx - kk * 0.5, dy - kk * 0.5, sz + kk, sz + kk); // (a pixel larger than its cell, so scaled neighbours overlap and never leave a hairline)
         }
         ctx.restore(); store.stats.stale += L.length;
       }

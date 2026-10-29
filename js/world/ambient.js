@@ -4,7 +4,7 @@
 // Owner: T2 ATMOSPHERE (docs/RENDER_PLAN.md, docs/ART_DIRECTION.md sections 4.4, 5.7, 8). Registered as the V2 `weather`, `field` and `particles` layers by atmos.js.
 import { h2, clamp, toGrid, HW } from './iso.js';
 import { stampGlow } from './gfx.js';
-import { LAYOUT, zAt } from './layout.js';
+import { LAYOUT, DIST, zAt } from './layout.js';
 import { INK } from './palette.js';
 import { COIN, SPARK, PUFF, RING } from './fx.js';
 
@@ -77,6 +77,12 @@ function paintButterfly(ctx, x, y, s, flap, dir, k) {
   for (const side of [-1, 1]) { ctx.fillStyle = c[0]; ctx.beginPath(); ctx.ellipse(x + side * wd * 0.55, y - s * 0.28, wd * 0.5, s * 0.55, side * -0.4, 0, TAU); ctx.fill(); ctx.fillStyle = c[1]; ctx.beginPath(); ctx.ellipse(x + side * wd * 0.62, y - s * 0.38, wd * 0.22, s * 0.24, side * -0.4, 0, TAU); ctx.fill(); }
   ctx.fillStyle = INK.contour; ctx.beginPath(); ctx.ellipse(x, y, Math.max(1, s * 0.12), s * 0.42, 0, 0, TAU); ctx.fill();
 }
+/** Is a world point under the cloud bank of a district that is still locked? A gull drawn over a bank is a cream shape on a white one: two pale arcs over a pale smudge, which reads as a face, so it is not drawn there (a bank's box, a little wider than the district's, stands for the bank). */
+export function underCloud(w, x, y) {
+  if (!w.unlocked) return false;
+  for (const id of LAYOUT.ids) { if (w.unlocked.has(id)) continue; const b = DIST[id].bb; if (x > b[0] - 60 && x < b[2] + 60 && y > b[1] - 140 && y < b[3] + 40) return true; }
+  return false;
+}
 export function paintField(ctx, w) {
   if (w.lite || w.reduced() || w.env.crunch || w.mode === 'map') return;
   const { W, H, cam, vt } = w, night = w.night, z = cam.z, lod = w.env.lod;
@@ -92,7 +98,7 @@ export function paintField(ctx, w) {
   if (gul > 0.03) {
     ctx.globalAlpha = gul; const x0 = Math.floor((cam.x - W / 2 / z) / SKY_CELL) - 1, x1 = Math.floor((cam.x + W / 2 / z) / SKY_CELL) + 1, y0 = Math.floor((cam.y - H / 2 / z) / SKY_CELL) - 1, y1 = Math.floor((cam.y + H / 2 / z) / SKY_CELL) + 1;
     for (let cx = x0; cx <= x1; cx++) for (let cy = y0; cy <= y1; cy++) {
-      if (!gullAt(cx, cy, vt, GULL)) continue; const x = (GULL.x - cam.x) * z + W / 2, y = (GULL.y - cam.y) * z + H / 2, s = Math.max(9, GULL.size * z * 1.4); if (x < -40 || x > W + 40 || y < -40 || y > H + 40) continue;
+      if (!gullAt(cx, cy, vt, GULL) || underCloud(w, GULL.x, GULL.y)) continue; const x = (GULL.x - cam.x) * z + W / 2, y = (GULL.y - cam.y) * z + H / 2, s = Math.max(9, GULL.size * z * 1.4); if (x < -40 || x > W + 40 || y < -40 || y > H + 40) continue;
       paintGull(ctx, x, y, s, GULL.flap, GULL.dir);
     }
     ctx.globalAlpha = 1;

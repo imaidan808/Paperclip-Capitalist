@@ -5,8 +5,8 @@
 import { registerLayer } from './stack.js';
 import { LAYOUT, DIST, EDGES, zAt, isRoad, BW, BD, GW, GH } from './layout.js';
 import { ROAD, PAVE, SAND, WOOD, LIGHT, SEA, TOY, GRASS, BLOOM, ROCK, ROCKHI, groundSet } from './palette.js';
-import { mix, clamp, h2 } from './iso.js';
-import { smooth as smoothstep, vnoise, LATTICE } from './noise.js';
+import { mix, clamp } from './iso.js';
+import { smooth as smoothstep, vnoise, LATTICE, hz } from './noise.js';
 import { bakeBase } from './rasterbase.js';
 import { surface } from './gfx.js';
 import { drawStage, paintFringe, tonesOf, tuft, gridRange, rrect } from './groundmat.js';
@@ -47,7 +47,7 @@ const BUSH_GREENS = [GRASS.mid, GRASS.lawn, GRASS.light, GRASS.lawnShade], ROCK_
  * along them, so a wood is a wood and a meadow is a meadow; the numbers are the share of tiles, held by tests/world-groundmat.test.mjs (a bush in about one tile in ten, a tree in about one in twelve inside a grove).
  */
 export function dressingOf(i, j, grove) {
-  const u = h2(i * 3 + 7, j * 5 + 11);
+  const u = hz(i, j, 7); // (the mixing hash: h2 leaves rows in what it scatters)
   if (u < 0.012 + 0.16 * grove * grove) return 3;
   if (u < 0.06 + 0.16 * grove) return 1;
   if (u < 0.078 + 0.16 * grove) return 2;
@@ -62,13 +62,13 @@ function drawTerrain(ctx, view, env, w, a) {
   const T = ch.scene.terr, { land, core } = LAYOUT, VW = LAYOUT.VW, [i0, i1, j0, j1] = gridRange(view, 90, 1, [GW, GH]), near = lod[2], close = lod[3], per = 0.9 + 1.5 * close; let budget = 1500;
   for (let s = i0 + j0; s <= i1 + j1 && budget > 0; s++) for (let j = Math.max(j0, s - i1); j <= Math.min(j1, s - i0); j++) {
     const i = s - j, k = j * GW + i; if (!land[k] || core[k] || !openMeadow(T, i, j, VW, -1.5, 4.5)) continue;
-    const n = per + h2(i, j + 4000) * per, cnt = (n | 0) + (h2(i + 91, j) < n - (n | 0) ? 1 : 0);
+    const n = per + hz(i, j, 4000) * per, cnt = (n | 0) + (hz(i, j, 4001) < n - (n | 0) ? 1 : 0);
     ctx.globalAlpha = near * 0.92;
     for (let q = 0; q < cnt; q++) {
-      const gx = i + h2(i * 7 + q, j * 3 + 17), gy = j + h2(i * 5 + 3, j * 11 + q * 5 + 1); if (LAYOUT.footAt(gx, gy) && !outsideBlock(gx, gy)) continue;
-      const z = zOn(gx, gy), x = px(gx, gy), y = py(gx, gy, z), hh = h2(i * 13 + q, j * 29 + 5);
+      const gx = i + hz(i, j, q * 3 + 1), gy = j + hz(i, j, q * 3 + 2); if (LAYOUT.footAt(gx, gy) && !outsideBlock(gx, gy)) continue;
+      const z = zOn(gx, gy), x = px(gx, gy), y = py(gx, gy, z), hh = hz(i, j, q * 3 + 3);
       if (hh > 0.86 - 0.06 * close) { // a few flowers in a small cluster
-        ctx.fillStyle = [BLOOM.white, BLOOM.butter, BLOOM.pink, BLOOM.lilac][(hh * 97 | 0) % 4]; ctx.beginPath(); for (let f = 0; f < 3; f++) { const fx = x + (h2(i + f, j * 3) - 0.5) * 7, fy = y + (h2(i * 3, j + f) - 0.5) * 3.5; ctx.moveTo(fx + 1.5, fy); ctx.arc(fx, fy, 1.5, 0, 6.2832); } ctx.fill(); budget -= 3; continue;
+        ctx.fillStyle = [BLOOM.white, BLOOM.butter, BLOOM.pink, BLOOM.lilac][(hh * 97 | 0) % 4]; ctx.beginPath(); for (let f = 0; f < 3; f++) { const fx = x + (hz(i, j, 20 + f) - 0.5) * 7, fy = y + (hz(i, j, 30 + f) - 0.5) * 3.5; ctx.moveTo(fx + 1.5, fy); ctx.arc(fx, fy, 1.5, 0, 6.2832); } ctx.fill(); budget -= 3; continue;
       }
       ctx.fillStyle = TUFT[(hh * 31 | 0) % 4]; ctx.beginPath(); tuft(ctx, x, y, hh); if (hh > 0.4) tuft(ctx, x + 4.2 + hh * 2, y + 1.4, 1 - hh, 4 + hh * 2.5); ctx.fill(); budget -= 6; // a clump: one tuft and, beside it, a smaller one
     }
@@ -91,8 +91,8 @@ export function drawPlants(ctx, view, env, w, a) {
   for (let s = i0 + j0; s <= i1 + j1; s++) for (let j = Math.max(j0, s - i1); j <= Math.min(j1, s - i0); j++) {
     const i = s - j, k = j * GW + i; if (!land[k] || core[k] || !openMeadow(T, i, j, VW, -2.6, 4.5)) continue;
     const grove = smoothstep(0.46, 0.74, vnoise(i * 0.075 + 5, j * 0.075 + 2)), what = dressingOf(i, j, grove); if (!what) continue;
-    const gx = i + 0.2 + h2(i * 11 + 1, j * 7) * 0.6, gy = j + 0.2 + h2(i * 5, j * 13 + 3) * 0.6; if (LAYOUT.footAt(gx, gy) || isRoad(gx, gy)) continue;
-    const z = zOn(gx, gy), x = px(gx, gy), y = py(gx, gy, z), hh = h2(i * 17 + 3, j * 19 + 5);
+    const gx = i + 0.2 + hz(i, j, 11) * 0.6, gy = j + 0.2 + hz(i, j, 12) * 0.6; if (LAYOUT.footAt(gx, gy) || isRoad(gx, gy)) continue;
+    const z = zOn(gx, gy), x = px(gx, gy), y = py(gx, gy, z), hh = hz(i, j, 13);
     ctx.globalAlpha = mid;
     if (what === 3) plantTree(ctx, x, y, z > 26 || hh < 0.22 ? 'pine' : 'round', 0.78 + hh * 0.5, (hh * 997) | 0);
     else if (what === 1) bush(ctx, x, y, 7 + hh * 5, BUSH_GREENS[(hh * 31 | 0) % 4], hh > 0.7 ? BLOOM[['pink', 'butter', 'white', 'lilac'][(hh * 13 | 0) % 4]] : null);

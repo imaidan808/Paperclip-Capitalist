@@ -27,7 +27,7 @@ export function tone(c, k = 0) {
   if (k) h = warmVeil(h, k * VEIL);
   v = a < 1 ? `rgba(${rgb(h).join(',')},${a})` : h; if (MEMO.size > 600) MEMO.clear(); MEMO.set(key, v); return v;
 }
-const MINB = 0.12;
+const MINB = 0.12, NEON = 0.26;
 /** What an `ell` decal of the kits is meant to be, from its colour: a puddle (blue-green), a stain of dirt (dark) or anything else (kept as it was drawn). */
 export function ellKind(fill) {
   const m = typeof fill === 'string' && fill.match(/rgba?\(([^)]+)\)/); if (!m) return 'other';
@@ -52,6 +52,14 @@ export function decalV2(ctx, d, z, k, S, detail) {
   switch (d.k) {
     case 'rect': {
       const f = tone(d.fill, k); if (!f) break;
+      const thin = Math.min(w, dd) < NEON && Math.max(w, dd) >= 8 && f[0] === '#'; // (a long opaque strip only: the short pen lines and the translucent ones keep their own width) a neon strip or a long painted line: never a hairline. A soft wide glow under a core of 0.26 tile (about 4 css pixels at the working zoom), both the strip's own colour
+      if (thin) {
+        const along = w >= dd, glow = NEON * 2.2, core = NEON; const cx = x + w / 2, cy = y + dd / 2;
+        const gx = along ? x : cx - glow / 2, gy = along ? cy - glow / 2 : y, gw = along ? w : glow, gd = along ? glow : dd;
+        ctx.globalAlpha = 0.2; ctx.fillStyle = f; ctx.beginPath(); rrect(ctx, gx, gy, gw, gd, glow / 2, z); ctx.fill();
+        const qx = along ? x : cx - core / 2, qy = along ? cy - core / 2 : y, qw = along ? w : core, qd = along ? core : dd;
+        ctx.globalAlpha = 1; ctx.beginPath(); rrect(ctx, qx, qy, qw, qd, core / 2, z); ctx.fill(); break;
+      }
       const ww = Math.max(w, MINB), dh = Math.max(dd, MINB), xx = w < MINB ? x - (MINB - w) / 2 : x, yy = dd < MINB ? y - (MINB - dd) / 2 : y;
       ctx.fillStyle = f; ctx.beginPath(); rrect(ctx, xx, yy, ww, dh, 0.14, z); ctx.fill(); break;
     }
