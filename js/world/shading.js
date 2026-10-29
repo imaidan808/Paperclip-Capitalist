@@ -98,3 +98,6 @@ function uniform(n) { let a = UNIFORM.get(n); if (!a) { a = Array.from({ length:
 
 /** A cheap hue shift towards the haze colour; props.js applies it to every body colour of a prop standing on high ground. */
 export const hazed = (c, k) => (k > 0.004 ? mix(c, HAZE, k) : c);
+
+// The rounded solids that replace `solid` call by call (T3, docs/RENDER_PLAN.md): re-exported here so the one place a building's form is shaded names its successor.
+export { roundedBox, bevelRadius } from './solids.js';

@@ -311,3 +311,48 @@ node scripts/diag/seams.mjs | anchor.mjs | stages.mjs sw 2 0|60      # cracks, a
 
 Tracks branch from the tip of `v2/art-stack` (after this plan and the refactor), work in their own worktree, and merge in any order: the file sets are disjoint, the shared modules are frozen, and every flag starts as legacy, so a track's merge changes nothing until it flips. The orchestrator merges flips one layer at a time, each with its rig diff and budget numbers. T5's first four deliverables should land before T3 and T4 depend on overlays; T3 and T4 meanwhile build the base complete. Cross-track requests go through the orchestrator in the track's report; do not edit round a freeze.
 
+
+## 11. As built: the refactor that put the code in this shape
+
+Committed on `v2/art-stack` after the plan. Nothing visible changed: that is the point, and it is proved.
+
+**What moved where.** Code was moved, not rewritten: every legacy drawer is the same text it was in `world.js`, now an object-literal method in its owner's module and mixed into `World.prototype` (`Object.assign(World.prototype, seaMethods, groundMethods, ...)` at the foot of `world.js`), so `this` is still the world and `w.drawWater`, `w.drawFog`, `w.drawGround`, `w.chip` and the rest of the names the tests call still exist. The one piece that was cut rather than lifted is `drawGround`, which was one 40-line method and is now its order (`ground.js`) over four layers: `drawCliffs` (`coast.js`), `drawTerrain` (`terrain.js`), `drawRoads` (`roads.js`) and `drawBlocks` (`ground.js`), called in the old order with the old variables.
+
+| was in `world.js` | now |
+|---|---|
+| `drawWater` | `sea.js` |
+| `drawGround` (order), districts' blocks, decals and crosswalks call | `ground.js` (`drawGround`, `drawBlocks`) |
+| cliff walls and foam | `coast.js` (`drawCliffs`) |
+| terrain tiles, `coarseCol` | `terrain.js` (`drawTerrain`, `coarseCol`) |
+| `drawRoads`, `drawBridge`, `drawMarks` | `roads.js` |
+| `drawDecal`, `drawLiveDecals` | `decals.js` |
+| `groundPass`, `cacheOK` | `groundcache.js` (the camera matrix is `World.toWorld`, written once) |
+| `drawFog` | `clouds.js` |
+| `drawGrade`, `drawWeather`, `drawField`, `drawParticles`, `CONFETTI` | `atmos.js` |
+| `drawStatic`, `boardText`, `drawTariff` | `statics.js` |
+| `drawPlot`, `drawPipe` | `ents-plots.js` |
+| `drawLead`, `drawPlayer`, `truckPos`, `drawTruck`, `cars`, `drawCar`, `lookOf`, `CARS` | `ents-actors.js` |
+| `drawLot`, `drawAsset`, `TAG_COLOR`, `classColor` | `ents-stock.js` |
+| `drawOverlay`, the name tags, pips, `chip`, `icon`, `tag`, `leadBubble`, `progress`, the tag-placement constants | `overlay.js` |
+| `drawMapRoute`, `drawMapLabels`, `spreadCards`, `miniBase`, `drawMini` | `mapmode.js` |
+| `compact`, `money`, `FAR_ZOOM`, `PIP_ZOOM`, `FOG_DIM` | `common.js` (`world.js` still exports `FAR_ZOOM`) |
+
+`world.js` fell from 1,259 lines to 604: the constructor, lifecycle, camera (with `bindInput` and `zoomBy` left exactly where they were, for `v2/zoom`), hit testing, `sync`, the frame loop, the governor, `update`, `draw` (the stack's order), the entity dispatcher, the hover, and the tutorial anchors. `props.js` fell from 763 lines to 40 (the front door: `drawProp`, `farDraw`, `KEEP_FAR`, `layerOf`, `BUILDING`, the re-exported `DRAW`) over `props-common.js` (73, the frozen helpers and the `DRAW`/`LAYER` registries), `props-buildings.js` (359: `shop` and the 17 layered buildings), `props-street.js` (168: 24 kinds), `props-nature.js` (33: 6 kinds) and `props-actors.js` (132: 11 machines, `autos`, `containers`). The DRAW table has the same 61 kinds as before. `iso.js` is untouched.
+
+**What was added.** `stack.js` (the layer table, the flags, `registerLayer`, `setFlag`, `setFlags`, `runLayer`, `groundKey`; `?layers=` is read in the address), `lod.js`, `palette.js`, `solids.js`, `shadow.js`; `World.toWorld`, `toScreen` and `safeLayer`; `env.lod` (set every frame from one reused record); `releaseShadows()` in `World.release`; `groundKey` as the eighth slot of the ground cache's key (0 while every layer is legacy, so nothing is redrawn that was not); `shading.js` re-exports `roundedBox` and `bevelRadius` so the module is part of the staged site's graph from now (T3 imports it directly when it begins). `docs/ARCHITECTURE.md` quotes the new module count and sizes (83 modules, 96 requests, 574 KB gzipped; `tests/finish-repair.test.mjs` holds them).
+
+**The proof.** The shot rig (`scripts/world-shots.mjs`, the settings that made the baseline) against the baseline at `adcd991` (`art-baseline/`):
+
+| set | shots | result |
+|---|---|---|
+| dsf 2, all | 27 (every scene, four hours of day, the pan and zoom pairs, the opened district) | identical on every shot: `meanAbs` 0, `share` 0, the same pixel hash in the manifests; no console error, none unstable |
+| dsf 1.5, quick | 6 | identical |
+| dsf 1, quick | 6 | identical |
+
+Frame cost on the rig's `--perf` (flush-inclusive, the baseline's own method, this machine, medians): working-zoom shots still 29.2 to 29.7 ms and panning 35.0 to 35.3; the finest shots' medians 27.0 to 27.2 (start-close) and 11.8 to 11.9 (coast-close). Inside the noise (about 10%): the stack adds one function call per drawn item. Canvas memory unchanged (127.3 MB offscreen, 148 MB with the canvas).
+
+The suite, `node --test --test-concurrency=4 tests/*.test.mjs`, twice in a row: 1,246 tests (1,210 before; 36 new), 0 failed, 15 skipped as before, about 175 seconds. **No existing test file was edited.** The two that quote or walk the staged site (`finish-repair.test.mjs` F2 and `finish-site.test.mjs`) pass because `docs/ARCHITECTURE.md`'s figures were refreshed and `shading.js` makes `solids.js` reachable. New: `tests/world-lod.test.mjs`, `world-palette.test.mjs`, `world-solids.test.mjs`, `world-shadow.test.mjs`, `world-stack.test.mjs`, `world-ownership.test.mjs` and the helper `tests/helpers/recctx.mjs`.
+
+**Flipping a layer, as an example.** T1 writes `registerLayer('sea', drawSea, 'world', seaKey)` in `sea.js`, opens a page with `?layers=sea:v2` (or `setFlag('sea', 'v2')` in a test) and shoots it with the rig; when its rows pass, the orchestrator changes the default of `sea` from `'legacy'` to `'v2'` in `stack.js` (the one-line flip), and T1 deletes `drawWater` and `SEA_STRIP` and the lines of `tests/world-fx.test.mjs` that pin the strip.
+
+**Still the old look on purpose.** `FAR_ZOOM` is 0.42 (T5 moves it to 0.30 with the tracks' `far` drawers), the sprite budget is 22 million pixels, the ground cache is the full-window copy, the camera translation is not rounded, and the governor sees JavaScript time only: each is a T5 deliverable above, and each changes pixels or timing, so none was done in a refactor that had to change neither.
