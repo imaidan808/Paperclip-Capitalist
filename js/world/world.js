@@ -64,11 +64,11 @@ export class World {
     this.cv = document.createElement('canvas');
     this.cv.className = 'worldcv'; this.cv.tabIndex = 0;
     this.cv.setAttribute('role', 'application');
-    this.cv.setAttribute('aria-label', 'Isometric world of sixteen districts. Drag to look around, scroll or pinch to zoom, arrow keys to pan. Every object here is also in the list below the map.');
+    this.cv.setAttribute('aria-label', 'Isometric world of sixteen districts. Drag to look around, scroll or pinch to zoom, plus and minus also zoom, 0 shows the whole island, arrow keys to pan. Every object here is also in the list below the map.');
     this.ctx = this.cv.getContext('2d', { alpha: false });
     this.mini = document.createElement('canvas'); this.mini.width = 150; this.mini.height = 96; this.mini.className = 'worldmini'; this.mini.setAttribute('aria-hidden', 'true'); this.mctx = this.mini.getContext('2d');
     this.cam = { x: 0, y: 0, z: 0.9 }; this.camTo = null;
-    this.zin = new ZoomInput({ zoom: () => this.cam.z, apply: (z, px, py) => this.zoomAbout(z, px, py), range: () => this.zoomRange(), size: () => [this.W, this.H], instant: () => this.reduced() || !this.running, touching: () => this.pointers.size > 1 }); // wheel, trackpad and Safari-gesture zoom (camera-input.js); two fingers down are zoomed by the pointer events already
+    this.zin = new ZoomInput({ zoom: () => this.cam.z, apply: (z, px, py) => this.zoomAbout(z, px, py), range: () => this.zoomRange(), size: () => [this.W, this.H], instant: () => this.reduced() || !this.running, touching: () => this.pointers.size > 1, gliding: () => !!this.camTo }); // wheel, trackpad and Safari-gesture zoom (camera-input.js); two fingers down are zoomed by the pointer events already, a glide of the camera's own is not broken by a scroll's momentum
     this.mode = 'world';
     this.W = 800; this.H = 500; this.dpr = 1;
     this.inset = { l: 0, r: 0 };                                                                // px of the window's left and right edges that the camera buttons stand over: the island is fitted to what they leave
@@ -177,13 +177,15 @@ export class World {
     this.cam.x = clamp(this.cam.x + ox / z, b.x0 + mx, b.x1 - mx) - ox / z;
     this.cam.y = clamp(this.cam.y, b.y0 + my, b.y1 - my);
   }
-  /** Zoom by a factor about a screen point (the camera buttons, the keyboard, a two-finger touch pinch, a trackpad pinch): at once, and it ends any wheel ease. */
-  zoomBy(f, px = this.W / 2, py = this.H / 2) { this.zin.cancel(); this.zoomAbout(this.cam.z * f, px, py); }
-  /** Set the zoom, keeping the world point under a screen point where it is: the one place the camera is zoomed (the wheel's ease steps through here too). */
+  /** Zoom by a factor about a screen point (the camera buttons, the keyboard, a two-finger touch pinch): at once. It ends a wheel ease, and steps on from where that ease was going. */
+  zoomBy(f, px = this.W / 2, py = this.H / 2) { this.zoomAbout((this.zin.settle() ?? this.cam.z) * f, px, py); }
+  /** Set the zoom, keeping the world point under a screen point where it is: the one place the camera is zoomed (the wheel, a trackpad pinch, Safari's gestures and the ease all come through here). */
   zoomAbout(z, px = this.W / 2, py = this.H / 2) {
     const before = this.s2w(px, py); this.cam.z = z; this.clampCam();
-    const after = this.s2w(px, py); this.cam.x += before[0] - after[0]; this.cam.y += before[1] - after[1]; this.clampCam(); this.camTo = null; this.dirty = true;
+    const after = this.s2w(px, py); this.cam.x += before[0] - after[0]; this.cam.y += before[1] - after[1]; this.clampCam(); this.camTo = null; this.dirty = true; this.rebaseDrag();
   }
+  /** One pointer is panning and the zoom changed under it: take hold of the ground where it is now, or the next move would work the camera out from where the drag began and the ground would slide off. */
+  rebaseDrag() { const d = this.drag; if (!d || this.pointers.size !== 1) return; const [p] = [...this.pointers.values()]; if (d.moved) { d.x = p.x; d.y = p.y; } d.cx = this.cam.x; d.cy = this.cam.y; }
   w2s(x, y) { return [(x - this.cam.x) * this.cam.z + this.W / 2, (y - this.cam.y) * this.cam.z + this.H / 2]; }
   s2w(x, y) { return [(x - this.W / 2) / this.cam.z + this.cam.x, (y - this.H / 2) / this.cam.z + this.cam.y]; }
   setMode(m) { if (m === this.mode) return; this.mode = m; this.hover = null; if (m === 'map') this.fit(true); else this.focusZone(this.api.ui.zone, true); this.dirty = true; }
@@ -198,6 +200,7 @@ export class World {
     });
     cv.addEventListener('pointermove', (e) => {
       const p = this.pointers.get(e.pointerId);
+      this.zin.seen(e.offsetX, e.offsetY, e.pointerType !== 'touch'); // where the pointer is, drag or no drag: a zoom under it looks again from here
       if (p) { p.x = e.offsetX; p.y = e.offsetY; }
       if (this.pointers.size > 1 && this.drag) { const d = this.pinchDist(); if (this.drag.pinch) { const mid = this.pinchMid(); if (this.drag.mid) { this.cam.x -= (mid[0] - this.drag.mid[0]) / this.cam.z; this.cam.y -= (mid[1] - this.drag.mid[1]) / this.cam.z; this.clampCam(); } this.zoomBy(d / this.drag.pinch, mid[0], mid[1]); this.drag.pinch = d; this.drag.mid = mid; this.drag.moved = true; } return; }
       if (this.drag && p) {
@@ -206,7 +209,7 @@ export class World {
         if (this.drag.moved) { this.cam.x = this.drag.cx - dx / this.cam.z; this.cam.y = this.drag.cy - dy / this.cam.z; this.clampCam(); this.camTo = null; this.zin.cancel(); this.dirty = true; }
         return;
       }
-      this.zin.seen(e.offsetX, e.offsetY); this.pointerAt(e.offsetX, e.offsetY, e);
+      this.pointerAt(e.offsetX, e.offsetY, e);
     });
     const up = (e) => {
       const d = this.drag, wasDrag = d?.moved;
@@ -219,9 +222,11 @@ export class World {
       }
     };
     cv.addEventListener('pointerup', up); cv.addEventListener('pointercancel', up);
-    cv.addEventListener('pointerleave', () => { if (!this.drag) { this.hover = null; this.api.hover?.(null); this.dirty = true; } });
-    // Zoom: the wheel (a mouse notch, a trackpad's two-finger scroll, a trackpad pinch in Chrome, Edge and Firefox) and Safari's pinch gestures. Only events aimed at the canvas get here
-    // (the HUD, the drawers and dialogs have their own), and none of them may scroll, zoom or navigate the page, so every one is cancelled (these listeners are not passive).
+    cv.addEventListener('pointerleave', () => { this.zin.left(); if (!this.drag) { this.hover = null; this.api.hover?.(null); this.dirty = true; } });
+    // Zoom: the wheel (a mouse notch, a trackpad's two-finger scroll, a trackpad pinch in Chrome, Edge and Firefox) and Safari's pinch gestures. Only events aimed at the canvas get here:
+    // the listeners are on the canvas, which has no children, so the HUD, the drawers and dialogs (siblings above it) never reach them and keep their own wheel. `mine` is a second lock
+    // for the day the canvas has children. None of them may scroll, zoom or navigate the page, so every one is cancelled (these listeners are not passive). tests/camera-input.test.mjs
+    // holds the structure in a real browser.
     const mine = (e) => !e.target || e.target === cv;
     cv.addEventListener('wheel', (e) => { if (!mine(e)) return; e.preventDefault(); this.zin.wheel(e); }, { passive: false });
     cv.addEventListener('gesturestart', (e) => { if (!mine(e)) return; e.preventDefault(); this.zin.gestureStart(e, cv.getBoundingClientRect()); }, { passive: false });
@@ -259,6 +264,13 @@ export class World {
     return null;
   }
   zoneHit(id) { const D = DIST[id], open = this.unlocked?.has(id) ?? true; return { kind: 'zone', id, eid: 'zone:' + id, zone: id, label: D.name + (open ? '' : ` (locked: opens at ${money(D.gate)} net worth)`), locked: !open, quick: true, gate: D.gate, polys: [blockPoly(D)] }; }
+  /** The camera moved (a zoom, a key, a glide, a drag that has ended) under a mouse that did not: what is under it is not what was, so look again, once a drawn frame, and never while it is panning. */
+  repickHover() {
+    const c = this.cam, s = this.camSeen;
+    if (this.drag || (s && s[0] === c.x && s[1] === c.y && s[2] === c.z)) return;
+    this.camSeen = [c.x, c.y, c.z];
+    const p = this.zin.resting(); if (p) this.pointerAt(p[0], p[1], { offsetX: p[0], offsetY: p[1] });
+  }
   pointerAt(px, py, ev) {
     const h = this.pick(px, py), key = h ? h.kind + ':' + h.id : null;
     const prev = this.hover ? this.hover.kind + ':' + this.hover.id : null; this.hover = h; if (key !== prev) { this.cv.style.cursor = h ? 'pointer' : 'grab'; this.dirty = true; }
@@ -410,7 +422,7 @@ export class World {
     if (!animating && !this.dirty) return;
     this.update(dt);
     this.draw();
-    this.dirty = false; G.prev = ts;
+    this.dirty = false; G.prev = ts; this.repickHover();
     this.govern(performance.now() - t0, gap);
     this.fps = this.slow > 4 ? 15 : this.slow > 2 ? 20 : 30;
     this.lite = this.slow > 2;

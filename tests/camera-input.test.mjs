@@ -1,15 +1,21 @@
 // Zooming the world with the wheel and the trackpad: the pure rules (js/world/camera-input.js: what a wheel event is, what it does to the zoom, how a notch eases, how Safari's
-// gestures are read) and the World's use of them (one non-passive listener on the canvas, a zoom about the pointer, the ease cancelled by a drag, a button or a camera move).
+// gestures are read; what one hard flick may spend; a camera glide that wins over a scroll) and the World's use of them (one non-passive listener on the canvas, a zoom about the pointer,
+// the ease cancelled by a drag, a button or a camera move; the ground held by a drag kept under the pointer through a zoom; what is under a parked mouse looked at again after one).
 // The DOM tests run the real World against the same recording-canvas stand-ins as tests/world.test.mjs, with event listeners kept as lists (as a page keeps them).
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { existsSync } from 'node:fs';
+import { createServer as netServer } from 'node:net';
+import { createServer as httpServer } from 'node:http';
 import { Game } from '../js/engine.js';
 import {
-  LINE_PX, MOUSE_STEP, TRACKPAD_RATE, PINCH_RATE, MAX_EVENT_FACTOR, ZOOM_TAU, SETTLE_LN, MOUSE, PINCH, TRACKPAD,
-  STREAM_GAP_MS, clampFactor, normalizeWheel, wheelZoomFactor, zoomFactor, gestureZoomFactor, easeZoom, ZoomInput,
+  LINE_PX, MOUSE_STEP, TRACKPAD_RATE, TRACKPAD_BUDGET, GAIN_FLOOR, MAC_TICK, PINCH_RATE, MAX_EVENT_FACTOR, ZOOM_TAU, SETTLE_LN, MOUSE, PINCH, TRACKPAD,
+  STREAM_GAP_MS, clampFactor, normalizeWheel, isMacTick, wheelZoomFactor, zoomFactor, trackpadGain, gestureZoomFactor, easeZoom, ZoomInput,
 } from '../js/world/camera-input.js';
 
 const near = (a, b, eps = 1e-9, msg = '') => assert.ok(Math.abs(a - b) <= eps, `${msg} ${a} vs ${b}`);
+/** What one two-finger gesture (events one after another with no pause) does to the zoom by the rule: each event's gain tapers as the gesture spends its budget. A factor. */
+const scrollRun = (deltas) => { let used = 0, ln = 0; for (const d of deltas) { const step = -d * TRACKPAD_RATE * trackpadGain(used); used += Math.abs(step); ln += step; } return Math.exp(ln); };
 const SOURCE = (e, h) => normalizeWheel(e, h).source;
 
 // ================================================================ the pure module: what a wheel event is
@@ -73,10 +79,10 @@ test('a two-finger scroll zooms smoothly and gently: small deltas make small ste
   assert.ok(f(3.7) < 1 && f(3.7) > 0.988);
   near(f(-3.7) * f(3.7), 1, 1e-12);
   assert.ok(f(-30.5) < 1.1, 'a quick scroll frame is still not a jump');
-  // what a hand makes of it: a gentle slide is a clear but modest zoom, a medium swipe with its momentum about three times, a hard flick nearly everything the range has
-  const dist = (px, n = 40) => { let z = 1; for (let i = 0; i < n; i++) z *= f(-px / n); return z; };
-  assert.ok(dist(150) > 1.15 && dist(150) < 1.6, `150 px: ${dist(150)}`); assert.ok(dist(800) > 2 && dist(800) < 5, `800 px: ${dist(800)}`); assert.ok(dist(2000) > 8, `2000 px: ${dist(2000)}`);
-  assert.ok(TRACKPAD_RATE >= 0.001 && TRACKPAD_RATE <= 0.003 && PINCH_RATE === 0.01);
+  // what a hand makes of it event by event (the whole-gesture limit is the budget's, below): a gentle slide is about a notch, a long one about two times and a quarter
+  const dist = (px, n = 80) => { let z = 1; for (let i = 0; i < n; i++) z *= f(-px / n); return z; };
+  assert.ok(dist(150) > 1.1 && dist(150) < 1.25, `150 px: ${dist(150)}`); assert.ok(dist(800) > 2 && dist(800) < 3, `800 px: ${dist(800)}`);
+  assert.ok(TRACKPAD_RATE >= 0.0008 && TRACKPAD_RATE <= 0.0015 && PINCH_RATE === 0.01);
   // the same distance of scrolling is much gentler than a pinch of the same delta, and than a notch of 100 px
   assert.ok(wheelZoomFactor({ deltaY: -48.5 }) < MOUSE_STEP);
   assert.ok(f(-5.5) < wheelZoomFactor({ ctrlKey: true, deltaY: -5.5 }));
@@ -220,8 +226,8 @@ test('ZoomInput: a notch-sized event inside a trackpad\'s gesture belongs to the
   // a flick: it ramps up through small deltas, then sends whole numbers over 50 with no deltaX, which alone look like notches
   const a = fakeHost({ z: 0.5 }); const za = new ZoomInput(a.host);
   za.wheel(ev(-6.5)); za.wheel(ev(-31.25)); const z1 = a.h.z; assert.equal(za.pending, false);
-  za.wheel(ev(-96)); assert.equal(za.pending, false, 'applied at once, not eased'); near(a.h.z, z1 * Math.exp(96 * TRACKPAD_RATE), 1e-12, 'by the scroll rule');
-  const z2 = a.h.z; za.wheel(ev(-120)); za.wheel(ev(-104)); near(a.h.z, z2 * Math.exp(224 * TRACKPAD_RATE), 1e-12, 'and the rest of the flick'); assert.equal(za.pending, false);
+  za.wheel(ev(-96)); assert.equal(za.pending, false, 'applied at once, not eased'); near(a.h.z, 0.5 * scrollRun([-6.5, -31.25, -96]), 1e-12, 'by the scroll rule'); assert.ok(a.h.z / z1 < MOUSE_STEP, 'less than a notch');
+  za.wheel(ev(-120)); za.wheel(ev(-104)); near(a.h.z, 0.5 * scrollRun([-6.5, -31.25, -96, -120, -104]), 1e-12, 'and the rest of the flick'); assert.equal(za.pending, false);
   za.wheel(ev(-3, { deltaMode: 1 })); assert.equal(za.pending, true, 'a wheel that scrolls by lines is a wheel, even then');
   // a pause ends the gesture
   const b = fakeHost(); const zb = new ZoomInput(b.host);
@@ -543,7 +549,312 @@ test('the buttons and keys keep their steps: +, - and the camera buttons jump by
   w.zoomBy(1.25); near(w.cam.z, z0 * 1.25, 1e-12); w.zoomBy(0.8); near(w.cam.z, z0, 1e-12);
 });
 
-test('the canvas says how to zoom: scroll or pinch, no longer Ctrl and scroll', async () => {
+test('the canvas says how to zoom: scroll or pinch, and the keys a keyboard has; no longer Ctrl and scroll', async () => {
   const { w } = await world(); const label = w.cv.attrs['aria-label'];
-  assert.match(label, /Drag to look around, scroll or pinch to zoom, arrow keys to pan\./); assert.ok(!/ctrl/i.test(label));
+  assert.match(label, /Drag to look around, scroll or pinch to zoom, plus and minus also zoom, 0 shows the whole island, arrow keys to pan\./); assert.ok(!/ctrl/i.test(label));
+  // what it promises is true: the keys it names do that
+  const z0 = w.cam.z; fire(w, 'keydown', { key: '+' }); assert.ok(w.cam.z > z0); fire(w, 'keydown', { key: '-' }); near(w.cam.z, z0, 1e-12);
+  fire(w, 'keydown', { key: '0' }); assert.ok(w.camTo, 'zero starts the glide that shows the whole island'); assert.equal(w.camTo.z, w.fitZoom());
+});
+
+// ================================================================ the repair round (review of the wheel and trackpad zoom): the pure module
+test('a Mac wheel\'s clicks are told from a trackpad\'s whole numbers: a deltaY that is a whole multiple of 4.000244 and no whole number itself is a notch', () => {
+  assert.equal(MAC_TICK, 4.000244140625);
+  for (const k of [1, 2, 3, 5, 9, 25]) {
+    for (const sign of [1, -1]) {
+      const e = { deltaY: sign * k * MAC_TICK, deltaX: 0, deltaMode: 0 };
+      assert.equal(SOURCE(e), MOUSE, `${k} ticks ${sign}`); assert.equal(normalizeWheel(e).guess, true, 'recognised by its size alone, as a big whole number is'); assert.equal(isMacTick(0, e.deltaY), true);
+      near(wheelZoomFactor(e), sign < 0 ? MOUSE_STEP : 1 / MOUSE_STEP, 1e-12, 'one click is one notch, however many ticks the click carries');
+    }
+  }
+  assert.equal(SOURCE({ deltaY: -4.000244140625 }), MOUSE, 'the number as a browser sends it');
+  assert.equal(SOURCE({ ctrlKey: true, deltaY: -8.00048828125 }), MOUSE, 'Ctrl held on a mouse wheel is still a notch');
+  // a trackpad's numbers are not: whole numbers (4, 8, 12 are near, but whole), fractions off a multiple, a sideways part, no movement
+  for (const e of [{ deltaY: -4 }, { deltaY: 8 }, { deltaY: -12 }, { deltaY: 3.9 }, { deltaY: -4.1 }, { deltaY: -4.00055 }, { deltaY: 6.123 }, { deltaY: 0.4 }, { deltaY: -4.000244140625, deltaX: 1.5 }, { deltaY: 37.6 }, { deltaY: -2.00012 }]) {
+    assert.equal(SOURCE(e), TRACKPAD, JSON.stringify(e)); assert.equal(isMacTick(e.deltaX || 0, e.deltaY), false);
+  }
+  for (const [x, y] of [[0, NaN], [0, Infinity], [0, undefined], [0, null], [0, 0], [NaN, MAC_TICK], [undefined, MAC_TICK]]) assert.equal(isMacTick(x, y), false, `${x}, ${y}`);
+  // the size of a mouse's click no longer depends on how fast it was spun (it used to be 0.6% for a slow click and 16% for a fast one)
+  const slow = wheelZoomFactor({ deltaY: -MAC_TICK }), fast = wheelZoomFactor({ deltaY: -6 * MAC_TICK }); near(slow, fast, 1e-12); near(slow, MOUSE_STEP, 1e-12);
+});
+
+test('ZoomInput: a Mac-wheel-sized event inside a trackpad\'s gesture is part of the gesture; a click after a pause is a notch', () => {
+  let t = 1000; const ev = (dy, extra = {}) => ({ deltaY: dy, offsetX: 100, offsetY: 100, timeStamp: (t += 16), ...extra });
+  const a = fakeHost(); const za = new ZoomInput(a.host);
+  za.wheel(ev(-6.5)); za.wheel(ev(-2 * MAC_TICK)); assert.equal(za.pending, false, 'an event of a click\'s size straight after a scroll event is the scroll');
+  t += STREAM_GAP_MS * 3; za.wheel(ev(-2 * MAC_TICK)); assert.equal(za.pending, true, 'a click after a pause is a click'); settle(za, a.host);
+  const b = fakeHost(); const zb = new ZoomInput(b.host); for (let i = 0; i < 3; i++) zb.wheel({ deltaY: -MAC_TICK, timeStamp: (t += 12) });
+  assert.equal(zb.pending, true); settle(zb, b.host); near(b.h.z, MOUSE_STEP ** 3, 1e-9, 'three quick clicks are three notches');
+});
+
+test('a fractional number of lines with Ctrl held is a pinch some browser sends by line, not a run of notches; whole lines are still notches', () => {
+  assert.equal(SOURCE({ ctrlKey: true, deltaMode: 1, deltaY: -0.15 }), PINCH); assert.equal(SOURCE({ ctrlKey: true, deltaMode: 2, deltaY: 0.02 }), PINCH);
+  assert.equal(SOURCE({ ctrlKey: true, deltaMode: 1, deltaY: -3 }), MOUSE); assert.equal(SOURCE({ ctrlKey: true, deltaMode: 1, deltaY: 1 }), MOUSE); assert.equal(SOURCE({ deltaMode: 1, deltaY: -3 }), MOUSE);
+  let z = 1; for (let i = 0; i < 20; i++) z *= wheelZoomFactor({ ctrlKey: true, deltaMode: 1, deltaY: -0.15 });
+  near(z, Math.exp(20 * 0.15 * LINE_PX * PINCH_RATE), 1e-9, 'it follows the fingers like any pinch'); assert.ok(z < 2, `twenty small pinch events made ${z}`);
+});
+
+test('trackpadGain: all of it at the start of a gesture, tapering as the budget is spent, never below the floor', () => {
+  assert.equal(trackpadGain(0), 1); near(trackpadGain(TRACKPAD_BUDGET / 2), 0.5, 1e-12); assert.equal(trackpadGain(TRACKPAD_BUDGET), GAIN_FLOOR); assert.equal(trackpadGain(TRACKPAD_BUDGET * 5), GAIN_FLOOR);
+  assert.equal(trackpadGain(Infinity), GAIN_FLOOR);
+  let prev = 1; for (let u = 0; u <= 2; u += 0.01) { const g = trackpadGain(u); assert.ok(g <= prev + 1e-12 && g >= GAIN_FLOOR, `gain at ${u}`); prev = g; }
+  for (const junk of [NaN, -1, undefined, null, '3', {}, -Infinity]) assert.equal(trackpadGain(junk), 1, String(junk));
+  near(TRACKPAD_BUDGET, Math.log(4), 1e-12); assert.ok(GAIN_FLOOR > 0 && GAIN_FLOOR < 0.5);
+});
+
+/** A two-finger swipe as a run of scroll events 16 ms apart: a peak that decays (a flick and its momentum). Returns the events. */
+const swipe = (t, n, peak, decay) => Array.from({ length: n }, (_, i) => ({ deltaY: -(peak * decay ** i + 0.25), offsetX: 100, offsetY: 100, timeStamp: (t.at += 16) }));
+
+test('ZoomInput: one hard flick with its momentum cannot fling the camera across the range, and the range takes a few deliberate strokes', () => {
+  const lo = 0.129, hi = 2.4, { h, host } = fakeHost({ z: lo, range: [lo, hi] }); const zi = new ZoomInput(host), t = { at: 1000 };
+  const stroke = () => { for (const e of swipe(t, 120, 100, 0.95)) zi.wheel(e); t.at += STREAM_GAP_MS * 4; }; // about 2000 px with its tail: a vigorous flick
+  const px = swipe({ at: 0 }, 120, 100, 0.95).reduce((a, e) => a - e.deltaY, 0); assert.ok(px > 1800 && px < 2300, `${px} px`);
+  stroke(); const one = h.z / lo; assert.ok(one > 2 && one < 3.3, `one flick: ${one} times (it would have been ${Math.exp(px * TRACKPAD_RATE)} untapered)`);
+  stroke(); assert.ok(h.z < hi, `two flicks have not reached the top: ${h.z}`);
+  stroke(); assert.equal(h.z, hi, 'the third reaches it');
+  // downwards the same
+  for (let i = 0; i < 2; i++) { for (const e of swipe(t, 120, 100, 0.95)) zi.wheel({ ...e, deltaY: -e.deltaY }); t.at += STREAM_GAP_MS * 4; } assert.ok(h.z > lo && h.z < hi, 'and two flicks back are not the whole way');
+  // an enormous one, 6000 px and more, is still a few times and not the range
+  const big = fakeHost({ z: 1, range: [0.01, 100] }); const zb = new ZoomInput(big.host), tb = { at: 5000 };
+  for (const e of swipe(tb, 250, 200, 0.97)) zb.wheel(e); assert.ok(big.h.z > 3 && big.h.z < 12, `an enormous flick: ${big.h.z} times`);
+});
+
+test('ZoomInput: a gentle slide keeps nearly all of its gain, a long slow scroll goes on after the budget is spent, and each new gesture has its budget again', () => {
+  const { h, host } = fakeHost({ z: 1, range: [0.001, 1000] }); const zi = new ZoomInput(host), t = { at: 1000 };
+  for (const e of Array.from({ length: 20 }, () => ({ deltaY: -7.5, offsetX: 1, offsetY: 1, timeStamp: (t.at += 16) }))) zi.wheel(e);
+  assert.ok(h.z > 1.12 && h.z < 1.17, `150 px: ${h.z}`);
+  t.at += STREAM_GAP_MS * 4; const z1 = h.z; for (const e of Array.from({ length: 20 }, () => ({ deltaY: -7.5, offsetX: 1, offsetY: 1, timeStamp: (t.at += 16) }))) zi.wheel(e);
+  near(h.z / z1, z1, 1e-9, 'the same slide after a pause zooms by the same amount again (z1 is what the first one made from 1)');
+  // 3300 px with no pause at all (a ten second scroll): the gain falls to its floor but never to nothing
+  t.at += STREAM_GAP_MS * 4; const long = Array.from({ length: 600 }, () => ({ deltaY: -5.5, offsetX: 1, offsetY: 1, timeStamp: (t.at += 16) }));
+  const zs = []; for (const e of long) { zi.wheel(e); zs.push(h.z); }
+  assert.ok(zs.every((z, i) => i === 0 || z > zs[i - 1]), 'it never stops dead'); const gone = zs[zs.length - 1] / zs[499]; assert.ok(gone > 1.05, `the last hundred events still moved it: ${gone}`);
+  assert.ok(zs[599] / zs[0] < Math.exp(600 * 5.5 * TRACKPAD_RATE) * 0.5, 'but nowhere near the untapered zoom');
+  // events with no clock cannot be told to be one gesture: each is judged alone, as before
+  const n = fakeHost({ range: [0.001, 1000] }); const zn = new ZoomInput(n.host); for (let i = 0; i < 100; i++) zn.wheel({ deltaY: -12.5 });
+  near(n.h.z, Math.exp(100 * 12.5 * TRACKPAD_RATE), 1e-9);
+});
+
+test('ZoomInput: a pinch is not budgeted: the fingers are the limit, so a single long pinch can go the whole range', () => {
+  const p = fakeHost({ z: 0.129, range: [0.129, 2.4] }); const zp = new ZoomInput(p.host); let t = 1000;
+  for (let i = 0; i < 100; i++) zp.wheel({ ctrlKey: true, deltaY: -3, offsetX: 5, offsetY: 5, timeStamp: (t += 16) });
+  assert.equal(p.h.z, 2.4, 'a single long pinch goes the whole way: the fingers did');
+});
+
+test('ZoomInput: while the camera glides, a two-finger scroll and the rest of its momentum are let go; a pinch or a notch still takes over, and a new gesture works', () => {
+  const { h, host } = fakeHost(); let glide = true; const zi = new ZoomInput({ ...host, gliding: () => glide });
+  let t = 1000; const ev = (dy, extra = {}) => ({ deltaY: dy, offsetX: 100, offsetY: 100, timeStamp: (t += 16), ...extra });
+  assert.equal(zi.wheel(ev(-6.5)), false, 'let go'); assert.equal(h.applied.length, 0); assert.equal(zi.pending, false);
+  glide = false; assert.equal(zi.wheel(ev(-6.25)), false, 'the glide is over, but this gesture\'s momentum is still let go'); assert.equal(zi.wheel(ev(-96)), false, 'even an event of a notch\'s size'); assert.equal(h.applied.length, 0);
+  t += STREAM_GAP_MS * 3; assert.equal(zi.wheel(ev(-6.25)), true, 'a new gesture after a pause zooms'); assert.equal(h.applied.length, 1);
+  glide = true; t += STREAM_GAP_MS * 3; assert.equal(zi.wheel(ev(-2.5, { ctrlKey: true })), true, 'a pinch takes over a glide'); assert.equal(zi.wheel(ev(-100)), false, 'a notch straight after it is, by size, part of the pinch');
+  t += STREAM_GAP_MS * 3; assert.equal(zi.wheel(ev(-100)), true, 'a notch after a pause takes over a glide'); assert.equal(zi.pending, true);
+  // no gliding() in the host, or one that throws: nothing is let go
+  const free = fakeHost(); assert.equal(new ZoomInput(free.host).wheel(ev(-6.5)), true);
+  assert.equal(new ZoomInput({ ...free.host, gliding: () => { throw new Error('boom'); } }).wheel(ev(-6.5)), true);
+});
+
+test('ZoomInput: a momentum event held back by a busy frame (80 ms late) is still part of its gesture, so a big whole number in it is not taken for a notch', () => {
+  assert.ok(STREAM_GAP_MS >= 100 && STREAM_GAP_MS <= 150, `${STREAM_GAP_MS} ms`);
+  const { h, host } = fakeHost({ z: 0.5 }); const zi = new ZoomInput(host); let t = 1000;
+  zi.wheel({ deltaY: -31.25, offsetX: 1, offsetY: 1, timeStamp: (t += 16) }); const z1 = h.z;
+  zi.wheel({ deltaY: -96, offsetX: 1, offsetY: 1, timeStamp: (t += 80) }); assert.equal(zi.pending, false, 'not eased: it is a scroll event, not a notch'); assert.ok(h.z / z1 < MOUSE_STEP);
+  t += STREAM_GAP_MS + 30; zi.wheel({ deltaY: -100, offsetX: 1, offsetY: 1, timeStamp: t }); assert.equal(zi.pending, true, 'after a real pause a notch is a notch');
+});
+
+test('ZoomInput: settle() ends an ease and says where it was going', () => {
+  const { h, host } = fakeHost(); const zi = new ZoomInput(host);
+  assert.equal(zi.settle(), null, 'nothing to settle'); zi.wheel({ deltaY: -100 }); zi.tick(1 / 60); assert.ok(zi.pending);
+  near(zi.settle(), MOUSE_STEP, 1e-12); assert.equal(zi.pending, false); assert.ok(h.z < MOUSE_STEP, 'and the zoom stays where it was');
+});
+
+test('ZoomInput: a gesture that reports exactly 0,0 has no point even when the canvas stands in the window\'s corner, where 0,0 would be a point on it', () => {
+  const rect = { left: 0, top: 0, width: 1280, height: 800 };
+  const { h, host } = fakeHost({ size: [1280, 800] }); const zi = new ZoomInput(host);
+  zi.seen(1000, 250);
+  zi.gestureStart({ clientX: 0, clientY: 0 }, rect); zi.gestureChange({ scale: 1.5, clientX: 0, clientY: 0 }, rect);
+  assert.deepEqual(h.applied.at(-1).slice(1), [1000, 250], 'about the pointer, not the corner');
+  zi.gestureChange({ scale: 1.6, clientX: 640, clientY: 400 }, rect); assert.deepEqual(h.applied.at(-1).slice(1), [640, 400], 'a point that is on the canvas is the gesture\'s own');
+  zi.gestureChange({ scale: 1.7, clientX: 0, clientY: 0 }, rect); assert.deepEqual(h.applied.at(-1).slice(1), [640, 400], 'and 0,0 mid-gesture keeps the last point');
+  zi.gestureEnd(); zi.gestureStart({ clientX: 0, clientY: 12 }, rect); assert.deepEqual([zi.gest.px, zi.gest.py], [0, 12], 'one coordinate at 0 is a point on the canvas\'s edge');
+  const n = fakeHost({ size: [1280, 800] }); const zn = new ZoomInput(n.host); zn.gestureStart({ clientX: 0, clientY: 0 }, rect); zn.gestureChange({ scale: 1.1, clientX: 0, clientY: 0 }, rect);
+  assert.deepEqual(n.h.applied.at(-1).slice(1), [640, 400], 'no pointer seen: the middle');
+});
+
+test('ZoomInput: where the mouse rests is known from its moves and from a wheel, and forgotten when it leaves or a finger touches', () => {
+  const { host } = fakeHost(); const zi = new ZoomInput(host);
+  assert.equal(zi.resting(), null, 'nothing seen yet'); zi.seen(30, 40); assert.deepEqual(zi.resting(), [30, 40]);
+  zi.left(); assert.equal(zi.resting(), null); zi.seen(31, 41); assert.deepEqual(zi.resting(), [31, 41], 'it came back');
+  zi.seen(50, 60, false); assert.equal(zi.resting(), null, 'a finger has no hover'); zi.seen(NaN, 3); assert.equal(zi.resting(), null, 'a move with no number changes nothing');
+  zi.wheel({ deltaY: -3.5, offsetX: 70, offsetY: 80 }); assert.deepEqual(zi.resting(), [70, 80], 'a wheel is turned over the pointer'); zi.wheel({ deltaY: -3.5 }); assert.deepEqual(zi.resting(), [70, 80], 'a wheel with no point changes nothing');
+});
+
+// ================================================================ the repair round: the World
+/**
+ * A world whose drawing publishes one hit: a lead that stands 10 screen px right of the mouse (at (400, 260), at the zoom the world is in) and is hit within 14 screen px of its middle,
+ * as the real drawing gives every object a hit as big as a finger at any zoom. A wheel is turned over the pointer, so a zoom keeps the ground under the mouse still and changes how
+ * far the lead is from it in pixels: zoom in and it slides out of reach, zoom out and it comes within. The hover callback is recorded.
+ */
+async function hoverWorld(size) {
+  const { w } = await world(size); w.running = true; w.vis = true; w.last = 0;
+  const calls = []; w.api.hover = (h, ev) => calls.push({ id: h ? h.id : null, at: ev ? [ev.offsetX, ev.offsetY] : null });
+  const P = [400, 260], c = w.s2w(P[0] + 10, P[1]), HIT = { kind: 'lead', id: 'L1', eid: 'lead:L1', circle: [c[0], c[1], 0] };
+  w.draw = () => { HIT.circle[2] = 14 / w.cam.z; w.hits = [HIT]; };
+  let ts = 1000; const frame = () => w.frame((ts += 40));
+  const move = (x, y, extra = {}) => fire(w, 'pointermove', { pointerId: 1, offsetX: x, offsetY: y, clientX: x, clientY: y, pointerType: 'mouse', ...extra });
+  const zoomAtMouse = (dy) => wheel(w, { ctrlKey: true, deltaY: dy, offsetX: P[0], offsetY: P[1] });
+  return { w, calls, P, HIT, frame, move, zoomAtMouse };
+}
+
+test('after a zoom under a mouse that has not moved, what is under it is looked at again: the highlight, the cursor and the tooltip follow, once a drawn frame', async () => {
+  const { w, calls, P, HIT, frame, move, zoomAtMouse } = await hoverWorld();
+  w.draw(); move(...P); assert.equal(w.hover, HIT, 'the mouse is over the lead'); assert.equal(w.cv.style.cursor, 'pointer'); assert.equal(calls.at(-1).id, 'L1');
+  zoomAtMouse(-45.5); zoomAtMouse(-45.5); // a pinch in: the lead slides out of reach of the mouse, which has not moved
+  assert.ok(w.cam.z > 2, `zoomed in: ${w.cam.z}`); w.draw(); assert.equal(w.pick(...P), null, 'nothing is under the mouse any more (the drawing has made the hits again)'); w.hover = HIT; // the state the page was in
+  const n0 = calls.length; frame();
+  assert.equal(w.hover, null, 'the hover left with the lead'); assert.equal(w.cv.style.cursor, 'grab'); assert.equal(calls.length, n0 + 1); assert.equal(calls.at(-1).id, null, 'and the tooltip was told');
+  // and back out: the lead comes within reach of the mouse again (which still has not moved)
+  zoomAtMouse(45.5); zoomAtMouse(45.5); frame();
+  assert.equal(w.hover, HIT); assert.equal(w.cv.style.cursor, 'pointer'); assert.deepEqual(calls.at(-1).at, P, 'the tooltip is placed at the mouse');
+  // a plain two-finger scroll and a notch do it too
+  wheel(w, { deltaY: -3.5, offsetX: P[0], offsetY: P[1], timeStamp: 100 }); for (let i = 0; i < 40; i++) wheel(w, { deltaY: -(70.5 - i), offsetX: P[0], offsetY: P[1], timeStamp: 100 + 16 * (i + 1) }); frame(); assert.equal(w.hover, null, 'a scroll');
+  for (let i = 0; i < 30; i++) wheel(w, { deltaY: 40.5, offsetX: P[0], offsetY: P[1], timeStamp: 5000 + 16 * i }); frame(); assert.equal(w.hover, HIT, 'and back');
+});
+
+test('the same for the other ways the ground moves under a mouse that does not: a key, a camera button, a glide', async () => {
+  const { w, P, HIT, frame, move } = await hoverWorld();
+  w.draw(); move(...P); assert.equal(w.hover, HIT);
+  fire(w, 'keydown', { key: 'ArrowRight' }); frame(); assert.equal(w.hover, null, 'a key pans the lead away');
+  fire(w, 'keydown', { key: 'ArrowLeft' }); frame(); assert.equal(w.hover, HIT, 'and back');
+  w.zoomBy(2.2, P[0], P[1]); frame(); assert.equal(w.hover, null, 'a camera button zooms it out of reach'); w.zoomBy(1 / 2.2, P[0], P[1]); frame(); assert.equal(w.hover, HIT);
+  const cam = { ...w.cam }; w.goTo(cam.x + 300, cam.y, cam.z, true); for (let i = 0; i < 40; i++) frame(); assert.equal(w.camTo, null, 'the glide ended'); assert.equal(w.hover, null, 'a glide moved the ground');
+});
+
+test('the hover is looked at again once per drawn frame, not once per event, and only when the camera moved', async () => {
+  const { w, calls, P, frame, move } = await hoverWorld();
+  w.draw(); move(...P); frame(); const n0 = calls.length;
+  for (let i = 0; i < 40; i++) wheel(w, { deltaY: -(8.5 + i * 0.25), offsetX: P[0], offsetY: P[1] }); assert.equal(calls.length, n0, 'forty wheel events looked at nothing');
+  frame(); assert.equal(calls.length, n0 + 1, 'the frame looked once'); frame(); frame(); assert.equal(calls.length, n0 + 1, 'and a camera at rest looks at nothing');
+});
+
+test('the hover is not looked at again for a mouse that has left or for a finger', async () => {
+  const { w, calls, P, frame, move } = await hoverWorld();
+  w.draw(); move(...P); frame(); fire(w, 'pointerleave', {}); const gone = calls.length;
+  w.zoomBy(1.4, P[0], P[1]); frame(); assert.equal(calls.length, gone, 'the mouse left the canvas: nothing is under it');
+  move(...P); const back = calls.length; w.zoomBy(0.7, P[0], P[1]); frame(); assert.equal(calls.length, back + 1, 'it came back');
+  move(120, 90, { pointerType: 'touch' }); const touched = calls.length; w.zoomBy(1.4, 120, 90); frame(); assert.equal(calls.length, touched, 'a finger has no hover');
+});
+
+test('the hover is not looked at while the ground is held, and once when it is let go', async () => {
+  const { w, calls, P, frame, move, zoomAtMouse } = await hoverWorld();
+  w.draw(); move(...P); frame(); press(w, 1, ...P); const down = calls.length;
+  zoomAtMouse(-30.5); frame(); assert.equal(calls.length, down, 'the pointer is panning, not hovering'); frame(); assert.equal(calls.length, down);
+  fire(w, 'pointerup', { pointerId: 1, offsetX: P[0], offsetY: P[1], button: 0 }); frame(); assert.equal(calls.length, down + 1, 'let go: look once'); frame(); assert.equal(calls.length, down + 1);
+});
+
+test('zooming while the ground is held keeps the held ground under the pointer: a pinch, a wheel and the momentum of an earlier swipe', async () => {
+  const { w } = await world(); const b = w.bounds(); w.goTo((b.x0 + b.x1) / 2, (b.y0 + b.y1) / 2, 0.6, false);
+  const at = (x, y) => ({ pointerId: 1, offsetX: x, offsetY: y, clientX: x, clientY: y });
+  const under = (p, x, y, why) => { const [sx, sy] = screenOf(w, p); assert.ok(Math.hypot(sx - x, sy - y) < 0.01, `${why}: the held ground is at ${sx.toFixed(2)},${sy.toFixed(2)}, the pointer at ${x},${y}`); };
+  press(w, 1, 400, 260); fire(w, 'pointermove', at(460, 300)); fire(w, 'pointermove', at(470, 305)); assert.equal(w.drag.moved, true);
+  const held = worldAt(w, 470, 305), z0 = w.cam.z;
+  wheel(w, { ctrlKey: true, deltaY: -30.5, offsetX: 470, offsetY: 305 }); assert.ok(w.cam.z > z0 * 1.3, `zoomed in a good deal: ${w.cam.z / z0}`);
+  fire(w, 'pointermove', at(471, 305)); under(held, 471, 305, 'after a pinch, the pointer moved by a pixel');
+  // the momentum of a swipe that ends after the next press is down: a tail of ever smaller events, the pointer creeping along
+  let x = 471; const z1 = w.cam.z;
+  for (let i = 0; i < 30; i++) { const dy = -(40.5 * 0.9 ** i); wheel(w, { deltaY: dy, offsetX: x, offsetY: 305, timeStamp: 3000 + 16 * i }); x += 1; fire(w, 'pointermove', at(x, 305)); under(held, x, 305, `momentum event ${i}`); }
+  assert.ok(w.cam.z > z1 * 1.2, `the tail zoomed as well: ${w.cam.z / z1}`);
+  // a key zoom is about the middle of the canvas, so the ground slides under the pointer; the drag then takes hold of whatever is under the pointer now
+  fire(w, 'keydown', { key: '-' }); const now = worldAt(w, x, 305); fire(w, 'pointermove', at(x + 1, 305)); under(now, x + 1, 305, 'after a key');
+  fire(w, 'pointerup', { pointerId: 1, offsetX: x + 1, offsetY: 305, button: 0 });
+});
+
+test('zooming between pressing and the first real move of a drag keeps the pressed ground under the pointer, and a press and release in place is still a click', async () => {
+  const { w } = await world(); const clicks = []; w.api.activate = (...a) => clicks.push(a);
+  press(w, 1, 400, 260); const held = worldAt(w, 400, 260);
+  wheel(w, { deltaY: -20.5, offsetX: 400, offsetY: 260 }); wheel(w, { deltaY: -20.5, offsetX: 400, offsetY: 260 });
+  fire(w, 'pointermove', { pointerId: 1, offsetX: 412, offsetY: 260, clientX: 412, clientY: 260 }); assert.equal(w.drag.moved, true);
+  const [sx, sy] = screenOf(w, held); assert.ok(Math.hypot(sx - 412, sy - 260) < 0.01, `the pressed ground follows the pointer: ${sx},${sy}`);
+  fire(w, 'pointerup', { pointerId: 1, offsetX: 412, offsetY: 260, button: 0 }); assert.equal(clicks.length, 0, 'a drag is not a click');
+  press(w, 2, 400, 260); wheel(w, { deltaY: -20.5, offsetX: 400, offsetY: 260 }); fire(w, 'pointerup', { pointerId: 2, offsetX: 400, offsetY: 260, button: 0 }); assert.equal(clicks.length, 1, 'a press and a release in place is a click, zoom or no zoom');
+});
+
+test('a two-finger touch pinch is not rebased by the drag rule (its two fingers are the camera), and one finger left carries on from where it is', async () => {
+  const { w } = await world(); press(w, 1, 300, 250); press(w, 2, 500, 250);
+  fire(w, 'pointermove', { pointerId: 2, offsetX: 560, offsetY: 250, clientX: 560, clientY: 250 }); const z1 = w.cam.z; assert.ok(z1 > 1.2, 'the pinch zoomed');
+  fire(w, 'pointerup', { pointerId: 2, offsetX: 560, offsetY: 250, button: 0 }); const cam = { ...w.cam };
+  fire(w, 'pointermove', { pointerId: 1, offsetX: 301, offsetY: 250, clientX: 301, clientY: 250 }); assert.ok(Math.abs(w.cam.x - (cam.x - 1 / cam.z)) < 1e-9, 'the finger left pans from where the camera is');
+  fire(w, 'pointerup', { pointerId: 1, offsetX: 301, offsetY: 250, button: 0 });
+});
+
+test('a camera glide (Fit, Show me) is not broken by a two-finger scroll or its momentum, and a pinch or a notch still takes over', async () => {
+  const { w } = await world(); w.running = true; w.vis = true; w.last = 0; let t = 5000;
+  const momentum = (n, peak = 12.5) => { for (let i = 0; i < n; i++) wheel(w, { deltaY: -(peak * 0.9 ** i + 0.25), offsetX: 300, offsetY: 200, timeStamp: (t += 16) }); };
+  w.fit(true); assert.ok(w.camTo, 'the glide is on its way'); const z0 = w.cam.z;
+  momentum(20); assert.ok(w.camTo, 'a swipe\'s momentum did not end the glide'); assert.equal(w.cam.z, z0, 'and did not zoom');
+  w.frame(60000); assert.equal(w.camTo, null, 'the glide ran to its end'); assert.ok(Math.abs(w.cam.z - w.fitZoom()) < 1e-9, 'at the whole island');
+  const fit = w.cam.z; momentum(5); assert.equal(w.cam.z, fit, 'the glide is over, but the gesture that began during it is still let go');
+  t += STREAM_GAP_MS * 4; momentum(5); assert.ok(w.cam.z > fit, 'a new gesture zooms');
+  w.fit(true); assert.ok(w.camTo); wheel(w, { ctrlKey: true, deltaY: -5.5, offsetX: 300, offsetY: 200, timeStamp: (t += STREAM_GAP_MS * 4) }); assert.equal(w.camTo, null, 'a pinch takes the camera');
+  w.fit(true); wheel(w, { deltaMode: 1, deltaY: -3, offsetX: 300, offsetY: 200, timeStamp: (t += STREAM_GAP_MS * 4) }); w.update(1 / 60); assert.equal(w.camTo, null, 'and so does a notch, at the next step of the loop'); w.stop();
+});
+
+test('under reduced motion a camera move is instant, so a scroll is never let go for a glide', async () => {
+  const { w } = await world(); document.documentElement.dataset.motion = 'reduce';
+  try { w.fit(true); assert.equal(w.camTo, null); const z = w.cam.z; wheel(w, { deltaY: -12.5, offsetX: 300, offsetY: 200, timeStamp: 9000 }); assert.ok(w.cam.z > z); } finally { document.documentElement.dataset.motion = 'auto'; }
+});
+
+test('a camera button or a key pressed in the middle of a notch\'s ease steps on from where the notch was going, not from where the ease had got to', async () => {
+  const { w } = await world(); w.running = true; const z0 = w.cam.z;
+  wheel(w, { deltaMode: 1, deltaY: -3, offsetX: 400, offsetY: 260 }); w.update(1 / 60); w.update(1 / 60); assert.ok(w.cam.z > z0 && w.cam.z < z0 * MOUSE_STEP, 'the ease is on its way');
+  fire(w, 'keydown', { key: '+' }); near(w.cam.z, z0 * MOUSE_STEP * 1.2, 1e-9); assert.equal(w.zin.pending, false);
+  wheel(w, { deltaMode: 1, deltaY: 3, offsetX: 400, offsetY: 260 }); w.update(1 / 60); const goal = w.cam.z / MOUSE_STEP; void goal;
+  w.zoomBy(1.25); near(w.cam.z, z0 * MOUSE_STEP * 1.2 / MOUSE_STEP * 1.25, 1e-9, 'a camera button too'); assert.equal(w.zin.pending, false);
+  w.stop();
+});
+
+test('a Safari gesture that reports 0,0 in a window whose canvas fills it goes about the pointer, not the corner', async () => {
+  const { w } = await world([1280, 800]); fire(w, 'pointermove', { pointerId: 1, offsetX: 1000, offsetY: 250, clientX: 1000, clientY: 250, pointerType: 'mouse' });
+  const p = worldAt(w, 1000, 250), z0 = w.cam.z;
+  fire(w, 'gesturestart', { scale: 1, clientX: 0, clientY: 0 }); fire(w, 'gesturechange', { scale: 1.5, clientX: 0, clientY: 0 });
+  near(w.cam.z, z0 * 1.5, 1e-9); const [sx, sy] = screenOf(w, p); assert.ok(Math.hypot(sx - 1000, sy - 250) < 1, `about the pointer: ${sx},${sy}`);
+});
+
+// ================================================================ the browser: what only the real page's structure shows
+// The wheel and gesture listeners are on the canvas, which has no children, and the HUD, the drawers, the dialogs and the camera buttons are elements above it: so their wheel never
+// reaches the canvas. The stand-in tests above hold the code; this holds the structure, in headless Chrome (skipped where there is no Chrome, or with PC_NO_BROWSER=1).
+const CHROME = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+const BROWSER = !process.env.PC_NO_BROWSER && existsSync(CHROME);
+const freePort = () => new Promise((res) => { const s = netServer(); s.listen(0, '127.0.0.1', () => { const p = s.address().port; s.close(() => res(p)); }); });
+
+test('browser: a wheel or pinch over the map zooms it and is cancelled; over the HUD, the dock, the camera buttons or the list it does neither', { skip: !BROWSER, timeout: 180000 }, async () => {
+  const { handler } = await import('../server/static.mjs'), { launch, open } = await import('../scripts/cdp.mjs'), { newGame } = await import('../scripts/boot.mjs');
+  const server = httpServer(handler); await new Promise((ok) => server.listen(0, '127.0.0.1', ok));
+  const chrome = await launch(await freePort()); let p;
+  try {
+    const slot = 'zm' + (Date.now() % 1e6);
+    p = await open(chrome, `http://127.0.0.1:${server.address().port}/?slot=${slot}`, { w: 1280, h: 800 });
+    await p.eval(`localStorage.setItem('pc.academyDone.${slot}', 'true')`);
+    await newGame(p, { perks: 'trades,pro', days: 0 });
+    // a record of every wheel event at the document, after the page's own listeners have had it (passive: it changes nothing): what it was aimed at, and whether it was cancelled
+    await p.eval(`window.__wheels = []; document.addEventListener('wheel', (e) => window.__wheels.push({ on: e.target.className || e.target.tagName, dp: e.defaultPrevented }), { passive: true })`);
+    const spot = (sel) => p.eval(`(()=>{const e=document.querySelector(${JSON.stringify(sel)}); if(!e) return null; const r=e.getBoundingClientRect(); const x=r.x+r.width/2, y=r.y+r.height/2; const top=document.elementFromPoint(x,y); return {x,y,onCanvas: !!top && top.classList.contains('worldcv'), over: top && (top.className||top.tagName)}})()`);
+    const state = () => p.eval(`({ z: pc.world.cam.z, x: pc.world.cam.x, y: pc.world.cam.y, wheels: window.__wheels.length, last: window.__wheels.at(-1) || null, scroll: document.scrollingElement.scrollTop, vv: window.visualViewport ? window.visualViewport.scale : 1 })`);
+    const wheel = async (x, y, dy, mod = 0) => { await p.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x, y }); await p.send('Input.dispatchMouseEvent', { type: 'mouseWheel', x, y, deltaX: 0, deltaY: dy, modifiers: mod }); await p.sleep(80); };
+    const targets = {};
+    for (const sel of ['.hud', '#dock', '.wvctl', '.wvlist summary']) { targets[sel] = await spot(sel); assert.ok(targets[sel], `${sel} is on the page`); assert.equal(targets[sel].onCanvas, false, `${sel} stands above the canvas (${targets[sel].over})`); }
+    const canvas = { x: 640, y: 400 }; assert.equal((await spot('.worldcv')).onCanvas, true, 'the middle of the window is the map');
+    // over the overlays: a notch, a two-finger scroll and a pinch (Ctrl) change nothing and are not cancelled by the map
+    for (const [sel, t] of Object.entries(targets)) {
+      const before = await state();
+      for (const [dy, mod] of [[-100, 0], [-7.5, 0], [-6.5, 2], [100, 2]]) { await wheel(t.x, t.y, dy, mod); const a = await state(); assert.equal(a.z, before.z, `${sel}: ${dy}/${mod} did not zoom the map`); assert.equal(a.last?.dp, false, `${sel}: ${dy}/${mod} was not cancelled by the map`); assert.notEqual(a.last?.on, 'worldcv', `${sel} is not the canvas`); }
+    }
+    // over the map: a two-finger scroll and a pinch zoom it at once, and are cancelled (a listener that was passive could not cancel them)
+    let a = await state(), z = a.z;
+    await wheel(canvas.x, canvas.y, -12.5); a = await state(); assert.ok(a.z > z, `a scroll zoomed in: ${a.z} from ${z}`); assert.equal(a.last.dp, true, 'and was cancelled'); assert.equal(a.last.on, 'worldcv'); z = a.z;
+    await wheel(canvas.x, canvas.y, -6.5, 2); a = await state(); assert.ok(a.z > z, 'a pinch (Ctrl) zoomed in'); assert.equal(a.last.dp, true); z = a.z;
+    await wheel(canvas.x, canvas.y, 9.5, 2); a = await state(); assert.ok(a.z < z, 'and back out'); assert.equal(a.last.dp, true);
+    await wheel(canvas.x, canvas.y, -100); a = await state(); assert.equal(a.last.dp, true, 'a notch is cancelled too (it eases in with the loop)');
+    assert.equal(a.scroll, 0, 'the page did not scroll'); assert.equal(a.vv, 1, 'and did not zoom');
+  } finally { try { await p?.close(); } catch { /* gone */ } chrome.close(); await new Promise((ok) => server.close(ok)); }
 });
