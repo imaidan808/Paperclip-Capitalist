@@ -30,19 +30,19 @@ const src = (f) => readFileSync(new URL('../' + f, import.meta.url), 'utf8');
 // ---------------------------------------------------------------- the rig: an engine under a fake clock, standing in for the page's engine
 const rngOf = (seed) => () => { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296; };
 /** Puts the real engine behind the page's `audio` (the wiring calls the singleton) and keeps a log of the two calls that end and start a run. */
-function rig(settings = {}) {
+function rig(settings = {}, { unlocked = true } = {}) {
   const ctx = fakeContext(), clk = fakeClock(), s = { ...audioDefaults(), ...settings };
   const E = createAudio({ get: () => s, now: clk.now, factory: () => ctx, timers: clk.timers_, random: rngOf(7), measure: false });
-  E.unlock();
-  const log = [], saved = {}, names = ['play', 'request', 'playMix', 'setEnv', 'hold', 'ambient', 'countUp', 'touch', 'release', 'newRun', 'sync', 'unlock', 'stopAll', 'setHidden'];
-  for (const k of names) { saved[k] = page[k]; page[k] = (...a) => { if (k === 'release' || k === 'newRun') log.push(k); return E[k](...a); }; }
+  if (unlocked) E.unlock();
+  const log = [], calls = { unlock: 0, touch: 0 }, saved = {}, names = ['play', 'request', 'playMix', 'setEnv', 'hold', 'ambient', 'countUp', 'touch', 'release', 'newRun', 'sync', 'unlock', 'stopAll', 'setHidden'];
+  for (const k of names) { saved[k] = page[k]; page[k] = (...a) => { if (k === 'release' || k === 'newRun') log.push(k); if (k in calls) calls[k]++; return E[k](...a); }; }
   const was = { env: Object.getOwnPropertyDescriptor(page, 'env'), state: Object.getOwnPropertyDescriptor(page, 'state'), supported: Object.getOwnPropertyDescriptor(page, 'supported'), perf: Object.getOwnPropertyDescriptor(globalThis, 'performance') };
   Object.defineProperty(page, 'env', { value: E.env, configurable: true, writable: true });
   Object.defineProperty(page, 'state', { get: () => E.state, configurable: true });
   Object.defineProperty(page, 'supported', { get: () => true, configurable: true });
   Object.defineProperty(globalThis, 'performance', { value: { now: clk.now }, configurable: true, writable: true });
   return {
-    E, ctx, clk, s, log,
+    E, ctx, clk, s, log, calls,
     played: () => ({ ...E.stats().played }),
     /** Let the collector flush and the clock run for `ms`. */
     settle: (ms = 40) => clk.advance(ms),
@@ -53,7 +53,20 @@ function rig(settings = {}) {
   };
 }
 /** Runs fn(rig) and always puts the page back. */
-async function withRig(fn, settings) { const r = rig(settings); try { return await fn(r); } finally { r.restore(); } }
+async function withRig(fn, settings, o) { const r = rig(settings, o); try { return await fn(r); } finally { r.restore(); } }
+
+/**
+ * The page-wide layer (initAudio) with stand-in deps, installed over the document stand-in: the settings object the page owns, a save, the announcements and toasts it made, and a key-value store.
+ * Returns what it was asked and a way to put it away. The earlier listeners are dropped, so a test hears only its own.
+ */
+function install(settings = {}, over = {}) {
+  listeners.clear(); wire._resetForTest();
+  const store = new Map(), toasts = [], announced = [], saves = [];
+  const kv = { get: (k) => (store.has(k) ? store.get(k) : null), set: (k, v) => { store.set(k, v); return true; }, del: (k) => { store.delete(k); } };
+  const deps = { settings: { audio: { ...audioDefaults(), ...settings } }, save: () => saves.push(structuredClone(deps.settings.audio)), announce: (m, a) => announced.push([m, !!a]), toast: (m, l) => toasts.push([m, l]), kv, ...over };
+  wire.initAudio(deps);
+  return { deps, kv, store, toasts, announced, saves, a: () => deps.settings.audio, done() { listeners.clear(); wire._resetForTest(); } };
+}
 
 /** A game context as the shell gives it to wireGame: the event bus and the session's. `sandbox` makes it an Academy lesson's. */
 function gameCtx({ sandbox = false, zone = 1 } = {}) {
@@ -125,4 +138,46 @@ test('WA-1: wire.js starts a run for a game that is not a sandbox only, and only
   assert.equal((body.match(/if \(!sandboxed\) audio\.newRun\?\.\(\)/g) || []).length, 2, 'both for a real game only');
   const saved = page.newRun; page.newRun = undefined;
   try { const un = wire.wireGame(gameCtx()); un(); } finally { page.newRun = saved; }
+});
+
+// ================================================================================ UX1: a bare click is a gesture
+/** A control as the table reads it (the few properties js/audio/wire.js asks of a button). */
+function button(act = 'solo') {
+  const e = {
+    tagName: 'BUTTON', dataset: { act }, type: undefined, value: '', checked: false, textContent: '', parentElement: null, disabled: false, isContentEditable: false,
+    classList: { contains: (c) => c === 'btn' }, getAttribute: () => null, hasAttribute: () => false, matches: () => false,
+    closest: (sel) => (sel.includes('button, [data-act]') ? e : null),
+  };
+  return e;
+}
+test('UX1: a bare trusted click creates the context, as a screen reader, a voice-control program or a switch presses a button; a script-made click and the keys that are no activation do not', () => withRig((r) => {
+  const p = install(), target = button();
+  fire('click', { type: 'click', isTrusted: false, target }); fire('pointerup', { type: 'pointerup', isTrusted: false, target });
+  fire('keydown', { type: 'keydown', key: 'Escape', target }); fire('keydown', { type: 'keydown', key: 'Shift', target });
+  assert.equal(r.E.state, 'locked', 'a script\'s click, a script\'s pointerup, Escape and a bare modifier: no gesture');
+  assert.equal(r.calls.unlock, 0); assert.equal(p.toasts.length, 0, 'and no note about sound either');
+  fire('click', { type: 'click', isTrusted: true, target });
+  assert.equal(r.E.state, 'running', 'a trusted click with no pointer or key event before it is a gesture');
+  assert.equal(r.calls.unlock, 1);
+  r.settle(200);
+  assert.equal(r.played()['ui.tick'], 1, 'and that same press plays its tick (the first sound of the page, 160 ms in)');
+  assert.equal(p.toasts.length, 1, 'the player who pressed that way is told about sound once, as any other is (7.4)');
+  p.done();
+}, {}, { unlocked: false }));
+test('UX1: pointerup, the activation of a touch or a pen, creates the context too, once; the events that follow it ask for nothing more', () => withRig((r) => {
+  const p = install(), target = button();
+  fire('pointerup', { type: 'pointerup', pointerType: 'pen', isTrusted: true, target });
+  assert.equal(r.E.state, 'running'); assert.equal(r.calls.unlock, 1);
+  fire('click', { type: 'click', isTrusted: true, target }); fire('pointerup', { type: 'pointerup', isTrusted: true, target }); fire('pointerdown', { type: 'pointerdown', isTrusted: true, target });
+  assert.equal(r.calls.unlock, 1, 'a context that runs is not asked again by every pointerup and click');
+  p.done();
+}, {}, { unlocked: false }));
+test('UX1: the gesture events are the five of UNLOCK_EVENTS, each listened to once on the document, and the script-made rule stays', () => {
+  const p = install();
+  assert.deepEqual(wire.UNLOCK_EVENTS, ['pointerdown', 'pointerup', 'touchend', 'keydown', 'click']);
+  for (const t of wire.UNLOCK_EVENTS) assert.ok((listeners.get(t) || []).length >= 1, `${t} is listened to`);
+  const s = src('js/audio/wire.js');
+  assert.match(s, /if \(e\.isTrusted === false\) return;/, 'the rule of B2 (a script-made event is no gesture) is still the first line of the listener');
+  assert.match(s, /for \(const t of UNLOCK_EVENTS\) document\.addEventListener\(t, unlock, opts\);/);
+  p.done();
 });

@@ -324,6 +324,14 @@ const pageState = { repayF: null, bids: 0 };
 const PRESS_CLOSES_MS = 250;
 /** Leaving a game stops its voices, except one that began in the last 150 ms: the press that left (Open debrief, Leave) has its own tick, and a 40 ms fade cut it to a blip (fourth round, W-4). It is more than the longest a voice waits for the compressor to warm up (LIMITS.WARM less LEAD, 148 ms), so that tick is still kept if it is the first sound of the page. */
 export const KEEP_MS = 150;
+/**
+ * The inputs that can be a page's first gesture (7.4), each listened to in the capture phase until the context runs. `click` and `pointerup` were not there (sixth round, UX1): a press that arrives
+ * as a bare `click`, with no pointerdown or key before it, is how a screen reader, a voice-control program and a switch device press a button (they activate a control by a click of their own),
+ * and it unlocked nothing, so the first sound of such a player's page was the first press AFTER the one that opened it, if there was one. A click that the browser itself made for an activation is
+ * `isTrusted` and counts as a user gesture; a script's is not, and the same rule as for the others (below) keeps it out. `pointerup` is the activation of a touch or a pen (a pointerdown is one
+ * only for a mouse), for the browsers that send no touchend for it.
+ */
+export const UNLOCK_EVENTS = ['pointerdown', 'pointerup', 'touchend', 'keydown', 'click'];
 /** Is a game's wiring installed? While it is, the five legacy names of common.js are no-ops (8.4): the events speak for themselves. Before any game is wired (the title, the draft) they still play. */
 export const wired = () => gamesWired > 0;
 /** A test hook: forget the page-wide layer, so a test can install it again with its own stand-ins. */
@@ -352,7 +360,7 @@ export function initAudio(d = {}) {
     const a = deps.settings?.audio, joining = inJoinPanel(e.target) || roomAsked(), idle = e.type === 'keydown' && e.key !== 'Enter' && e.key !== ' ';
     if (!gamesWired && a && !a.hinted && !a.mute && !a.quiet && !joining && !idle && audio.supported && deps.toast) { deps.settings.audio = { ...a, hinted: true }; deps.save?.(); deps.toast(HINT_PAGE_TEXT, 'info'); }
   });
-  for (const t of ['pointerdown', 'touchend', 'keydown']) document.addEventListener(t, unlock, opts);
+  for (const t of UNLOCK_EVENTS) document.addEventListener(t, unlock, opts);
   // 2. visibility: hidden stops every voice and suspends; visible resumes after the shell's own tick has run
   document.addEventListener('visibilitychange', guard(() => audio.setHidden(document.hidden)));
   addEventListener('pagehide', guard((e) => { if (!e.persisted) audio.close(); }));
