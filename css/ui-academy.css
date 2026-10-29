@@ -39,6 +39,17 @@
 .ac-coach.slim :is(.ac-hint, .ac-look, .ac-where) { display: none; }
 /* ...and when even that covers the control the keyboard is on, the card is only its head and its two buttons: a card over the cursor hides the one thing a keyboard player needs to see */
 .ac-coach.min :is(.ac-say, .ac-hint, .ac-look, .ac-lost, .ac-where), .ac-coach.min [data-act="ac-restart"] { display: none; }
+/* handle (a Deal Room only, js/ui/academy.js): where even the head-and-two-buttons card would cover a button of the room, the card folds to a one-line tab that opens it. The words stay in the page, clipped and not display: none, so a screen reader still has them. */
+.ac-coach.narrow { width: min(15rem, calc(100vw - 1rem)); } /* slim in a column: a phone on its side has an empty one beside the room's buttons (a Deal Room only) */
+.ac-grab { display: none; }
+.ac-coach.handle { width: max-content; max-width: calc(100vw - 1rem); }
+.ac-coach.handle[data-side]::before { display: none; } /* one more attribute than the caret's own rules below (.ac-coach[data-side="below"]::before), so the tab has no caret and nothing is forced */
+.ac-coach.handle .ac-coach-in { padding: 0; max-height: none; overflow: visible; }
+.ac-coach.handle :is(.ac-head, .ac-btns) { display: none; }
+.ac-coach.handle :is(.ac-say, .ac-hint, .ac-look, .ac-where, .ac-lost) { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; border: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.ac-coach.handle .ac-grab { display: flex; align-items: center; gap: .45rem; min-height: 2.5rem; padding: .3rem .7rem; border: 0; border-radius: 2px; background: transparent; color: var(--gold); font: inherit; font-size: .74rem; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; white-space: nowrap; cursor: pointer; }
+.ac-coach.handle .ac-grab::after { content: "\25B8"; }
+.ac-coach.handle .ac-grab:hover { background: color-mix(in srgb, var(--gold) 14%, transparent); }
 /* the caret is a turned square that carries the card's own colour at the edge it sits on (the lit top for "below", the plain panel elsewhere), so it joins the frame without a seam */
 .ac-coach::before { content: ""; position: absolute; display: none; width: 12px; height: 12px; background: var(--panel); border: var(--bw) solid var(--gold); transform: rotate(45deg); }
 .ac-coach[data-side="below"]::before { display: block; top: -8px; left: clamp(1.1rem, var(--ac-ax, 50%), calc(100% - 1.5rem)); margin-left: -6px; border-right: 0; border-bottom: 0; background: var(--ac-top); }
@@ -53,6 +64,12 @@
 .ac-coach .ac-lost { margin: .3rem 0 .6rem; font-size: .84rem; color: var(--mute); }
 .ac-coach.stranded .ac-say { font-weight: 700; }
 .ac-btns { display: flex; flex-wrap: wrap; gap: .4rem; }
+/* The card's words scroll in .ac-coach-in when the window is shorter than they are (the full card with its hint is 378px of a 390px window), and the buttons are the last thing in them: they stay at the foot of the
+   part that scrolls while the words go by above them, so Show me, Skip lesson and Restart are never cut by the card's own scroll. Nothing here changes the card's size: where the words fit, the row is where it
+   always was (the sticky edge is the box of the words, so the card's padding stays under it), and the shadow, which has no size, paints the strip of that padding the words would otherwise show through. */
+.ac-coach:not(.handle) .ac-btns { position: sticky; bottom: 0; z-index: 1; background: var(--panel); box-shadow: 0 .8rem 0 0 var(--panel); }
+/* a toast the card stands over (js/ui/academy.js, toastsYield): the card's words outrank it, and it is read out anyway. Its own opacity transition (styles.css) does the fade. */
+.toast.ac-under { opacity: 0; }
 .ac-btns .btn[aria-pressed="true"] { border-color: var(--gold); color: var(--gold); }
 
 /* ---- the sheets after a win */

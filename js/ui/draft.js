@@ -2,10 +2,11 @@
 // build: two of twelve Backgrounds and one specialty. This file is two layers:
 //   1. pure: draftInit, draftReduce, draftChoice, summaryOf, suggestPair and the HTML builders (draftHTML and its parts). No DOM, so Node tests them.
 //   2. mountDraft: wires the form (keyboard, live announcements, focus) and hands the finished choice to the router.
-import { PERKS, PERK_IDS, perkMods, SKILLS } from '../config.js';
+import { PERKS, PERK_IDS, perkMods, SKILLS, SKILL_MAX, ASSETS, BROKEN_FACTOR } from '../config.js';
+import { lotShare, repairCostFor } from '../market.js';
 import { PERK_PAIRS } from '../data/perks.js';
 import { hash } from '../rng.js';
-import { $, $$, esc, setHTML, delegate, announce } from './common.js';
+import { $, $$, esc, setHTML, delegate, announce, fitStuck } from './common.js';
 
 export const MAX_PICKS = 2;
 const own = (o, k) => typeof k === 'string' && Object.prototype.hasOwnProperty.call(o, k);
@@ -22,10 +23,31 @@ const plural = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
  *  arrival rate. Grad's alumni network (leadBudget 1.12) is then +0.096, a hair under a strength by itself, and Well-Connected's +30% arrivals and +15% budgets +0.42. (The first version added the budget at weight 1, which
  *  put Grad's 12% over the line of a strength and Connected's 15% at a full 0.15.) */
 export const BUDGET_WEIGHT = 0.8;
+
+/** The level the Ops term of "stock costs" is read at: where a specialty starts ("One skill starts at level 3"). A free level of Ops is worth a different amount at every level (the repair bill has fallen to 0.18 of its list by 3), so it has to be read somewhere. */
+export const OPS_REF = 3;
+/** A typical repair bill as a share of a working crate's worth: the middle of the classes that can be repaired (`repair` over `base` in the data: 15% to 37%, the median about 25%). */
+export const REPAIR_SHARE = (() => {
+  const r = Object.values(ASSETS).filter((a) => a.repair > 0 && a.base > 0).map((a) => a.repair / a.base).sort((x, y) => x - y);
+  return r.length ? r[r.length >> 1] : 0.25;
+})();
+/**
+ * What `bonus` free levels of Ops do to the cost of stocking up, as a share of a working crate's worth, read from the engine's own rules at OPS_REF. Positive is cheaper. Three things move, and they do not
+ * move the same way: a working lot is posted cheaper (`lotShare` 'ok': 2.5 points a level), a wreck is posted DEARER (`lotShare` 'broken': sellers ask for the repair upside, 0.21 of its as-is value a level, and
+ * the as-is value is BROKEN_FACTOR of a working crate's), and the repair a wreck needs costs less (`repairCostFor`: x0.42 a level). It is the cost of one of each. Beyond the first levels Ops makes a repaired
+ * crate worth more (restored quality) rather than making the stock cheaper, so the term is small: the old flat 0.12 a level said the opposite (docs/BALANCE.md, Formulas: Broken lots).
+ */
+export function opsStockEffect(bonus) {
+  const from = OPS_REF, to = Math.min(SKILL_MAX + 2, Math.max(0, from + finite(bonus))); // the engine's own limits on a skill (Game.lvl)
+  const sound = lotShare(from, 'ok') - lotShare(to, 'ok');
+  const wreck = (lotShare(from, 'broken') - lotShare(to, 'broken')) * BROKEN_FACTOR;
+  const repair = REPAIR_SHARE * (repairCostFor(1, from) - repairCostFor(1, to));
+  return sound + wreck + repair;
+}
 const TRAITS = [
   { id: 'buyers', name: 'buyer flow', fn: (m) => (m.leadMult - 1) + BUDGET_WEIGHT * (m.leadBudget - 1) + m.loyalty + 0.6 * m.trendBuyers + (m.digitalBuyers ? 0.25 : 0) - 0.6 * (1 - m.farLeadMult) },
   { id: 'prices', name: 'selling prices', fn: (m) => (m.pitchMult - 1) + (m.trendMult - 1) + (m.digitalMult - 1) + 0.08 * m.haggleAssist - 0.08 * m.haggleHandicap },
-  { id: 'sourcing', name: 'stock costs', fn: (m) => 0.12 * m.opsBonus + (1 - m.repairMult) + m.brokenDiscount + m.lotDiscount + 0.6 * m.lotDiscountGray + 0.8 * m.lotRefresh },
+  { id: 'sourcing', name: 'stock costs', fn: (m) => opsStockEffect(m.opsBonus) + (1 - m.repairMult) + m.brokenDiscount + m.lotDiscount + 0.6 * m.lotDiscountGray + 0.8 * m.lotRefresh },
   { id: 'steady', name: 'steady demand', fn: (m) => -2 * m.volatility - 1.5 * m.scamRate - (m.burnout ? 0.1 : 0) - 0.005 * m.flopRep },
   { id: 'costs', name: 'running costs', fn: (m) => (1 - m.overheadMult) - (m.managerCost - 1) - 3 * finite(m.familyTax?.rate) - 2 * finite(m.garnish?.rate) - 8 * finite(m.subscription?.rate) },
   { id: 'credit', name: 'bank credit', fn: (m) => -m.spreadAdj + 2 * finite(m.circle?.pct) + 0.1 * m.fintechBonus - 0.5 * (m.bankMinNW / 10000) },
@@ -174,6 +196,19 @@ export function actionsHTML(st) {
     <button class="btn big" type="submit" id="dr-begin" data-fid="dr-begin" aria-disabled="${ok ? 'false' : 'true'}" aria-describedby="dr-need">Begin</button>`;
 }
 
+/**
+ * The question asked when Begin would replace the run saved in this browser. There is one save slot, so a new run (solo, or in a classroom: "Join" only opens this screen) writes over the saved one; `run` is
+ * `describeSave()` of it, `room` the classroom being joined, if any. It names both, and the safe answer has the cursor.
+ */
+export function replaceRunHTML(run, room = null) {
+  const names = (run.perks || []).filter((id) => own(PERKS, id)).map((id) => PERKS[id].name);
+  const saved = `${run.handle ? `<b>${esc(run.handle)}</b>` : 'your founder'}, day ${finite(run.day)}${names.length ? ` (${esc(list(names))})` : ''}${run.room ? `, in room <b class="mono">${esc(run.room)}</b>` : ''}`;
+  const next = room && room.code ? `a new run in room <b class="mono">${esc(room.code)}</b>` : 'a new solo run';
+  return `<h2 tabindex="-1">Replace your saved run?</h2>
+    <p>This browser has a saved run: ${saved}. Beginning ${next} replaces it, and it cannot be brought back.</p>
+    <div class="row gap"><button class="btn ghost" data-close autofocus>Keep my saved run</button><button class="btn danger" data-replace>Replace it and begin</button></div>`;
+}
+
 /** The whole screen as one string. Parts are rebuilt by mountDraft without touching the cards or the alias field (typing is never interrupted). */
 export function draftHTML(st) {
   const n = st.picks.length;
@@ -194,7 +229,7 @@ export function draftHTML(st) {
       </div>
       <div class="dr-side"><section class="dr-tray" id="dr-tray" aria-label="Your build">${trayHTML(st)}</section></div>
     </div>
-    <div class="dr-actions" id="dr-actions">${actionsHTML(st)}</div>
+    <div class="dr-actions" id="dr-actions" data-stuck="bottom">${actionsHTML(st)}</div>
   </form>`;
 }
 
@@ -217,7 +252,11 @@ export function mountDraft(root, S, { room = null, onBegin, onBack } = {}) {
     setHTML(tray, trayHTML(st));
     setHTML(spec, specHTML(st));
     setHTML(bar, actionsHTML(st));
+    fit(); // a notice makes the bar a line taller
   }
+  // the page scrolls here and the actions bar sticks to its foot: Tab must scroll a card to just above the bar, whatever height the bar has now (common.js, fitStuck)
+  const page = root.ownerDocument?.documentElement, fit = () => fitStuck(page);
+  fit(); globalThis.addEventListener?.('resize', fit);
   function send(action, say = true) {
     st = draftReduce(st, action);
     paint();
@@ -256,7 +295,11 @@ export function mountDraft(root, S, { room = null, onBegin, onBack } = {}) {
     }
     begun = true;
     $('#dr-begin', root)?.setAttribute('aria-busy', 'true');
-    onBegin?.({ perks: c.perks, specialty: c.specialty, handle: c.handle });
+    // A caller that has not started the run (it is asking first: replaceRunHTML) answers false, and the form is as it was: Begin works again, the picks are kept.
+    if (onBegin?.({ perks: c.perks, specialty: c.specialty, handle: c.handle }) === false) { begun = false; $('#dr-begin', root)?.removeAttribute('aria-busy'); }
   });
-  return { destroy() {}, state: () => st };
+  return {
+    destroy() { globalThis.removeEventListener?.('resize', fit); page?.style?.removeProperty('--stuck-t'); page?.style?.removeProperty('--stuck-b'); },
+    state: () => st,
+  };
 }

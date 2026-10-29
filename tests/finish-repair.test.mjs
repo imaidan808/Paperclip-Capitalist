@@ -80,8 +80,8 @@ test('F2: the sizes docs/ARCHITECTURE.md quotes are the shipped tree\'s, not the
   close(num(s[2]), kb(m.title.raw), 'title screen JavaScript'); close(num(s[3]), kb(m.title.gz), 'title screen gzipped'); close(num(s[5]), kb(m.rest.raw), 'the rest, JavaScript'); close(num(s[6]), kb(m.rest.gz), 'the rest, gzipped');
 });
 
-test('F3: the closing paragraph of BALANCE.md holds only what is still open, with the draft screen\'s real figures', () => {
-  const md = read('docs/BALANCE.md'), i = md.indexOf('Open, and for the owner of the file named'), p = md.slice(i, md.indexOf('## Decisions the spec left open'));
+test('F3: the closing paragraph of BALANCE.md holds only what is still open, with the draft screen\'s real figures (closed in the leftovers round, one question left: tests/leftovers.test.mjs)', () => {
+  const md = read('docs/BALANCE.md'), i = md.indexOf('The Draft screen and the wreck price: closed'), p = md.slice(i, md.indexOf('## Decisions the spec left open'));
   assert.ok(i > 0, 'the paragraph is there');
   assert.doesNotMatch(p, /price the wreck at its as-is value, which is the price at Ops 1/, 'the Codex and the Academy now state the open market\'s price (commit 3940256)');
   assert.doesNotMatch(p, /British spelling of "neighbor"/, '"neighbor" is the American form');
@@ -143,13 +143,15 @@ test('F6: the faculty kit\'s recovery flow names the controls the dashboard and 
   assert.match(parts.keep, /Keep this room/); assert.match(parts.keep, /Show the recovery code/); assert.match(parts.keep, /Copy the recovery code/);
 });
 
-test('F7: the Ops blurb promises what Ops does: cheaper sound lots, but a dearer wreck', () => {
+test('F7: the Ops blurb promises what Ops does: cheaper working lots, but a dearer wreck (and the rest of it is held in tests/leftovers.test.mjs)', () => {
   assert.doesNotMatch(SKILLS.ops.blurb, /lower sourcing prices/);
-  assert.match(SKILLS.ops.blurb, /lower prices on sound lots/);
+  assert.match(SKILLS.ops.blurb, /lower prices on working lots \(wrecks ask more as your Ops rises\)/);
   // the engine: a sound lot gets cheaper with Ops (97% of its value at Ops 1, 2.5 points less each level, never under 84%), a wreck dearer (1.00 times its as-is value at Ops 1, 1.21 at Ops 2)
   const lot = (ops) => Math.max(ECON.lotDiscLo, ECON.lotDiscHi - 0.025 * (ops - 1)), wreck = (ops) => Math.max(ECON.brokenLo, 1 - ECON.brokenSlope * (ops - 1));
   assert.ok(lot(4) < lot(1) && wreck(4) > wreck(1), 'the two prices move opposite ways with Ops');
-  assert.match(read('js/engine.js'), /Math\.max\(ECON\.lotDiscLo, ECON\.lotDiscHi - 0\.025 \* \(ops - 1\)\) : Math\.max\(ECON\.brokenLo, 1 - ECON\.brokenSlope \* \(ops - 1\)\)/, 'and that is the engine\'s own line');
+  // ...and that is the engine's own rule: since the leftovers round the lot generator and the draft screen both read it from one function (market.js `lotShare`)
+  assert.match(read('js/engine.js'), /let disc = lotShare\(ops, cond\);/, 'the engine prices a lot with the shared rule');
+  assert.match(read('js/market.js'), /Math\.max\(ECON\.lotDiscLo, ECON\.lotDiscHi - LOT_STEP \* \(ops - 1\)\) : Math\.max\(ECON\.brokenLo, 1 - ECON\.brokenSlope \* \(ops - 1\)\)/, 'and that is the rule');
 });
 
 test('F8: the README layout names every top-level folder the repository tracks, dev/ included', () => {
@@ -311,9 +313,9 @@ test('A7: the card is placed again when the drawer scrolls, stays off the drawer
   const src = read('js/ui/academy.js'), css = read('css/ui-academy.css');
   assert.match(src, /ctx\.el\.drawer\.addEventListener\('scroll', later, true\)/); assert.match(src, /ctx\.el\.drawer\.removeEventListener\('scroll', later, true\)/, 'and lets go of it');
   assert.match(src, /for \(const e of body\.querySelectorAll\(CONTROLS\)\) add\(e, 2, 0, false, clip, true\)/, 'the drawer\'s visible controls count, clipped to the body they scroll in');
-  assert.match(src, /const TIERS = \{ full: '', slim: 'slim', compact: 'compact', min: 'compact min' \}/);
+  assert.match(src, /const TIERS = \{ full: '', slim: 'slim', compact: 'compact', min: 'compact min', narrow: 'slim narrow', handle: 'handle' \}/, 'the four sizes are as they were; the narrow card and the handle are the Deal Room\'s (tests/rep-card.test.mjs)');
   assert.deepEqual(A.CARD_SIZES, ['full', 'slim', 'compact', 'min'], 'the slim card is tried first: it keeps the step\'s words');
-  assert.match(src, /const pick = chooseSize\(fit\);/, 'and the runner asks for the size by one pure rule');
+  assert.match(src, /const pick = chooseSize\(fit, \{ handle: foldable && !open, narrow: foldable, words: foldable && open \}\);/, 'and the runner asks for the size by one pure rule');
   assert.match(css, /\.ac-coach\.slim :is\(\.ac-hint, \.ac-look, \.ac-where\) \{ display: none; \}/); assert.doesNotMatch(css, /\.ac-coach\.slim[^{]*\.ac-say/, 'the words stay');
 });
 
@@ -333,10 +335,10 @@ test('B1: the smallest card is its head and two buttons, so at 200% zoom it can 
 
 test('B2: a control the keyboard scrolls into view rests inside the window\'s edge, so its 5px ring is never cut', () => {
   const base = read('css/styles.css'), ac = read('css/ui-academy.css');
-  const html = /\nhtml \{[^}]*scroll-padding-block: \.5rem;/.exec(base); assert.ok(html, 'the page');
+  const html = /\nhtml \{[^}]*scroll-padding-block: calc\(\.5rem \+ var\(--stuck-t, 0px\)\) calc\(\.5rem \+ var\(--stuck-b, 0px\)\);/.exec(base); assert.ok(html, 'the page: half a rem, and clear of a sticky bar that stands over its edge (tests/rep-feet.test.mjs)');
   assert.match(ac, /\.ac-sheet \{[^}]*scroll-padding-block: \.5rem;/, 'the Academy\'s sheets scroll on their own');
   const reach = Number(/export const RING_REACH = (\d+)/.exec(read('js/ui/common.js'))[1]); assert.ok(0.5 * 16 > reach, `half a rem (8px) is more than the ${reach}px a ring reaches`);
-  assert.match(read('css/shell.css'), /\.db \{[^}]*scroll-padding: var\(--sp-2\)/, 'the drawers already did the same');
+  assert.match(read('css/shell.css'), /\.db \{[^}]*scroll-padding: calc\(var\(--sp-2\) \+ var\(--stuck-t, 0px\)\) var\(--sp-2\) calc\(var\(--sp-2\) \+ var\(--stuck-b, 0px\)\)/, 'the drawers already did the same, and stand clear of their sticky bars');
 });
 
 // ====================================================================================================================================
@@ -376,7 +378,7 @@ test('V2: the licence the site declares is a file in the repository', () => {
 });
 
 test('V3: the dashboard\'s grading line links to a rubric a visitor can open (docs/ is not published)', () => {
-  assert.equal(KIT_URL, 'https://github.com/imaidan808/paperclip-capitalist/blob/main/docs/FACULTY_KIT.md');
+  assert.equal(KIT_URL, 'https://github.com/imaidan808/Paperclip-Capitalist/blob/main/docs/FACULTY_KIT.md');
   const s = new Session(); s.pid = 'TEACH'; s.mode = 'instructor'; s.roomInfo = { code: 'ROOM', relay: '' };
   const g = instructorParts(s, {}).grade;
   assert.ok(g.includes(`<a href="${KIT_URL}" target="_blank" rel="noopener noreferrer">faculty kit</a>`), 'a link, opened in its own tab, without the opener');
@@ -493,7 +495,8 @@ test('round 2 A1: on the lesson-1 page at 640x360 and 640x400 the card stands cl
   assert.ok(n >= 60, `${n} placements held`);
   // the runner asks for the size by this rule, and counts the dock's buttons among the controls it keeps clear
   const src = read('js/ui/academy.js');
-  assert.match(src, /const fit = \(t\) => \{ setTier\(t\);[^}]*target: !!spot && rectsOverlap\(\{ x: p\.x, y: p\.y, w: s\.w, h: s\.h \}, spot\)/, 'fit says whether the card is over the target');
+  assert.match(src, /const fit = \(t\) => \{ setTier\(t\); return fitCard\(t, sizeOf\(\), spot, view, keep\); \};/, 'the runner weighs each size by the one pure rule (fitCard)');
+  { const spot = { x: 100, y: 100, w: 50, h: 50 }, view = { w: 400, h: 400 }, f = A.fitCard('full', { w: 400, h: 400 }, spot, view, []); assert.equal(f.target, true, 'fitCard says whether the card is over the target (a card as big as the view cannot miss it)'); assert.equal(A.fitCard('min', { w: 40, h: 40 }, spot, view, []).target, false, 'and that it is not, where it is clear'); }
   assert.match(src, /for \(const e of ctx\.el\.dock\.querySelectorAll\(CONTROLS\)\) add\(e, 2, 0, false, null, true\)/, 'the dock\'s buttons are controls the card keeps off');
 });
 

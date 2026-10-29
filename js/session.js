@@ -30,6 +30,16 @@ export const kv = {
   getRaw(n) { try { return localStorage.getItem(K(n)); } catch { return null; } },
   setRaw(n, v) { try { localStorage.setItem(K(n), v); return true; } catch { return false; } },
 };
+/**
+ * A saved run, as it is named to the player before something replaces it (the draft's Begin writes the one save slot: docs/ARCHITECTURE.md, "Open decisions"). Null for a save that `restore()` would
+ * refuse (a save from the three-profile game has no Backgrounds): nothing is lost by replacing one that cannot be played. Never throws, whatever the storage holds.
+ */
+export function describeSave(d) {
+  if (!d || typeof d !== 'object' || d.v !== 1 || !d.state || typeof d.state !== 'object' || d.state.v !== 2 || !Array.isArray(d.state.perks)) return null;
+  const room = d.mode === 'student' && d.room && typeof d.room === 'object' ? cleanCode(d.room.code) : '';
+  const hour = num(d.state.hour, 0, TOTAL_HOURS, 0);
+  return { handle: text(d.state.handle, 20), day: Math.min(TOTAL_DAYS, Math.floor(hour / 24) + 1), perks: d.state.perks.filter((p) => typeof p === 'string').slice(0, 2), room: room.length >= 3 ? room : '' };
+}
 export const SOLO_OFFLINE_CAP_H = 7 * 24;
 export const SPEEDS = [0.25, 1, 4, 16, 64];
 /** How long a student in a room waits for the class clock before it runs its own (no instructor and no lowest-ID student has spoken). */
@@ -890,26 +900,35 @@ export class Session {
   }
 
   // ---- instructor actions
+  /** A room taken back with its recovery code does not know the class's hour until it has heard it (`recovering`): its clock reads hour 0, paused, and a rewind or a shock measured from it would go to the whole
+   *  class at a made-up hour (a rewind to day 1). The dashboard holds those controls, and the session refuses them too, so no other caller can send one. Null when the action may go. */
+  _holdWhileRecovering(what) {
+    return this.recovering ? { ok: false, msg: `This room is still waiting to hear the class's clock, so it does not know the class's hour yet. Try ${what} again in a few seconds.` } : null;
+  }
   inject(kind, { when = 'now', replace = false, cls } = {}) {
     if (this.mode !== 'instructor') return;
+    const held = this._holdWhileRecovering('the shock'); if (held) return held;
     const h = Math.floor(this.clock.now());
     const at = when === 'now' ? h : h + when;
     const id = `inj-${kind}-${at}-${Math.floor(Math.random() * 1e4)}`;
     this._noteShock(id, at);
     this.room?.send({ t: 'inject', kind, atHour: at, id, replace, cls });
     this.emit('change');
+    return { ok: true, msg: 'Shock sent to the class.', id, atHour: at };
   }
   setDifficulty(patch) { Object.assign(this.difficulty, cleanDifficulty(patch)); this._sendClock(); this.emit('change'); }
   setGhosts(n) { this.ghosts = Math.round(num(+n, 0, 200, this.ghosts)); this.cohort.ghosts = this.ghosts; this.cohort.refresh(); this._sendClock(); this.emit('change'); } // refresh: the heat map must not keep showing the old herd
   setAlgo(on) { this.algo = !!on; this._sendClock(); this.emit('change'); }
   rewind(days) {
     if (this.mode !== 'instructor') return;
+    const held = this._holdWhileRecovering('the rewind'); if (held) return held;
     const to = Math.max(0, Math.floor(this.clock.now() / 24 - days) * 24);
     this.rewindReport.clear();
     this.room?.send({ t: 'rewind', toHour: to });
     this.clock.set({ hour: to });
     this._sendClock();
     this.emit('change');
+    return { ok: true, msg: 'Rewind sent to all students.', toHour: to };
   }
   setDemo(n) {
     this.demo = n;

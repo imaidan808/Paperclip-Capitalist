@@ -182,7 +182,7 @@ function achievementsHTML(ctx) {
 // ------------------------------------------------------------------ the drawer
 function html(ctx) {
   const g = ctx.g(), s = g.s, has = !!ctx.progress;
-  const nav = `<nav class="qs-nav" aria-label="Jump to a section"><button class="btn sm ghost" data-act="quests-jump" data-to="skills" data-fid="qs-j-skills">Skills${s.points ? ` (${s.points})` : ''}</button>${has ? `<button class="btn sm ghost" data-act="quests-jump" data-to="quests" data-fid="qs-j-quests">Quests</button><button class="btn sm ghost" data-act="quests-jump" data-to="daily" data-fid="qs-j-daily">Daily</button><button class="btn sm ghost" data-act="quests-jump" data-to="badges" data-fid="qs-j-badges">Badges</button>` : ''}</nav>`;
+  const nav = `<nav class="qs-nav" data-stuck="top" aria-label="Jump to a section"><button class="btn sm ghost" data-act="quests-jump" data-to="skills" data-fid="qs-j-skills">Skills${s.points ? ` (${s.points})` : ''}</button>${has ? `<button class="btn sm ghost" data-act="quests-jump" data-to="quests" data-fid="qs-j-quests">Quests</button><button class="btn sm ghost" data-act="quests-jump" data-to="daily" data-fid="qs-j-daily">Daily</button><button class="btn sm ghost" data-act="quests-jump" data-to="badges" data-fid="qs-j-badges">Badges</button>` : ''}</nav>`;
   const skills = `<section class="sect" data-qsect="skills"><h3 tabindex="-1"><span>Skills</span><span>${plural(s.points, 'point')} to spend</span></h3><div class="qs-skills">${Object.keys(SKILLS).map((k) => skillCard(ctx, k)).join('')}</div></section>`;
   return `<div class="qs">${nav}${heroHTML(ctx)}${skills}${has ? `${questsHTML(ctx)}${dailiesHTML(ctx)}${achievementsHTML(ctx)}` : ''}</div>`;
 }

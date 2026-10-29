@@ -29,7 +29,7 @@ export const FOLLOW_SECONDS = 60;
 /** How long a room taken back waits to hear the class's clock before it starts paused (js/session.js `RECOVER_WAIT_MS`, 15 000 ms; tests/finish-repair.test.mjs holds the two together). */
 export const RECOVER_WAIT_SECONDS = 15;
 /** Where the grading rubric is: docs/ is not published with the site, so the dashboard links to the file in the repository. */
-export const KIT_URL = 'https://github.com/imaidan808/paperclip-capitalist/blob/main/docs/FACULTY_KIT.md';
+export const KIT_URL = 'https://github.com/imaidan808/Paperclip-Capitalist/blob/main/docs/FACULTY_KIT.md';
 /** The one sentence the dashboard and the title screen both say about that wait. */
 export const FOLLOW_NOTE = `Students follow your new Founder ID once the old one has been silent for about a minute, not at once. Wait that long before you change the pace, deploy a shock or rewind, because until then they ignore it.`;
 
@@ -188,11 +188,11 @@ export function mountInstructor(root, S, hooks) {
     pause() { S.setPaused(!S.clock.paused); },
     speed(b) { S.setSpeed(+b.dataset.v); },
     pace(b) { if (b.value !== '') { S.setSpeed(PRESETS[+b.value][1]); toast(`1 virtual day is now ${realPerDay(S.clock.speed)}.`, 'info'); } },
-    rewind(b) { S.rewind(+b.dataset.d); toast('Rewind sent to all students.', 'warn'); },
+    rewind(b) { const r = S.rewind(+b.dataset.d); toast(r && r.ok === false ? r.msg : 'Rewind sent to all students.', 'warn'); }, // (a room still taking itself back refuses: Session._holdWhileRecovering)
     hzsel(b) { U.zone = +b.value; render(); },
     evsel(b) { U.ev = b.value; }, evwhen(b) { U.when = b.value; }, evrep(b) { U.replace = b.checked; },
-    deploy() { S.inject(U.ev, { when: +U.when, replace: U.replace && !!EVENTS[U.ev], cls: 'sneakers' }); toast('Event deployed to the cohort.', 'warn'); },
-    squeeze() { S.inject('fed', { when: 0, replace: true }); toast('Credit Crunch injected.', 'warn'); },
+    deploy() { const r = S.inject(U.ev, { when: +U.when, replace: U.replace && !!EVENTS[U.ev], cls: 'sneakers' }); toast(r && r.ok === false ? r.msg : 'Event deployed to the cohort.', 'warn'); },
+    squeeze() { const r = S.inject('fed', { when: 0, replace: true }); toast(r && r.ok === false ? r.msg : 'Credit Crunch injected.', 'warn'); },
     fr(b) { S.setDifficulty({ friction: +b.value }); $('#frv').textContent = (+b.value).toFixed(2) + 'x'; },
     au(b) { S.setDifficulty({ audit: +b.value }); $('#auv').textContent = (+b.value).toFixed(2) + 'x'; },
     gh(b) { S.setGhosts(+b.value); $('#ghv').textContent = b.value; },

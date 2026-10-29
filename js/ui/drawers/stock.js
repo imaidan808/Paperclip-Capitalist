@@ -129,7 +129,7 @@ function selBarHTML(ctx, sel) {
   else if (pq && !pq.ok) why.push(pq.msg);
   if (oneDistrict && s.zones.length < 2) why.push('Shipping needs a second district. Net worth opens the next one.');
   if (benchShut) why.push(`${bench.blocker} ${NEED_CASH}`);
-  return `<div class="stk-selbar" role="region" aria-label="Actions for the ticked crates">
+  return `<div class="stk-selbar" data-stuck="top" role="region" aria-label="Actions for the ticked crates">
     <div class="row"><b>${plural(sel.length, 'crate')} ticked</b><span class="small">worth <span class="mono">${m(worth)}</span>, you paid <span class="mono">${m(paid)}</span></span><span class="grow"></span><button class="btn sm ghost" data-act="stock-clear" data-fid="st-clear">Clear</button></div>
     <div class="row stk-acts">
       ${btn('stock-sellpool', 'Sell to the pool', !!(pq && pq.ok), '', 'stock-sell-pool')}

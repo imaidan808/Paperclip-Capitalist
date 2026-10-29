@@ -9,7 +9,7 @@
 //
 // Never staged: tests/, server/, docs/, scripts/, dev/, package files, .git, .github, any dotfile. The list is an allowlist, so a new folder is not published by accident.
 // --verify re-reads a staged folder and checks it hangs together (every reference resolves, no module is missing or left over, no source map).
-// --serve stages and serves the folder the way GitHub Pages does (under /paperclip-capitalist/, 404.html for a path that is not a file, gzip, a ten-minute cache),
+// --serve stages and serves the folder the way GitHub Pages does (under /Paperclip-Capitalist/, 404.html for a path that is not a file, gzip, a ten-minute cache),
 // so a path that only works at the root of a server fails here before it fails online. --latency adds a round trip to every answer, to feel what the host would.
 import { createServer } from 'node:http';
 import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
@@ -17,10 +17,15 @@ import { tmpdir } from 'node:os';
 import { dirname, extname, join, relative, resolve, sep, posix } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { gzipSync } from 'node:zlib';
-import { ENTRY, ROOT, preloadLines, walk } from './preload.mjs';
+import { ENTRY, ROOT, existsExactly, preloadLines, walk } from './preload.mjs';
 
-export const SITE_URL = 'https://imaidan808.github.io/paperclip-capitalist/';
-export const BASE_PATH = new URL(SITE_URL).pathname;           // '/paperclip-capitalist/'
+// The address of the published site, spelled exactly as GitHub spells the repository. A Pages address is case-sensitive: https://imaidan808.github.io/Paperclip-Capitalist/ is the site
+// and the same address in lower case is a 404 on the real host. This line is the one source of the spelling: BASE_PATH (where the stand-in below mounts the site), REPO_NAME and
+// REPO_URL are read from it, and every other place that writes the address (the pages, robots.txt, sitemap.xml, llms.txt, the docs) is held to it by `verify` and the tests.
+export const SITE_URL = 'https://imaidan808.github.io/Paperclip-Capitalist/';
+export const BASE_PATH = new URL(SITE_URL).pathname;           // '/Paperclip-Capitalist/', the folder the site is mounted at (the stand-in below serves nothing outside it)
+export const REPO_NAME = BASE_PATH.slice(1, -1);               // 'Paperclip-Capitalist'
+export const REPO_URL = `https://github.com/imaidan808/${REPO_NAME}/`;
 export const PAGES = ['index.html', '404.html'];
 export const TOP_FILES = ['index.html', '404.html', 'robots.txt', 'sitemap.xml', 'llms.txt'];
 export const TOP_DIRS = ['assets', 'css', 'js'];
@@ -47,6 +52,25 @@ export function pageRefs(html) {
   }
   for (const m of html.matchAll(/<meta\b[^>]*\b(?:property|name)\s*=\s*["'](?:og:image|twitter:image)["'][^>]*>/gi)) { const c = m[0].match(/\bcontent\s*=\s*"([^"]*)"/i); if (c) add(c[1]); }
   return { local: [...local], remote: [...remote] };
+}
+
+const AS_A_PATH = new RegExp(`(?<=/)${REPO_NAME}(?![\\w-])`, 'gi');   // the name as the last step of an address or path; inside a longer word (an npm package, a channel name) it is not an address
+const A_PAGES_ADDRESS = /https?:\/\/[a-z0-9-]+\.github\.io[^\s"'<>)`\\]*/gi;
+const THE_SITE_IN_ANY_CASE = new RegExp(`^${SITE_URL.slice(0, -1).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![\\w-])`, 'i');   // the site's own address, its last slash or not, in any case: its case is judged above
+/**
+ * What `text` gets wrong about the site's address, as a list of sentences (empty when it is right): the repository named in a path (a Pages address, a GitHub address, a local mount)
+ * in any spelling but GitHub's own, and any github.io address that is not under SITE_URL. The name inside a longer word (the npm package, a broadcast channel) is not an address and is not read.
+ */
+export function addressProblems(text) {
+  const bad = [];
+  for (const m of text.matchAll(AS_A_PATH)) {
+    if (m[0] === REPO_NAME) continue;
+    const written = text.slice(Math.max(0, m.index - 80), m.index).match(/[^\s"'<>(`]*$/)[0] + m[0];   // the address as far back as it goes: https://host/name
+    bad.push(`writes "${written}" but GitHub Pages is case-sensitive and the repository is ${REPO_NAME}`);
+  }
+  // an address on the host that is not the site's at all (another repository, the bare host); one that is the site's in a wrong case is said above, once
+  for (const m of text.matchAll(A_PAGES_ADDRESS)) if (!THE_SITE_IN_ANY_CASE.test(m[0])) bad.push(`writes ${m[0]}, which is not under ${SITE_URL}`);
+  return bad;
 }
 
 /** The stylesheets index.html links, in order, as paths relative to the project. */
@@ -130,6 +154,7 @@ export function stage({ root = ROOT, out = DEFAULT_OUT, lastmod } = {}) {
   return { out, files, graph, preload };
 }
 
+const TEXT_FILES = /\.(html|css|m?js|json|svg|txt|xml|webmanifest)$/;
 const PNG_SIG = '89504e470d0a1a0a';
 /** Width and height of a PNG, from its header. */
 export function pngSize(buf) {
@@ -151,6 +176,8 @@ export function verify(out) {
     if (f.endsWith('.map')) bad.push(`${f}: a source map`);
     if (/\.(js|css|html)$/.test(f) && /sourceMappingURL/.test(readFileSync(join(out, f), 'utf8'))) bad.push(`${f}: names a source map`);
   }
+  // the address, in every file that is text: the one spelling GitHub Pages answers to (a lower-case leftover is a 404 online and nowhere else)
+  for (const f of files) if (TEXT_FILES.test(f)) for (const p of addressProblems(readFileSync(join(out, f), 'utf8'))) bad.push(`${f}: ${p}`);
   // every page: its local references exist, and it fetches nothing from another host
   for (const page of PAGES) {
     if (!files.includes(page)) continue;
@@ -230,12 +257,13 @@ export function servePages(dir, { base = BASE_PATH, latency = 0, gzip = true } =
         if (parts.some((p) => p === '..' || p === '.')) { notFound(); return; }
         let file = join(dir, ...parts);
         if (file !== dir && !file.startsWith(dir + sep)) { notFound(); return; }
+        if (!existsExactly(dir, parts)) { notFound(); return; } // the host's disk tells JS/ from js/; this one may not (macOS), and a path that only works there must fail here
         let st = null;
         try { st = statSync(file); } catch { /* not there */ }
         if (st?.isDirectory()) {
           if (!path.endsWith('/')) { send(req, res, 301, TYPES['.html'], Buffer.alloc(0), { location: path + '/', name: 'redirect' }); return; }
           file = join(file, 'index.html');
-          try { st = statSync(file); } catch { st = null; }
+          try { st = existsExactly(dir, [...parts, 'index.html']) ? statSync(file) : null; } catch { st = null; }
         } else if (st?.isFile() && path.endsWith('/')) st = null;
         if (!st?.isFile()) { notFound(); return; }
         const ext = extname(file);

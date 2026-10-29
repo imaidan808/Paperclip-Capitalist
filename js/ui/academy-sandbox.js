@@ -88,11 +88,20 @@ export function coverScore(p, rect, avoid = []) {
   return s;
 }
 
-/** The rectangles the coach card must stay off, heaviest first: the open drawer and the dock (weight 3), then every control of an open dialog (weight 1). Empty or missing rects are dropped. */
-export function keepClear({ drawer = null, dock = null, controls = [] } = {}) {
-  const out = [], add = (r, wt) => { if (r && num(r.w, 0) > 0 && num(r.h, 0) > 0) out.push({ x: num(r.x, 0), y: num(r.y, 0), w: r.w, h: r.h, wt }); };
-  add(drawer, 3); add(dock, 3);
-  for (const r of ownList(controls)) add(r, 1);
+/**
+ * The rectangles the coach card must stay off, heaviest first: the open drawer and the dock (weight 3), then every control of an open dialog (weight 1). Empty or missing rects are dropped.
+ * A control is `ctl`: a button a tap may be aimed at, so the card is sized and placed to touch the fewest (fitCard, chooseSize). `clip` is the part of the window the controls can be seen in
+ * (a Deal Room's sheet scrolls under the card): a control is cut to it, a control scrolled right out of it counts for nothing.
+ */
+export function keepClear({ drawer = null, dock = null, controls = [], clip = null } = {}) {
+  const c = normRect(clip), out = [];
+  const add = (r, wt, ctl) => {
+    let n = normRect(r);
+    if (n && c && ctl) { const x0 = Math.max(n.x, c.x), y0 = Math.max(n.y, c.y), x1 = Math.min(n.x + n.w, c.x + c.w), y1 = Math.min(n.y + n.h, c.y + c.h); n = x1 > x0 && y1 > y0 ? { x: x0, y: y0, w: x1 - x0, h: y1 - y0 } : null; }
+    if (n) out.push(ctl ? { ...n, wt, ctl: true } : { ...n, wt });
+  };
+  add(drawer, 3, false); add(dock, 3, false);
+  for (const r of ownList(controls)) add(r, 1, true);
   return out;
 }
 
@@ -147,23 +156,69 @@ export function placeCard(rect, card, view, gap = 14, margin = 8, avoid = []) {
 
 /** The card's four sizes, largest first (css/ui-academy.css: full, then `slim`, `compact` and `compact min`). */
 export const CARD_SIZES = ['full', 'slim', 'compact', 'min'];
+/** A Deal Room may also try a narrow card (css `narrow`: the step's words in a column 15rem wide, between slim and compact), which stands in the empty column beside the room's buttons on a phone on its side where a card of the usual width cannot. */
+export const NARROW_SIZE = 'narrow';
+/** The last shape, the last resort in a Deal Room only: a one-line tab (css `handle`) that opens the card on a tap. It is not one of the four sizes: the sizes are the card, this is where the card goes when no size of it stands clear. */
+export const HANDLE_SIZE = 'handle';
+const harmOf = (f) => [f.cursor ? 1 : 0, f.target ? 1 : 0, f.n | 0]; // what a placement hides, in the order that matters: the keyboard's cursor, the control the step names, the buttons
+const lessHarm = (a, b) => { const x = harmOf(a), y = harmOf(b); return x[0] !== y[0] ? x[0] < y[0] : x[1] !== y[1] ? x[1] < y[1] : x[2] < y[2]; };
 /**
  * Which size of card to show. `fit(size)` places a card of that size (placeCard) and says what it would hide: { cursor, target, n } (the control the keyboard is on, the control the step
- * names, and how many buttons of the drawer). The full card is kept while the place it gets is clear of all three; otherwise each smaller size is tried and the first that is clear wins.
+ * names, and how many buttons: the drawer's, the dock's and, in a Deal Room, every button and link of the room). The full card is kept while the place it gets is clear of all three; otherwise each smaller size is tried and the first that is clear wins.
  * When none is, the least harm wins in this order: never over the keyboard's cursor (a card that hides it is wrong wherever else it lands), then never over the control the step names (a
- * card that says "open Market" over Market cannot be obeyed with a mouse or a finger), then the fewest drawer buttons, a tie going to the larger card (more of the words). A card every
+ * card that says "open Market" over Market cannot be obeyed with a mouse or a finger), then the fewest buttons, a tie going to the larger card (more of the words). A card every
  * size of which hides the cursor is the full one, as it always was. Returns what `fit` returned for the size chosen.
+ *   narrow: the Deal Room asks for the narrow card too, after slim and before compact (it keeps the step's words, which compact and min drop).
+ *   handle: the Deal Room asks for the handle too. When no size of the card is clear, the handle (HANDLE_SIZE: a tab one line high, which stands in a gap a card cannot) is taken if it hides less
+ *           than the best card does and never the keyboard's cursor: a tap on a button of the room must land on that button, and a card with the step's words in it covers several wherever it stands on a phone.
+ *   words:  the player has opened the card to read it: only the full card is shown (the words, the hint and the notes), wherever it covers least, and never the handle: they asked, and they can fold it away.
  */
-export function chooseSize(fit) {
+export function chooseSize(fit, { handle = false, narrow = false, words = false } = {}) {
   const clean = (f) => !f.cursor && !f.target && !f.n;
-  let pick = fit('full');
+  const sizes = words ? [CARD_SIZES[0]] : CARD_SIZES.slice();
+  if (narrow && !words) sizes.splice(2, 0, NARROW_SIZE);
+  let pick = fit(sizes[0]);
   if (clean(pick)) return pick;
-  for (const t of CARD_SIZES.slice(1)) {
+  for (const t of sizes.slice(1)) {
     const f = fit(t);
     if (!f.cursor && (pick.cursor || (f.target ? 1 : 0) < (pick.target ? 1 : 0) || ((f.target ? 1 : 0) === (pick.target ? 1 : 0) && f.n < pick.n))) pick = f;
     if (clean(pick)) break;
   }
-  return pick.cursor ? fit('full') : pick;
+  if (handle && !words && !clean(pick)) { const h = fit(HANDLE_SIZE); if (!h.cursor && lessHarm(h, pick)) return h; }
+  return pick.cursor ? fit(sizes[0]) : pick;
+}
+
+/**
+ * Does the card stay where it is when the sheet under it has moved on? A crowded place (nothing is clear) does not follow every scroll of the sheet: the old place stays while it is about as good as
+ * the new one, `old` ({ x, y }) against `at` ({ x, y }) for a card of `size` ({ w, h }). It is kept only when the new place covers something (when it covers nothing it is simply better), when the old
+ * one scores no worse than a quarter above the new (and 400 square pixels), when it is not over the control the step names while the new one is not, and when it is not over more buttons than
+ * the new one: a card that stays put over three buttons while a place over one is a scroll away loses a tap that need not be lost. `spot` is the control the step names, `keep` the rects to stay off.
+ */
+export function keepsPlace(old, at, size, spot, keep) {
+  const mine = { x: old.x, y: old.y, w: size.w, h: size.h }, fresh = { x: at.x, y: at.y, w: size.w, h: size.h };
+  const now = coverScore(fresh, spot, keep), was = coverScore(mine, spot, keep);
+  const staysOff = !spot || !rectsOverlap(mine, spot) || rectsOverlap(fresh, spot); // the old place is not kept when it is over the target and the new one is not
+  const buttons = (b) => keep.filter((r) => r.ctl && rectsOverlap(b, r)).length;
+  return now > 0 && was <= now * 1.25 + 400 && staysOff && buttons(mine) <= buttons(fresh);
+}
+
+/**
+ * Where the cursor goes when the card's shape hides the button it was on (a smaller shape drops Restart, the tab drops every button but itself, and an element with no box loses the focus): the first
+ * button of the card that is still shown, or null when the cursor is not on the card or is still on something that is shown. `card` and `f` (the element with the focus) are DOM nodes or stand-ins.
+ */
+export function rescueButton(card, f) {
+  if (!card || !f || f === card || !card.contains(f) || f.getClientRects().length) return null;
+  return [...card.querySelectorAll('button')].find((b) => b.getClientRects().length) || null;
+}
+
+/**
+ * One card shape placed and weighed: where placeCard puts a card of shape `t` and size `s` ({ w, h }, measured by the caller with that shape's classes on), and what it would hide of `keep` (the
+ * rects to stay off, see keepRects in ./academy.js: `focus` marks the control the keyboard is on, `ctl` a button the player may have to press) and of the control the step names (`spot`).
+ * Returns { t, s, p, cursor, target, n } for chooseSize.
+ */
+export function fitCard(t, s, spot, view, keep) {
+  const p = placeCard(spot, s, view, 14, 8, keep), box = { x: p.x, y: p.y, w: s.w, h: s.h }, cur = keep.find((r) => r.focus);
+  return { t, s, p, cursor: !!cur && rectsOverlap(box, cur), target: !!spot && rectsOverlap(box, spot), n: keep.filter((r) => r.ctl && rectsOverlap(box, r)).length };
 }
 
 // ------------------------------------------------------------------ the step resolver
@@ -229,6 +284,7 @@ const DEAL_FROM = { inspect: ['buy'], buy: ['buy'], auction: ['buy'], haggle: ['
  *   exists  the anchor resolved to something on screen the player can reach
  *   clipped it exists, but a control of the drawer's body that has scrolled out of the body's view (the note says where it is and that Show me scrolls to it)
  *   modal   'deal' (the Deal Room is open), 'hire' (the hire dialog), 'dialog' (any other window over the game) or null
+ *   drawer  a panel is open (the news line steps aside for it in a narrow window, and in the bottom sheet), so the ticker's note says to close it
  *   deal    what the open Deal Room is about, { kind, lot, lead, asset, assetCls, done, stageDone, last } (ids; any may be missing; done: its result is showing; stageDone: the stage in play is finished and the room offers
  *           Continue, or See the result when `last`), when modal is 'deal'
  */
@@ -255,7 +311,7 @@ export function unseenNote(anchor, wait, s = {}) {
   if (a.kind === 'world') return 'I cannot put a frame on it from here. It may be off the screen: move the view, or pick it from the list under the world.';
   if (a.name.startsWith('deal-')) return "The Deal Room is not open yet. Open a deal first, from a buyer's card in Market or a lot in the world, and this control is inside it.";
   if (a.name.startsWith('hire-')) return 'That is in the hire window. Open Crew and press Hire a manager to open it.';
-  if (a.name === 'ticker') return 'The news line shows up when there is news. Keep the clock running and it will appear.';
+  if (a.name === 'ticker') return `The news line shows up when there is news. Keep the clock running and it will appear.${s.drawer ? ' A panel that is open can cover it on a small screen: close the panel to read it.' : ''}`; // the line steps aside while a panel is open in a narrow window (css/shell.css)
   if (a.name === 'drawer') return 'Open a panel from the dock below, and the card will point into it.';
   if (a.name === 'bank-repay') return 'Open the Bank from the dock below. Each loan you owe has its Repay buttons.';
   if (a.name === 'stock-sell-pool') return 'Open Stock and tick the crates to sell. Sell to the pool appears under the list.';
