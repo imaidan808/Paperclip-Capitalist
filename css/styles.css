@@ -46,7 +46,7 @@
 @media (min-width: 2200px) and (min-height: 1200px) { :root { --ui-scale: 1.2; } }
 
 * { box-sizing: border-box; }
-html { font-size: calc(var(--fs) * var(--ui-scale)); -webkit-text-size-adjust: 100%; text-size-adjust: 100%; scroll-padding-block: .5rem; } /* a control the keyboard scrolls into view rests this far inside the window's edge, so the 5px of its focus ring are never cut (the Academy's sheets and the shell's drawers say the same) */
+html { font-size: calc(var(--fs) * var(--ui-scale)); -webkit-text-size-adjust: 100%; text-size-adjust: 100%; scroll-padding-block: calc(.5rem + var(--stuck-t, 0px)) calc(.5rem + var(--stuck-b, 0px)); } /* a control the keyboard scrolls into view rests this far inside the window's edge, so the 5px of its focus ring are never cut (the Academy's sheets and the shell's drawers say the same), and clear of a sticky bar that stands over the edge: the draft's actions bar, measured by common.js (fitStuck) */
 body { margin: 0; background: var(--bg); color: var(--ink); font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; line-height: var(--lh-body); min-height: 100vh; min-height: 100dvh;
   background-image: linear-gradient(rgba(255,255,255,.025) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.025) 1px, transparent 1px); background-size: 24px 24px; }
 :root[data-contrast="high"] body { background-image: none; }
@@ -144,6 +144,8 @@ label { display: block; font-size: .82rem; color: var(--mute); margin-bottom: .2
 .toast { transition: opacity .2s, transform .2s; } .toast.out { opacity: 0; transform: translateY(6px); } /* common.js adds .out, then removes the toast */
 @keyframes slidein { from { transform: translateY(8px); opacity: 0; } to { transform: none; opacity: 1; } }
 dialog { background: var(--panel); color: var(--ink); border: var(--bw) solid var(--gold); box-shadow: 8px 8px 0 rgba(0,0,0,.6), 0 24px 60px rgba(0,0,0,.5); padding: 1.1rem 1.3rem; width: min(46rem, 94vw); max-height: 92vh; max-height: calc(100dvh - var(--edge-t) - var(--edge-b)); overflow: auto; overscroll-behavior: contain; border-radius: 2px; }
+dialog { scroll-padding-block: calc(.5rem + var(--stuck-t, 0px)) calc(.5rem + var(--stuck-b, 0px)); } /* a control the keyboard scrolls into view rests inside the dialog's edge, its 5px ring and all, and clear of a sticky bar: common.js (fitStuck) writes how far the bars reach as --stuck-t and --stuck-b (the Deal Room says its own, below) */
+[data-stuck][data-free] { position: static; } /* a sticky bar that would stand over most of its scroller scrolls with it instead (common.js, fitStuck): its own rule is one class, this is two */
 dialog:not([open]) { display: none; } /* a class that sets `display` (.deal) must not keep a closed dialog on the page: the browser's own rule has the weakest say */
 dialog[open] { animation: dlgin .18s ease-out; }
 @keyframes dlgin { from { transform: translateY(10px); opacity: 0; } to { transform: none; opacity: 1; } }

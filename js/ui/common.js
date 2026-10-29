@@ -122,6 +122,42 @@ export function toast(msg, level = 'info', ms = 4200) {
 // ---- dialogs (native <dialog>: focus trap, Escape, inert background for free)
 const D = () => $('#dlg');
 let returnFocus = null;
+/**
+ * A bar that sticks to an edge of a scrolling box (a dialog's foot, a drawer's selection bar or Ship row, the draft's actions bar) stands over whatever the keyboard scrolls to that edge:
+ * Tab scrolls a control only as far as the box's scroll-padding says, and a bar that is not in the padding is not there for it. Such a bar carries data-stuck="top" or "bottom".
+ * `fitStuck(box)` writes how far the bars on each edge reach into `box` as --stuck-t and --stuck-b (px; the deepest bar on an edge; 0 when there is none), and css turns them into the
+ * box's scroll-padding (styles.css: the page and dialogs; shell.css: the drawers), so a control scrolled to is left clear of the bar, its 5px ring and all. A bar's reach is how far its
+ * far edge stands from the box's edge once it is stuck: the box's padding on that side (a sticky offset is taken inside it), plus the bar's own offset (negative when it bleeds back
+ * into the padding), plus its height. That is a measure the markup cannot give, since a bar wraps, so it is read from the page. `style` is getComputedStyle (a test hands in its own).
+ * A bar that leaves no room beside it has nothing to scroll a control into, and no padding can make some: when it would stand over more than FREE of the box (the Ship row on a phone: 150px
+ * of a 200px drawer), or when the tallest control in the box would not fit in what it leaves (a manager card of 253px beside an 83px foot in a 340px dialog, with half a rem each side for the
+ * ring), it gets data-free, which css/styles.css turns into position: static, so it scrolls with the content instead of covering it.
+ */
+export const FREE = 0.4, SLACK = 16;
+export const FOCUSABLE = 'a[href], button:not(:disabled), input:not(:disabled):not([type=hidden]), select:not(:disabled), textarea:not(:disabled), summary, [tabindex]:not([tabindex="-1"])'; // the Tab stops: never the page's own region or a heading (tabindex -1), which is as tall as the whole page
+export function stuckReach(box, style = (e) => getComputedStyle(e)) {
+  const reach = { top: 0, bottom: 0 }, bs = box?.querySelectorAll ? style(box) : null;
+  if (!bs) return reach;
+  let tall = null; // the tallest control that is not on a bar, looked for only when a bar is there to be fitted around
+  for (const bar of box.querySelectorAll('[data-stuck]')) {
+    const edge = bar.dataset.stuck === 'top' ? 'top' : 'bottom', h = bar.offsetHeight;
+    if (!(h > 0)) continue; // hidden: it stands over nothing
+    if (tall === null) tall = [...box.querySelectorAll(FOCUSABLE)].reduce((m, e) => (e.closest?.('[data-stuck]') ? m : Math.max(m, e.offsetHeight || 0)), 0);
+    const free = h > box.clientHeight * FREE || tall + h + SLACK > box.clientHeight; // measured whether it is stuck or not: its height does not change when it lets go, so it cannot flip back and forth
+    if (free !== bar.hasAttribute('data-free')) bar.toggleAttribute('data-free', free);
+    if (free) continue;
+    const at = style(bar), pad = parseFloat(bs[edge === 'top' ? 'paddingTop' : 'paddingBottom']) || 0, off = parseFloat(at[edge]) || 0;
+    reach[edge] = Math.max(reach[edge], Math.max(0, pad + off + h));
+  }
+  return reach;
+}
+export function fitStuck(box, style) {
+  if (!box?.style) return null;
+  const r = stuckReach(box, style), t = Math.round(r.top) + 'px', b = Math.round(r.bottom) + 'px';
+  if (box.style.getPropertyValue('--stuck-t') !== t) box.style.setProperty('--stuck-t', t); // written only when it changed: a drawer is looked at after every redraw
+  if (box.style.getPropertyValue('--stuck-b') !== b) box.style.setProperty('--stuck-b', b);
+  return r;
+}
 export const dlg = {
   open(html, { cls = '', label = '', onClose } = {}) {
     const d = D();
@@ -133,10 +169,13 @@ export const dlg = {
     d._onClose = onClose;
     d.showModal();
     d.scrollTop = 0; // the element is reused: a tall dialog must not open half way down
+    fitStuck(d); // measured once it is on the screen (a closed dialog has no boxes); a dialog that repaints its foot says so with dlg.fit(), and a resize is heard in initDialog
     (d.querySelector('[autofocus]') || d.querySelector('h1,h2,h3') || d).focus?.();
     return d;
   },
   close() { const d = D(); if (d.open) d.close(); },
+  /** The open dialog's foot changed (its text came or went, a button was added): measure it again. */
+  fit() { const d = D(); return d.open ? fitStuck(d) : null; },
   get el() { return D(); },
 };
 export function initDialog() {
@@ -162,6 +201,7 @@ export function initDialog() {
     }, 0);
   });
   d.addEventListener('click', (e) => { if (e.target === d) d.close(); });
+  globalThis.addEventListener?.('resize', () => { if (d.open) fitStuck(d); }); // a narrower window wraps a foot onto more lines; a turned phone is a resize too
 }
 
 // ---- delegated actions: <button data-act="name" data-x="..."> -> acts.name(el, event)

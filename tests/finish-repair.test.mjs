@@ -333,10 +333,10 @@ test('B1: the smallest card is its head and two buttons, so at 200% zoom it can 
 
 test('B2: a control the keyboard scrolls into view rests inside the window\'s edge, so its 5px ring is never cut', () => {
   const base = read('css/styles.css'), ac = read('css/ui-academy.css');
-  const html = /\nhtml \{[^}]*scroll-padding-block: \.5rem;/.exec(base); assert.ok(html, 'the page');
+  const html = /\nhtml \{[^}]*scroll-padding-block: calc\(\.5rem \+ var\(--stuck-t, 0px\)\) calc\(\.5rem \+ var\(--stuck-b, 0px\)\);/.exec(base); assert.ok(html, 'the page: half a rem, and clear of a sticky bar that stands over its edge (tests/rep-feet.test.mjs)');
   assert.match(ac, /\.ac-sheet \{[^}]*scroll-padding-block: \.5rem;/, 'the Academy\'s sheets scroll on their own');
   const reach = Number(/export const RING_REACH = (\d+)/.exec(read('js/ui/common.js'))[1]); assert.ok(0.5 * 16 > reach, `half a rem (8px) is more than the ${reach}px a ring reaches`);
-  assert.match(read('css/shell.css'), /\.db \{[^}]*scroll-padding: var\(--sp-2\)/, 'the drawers already did the same');
+  assert.match(read('css/shell.css'), /\.db \{[^}]*scroll-padding: calc\(var\(--sp-2\) \+ var\(--stuck-t, 0px\)\) var\(--sp-2\) calc\(var\(--sp-2\) \+ var\(--stuck-b, 0px\)\)/, 'the drawers already did the same, and stand clear of their sticky bars');
 });
 
 // ====================================================================================================================================

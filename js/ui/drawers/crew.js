@@ -282,7 +282,7 @@ function hireBody(ctx) {
     <input id="ch-amt" type="range" min="0" max="100" step="5" value="${cap ? Math.round(alloc / cap * 100) : 0}" data-input="crew-hamt" data-fid="ch-amt">
     <div class="row"><button class="btn ghost" data-act="crew-hmax" data-fid="hmax">Use full capacity</button>${!edit && left > 0 && left < alloc ? `<button class="btn ghost" data-act="crew-hafford" data-fid="hafford">Use what I can afford (${m(left)})</button>` : ''}</div>
     <div id="chprev" class="gap">${previewHTML(ctx)}</div>
-    <div class="cr-foot">${why ? `<p class="cr-why small">${esc(why)}</p>` : ''}<div class="row"><button class="btn" data-act="crew-hgo" data-fid="hgo" data-anchor="hire-go" ${why ? 'aria-disabled="true"' : ''}>${edit ? 'Save changes' : `Hire for ${m(cost)}`}</button><button class="btn ghost" data-close>Cancel</button></div></div>`;
+    <div class="cr-foot" data-stuck="bottom">${why ? `<p class="cr-why small">${esc(why)}</p>` : ''}<div class="row"><button class="btn" data-act="crew-hgo" data-fid="hgo" data-anchor="hire-go" ${why ? 'aria-disabled="true"' : ''}>${edit ? 'Save changes' : `Hire for ${m(cost)}`}</button><button class="btn ghost" data-close>Cancel</button></div></div>`;
 }
 
 function hireDialog(ctx) {
@@ -297,6 +297,7 @@ function repaint(ctx, fid) {
   const body = dlgRoot(ctx)?.querySelector?.('#chbody');
   if (!body || !ST(ctx).hire) return;
   body.innerHTML = hireBody(ctx);
+  ctx.dlg.fit?.(); // the foot may have gained or lost its reason line: the dialog's scroll-padding follows its height
   if (fid) body.querySelector?.(`[data-fid="${fid}"]`)?.focus?.({ preventScroll: true });
 }
 function repaintPreview(ctx) {
