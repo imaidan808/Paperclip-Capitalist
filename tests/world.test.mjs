@@ -7,6 +7,7 @@ import * as L from '../js/world/layout.js';
 import { REGIONS } from '../js/world/island.js';
 import { KITS } from '../js/world/kits.js';
 import { DRAW } from '../js/world/props.js';
+import { setFlag } from '../js/world/stack.js';
 import { ZONES, ZONE_IDS } from '../js/data/index.js';
 import { THEMES } from '../js/data/schema.js';
 import { ASSETS, BUYERS } from '../js/config.js';
@@ -278,7 +279,7 @@ test('culling and levels of detail: a focused view draws a fraction of the islan
   w.fit(false); statics = 0; log.n = 0; w.draw(); const fitOps = log.n, fitStatics = statics;
   assert.ok(focusStatics < SCENERY.length * 0.4, `focused: ${focusStatics} of ${SCENERY.length} props drawn`);
   assert.ok(fitStatics < SCENERY.length, 'at fit the small scenery is left out: ' + fitStatics + ' of ' + SCENERY.length);
-  assert.ok(focusOps < 40000 && fitOps < 40000, `focused ${focusOps} calls, fit ${fitOps} calls`);
+  assert.ok(focusOps < 100000 && fitOps < 100000, `focused ${focusOps} calls, fit ${fitOps} calls`); // (was 40,000 for the legacy flat-shaded props: a V2 body is built into a sprite in the browser, but this harness has no offscreen surfaces, so every body is drawn straight, with its bevels, windows and shading as path calls)
   w.cam.z = 0.9; w.cam.x = L.LAYOUT.bounds.x1 + 3000; w.clampCam(); assert.ok(w.cam.x <= w.bounds().x1, 'the camera cannot leave the island');
 });
 
@@ -329,7 +330,7 @@ test('rectOf gives a real on-screen rectangle for every kind of thing, and null 
   assert.ok(inside(w.rectOf('zone', 5)), 'zone');
   const f = g.s.freight[0]; w.truckPos(w.ents.get('truck:' + f.id)); assert.equal(w.rectOf('truck', f.id) === null || inside(w.rectOf('truck', f.id)), true);
   // the rectangle follows the camera
-  const r1 = w.rectOf('static', 'bank'); w.cam.x += 50; const r2 = w.rectOf('static', 'bank'); assert.ok(Math.abs((r1.x - r2.x) - 50 * w.cam.z) < 1e-6, 'it moves with the camera');
+  const r1 = w.rectOf('static', 'bank'); w.cam.x += 50; const r2 = w.rectOf('static', 'bank'); assert.ok(Math.abs((r1.x - r2.x) - 50 * w.cam.z) <= 1 / w.dpr + 1e-6, 'it moves with the camera, to a device pixel (the screen origin is the camera\'s translation rounded to whole device pixels: docs/RENDER_PLAN.md section 5; it was exact to 1e-6)');
   w.focusZone(16, false); assert.equal(w.rectOf('static', 'bank'), null, 'a building in another district is off screen');
   assert.equal(w.rectOf('lead', 'nope'), null); assert.equal(w.rectOf('static', 'nope'), null); assert.equal(w.rectOf('banana', 1), null);
 });
@@ -491,9 +492,9 @@ test('gates only stand while a district is locked: the barrier, the raised bridg
 test('one broken prop never blanks the frame: the fault is logged once and everything else still draws', async () => {
   const g = newGame(4); openTo(g, 4);
   const { w, log } = await world(g, { zone: 1, sel: new Set() });
-  w.focusZone(1, false); const orig = DRAW.scrap; DRAW.scrap = () => { throw new Error('boom'); };
+  w.focusZone(1, false); const orig = DRAW.scrap; DRAW.scrap = () => { throw new Error('boom'); }; setFlag('static-prop', 'legacy'); // (the legacy drawer is what the broken one replaces: the V2 kind would answer first)
   const err = console.error; let logged = 0; console.error = () => { logged++; };
-  try { log.n = 0; w.draw(); const ops = log.n; w.draw(); assert.ok(ops > 3000, 'the rest of the scene was drawn: ' + ops); assert.equal(logged, 1, 'logged once, not per frame'); assert.equal(faults(w).length, 1); } finally { DRAW.scrap = orig; console.error = err; }
+  try { log.n = 0; w.draw(); const ops = log.n; w.draw(); assert.ok(ops > 3000, 'the rest of the scene was drawn: ' + ops); assert.equal(logged, 1, 'logged once, not per frame'); assert.equal(faults(w).length, 1); } finally { DRAW.scrap = orig; console.error = err; setFlag('static-prop', 'v2'); }
 });
 
 test('resize redraws synchronously: the canvas is never blank after it changes size', async () => {

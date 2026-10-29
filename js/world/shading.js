@@ -2,6 +2,8 @@
 // plaster, boards), contact shadow, and the thin blue haze that pales high ground. Built on iso.js's box(); props.js and kits call these, nothing else does.
 // What it never does: move or resize anything (every effect stays inside the faces it is given), read game state, or use Math.random (texture comes from hashes).
 // The sun is at the upper left: left faces are lit, right faces shaded, cast shadows run towards +gx (see iso.js).
+// Owner: T5 RASTER QUALITY, FROZEN LEGACY (docs/RENDER_PLAN.md section 7), like iso.js: the four props-*.js files import `solid`, props-common.js imports `hazed` and props.js `hazeAt`, so no art track edits it.
+// T3 and T4 write their V2 drawers on solids.js's roundedBox and migrate off `solid` at their own pace; T5 deletes this module when nothing imports it.
 import { box, diamond, quadN, facePoint, mix, snowA, sootA, inkA, h2, clamp } from './iso.js';
 
 /** The air colour distant or high things fade towards. */
@@ -98,3 +100,8 @@ function uniform(n) { let a = UNIFORM.get(n); if (!a) { a = Array.from({ length:
 
 /** A cheap hue shift towards the haze colour; props.js applies it to every body colour of a prop standing on high ground. */
 export const hazed = (c, k) => (k > 0.004 ? mix(c, HAZE, k) : c);
+
+// The rounded solids that replace `solid` call by call (T3, docs/RENDER_PLAN.md): re-exported here so the one place a building's form is shaded names its successor.
+export { roundedBox, bevelRadius } from './solids.js';
+// The crisp-edge tools (crisp.js, T5): lineFor, snapWorld, crispRect, sealedFaces, contourFill, inflate, contourWidth and the rest. Re-exported here, beside the rounded solids, so a drawer finds the two kinds of tool in one place.
+export * from './crisp.js';

@@ -3,6 +3,7 @@
 // What it never does: read game state, touch the DOM, use Math.random (variation comes from the hash functions at the foot), or decide where anything stands.
 // Grid coordinates (gx, gy) are tiles; gz is height in pixels. Screen x grows with gx - gy, screen y with gx + gy.
 // Light: the sun stands to the upper left. Left faces are lit (0.8), right faces shaded (0.6), tops full; cast shadows run towards +gx (screen right and down).
+import { FLAGS } from './stack.js';
 export const TW = 64, TH = 32, HW = TW / 2, HH = TH / 2;
 export const sx = (gx, gy) => (gx - gy) * HW;
 export const sy = (gx, gy, gz = 0) => (gx + gy) * HH - gz;
@@ -39,9 +40,13 @@ export const tone = (h) => {
 };
 export const gray = (h) => { const [r, g, b] = rgb(h), y = 0.3 * r + 0.59 * g + 0.11 * b; return hex(y, y, y); };
 const fogMemo = new Map();
+let veilFn = null;
+/** (T2's hook, the one line this frozen module takes: docs/RENDER_PLAN.md section 8, T5 item 10) While the `clouds` layer is flagged v2, a colour under cloud is `veiled`, never darkened: palette.js hands its veil over here when it loads. */
+export const setVeil = (fn) => { veilFn = fn; };
 /** Fogged colour: desaturated and darkened by k (0 = untouched, 1 = a locked district). */
 export const fogged = (h, k) => {
   if (!(k > 0.01)) return h;
+  if (veilFn !== null && FLAGS.clouds === 'v2') return veilFn(h, k);
   const m = nest(fogMemo, h); let v = m.get(k);
   if (v === undefined) { v = mix(mix(h, gray(h), Math.min(1, k * 1.5)), '#121826', k * 0.5); if (m.size > 48) m.clear(); m.set(k, v); }
   return v;
@@ -84,6 +89,9 @@ export function box(ctx, gx, gy, w, d, h, c, o = {}) {
   const z0 = o.z || 0, z1 = z0 + h;
   const A = P(gx, gy, z1), B = P(gx + w, gy, z1), C = P(gx + w, gy + d, z1), D = P(gx, gy + d, z1);
   const B0 = P(gx + w, gy, z0), C0 = P(gx + w, gy + d, z0), D0 = P(gx, gy + d, z0);
+  // the silhouette first (DIAGNOSIS S1): the three faces share edges, and where two anti-aliased faces meet the pixel gets 0.5 + 0.5 x 0.5 of coverage, so a quarter of what is behind shows as a hairline. A hexagon in the
+  // lit face's colour under them leaves nothing to show through (the seam pixel is a blend of two faces and the underlay, never of the ground)
+  ctx.beginPath(); ctx.moveTo(A[0], A[1]); ctx.lineTo(B[0], B[1]); ctx.lineTo(B0[0], B0[1]); ctx.lineTo(C0[0], C0[1]); ctx.lineTo(D0[0], D0[1]); ctx.lineTo(D[0], D[1]); ctx.closePath(); ctx.fillStyle = c.l; ctx.fill();
   quad(ctx, [D, C, C0, D0], c.l, o.line);
   quad(ctx, [C, B, B0, C0], c.r, o.line);
   quad(ctx, [A, B, C, D], c.t, o.line);

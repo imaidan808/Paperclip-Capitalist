@@ -32,6 +32,7 @@ const { instructorParts, RECOVER_WAIT_SECONDS, KIT_URL } = await import('../js/u
 const { Session } = await import('../js/session.js');
 const { makeGame } = await import('./bot.mjs');
 const { fakeCtx } = await import('./helpers/ctx.mjs');
+const { measured } = await import('./helpers/staged-size.mjs'); // what scripts/stage.mjs publishes, measured the way docs/ARCHITECTURE.md says (also printed by scripts/arch-figures.mjs). Every top-level await stays up here: one in the middle of the file lets the runner finish before the `test.after` at the foot of the file is registered, and the browser tests' Chrome is never closed
 
 const read = (rel) => readFileSync(join(ROOT, rel), 'utf8');
 const M = (id) => ACADEMY.find((m) => m.id === id);
@@ -50,33 +51,25 @@ test('F1: the overworld map names its regions the American way, and the spelling
   assert.match(read('js/world/island.js'), /city and harbor, industry/, 'and the comment agrees');
 });
 
-/** What `scripts/stage.mjs` publishes, measured the way docs/ARCHITECTURE.md says: the page, every sheet it links and every module, each gzipped on its own. 1 KB is 1,024 bytes. */
-function measured() {
-  const out = join(mkdtempSync(join(tmpdir(), 'pc-size-')), 'site');
-  try {
-    stage({ out, lastmod: '2026-10-28' });
-    const g = walk(), html = readFileSync(join(out, 'index.html'));
-    const sheets = [...html.toString().matchAll(/<link[^>]+rel="stylesheet"[^>]+href="([^"]+)"/g)].map((m) => m[1]);
-    const of = (files) => files.reduce((a, f) => { const b = readFileSync(join(out, f)); return [a[0] + b.length, a[1] + gzipSync(b).length]; }, [0, 0]);
-    const js = of(g.modules), css = of(sheets), page = gzipSync(html).length;
-    // the title screen alone: main.js and what it needs without the five screens it imports (the game's shell, the draft, the Academy, the instructor's dashboard, the debrief)
-    const SCREENS = new Set(['js/ui/draft.js', 'js/ui/academy.js', 'js/ui/shell.js', 'js/ui/instructor.js', 'js/ui/debrief.js']), seen = new Set(), q = ['js/main.js'];
-    while (q.length) { const f = q.shift(); if (seen.has(f)) continue; seen.add(f); for (const d of [...(g.edges[f]?.statics || []), ...(g.edges[f]?.dynamics || [])]) if (!SCREENS.has(d)) q.push(d); }
-    const title = of([...seen]);
-    return { requests: 1 + sheets.length + g.modules.length, modules: g.modules.length, js, css, total: page + js[1] + css[1], title: { n: seen.size, raw: title[0], gz: title[1] }, rest: { n: g.modules.length - seen.size, raw: js[0] - title[0], gz: js[1] - title[1] } };
-  } finally { rmSync(join(out, '..'), { recursive: true, force: true }); }
-}
 
+// F2 holds the document's figures to the staged tree's. docs/ARCHITECTURE.md is the orchestrator's file (docs/RENDER_PLAN.md rule 11): the art tracks add modules to js/world/ and every module moves these figures, so on a
+// track branch the test tolerates growth or shrinkage of js/world/ (at most 24 modules, every one of them under js/world/, and 10% of the sizes) and the title screen's own set must not change at all. With
+// PC_STRICT_DOCS=1 the figures are exact (1% of the sizes, the module counts equal): the orchestrator runs that after `node scripts/arch-figures.mjs --write` at every merge, and so does the staged site's workflow.
+const STRICT = process.env.PC_STRICT_DOCS === '1', ALLOW = 24;
 test('F2: the sizes docs/ARCHITECTURE.md quotes are the shipped tree\'s, not the launch pass\'s', () => {
-  const md = read('docs/ARCHITECTURE.md'), m = measured(), kb = (n) => n / 1024;
-  const close = (said, real, what) => assert.ok(Math.abs(said - real) / real <= 0.01, `${what}: the document says ${said} KB and the staged tree measures ${real.toFixed(1)} KB (within 1%)`);
+  const md = read('docs/ARCHITECTURE.md'), m = measured(), kb = (n) => n / 1024, slack = STRICT ? 0.01 : 0.10;
+  const close = (said, real, what) => assert.ok(Math.abs(said - real) / real <= slack, `${what}: the document says ${said} KB and the staged tree measures ${real.toFixed(1)} KB (within ${slack * 100}%; \`node scripts/arch-figures.mjs --write\` refreshes the document)`);
   const t = /\| Transferred \| about ([\d,]+) KB gzipped \(([\d,]+) KB of JavaScript and ([\d,]+) KB of CSS before gzip/.exec(md);
   assert.ok(t, 'the Transferred row says its three figures');
   close(num(t[1]), kb(m.total), 'gzipped'); close(num(t[2]), kb(m.js[0]), 'JavaScript'); close(num(t[3]), kb(m.css[0]), 'CSS');
-  assert.match(md, new RegExp(`\\| Requests \\| ${m.requests}: the page, 12 stylesheets, ${m.modules} modules`), 'the request count is the tree\'s');
+  const q = /\| Requests \| (\d+): the page, 12 stylesheets, (\d+) modules/.exec(md); assert.ok(q, 'the Requests row says its figures');
+  const grew = m.modules - num(q[2]);
+  assert.equal(m.requests - num(q[1]), grew, 'requests and modules move together');
+  if (STRICT) assert.equal(grew, 0, `the document says ${q[2]} modules and the tree has ${m.modules} (node scripts/arch-figures.mjs --write)`);
+  else assert.ok(Math.abs(grew) <= ALLOW && grew <= m.world, `the document says ${q[2]} modules and the tree has ${m.modules}: more than ${ALLOW} apart, or growth outside js/world/ (the orchestrator refreshes the document at a merge)`);
   const s = /needs (\d+) modules, ([\d,]+) KB of JavaScript \(([\d,]+) KB gzipped\); the other (\d+), ([\d,]+) KB \(([\d,]+) KB gzipped\)/.exec(md);
   assert.ok(s, 'the split of the title screen and the rest is quoted');
-  assert.equal(num(s[1]), m.title.n); assert.equal(num(s[4]), m.rest.n);
+  assert.equal(num(s[1]), m.title.n, 'the title screen\'s own set of modules does not change with the art'); assert.equal(m.rest.n - num(s[4]), grew, 'the rest of the modules moved with the tree');
   close(num(s[2]), kb(m.title.raw), 'title screen JavaScript'); close(num(s[3]), kb(m.title.gz), 'title screen gzipped'); close(num(s[5]), kb(m.rest.raw), 'the rest, JavaScript'); close(num(s[6]), kb(m.rest.gz), 'the rest, gzipped');
 });
 
