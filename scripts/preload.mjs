@@ -96,6 +96,23 @@ export function scanImports(src) {
 
 const isRelative = (s) => s.startsWith('./') || s.startsWith('../');
 
+/**
+ * Does `rel` (posix, relative to `root`, as a list of steps or a string) name something on the disk with every step spelled exactly as the disk spells it? `statSync` alone answers by the disk's own
+ * rules, and a disk that does not tell upper case from lower (macOS, Windows) finds js/main.js under JS/main.js, where GitHub Pages, on Linux, finds nothing: a spelling slip would pass here and 404 there.
+ * Each step is looked up in its folder's own listing, so the answer is the host's.
+ */
+export function existsExactly(root, rel) {
+  let at = root;
+  for (const part of Array.isArray(rel) ? rel : String(rel).split('/')) {
+    if (part === '' || part === '.') continue;
+    let names;
+    try { names = readdirSync(at); } catch { return false; }
+    if (!names.includes(part)) return false;
+    at = join(at, part);
+  }
+  return true;
+}
+
 /** A pattern like './play/${}.js' as a RegExp over the file name in its folder, or null when the hole is not confined to one path segment. */
 function patternParts(pattern) {
   const slash = pattern.lastIndexOf('/');
@@ -113,7 +130,7 @@ function patternParts(pattern) {
  */
 export function walk(root = ROOT, entry = ENTRY) {
   const problems = [], edges = {};
-  const exists = (p) => { try { return statSync(join(root, p)).isFile(); } catch { return false; } };
+  const exists = (p) => { try { return statSync(join(root, p)).isFile() && existsExactly(root, p); } catch { return false; } };
   const resolveSpec = (from, spec) => {
     if (!isRelative(spec)) { problems.push(`${from}: "${spec}" is not a relative path (a browser cannot resolve it)`); return null; }
     const p = posix.normalize(posix.join(posix.dirname(from), spec));

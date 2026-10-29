@@ -200,7 +200,13 @@ export function initDialog() {
       try { (document.querySelector('#drawer:not([hidden]) #dh-title') || document.getElementById('app'))?.focus({ preventScroll: true }); } catch { /* nothing to focus */ }
     }, 0);
   });
-  d.addEventListener('click', (e) => { if (e.target === d) d.close(); });
+  // A click on the dialog's own backdrop closes it, and only a PRESS that began there counts. A press on a control that ends on the dialog itself (the finger went down on a button and a
+  // card laid over the dialog moved under it, or it slid off the button) makes a click whose target is the nearest common ancestor, the dialog, and that is not a click on the backdrop:
+  // it used to close the hire dialog under the player's finger. `down` is where the last press began (null: a click made by script, which has no press and still closes).
+  let down = null;
+  const begin = (e) => { down = e.target; };
+  d.addEventListener('pointerdown', begin, true); d.addEventListener('mousedown', begin, true);
+  d.addEventListener('click', (e) => { const began = down; down = null; if (e.target === d && (began === null || began === d)) d.close(); });
   globalThis.addEventListener?.('resize', () => { if (d.open) fitStuck(d); }); // a narrower window wraps a foot onto more lines; a turned phone is a resize too
 }
 

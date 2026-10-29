@@ -53,6 +53,10 @@ test('stuckReach: edges are separate, the deepest bar on an edge counts, a hidde
   assert.deepEqual(stuckReach(both, style), { top: 40, bottom: 50 }, 'top: the deeper of 40 and 12+20; bottom 50');
   const hidden = bar('bottom', { h: 0 }), b = box({ bars: [hidden] });
   assert.deepEqual(stuckReach(b, style), { top: 0, bottom: 0 }); assert.equal(hidden.attrs.size, 0, 'a bar with no box is left alone: nothing to measure, nothing to let go of');
+  // in a PADDED box a hidden bar would still make a reach out of nothing (the box's 12px of padding, plus an offset of 0, plus a height of 0): only the guard on its height keeps it at 0
+  const padded = box({ pt: 12, pb: 12, h: 400, bars: [bar('top', { h: 0, off: 0 }), bar('bottom', { h: 0, off: 0 })] });
+  assert.deepEqual(stuckReach(padded, style), { top: 0, bottom: 0 }, 'a hidden bar in a padded box stands over nothing');
+  assert.deepEqual(stuckReach(box({ pt: 12, pb: 12, h: 400, bars: [bar('bottom', { h: 0, off: 4 })] }), style), { top: 0, bottom: 0 }, 'whatever its offset');
   assert.deepEqual(stuckReach(null, style), { top: 0, bottom: 0 }); assert.deepEqual(stuckReach({}, style), { top: 0, bottom: 0 }); assert.deepEqual(stuckReach(box({ bars: [] }), style), { top: 0, bottom: 0 });
   const odd = { dataset: { stuck: 'sideways' }, offsetHeight: 30, css: { top: 'auto', bottom: 'auto' }, hasAttribute: () => false, toggleAttribute() {} };
   assert.deepEqual(stuckReach(box({ pb: 10, bars: [odd] }), style), { top: 0, bottom: 40 }, 'an edge that is not "top" is the bottom; "auto" is no offset');
@@ -123,7 +127,8 @@ function stickyRules() {
   return out;
 }
 /** Each sticky selector, and who answers for it. `bar`: this file's markup carries data-stuck on it, and fitStuck measures it for its scroller. `deal`: the Deal Room's own fixed
- *  scroll-padding and keepInView (tests/finish-flow.test.mjs). `column`: a column beside its neighbours, not a bar over them: nothing scrolls under it. */
+ *  scroll-padding and keepInView (tests/finish-flow.test.mjs). `column`: a column beside its neighbours, not a bar over them: nothing scrolls under it. `card`: the coach card's own foot of buttons,
+ *  in a box that holds words and nothing else a keyboard stops on (the buttons ARE the bar), pinned so a window shorter than the words does not cut them (tests/repair-card.test.mjs). */
 const STICKY = {
   '.cr-foot': { how: 'bar', file: 'js/ui/drawers/crew.js', edge: 'bottom', tag: 'div class="cr-foot"' },
   '.stk-selbar': { how: 'bar', file: 'js/ui/drawers/stock.js', edge: 'top', tag: 'div class="stk-selbar"' },
@@ -133,6 +138,7 @@ const STICKY = {
   '.wvlist > summary': { how: 'bar', file: 'js/ui/worldview.js', edge: 'top', tag: 'summary' },
   '.deal-dock': { how: 'deal' }, '.deal-foot': { how: 'deal' }, '.deal-result > .row:last-child': { how: 'deal' },
   '.dr-side': { how: 'column' },
+  '.ac-coach:not(.handle) .ac-btns': { how: 'card' },
 };
 
 test('every position: sticky in the sheets is a bar that is measured, the Deal Room\'s own, or a column: a new one fails here until it is one of them', () => {
@@ -284,6 +290,11 @@ test('the real keyboard: every stop of the Background draft, forward and back, i
     const slot = 'rd' + (Date.now() % 1e6), p = await b.open(b.chrome, `${b.base}/?slot=${slot}`, { w: vp.w, h: vp.h, dsf: vp.dsf, mobile: vp.mobile });
     try {
       await until(p, text('/^Play solo/i'), 'the title screen'); await click(p, text('/^Play solo/i')); await until(p, `!!document.querySelector('.dr-actions')`, 'the draft'); await p.sleep(300);
+      // Begin with nothing picked puts a notice in the bar and the bar grows a line: the draft must measure its bar again after that repaint (fit() in paint), or every stop near the foot is left under it
+      const before = await p.eval(`document.querySelector('.dr-actions').offsetHeight`);
+      await click(p, `document.querySelector('#dr-begin')`); await until(p, `!!document.querySelector('.dr-notice')`, 'the notice that makes the bar a line taller'); await p.sleep(200);
+      const grew = await p.eval(`document.querySelector('.dr-actions').offsetHeight`);
+      assert.ok(grew > before, `${vp.name}: the notice made the actions bar taller (${before}px, then ${grew}px): the walk below is a walk under the taller bar`);
       const r = await walk(p, { scope: 'html', start: '.dr-head h1', back: true });
       assert.ok(r.n >= 14, `${vp.name}: the draft walk visited ${r.n} stops`);
       if (!sawABar(r)) faults.push(`${vp.name} draft | the walk met no actions bar (${r.bars} marked, ${r.stuck} stuck, ${r.freed} let go): else it walks nothing`);
@@ -291,6 +302,27 @@ test('the real keyboard: every stop of the Background draft, forward and back, i
     } finally { await p.close(); }
   }
   assert.deepEqual(faults, [], `every stop of the draft is above the actions bar:\n${faults.join('\n')}`);
+});
+
+test('the real keyboard: a drawer is measured again when the window changes size (the shell\'s observer), so a bar that wraps differently is still cleared', { skip: !BROWSER, timeout: 600_000 }, async () => {
+  const b = await browser(), faults = [], seen = [];
+  // the Stock selection bar is a line at 1024x768 and wraps to several at 360x640: a walk at the new size under the padding the old size measured would leave stops under it
+  for (const [from, to] of [[ALL[0], ALL[2]], [ALL[1], ALL[0]]]) {
+    const p = await gamePage(b, from);
+    try {
+      const o = await SURFACES['stock, crates ticked'](p), first = await walk(p, o);
+      assert.ok(first.n >= 3, `${from.name}: the first walk went through ${first.n} stops`);
+      for (const f of first.faults) faults.push(`${from.name} | ${f}`);
+      await p.send('Emulation.setDeviceMetricsOverride', { width: to.w, height: to.h, deviceScaleFactor: to.dsf, mobile: to.mobile }); await p.sleep(900);
+      const reach = await p.eval(`(()=>{ const bar=document.querySelector('#drawer .stk-selbar'), db=document.querySelector('#drawer .db'); return { bar: bar ? bar.offsetHeight : 0, stuckT: parseFloat(db.style.getPropertyValue('--stuck-t')) || 0, free: !!bar && bar.hasAttribute('data-free') } })()`);
+      seen.push(`${from.name} -> ${to.name}: bar ${reach.bar}px, --stuck-t ${reach.stuckT}px${reach.free ? ', let go' : ''}`);
+      assert.ok(reach.free || Math.abs(reach.stuckT - reach.bar) <= 24, `${to.name}: after the window changed the drawer's padding follows the bar (${JSON.stringify(reach)})`);
+      const second = await walk(p, o);
+      assert.ok(second.n >= 3, `${to.name}: the walk after the resize went through ${second.n} stops`);
+      for (const f of second.faults) faults.push(`${from.name} -> ${to.name} | ${f}`);
+    } finally { await p.close(); }
+  }
+  assert.deepEqual(faults, [], `the keyboard clears the bar at the new size too:\n${faults.join('\n')}\n${seen.join('\n')}`);
 });
 
 test('the same walks fail with the mechanism taken out of the page (so the check above can fail): the hire dialog at 844x390, the draft at 844x390, the Stock bar at 360x640, the world list at 844x390', { skip: !BROWSER, timeout: 600_000 }, async () => {

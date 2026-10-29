@@ -22,7 +22,7 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const read = (rel) => readFileSync(join(ROOT, rel), 'utf8');
 
 const { Game } = await import('../js/engine.js');
-const { SKILLS, ECON, FRESH, BROKEN_FACTOR, PERKS, PERK_IDS, ASSETS } = await import('../js/config.js');
+const { SKILLS, SKILL_MAX, ECON, FRESH, BROKEN_FACTOR, PERKS, PERK_IDS, ASSETS } = await import('../js/config.js');
 const { lotShare, LOT_STEP, repairCostFor } = await import('../js/market.js');
 const { Session, describeSave } = await import('../js/session.js');
 const D = await import('../js/ui/draft.js');
@@ -107,6 +107,9 @@ test('L6: a free level of Ops is no longer 0.12 of cheaper stock: the trait adds
   for (const bonus of [-1, 1, 2]) assert.ok(Math.abs(opsStockEffect(bonus)) < 0.06, `${bonus}: ${opsStockEffect(bonus)}`);
   assert.ok(opsStockEffect(2) < 0 && opsStockEffect(-1) < 0, 'two free levels make the stock a little dearer in all (wrecks), and so does losing one (repairs)');
   assert.ok(Math.abs(REPAIR_SHARE - 0.2489) < 0.001, 'a typical repair bill is a quarter of a crate\'s worth: the median of the classes that can be repaired');
+  // the engine's own limits on a skill (Game.lvl): a level cannot go below 0 or above SKILL_MAX + 2 (the two a Background may add), however many free levels are asked about
+  near(opsStockEffect(100), opsStockEffect(SKILL_MAX + 2 - OPS_REF), 1e-12); near(opsStockEffect(-100), opsStockEffect(-OPS_REF), 1e-12);
+  near(opsStockEffect(100), -0.3172, 0.0005); near(opsStockEffect(-100), -0.154, 0.0005); // a clamp widened to +20 and -9 would read -1.45 and -0.38
   // the trait: the Backgrounds' own repair and wreck discounts, plus that
   near(sourcing(['trades']), opsStockEffect(2) + 0.5 + 0.2, 1e-9);
   near(sourcing(['grad']), opsStockEffect(-1), 1e-9);

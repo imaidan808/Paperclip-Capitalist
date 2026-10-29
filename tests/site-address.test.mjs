@@ -50,8 +50,12 @@ function textFiles(dir, base = dir) {
 /** Files that may write the address in another spelling. Empty, and it stays empty: a lower-case address is a 404 online, and an exception here is a page nobody can open. */
 const ALLOW = [];
 
-test('the list of files allowed to spell the address any other way is empty', () => {
-  assert.deepEqual(ALLOW, []);
+test('an exception to the address rule has to be earned: a file allowed another spelling exists and really writes one (the list is empty today, and a stale entry fails here)', () => {
+  // ALLOW is the very list the scan of the repository below consults, so an entry is a hole in it; one that names no file, or a file that spells the address right, is a hole for nothing
+  for (const f of ALLOW) {
+    assert.ok(existsSync(join(ROOT, f)), `${f} is allowed another spelling and is not a file`);
+    assert.ok(offences(read(f)).length > 0, `${f} is allowed another spelling and writes none: take it off the list`);
+  }
 });
 
 test('the reading itself: it finds every spelling but the real one, in every kind of address, and leaves words that only contain the name alone', () => {

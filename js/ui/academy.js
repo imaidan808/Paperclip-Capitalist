@@ -28,10 +28,10 @@ import { ZONES } from '../config.js';
 import { Progress, CODEX_BY_ID } from '../meta/progress.js';
 import { ACADEMY as MISSIONS } from '../meta/academy.js';
 import {
-  parseAnchor, resolveAnchor, hitMatches, keepClear, fitCard, chooseSize, coverScore, rectsOverlap, coverOf, pointInRect, startRun, feedRun, coachFor, satisfiedNow, shortSay, hintDue,
+  parseAnchor, resolveAnchor, hitMatches, keepClear, fitCard, chooseSize, rectsOverlap, coverOf, pointInRect, startRun, feedRun, coachFor, satisfiedNow, shortSay, hintDue,
   newTeach, pickTeach, revealTeach, teachDone, teachFirstTry, readAcademy, markMission, nextIndex, rewardPlan, applyRewards,
   readPending, addPending, claimPending, codexSeed, emptyMeta, makeSandboxSession, featuresFor, KEYS,
-  newLookout, hireSnapshot, hireCoach, unseenNote,
+  newLookout, hireSnapshot, hireCoach, unseenNote, keepsPlace, rescueButton,
 } from './academy-sandbox.js';
 
 export const missionList = () => MISSIONS;
@@ -59,7 +59,7 @@ export function introHTML(m, { index, total, st, concept, replay, missions = [] 
     <p class="ac-scene">${esc(m.intro || '')}</p>
     <ul class="ac-facts">${facts.map((f) => `<li class="chip info">${esc(f)}</li>`).join('')}</ul>
     <ol class="ac-pips" aria-label="Your lessons">${pips}</ol>
-    <div class="row gap"><button class="btn big" data-act="ac-start" autofocus>${replay ? 'Replay the lesson' : 'Start the lesson'}</button><button class="btn ghost" data-act="ac-leave">Leave the Academy</button></div>
+    <div class="row gap"><button class="btn big" data-act="ac-start">${replay ? 'Replay the lesson' : 'Start the lesson'}</button><button class="btn ghost" data-act="ac-leave">Leave the Academy</button></div>
     <p class="small mute">${replay ? 'A replay is for learning: it pays no new XP.' : 'Nothing you do in a lesson touches your real run.'}</p>
   </section>`;
 }
@@ -174,7 +174,7 @@ export function mountAcademy(root, S, { onDone, onSkip, only, missions, store = 
     const m = list[idx], st = readAcademy(store), replay = st.done.includes(m.id);
     root.innerHTML = introHTML(m, { index: idx, total: list.length, st, concept: lookup(m.concept) || null, replay, missions: list });
     delegate(root, { 'ac-start': () => play(idx), 'ac-leave': leave });
-    $('#ac-h', root)?.focus({ preventScroll: true });
+    $('#ac-h', root)?.focus({ preventScroll: true }); // the heading is where the cursor goes (it is read out); go() has already focused the page, so an `autofocus` on the button was ignored and logged "Autofocus processing was blocked"
     announce(`Lesson ${idx + 1} of ${list.length}: ${m.title}. ${m.intro || ''}`);
   }
   const advance = (idx) => { if (only || idx + 1 >= list.length) finish('done', { completed: readAcademy(store).done.length, finished: readAcademy(store).finished }); else intro(idx + 1); };
@@ -284,9 +284,12 @@ export function mountAcademy(root, S, { onDone, onSkip, only, missions, store = 
         }
         add(ctx.el.dock, 3);
         if (ctx.el.dock) for (const e of ctx.el.dock.querySelectorAll(CONTROLS)) add(e, 2, 0, false, null, true); // the dock's buttons are how the player moves between panels: a card over one is a tap lost, so a smaller card is tried before one stands over them
-        for (const part of [ctx.el.tracker, ctx.el.ticker, ctx.el.hud, ctx.el.world.querySelector('.wvctl'), ctx.el.world.querySelector('.wvlist')]) {
+        for (const part of [ctx.el.tracker, ctx.el.ticker, ctx.el.world.querySelector('.wvctl'), ctx.el.world.querySelector('.wvlist')]) {
           if (part) for (const e of part.querySelectorAll(CONTROLS)) add(e, 2);
         }
+        // The HUD's buttons are controls a tap is aimed at, as the dock's are: the clock above all (lessons 6, 7 and 9 ask for it, and lesson 9's step 4 says "pause the clock" while it names the ticker). Only a button
+        // counts (`ctl`), so a card that would stand over the clock is made smaller or stands elsewhere before it hides it: at 360x640 the whole card, in the HUD's place, covered the clock and every tap landed on the card.
+        if (ctx.el.hud) for (const e of ctx.el.hud.querySelectorAll(CONTROLS)) add(e, 2, 0, false, null, true);
       }
       const f = document.activeElement;
       if (f && f !== document.body && f !== document.documentElement && f.tagName !== 'CANVAS' && !cardEl?.contains(f)) { // the world's canvas is the whole window: it is never "covered"
@@ -309,11 +312,30 @@ export function mountAcademy(root, S, { onDone, onSkip, only, missions, store = 
       if (el && body && body.contains(el)) { try { el.scrollIntoView({ block: 'nearest', inline: 'nearest' }); } catch { /* an old engine: the frame waits */ } }
     }
 
+    // A press in flight. The card does not move, change shape or change its words while a finger or a mouse button is down: pressing a control moves the cursor to it (focusin), the cursor is the first
+    // thing the card keeps off, and a card that hops over the control being pressed takes the release (the hire dialog's Student card: the one-line bar at the foot grew to the full card over it, the
+    // release landed on the card, and the dialog closed on a click whose target was itself). A touch's click is made a moment AFTER the finger is up (touchend, then the mouse events of the tap), so the
+    // card also holds for `CLICK_GRACE` after a release, or until the click itself comes: the capture listener of `click` lifts the hold before the handlers that follow, which paint as they always did. What was
+    // owed is painted then. A press that never ends (a button let go outside the window) is forgotten after `PRESS_MAX`.
+    const PRESS_MAX = 4000, CLICK_GRACE = 350;
+    let pressing = false, owed = false, pressAt = 0, graceTo = 0, graceT = 0;
+    const holding = () => pressing || Date.now() < graceTo;
+    const thaw = () => { graceTo = 0; clearTimeout(graceT); if (owed && !pressing) { owed = false; if (!dead && !gone && !sheet) paintCoach(); } };
+    const pressDown = () => { pressing = true; pressAt = Date.now(); graceTo = 0; clearTimeout(graceT); };
+    const pressUp = () => { if (!pressing) return; pressing = false; graceTo = Date.now() + CLICK_GRACE; clearTimeout(graceT); graceT = setTimeout(thaw, CLICK_GRACE + 20); };
+    const pressClick = () => { pressing = false; thaw(); };
+    const PRESS_ON = ['pointerdown', 'mousedown', 'touchstart'], PRESS_OFF = ['pointerup', 'pointercancel', 'mouseup', 'touchend', 'touchcancel', 'dragend', 'contextmenu'];
+    for (const t of PRESS_ON) document.addEventListener(t, pressDown, { capture: true, passive: true });
+    for (const t of PRESS_OFF) document.addEventListener(t, pressUp, { capture: true, passive: true });
+    document.addEventListener('click', pressClick, true);
+    window.addEventListener('blur', pressUp);
     let placed = null; // where the card stands: { x, y, key } (a crowded dialog keeps a place that is still about as good, see the end of paintCoach)
     let said = ''; // what the card says about a thing it cannot frame (unseenNote), kept for the announcement a new step makes
     let open = false, openFor = '', foldedSaid = ''; // a Deal Room's card folded to its tab and opened by the player: it stays open until Fold away, a press elsewhere or the next step (openFor); foldedSaid: the step the fold was last announced for
     function paintCoach(force, snap) {
       if (dead || gone || sheet || winPending || run.won) return;
+      if (pressing && Date.now() - pressAt > PRESS_MAX) pressing = false;
+      if (holding() && layer?.isConnected) { owed = true; return; } // a press is in flight: see above
       ensureLayer();
       const c = coachNow(), found = c.stranded ? null : resolve(c.anchor), host = hostFor();
       const res = host === dlg.el && !inDialog(found) ? null : found; // the step's own thing is not in the sheet that has the card: nothing to ring
@@ -322,10 +344,12 @@ export function mountAcademy(root, S, { onDone, onSkip, only, missions, store = 
       const clipped = res?.via === 'dom' && !fullyShown(res); // a control of the drawer's body that has scrolled out of it: a frame would stand on the dock or off the window, and dim all of it
       const spot = res && res.via !== 'fallback' && !clipped && coverOf(res.rect, view) < 0.6 ? res.rect : null, pad = 6;
       const exists = !!res && res.via !== 'fallback'; // on screen and reachable, framed or (a whole panel) too big to frame
-      const modal = modalKind(), where = c.stranded ? '' : unseenNote(c.anchor, c.wait, { exists, clipped, modal, deal: modal === 'deal' ? dealOf?.() : null });
+      const modal = modalKind(), where = c.stranded ? '' : unseenNote(c.anchor, c.wait, { exists, clipped, modal, drawer: !ctx.el.drawer.hidden, deal: modal === 'deal' ? dealOf?.() : null });
       said = where;
-      const dealRoom = host === dlg.el && modal === 'deal', foldable = dealRoom && !confirm && !c.stranded; // only a Deal Room's card may fold to a tab, and not the one that asks "Skip this lesson?" or says the lesson is closed
-      if (openFor !== c.id || !dealRoom) { open = false; openFor = c.id; }
+      // Only a Deal Room's card and the hire dialog's may fold to a tab (a room that is buttons from edge to edge, where no card stands clear: the hire dialog's manager cards are 252px tall in a 360px window), and
+      // not the one that asks "Skip this lesson?" or says the lesson is closed. A drawer's card is as it was.
+      const foldRoom = host === dlg.el && (modal === 'deal' || modal === 'hire'), foldable = foldRoom && !confirm && !c.stranded;
+      if (openFor !== c.id || !foldRoom) { open = false; openFor = c.id; }
       const key = [c.id, c.stranded || c.inDialog ? c.say : '', hintOn, showMe, confirm, !!manual, where, spot ? 1 : 0, exists ? 1 : 0, clipped ? 1 : 0].join('|') + (foldable ? (open ? '|open' : '|fold') : '');
       if (force || key !== lastKey) {
         const news = key !== lastKey && c.inDialog; // the dialog's words are spoken once, when they change
@@ -357,23 +381,29 @@ export function mountAcademy(root, S, { onDone, onSkip, only, missions, store = 
       let size = pick.s, at = pick.p;
       if (tier() !== was) snap = true;
       { // the key that was under the player's finger may be hidden by the smaller card now (display: none drops the cursor): it goes to the first button the card still shows, and a fold is said once a step
-        const f = document.activeElement;
-        if (f && f !== cardEl && cardEl.contains(f) && !f.getClientRects().length) [...cardEl.querySelectorAll('button')].find((b) => b.getClientRects().length)?.focus({ preventScroll: true });
+        rescueButton(cardEl, document.activeElement)?.focus({ preventScroll: true });
         if (tier() === 'handle' && was !== 'handle' && foldedSaid !== c.id) { foldedSaid = c.id; announce('The lesson card is folded to a tab so it does not cover the buttons. Press C, then Enter, to open it.'); }
       }
       const here = `${c.id}|${host === dlg.el ? 'dlg' : 'page'}|${Math.round(size.w)}x${Math.round(size.h)}`;
-      if (placed && placed.key === here && !snap) { // a crowded place (nothing is clear) does not follow every scroll of the sheet: the old place stays while it covers about what a new one would
-        const mine = { x: placed.x, y: placed.y, w: size.w, h: size.h }, now = coverScore({ x: at.x, y: at.y, w: size.w, h: size.h }, spot, keep), was = coverScore(mine, spot, keep);
-        const staysOff = !spot || !rectsOverlap(mine, spot) || rectsOverlap({ x: at.x, y: at.y, w: size.w, h: size.h }, spot); // the old place is not kept when it is over the target and the new one is not
-        const buttons = (b) => keep.filter((r) => r.ctl && rectsOverlap(b, r)).length; // nor when it is over more buttons than the new one
-        if (now > 0 && was <= now * 1.25 + 400 && staysOff && buttons(mine) <= buttons({ x: at.x, y: at.y, w: size.w, h: size.h })) at = { ...at, x: placed.x, y: placed.y };
-      }
+      if (placed && placed.key === here && !snap && keepsPlace(placed, at, size, spot, keep)) at = { ...at, x: placed.x, y: placed.y }; // a crowded place (nothing is clear) does not follow every scroll of the sheet: the old place stays while it covers about what a new one would
       placed = { x: at.x, y: at.y, key: here };
       cardEl.dataset.side = at.side;
       if (spot && cardEl.style.setProperty) { cardEl.style.setProperty('--ac-ax', `${Math.round(spot.x + spot.w / 2 - at.x)}px`); cardEl.style.setProperty('--ac-ay', `${Math.round(spot.y + spot.h / 2 - at.y)}px`); } // where the caret on the card's edge points
       if (snap) { cardEl.style.transition = 'none'; requestAnimationFrame(() => requestAnimationFrame(() => { if (cardEl) cardEl.style.transition = ''; })); } // out of the cursor's way at once, not in .25s
       cardEl.style.transform = `translate(${Math.round(at.x)}px, ${Math.round(at.y)}px)`;
       cardEl.classList.toggle('lift', true);
+      toastsYield(host === dlg.el ? null : { x: at.x, y: at.y, w: size.w, h: size.h });
+    }
+    // A toast gives way to the card. Toasts are over the game for four seconds ("Liability added", "Drew $600") and stand above the card, which is in the stage: at the start of a step, which is when they
+    // come, they covered its words and its buttons (844x390: three quarters of the words; 360x640: most of the buttons), in a band the HUD, the drawer and the dock leave nowhere else for either to stand.
+    // The lesson's words outrank a passing line, which is read out in the live region and kept in the ledger whatever happens to it, so a toast under the card is let go dim (`ac-under`, css/ui-academy.css)
+    // and is seen again if the card moves off it. A toast that says an action failed (`bad`) is never dimmed: that is the one the player needs. A card in a window is over no toast.
+    function toastsYield(box) {
+      const list = document.querySelectorAll('#toasts .toast');
+      for (const t of list) {
+        const r = box && !t.classList.contains('bad') ? t.getBoundingClientRect() : null, under = !!r && rectsOverlap(box, { x: r.x, y: r.y, w: r.width, h: r.height });
+        if (t.classList.contains('ac-under') !== under) t.classList.toggle('ac-under', under);
+      }
     }
     function stepChanged() {
       stepAt = performance.now(); hintOn = false; showMe = false; confirm = false;
@@ -453,6 +483,8 @@ export function mountAcademy(root, S, { onDone, onSkip, only, missions, store = 
     const mo = new MutationObserver(later);
     for (const e of [ctx.el.hud, ctx.el.tracker, ctx.el.ticker, ctx.el.dock, ctx.el.drawer, ctx.el.world]) mo.observe(e, { childList: true, subtree: true, attributes: true, attributeFilter: ['hidden', 'class'] });
     mo.observe(dlg.el, { childList: true, subtree: true, attributes: true, attributeFilter: ['open', 'aria-pressed'] }); // the hire dialog: a manager picked, the dialog opened or shut
+    const toastBox = document.getElementById('toasts'); // a toast comes and goes: the card looks again (the box is not part of the stage)
+    if (toastBox) mo.observe(toastBox, { childList: true, subtree: true, attributes: true, attributeFilter: ['class'] });
 
     // ---- the sheets that follow the win
     const stageKids = () => [...ctx.el.stage.children].filter((c) => c !== ctx.el.overlay);
@@ -567,6 +599,10 @@ export function mountAcademy(root, S, { onDone, onSkip, only, missions, store = 
         document.removeEventListener('click', onClick, true); document.removeEventListener('keydown', onKey); window.removeEventListener('resize', onResize); document.removeEventListener('focusin', onFocus);
         mo.disconnect(); if (raf) cancelAnimationFrame(raf); ctx.el.drawer.removeEventListener('scroll', later, true);
         document.removeEventListener('click', onAway, true); dlg.el.removeEventListener('scroll', later, true);
+        toastsYield(null);
+        for (const t of PRESS_ON) document.removeEventListener(t, pressDown, true);
+        for (const t of PRESS_OFF) document.removeEventListener(t, pressUp, true);
+        document.removeEventListener('click', pressClick, true); window.removeEventListener('blur', pressUp); clearTimeout(graceT);
         for (const k of inerted) k.inert = false;
         layer?.remove(); sheet?.remove();
         try { mounted.destroy(); } catch (e) { console.error(e); }

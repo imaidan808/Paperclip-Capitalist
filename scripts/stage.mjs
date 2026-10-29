@@ -17,7 +17,7 @@ import { tmpdir } from 'node:os';
 import { dirname, extname, join, relative, resolve, sep, posix } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { gzipSync } from 'node:zlib';
-import { ENTRY, ROOT, preloadLines, walk } from './preload.mjs';
+import { ENTRY, ROOT, existsExactly, preloadLines, walk } from './preload.mjs';
 
 // The address of the published site, spelled exactly as GitHub spells the repository. A Pages address is case-sensitive: https://imaidan808.github.io/Paperclip-Capitalist/ is the site
 // and the same address in lower case is a 404 on the real host. This line is the one source of the spelling: BASE_PATH (where the stand-in below mounts the site), REPO_NAME and
@@ -257,12 +257,13 @@ export function servePages(dir, { base = BASE_PATH, latency = 0, gzip = true } =
         if (parts.some((p) => p === '..' || p === '.')) { notFound(); return; }
         let file = join(dir, ...parts);
         if (file !== dir && !file.startsWith(dir + sep)) { notFound(); return; }
+        if (!existsExactly(dir, parts)) { notFound(); return; } // the host's disk tells JS/ from js/; this one may not (macOS), and a path that only works there must fail here
         let st = null;
         try { st = statSync(file); } catch { /* not there */ }
         if (st?.isDirectory()) {
           if (!path.endsWith('/')) { send(req, res, 301, TYPES['.html'], Buffer.alloc(0), { location: path + '/', name: 'redirect' }); return; }
           file = join(file, 'index.html');
-          try { st = statSync(file); } catch { st = null; }
+          try { st = existsExactly(dir, [...parts, 'index.html']) ? statSync(file) : null; } catch { st = null; }
         } else if (st?.isFile() && path.endsWith('/')) st = null;
         if (!st?.isFile()) { notFound(); return; }
         const ext = extname(file);

@@ -224,6 +224,12 @@ body:has(.stage[data-toasts="tight"]) #toasts .toast:nth-last-child(n+2) { displ
   .wvctl { grid-template-columns: repeat(2, auto); gap: var(--sp-1); }
   .tickerhost { bottom: calc(var(--dock-h) + var(--sp-1)); left: calc(var(--edge-l) + var(--cam-w) + var(--sp-2)); right: calc(var(--edge-r) + var(--cam-w) + var(--sp-2)); } .tick .tk-t { -webkit-line-clamp: 1; line-clamp: 1; } /* the camera and list buttons are 3 rows tall here and reach the ticker's row: it stops short of them, still centred */
 }
+/* A phone on its side that is also narrow (a 640x360 window, which is a desktop at 200% zoom) leaves the news line, with a side drawer open, the strip between the camera column and the drawer: 103px, where the
+   headline had 37px and read "Li..." or "Day 2 T...". As in the bottom sheet (above) the line steps aside while the drawer is open; it is back the moment the drawer shuts, an alert still opens over everything, and the
+   same words are read out. Gone (display: none, not hidden) so the toasts, which stand above it, come down by its height and nothing frames a line that cannot be seen. At 844x390 the strip is 259px and stays. */
+@media (max-height: 520px) and (max-width: 720px) {
+  .stage[data-drawer]:not([data-drawer=""]) .tickerhost { display: none; }
+}
 
 @media (prefers-reduced-motion: reduce) { .drawer, .drawer.dragging { animation: none; transition: none; } }
 :root[data-motion="reduce"] .drawer { animation: none; transition: none; }

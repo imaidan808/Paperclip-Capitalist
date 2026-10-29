@@ -6,6 +6,9 @@
 //   the same order of harm (the keyboard's cursor, the control the step names, the buttons covered, then the area); a Deal Room's card may also be the narrow card (the words in a 15rem column, for the empty
 //   column beside the room's buttons on a phone on its side) and, where even the head-and-two-buttons card covers a button, a one-line tab (`handle`) that opens the card on a tap and folds away again.
 // Pure half: the rule (chooseSize, fitCard, keepClear) and the measured rooms, swept over every position of the sheet. Browser half (skipped without Chrome or with PC_NO_BROWSER=1): real taps in headless Chrome.
+//   Not every test here fails on the fault. Four are GUARDS for what the fix left as it was, and pass on the code before it: 'chooseSize: the old four sizes are what it asks for unless the Deal Room asks
+//   for more' and the browser tests for lessons 6, 8 and 9 (the lessons whose card was not over a Deal Room's button). A green result on those holds that nothing moved; it is not proof of the fix. The other
+//   eighteen fail on the pre-fix code. The repair round after the browser audit (hire dialog, HUD, toasts, ticker) is tests/repair-card.test.mjs.
 // Run: node --test tests/rep-card.test.mjs
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -60,6 +63,15 @@ test('chooseSize (handle): the last resort, taken only when it hides less than t
   assert.equal(A.chooseSize(table({ full: { cursor: true }, slim: { cursor: true }, compact: { cursor: true }, min: { cursor: true }, handle: { cursor: true } }), { handle: true }).t, 'full', 'all of them hide it: the full card, as it always was');
   assert.equal(A.chooseSize(table({ full: { target: true }, slim: { target: true }, compact: { target: true }, min: { target: true }, handle: { n: 0 } }), { handle: true }).t, 'handle', 'every card is over the control the step names: the tab, which is not');
   assert.equal(A.chooseSize(table({ ...crowded, compact: { n: 0 } }), { handle: true }).t, 'compact', 'a card that is clear is taken before the tab is looked at');
+});
+
+test('chooseSize (handle): the tab is never taken over the cursor, whatever the cards cost, and the cursor outranks the control the step names', () => {
+  const hides = { cursor: true, n: 2 };
+  assert.equal(A.chooseSize(table({ full: hides, slim: hides, compact: hides, min: hides, handle: { cursor: true, n: 0 } }), { handle: true }).t, 'full', 'every card hides the cursor and the tab hides it too, though it covers fewer buttons: the tab is not taken (the full card, as it always was)');
+  // the cursor comes before the control the step names in the order of harm: every card hides the cursor (and not the control), the tab hides the control (and not the cursor): the tab
+  const card = { cursor: true }, tab = { target: true };
+  assert.equal(A.chooseSize(table({ full: card, slim: card, compact: card, min: card, handle: tab }), { handle: true }).t, 'handle', 'a card over the cursor is wrong wherever else it lands: the tab, even over the control the step names');
+  assert.equal(A.chooseSize(table({ full: { target: true }, slim: { target: true }, compact: { target: true }, min: { target: true }, handle: { cursor: true } }), { handle: true }).t, 'full', 'and the tab over the cursor is never taken for it');
 });
 
 test('chooseSize (words): a player who opened the card is shown the full card, wherever it covers least, and never the tab', () => {
@@ -205,11 +217,11 @@ test('the Deal Room, the lessons\' own words: where the reported controls are, t
 // the runner, the markup and the sheet
 // ====================================================================================================================================
 
-test('the runner counts every button of the room, folds to the tab only in a Deal Room, and takes nothing from a screen reader', () => {
+test('the runner counts every button of the room, folds to the tab only in a Deal Room or the hire dialog, and takes nothing from a screen reader', () => {
   const src = read('js/ui/academy.js'), css = read('css/ui-academy.css');
   assert.match(src, /for \(const r of keepClear\(\{ controls: mine\.map\(\(e\) => e\.getBoundingClientRect\(\)\), clip: host\.getBoundingClientRect\(\) \}\)\) out\.push\(\{ \.\.\.r, focus: false \}\);/, 'the room\'s buttons are controls, cut to the sheet they scroll in');
   assert.match(src, /const mine = \[\.\.\.host\.querySelectorAll\(CONTROLS\)\]\.filter\(\(e\) => e !== cardEl && !cardEl\?\.contains\(e\)\)/, 'every button, link, field and summary of the room, never the card\'s own');
-  assert.match(src, /const dealRoom = host === dlg\.el && modal === 'deal', foldable = dealRoom && !confirm && !c\.stranded;/, 'the tab is the Deal Room\'s, and not for the question "Skip this lesson?" or a lesson that is closed');
+  assert.match(src, /const foldRoom = host === dlg\.el && \(modal === 'deal' \|\| modal === 'hire'\), foldable = foldRoom && !confirm && !c\.stranded;/, 'the tab is the Deal Room\'s and the hire dialog\'s (a room of buttons from edge to edge), and not for the question "Skip this lesson?" or a lesson that is closed');
   assert.match(src, /chooseSize\(fit, \{ handle: foldable && !open, narrow: foldable, words: foldable && open \}\)/);
   assert.match(src, /dlg\.el\.addEventListener\('scroll', later, true\)/, 'the card looks again when the room\'s sheet scrolls'); assert.match(src, /dlg\.el\.removeEventListener\('scroll', later, true\)/, 'and lets go of it');
   assert.match(src, /\[\.\.\.\(cardEl\?\.querySelectorAll\('button'\) \|\| \[\]\)\]\.find\(\(b\) => b\.getClientRects\(\)\.length\)\?\.focus\(\)/, 'C reaches the first button the card shows: the tab, when it is folded');
@@ -482,7 +494,7 @@ test('browser, lesson 6 (Cash Is Not Sleeping): the HUD, the dock and the Crew d
       await t.tap('[data-anchor="hud-cash"]', '.'); await closeCash(p); await atStep(p, 2);
       await t.tap('[data-anchor="dock-crew"]', '.', { then: stepIs(3) }); await atStep(p, 3);
       await t.tap('[data-act="crew-hire"]', '.'); await until(p, `document.querySelector('dialog#dlg').open && !!document.querySelector('dialog#dlg [data-anchor="hire-go"]')`, 'the hire dialog');
-      // the hire dialog is not a Deal Room: it is as it was (the card hops into it and says what to press); what it covers there is another track's
+      // the card hops into the hire dialog and says what to press (what it covers there, and the tab it folds to, are held by tests/repair-card.test.mjs)
       assert.ok(await p.eval(`document.querySelector('dialog#dlg').contains(document.querySelector('.ac-coach'))`), `${sz.w}x${sz.h}: the card is in the hire dialog, where it can be read`);
       assert.ok(await p.eval(`!!document.querySelector('.ac-coach .ac-say').textContent.trim()`), 'with its words');
       await p.key('Escape', { wait: 500 });

@@ -189,6 +189,29 @@ export function chooseSize(fit, { handle = false, narrow = false, words = false 
 }
 
 /**
+ * Does the card stay where it is when the sheet under it has moved on? A crowded place (nothing is clear) does not follow every scroll of the sheet: the old place stays while it is about as good as
+ * the new one, `old` ({ x, y }) against `at` ({ x, y }) for a card of `size` ({ w, h }). It is kept only when the new place covers something (when it covers nothing it is simply better), when the old
+ * one scores no worse than a quarter above the new (and 400 square pixels), when it is not over the control the step names while the new one is not, and when it is not over more buttons than
+ * the new one: a card that stays put over three buttons while a place over one is a scroll away loses a tap that need not be lost. `spot` is the control the step names, `keep` the rects to stay off.
+ */
+export function keepsPlace(old, at, size, spot, keep) {
+  const mine = { x: old.x, y: old.y, w: size.w, h: size.h }, fresh = { x: at.x, y: at.y, w: size.w, h: size.h };
+  const now = coverScore(fresh, spot, keep), was = coverScore(mine, spot, keep);
+  const staysOff = !spot || !rectsOverlap(mine, spot) || rectsOverlap(fresh, spot); // the old place is not kept when it is over the target and the new one is not
+  const buttons = (b) => keep.filter((r) => r.ctl && rectsOverlap(b, r)).length;
+  return now > 0 && was <= now * 1.25 + 400 && staysOff && buttons(mine) <= buttons(fresh);
+}
+
+/**
+ * Where the cursor goes when the card's shape hides the button it was on (a smaller shape drops Restart, the tab drops every button but itself, and an element with no box loses the focus): the first
+ * button of the card that is still shown, or null when the cursor is not on the card or is still on something that is shown. `card` and `f` (the element with the focus) are DOM nodes or stand-ins.
+ */
+export function rescueButton(card, f) {
+  if (!card || !f || f === card || !card.contains(f) || f.getClientRects().length) return null;
+  return [...card.querySelectorAll('button')].find((b) => b.getClientRects().length) || null;
+}
+
+/**
  * One card shape placed and weighed: where placeCard puts a card of shape `t` and size `s` ({ w, h }, measured by the caller with that shape's classes on), and what it would hide of `keep` (the
  * rects to stay off, see keepRects in ./academy.js: `focus` marks the control the keyboard is on, `ctl` a button the player may have to press) and of the control the step names (`spot`).
  * Returns { t, s, p, cursor, target, n } for chooseSize.
@@ -261,6 +284,7 @@ const DEAL_FROM = { inspect: ['buy'], buy: ['buy'], auction: ['buy'], haggle: ['
  *   exists  the anchor resolved to something on screen the player can reach
  *   clipped it exists, but a control of the drawer's body that has scrolled out of the body's view (the note says where it is and that Show me scrolls to it)
  *   modal   'deal' (the Deal Room is open), 'hire' (the hire dialog), 'dialog' (any other window over the game) or null
+ *   drawer  a panel is open (the news line steps aside for it in a narrow window, and in the bottom sheet), so the ticker's note says to close it
  *   deal    what the open Deal Room is about, { kind, lot, lead, asset, assetCls, done, stageDone, last } (ids; any may be missing; done: its result is showing; stageDone: the stage in play is finished and the room offers
  *           Continue, or See the result when `last`), when modal is 'deal'
  */
@@ -287,7 +311,7 @@ export function unseenNote(anchor, wait, s = {}) {
   if (a.kind === 'world') return 'I cannot put a frame on it from here. It may be off the screen: move the view, or pick it from the list under the world.';
   if (a.name.startsWith('deal-')) return "The Deal Room is not open yet. Open a deal first, from a buyer's card in Market or a lot in the world, and this control is inside it.";
   if (a.name.startsWith('hire-')) return 'That is in the hire window. Open Crew and press Hire a manager to open it.';
-  if (a.name === 'ticker') return 'The news line shows up when there is news. Keep the clock running and it will appear.';
+  if (a.name === 'ticker') return `The news line shows up when there is news. Keep the clock running and it will appear.${s.drawer ? ' A panel that is open can cover it on a small screen: close the panel to read it.' : ''}`; // the line steps aside while a panel is open in a narrow window (css/shell.css)
   if (a.name === 'drawer') return 'Open a panel from the dock below, and the card will point into it.';
   if (a.name === 'bank-repay') return 'Open the Bank from the dock below. Each loan you owe has its Repay buttons.';
   if (a.name === 'stock-sell-pool') return 'Open Stock and tick the crates to sell. Sell to the pool appears under the list.';
