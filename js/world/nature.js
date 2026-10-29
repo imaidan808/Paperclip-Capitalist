@@ -87,19 +87,27 @@ function crown(g, sp, s, env, base) {
     ball(g, cx - 2.4 * s, cyp + 3 * s, 2.4 * s, '#9c6238'); ball(g, cx + 2.6 * s, cyp + 3.4 * s, 2.4 * s, '#9c6238');
   } else puffs(g, ROUND, U, cy, sp === 'blossom' ? col(BLOOM.pink, env) : base, sp === 'blossom' ? col(BLOOM.lilac, env) : null, sp === 'apple' ? appleDots : sp === 'blossom' ? blossomDots : leafDots);
 }
+registerProp('tree', drawTree);
 const rectOf = (sp, s, part) => { const U = 34 * s, w = (sp === 'pine' ? 0.62 * 1.5 : sp === 'palm' ? 0.95 : 0.66) * U + 6, top = (sp === 'pine' ? 66 : sp === 'palm' ? 62 : 52) * s; return part === 'foot' ? [-w - 0.3 * U, -(sp === 'palm' ? 46 : 26) * s, w + 1.6 * U, 0.62 * U] : [-w - 6, -top - 8, w + 6 + (sp === 'palm' ? 14 * s : 0), 8]; };
 
 /** The sway of a crown in world pixels: 4.2 s, 1.2 px at the crown, a slow gust over it (docs/ART_DIRECTION.md 8.1); zero when time stands still. */
 export const swayOf = (t, ph, wind = 1) => (t ? Math.sin((t / 4200) * Math.PI * 2 + ph) * 1.2 * (0.72 + 0.28 * Math.sin((t / 18000) * Math.PI * 2 + ph * 0.5)) * wind : 0);
 
+const TREE_MEMO = new WeakMap(); // prop -> { sig, spec, kf, kc, rf, rc, df, dc }: a tree's look changes only with the veil, so its names, boxes and drawing closures are made once
 function drawTree(ctx, p, env) {
-  const sp = specOf(p, env), [x, y] = P(p.gx, p.gy), k = sp.key;
-  blit(ctx, 'tf|' + k, rectOf(sp.sp, sp.s, 'foot'), (g) => foot(g, sp.sp, sp.s, env, sp.base), x, y);
-  blit(ctx, 'tc|' + k, rectOf(sp.sp, sp.s, 'crown'), (g) => crown(g, sp.sp, sp.s, env, sp.base), x, y, swayOf(env.t, sp.ph, env.wind), 0);
+  const sig = Math.round((env.dim || 0) * 16) * 1000 + Math.round((env.hz || 0) * 50);
+  let m = TREE_MEMO.get(p);
+  if (!m || m.sig !== sig) {
+    const sp = specOf(p, env), [x, y] = P(p.gx, p.gy), e = { dim: env.dim, hz: env.hz };
+    m = { sig, spec: sp, x, y, kf: 'tf|' + sp.key, kc: 'tc|' + sp.key, rf: rectOf(sp.sp, sp.s, 'foot'), rc: rectOf(sp.sp, sp.s, 'crown'), df: (g) => foot(g, sp.sp, sp.s, e, sp.base), dc: (g) => crown(g, sp.sp, sp.s, e, sp.base) };
+    TREE_MEMO.set(p, m);
+  }
+  blit(ctx, m.kf, m.rf, m.df, m.x, m.y);
+  blit(ctx, m.kc, m.rc, m.dc, m.x, m.y, swayOf(env.t, m.spec.ph, env.wind), 0);
   attendOf(ctx, p, env, 'tree');
   return null;
 }
-registerProp('tree', drawTree);
+
 
 // ---------------------------------------------------------------- the dead tree, bush and small growing things
 function deadTree(g, env, seed) {

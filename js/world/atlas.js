@@ -9,8 +9,8 @@ import { registerProp } from './stack.js';
 import { P } from './iso.js';
 import { vseed } from './toys.js';
 
-const ZOOM_STEPS = 1024, REUSE_MIN = 0.78, REUSE_MAX = 1.28, MOVING_MS = 90, BUILD_MS = 3, GAP_MS = 6, MAX_PX = 1.6e6, KEEP_MS = 400;
-export const ATLAS_BUDGET = 8e6;                // pixels the atlas may hold at any density (28 MB of 4-byte pixels); the least recently used go first
+const ZOOM_STEPS = 1024, REUSE_MIN = 0.6, REUSE_MAX = 1.28, MOVING_MS = 90, BUILD_MS = 3, GAP_MS = 6, MAX_PX = 1.6e6, KEEP_MS = 400;
+export const ATLAS_BUDGET = 5e6;                // pixels the atlas may hold at any density (20 MB of 4-byte pixels); the least recently used go first
 const MAP = new Map();                            // key -> { list: [entry] }
 const ALL = new Set();
 export const stats = { builds: 0, hits: 0, direct: 0, stale: 0, evicted: 0, pixels: 0 };

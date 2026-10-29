@@ -33,8 +33,10 @@ const TOYS = {
 };
 const BOX = { flowerpot: [-9, -17, 9, 3], mailbox: [-8, -22, 11, 3], bin: [-8, -14, 8, 3], hydrant: [-9, -12, 9, 3], cup: [-5, -11, 6, 2], puddle: [-10, -5, 10, 5], pigeon: [-9, -11, 9, 3], reeds: [-9, -26, 16, 4], bush: [-14, -22, 14, 4], flowers: [-9, -10, 9, 4], rock: [-12, -12, 12, 4], sign: [-10, -25, 10, 3] };
 /** One little toy at (x, y) with `alpha`, as a variant sprite. `v` picks its look (a colour, a way it faces). */
+const MICRO = new Map(); // 'name|variant|veil' -> { key, draw }: the name and the drawing closure of one little toy, made once
 function micro(ctx, name, x, y, alpha, v, dim, dx = 0) {
-  const pa = ctx.globalAlpha; ctx.globalAlpha = pa * alpha; blit(ctx, `mi|${name}|${v}|${dim}`, BOX[name], (g) => TOYS[name](g, v), x, y, dx, 0); ctx.globalAlpha = pa;
+  const k = name + '|' + v + '|' + dim; let m = MICRO.get(k); if (!m) MICRO.set(k, m = { key: 'mi|' + k, draw: (g) => TOYS[name](g, v) });
+  const pa = ctx.globalAlpha; ctx.globalAlpha = pa * alpha; blit(ctx, m.key, BOX[name], m.draw, x, y, dx, 0); ctx.globalAlpha = pa;
 }
 
 // ---------------------------------------------------------------- the attendants of a prop
@@ -42,7 +44,7 @@ function micro(ctx, name, x, y, alpha, v, dim, dx = 0) {
 export function attendantOf(kind, p, theme) {
   const r = h2((p.gx * 29) | 0, (p.gy * 31) | 0), r2 = h2((p.gx * 17) | 0, (p.gy * 13) | 0), rich = RICH.has(theme);
   switch (kind) {
-    case 'lamp': return r < 0.28 ? ['flowerpot', -11, 6] : r < 0.4 ? ['pigeon', 0, -37] : r < 0.5 && (theme === 'metro' || theme === 'auto' || theme === 'industrial') ? ['hydrant', 12, 7] : r < 0.58 && !rich ? ['bin', -11, 7] : null;
+    case 'lamp': return r < 0.28 ? ['flowerpot', -11, 6] : r < 0.4 ? ['pigeon', 0, -37] : r < 0.5 && (theme === 'metro' || theme === 'auto' || theme === 'industrial') ? ['hydrant', 12, 7] : r < 0.58 && !rich ? ['bin', -11, 7] : r < 0.7 && (theme === 'campus' || theme === 'estate' || theme === 'realty' || theme === 'metro') ? ['mailbox', 12, 7] : null;
     case 'bench': return r < 0.38 ? ['pigeon', 8, -19] : r < 0.55 && !rich && theme !== 'campus' ? ['cup', -3, -8] : r > 0.9 && !rich ? ['bin', -20, 6] : null;
     case 'tree': return r < 0.3 ? ['bush', -17, 4] : r < 0.5 ? ['flowers', 15, 4] : r < 0.6 ? ['rock', 14, 5] : null;
     case 'bollard': return theme === 'harbor' ? (r < 0.3 ? ['pigeon', 0, -13] : r < 0.5 ? ['reeds', 12, 5] : null) : null;
@@ -55,10 +57,13 @@ export function attendantOf(kind, p, theme) {
 }
 const themeOf = (p) => p.theme || (DIST[p.zone] && DIST[p.zone].theme);
 /** The hook of atlas.js: called after every shared prop (and tree) is drawn; draws its attendant when the picture is near enough (alpha: the ladder's `near` band). */
+const ATT = new WeakMap(); // prop -> { a, x, y, v }: what stands beside a prop, decided once (the island is the same every time)
 function attend(ctx, p, env, kind) {
   const d = env.lod ? env.lod.detail[2] : 0; if (d < 0.02 || env.lite) return;
-  const a = attendantOf(kind, p, themeOf(p)); if (!a) return;
-  const [x, y] = P(p.gx, p.gy), v = (h2((p.gx * 7) | 0, (p.gy * 11) | 0) * 8) | 0, dim = Math.round((env.dim || 0) * 8);
+  let m = ATT.get(p);
+  if (!m) { const a = attendantOf(kind, p, themeOf(p)), [x, y] = P(p.gx, p.gy); m = { a, x, y, v: (h2((p.gx * 7) | 0, (p.gy * 11) | 0) * 8) | 0 }; ATT.set(p, m); }
+  const a = m.a; if (!a) return;
+  const x = m.x, y = m.y, v = m.v, dim = Math.round((env.dim || 0) * 8);
   const sway = a[0] === 'reeds' && env.t ? swayOf(env.t, v * 0.7, env.wind) * 1.6 : 0;
   micro(ctx, a[0], x + a[1], y + a[2], d, v, dim, sway);
   if (a[0] === 'reeds' && kind === 'lookout') micro(ctx, 'reeds', x + 30, y + 12, d, v + 1, dim, sway * 0.8); // reeds at both ends of the viewpoint

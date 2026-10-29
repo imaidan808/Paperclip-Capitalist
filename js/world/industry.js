@@ -128,7 +128,7 @@ shared('silo', {
   body(g, p, env) {
     const cx = p.gx + p.w / 2, cy = p.gy + p.d / 2, [x, y] = P(cx, cy), rx = p.w * 15.2, c = col(lifted(p.col || '#e8eef6', 0.8), env);
     stampSoft(g, x + 12, y + 5, rx * 2, rx * 0.9, 0.22); stand(g, x, y + 2, rx * 1.1, rx * 0.5); drum(g, x, y + 3, rx * 1.05, 4, shade(c, 0.9));
-    drum(g, x, y, rx, p.h, c, { dome: 12, domeCol: col('#b8c4e0', env), ribs: [0.14, 0.28, 0.42, 0.56, 0.7, 0.84], ribCol: shade(c, 0.88) });
+    drum(g, x, y, rx, p.h, c, { dome: 12, domeCol: col('#b8c4e0', env), ribs: [0.12, 0.3, 0.48, 0.66, 0.84], ribCol: shade(c, 0.9), ribW: 2.2 });
     rr(g, x - 4, y - 14, 8, 14, 4, col('#8392b4', env)); rr(g, x - 3, y - 13, 6, 12, 3, col('#5b6890', env));
     const lx = x + rx * 0.7, ly = y + rx * 0.25; bar(g, lx, ly, lx, ly - p.h, 3, col(METAL.steelMid, env)); ball(g, x, y - p.h - 12, 3, col(TOY.red, env));
     return null;

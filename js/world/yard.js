@@ -92,16 +92,22 @@ registerProp('gate', {
       const t = env.locked || !env.t ? 0.05 : 0.5 + 0.5 * Math.sin(env.t / 5200), bx = gx + (p.fx - gx) * (env.locked ? 0.05 : 0.08 + t * 0.84), by = gy + (p.fy - gy) * (env.locked ? 0.05 : 0.08 + t * 0.84), alongX = Math.abs(p.fx - gx) > Math.abs(p.fy - gy);
       const w = alongX ? 2.6 : 1.2, d = alongX ? 1.2 : 2.6, z0 = -p.z, bob = env.t ? Math.sin(env.t / 880) * 1.2 : 0, [sx, sy] = P(bx, by, z0);
       stampSoft(ctx, sx + 5, sy + 4, (w + d) * 17, (w + d) * 7, 0.22); ctx.save(); ctx.translate(0, bob);
-      const F = roundedBox(ctx, bx - w / 2, by - d / 2, w, d, 6, col('#fffaf0', env), { z: z0 - 1, r: 4 }); fq(ctx, F.left, 0.02, 0.98, 0.42, 0.62, col('#4a8ff0', env)); fq(ctx, F.right, 0.02, 0.98, 0.42, 0.62, col('#3a6fc0', env));
-      const C = roundedBox(ctx, bx - w / 4, by - d / 4, w / 2, d / 2, 8, col(env.locked ? '#c8c4d8' : '#fffaf0', env), { z: z0 + 5, r: 3.4 }); fq(ctx, C.left, 0.08, 0.92, 0.3, 0.76, col(env.locked ? '#8f9ac0' : '#78bdec', env));
-      for (let i = 0; i < 3; i++) { const [px, py] = facePoint(F.left, 0.2 + i * 0.3, 0.3); disc(ctx, px, py, 1.5, 1.5, col('#78bdec', env)); }
-      const [fx, fy] = P(bx, by, z0 + 17); bar(ctx, fx, fy + 4, fx, fy - 3, 3, col('#fffaf0', env)); poly(ctx, [[fx + 1, fy - 3], [fx + 8, fy - 1], [fx + 1, fy + 1]], col(TOY.red, env)); ctx.restore();
+      const F = roundedBox(ctx, bx - w / 2, by - d / 2, w, d, 8, col('#fffaf0', env), { z: z0 - 1, r: 6 }); fq(ctx, F.left, 0.02, 0.98, 0.36, 0.58, col('#4a8ff0', env)); fq(ctx, F.right, 0.02, 0.98, 0.36, 0.58, col('#3a6fc0', env)); fq(ctx, F.left, 0.02, 0.98, 0.0, 0.16, col('#ff5f4e', env)); fq(ctx, F.right, 0.02, 0.98, 0.0, 0.16, shade(col('#ff5f4e', env), 0.7));
+      for (let i = 0; i < 5; i++) { const [px, py] = facePoint(F.left, 0.12 + i * 0.19, 0.12); ball(ctx, px, py, 2, col('#222a52', env)); } // fenders along the side
+      const C = roundedBox(ctx, bx - w * 0.3, by - d * 0.3, w * 0.6, d * 0.6, 11, col(env.locked ? '#f2efe8' : '#fffaf0', env), { z: z0 + 7, r: 4.6 }); fq(ctx, C.left, 0.08, 0.92, 0.42, 0.82, col(env.locked ? '#9fb4d8' : '#78bdec', env)); fq(ctx, C.right, 0.08, 0.92, 0.42, 0.82, shade(col('#78bdec', env), 0.72));
+      for (let i = 0; i < 4; i++) { const [px, py] = facePoint(F.left, 0.18 + i * 0.2, 0.74); disc(ctx, px, py, 1.7, 1.7, col('#78bdec', env)); }
+      const [fx, fy] = P(bx, by, z0 + 20); bar(ctx, fx, fy + 4, fx, fy - 3, 3, col('#fffaf0', env)); poly(ctx, [[fx + 1, fy - 3], [fx + 8, fy - 1], [fx + 1, fy + 1]], col(TOY.red, env)); ctx.restore();
       const a = P(gx, gy, 0), c = col(env.locked ? '#d9c9a8' : '#bfe8ff', env); post(ctx, a[0], a[1], 26, 4.6, col(WOOD.shade, env), true);
       rr(ctx, a[0] - 22, a[1] - 40, 44, 15, 4.4, shd(c)); rr(ctx, a[0] - 22, a[1] - 40, 44, 13.2, 4.4, c); ctx.font = `800 7.6px ${'"Nunito",ui-rounded,system-ui,sans-serif'}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillStyle = env.locked ? '#a2422f' : '#2f6fd0'; ctx.fillText(env.locked ? 'NOT RUNNING' : 'FERRY', a[0], a[1] - 33);
       return null;
     }
     if (!env.locked) return null;
     const a = P(gx - nx * 1.3, gy - ny * 1.3, 0), b = P(gx + nx * 1.3, gy + ny * 1.3, 0), post0 = col(ROAD.light, env), pc = col(ROAD.mid, env);
+    if (env.far) { // from the whole-island view a gate is its posts and its striped arm (no lamps, no cones, no padlock plate)
+      for (const q of [a, b]) post(ctx, q[0], q[1], 19, 6.4, pc, true);
+      if (k === 'bridge') { const a2 = P(gx - nx * 1.3 + hx * 3.2, gy - ny * 1.3 + hy * 3.2, 26), b2 = P(gx + nx * 1.3 + hx * 3.2, gy + ny * 1.3 + hy * 3.2, 26); poly(ctx, [a, b, b2, a2], col(WOOD.mid, env)); return null; }
+      bar(ctx, a[0], a[1] - 14, b[0], b[1] - 14, 6.4, col(TOY.orange, env)); return null;
+    }
     if (k === 'bridge') { // the leaf is raised: a tilted plank deck striped with chevrons, ball-capped posts and warning lamps
       const a2 = P(gx - nx * 1.3 + hx * 3.2, gy - ny * 1.3 + hy * 3.2, 26), b2 = P(gx + nx * 1.3 + hx * 3.2, gy + ny * 1.3 + hy * 3.2, 26);
       stampSoft(ctx, (a[0] + b[0]) / 2 + 8, (a[1] + b[1]) / 2 + 4, 44, 10, 0.2);
