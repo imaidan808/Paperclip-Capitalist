@@ -82,7 +82,7 @@ export function seaPass(buf, W, H, S, ox, oy, sc, skipLand = false) {
   }
   // ---- the pixels: in 2 x 2 blocks where the sea is smooth (interpolated from the nodes), one pixel at a time within a tile and a half of the coast (the exact distance, the foam)
   const isk = 1 / SK, NEAR = 1.7;
-  const band = sc.band, crest = sc.crest;
+  const band = sc.band, crest = sc.crest, bandAmp = smooth(0.2, 0.5, S); // the bands are ribbons a few pixels wide: they fade out as the scale falls (at the far zoom the depth, the foam and the glow carry the sea)
   const exact = (px, py, o, k, k1, k2, k3, tx, ty, nf, nt, nbk) => {
     const w00 = (1 - tx) * (1 - ty), w10 = tx * (1 - ty), w01 = (1 - tx) * ty, w11 = tx * ty, di = nd[k] * w00 + nd[k1] * w10 + nd[k2] * w01 + nd[k3] * w11; // the lattice's own estimate of the distance
     if (di > 1.25) { buf[o] = nr[k] * w00 + nr[k1] * w10 + nr[k2] * w01 + nr[k3] * w11; buf[o + 1] = ng[k] * w00 + ng[k1] * w10 + ng[k2] * w01 + ng[k3] * w11; buf[o + 2] = nb[k] * w00 + nb[k1] * w10 + nb[k2] * w01 + nb[k3] * w11; buf[o + 3] = 255; return; }
@@ -94,7 +94,7 @@ export function seaPass(buf, W, H, S, ox, oy, sc, skipLand = false) {
       if (d > 0.25) { const tr = clamp((d - 0.3) / aa * 0.5 + 0.5, 0, 1) * clamp((0.58 - d) / aa * 0.5 + 0.5, 0, 1) * smooth(0.5, 0.72, nt) * 0.5; if (tr > fa) fa = tr; }
       if (fa > 0) { r += (foam[0] - r) * fa; g += (foam[1] - g) * fa; b += (foam[2] - b) * fa; }
     }
-    const bv = band[li]; if (bv > 0.02) { const m = bv * 0.16 * nbk; r += (crest[0] - r) * m; g += (crest[1] - g) * m; b += (crest[2] - b) * m; }
+    const bv = band[li] * bandAmp; if (bv > 0.02) { const m = bv * 0.16 * nbk; r += (crest[0] - r) * m; g += (crest[1] - g) * m; b += (crest[2] - b) * m; }
     buf[o] = r; buf[o + 1] = g; buf[o + 2] = b; buf[o + 3] = 255;
   };
   for (let py = 0; py < H; py += 2) {
@@ -107,7 +107,7 @@ export function seaPass(buf, W, H, S, ox, oy, sc, skipLand = false) {
       if (dmin > NEAR) {
         const w00 = (1 - tx) * (1 - ty), w10 = tx * (1 - ty), w01 = (1 - tx) * ty, w11 = tx * ty;
         let r = nr[k] * w00 + nr[k1] * w10 + nr[k2] * w01 + nr[k3] * w11, g = ng[k] * w00 + ng[k1] * w10 + ng[k2] * w01 + ng[k3] * w11, b = nb[k] * w00 + nb[k1] * w10 + nb[k2] * w01 + nb[k3] * w11;
-        const dI = d00 * w00 + d10 * w10 + d01 * w01 + d11 * w11, bv = band[(dI > FAR_D ? FAR_D : dI) * LUT_N | 0];
+        const dI = d00 * w00 + d10 * w10 + d01 * w01 + d11 * w11, bv = band[(dI > FAR_D ? FAR_D : dI) * LUT_N | 0] * bandAmp;
         if (bv > 0.02) { const bx = ox + xc * inv, by = oy + yc * inv, m = bv * 0.16 * smooth(0.42, 0.68, lnoise((bx / 64 + by / 32) * 0.55 + 21, (by / 32 - bx / 64) * 0.55 + 4)); r += (crest[0] - r) * m; g += (crest[1] - g) * m; b += (crest[2] - b) * m; } // soft ribbons of lighter water along the shore, broken by noise
         let o = (py * W + px) * 4, o2 = (py1 * W + px) * 4; const two = px + 1 < W;
         let q = cellNoise(px, py) * 2.2; buf[o] = r + q; buf[o + 1] = g + q; buf[o + 2] = b + q; buf[o + 3] = 255; q = cellNoise(px + 5, py1 + 3) * 2.2; buf[o2] = r + q; buf[o2 + 1] = g + q; buf[o2 + 2] = b + q; buf[o2 + 3] = 255; // (a level of dither, so the gradient is never a band)

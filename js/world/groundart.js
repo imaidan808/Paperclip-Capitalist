@@ -77,10 +77,14 @@ let GRAIN;
 /** A 64 x 64 tile of fine speckle (light and violet-dark specks at a few percent), made once: laid over a block it gives plaza, asphalt and dirt a weathered surface. It is a pattern in world space, so it runs on across chunks. */
 function grainPattern(ctx) {
   if (GRAIN !== undefined) return GRAIN;
-  GRAIN = null; const f = surface(64, 64); if (!f || typeof ImageData !== 'function' || typeof ctx.createPattern !== 'function') return GRAIN;
-  const img = f.g.createImageData(64, 64), d = img.data;
-  for (let i = 0; i < 64 * 64; i++) { const h = LATTICE[(i * 7 + 13) & 65535], dark = h < 0.5, a = Math.abs(h - 0.5) * 2; d[i * 4] = dark ? 74 : 255; d[i * 4 + 1] = dark ? 63 : 247; d[i * 4 + 2] = dark ? 136 : 220; d[i * 4 + 3] = Math.round(a * a * 46); }
-  f.g.putImageData(img, 0, 0); GRAIN = ctx.createPattern(f.c, 'repeat') || null; return GRAIN;
+  GRAIN = null;
+  try {
+    const f = surface(64, 64); if (!f || typeof ImageData !== 'function' || typeof ctx.createPattern !== 'function') return GRAIN;
+    const img = f.g.createImageData(64, 64), d = img.data;
+    for (let i = 0; i < 64 * 64; i++) { const h = LATTICE[(i * 7 + 13) & 65535], dark = h < 0.5, a = Math.abs(h - 0.5) * 2; d[i * 4] = dark ? 74 : 255; d[i * 4 + 1] = dark ? 63 : 247; d[i * 4 + 2] = dark ? 136 : 220; d[i * 4 + 3] = Math.round(a * a * 46); }
+    f.g.putImageData(img, 0, 0); GRAIN = ctx.createPattern(f.c, 'repeat') || null;
+  } catch { GRAIN = null; /* a context without patterns: the blocks are drawn without the grain */ }
+  return GRAIN;
 }
 /**
  * Each district's block as a little stage: a soft violet contact shadow on the terrain towards the shade side, the block in its daylight ground with a lighter rim, the sidewalks in cream, the avenue and the

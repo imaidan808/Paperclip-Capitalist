@@ -25,8 +25,8 @@ const POOL = []; // surfaces of released chunks, reused (a bake allocates nothin
 /** One set of chunks at one scale and one state of the ground. */
 class ChunkSet {
   constructor(S, key) { this.S = S; this.key = key; this.m = new Map(); this.stamp = 0; }
-  get(ci, cj) { return this.m.get(ci * 4096 + cj); }
-  put(ci, cj, c) { this.m.set(ci * 4096 + cj, c); }
+  get(ci, cj) { return this.m.get(ci * 8192 + cj); }
+  put(ci, cj, c) { this.m.set(ci * 8192 + cj, c); }
   get size() { return this.m.size; }
   free() { for (const c of this.m.values()) POOL.push(c.s); this.m.clear(); }
 }
@@ -38,6 +38,16 @@ export class ChunkCache {
   sync() { const n = this.count(); if (n) ledger.register('ground.chunks', n * CHUNK_BYTES); else ledger.release('ground.chunks'); }
 }
 registerReleaser(() => { for (const c of caches) c.release(); POOL.length = 0; });
+
+/** Free the chunks of the old set that the new set now covers entirely (each new chunk that is made lets go of the old ones under it), so the two scales never both hold the whole ground: the peak stays near the plan's. */
+function trimOld(old, set) {
+  const so = C / old.S, sn = C / set.S;
+  for (const [key, c] of old.m) {
+    const oj = ((key % 8192) + 12288) % 8192 > 4096 ? ((key % 8192) + 12288) % 8192 - 8192 : ((key % 8192) + 12288) % 8192, oi = (key - oj) / 8192, x0 = oi * so, y0 = oj * so, i0 = Math.floor(x0 / sn + 1e-6), i1 = Math.floor((x0 + so) / sn - 1e-6), j0 = Math.floor(y0 / sn + 1e-6), j1 = Math.floor((y0 + so) / sn - 1e-6);
+    let whole = true; for (let j = j0; j <= j1 && whole; j++) for (let i = i0; i <= i1; i++) if (!set.get(i, j)) { whole = false; break; }
+    if (whole) { POOL.push(c.s); old.m.delete(key); }
+  }
+}
 
 /** Bake one chunk of a set: its surface is painted by the stack's ground layers under the chunk's own transform. */
 function bake(w, cs, set, ci, cj) {
@@ -95,7 +105,9 @@ export function chunkPass(w, ctx) {
   }
   ctx.restore();
   if (!missing && old) { old.free(); cs.old = null; } // the exact scale is complete: the old one goes
-  if (!missing && !hold && may()) { // nothing missing: bake one chunk of the ring beyond the window, the one the camera is heading for, so a pan finds it ready
+  else if (old && baked > 0) trimOld(old, set);
+  const cap = Math.ceil(need.length * 1.3); // the window and a ring that is part of the way round it
+  if (!missing && !hold && set.size < cap && may()) { // nothing missing: bake one chunk of the ring beyond the window, the one the camera is heading for, so a pan finds it ready
     let best = null, bs = -1e9; const ax = -shx, ay = -shy;
     for (let j = j0 - 1; j <= j1 + 1; j++) for (let i = i0 - 1; i <= i1 + 1; i++) {
       if ((i >= i0 && i <= i1 && j >= j0 && j <= j1) || set.get(i, j)) continue;
@@ -104,7 +116,6 @@ export function chunkPass(w, ctx) {
     if (best && (cs.still >= 1 || (shx !== 0 || shy !== 0))) { bake(w, cs, set, best[0], best[1]); cs.stats.baked++; }
   }
   // keep the set to the window and the ring round it: the chunks unused for the longest go back to the pool
-  const cap = (i1 - i0 + 1 + 2) * (j1 - j0 + 1 + 2);
   if (set.size > cap) { const all = [...set.m.entries()].sort((a, b) => a[1].stamp - b[1].stamp); for (let q = 0; set.size > cap && q < all.length; q++) { POOL.push(all[q][1].s); set.m.delete(all[q][0]); } }
   if (POOL.length > 12) POOL.length = 12;
   if (typeof performance !== 'undefined') cs.stats.bakeMs += performance.now() - t0;

@@ -27,3 +27,5 @@ export function sceneOf(locked = []) {
 export function warm(locked) { const go = () => { try { sceneOf(locked); } catch { /* the first draw builds it and reports */ } }; if (typeof requestIdleCallback === 'function') requestIdleCallback(go, { timeout: 2000 }); else if (typeof setTimeout === 'function') setTimeout(go, 50); }
 /** Forget what was built (for tests, and for a world that gives its memory back). */
 export function forget() { COAST = null; SCENES.clear(); }
+// A browser builds the coast and the opening state's scene when it is idle (every district but the first under cloud), so the first frame that needs them finds them made; Node has no idle callback and builds on demand.
+if (typeof requestIdleCallback === 'function') warm(LAYOUT.ids.filter((id) => id !== 1));
