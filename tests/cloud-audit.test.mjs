@@ -5,6 +5,7 @@
 //   E1  the engine: an offer is accepted once (a second accept of the same offer paid again and delivered another copy of the proposer's crates)
 //   E2  the engine writes a negative amount as -$12.50, as the rest of the product does, not $-12.50
 //   E3  the engine's plurals: 1 day, 1 hour (not "1 days", "1 hours")
+//   E5  the swap matrix prices a digital crate at its own quality (a known counterfeit showed as worth a genuine one)
 //   E4  a throwing event listener does not stop a day from finishing (profit counted twice, a missing history row, no checkpoint)
 //   A1  the art: a ferry gate's "Opens at" chip rides above its plaque (the first judge pass found the plaque's words half hidden)
 //   D1  the Deal Room: the second press of a double-click and a held key are not second moves
@@ -117,6 +118,16 @@ test('E4: an event listener that throws does not stop the day: the tick finishes
   assert.equal(g.s.hour, hour + 48, 'the clock reached the hour asked for'); assert.ok(errors.length >= 1, 'and the fault was reported, not swallowed silently');
   if (rows != null) assert.ok(g.s.hist.length >= rows + 2, 'a history row for each day');
   const again = JSON.stringify(g.s); assert.ok(again.length > 100, 'the state is still plain JSON');
+});
+
+test('E5: the swap matrix prices a digital crate at its own quality: a known counterfeit is a small share of a genuine one, as for a physical crate', () => {
+  const g = mk(); rich(g, 5000);
+  const crate = (id, quality) => ({ id, cls: 'domain', cond: 'ok', quality, wear: 1, zone: 1 });
+  const genuine = g.projected(crate('D1', 1)), fake = g.projected(crate('D2', 0.08)), half = g.projected(crate('D3', 0.5));
+  assert.ok(genuine > 0, `a genuine domain is worth something (${genuine})`);
+  assert.ok(fake < genuine * 0.2, `a counterfeit (${fake.toFixed(2)}) is a small share of a genuine one (${genuine.toFixed(2)})`);
+  assert.ok(half > fake && half < genuine, 'and quality is a scale, not a switch');
+  const physical = (q) => g.projected({ id: 'P', cls: 'bike', cond: 'ok', quality: q, wear: 1, zone: 1 }); assert.ok(physical(0.08) < physical(1) * 0.2, 'as it already was for a physical crate');
 });
 
 // ------------------------------------------------------------------------------------------------------------------------- the Deal Room

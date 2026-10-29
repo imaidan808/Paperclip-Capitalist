@@ -496,6 +496,8 @@ export class Session {
   _rewind(toHour, from) {
     const g = this.game, wanted = num(toHour, 0, TOTAL_HOURS, null);
     if (wanted == null) return;
+    // a run that has not reached that hour has nothing to take back: restoring "the newest checkpoint at or before it" would throw away the hours since that checkpoint (up to a day of play)
+    if (g.s.hour <= wanted) { this._tell(from, 'rewound', { wanted, hour: g.s.hour, ok: true }); return; }
     let got = null;
     try {
       got = g.rewindTo(wanted);

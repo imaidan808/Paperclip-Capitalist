@@ -1520,7 +1520,7 @@ export class Game {
       const q = restoreQuality(k.ops), local = (1 - (ZONES[z].rules.repair || 0)) * (z > 4 ? mods.repair : 1); // repairMultFor(), read from the mods given
       return working * q * pv - repairCostFor(def.repair, k.ops, mine ? local * this.P.repairMult * this.B.repairMult : local);
     }
-    if (def.tags.includes('digital')) return working * Math.min(1.4, 0.7 + 0.1 * k.growth) * pv;
+    if (def.tags.includes('digital')) return working * clamp(pubAsset.quality ?? 1, 0, 1.5) * Math.min(1.4, 0.7 + 0.1 * k.growth) * pv; // the crate's own quality counts (a known counterfeit is folded into it): `working` is priced at quality 1 for the restored-goods branch above
     return assetFMV(pubAsset, z, mods, crowd) * pv;
   }
   /** An asset leaves for a classmate as it truly is: what it is really worth is folded into its quality and the hidden truth stays behind, so a swap neither leaks the truth nor launders a counterfeit into a genuine crate. */
