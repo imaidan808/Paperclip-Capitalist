@@ -1697,7 +1697,8 @@ export class Game {
     if (!o) return fail('That offer is not valid.');
     if (o.from && o.from === s.pid) return fail('You cannot accept your own offer.');
     if (o.to != null && o.to !== s.pid) return fail('That offer was not made to you.');
-    if (typeof o.id === 'string' && (s.accepted || []).includes(o.id)) return fail('You already accepted that offer.'); // a message that arrives twice (or is sent twice) pays and delivers once
+    const seenKey = typeof o.id === 'string' ? `${o.from || ''}|${o.id}` : null; // an offer's id is its proposer's (`O<pid>-<n>`): another founder's offer with the same id is another offer
+    if (seenKey && (s.accepted || []).includes(seenKey)) return fail('You already accepted that offer.'); // a message that arrives twice (or is sent twice) pays and delivers once
     // what I would send is checked as it truly is (a counterfeit is worth what it is worth), not as the proposer described it
     const mine = o.want.assets.map((w) => s.assets.find((a) => a.id === w.id && a.cls === w.cls && a.zone === w.zone));
     const held = mine.every(Boolean);
@@ -1716,7 +1717,7 @@ export class Game {
     for (const [z, k] of Object.entries(inbound)) if (k - (outbound[z] || 0) > this.roomIn(+z)) return fail(`There is no room in ${ZONES[z].short} for what they are sending.`);
     // ---- every check has passed: now the whole swap, with nothing left to fail
     const gone = new Set(mine);
-    if (typeof o.id === 'string') { (s.accepted ||= []).push(o.id); if (s.accepted.length > 200) s.accepted.shift(); }
+    if (seenKey) { (s.accepted ||= []).push(seenKey); if (s.accepted.length > 200) s.accepted.shift(); }
     s.assets = s.assets.filter((a) => !gone.has(a));
     s.cash -= o.want.cash;
     const got = o.give.assets.map((a) => this._arrive({ id: 'A' + s.nid++, cls: a.cls, cond: a.cond, quality: a.quality, wear: a.wear, zone: a.zone, basis: 0, from: 'p2p', got: s.hour, known: true }));

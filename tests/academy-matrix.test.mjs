@@ -52,12 +52,10 @@ test('M2: the sweep reports a card put over the dock as covering it, and a folde
     try {
       const before = await q.eval(`__sw.measure(__ac, { state: 'plain', step: 0, variant: 'base' })`);
       assert.deepEqual(judge(before), [], 'the card where the placer put it is clean');
-      const dock = await q.eval(`(() => { const r = document.querySelector('.dock').getBoundingClientRect(); return { x: r.x + 4, y: r.y + 4 }; })()`);
-      await q.eval(`(() => { __ac.card().style.transform = 'translate(${dock.x}px, ${dock.y}px)'; })()`); // the card moved by hand onto the dock
-      const over = judge(await q.eval(`__sw.measure(__ac, { state: 'plain', step: 0, variant: 'base' })`)).map((f) => f.type);
+      // each change and its measurement in one evaluation: the card's own beat (every 200 ms) puts it back where the placer wants it, and a round trip between the two is long enough, on a busy machine, for it to
+      const over = judge(await q.eval(`(() => { const r = document.querySelector('.dock').getBoundingClientRect(); __ac.card().style.transform = 'translate(' + (r.x + 4) + 'px, ' + (r.y + 4) + 'px)'; return __sw.measure(__ac, { state: 'plain', step: 0, variant: 'base' }); })()`)).map((f) => f.type); // the card moved by hand onto the dock
       assert.ok(over.includes('covers-dock'), `a card standing on the dock is reported (${over.join(', ') || 'nothing'})`);
-      await q.eval(`(() => { const c = __ac.card(); c.querySelector('.ac-grab')?.remove(); c.classList.add('handle'); })()`); // a card that says it is folded and has no tab
-      const none = judge(await q.eval(`__sw.measure(__ac, { state: 'plain', step: 0, variant: 'base' })`)).map((f) => f.type);
+      const none = judge(await q.eval(`(() => { const c = __ac.card(); c.querySelector('.ac-grab')?.remove(); c.classList.add('handle'); return __sw.measure(__ac, { state: 'plain', step: 0, variant: 'base' }); })()`)).map((f) => f.type); // a card that says it is folded and has no tab
       assert.ok(none.includes('tab-unnamed') || none.includes('words-hidden'), `a folded card with no tab is reported (${none.join(', ') || 'nothing'})`);
     } finally { await closePage(q); }
   } finally { await env.close(); }

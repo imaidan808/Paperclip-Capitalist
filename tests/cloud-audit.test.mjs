@@ -83,7 +83,9 @@ test('E1: an offer is accepted once: the same message twice pays once and delive
   const again = B.acceptOffer(off.offer);
   assert.equal(again.ok, false); assert.match(again.msg, /already accepted/);
   assert.equal(B.s.cash, cash0 - 150, 'no second payment'); assert.equal(B.s.royalties.length, 1, 'and no second stream');
-  assert.deepEqual(JSON.parse(JSON.stringify(B.s)).accepted, [off.offer.id], 'the record is plain JSON in the save');
+  assert.deepEqual(JSON.parse(JSON.stringify(B.s)).accepted, ['AAA|' + off.offer.id], 'the record (the proposer and the id) is plain JSON in the save');
+  // another founder's offer that carries the same id is another offer: an id is only the proposer's own
+  const other = B.acceptOffer({ ...off.offer, from: 'CCC' }); assert.doesNotMatch(other.msg || '', /already accepted/, 'it is judged on its merits, not refused as already accepted');
   for (let i = 0; i < 250; i++) { B.s.accepted.push('O' + i); if (B.s.accepted.length > 200) B.s.accepted.shift(); }
   assert.ok(B.s.accepted.length <= 200);
 });
@@ -117,9 +119,11 @@ test('E4: an event listener that throws does not stop the day: the tick finishes
 });
 
 // ------------------------------------------------------------------------------------------------------------------------- the Deal Room
-test('D1: the Deal Room ignores the second press of a double-click and a key held down: one press is one move', () => {
+test('D1: the Deal Room takes one press of a button as one move: the same move again within a third of a second and a key held down are not second moves, a different button in the same place is', () => {
   const src = readFileSync(join(ROOT, 'js/ui/deal.js'), 'utf8');
-  assert.match(src, /const onClick = \(e\) => \{ const b = e\.target\.closest\?\.\('\[data-deal\]'\); if \(b && !b\.disabled && el\(\)\.classList\.contains\('deal'\)\) \{ e\.preventDefault\(\); if \(e\.detail > 1\) return;/, 'a click whose detail is above 1 is the second press of a double-click');
+  assert.match(src, /const DOUBLE_MS = 350;/);
+  assert.match(src, /if \(ses\.lastAct && ses\.lastAct\.name === name && at - ses\.lastAct\.at < DOUBLE_MS\) return;[^]*?ses\.lastAct = \{ name, at \}; acts\[name\]\?\.\(b, e\);/, 'the same act within DOUBLE_MS is dropped; any other is a move');
+  assert.doesNotMatch(src, /e\.detail > 1/, 'not by the click count: a second click on the next stage\'s button in the same place is a decision, and the browser counts it as a double-click');
   assert.match(src, /const onKey = \(e\) => \{\n    if \(e\.repeat && e\.target\.closest\?\.\('\[data-deal\]'\)\) \{ e\.preventDefault\(\); return; \}/, 'and a key held on a Deal Room button repeats no click');
   assert.match(src, /run\.key !== 'fix' \|\| run\.res\.fix \|\| ses\.reduced\(\) \|\| e\.repeat \|\| !\(e\.key === ' ' \|\| e\.key === 'Enter'\)/, 'and a held space or Enter is one Stop, not a run of them');
 });

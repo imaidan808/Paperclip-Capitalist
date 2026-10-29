@@ -560,7 +560,8 @@ export function createSession(ctx, run) {
   ses.acts = acts; ses.changes = changes; ses.inputs = inputs;
 
   // ---- listeners on the shared dialog: one set per session, removed when it closes
-  const onClick = (e) => { const b = e.target.closest?.('[data-deal]'); if (b && !b.disabled && el().classList.contains('deal')) { e.preventDefault(); if (e.detail > 1) return; /* the second press of a double-click is not a second move */ if (!run.over && run.gone?.()) { result(); return; } acts[b.dataset.deal]?.(b, e); } };
+  const DOUBLE_MS = 350; // the same button pressed again this soon is a double-click, not a second decision (the stage under the pointer often changes to another button in the same place, which is a new move)
+  const onClick = (e) => { const b = e.target.closest?.('[data-deal]'); if (b && !b.disabled && el().classList.contains('deal')) { e.preventDefault(); if (!run.over && run.gone?.()) { result(); return; } const name = b.dataset.deal, at = performance.now(); if (ses.lastAct && ses.lastAct.name === name && at - ses.lastAct.at < DOUBLE_MS) return; /* the second press of a double-click is not a second move: the same move again within a third of a second (a different button in the same place is another move) */ ses.lastAct = { name, at }; acts[name]?.(b, e); } };
   const onChange = (e) => { const b = e.target.closest?.('[data-change-deal]'); if (b) changes[b.dataset.changeDeal]?.(b, e); };
   const onInput = (e) => { const b = e.target.closest?.('[data-deal-input]'); if (b) inputs[b.dataset.dealInput]?.(b, e); };
   const onKey = (e) => {

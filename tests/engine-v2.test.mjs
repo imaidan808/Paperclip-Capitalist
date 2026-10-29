@@ -729,7 +729,8 @@ test('a swap cannot push a district past its storage: roomIn counts held, in-tra
   assert.equal(g.roomIn(1), 0);
   g.s.cash = 100;
   const incoming = (cls, id) => ({ cls, cond: 'ok', quality: 1, wear: 1, zone: 1, id });
-  const offer = (give, want) => ({ id: 'Ox', from: 'P', fromHandle: 'P', give: { assets: give, cash: 0, royalty: null }, want, skills: {} });
+  let n = 0; // each offer has an id of its own, as a real one does (the engine accepts an id once)
+  const offer = (give, want) => ({ id: 'Ox' + n++, from: 'P', fromHandle: 'P', give: { assets: give, cash: 0, royalty: null }, want, skills: {} });
   const pen = incoming('pen', 'z1');
   const cash = Math.round(g.sideValue({ assets: [pen] }) * 100) / 100;
   const full = g.acceptOffer(offer([pen], { assets: [], cash }));
