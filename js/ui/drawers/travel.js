@@ -263,7 +263,7 @@ function shipHTML(ctx) {
   return `<section class="sect"><h3><span>Ship crates</span><span>${plan.rows.length} destination${plan.rows.length === 1 ? '' : 's'}</span></h3>${head}
     ${plan.rows.some((r) => r.net > 0) ? '' : '<div class="callout warn"><b>No district pays more after freight.</b> Move goods only when the price gap is bigger than the freight bill, and mind the room and the risks.</div>'}
     <div class="tv-dests" role="group" aria-label="Choose a destination">${plan.rows.map((r) => destRow(ctx, r, plan)).join('')}</div>
-    <div class="tv-shiprow">${btn}${why ? `<p class="small tv-why">${esc(why)}</p>` : `<p class="small mute">Arrives in about ${hoursText(c.q.hours)}. Goods can be damaged on the way, and Ops and a Logistics Agent lower the risk.</p>`}</div></section>`;
+    <div class="tv-shiprow" data-stuck="bottom">${btn}${why ? `<p class="small tv-why">${esc(why)}</p>` : `<p class="small mute">Arrives in about ${hoursText(c.q.hours)}. Goods can be damaged on the way, and Ops and a Logistics Agent lower the risk.</p>`}</div></section>`;
 }
 
 function transitHTML(ctx) {

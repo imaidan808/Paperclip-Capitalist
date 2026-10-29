@@ -5,7 +5,7 @@
 import { PERKS, PERK_IDS, perkMods, SKILLS } from '../config.js';
 import { PERK_PAIRS } from '../data/perks.js';
 import { hash } from '../rng.js';
-import { $, $$, esc, setHTML, delegate, announce } from './common.js';
+import { $, $$, esc, setHTML, delegate, announce, fitStuck } from './common.js';
 
 export const MAX_PICKS = 2;
 const own = (o, k) => typeof k === 'string' && Object.prototype.hasOwnProperty.call(o, k);
@@ -194,7 +194,7 @@ export function draftHTML(st) {
       </div>
       <div class="dr-side"><section class="dr-tray" id="dr-tray" aria-label="Your build">${trayHTML(st)}</section></div>
     </div>
-    <div class="dr-actions" id="dr-actions">${actionsHTML(st)}</div>
+    <div class="dr-actions" id="dr-actions" data-stuck="bottom">${actionsHTML(st)}</div>
   </form>`;
 }
 
@@ -217,7 +217,11 @@ export function mountDraft(root, S, { room = null, onBegin, onBack } = {}) {
     setHTML(tray, trayHTML(st));
     setHTML(spec, specHTML(st));
     setHTML(bar, actionsHTML(st));
+    fit(); // a notice makes the bar a line taller
   }
+  // the page scrolls here and the actions bar sticks to its foot: Tab must scroll a card to just above the bar, whatever height the bar has now (common.js, fitStuck)
+  const page = root.ownerDocument?.documentElement, fit = () => fitStuck(page);
+  fit(); globalThis.addEventListener?.('resize', fit);
   function send(action, say = true) {
     st = draftReduce(st, action);
     paint();
@@ -258,5 +262,8 @@ export function mountDraft(root, S, { room = null, onBegin, onBack } = {}) {
     $('#dr-begin', root)?.setAttribute('aria-busy', 'true');
     onBegin?.({ perks: c.perks, specialty: c.specialty, handle: c.handle });
   });
-  return { destroy() {}, state: () => st };
+  return {
+    destroy() { globalThis.removeEventListener?.('resize', fit); page?.style?.removeProperty('--stuck-t'); page?.style?.removeProperty('--stuck-b'); },
+    state: () => st,
+  };
 }

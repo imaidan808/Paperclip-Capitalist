@@ -205,9 +205,8 @@ test('Deal Room: the result\'s Continue rides the foot of the sheet, and every s
   assert.match(css, /\.deal-result > \.row:last-child \{ position: sticky; bottom: 0;[^}]*background: var\(--panel2\)/);
   assert.match(css, /dialog\.deal \{[^}]*scroll-padding: \.5rem \.5rem 8rem/, 'a ring is never cut by the dialog\'s edge');
   const shell = read('css/shell.css');
-  assert.match(shell, /\.db \{[^}]*scroll-padding: var\(--sp-2\)/, 'nor by a drawer\'s');
-  assert.match(shell, /\.db:has\(\.qs-nav\) \{ scroll-padding-top: 4\.4rem; \}/, 'and a drawer\'s sticky bar never stands over the control Shift+Tab lands on');
-  assert.match(shell, /\.db:has\(\.tv-shiprow\) \{ scroll-padding-bottom: /);
+  assert.match(shell, /\.db \{[^}]*scroll-padding: calc\(var\(--sp-2\) \+ var\(--stuck-t, 0px\)\) var\(--sp-2\) calc\(var\(--sp-2\) \+ var\(--stuck-b, 0px\)\)/, 'nor by a drawer\'s, and a drawer\'s sticky bar never stands over the control Shift+Tab lands on (its height is measured: common.js fitStuck, tests/rep-feet.test.mjs)');
+  assert.match(read('js/ui/drawers/quests.js'), /<nav class="qs-nav" data-stuck="top"/); assert.match(read('js/ui/drawers/travel.js'), /<div class="tv-shiprow" data-stuck="bottom">/);
 });
 test('Deal Room: the sticky Continue row leaves room for the focus ring at the foot of the sheet, and the phone clears the home indicator', () => {
   const css = read('css/ui-deal.css'), base = read('css/styles.css');

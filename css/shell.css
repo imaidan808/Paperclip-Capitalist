@@ -60,7 +60,8 @@ body:has(.stage) { background-image: none; overflow: hidden; overscroll-behavior
 .wvlist[open] { z-index: var(--z-hud); top: auto; bottom: calc(var(--dock-h) + var(--tick-h) + var(--sp-3)); left: calc(var(--edge-l) + var(--cam-w) + var(--sp-2));
   max-width: min(22rem, calc(100% - var(--edge-l) - var(--cam-w) - var(--sp-2) - var(--edge-r)));
   max-height: max(6rem, min(26rem, calc(100% - var(--dock-h) - var(--tick-h) - var(--sp-3) - var(--trk-b) - var(--sp-2)))); /* from the ticker's top up to the tracker's foot */
-  overflow: auto; overscroll-behavior: contain; padding: 0 var(--sp-2) var(--sp-1); border-color: var(--gold); }
+  overflow: auto; overscroll-behavior: contain; padding: 0 var(--sp-2) var(--sp-1); border-color: var(--gold);
+  scroll-padding: calc(var(--sp-2) + var(--stuck-t, 0px)) var(--sp-2) var(--sp-2); } /* a button scrolled to by Tab rests clear of the sticky heading and its ring is not cut (common.js, fitStuck) */
 .wvlist[open] > summary { justify-content: flex-start; margin: 0 calc(-1 * var(--sp-2)); padding: 0 var(--sp-3); border-bottom: 1px dashed var(--line); margin-bottom: var(--sp-2); }
 .wvlist[open] > summary .wvl-t { position: static; width: auto; height: auto; overflow: visible; clip: auto; white-space: normal; } /* open: it is the panel's heading */
 .wvul { list-style: none; padding: 0; margin: 0 0 var(--sp-1); display: grid; gap: var(--sp-1); }
@@ -139,10 +140,9 @@ body:has(.stage) { background-image: none; overflow: hidden; overscroll-behavior
 .dh h2 { margin: 0; min-width: 0; overflow-wrap: anywhere; } .dh h2:focus { outline: none; }
 /* --db-pad is the body's own padding, published so a panel's sticky bar can bleed out to the drawer's edges by exactly that much (ui-quests.css .qs-nav, ui-travel.css .tv-shiprow). */
 .db { --db-pad: var(--sp-3); flex: 1; min-height: 0; overflow: auto; overscroll-behavior: contain; padding: var(--db-pad); display: grid; gap: .7rem; align-content: start;
-  scroll-padding: var(--sp-2); } /* a control scrolled into view by Tab rests this far inside the edge, so its focus ring is never cut by the clip */
-/* ...and clear of a bar that stands over the scroller's edge: the Quests jump bar at the top, the Travel ship row at the foot (Focus Not Obscured) */
-.db:has(.qs-nav) { scroll-padding-top: 4.4rem; }
-.db:has(.tv-shiprow) { scroll-padding-bottom: 5.6rem; }
+  scroll-padding: calc(var(--sp-2) + var(--stuck-t, 0px)) var(--sp-2) calc(var(--sp-2) + var(--stuck-b, 0px)); } /* a control scrolled into view by Tab rests this far inside the edge, so its focus ring is never cut by the clip... */
+/* ...and clear of a bar that stands over the scroller's edge (Focus Not Obscured): the Quests jump bar and the Stock selection bar at the top, the Travel ship row at the foot. Each carries data-stuck, and
+   common.js (fitStuck) writes how far they reach as --stuck-t and --stuck-b after the drawer is drawn and when the window changes size: a bar wraps, so its height is not a number to write here. */
 .db .sect > h3 { display: flex; justify-content: space-between; gap: var(--sp-2); border-bottom: 1px dashed var(--line); padding-bottom: var(--sp-1); margin-bottom: var(--sp-2); text-transform: uppercase; letter-spacing: .06em; font-size: var(--t-sm); color: var(--mute); }
 .dtabs { display: flex; gap: .3rem; flex-wrap: wrap; } .dtabs .btn[aria-pressed="true"] { background: var(--gold); color: var(--on-gold); border-color: var(--gold); }
 .overlay { position: absolute; inset: 0; z-index: var(--z-overlay); pointer-events: none; } .overlay > * { pointer-events: auto; }

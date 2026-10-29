@@ -12,6 +12,7 @@
 // shut, and keeps the render path cheap (attributes written only when they change, bars listed once per render and painted only when they move, no work for a hidden tab).
 import { ZONES, TOTAL_HOURS, CLIENTS } from '../config.js';
 import { $, $$, esc, setHTML, delegate, dlg, toast, announce, sfx, burst, reduced, settingsDialog } from './common.js';
+import { fitStuck } from './common.js'; // its own line: the shell's other helpers are imported above
 import { kv } from '../session.js';
 import { hudHTML, trackerHTML, tickerHTML } from './hud.js';
 import { DRAWERS } from './drawers/index.js';
@@ -103,7 +104,7 @@ export function mountGame(root, S, hooks) {
     if (el.drawer.dataset.d !== key) el.drawer.dataset.d = key;
     wv?.update();
     if (open !== wasOpen) { wasOpen = open; fitToasts(); }
-    if (redrawn) collectBars();
+    if (redrawn) { collectBars(); fitDrawer(); }
     paintBars(redrawn);
     pumpQueue();
   }
@@ -135,7 +136,9 @@ export function mountGame(root, S, hooks) {
     }
     if (now !== tight) { tight = now; if (now) el.stage.dataset.toasts = 'tight'; else delete el.stage.dataset.toasts; }
   }
-  const sizer = typeof ResizeObserver === 'function' ? new ResizeObserver(() => { measure(); fitToasts(); }) : null;
+  // A bar that sticks to an edge of the drawer's body (the Stock selection bar, the Travel ship row, the Quests jump bar) is measured for the body's scroll-padding: after the drawer is drawn and when anything resizes.
+  function fitDrawer() { const db = el.drawer.hidden ? null : el.drawer.querySelector('.db'); if (db?.querySelector('[data-stuck]')) fitStuck(db); }
+  const sizer = typeof ResizeObserver === 'function' ? new ResizeObserver(() => { measure(); fitToasts(); fitDrawer(); }) : null;
   sizer?.observe(el.hud); sizer?.observe(el.dock); sizer?.observe(el.ticker); sizer?.observe(el.tracker); sizer?.observe(el.stage);
 
   // A phone's bottom sheet closes the way a native one does: drag its header down. Only the header takes the gesture (touch-action: none there); the close button and Escape stay.

@@ -4,11 +4,11 @@
 import { World } from '../world/world.js';
 import { ZONES, ASSETS, BUYERS, PIPE } from '../config.js';
 import { fmtMoney as money, fitLabel } from '../market.js';
-import { esc, toast } from './common.js';
+import { esc, toast, fitStuck } from './common.js';
 
 export function createWorldView(ctx) {
   const { S, U } = ctx;
-  let world = null, host = null, lastZone = null, booted = false;
+  let world = null, host = null, lastZone = null, booted = false, onResize = null;
   const g = () => S.game;
   const unlocked = (z) => g().s.zones.includes(z);
   const gate = (z) => `${ZONES[z].name} opens at ${money(ZONES[z].gate)} net worth.`;
@@ -114,6 +114,7 @@ export function createWorldView(ctx) {
     const had = ul.contains(document.activeElement) ? document.activeElement.dataset.hs : null;
     ul.innerHTML = items.length ? items.map((h) => `<li><button class="btn sm ghost" data-hs="${esc(`${h.kind}|${h.id}|${h.zone || ''}`)}">${esc(h.label)}</button></li>`).join('') : '<li class="mute small">Nothing here yet.</li>';
     if (had) (ul.querySelector(`[data-hs="${CSS.escape(had)}"]`) || ul.closest('details').querySelector('summary')).focus({ preventScroll: true });
+    fitStuck(box); // the panel's heading sticks to its top: Shift+Tab must scroll a button to just under it, not behind it
   }
   /** The list view carries ids only; rebuild the full hit object the click handler expects. */
   function withData(h) {
@@ -133,7 +134,7 @@ export function createWorldView(ctx) {
       el.innerHTML = `<div class="wvcv"></div>
         <div class="wvctl" role="group" aria-label="Camera"><button class="ibtn" data-wv="zin" aria-label="Zoom in">+</button><button class="ibtn" data-wv="zout" aria-label="Zoom out">−</button><button class="ibtn" data-wv="fit" aria-label="Show the whole island">◎</button><button class="ibtn" data-wv="me" aria-label="Back to my district">⌂</button></div>
         <div class="wvtip" hidden></div>
-        <details class="wvlist"><summary><svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false"><path d="M6.5 4H14M6.5 8H14M6.5 12H14" fill="none" stroke="currentColor" stroke-width="2"/><path d="M2 4h1.6M2 8h1.6M2 12h1.6" fill="none" stroke="currentColor" stroke-width="2.4"/></svg><span class="wvl-t">List of everything in this district <span class="wvl-x">(for keyboard and screen readers)</span></span></summary><ul class="wvul"></ul></details>`;
+        <details class="wvlist"><summary data-stuck="top"><svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false"><path d="M6.5 4H14M6.5 8H14M6.5 12H14" fill="none" stroke="currentColor" stroke-width="2"/><path d="M2 4h1.6M2 8h1.6M2 12h1.6" fill="none" stroke="currentColor" stroke-width="2.4"/></svg><span class="wvl-t">List of everything in this district <span class="wvl-x">(for keyboard and screen readers)</span></span></summary><ul class="wvul"></ul></details>`;
       world = new World({ session: S, ui: U, activate, hover, reveal: () => {}, insets });
       if (window.pc) window.pc.world = world;
       world.attach(el.querySelector('.wvcv'));
@@ -149,6 +150,8 @@ export function createWorldView(ctx) {
         if (a === 'zin') world.zoomBy(1.25); else if (a === 'zout') world.zoomBy(0.8); else if (a === 'fit') world.fit(); else if (a === 'me') world.focusZone(U.zone, true);
       };
       el.querySelector('.wvlist').addEventListener('toggle', (e) => { if (e.target.open) list(); }); // build the list the moment it is opened
+      onResize = () => { const b = host?.querySelector('.wvlist'); if (b?.open) fitStuck(b); }; // the panel's height, and so whether its heading may stick, follows the window
+      addEventListener('resize', onResize);
       this.update();
     },
     update() {
@@ -160,7 +163,8 @@ export function createWorldView(ctx) {
     destroy() {
       world?.stop(); world?.detach?.(); // detach lets go of the bitmaps; the debugging handle must not keep the whole world reachable either
       if (window.pc && window.pc.world === world) window.pc.world = null;
-      host = null; world = null;
+      if (onResize) removeEventListener('resize', onResize);
+      onResize = null; host = null; world = null;
     },
   };
 }
