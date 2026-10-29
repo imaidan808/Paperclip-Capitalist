@@ -20,6 +20,13 @@ test('closeAlpha fills a one pixel crack and a two pixel crack; the colour of th
   assert.deepEqual([d[i], d[i + 1], d[i + 2]], rgb, 'a half-covered pixel keeps its blend; only its alpha rises');
 });
 
+test('a shallow shared edge spreads over three half-covered pixels and is closed; four are a feature and stay', () => {
+  for (const [wd, closed] of [[3, true], [4, false]]) {
+    const d = plane((x) => (x >= 30 && x < 30 + wd ? [90, 140, 60, 170] : [200, 120, 50, 255])); closeAlpha(d, W, H);
+    assert.equal(alphaAt(d, 31, 20) === 255, closed, `${wd} wide`);
+  }
+});
+
 test('two cracks that cross are both closed, the crossing pixel included', () => {
   const d = plane((x, y) => (x === 32 || y === 40 ? [90, 140, 60, 191] : [200, 120, 50, 255])); assert.ok(countCracks(d, W, H) > 40);
   closeAlpha(d, W, H); assert.equal(countCracks(d, W, H), 0); assert.equal(alphaAt(d, 32, 40), 255, 'the pixel where they cross');

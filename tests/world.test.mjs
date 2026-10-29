@@ -329,7 +329,7 @@ test('rectOf gives a real on-screen rectangle for every kind of thing, and null 
   assert.ok(inside(w.rectOf('zone', 5)), 'zone');
   const f = g.s.freight[0]; w.truckPos(w.ents.get('truck:' + f.id)); assert.equal(w.rectOf('truck', f.id) === null || inside(w.rectOf('truck', f.id)), true);
   // the rectangle follows the camera
-  const r1 = w.rectOf('static', 'bank'); w.cam.x += 50; const r2 = w.rectOf('static', 'bank'); assert.ok(Math.abs((r1.x - r2.x) - 50 * w.cam.z) < 1e-6, 'it moves with the camera');
+  const r1 = w.rectOf('static', 'bank'); w.cam.x += 50; const r2 = w.rectOf('static', 'bank'); assert.ok(Math.abs((r1.x - r2.x) - 50 * w.cam.z) <= 1 / w.dpr + 1e-6, 'it moves with the camera, to a device pixel (the screen origin is the camera\'s translation rounded to whole device pixels: docs/RENDER_PLAN.md section 5; it was exact to 1e-6)');
   w.focusZone(16, false); assert.equal(w.rectOf('static', 'bank'), null, 'a building in another district is off screen');
   assert.equal(w.rectOf('lead', 'nope'), null); assert.equal(w.rectOf('static', 'nope'), null); assert.equal(w.rectOf('banana', 1), null);
 });

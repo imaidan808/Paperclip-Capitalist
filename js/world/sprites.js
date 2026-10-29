@@ -69,6 +69,12 @@ function trim(keep) { // least recently used first (overlays before bases), down
 export function setSpriteBudget(dpr = 1) { budget = Math.round(SPRITE_BUDGET * Math.max(1, Math.min(1.5, 1 + (dpr - 1) * 0.7))); }
 /** The pixels the cache may hold now. */
 export const spriteBudget = () => budget;
+/** Evict the least recently used sprites (overlays first) until the cache holds at most `frac` of its budget: what the world does when the pixel ledger is over its ceiling (World.squeeze). Answers how many went. */
+export function trimSprites(frac = 0.75) {
+  const list = [...ALL].sort((a, b) => (a.L.ov ? 0 : 1) - (b.L.ov ? 0 : 1) || a.last - b.last); let n = 0;
+  for (const e of list) { if (stats.pixels <= budget * frac) break; forget(e); stats.evicted++; n++; }
+  return n;
+}
 /** Forget every sprite (tests, and a quality change that wants a clean slate). */
 export function clearSprites() { for (const e of [...ALL]) forget(e); ALL.clear(); stats.pixels = 0; tell(); }
 /** Switch the cache off (every prop draws directly) or back on: for comparisons, tests and a quality setting that would rather not hold the memory. */

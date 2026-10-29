@@ -41,8 +41,8 @@ export class Labels {
     ctx.drawImage(spr.c, Math.round((x - ax - spr.pad) * d) / d, Math.round((y - ay - spr.pad) * d) / d, spr.w, spr.h);
   }
 
-  /** The line width of a label's rule: one css pixel on a 1x screen, one and a half on 2x (always whole device pixels). */
-  lw(n = 1) { return (this.dpr || 1) >= 2 ? n * 1.5 : n; }
+  /** The line width of a label's rule in css pixels: one css pixel on a 1x screen, one and a half on 2x, and always a WHOLE number of device pixels (a rule of 1.5 device pixels on a 1.5x screen is two blurred rows). */
+  lw(n = 1) { const d = this.dpr || 1; return Math.max(1, Math.round(n * (d >= 2 ? 1.5 : 1) * d)) / d; }
 
   // ------------------------------------------------------------------------------------------ the labels
   /** A small rounded name chip centred on its anchor ("You", "+ Hire", "Opens at $500k", a district's tag). */

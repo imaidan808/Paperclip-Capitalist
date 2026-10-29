@@ -12,7 +12,7 @@
 //   - what moves on the ground (water, pulses: stage mode 2) is drawn live over the chunks, as before.
 // A district opening is drawn directly while it lasts (its fog is moving), exactly as before.
 import { groundKey } from './stack.js';
-import { CHUNK_PX, scaleKey, cellsFor, chunkCap, snapTranslation } from './chunks.js';
+import { CHUNK_PX, scaleKey, chunkKey, cellsFor, chunkCap, snapTranslation } from './chunks.js';
 import { ChunkCache } from './chunkcache.js';
 export { CHUNK_PX, chunkWorld, chunkBytes, chunksTouched, groundBytes, chunksFor } from './chunks.js'; // the chunk cache's arithmetic (tests/world-ledger.test.mjs holds the memory ledger to it)
 
@@ -20,6 +20,8 @@ export { CHUNK_PX, chunkWorld, chunkBytes, chunksTouched, groundBytes, chunksFor
 export const BAKE_MS_STILL = 10, BAKE_MS_MOVING = 3.5;
 /** The scale must stand still this long (ms) before chunks are baked at it: while it changes every frame, stale chunks and direct cells stand in. */
 export const ZOOM_REST_MS = 90;
+/** An exact chunk baked over the stand-in that was showing there fades in over this many ms (a zoom that comes to rest: the soft picture sharpens, a stride that changed does not pop). Never under Calm, Off and reduced motion. */
+export const GROUND_FADE_MS = 140;
 
 export const groundCacheMethods = {
   /** The render scale of this frame: device pixels per world pixel (chunks.js renderScale). */
@@ -44,6 +46,7 @@ export const groundCacheMethods = {
     const win = this.gcWin || (this.gcWin = { x0: 0, x1: 0, y0: 0, y1: 0 }); win.x0 = -e / a; win.x1 = (cw - e) / a; win.y0 = -f / a; win.y1 = (ch - f) / a;
     const cells = cellsFor(win, a, this.gcCells || (this.gcCells = {}));
     const draw = this.gcDraw || (this.gcDraw = (g, v) => this.drawGround(g, v, 1));
+    const fadeMs = this.reduced() ? 0 : (this.gcFade ?? GROUND_FADE_MS);
     // ---- which cells are baked, and which are not (the nearest to the middle of the window are baked first)
     const miss = this.gcMiss || (this.gcMiss = []); miss.length = 0; let have = 0;
     const cx = (cw / 2 - e) / (a * 1), cy = (ch / 2 - f) / (a * 1), s = cells.s;
@@ -52,11 +55,11 @@ export const groundCacheMethods = {
     if (miss.length) {
       const pts = []; for (let n = 0; n < miss.length; n += 2) pts.push([miss[n], miss[n + 1], Math.hypot((miss[n] + 0.5) * s - cx, (miss[n + 1] + 0.5) * s - cy)]); pts.sort((p, q) => p[2] - q[2]);
       const budget = this.gcSeen >= 1 ? (this.gcBudget?.[0] ?? BAKE_MS_STILL) : (this.gcBudget?.[1] ?? BAKE_MS_MOVING), t0 = performance.now(); miss.length = 0; // (this.gcBudget: a test's own milliseconds [still, moving])
-      if (zooming) store.standIns(a, sk);
+      if (zooming || fadeMs > 0) store.standIns(a, sk, now);
       const ab = Math.round(Math.pow(2, Math.round(Math.log2(a) * 4) / 4) * 1e5) / 1e5, sb = CHUNK_PX / ab; // the quarter-octave bucket: what is baked while the scale moves is baked here, so the frames of one stretch of a zoom share their chunks
       for (const [i, j] of pts) {
         const ok = baked === 0 || performance.now() - t0 < budget;
-        if (!zooming) { if (ok) { const c = store.bake(draw, a, i, j, dpr); if (c) { baked++; continue; } } }
+        if (!zooming) { if (ok) { const c = store.bake(draw, a, i, j, dpr); if (c) { baked++; if (fadeMs > 0 && !c.empty && store.covered((i + 0.5) * s, (j + 0.5) * s)) c.fadeEnd = performance.now() + fadeMs; continue; } } } // (a chunk baked where a stand-in was showing fades in over it)
         else { // while the scale changes a cell is baked only when nothing stands in for it (the cells a zoom out reveals), at the bucket scale: that chunk stands in for the next frames of the zoom, and costs a bake once where a direct draw costs every frame
           const mx = (i + 0.5) * s, my = (j + 0.5) * s;
           if (!store.covered(mx, my) && ok) { const c = store.bake(draw, ab, Math.floor(mx / sb), Math.floor(my / sb), dpr); if (c) { baked++; store.standIns(a, sk); } }
@@ -64,14 +67,16 @@ export const groundCacheMethods = {
         miss.push(i, j);
       }
     }
-    // ---- stamp: stale stand-ins first (not where an exact chunk goes), the cells with nothing to stand in drawn directly, then the exact chunks 1:1
+    // ---- stamp: stale stand-ins first (not where an exact chunk goes, unless that chunk is still fading in), the cells with nothing to stand in drawn directly, then the exact chunks 1:1
     ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0);
-    const X = (i) => i * CHUNK_PX + e, Y = (j) => j * CHUNK_PX + f;
-    if (miss.length) {
-      const L = store.standIns(a, sk), direct = this.gcDirect || (this.gcDirect = []); direct.length = 0;
+    const X = (i) => i * CHUNK_PX + e, Y = (j) => j * CHUNK_PX + f, tNow = performance.now();
+    let fading = 0;
+    for (let j = cells.j0; j <= cells.j1; j++) for (let i = cells.i0; i <= cells.i1; i++) { const c = store.map.get(chunkKey(sk, i, j)); if (c && c.fadeEnd) { if (c.fadeEnd > tNow) fading++; else c.fadeEnd = 0; } }
+    if (miss.length || fading) {
+      const L = store.standIns(a, sk, tNow), direct = this.gcDirect || (this.gcDirect = []); direct.length = 0;
       if (L.length) {
         ctx.save(); ctx.beginPath(); ctx.rect(0, 0, cw, ch);
-        for (let j = cells.j0; j <= cells.j1; j++) for (let i = cells.i0; i <= cells.i1; i++) if (store.has(sk, i, j)) ctx.rect(X(i), Y(j), CHUNK_PX, CHUNK_PX);
+        for (let j = cells.j0; j <= cells.j1; j++) for (let i = cells.i0; i <= cells.i1; i++) { const c = store.map.get(chunkKey(sk, i, j)); if (c && !(c.fadeEnd > tNow)) ctx.rect(X(i), Y(j), CHUNK_PX, CHUNK_PX); }
         ctx.clip('evenodd');
         for (const c of L) {
           const kk = a / c.a, dx = c.i * CHUNK_PX * kk + e, dy = c.j * CHUNK_PX * kk + f, sz = CHUNK_PX * kk;
@@ -93,9 +98,10 @@ export const groundCacheMethods = {
     }
     for (let j = cells.j0; j <= cells.j1; j++) for (let i = cells.i0; i <= cells.i1; i++) {
       const c = store.get(sk, i, j); if (!c || c.empty) continue;
+      if (c.fadeEnd > tNow) { const t = 1 - (c.fadeEnd - tNow) / fadeMs; ctx.globalAlpha = t * t * (3 - 2 * t); ctx.drawImage(c.img, X(i), Y(j)); ctx.globalAlpha = 1; store.stats.faded++; continue; }
       ctx.drawImage(c.img, X(i), Y(j)); store.stats.hits++; // the whole bitmap, 1:1 on whole pixels (with a source rectangle the same blit costs twice as much on a CPU-drawn canvas)
     }
-    ctx.restore();
+    ctx.restore(); if (fading) this.dirty = true; // (a fade is a few frames of its own: the loop keeps drawing until it is over)
     this.gcValid = miss.length === 0;
     if (baked || miss.length === 0 || moved) store.sweep(cells, a, chunkCap(W, H, dpr));
     this.drawGround(ctx, view, 2); // what moves on the ground, live over the chunks (the caller's world transform is back)

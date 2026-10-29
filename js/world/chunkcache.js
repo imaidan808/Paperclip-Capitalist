@@ -17,7 +17,7 @@ export class ChunkCache {
   constructor(name = 'ground.chunks', make = makeSurface) {
     this.name = name; this.make = make; this.map = new Map(); this.ver = NaN; this.bytes = 0; this.tick = 0;
     this.work = null; this.fin = null; this.cell = null; this.scratch = null; this.scratchN = 0; this.list = [];
-    this.stats = { baked: 0, sealed: 0, dropped: 0, ms: 0, lastMs: 0, direct: 0, stale: 0, hits: 0 };
+    this.stats = { baked: 0, sealed: 0, dropped: 0, ms: 0, lastMs: 0, direct: 0, stale: 0, hits: 0, faded: 0 };
   }
   get size() { return this.map.size; }
   /** What the picture depends on besides the camera's scale (the districts that are open, the V2 layers' keys): a different value drops every chunk. */
@@ -25,8 +25,8 @@ export class ChunkCache {
   get(sk, i, j) { const c = this.map.get(chunkKey(sk, i, j)); if (c) c.last = ++this.tick; return c; }
   has(sk, i, j) { return this.map.has(chunkKey(sk, i, j)); }
   /** Every chunk of the other scales that could stand in for scale `a` (within the plan's ratio window), furthest first, into a reused list. */
-  standIns(a, sk) {
-    this.lastA = a; const L = this.list; L.length = 0; const sc = this.scales || (this.scales = new Map()); sc.clear();
+  standIns(a, sk, now = 0) {
+    this.lastA = a; this.now = now; const L = this.list; L.length = 0; const sc = this.scales || (this.scales = new Map()); sc.clear();
     for (const c of this.map.values()) if (c.sk !== sk && staleRatio(c.a, a)) { L.push(c); sc.set(c.sk, c.a); }
     L.sort((p, q) => Math.abs(Math.log(q.a / a)) - Math.abs(Math.log(p.a / a)));
     const sl = this.scaleList || (this.scaleList = []); sl.length = 0; for (const [k, a0] of sc) sl.push([k, a0, Math.abs(Math.log(a0 / a))]); sl.sort((p, q) => p[2] - q[2]); // the scales found, nearest first
@@ -41,7 +41,7 @@ export class ChunkCache {
   hidden(c, sk, s) {
     const s0 = CHUNK_PX / c.a, x0 = c.i * s0, y0 = c.j * s0, me = Math.abs(Math.log(c.a / this.lastA)), sl = this.scaleList || [];
     for (let q = 0; q < 5; q++) {
-      const x = x0 + s0 * (q === 4 ? 0.5 : q & 1 ? 0.88 : 0.12), y = y0 + s0 * (q === 4 ? 0.5 : q & 2 ? 0.88 : 0.12); let hit = this.map.has(chunkKey(sk, Math.floor(x / s), Math.floor(y / s)));
+      const x = x0 + s0 * (q === 4 ? 0.5 : q & 1 ? 0.88 : 0.12), y = y0 + s0 * (q === 4 ? 0.5 : q & 2 ? 0.88 : 0.12); const ex = this.map.get(chunkKey(sk, Math.floor(x / s), Math.floor(y / s))); let hit = !!ex && !(ex.fadeEnd > this.now); // (an exact chunk that is still fading in hides nothing)
       for (let n = 0; !hit && n < sl.length && sl[n][2] < me - 1e-9; n++) { const t0 = CHUNK_PX / sl[n][1]; if (this.map.has(chunkKey(sl[n][0], Math.floor(x / t0), Math.floor(y / t0)))) hit = true; }
       if (!hit) return false;
     }
@@ -88,7 +88,7 @@ export class ChunkCache {
         const own = this.make(CHUNK_PX, CHUNK_PX); if (own) { own.g.drawImage(fin.c, BLEED, BLEED, CHUNK_PX, CHUNK_PX, 0, 0, CHUNK_PX, CHUNK_PX); img = own.c; }
       }
     }
-    const c = { sk, a, i, j, img, empty, bytes: empty ? 0 : CHUNK_PX * CHUNK_PX * 4, last: ++this.tick, sealed };
+    const c = { fadeEnd: 0, sk, a, i, j, img, empty, bytes: empty ? 0 : CHUNK_PX * CHUNK_PX * 4, last: ++this.tick, sealed };
     this.map.set(key, c); this.sync();
     const ms = (typeof performance !== 'undefined' ? performance.now() : 0) - t0; this.stats.baked++; if (sealed) this.stats.sealed++; this.stats.ms += ms; this.stats.lastMs = ms;
     return c;
@@ -122,6 +122,11 @@ export class ChunkCache {
       const rest = []; for (const c of this.map.values()) { const vis = c.sk === sk && c.i >= win.i0 && c.i <= win.i1 && c.j >= win.j0 && c.j <= win.j1; if (!vis) rest.push(c); }
       rest.sort((p, q) => p.last - q.last); for (const c of rest) { if (n <= cap) break; this.drop(c); n--; }
     }
+  }
+  /** Over a memory ceiling: drop chunks (stale first, then the least recently used outside the visible cells) until `n` are left. Answers how many went. */
+  shrink(n, win, a) {
+    const sk = scaleKey(a), rest = []; for (const c of this.map.values()) { const vis = win && c.sk === sk && c.i >= win.i0 && c.i <= win.i1 && c.j >= win.j0 && c.j <= win.j1; if (!vis) rest.push(c); }
+    rest.sort((p, q) => (q.sk !== sk) - (p.sk !== sk) || p.last - q.last); let k = 0; for (const c of rest) { if (this.map.size <= n) break; this.drop(c); k++; } return k;
   }
   /** Tell the ledger what the store holds (chunks, the working surfaces). */
   sync() {

@@ -13,10 +13,10 @@ import { LAYOUT, DIST, SPOTS, PLOTS, SCENERY, BW, BD, zAt, zoneAt } from './layo
 import { Fx } from './fx.js';
 import { Lighting, dayTargets } from './lighting.js';
 import { Labels } from './labels.js';
-import { surface, softwareRaster, releaseAll } from './gfx.js';
+import { surface, softwareRaster, releaseAll, ledger, LEDGER_LIMIT_MB } from './gfx.js';
 import { snapTranslation } from './chunks.js';
 import { SLOW_MS, FAST_MS, GOV_WAIT, GOV_DOWN, judge } from './governor.js';
-import { clearSprites, setSpriteBudget } from './sprites.js';
+import { clearSprites, setSpriteBudget, trimSprites } from './sprites.js';
 import { FAR_ZOOM, FOG_DIM, money } from './common.js';
 import { runLayer } from './stack.js';
 import { releaseShadows } from './shadow.js';
@@ -111,7 +111,28 @@ export class World {
    */
   release() {
     this.releaseGround(); this.waterGr = null; this.seaStrip = undefined; this.seaKey = -1;
-    this.light.release(); this.labels.release(); clearSprites(); releaseShadows(); releaseAll(); // (releaseAll: every holder a module registered through gfx.js's registerReleaser)
+    this.light.release(); this.labels.release(); clearSprites(); releaseShadows(); releaseAll(); this.ledgerSync(); // (releaseAll: every holder a module registered through gfx.js's registerReleaser)
+  }
+  /**
+   * Tell the pixel ledger (gfx.js) what the world holds that no module registers for itself: the canvas, the light layers and the label sprites (the sprites, the ground chunks and the sea register their own). Called when the
+   * size changes and every couple of seconds; cheap (a sum over a few dozen surfaces).
+   */
+  ledgerSync() {
+    const px = (c) => (c ? ((c.c || c).width * (c.c || c).height) || 0 : 0), L = this.light;
+    ledger.register('canvas.main', this.cv.width * this.cv.height * 4);
+    ledger.register('light', 4 * (L ? [...Object.values(L.big || {}), ...Object.values(L.src || {})].reduce((a, c) => a + px(c), 0) : 0));
+    ledger.register('labels', 4 * [...(this.labels.cache.m?.values() || [])].reduce((a, c) => a + (c && c.c ? c.c.width * c.c.height : 0), 0));
+  }
+  /**
+   * The pixel ledger is over its ceiling (docs/RENDER_PLAN.md section 6: 160 MB at density 2): give some back, cheapest to rebuild first. Sprites go to 70% of their budget (overlays first), then chunks that are not in view
+   * or are stale down to what the window touches, then the label sprites. Answers whether the ledger is within the ceiling afterwards. The picture does not change: what was dropped is made again on demand.
+   */
+  squeeze() {
+    if (ledger.within()) return true;
+    trimSprites(0.7); this.ledgerSync();
+    if (!ledger.within() && this.gc && typeof this.gc.shrink === 'function') { const win = this.gcCells; this.gc.shrink(Math.max(8, Math.ceil(this.gc.size * 0.6)), win, this.renderScale()); this.ledgerSync(); }
+    if (!ledger.within()) { this.labels.cache.clear(); this.ledgerSync(); }
+    return ledger.within();
   }
   start() { if (this.running) return; this.running = true; this.last = performance.now(); this.raf = requestAnimationFrame((t) => this.frame(t)); }
   stop() { this.running = false; cancelAnimationFrame(this.raf); }
@@ -131,7 +152,7 @@ export class World {
     this.dpr = this.targetDpr(); this.warm = 30;
     this.refreshInset(); setSpriteBudget(this.dpr);
     this.cv.width = Math.floor(this.W * this.dpr); this.cv.height = Math.floor(this.H * this.dpr);
-    this.cv.style.width = this.W + 'px'; this.cv.style.height = this.H + 'px';
+    this.cv.style.width = this.W + 'px'; this.cv.style.height = this.H + 'px'; this.ledgerSync();
     this.gcValid = false; this.labels.setDpr(this.dpr); // what was made for the old size is made again on demand: the ground's chunks are the same at any window size (they are cut by scale, not by window), and a new density is a new scale the sweep tells from the old
     this.dirty = true;
     if (this.g && this.unlocked) this.draw(); // a resized canvas is blank until redrawn: never show that gap
@@ -169,8 +190,13 @@ export class World {
     const before = this.s2w(px, py); this.cam.z *= f; this.clampCam();
     const after = this.s2w(px, py); this.cam.x += before[0] - after[0]; this.cam.y += before[1] - after[1]; this.clampCam(); this.camTo = null; this.dirty = true;
   }
-  w2s(x, y) { return [(x - this.cam.x) * this.cam.z + this.W / 2, (y - this.cam.y) * this.cam.z + this.H / 2]; }
-  s2w(x, y) { return [(x - this.W / 2) / this.cam.z + this.cam.x, (y - this.H / 2) / this.cam.z + this.cam.y]; }
+  /**
+   * Where the world's origin is on the screen, in css pixels: the camera's translation rounded to whole DEVICE pixels, divided by the density. The picture is drawn from this (toWorld), so everything that is placed by it
+   * (labels, tags, map cards, hit testing) lands where the ground and the sprites do: a pan moves them all by the same whole pixels. `out` is reused ([x, y]).
+   */
+  origin(out = this._o || (this._o = [0, 0])) { const a = this.renderScale(), s = this._os || (this._os = [0, 0]); snapTranslation(this.W, this.H, this.dpr, this.cam.x, this.cam.y, a, s); out[0] = s[0] / this.dpr; out[1] = s[1] / this.dpr; return out; }
+  w2s(x, y) { const o = this.origin(), k = this.renderScale() / this.dpr; return [x * k + o[0], y * k + o[1]]; }
+  s2w(x, y) { const o = this.origin(), k = this.renderScale() / this.dpr; return [(x - o[0]) / k, (y - o[1]) / k]; }
   setMode(m) { if (m === this.mode) return; this.mode = m; this.hover = null; if (m === 'map') this.fit(true); else this.focusZone(this.api.ui.zone, true); this.dirty = true; }
 
   // ------------------------------------------------------------------ input
@@ -391,6 +417,7 @@ export class World {
     this.draw();
     this.dirty = false; G.prev = ts;
     this.govern(performance.now() - t0, gap);
+    if ((this.ledgerN = (this.ledgerN | 0) + 1) % 90 === 0) { this.ledgerSync(); if (!ledger.within(LEDGER_LIMIT_MB)) this.squeeze(); } // every few seconds: the pixel ledger against its ceiling
     this.fps = this.slow > 4 ? 15 : this.slow > 2 ? 20 : 30; if (this.moving && this.slow < 3) this.fps = 60; // the 30 fps cap is for a still camera's idle motion: a camera that moves draws every refresh while the machine keeps up (docs/RENDER_PLAN.md section 5, DIAGNOSIS P4)
     this.lite = this.slow > 2;
     if (Math.abs(this.targetDpr() - this.dpr) > 0.01) this.resize();

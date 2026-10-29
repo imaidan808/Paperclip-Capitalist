@@ -5,9 +5,9 @@
 // 1 - 0.5 x 0.5 = 0.75, not 1: a quarter of whatever is under the bitmap shows through. On a ground chunk that is the sea, on a sprite the ground, as a faint line along every edge of every face and every tile.
 // Stroking the shapes wider hides it only where the stroke is a device pixel or more (zoom and density decide), which is why the old tile loop cracked below zoom 0.9 and at density 1 to 1.5 and not above.
 //
-// WHAT. Every pixel that is not opaque (alpha under 250) and has opaque pixels on BOTH sides of it along a row or a column, within two pixels, is a gap between two filled regions and takes their alpha (the lower of the two).
-// A gap one or two pixels wide is filled, anything wider is left alone, and the coast, a soft tail and a corner are not touched (they have opaque pixels on one side only). That is a closing of the alpha plane by a line
-// of three pixels along each axis, done twice so that the pixel where two cracks cross is filled too. Colour is never touched except where a filled pixel had none (alpha 0): it takes its neighbour's. `data` is straight
+// WHAT. Every pixel that is not opaque (alpha under 250) and has opaque pixels on BOTH sides of it along a row or a column, within three pixels, through pixels that are at least half covered, is a gap between two filled regions
+// and takes their alpha (the lower of the two). A gap of up to three pixels is filled (a shallow shared edge spreads its anti-aliasing over three), a gap with a pixel under half covered in it is a real hole and is left alone, and the coast, a soft tail and a corner are not touched (they have opaque pixels on one side only). That is a closing of the alpha plane by a line
+// of three pixels along each axis, repeated (up to four times) until nothing changes, so that the pixel where two cracks cross, and a crack that was two pixels wide at a bend, are filled too. Colour is never touched except where a filled pixel had none (alpha 0): it takes its neighbour's. `data` is straight
 // (non-premultiplied) RGBA, what getImageData gives and putImageData takes, so a half-covered pixel keeps the right blend of the two colours and only its alpha rises.
 //
 // COST. One pass over the alpha plane to find the 16 x 16 blocks that hold both opaque and not-opaque pixels (a block that is all land or all sea has no gap in it), then the two row and column tests on the not-opaque pixels
@@ -22,7 +22,7 @@ export const OPAQUE = 250;
  */
 const BLOCK = 16;
 export function closeAlpha(data, w, h, o = {}) {
-  const n = w * h, lo = o.min ?? 128; // a pixel with alpha under `lo` is a real gap, not a crack (a crack between two shapes that share an edge keeps at least 0.75 of the colour); `min: 0` fills any gap if (!(w > 4 && h > 4) || data.length < n * 4) return 0;
+  const n = w * h, lo = o.min ?? 128; // a pixel with alpha under `lo` is a real gap, not a crack (a crack between two shapes that share an edge keeps at least 0.75 of the colour); `min: 0` fills any gap if (!(w > 6 && h > 6) || data.length < n * 4) return 0;
   const A = o.scratch?.a?.length >= n ? o.scratch.a : new Uint8Array(n), bw = Math.ceil(w / BLOCK), bh = Math.ceil(h / BLOCK), flags = o.scratch?.flags?.length >= bw * bh ? o.scratch.flags : new Uint8Array(bw * bh);
   flags.fill(0, 0, bw * bh);
   // one pass: the alpha plane, and for each block whether it holds an opaque pixel (1) and a not-opaque one (2)
@@ -31,21 +31,26 @@ export function closeAlpha(data, w, h, o = {}) {
     for (let x = 0; x < w; x++) { const v = data[(r + x) * 4 + 3]; A[r + x] = v; flags[fb + (x >> 4)] |= v >= OPAQUE ? 1 : 2; }
   }
   let changed = 0;
-  for (let pass = 0; pass < 2; pass++) {
+  for (let pass = 0; pass < 4; pass++) {
     let any = 0;
     for (let by = 0; by < bh; by++) for (let bx = 0; bx < bw; bx++) {
       if (flags[by * bw + bx] !== 3) continue; // all opaque or all not: no gap inside
-      const x0 = Math.max(bx * BLOCK, 2), x1 = Math.min(bx * BLOCK + BLOCK, w - 2), y0 = Math.max(by * BLOCK, 2), y1 = Math.min(by * BLOCK + BLOCK, h - 2);
+      const x0 = Math.max(bx * BLOCK, 3), x1 = Math.min(bx * BLOCK + BLOCK, w - 3), y0 = Math.max(by * BLOCK, 3), y1 = Math.min(by * BLOCK + BLOCK, h - 3);
       for (let y = y0; y < y1; y++) {
         const r = y * w;
         for (let x = x0; x < x1; x++) {
           const i = r + x; if (A[i] >= OPAQUE || A[i] < lo) continue;
+          // along each axis: the first opaque pixel on either side within three steps, through pixels that are themselves at least `lo` (a crack is partial coverage, a real hole is not); a gap of up to three pixels between two of
+          // them is a crack, and it takes the lower of their alphas
           let v = 0, src = -1;
-          const l1 = A[i - 1], r1 = A[i + 1], u1 = A[i - w], d1 = A[i + w];
-          if (l1 >= OPAQUE) { if (r1 >= OPAQUE) { v = l1 < r1 ? l1 : r1; src = i - 1; } else { const r2 = A[i + 2]; if (r2 >= OPAQUE) { v = l1 < r2 ? l1 : r2; src = i - 1; } } }
-          else if (r1 >= OPAQUE) { const l2 = A[i - 2]; if (l2 >= OPAQUE) { v = r1 < l2 ? r1 : l2; src = i + 1; } }
-          if (u1 >= OPAQUE) { if (d1 >= OPAQUE) { const m = u1 < d1 ? u1 : d1; if (m > v) { v = m; src = i - w; } } else { const d2 = A[i + 2 * w]; if (d2 >= OPAQUE) { const m = u1 < d2 ? u1 : d2; if (m > v) { v = m; src = i - w; } } } }
-          else if (d1 >= OPAQUE) { const u2 = A[i - 2 * w]; if (u2 >= OPAQUE) { const m = d1 < u2 ? d1 : u2; if (m > v) { v = m; src = i + w; } } }
+          for (let ax = 0; ax < 2; ax++) {
+            const st = ax ? w : 1; let L = 0, dl = 0, R = 0, dr = 0;
+            for (let d = 1; d <= 3; d++) { const q = A[i - d * st]; if (q >= OPAQUE) { L = q; dl = d; break; } if (q < lo) break; }
+            if (!L) continue;
+            for (let d = 1; d <= 3; d++) { const q = A[i + d * st]; if (q >= OPAQUE) { R = q; dr = d; break; } if (q < lo) break; }
+            if (!R || dl + dr > 4) continue;
+            const m = L < R ? L : R; if (m > v) { v = m; src = i - st; }
+          }
           if (v > A[i]) {
             if (A[i] === 0 && src >= 0) { data[i * 4] = data[src * 4]; data[i * 4 + 1] = data[src * 4 + 1]; data[i * 4 + 2] = data[src * 4 + 2]; } // a hole has no colour of its own: borrow a neighbour's
             A[i] = v; data[i * 4 + 3] = v; changed++; any++;
@@ -57,6 +62,13 @@ export function closeAlpha(data, w, h, o = {}) {
   }
   return changed;
 }
+
+/**
+ * The gaps a closing would fill in straight RGBA `data`, counted without changing it: the crack pixels in the sense the pass itself uses (a pixel of alpha 128 to 249 with opaque pixels on both sides within two along a row or
+ * a column). Zero on a bitmap that has been sealed. (`countCracks` below is the broader count of any partial pixel inside an opaque field: it also finds the one-pixel tips of a wedge of sea between two coasts, which are
+ * geometry and not a crack.)
+ */
+export function countGaps(data, w, h, o = {}) { return closeAlpha(Uint8ClampedArray.from(data), w, h, o); }
 
 /**
  * Count the crack pixels in straight RGBA `data`: pixels whose alpha is under `below` (default 225: a tenth of what is underneath shows) that sit in an opaque field, meaning there are opaque pixels on BOTH sides of
