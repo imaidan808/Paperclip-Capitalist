@@ -43,7 +43,7 @@ export function strip(ctx, f, side, u0, u1, v0, v1, col) {
 export function windowGlow(env, p, face, scale = 1) {
   if (!env.lights || env.night < 0.3 || lite(env)) return;
   const [x, y] = fp(face, 0.5, 0.5);
-  env.lights.push({ wx: x, wy: y - env.zoff, r: clamp((p.w * 14 + 16) * scale, 28, 62), c: '255,208,130', a: 0.2 * env.night });
+  env.lights.push({ wx: x, wy: y - env.zoff, r: clamp((p.w * 14 + 16) * scale, 28, 62), c: '255,208,130', a: 0.34 * env.night });
 }
 
 export function smoke(ctx, x, y, t, n = 4, col = '255,255,255') {

@@ -41,6 +41,17 @@ export function roundedPoly(ctx, pts, r) {
  * Returns the faces exactly as iso.box() does ({ left, right, top }, each a polygon), plus `r`, the radius used, so hit shapes and window grids built on it are unchanged.
  * o: { z: elevation, r: radius override, rim: false, ao: false, edge: false }. Every stroke is at least 1.5 world pixels wide.
  */
+
+/**
+ * A vertical strip from y0 to y1 across x0..x1 in the current fill, whose two ends fade out over `fade` pixels in three steps of falling alpha (a hard-ended pale strip at the foot of a corner
+ * was read as a ghost laid over the wall). The fill is the caller's (a horizontal gradient, so it does not depend on y); the alpha is restored.
+ */
+export function fadedStrip(ctx, x0, y0, w, y1, fade, alpha) {
+  const f = Math.min(fade, (y1 - y0) / 4), n = 3, a0 = ctx.globalAlpha;
+  ctx.globalAlpha = a0 * alpha; ctx.fillRect(x0, y0 + f, w, y1 - y0 - 2 * f);
+  for (let i = 0; i < n; i++) { const t = (i + 0.5) / n; ctx.globalAlpha = a0 * alpha * t; ctx.fillRect(x0, y0 + (f * i) / n, w, f / n + 0.3); ctx.fillRect(x0, y1 - (f * (i + 1)) / n - 0.3, w, f / n + 0.3); }
+  ctx.globalAlpha = a0;
+}
 export function roundedBox(ctx, gx, gy, w, d, h, c, o = {}) {
   const tone = faceTone(c), r = o.r ?? bevelRadius(w, d), z0 = o.z || 0, z1 = z0 + h;
   const A = P(gx, gy, z1), B = P(gx + w, gy, z1), C = P(gx + w, gy + d, z1), D = P(gx, gy + d, z1), B0 = P(gx + w, gy, z0), C0 = P(gx + w, gy + d, z0), D0 = P(gx, gy + d, z0);
@@ -50,8 +61,8 @@ export function roundedBox(ctx, gx, gy, w, d, h, c, o = {}) {
   const prevAlpha = ctx.globalAlpha, fine = Math.min(r, h * 0.45); // a very low prism (a kerb, a step) does not get a fillet taller than itself
   if (o.edge !== false && h >= 8) { // the front vertical edge: a strip across the corner shaded like a cylinder (lit side, a streak of sky light, then the shade)
     const k = fine * 0.9, g = ctx.createLinearGradient(C[0] - k, 0, C[0] + k, 0);
-    g.addColorStop(0, tone.l); g.addColorStop(0.32, mix(tone.t, tone.l, 0.4)); g.addColorStop(0.62, mix(tone.l, tone.r, 0.55)); g.addColorStop(1, tone.r);
-    ctx.globalAlpha = prevAlpha; ctx.fillStyle = g; ctx.fillRect(C[0] - k, C[1] + fine * 0.4, 2 * k, C0[1] - C[1] - fine * 0.8);
+    g.addColorStop(0, rgba(tone.l, 0)); g.addColorStop(0.32, rgba(mix(tone.t, tone.l, 0.4), 1)); g.addColorStop(0.62, rgba(mix(tone.l, tone.r, 0.55), 0.8)); g.addColorStop(1, rgba(tone.r, 0)); // both ends clear: the strip is a streak on the corner and has no edge where it meets the walls
+    ctx.fillStyle = g; fadedStrip(ctx, C[0] - k, C[1] + fine * 0.2, 2 * k, C0[1] - fine * 0.2, fine * 1.4, prevAlpha);
   }
   if (o.rim !== false) {
     ctx.lineJoin = 'round'; ctx.lineCap = 'round';
@@ -196,8 +207,8 @@ export function toyBox(ctx, gx, gy, w, d, h, c, o = {}) {
   if (glossy && w * d > 1.5) { const gt = ctx.createLinearGradient(A[0], A[1], C[0], C[1]); gt.addColorStop(0, rgba('#ffffff', 0.16 * gl)); gt.addColorStop(0.55, rgba('#ffffff', 0)); gt.addColorStop(1, rgba('#7a68c8', 0.07 * gl)); ctx.fillStyle = gt; ctx.fill(); }
   if (o.edge !== false && h >= 8) { // the front vertical edge: a strip across the corner shaded like a cylinder (lit side, a streak of sky light, then the shade)
     const k = fine * 1.0, g = ctx.createLinearGradient(C[0] - k, 0, C[0] + k, 0);
-    g.addColorStop(0, tone.l); g.addColorStop(0.34, mix(tone.t, tone.l, 0.35)); g.addColorStop(0.62, mix(tone.l, tone.r, 0.5)); g.addColorStop(1, tone.r);
-    ctx.fillStyle = g; ctx.fillRect(C[0] - k, C[1] + fine * 0.4, 2 * k, C0[1] - C[1] - fine * 0.9);
+    g.addColorStop(0, rgba(tone.l, 0)); g.addColorStop(0.34, rgba(mix(tone.t, tone.l, 0.35), 1)); g.addColorStop(0.62, rgba(mix(tone.l, tone.r, 0.5), 0.8)); g.addColorStop(1, rgba(tone.r, 0)); // both ends clear: a streak on the corner, never a rectangle of wall colour laid over the AO at the foot
+    ctx.fillStyle = g; fadedStrip(ctx, C[0] - k, C[1] + fine * 0.2, 2 * k, C0[1] - fine * 0.2, fine * 1.4, prevAlpha);
   }
   // the bands are filled quads along the edges, shortened where an edge meets a rounded silhouette corner (a band that ran into the curve would stick out of it)
   const E = r * 0.8, along = (p0, p1, e0, e1) => { const dx = p1[0] - p0[0], dy = p1[1] - p0[1], l = Math.hypot(dx, dy) || 1; return [[p0[0] + (dx / l) * e0, p0[1] + (dy / l) * e0], [p1[0] - (dx / l) * e1, p1[1] - (dy / l) * e1]]; };

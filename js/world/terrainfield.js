@@ -67,7 +67,8 @@ export function terrainField(L, coast, locked = new Set()) {
     // the nearest district: its pastel ground, blended in over six tiles and never fully
     let nd = ids[0], dd = 1e9; for (const id of ids) { const d = rectDist(i, j, DIST[id].fp); if (d < dd) { dd = d; nd = id; } }
     const gs = sets[nd]; gr.set(rgb(gs.ground)); hi.set(rgb(gs.hi)); lerp3(gr, gr, hi, 0.55 * smooth(0.35, 0.8, nMid)); // a district's ground is not one flat dye either
-    const wD = 0.88 * (1 - smooth(0, 1.35, Math.max(0, dd))); // the district's ground under its footprint and a verge a tile and a bit wide beyond it, falling smoothly: no edge, no veil laid on the meadow
+    // the district's ground under its footprint, falling to the meadow over about two tiles through a ragged edge (a grain of dirt and grass, not a line, and no veil laid on the meadow)
+    const db = Math.max(0, dd) + (nMid - 0.5) * 1.8, wD = db <= 0 ? 0.9 : 0.88 * (1 - smooth(0, 2.4, db));
     if (wD > 0.01 && rw < 0.9) lerp3(col, col, gr, wD * (1 - rw * 0.8));
     tmp.set(rgb(REGION_TINT[DIST[nd].region] || REGION_TINT.A)); lerp3(col, col, tmp, 0.05);
     const l = litS[k]; if (l > 0) lerp3(col, col, T.key, 0.16 * l); else lerp3(col, col, T.ao, -0.2 * l);

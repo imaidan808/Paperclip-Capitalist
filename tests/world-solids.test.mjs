@@ -45,7 +45,7 @@ test('roundedBox clips to a rounded outline, balances save and restore, rounds t
   assert.ok(callNames(log).filter((n) => n === 'quadraticCurveTo').length >= 6);
   const styles = log.strokes.map((s) => s.style), t = faceTone('#ffc8d0'); assert.ok(styles.includes(LIGHT.rim) && styles.includes(LIGHT.ao), 'the sun streak and the AO band');
   assert.ok(styles.includes(mix(t.t, t.l, 0.5)) && styles.includes(mix(t.t, t.r, 0.5)), 'a chamfer band on each front top edge, in the colour between the top and the wall');
-  assert.ok(callNames(log).includes('fillRect') && log.rects.some((r) => r.w > 4 && r.h > 20), 'a fillet strip down the front corner, as wide as the corner is round');
+  assert.ok(callNames(log).includes('fillRect') && log.rects.filter((r) => r.w > 4).reduce((a, r) => a + r.h, 0) > 20 && log.rects.some((r) => r.w > 4 && r.h > 8), 'a fillet strip down the front corner, as wide as the corner is round (its two ends fade in steps, so it is several rectangles: fadedStrip)');
   assert.ok(thinnestStroke(log) >= 1.5, `a stroke of ${thinnestStroke(log)}`);
   // the bevel is a band as wide as the radius, not a hairline: the chamfer strokes are at least a pixel and a half and scale with the fillet, and every band is wider than the old 1.5 and 3 pixel ones
   const wide = (r) => { const q = recCtx(); roundedBox(q.ctx, 2, 2, 3.3, 3.3, 90, '#ffc8d0', r ? { r } : {}); return q.log.strokes.map((s) => s.lw); };

@@ -28,6 +28,12 @@ export function tone(c, k = 0) {
   v = a < 1 ? `rgba(${rgb(h).join(',')},${a})` : h; if (MEMO.size > 600) MEMO.clear(); MEMO.set(key, v); return v;
 }
 const MINB = 0.12;
+/** What an `ell` decal of the kits is meant to be, from its colour: a puddle (blue-green), a stain of dirt (dark) or anything else (kept as it was drawn). */
+export function ellKind(fill) {
+  const m = typeof fill === 'string' && fill.match(/rgba?\(([^)]+)\)/); if (!m) return 'other';
+  const [r, g, b] = m[1].split(',').map(Number); if (b > r + 25 && b >= g - 20) return 'puddle'; return (0.3 * r + 0.59 * g + 0.11 * b) / 255 < 0.35 ? 'dirt' : 'other';
+}
+const hashI = (x, y, i, j) => { let h = Math.imul((i * 7349 + ((x * 31) | 0)) | 0, 374761393) ^ Math.imul((j * 5651 + ((y * 17) | 0)) | 0, 668265263); h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; };
 const quad = (ctx, x, y, w, d, z) => { ctx.moveTo(px(x, y), py(x, y, z)); ctx.lineTo(px(x + w, y), py(x + w, y, z)); ctx.lineTo(px(x + w, y + d), py(x + w, y + d, z)); ctx.lineTo(px(x, y + d), py(x, y + d, z)); ctx.closePath(); };
 function rrect(ctx, x, y, w, d, r, z) {
   r = Math.min(r, w / 2, d / 2); ctx.moveTo(px(x + r, y), py(x + r, y, z));
@@ -49,12 +55,19 @@ export function decalV2(ctx, d, z, k, S, detail) {
       const ww = Math.max(w, MINB), dh = Math.max(dd, MINB), xx = w < MINB ? x - (MINB - w) / 2 : x, yy = dd < MINB ? y - (MINB - dd) / 2 : y;
       ctx.fillStyle = f; ctx.beginPath(); rrect(ctx, xx, yy, ww, dh, 0.14, z); ctx.fill(); break;
     }
-    case 'ell': { // a puddle or a stain: a soft blob with an irregular outline, feathered in three steps (no rim) and, for the kit's blue ones (a puddle), a crescent of sky in it
-      const r = d.r, rx = r * HW * 1.42, ry = r * HH * 1.42, f = tone(d.fill, k); if (!f) break;
-      const cx = px(x, y), cy = py(x, y, z), seed = Math.floor(x * 31 + y * 17), wet = typeof d.fill === 'string' && d.fill.indexOf('110,150,190') >= 0;
+    case 'ell': { // a puddle or a stain: a soft blob with an irregular outline feathered in three steps (no rim), in a colour that says which (clear blue-green water with a glint of sky, or a patch of darker worn dirt), never a flat grey ellipse
+      const r = d.r, rx = r * HW * 1.42, ry = r * HH * 1.42, kind = ellKind(d.fill), cx = px(x, y), cy = py(x, y, z), seed = Math.floor(x * 31 + y * 17);
       const blob = (sc) => { ctx.beginPath(); for (let i = 0; i <= 18; i++) { const a = (i / 18) * 6.2832, w = 1 + 0.13 * Math.sin(2 * a + seed) + 0.08 * Math.sin(3 * a + seed * 1.7), X = cx + Math.cos(a) * rx * w * sc, Y = cy + Math.sin(a) * ry * w * sc; i ? ctx.lineTo(X, Y) : ctx.moveTo(X, Y); } ctx.closePath(); ctx.fill(); };
-      ctx.fillStyle = f; ctx.globalAlpha = 0.34; blob(1.14); ctx.globalAlpha = 0.5; blob(0.94); ctx.globalAlpha = 0.45; blob(0.62);
-      if (wet) { ctx.globalAlpha = 0.34; ctx.fillStyle = LIGHT.white; ctx.beginPath(); ctx.ellipse(cx - rx * 0.26, cy - ry * 0.3, rx * 0.34, ry * 0.15, -0.35, 0, 6.2832); ctx.fill(); }
+      if (kind === 'puddle') {
+        ctx.fillStyle = tone(mix(SEA.lagoon, SEA.shoal, 0.55), k); ctx.globalAlpha = 0.34; blob(1.14); ctx.globalAlpha = 0.55; blob(0.94);   // the pool: a clear, pale water with the dirt showing through
+        ctx.fillStyle = tone(mix(SEA.shoal, SEA.foam, 0.6), k); ctx.globalAlpha = 0.5; blob(0.62);                                         // its lighter heart
+        ctx.fillStyle = SEA.foam; ctx.globalAlpha = 0.6; ctx.beginPath(); ctx.ellipse(cx - rx * 0.26, cy - ry * 0.3, rx * 0.3, ry * 0.13, -0.35, 0, 6.2832); ctx.fill(); // a glint of sky on the upper left
+      } else if (kind === 'dirt') {
+        const g = (S && S.ground) || '#f1cd8e'; ctx.fillStyle = tone(mix(g, '#8d5a30', 0.45), k); ctx.globalAlpha = 0.3; blob(1.14); ctx.globalAlpha = 0.45; blob(0.94);   // a patch of worn, darker dirt
+        ctx.fillStyle = tone(mix(g, '#fff4d8', 0.25), k); ctx.globalAlpha = 0.4; blob(0.55);
+      } else {
+        const f = tone(d.fill, k); if (!f) break; ctx.fillStyle = f; ctx.globalAlpha = 0.34; blob(1.14); ctx.globalAlpha = 0.5; blob(0.94); ctx.globalAlpha = 0.45; blob(0.62);
+      }
       ctx.globalAlpha = 1; break;
     }
     case 'stripes': {
@@ -62,15 +75,15 @@ export function decalV2(ctx, d, z, k, S, detail) {
       for (let i = 0; i < n; i++) { const t0 = i / n, t1 = (i + 1) / n, c = tone(i % 2 ? d.c2 : d.c1, k); if (!c) continue; ctx.fillStyle = c; ctx.beginPath(); if (d.axis === 'x') quad(ctx, x, y + dd * t0, w, dd * (t1 - t0) + 0.01, z); else quad(ctx, x + w * t0, y, w * (t1 - t0) + 0.01, dd, z); ctx.fill(); }
       break;
     }
-    case 'checker': {
+    case 'checker': { // two tones laid as pavers: the second is a tint a little paler or darker, slab by slab, with a joint between, not a chessboard
       const c1 = tone(d.c1, k), c2 = tone(d.c2, k), s = d.step; if (c1) { ctx.fillStyle = c1; ctx.beginPath(); quad(ctx, x, y, w, dd, z); ctx.fill(); }
-      if (c2) { ctx.fillStyle = c2; ctx.beginPath(); for (let i = 0; i * s < w - 0.01; i++) for (let j = 0; j * s < dd - 0.01; j++) if ((i + j) % 2) quad(ctx, x + i * s + 0.03, y + j * s + 0.03, Math.min(s, w - i * s) - 0.06, Math.min(s, dd - j * s) - 0.06, z); ctx.fill(); }
+      if (c2) { ctx.fillStyle = c2; ctx.globalAlpha = 0.5; ctx.beginPath(); for (let i = 0; i * s < w - 0.01; i++) for (let j = 0; j * s < dd - 0.01; j++) if ((i + j) % 2) rrect(ctx, x + i * s + 0.05, y + j * s + 0.05, Math.min(s, w - i * s) - 0.1, Math.min(s, dd - j * s) - 0.1, 0.08, z); ctx.fill(); ctx.globalAlpha = 1; }
       break;
     }
-    case 'grid': { // hairlines become pavers: every other tile of the grid a shade apart, joints between them
-      const c = tone(d.col, k); if (!c || detail[2] < 0.05) break; const s = d.step > 1.05 ? d.step / 2 : d.step; ctx.fillStyle = c; ctx.beginPath(); // pavers no bigger than a tile
-      for (let i = 0; i * s < w - 0.01; i++) for (let j = 0; j * s < dd - 0.01; j++) if ((i + j) % 2) quad(ctx, x + i * s + 0.035, y + j * s + 0.035, Math.min(s, w - i * s) - 0.07, Math.min(s, dd - j * s) - 0.07, z);
-      ctx.fill(); break;
+    case 'grid': { // hairlines become pavers: every slab of the grid a tint of the line's colour, each its own strength, joints between them (no chessboard)
+      const c = tone(d.col, k); if (!c || detail[2] < 0.05) break; const s = d.step > 1.05 ? d.step / 2 : d.step; ctx.fillStyle = c; // pavers no bigger than a tile
+      for (let q = 0; q < 3; q++) { ctx.globalAlpha = detail[2] * (0.3 + 0.28 * q); ctx.beginPath(); for (let i = 0; i * s < w - 0.01; i++) for (let j = 0; j * s < dd - 0.01; j++) if (((hashI(x, y, i, j) * 3) | 0) === q) rrect(ctx, x + i * s + 0.05, y + j * s + 0.05, Math.min(s, w - i * s) - 0.1, Math.min(s, dd - j * s) - 0.1, 0.07, z); ctx.fill(); }
+      ctx.globalAlpha = 1; break;
     }
     case 'spk': { // specks become round pebbles and confetti, near and close only
       if (detail[3] < 0.15) break; const f = tone(d.fill, k); ctx.fillStyle = f; ctx.globalAlpha = detail[3]; ctx.beginPath();

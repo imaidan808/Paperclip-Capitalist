@@ -157,6 +157,8 @@ export function beachRuns(ring) {
   RUNS.set(ring, runs); return runs;
 }
 const RIB = new Float32Array(2 * 4096), RIBW = new Float32Array(2 * 4096);
+/** The breath of the swash at a point of the coast `arc` tiles along it, 0..1: a period of 6.5 seconds whose phase runs along the beach (0.12 of a cycle a tile). */
+export const breathAt = (t, arc) => 0.5 + 0.5 * Math.sin(TAU * (t / 6.5 + arc * 0.12));
 /**
  * Along every beach in view, a film of foam that advances and retreats over 6.5 seconds, its phase running along the coast (0.12 of a cycle a tile) so the swash travels down the beach: a wide soft ribbon of
  * shoal colour under a narrower white one, each ONE filled polygon along the whole run (the coast's own points and the same points pushed out to sea by the width), the width a smooth function of the arc, the ends
@@ -171,7 +173,7 @@ export function drawSwash(ctx, view, zoom, t, tier = 0) {
     const n = Math.min(run.n, 4096), g = run.grid, nm = run.nrm, a0 = run.arc[0], aN = run.arc[n - 1];
     for (let pass = 0; pass < 2; pass++) {
       const base = pass ? 0.06 : 0.16, amp = pass ? 0.08 : 0.15; let k = 0;
-      for (let i = 0; i < n; i++) { const s = run.arc[i] - a0, e = Math.min(1, Math.min(s, aN - run.arc[i]) / 0.8), breath = 0.5 + 0.5 * Math.sin(TAU * (t / 6.5 + run.arc[i] * 0.12)), w = (base + amp * breath) * e * e * (3 - 2 * e); RIBW[i] = w; }
+      for (let i = 0; i < n; i++) { const s = run.arc[i] - a0, e = Math.min(1, Math.min(s, aN - run.arc[i]) / 0.8), breath = breathAt(t, run.arc[i]), w = (base + amp * breath) * e * e * (3 - 2 * e); RIBW[i] = w; }
       for (let i = 0; i < n; i++) { RIB[k++] = (g[2 * i] - g[2 * i + 1]) * HWd; RIB[k++] = (g[2 * i] + g[2 * i + 1]) * HHd; }
       for (let i = n - 1; i >= 0; i--) { const gx = g[2 * i] + nm[2 * i] * RIBW[i], gy = g[2 * i + 1] + nm[2 * i + 1] * RIBW[i]; RIB[k++] = (gx - gy) * HWd; RIB[k++] = (gx + gy) * HHd; }
       ctx.beginPath(); ctx.moveTo(RIB[0], RIB[1]); for (let i = 1; i < 2 * n; i++) ctx.lineTo(RIB[2 * i], RIB[2 * i + 1]); ctx.closePath();

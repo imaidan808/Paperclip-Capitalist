@@ -13,7 +13,7 @@ export const staticMethods = {
     if (p.t === 'gate' && !locked && p.gk !== 'ferry') return;
     ctx.save(); ctx.translate(0, -z);
     env.dim = fx.dim; env.night = Math.max(this.night, fx.lights); env.zoff = z; env.locked = locked;
-    if (p.t === 'lamp' && env.night > 0.04) this.lights.push({ wx: sx(p.gx, p.gy), wy: sy(p.gx, p.gy, z + 28), gy: sy(p.gx, p.gy, z), r: 46, c: p.col ? rgbOf(p.col) : '255,222,140', a: 0.55 * env.night });
+    if (p.t === 'lamp' && env.night > 0.04) this.lights.push({ wx: sx(p.gx, p.gy), wy: sy(p.gx, p.gy, z + 28), gy: sy(p.gx, p.gy, z), r: 56, c: p.col ? rgbOf(p.col) : '255,222,140', a: 0.7 * env.night });
     if (p.t === 'board') env.boardText = this.boardText(p, locked);
     const polys = drawProp(ctx, p, env);
     ctx.restore();

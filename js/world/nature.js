@@ -88,6 +88,11 @@ function crown(g, sp, s, env, base) {
   } else puffs(g, ROUND, U, cy, sp === 'blossom' ? col(BLOOM.pink, env) : base, sp === 'blossom' ? col(BLOOM.lilac, env) : null, sp === 'apple' ? appleDots : sp === 'blossom' ? blossomDots : leafDots);
 }
 registerProp('tree', drawTree);
+/** One tree painted straight into a surface at (x, y), foot and crown, with no sprite and no sway: the meadows' trees are baked into the ground (groundart.js). `v` picks one of the five greens. */
+export function plantTree(g, x, y, sp, s, v) {
+  const e = { dim: 0, hz: 0 }, base = col(GREENS[Math.abs(v) % 5], e);
+  g.save(); g.translate(x, y); foot(g, sp, s, e, base); crown(g, sp, s, e, base); g.restore();
+}
 const rectOf = (sp, s, part) => { const U = 34 * s, w = (sp === 'pine' ? 0.62 * 1.5 : sp === 'palm' ? 0.95 : 0.66) * U + 6, top = (sp === 'pine' ? 66 : sp === 'palm' ? 62 : 52) * s; return part === 'foot' ? [-w - 0.3 * U, -(sp === 'palm' ? 46 : 26) * s, w + 1.6 * U, 0.62 * U] : [-w - 6, -top - 8, w + 6 + (sp === 'palm' ? 14 * s : 0), 8]; };
 
 /** The sway of a crown in world pixels: 4.2 s, 1.2 px at the crown, a slow gust over it (docs/ART_DIRECTION.md 8.1); zero when time stands still. */
