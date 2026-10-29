@@ -560,11 +560,12 @@ export function createSession(ctx, run) {
   ses.acts = acts; ses.changes = changes; ses.inputs = inputs;
 
   // ---- listeners on the shared dialog: one set per session, removed when it closes
-  const onClick = (e) => { const b = e.target.closest?.('[data-deal]'); if (b && !b.disabled && el().classList.contains('deal')) { e.preventDefault(); if (!run.over && run.gone?.()) { result(); return; } acts[b.dataset.deal]?.(b, e); } };
+  const onClick = (e) => { const b = e.target.closest?.('[data-deal]'); if (b && !b.disabled && el().classList.contains('deal')) { e.preventDefault(); if (e.detail > 1) return; /* the second press of a double-click is not a second move */ if (!run.over && run.gone?.()) { result(); return; } acts[b.dataset.deal]?.(b, e); } };
   const onChange = (e) => { const b = e.target.closest?.('[data-change-deal]'); if (b) changes[b.dataset.changeDeal]?.(b, e); };
   const onInput = (e) => { const b = e.target.closest?.('[data-deal-input]'); if (b) inputs[b.dataset.dealInput]?.(b, e); };
   const onKey = (e) => {
-    if (run.key !== 'fix' || run.res.fix || ses.reduced() || !(e.key === ' ' || e.key === 'Enter')) return;
+    if (e.repeat && e.target.closest?.('[data-deal]')) { e.preventDefault(); return; } // a key held on a button repeats its click: one press is one move
+    if (run.key !== 'fix' || run.res.fix || ses.reduced() || e.repeat || !(e.key === ' ' || e.key === 'Enter')) return;
     if (e.target.closest?.('button, input, select, a, textarea, summary')) return;
     e.preventDefault(); acts.stop();
   };

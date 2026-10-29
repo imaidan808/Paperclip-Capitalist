@@ -34,7 +34,9 @@ export async function handler(req, res) {
     if (r.status) { res.writeHead(r.status); res.end(r.status === 400 ? 'bad request' : 'not found'); return; }
     const full = join(root, r.file);
     if (full !== root && !full.startsWith(root + sep)) { res.writeHead(404); res.end('not found'); return; }
-    const data = await readFile(full);
+    const real = realpathSync(full), top = realpathSync(root); // a symlink inside the tree must not lead out of it
+    if (real !== top && !real.startsWith(top + sep)) { res.writeHead(404); res.end('not found'); return; }
+    const data = await readFile(real);
     res.writeHead(200, { 'content-type': types[extname(r.file)], 'cache-control': 'no-store' });
     res.end(req.method === 'HEAD' ? undefined : data);
   } catch {

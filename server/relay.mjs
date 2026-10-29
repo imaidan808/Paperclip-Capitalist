@@ -3,7 +3,7 @@
 //   cd server && npm install && npm start      (PORT=8787 by default; PORT=0 picks a free one and says which)
 //
 // It is the one process every class shares, so it trusts nobody and must not fall over:
-//  - every socket has an error handler, a message rate and a size limit; a frame that is binary, oversize, not JSON or of an unknown type is dropped;
+//  - every socket has an error handler, a message rate and a size limit; a frame that is binary, oversize, not JSON or of an unknown type is dropped (and counts against the rate, so a flood of any of them ends the connection);
 //  - `from` and `role` are stamped by the relay from the connection, never taken from the message. The first connection to claim the instructor's seat in a
 //    room holds it, and its pid (with its key, below) can always take it back from anyone; no other pid is ever handed it while the room lives (a timer was: a laptop lid closed for a break and a student was the instructor,
 //    with the real one locked out. An operator who wants a handover after a long absence sets SEAT_GRACE_MS). Only the instructor can send clock, inject or rewind;
@@ -150,7 +150,7 @@ export function createRelay({ env = process.env, now = Date.now, log = (...a) =>
       // nothing a frame holds may throw out of here: an exception in a listener ends this socket's receiver (and, uncaught, is all the relay has to stand on), so it ends this one connection, not the service
       try {
         const t = now(), instructor = isInstructor(room, ws);
-        if (isBinary || !allow(ws, t, instructor ? 5 : 1)) return;
+        if (!allow(ws, t, instructor ? 5 : 1) || isBinary) return; // the bucket first: a binary frame is dropped, but a socket that sends nothing else pays for each one (and is cut off at 300 strikes)
         const text = data.toString();
         if (text.length > MAX_MSG || nesting(text, 32) > 32) return;
         let m;
@@ -210,6 +210,15 @@ export function createRelay({ env = process.env, now = Date.now, log = (...a) =>
         });
       });
     },
+    /** A planned stop (a restart, a deploy): every client is told the relay is going away (close code 1001, which a browser's reconnect treats as a pause, not a fault), given `grace` ms to say goodbye, and then it is closed. */
+    shutdown(grace = 1000) {
+      for (const ws of wss.clients) { try { ws.close(1001, 'relay restarting'); } catch { /* gone */ } }
+      return new Promise((resolve) => {
+        const done = () => { clearTimeout(t); this.close().then(resolve); };
+        const t = setTimeout(done, grace); t.unref?.();
+        const poll = setInterval(() => { if (!wss.clients.size) { clearInterval(poll); done(); } }, 25); poll.unref?.();
+      });
+    },
     /** Closes every connection and the server, and forgets every room. */
     close() {
       return new Promise((resolve) => {
@@ -230,5 +239,14 @@ if (asProgram) {
   process.on('uncaughtException', (e) => console.error('relay: uncaught:', e && e.message));
   process.on('unhandledRejection', (e) => console.error('relay: unhandled:', e && e.message));
   // An error before the relay is listening (the port is taken, or not ours to use) is the end of this process, with a failing exit code so `npm start` and a service manager see it.
-  createRelay().listen().then((port) => console.log(`relay listening on :${port}`), (e) => { console.error(`relay: ${e.what || 'http'} error:`, e.message); process.exit(1); });
+  const relay = createRelay();
+  relay.listen().then((port) => console.log(`relay listening on :${port}`), (e) => { console.error(`relay: ${e.what || 'http'} error:`, e.message); process.exit(1); });
+  // A normal stop (a deploy, `docker stop`, Ctrl-C) tells the classes the relay is going away and then ends; as PID 1 of a container a process with no handler for SIGTERM is not stopped by it at all.
+  let stopping = false;
+  for (const sig of ['SIGTERM', 'SIGINT']) process.on(sig, () => {
+    if (stopping) return; stopping = true;
+    console.error(`relay: ${sig}, closing`);
+    const hard = setTimeout(() => process.exit(0), 3000); hard.unref?.();
+    relay.shutdown().then(() => process.exit(0), () => process.exit(1));
+  });
 }

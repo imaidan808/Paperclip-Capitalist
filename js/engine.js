@@ -17,7 +17,8 @@ const fail = (msg, extra = {}) => ({ ...extra, ok: false, msg });
 const fin = (x, d) => (typeof x === 'number' && !Number.isNaN(x) ? x : d); // +-Infinity is a number: the caller's clamp turns it into the nearest bound
 const own = (o, k) => typeof k === 'string' && Object.prototype.hasOwnProperty.call(o, k); // ids come from the UI and the network: never index a plain object by them unchecked
 const DE_CAP = 999; // a debt-to-equity figure that is logged or shown is finite: nothing left to divide by reads as 999, not Infinity (JSON writes Infinity as null)
-const money = (x) => (Math.abs(x) < 100 ? '$' + x.toFixed(2) : '$' + Math.round(x).toLocaleString('en-US'));
+const money = (x) => (x < 0 && Math.abs(x) >= 0.005 ? '-' : '') + (Math.abs(x) < 100 ? '$' + Math.abs(x).toFixed(2) : '$' + Math.round(Math.abs(x)).toLocaleString('en-US')); // -$12.50, as the rest of the product writes it, not $-12.50
+const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`; // "1 day", "2 days"
 const uniq = (ids) => [...new Set(ids)]; // an id list from outside may repeat an id: one crate is one crate
 const isNum = (x) => typeof x === 'number' && Number.isFinite(x); // a real number: not NaN, not +-Infinity, not a string (JSON turns Infinity into null)
 const LEDGER_CAP = 3200, LEDGER_FOLD = 200; // see led()
@@ -119,7 +120,7 @@ export class Game {
     const evt = { type, day: this.day, ...payload };
     this.evq.push(evt);
     if (this.evq.length > 200) this.evq.shift();
-    this.onEvent?.(evt);
+    try { this.onEvent?.(evt); } catch (e) { console.error('engine: an event listener threw:', e); } // a listener is the page's business: a day that has half run (profit counted, history not written) is the engine's
     return evt;
   }
   get day() { return Math.min(TOTAL_DAYS, Math.floor(this.s.hour / 24) + 1); }
@@ -423,7 +424,7 @@ export class Game {
       if (!ev.warned && h < ev.start && h >= ev.start - lead) {
         ev.warned = true; ev.warnedAt = h;
         const hrs = ev.start - h;
-        this.note('warn', `${ev.name}: effective in ${hrs >= 24 ? Math.round(hrs / 24) + ' days' : hrs + ' hours'}.`, { alert: { ...ev.alert, name: ev.name, level: ev.level, start: ev.start } });
+        this.note('warn', `${ev.name}: effective in ${hrs >= 24 ? plural(Math.round(hrs / 24), 'day') : plural(hrs, 'hour')}.`, { alert: { ...ev.alert, name: ev.name, level: ev.level, start: ev.start } });
       }
       if (!ev.started && h >= ev.start) {
         ev.started = true;
@@ -1451,7 +1452,7 @@ export class Game {
     s.exit = { kind: s.exiting.kind, hour: s.hour, nw, daysLeft: this.daysRemaining(), eei: eeiCalc(nw, s.startCapital, this.daysRemaining(), this.env.difficulty.eeiFloor) };
     s.exiting = null; s.over = true;
     this.led('exit', 'Exit completed', proceeds);
-    this.note('good', `Exit complete at ${money(nw)}. Score locked with ${Math.round(this.daysRemaining())} days to spare.`, { final: true });
+    this.note('good', `Exit complete at ${money(nw)}. Score locked with ${plural(Math.round(this.daysRemaining()), 'day')} to spare.`, { final: true });
   }
 
   // ------------------------------------------------------------------ peer-to-peer exchange
@@ -1696,6 +1697,7 @@ export class Game {
     if (!o) return fail('That offer is not valid.');
     if (o.from && o.from === s.pid) return fail('You cannot accept your own offer.');
     if (o.to != null && o.to !== s.pid) return fail('That offer was not made to you.');
+    if (typeof o.id === 'string' && (s.accepted || []).includes(o.id)) return fail('You already accepted that offer.'); // a message that arrives twice (or is sent twice) pays and delivers once
     // what I would send is checked as it truly is (a counterfeit is worth what it is worth), not as the proposer described it
     const mine = o.want.assets.map((w) => s.assets.find((a) => a.id === w.id && a.cls === w.cls && a.zone === w.zone));
     const held = mine.every(Boolean);
@@ -1714,6 +1716,7 @@ export class Game {
     for (const [z, k] of Object.entries(inbound)) if (k - (outbound[z] || 0) > this.roomIn(+z)) return fail(`There is no room in ${ZONES[z].short} for what they are sending.`);
     // ---- every check has passed: now the whole swap, with nothing left to fail
     const gone = new Set(mine);
+    if (typeof o.id === 'string') { (s.accepted ||= []).push(o.id); if (s.accepted.length > 200) s.accepted.shift(); }
     s.assets = s.assets.filter((a) => !gone.has(a));
     s.cash -= o.want.cash;
     const got = o.give.assets.map((a) => this._arrive({ id: 'A' + s.nid++, cls: a.cls, cond: a.cond, quality: a.quality, wear: a.wear, zone: a.zone, basis: 0, from: 'p2p', got: s.hour, known: true }));
