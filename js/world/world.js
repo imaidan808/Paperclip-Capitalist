@@ -13,6 +13,7 @@ import { Lighting, dayTargets } from './lighting.js';
 import { Labels, qs } from './labels.js';
 import { surface, snap, mono, sans, stampGlow, rgbOf, softwareRaster } from './gfx.js';
 import { clearSprites, setSpriteBudget } from './sprites.js';
+import { ZoomInput } from './camera-input.js';
 
 const TAG_COLOR = { tool: '#a0a6ad', office: '#d9d2c0', prestige: '#7a5fb0', paper: '#e8e2cc', retro: '#b07a3a', electronics: '#4a8fb0', vehicle: '#b0493a', consumer: '#c45f7a', trend: '#ff3da8', scrap: '#6b5a4a', industrial: '#8a7a62', training: '#46a06a', digital: '#7be3ff', b2b: '#5a6fb0', franchise: '#e8cd6a', infra: '#6a5fa0',
   food: '#d98a3a', farm: '#8aa84a', bulk: '#9a8a6a', marine: '#3a8ab0', collectible: '#c9a227', luxury: '#b88adf', fashion: '#e06aa0', ip: '#9b6dff', media: '#d04aa8', realty: '#c47a5a', finance: '#4aa87a', energy: '#e0c030', medical: '#e0e8f0', home: '#b09070', outdoor: '#5a9a5a', gem: '#7ae0d0' };
@@ -63,10 +64,11 @@ export class World {
     this.cv = document.createElement('canvas');
     this.cv.className = 'worldcv'; this.cv.tabIndex = 0;
     this.cv.setAttribute('role', 'application');
-    this.cv.setAttribute('aria-label', 'Isometric world of sixteen districts. Drag to look around, Ctrl and scroll to zoom, arrow keys to pan. Every object here is also in the list below the map.');
+    this.cv.setAttribute('aria-label', 'Isometric world of sixteen districts. Drag to look around, scroll or pinch to zoom, arrow keys to pan. Every object here is also in the list below the map.');
     this.ctx = this.cv.getContext('2d', { alpha: false });
     this.mini = document.createElement('canvas'); this.mini.width = 150; this.mini.height = 96; this.mini.className = 'worldmini'; this.mini.setAttribute('aria-hidden', 'true'); this.mctx = this.mini.getContext('2d');
     this.cam = { x: 0, y: 0, z: 0.9 }; this.camTo = null;
+    this.zin = new ZoomInput({ zoom: () => this.cam.z, apply: (z, px, py) => this.zoomAbout(z, px, py), range: () => this.zoomRange(), size: () => [this.W, this.H], instant: () => this.reduced() || !this.running, touching: () => this.pointers.size > 1 }); // wheel, trackpad and Safari-gesture zoom (camera-input.js); two fingers down are zoomed by the pointer events already
     this.mode = 'world';
     this.W = 800; this.H = 500; this.dpr = 1;
     this.inset = { l: 0, r: 0 };                                                                // px of the window's left and right edges that the camera buttons stand over: the island is fitted to what they leave
@@ -123,7 +125,7 @@ export class World {
     this.light.release(); this.labels.release(); clearSprites();
   }
   start() { if (this.running) return; this.running = true; this.last = performance.now(); this.raf = requestAnimationFrame((t) => this.frame(t)); }
-  stop() { this.running = false; cancelAnimationFrame(this.raf); }
+  stop() { this.running = false; cancelAnimationFrame(this.raf); this.zin.cancel(); }
   /**
    * The pixel density the canvas is drawn at. The screen's own, to 2; at most SOFT_DPR where the canvas is drawn on the CPU. The quality governor takes a quarter off at
    * its fourth tier, and puts it back only below its second: a picture that tips between two tiers must not reallocate the canvas (and every layer made for it) each time.
@@ -164,6 +166,7 @@ export class World {
     this.goTo(sx(d.cx, d.cy), sy(d.cx, d.cy, d.z) - 20, zoom, animate);
   }
   goTo(x, y, z, animate = true) {
+    this.zin.cancel(); // a move of the camera's own ends any wheel ease
     if (!animate || this.reduced()) { this.cam = { x, y, z }; this.camTo = null; this.clampCam(); } else this.camTo = { x, y, z, t0: this.t, from: { ...this.cam }, dur: 650 };
     this.dirty = true;
   }
@@ -174,8 +177,11 @@ export class World {
     this.cam.x = clamp(this.cam.x + ox / z, b.x0 + mx, b.x1 - mx) - ox / z;
     this.cam.y = clamp(this.cam.y, b.y0 + my, b.y1 - my);
   }
-  zoomBy(f, px = this.W / 2, py = this.H / 2) {
-    const before = this.s2w(px, py); this.cam.z *= f; this.clampCam();
+  /** Zoom by a factor about a screen point (the camera buttons, the keyboard, a two-finger touch pinch, a trackpad pinch): at once, and it ends any wheel ease. */
+  zoomBy(f, px = this.W / 2, py = this.H / 2) { this.zin.cancel(); this.zoomAbout(this.cam.z * f, px, py); }
+  /** Set the zoom, keeping the world point under a screen point where it is: the one place the camera is zoomed (the wheel's ease steps through here too). */
+  zoomAbout(z, px = this.W / 2, py = this.H / 2) {
+    const before = this.s2w(px, py); this.cam.z = z; this.clampCam();
     const after = this.s2w(px, py); this.cam.x += before[0] - after[0]; this.cam.y += before[1] - after[1]; this.clampCam(); this.camTo = null; this.dirty = true;
   }
   w2s(x, y) { return [(x - this.cam.x) * this.cam.z + this.W / 2, (y - this.cam.y) * this.cam.z + this.H / 2]; }
@@ -197,10 +203,10 @@ export class World {
       if (this.drag && p) {
         const dx = e.offsetX - this.drag.x, dy = e.offsetY - this.drag.y;
         if (!this.drag.moved && Math.hypot(dx, dy) > 6) { this.drag.moved = true; cv.style.cursor = 'grabbing'; }
-        if (this.drag.moved) { this.cam.x = this.drag.cx - dx / this.cam.z; this.cam.y = this.drag.cy - dy / this.cam.z; this.clampCam(); this.camTo = null; this.dirty = true; }
+        if (this.drag.moved) { this.cam.x = this.drag.cx - dx / this.cam.z; this.cam.y = this.drag.cy - dy / this.cam.z; this.clampCam(); this.camTo = null; this.zin.cancel(); this.dirty = true; }
         return;
       }
-      this.pointerAt(e.offsetX, e.offsetY, e);
+      this.zin.seen(e.offsetX, e.offsetY); this.pointerAt(e.offsetX, e.offsetY, e);
     });
     const up = (e) => {
       const d = this.drag, wasDrag = d?.moved;
@@ -214,14 +220,20 @@ export class World {
     };
     cv.addEventListener('pointerup', up); cv.addEventListener('pointercancel', up);
     cv.addEventListener('pointerleave', () => { if (!this.drag) { this.hover = null; this.api.hover?.(null); this.dirty = true; } });
-    cv.addEventListener('wheel', (e) => { if (!(e.ctrlKey || e.metaKey || e.altKey)) return; e.preventDefault(); this.zoomBy(Math.exp(-e.deltaY * 0.0022), e.offsetX, e.offsetY); }, { passive: false });
+    // Zoom: the wheel (a mouse notch, a trackpad's two-finger scroll, a trackpad pinch in Chrome, Edge and Firefox) and Safari's pinch gestures. Only events aimed at the canvas get here
+    // (the HUD, the drawers and dialogs have their own), and none of them may scroll, zoom or navigate the page, so every one is cancelled (these listeners are not passive).
+    const mine = (e) => !e.target || e.target === cv;
+    cv.addEventListener('wheel', (e) => { if (!mine(e)) return; e.preventDefault(); this.zin.wheel(e); }, { passive: false });
+    cv.addEventListener('gesturestart', (e) => { if (!mine(e)) return; e.preventDefault(); this.zin.gestureStart(e, cv.getBoundingClientRect()); }, { passive: false });
+    cv.addEventListener('gesturechange', (e) => { if (!mine(e)) return; e.preventDefault(); this.zin.gestureChange(e, cv.getBoundingClientRect()); }, { passive: false });
+    cv.addEventListener('gestureend', (e) => { if (!mine(e)) return; e.preventDefault(); this.zin.gestureEnd(); }, { passive: false });
     cv.addEventListener('keydown', (e) => {
       if (e.ctrlKey || e.metaKey || e.altKey) return; // never swallow the browser's own zoom and navigation shortcuts
       if (e.key === '0') { e.preventDefault(); this.fit(true); return; }
       const step = 60 / this.cam.z; let h = true;
       if (e.key === 'ArrowLeft') this.cam.x -= step; else if (e.key === 'ArrowRight') this.cam.x += step; else if (e.key === 'ArrowUp') this.cam.y -= step; else if (e.key === 'ArrowDown') this.cam.y += step;
       else if (e.key === '+' || e.key === '=') this.zoomBy(1.2); else if (e.key === '-') this.zoomBy(1 / 1.2); else h = false;
-      if (h) { e.preventDefault(); this.clampCam(); this.camTo = null; this.dirty = true; }
+      if (h) { e.preventDefault(); this.clampCam(); this.camTo = null; this.zin.cancel(); this.dirty = true; }
     });
     cv.style.cursor = 'grab';
     this.mini.addEventListener('pointerdown', (e) => { const r = this.mini.getBoundingClientRect(), b = this.bounds(); this.goTo(b.x0 + (e.clientX - r.left) / r.width * (b.x1 - b.x0), b.y0 + (e.clientY - r.top) / r.height * (b.y1 - b.y0), this.cam.z, true); });
@@ -394,7 +406,7 @@ export class World {
     const t0 = performance.now(), G = this.gov, gap = G.prev && ts - G.prev < 250 ? ts - G.prev : 0; // the gap between two drawn frames (0 after a pause)
     this.last = ts; this.t = ts;
     const calm = this.reduced();
-    const animating = !calm || this.camTo || this.player.path.length || this.fx.active || this.revealing();
+    const animating = !calm || this.camTo || this.zin.pending || this.player.path.length || this.fx.active || this.revealing();
     if (!animating && !this.dirty) return;
     this.update(dt);
     this.draw();
@@ -431,7 +443,8 @@ export class World {
 
   update(dt) {
     const calm = this.reduced(), speed = this.api.session.clock.speed, env = this.env;
-    // camera tween
+    // camera tween, and a mouse notch's zoom ease
+    this.zin.tick(dt);
     if (this.camTo) { const c = this.camTo, k = clamp((this.t - c.t0) / c.dur, 0, 1), e = ease(k); this.cam.x = lerp(c.from.x, c.x, e); this.cam.y = lerp(c.from.y, c.y, e); this.cam.z = lerp(c.from.z, c.z, e); if (k >= 1) this.camTo = null; this.clampCam(); }
     // light: rate-limited so fast clocks never strobe (WCAG 2.3.1); the golden hour follows the same limit
     const T = dayTargets(env.hour, speed, calm, this.tod), step = dt * 0.35;
