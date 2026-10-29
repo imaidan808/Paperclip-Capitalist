@@ -29,7 +29,7 @@ import { terrainMethods } from './terrain.js';
 import { roadMethods } from './roads.js';
 import { decalMethods } from './decals.js';
 import { groundCacheMethods } from './groundcache.js';
-import { cloudMethods } from './clouds.js';
+import { cloudMethods, shrinkClouds } from './clouds.js';
 import { atmosMethods } from './atmos.js';
 import { staticMethods } from './statics.js';
 import { plotMethods } from './ents-plots.js';
@@ -131,6 +131,7 @@ export class World {
     if (ledger.within()) return true;
     trimSprites(0.7); this.ledgerSync();
     if (!ledger.within() && this.gc && typeof this.gc.shrink === 'function') { const win = this.gcCells; this.gc.shrink(Math.max(8, Math.ceil(this.gc.size * 0.6)), win, this.renderScale()); this.ledgerSync(); }
+    if (!ledger.within() && shrinkClouds(this)) this.ledgerSync();
     if (!ledger.within()) { this.labels.cache.clear(); this.ledgerSync(); }
     return ledger.within();
   }

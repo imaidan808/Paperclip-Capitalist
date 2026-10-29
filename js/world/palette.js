@@ -88,14 +88,14 @@ export function faceTone(c) {
 }
 const veilMemo = new Map();
 /**
- * The colour of something under cloud (replaces iso.fogged): desaturated by 0.45 k, then 22% k towards lilac-white, so it is never darker than its source by more than a twentieth.
+ * The colour of something under cloud (replaces iso.fogged): desaturated by 0.24 k, then 12% k towards lilac-white, so it is never darker than its source by more than a twentieth.
  * k is 1 while a district is locked and falls to 0 as it opens. A district keeps what it is and what colour it is; it is veiled, not buried.
  */
 export function veiled(c, k) {
   if (!(k > 0.01)) return c;
   const kk = Math.round(clamp(k, 0, 1) * 50) / 50; let m = veilMemo.get(c); if (!m) { if (veilMemo.size > 2000) veilMemo.clear(); m = new Map(); veilMemo.set(c, m); }
   let v = m.get(kk);
-  if (v === undefined) { v = mix(mix(c, gray(c), 0.45 * kk), CLOUD.veil, 0.22 * kk); if (m.size > 48) m.clear(); m.set(kk, v); }
+  if (v === undefined) { v = mix(mix(c, gray(c), 0.24 * kk), CLOUD.veil, 0.12 * kk); if (m.size > 48) m.clear(); m.set(kk, v); }
   return v;
 }
 

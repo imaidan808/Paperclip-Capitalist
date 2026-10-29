@@ -9,6 +9,7 @@ import { luma, rgb } from '../js/world/iso.js';
 import { ledger, releaseAll } from '../js/world/gfx.js';
 import { slotFor, setFlag } from '../js/world/stack.js';
 import { DIST } from '../js/world/layout.js';
+import { bankOf, coverUnder } from '../js/world/cloudpaint.js';
 
 /** A recording stand-in for OffscreenCanvas: each surface keeps the calls made on it. */
 function installOffscreen() {
@@ -90,13 +91,17 @@ test('the V2 grade layer is registered in screen space and one Grade is made for
   const w = { light: { perFrame: 3 } }, g = gradeOf(w); assert.strictEqual(gradeOf(w), g); assert.equal(g.perFrame, 3); assert.notStrictEqual(gradeOf({}), g); assert.ok(releaseAll() >= 0);
 });
 
-test('a lamp under a cloud shines a third as strongly as one in the open (the cloud is in front of it), and every other light is stamped as Lighting.lights stamps it', () => {
+test('a lamp under a cloud is not stamped (the cloud is in front of it: no glowing blobs inside a bank), one in a window of the bank shines in full, and every other light is stamped as Lighting.lights stamps it', () => {
   installOffscreen();
   try {
     const g = new Grade(), seen = [], ctx = { globalAlpha: 1, globalCompositeOperation: 'source-over', save() {}, restore() {}, drawImage() { seen.push(+this.globalAlpha.toFixed(3)); } };
-    const D = DIST[3], inside = [(D.bb[0] + D.bb[2]) / 2, (D.bb[1] + D.bb[3]) / 2], outside = [DIST[1].bb[0] + 200, DIST[1].bb[1] + 400], cam = { x: 0, y: 0, z: 1 };
-    const mk = (pt, unlocked) => ({ W: 20000, H: 20000, cam: { x: pt[0], y: pt[1], z: 1 }, unlocked, lights: [{ wx: pt[0], wy: pt[1], r: 40, c: '255,233,168', a: 0.6 }] }); void cam;
-    g.lights(ctx, mk(inside, new Set([1])), 160); g.lights(ctx, mk(inside, new Set([1, 3])), 160); g.lights(ctx, mk(outside, new Set([1])), 160);
-    assert.deepEqual(seen, [0.18, 0.6, 0.6], 'under cloud 0.3 of the strength; once its district is open, in full; a light elsewhere in full');
+    const D = DIST[3], form = bankOf(D, 1), win = form.windows[0], under = form.lobes.filter((l) => l.kind === 0 && l.r > 40).sort((p, q) => Math.hypot(p.x - form.cx, p.y - form.cy) - Math.hypot(q.x - form.cx, q.y - form.cy))[0], outside = [DIST[1].bb[0] + 200, DIST[1].bb[1] + 400];
+    const mk = (pt, unlocked, r = 40) => ({ W: 20000, H: 20000, cam: { x: pt[0], y: pt[1], z: 1 }, unlocked, lights: [{ wx: pt[0], wy: pt[1], r, c: '255,233,168', a: 0.6 }] });
+    assert.equal(coverUnder(D, under.x, under.y, 40), 1, 'the middle of a lobe is wholly under cloud'); assert.equal(coverUnder(D, win.x, win.y, 40), 0, 'the middle of a window is clear sky');
+    g.lights(ctx, mk([under.x, under.y], new Set([1])), 160); assert.deepEqual(seen, [], 'under cloud: nothing is stamped'); seen.length = 0;
+    g.lights(ctx, mk([win.x, win.y], new Set([1])), 160); assert.deepEqual(seen, [0.6], 'in a window: in full'); seen.length = 0;
+    g.lights(ctx, mk([under.x, under.y], new Set([1, 3])), 160); assert.deepEqual(seen, [0.6], 'once its district is open, in full'); seen.length = 0;
+    g.lights(ctx, mk(outside, new Set([1])), 160); assert.deepEqual(seen, [0.6], 'a light elsewhere in full');
+    const edge = [win.x + win.rx * 0.97, win.y]; seen.length = 0; g.lights(ctx, mk(edge, new Set([1]), 90), 160); assert.ok(seen.length === 0 || seen[0] < 0.6, 'a light at the edge of a window whose pool reaches under the rim is dimmed, never brighter than in the open');
   } finally { delete globalThis.OffscreenCanvas; }
 });
