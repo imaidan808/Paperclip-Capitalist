@@ -4,7 +4,8 @@
 // (the palette audit allows exactly that). The values are held to the machine-checked block of the art direction by tests/world-palette.test.mjs.
 //
 // The old palette (olive terrain, slate asphalt, `#121826` fog, ink `rgb(8,10,20)`) is retired in full; a world module that still uses it is a legacy drawer waiting for its V2.
-import { mix, shade, gray, luma, rgb, hex, clamp } from './iso.js';
+import { mix, shade, gray, luma, rgb, hex, clamp, setVeil } from './iso.js';
+import { FOG_DIM } from './common.js';
 
 /** A five-stop ramp: hi (sun-struck), light, mid (the body colour), shade (shifted towards violet-blue), deep. */
 const ramp = (hi, light, mid, shd, deep, extra) => Object.freeze({ hi, light, mid, shade: shd, deep, ...extra });
@@ -98,6 +99,9 @@ export function veiled(c, k) {
   return v;
 }
 
+/** The legacy callers of iso.fogged pass fxOf's `dim` (0 to FOG_DIM); while the clouds are V2 they get the veil (setVeil): k = dim / FOG_DIM. */
+setVeil((c, dim) => veiled(c, dim / FOG_DIM));
+
 // ---------------------------------------------------------------- 5.1 the sea's depth ramp
 const smooth = (x) => { const t = x < 0 ? 0 : x > 1 ? 1 : x; return t * t * (3 - 2 * t); };
 /**
@@ -122,7 +126,7 @@ export function skyOf(h, out = { night: 0, dusk: 0 }) {
   out.dusk = Math.max(bump(17.8, 1.7), bump(6.1, 1.2));
   return out;
 }
-const GOLD_RGB = rgb(GRADE.dusk), NIGHT_RGB = rgb(GRADE.night), RAIN_RGB = rgb(GRADE.rain);
+const ROSE_RGB = [236, 150, 196], GOLD_RGB = rgb(GRADE.dusk), NIGHT_RGB = rgb(GRADE.night), RAIN_RGB = rgb(GRADE.rain);
 let tKey = -1, tStr = '';
 /**
  * The multiply colour of the grade (replaces lighting.tintOf): white by day (answered as ''), warm gold at dawn and dusk, periwinkle at night (#8c98de at full night: luma 0.61, never murky),
@@ -130,7 +134,8 @@ let tKey = -1, tStr = '';
  */
 export function tintFor(night, dusk, crunch) {
   let r = 255, g = 255, b = 255;
-  if (dusk > 0.01) { const k = dusk * (1 - night * 0.55) * 0.85; r += (GOLD_RGB[0] - r) * k; g += (GOLD_RGB[1] - g) * k; b += (GOLD_RGB[2] - b) * k; }
+  if (dusk > 0.01) { const k = dusk * (1 - night * 0.4) * 0.92; r += (GOLD_RGB[0] - r) * k; g += (GOLD_RGB[1] - g) * k; b += (GOLD_RGB[2] - b) * k; }
+  if (dusk > 0.01 && night > 0.3 && night < 0.8) { const k = dusk * (1 - ((night - 0.55) / 0.25) ** 2) * 0.9; if (k > 0) { r += (ROSE_RGB[0] - r) * k; g += (ROSE_RGB[1] - g) * k; b += (ROSE_RGB[2] - b) * k; } } // the blue hour: gold and periwinkle mixed straight are grey, so the middle of the evening is pulled through a rose-violet
   if (night > 0) { r += (NIGHT_RGB[0] - r) * night; g += (NIGHT_RGB[1] - g) * night; b += (NIGHT_RGB[2] - b) * night; }
   if (crunch) { r *= RAIN_RGB[0] / 255; g *= RAIN_RGB[1] / 255; b *= RAIN_RGB[2] / 255; }
   r = Math.round(r); g = Math.round(g); b = Math.round(b);

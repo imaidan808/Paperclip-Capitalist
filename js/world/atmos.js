@@ -1,6 +1,9 @@
 // The screen-space passes of the air: the grade (tint, light pools, ambient), weather (rain, a trend surge's confetti and wash, a tariff's red edge), floating dust and the particles.
 // Owner: T2 ATMOSPHERE (docs/RENDER_PLAN.md). Each is a layer of stack.js ('grade', 'weather', 'field', 'particles').
 
+import './grade.js'; // registers the V2 grade layer
+import { registerLayer } from './stack.js';
+import { paintWeather, paintField, paintParticles, paintSmokeQueue } from './ambient.js';
 
 const CONFETTI = ['#ff3da8', '#7be3ff', '#ffd36e'];
 export const atmosMethods = {
@@ -26,3 +29,8 @@ export const atmosMethods = {
   /** Coins, sparks, dust puffs, rings and text pops (fx.js), over the labels. */
   drawParticles(ctx) { this.fx.draw(ctx, this); },
 };
+
+// ---------------------------------------------------------------- V2 (flagged `weather:v2`, `field:v2`, `particles:v2`; ambient.js paints them)
+registerLayer('weather', (ctx, view, env, w) => paintWeather(ctx, w), 'screen');
+registerLayer('field', (ctx, view, env, w) => { paintField(ctx, w); paintSmokeQueue(ctx, w); }, 'screen');
+registerLayer('particles', (ctx, view, env, w) => paintParticles(ctx, w), 'screen');
