@@ -241,7 +241,7 @@ export function mountGame(root, S, hooks) {
       const a = settings.audio; if (!a) return;
       const r = toggleMute(a); // at volume 0 "on" brings the volume back and says so; with both buses off nothing changes and the words say why
       if (r.changed) { settings.audio = r.next; applySettings(); }
-      announce(r.said);
+      toast(r.shown, 'info'); // the icon changes, and a toast says what it changed to (it speaks itself: no announce besides; fifth round, U3)
       if (r.changed && !r.next.mute) { audio.unlock(); if (r.hears) audio.play('ui.ok'); }
       render();
     },

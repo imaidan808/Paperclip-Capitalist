@@ -131,7 +131,7 @@ export function createAudio(cfg = {}) {
     if (s.mute || s.master <= 0) return 'mute';
     if (e.bus === 'ui' ? !s.ui : !s.game) return 'bus';
     if ((id === 'world.hover' || id === 'world.step') && !s.worldTicks) return 'bus'; // the world's ticks have a switch of their own (7.1): hover and footsteps are the most frequent sounds there are
-    if (s.quiet && e.bus === 'game' && tierOf(id, opts.variant ?? firstVariant(id)) === 'tiny') return 'quiet';
+    if (s.quiet && e.bus === 'game' && tierOf(id, peekVariant(e, id, opts) ?? firstVariant(id)) === 'tiny') return 'quiet';
     if ((e.class === 'clock' || opts.clock) && !s.clockSounds) return 'bus';
     if (!playable()) return 'locked';
     return null;
@@ -167,9 +167,19 @@ export function createAudio(cfg = {}) {
     poolLast.set(key, k);
     return k;
   }
-  function variantFor(e, id, opts) {
+  /**
+   * The variant a request names, by `variant` or by `size`, or null when it names none (a rotation or the first variant decides). It only LOOKS: the gate asks it for every request and a rotation is advanced
+   * only when a voice is built. The gate used to read `opts.variant` alone, so a coin asked for by size ({ size: 'm' }, as the test button asked) was judged as the first, tiny, variant and
+   * Classroom left it out, whatever its size: the Classroom rule is about the sound that plays (fifth round, U2).
+   */
+  function peekVariant(e, id, opts) {
     if (opts.variant && e.variants[opts.variant]) return opts.variant;
     if (opts.size) { const v = opts.size === 'xl' && id === 'cash.out' ? 'l' : opts.size; if (e.variants[v]) return v; }
+    return null;
+  }
+  function variantFor(e, id, opts) {
+    const named = peekVariant(e, id, opts);
+    if (named) return named;
     if (e.rotate) { const names = Object.keys(e.variants), last = rotateLast.get(id); const nxt = names[(names.indexOf(last) + 1) % names.length]; rotateLast.set(id, nxt); return nxt; }
     return firstVariant(id);
   }

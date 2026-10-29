@@ -313,7 +313,7 @@ test('M can be switched off; the speaker button stays', () => {
 });
 
 // ================================================================================ the Classroom rule (W3)
-test('a student who joins a room gets Classroom with one toast, the earlier values are kept, and leaving puts them back unless a setting changed', () => {
+test('a student who joins a room gets Classroom with one toast, the earlier values are kept, and leaving puts back what the room changed and keeps what the player did', () => {
   const toastsSeen = [], d = { settings: { audio: { ...audioDefaults(), master: 55 } }, kv, save: () => {}, toast: (m, l) => toastsSeen.push([m, l]) };
   pageKv.clear();
   assert.equal(wire.applyRoomRule(d, true), 'joined');
@@ -325,10 +325,13 @@ test('a student who joins a room gets Classroom with one toast, the earlier valu
   // touched by hand: never
   const t = { settings: { audio: { ...audioDefaults(), touched: true } }, kv, save: () => {}, toast: () => { throw new Error('no toast'); } };
   assert.equal(wire.applyRoomRule(t, true), null); assert.equal(t.settings.audio.quiet, false);
-  // changed meanwhile: kept
+  // changed meanwhile: the player's change stands, and the room's rule is still released (fifth round, U1: any change at all used to leave the student in Classroom for good)
   const c = { settings: { audio: { ...audioDefaults() } }, kv, save: () => {}, toast: () => {} };
   wire.applyRoomRule(c, true); c.settings.audio = { ...c.settings.audio, master: 30, touched: true };
-  wire.applyRoomRule(c, false); assert.equal(c.settings.audio.master, 30, 'the player\'s own change stands'); assert.equal(c.settings.audio.quiet, true);
+  wire.applyRoomRule(c, false); assert.equal(c.settings.audio.master, 30, 'the player\'s own change stands'); assert.equal(c.settings.audio.quiet, false, 'and what the room changed goes back');
+  const e = { settings: { audio: { ...audioDefaults() } }, kv, save: () => {}, toast: () => {} };
+  wire.applyRoomRule(e, true); e.settings.audio = { ...e.settings.audio, ui: false, touched: true };
+  wire.applyRoomRule(e, false); assert.equal(e.settings.audio.ui, false, 'a choice of the mix stands'); assert.equal(e.settings.audio.quiet, false); assert.equal(e.settings.audio.clockSounds, true);
   pageKv.clear();
 });
 test('wireGame applies the rule for a student in a room and again when the room is left', () => {

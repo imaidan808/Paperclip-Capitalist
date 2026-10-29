@@ -83,17 +83,19 @@ export const audible = (a) => !a.mute && a.master > 0 && (a.ui || a.game);
  * The one switch of the speaker button, key M and the Deal Room's toggle: what the settings, the words and the "ok" are after a press. Pure. It is truthful about what the press does:
  * sound that can be heard is muted; sound that is muted is unmuted, and at volume 0 that is brought back to 70 (the rule of a preset; an "on" that nobody can hear is a broken speaker to the player)
  * and said ("Sound on at 70 percent."); with Interface and Game both off there is nothing to mute and nothing a speaker can turn on, so nothing changes and the words say why.
- * Returns { next, said, hears, changed }: `hears` is whether the "ok" of unmuting can be heard.
+ * Returns { next, said, shown, hears, changed }: `hears` is whether the "ok" of unmuting can be heard; `said` is the short sentence for a live region and `shown` the one for a toast (it says how to undo a mute).
  */
 export function toggleMute(a) {
   const mute = a.mute === true, master = Number.isFinite(+a.master) ? +a.master : 70, ui = a.ui !== false, game = a.game !== false; // a missing field is the default
   if (!mute && master > 0) {
-    if (!ui && !game) return { next: a, said: 'Interface sounds and game sounds are both off. Turn one on under Display and sound.', hears: false, changed: false };
-    return { next: { ...a, mute: true, touched: true }, said: 'Sound off.', hears: false, changed: true };
+    if (!ui && !game) { const said = 'Interface sounds and game sounds are both off. Turn one on under Display and sound.'; return { next: a, said, shown: said, hears: false, changed: false }; }
+    // `shown` is the words for a toast (fifth round, U3: key M changed nothing a sighted player could see on the title, the Draft or the dashboard). Muting says how to come back, by the way that exists:
+    // M, unless the shortcut is switched off, and then the speaker button, which is on the game screen, the one place that button is.
+    return { next: { ...a, mute: true, touched: true }, said: 'Sound off.', shown: a.mKey === false ? 'Sound off. Use the speaker button to turn it back on.' : 'Sound off. Press M to turn it back on.', hears: false, changed: true };
   }
   const raised = !(master > 0), next = { ...a, mute: false, touched: true, master: raised ? 70 : master };
   const said = raised ? 'Sound on at 70 percent.' : !ui && !game ? 'Sound on, but interface sounds and game sounds are both off.' : 'Sound on.';
-  return { next, said, hears: ui || game, changed: true };
+  return { next, said, shown: said, hears: ui || game, changed: true };
 }
 /** The speaker button's state in words: pressed only when something can be heard, and a title that says what a press does (7.3). */
 export function speakerState(a) {
@@ -152,12 +154,30 @@ export function joinRoom(a) {
   if (a.quiet) return { before: { ...a, ...PRESETS.full }, next: { ...a } };
   return { before: { ...a }, next: { ...applyPreset(a, 'classroom'), touched: false } };
 }
-/** Leaving the room puts the earlier values back, unless a sound setting was changed meanwhile (the room's own preset is no longer exactly what is set). */
+/** The fields the Classroom preset sets (and the mute it clears): the only ones the room changed, so the only ones `leaveRoom` gives back. The volume, the ambience level, the world ticks and the M shortcut are the player's own throughout. */
+const ROOM_KEYS = ['mute', 'ui', 'game', 'ambient', 'dial', 'clockSounds', 'quiet'];
+/**
+ * Leaving the room gives back what the ROOM changed and keeps what the PLAYER did (fifth round, U1). A field still as the room set it goes back to how it was before; a field the player has changed
+ * since (a mute, Interface sounds off, Full chosen under Display and sound) is theirs and stays; the volume and the other fields the rule never touches are carried as they are now. It was
+ * all or nothing: any change at all, and the volume is the commonest one a student makes in a lab, left the student in Classroom for good and the remembered values were deleted unused.
+ * `touched` is theirs only when they chose the mix: a volume is not a choice about it, so the next room is a room again. Returns `a` itself when nothing changes.
+ */
 export function leaveRoom(a, before) {
   if (!before) return a;
-  const room = { ...applyPreset(before, 'classroom'), touched: false };
-  for (const k of [...Object.keys(NUM), ...BOOL]) if (k !== 'touched' && k !== 'hinted' && a[k] !== room[k]) return a;
-  return { ...before, hinted: a.hinted };
+  const room = { ...applyPreset(before, 'classroom'), touched: false }; // what joining made of the earlier values
+  const next = { ...a };
+  let theirs = false;
+  for (const k of ROOM_KEYS) { if (a[k] === room[k]) next[k] = before[k]; else theirs = true; }
+  next.touched = before.touched === true || theirs;
+  return Object.keys(next).every((k) => next[k] === a[k]) ? a : next;
+}
+/**
+ * The one note when the room's rule is released: what the sound is now (so a student is told it changed, and to what) and why. Worded for both ways out of a room: leaving it, and a Back out of the Draft
+ * that was told "Classroom (quieter) in this room" before any room was joined.
+ */
+export function leftRoomText(next) {
+  const p = presetOf(next || {});
+  return `Sound is back to ${p === 'full' || p === 'interface' ? PRESET_NAMES[p] : 'how you had it'}: Classroom sound applies only in a room.`;
 }
 
 // ---- the Sound section (7.2)
@@ -272,9 +292,14 @@ export function whyDropped(reason, a, info = {}) {
     default: return reason ? `The engine held it back (${reason}).` : 'The engine returned nothing.';
   }
 }
-/** The test sound: a click, then the warning, then coins, so the last thing heard is the good one. */
-export const TEST_STEPS = [[0, 'ui.tick', { variant: 'full' }], [600, 'alert.advance', { variant: 'l1' }], [1300, 'cash.in', { size: 'm' }]];
+/** The test sound: a click, then the warning, then coins, so the last thing heard is the good one. The coin is asked for by its variant (a medium one: Classroom leaves out the tiny ones, and a test that dropped its coins was not the good news it announced). */
+export const TEST_STEPS = [[0, 'ui.tick', { variant: 'full' }], [600, 'alert.advance', { variant: 'l1' }], [1300, 'cash.in', { variant: 'm' }]];
 export const TEST_MS = 1300 + 900;
+/** What the test button says: the three sounds, and what a room leaves out of a game that is quieter (fifth round, U2). */
+export function testSaid(a) {
+  if (!a.game) return 'Playing a test click. Game sounds are off, so the warning and the coins are silent.';
+  return 'Playing a test: a click, a warning, then coins.' + (a.quiet ? ' Classroom leaves out the smallest game sounds and the clock sounds.' : '');
+}
 /**
  * Wires the section inside `root`. deps: { audio (the engine), settings, save (applySettings), announce }.
  * Every control is a native one with a visible label; every change is stored (`touched`), applied to the engine and said politely. A change updates the controls in place, a slider changes the
@@ -314,7 +339,7 @@ export function bindAudioSettings(root, deps) {
     const a = A(), why = whyQuiet(a);
     if (why) { announce?.(why); return; }
     testing = true;
-    announce?.(a.game ? 'Playing a test: a click, a warning, then coins.' : 'Playing a test click. Game sounds are off, so the warning and the coins are silent.');
+    announce?.(testSaid(a));
     for (const [ms, id, o] of TEST_STEPS) setTimeout(() => audio.play?.(id, o), ms);
     setTimeout(() => { testing = false; }, TEST_MS);
   };

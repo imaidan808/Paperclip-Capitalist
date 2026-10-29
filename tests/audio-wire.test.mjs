@@ -126,7 +126,7 @@ test('the controls with a sound of their own, or an outcome that always speaks, 
   assert.equal(wire.controlFor({ act: 'pick', kind: 'change', checkbox: true }), null, 'a Draft card is heard by the Draft');
   for (const act of ['stock-sellpool', 'market-sell', 'market-look', 'travel-go', 'quests-go', 'crew-hgo', 'crew-rel', 'bank-exit']) assert.equal(c(act)[1], 'ui.tick', act + ' can refuse: its click is a tick');
   for (const act of ['resume', 'solo', 'join', 'instr', 'instr-resume', 'instr-recover']) assert.deepEqual(c(act), ['play', 'ui.tick', { variant: 'full' }], 'the title: ' + act);
-  assert.equal(c('a11y')[1], 'ui.dialog-open'); assert.equal(c('close')[1], 'ui.dialog-close'); assert.equal(c('back')[1], 'ui.dialog-close'); assert.equal(c('copylink')[1], 'ui.ok');
+  assert.equal(c('a11y')[1], 'ui.dialog-open'); assert.equal(c('close')[1], 'ui.dialog-close'); assert.equal(c('back')[1], 'ui.dialog-close'); assert.equal(c('copylink')[1], 'ui.tick', 'it can fail (no clipboard): the outcome speaks, fifth round W2-1'); assert.equal(c('gradecsv')[1], 'ui.ok');
   assert.deepEqual([c('start')[2].variant, c('deploy')[2].variant, c('squeeze')[2].variant, c('rewind')[2].variant], ['start', 'deploy', 'deploy', 'rewind']);
 });
 test('the state of a toggle is read as it was before the press: pressed, expanded, or the word on a Pause button', () => {
@@ -201,12 +201,12 @@ test('a disclosure opened by a press is a toggle; one drawn open by a redraw is 
   r.E.env.lastPress = -Infinity; fire('toggle', { target: d }); assert.equal(r.asked.length, 0, 'no press, no sound');
   r.E.touch(); fire('toggle', { target: d }); assert.deepEqual(r.asked.at(-1).slice(1), ['ui.toggle', { variant: 'on' }]);
 }));
-test('key M mutes silently, unmutes with an ok, announces both, and does nothing inside a field', async () => withRig({}, async (r) => {
+test('key M mutes silently, unmutes with an ok, says both in a toast, and does nothing inside a field', async () => withRig({}, async (r) => {
   const key = (target) => fire('keydown', { type: 'keydown', key: 'm', target });
   key({ tagName: 'INPUT', type: 'text' }); assert.equal(S0.audio.mute, false, 'typing an m');
-  key({ tagName: 'BODY' }); assert.equal(S0.audio.mute, true); assert.deepEqual(notes.announced.at(-1), ['Sound off.', false]);
+  key({ tagName: 'BODY' }); assert.equal(S0.audio.mute, true); assert.deepEqual(notes.toasts.at(-1), ['Sound off. Press M to turn it back on.', 'info'], 'a toast: a sighted player sees it (fifth round, U3), and toast() speaks it, so announce() is not also used'); assert.equal(notes.announced.length, 0);
   r.settle(100); const n = r.asked.length; click(el({ data: { act: 'dock', d: 'stock' } })); assert.equal(r.played()['ui.drawer-open'], undefined, 'muted: ' + n);
-  key({ tagName: 'BODY' }); assert.equal(S0.audio.mute, false); assert.deepEqual(notes.announced.at(-1), ['Sound on.', false]); assert.equal(r.asked.at(-1)[1], 'ui.ok');
+  key({ tagName: 'BODY' }); assert.equal(S0.audio.mute, false); assert.deepEqual(notes.toasts.at(-1), ['Sound on.', 'info']); assert.equal(r.asked.at(-1)[1], 'ui.ok');
 }));
 test('the dock button names the drawer that is really open, so the player card of an open drawer is a close', async () => withRig({}, async (r) => {
   els.stage = { dataset: { drawer: 'quests' } };

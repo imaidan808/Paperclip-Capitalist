@@ -189,8 +189,8 @@ test('B2: a script-made pointerdown is no gesture: nothing creates a context for
 test('U15: key M does nothing in a browser with no Web Audio (it announced "Sound off." beside a settings line that says it cannot play sound)', () => {
   const m = { type: 'keydown', key: 'm', target: { tagName: 'BODY' } };
   const press = () => { for (const fn of listeners.get('keydown').slice(-2)) fn(m); };
-  return withPage({}, (p) => { press(); assert.deepEqual(p.asked.filter((a) => a[0] === 'announce'), [], 'nothing said'); assert.equal(p.deps.settings.audio.mute, false); }, { supported: false })
-    .then(() => withPage({}, (p) => { press(); assert.equal(p.deps.settings.audio.mute, true, 'and where Web Audio exists it still mutes'); assert.deepEqual(p.asked.find((a) => a[0] === 'announce')?.slice(1), ['Sound off.']); }));
+  return withPage({}, (p) => { press(); assert.deepEqual(p.asked.filter((a) => a[0] === 'announce'), [], 'nothing said'); assert.deepEqual(p.toasts, [], 'nothing shown'); assert.equal(p.deps.settings.audio.mute, false); }, { supported: false })
+    .then(() => withPage({}, (p) => { press(); assert.equal(p.deps.settings.audio.mute, true, 'and where Web Audio exists it still mutes'); assert.deepEqual(p.toasts, [['Sound off. Press M to turn it back on.', 'info']], 'a toast, which speaks itself (fifth round, U3)'); }));
 });
 
 // ================================================================================ W-6: distance
@@ -383,9 +383,9 @@ test('W-9 / U14: the faculty kit says what the link gains, what the room does an
   assert.match(src('README.md'), /`js\/audio\/` is the generated sound layer/);
 });
 test('Appendix G exists, answers every finding, and says which were not taken as reported', () => {
-  const doc = src('docs/AUDIO.md'), g = doc.slice(doc.indexOf('## Appendix G.'));
+  const doc = src('docs/AUDIO.md'), from = doc.indexOf('## Appendix G.'), to = doc.indexOf('## Appendix H.'), g = doc.slice(from, to > from ? to : undefined); // Appendix H (the fifth round) follows it
   for (const id of ['R1', 'R2', 'R3', 'R4', 'R5', 'R6', 'R7', 'R8', 'W-1', 'W-2', 'W-3', 'W-4', 'W-5', 'W-6', 'W-7', 'W-8', 'W-9', 'B1', 'B2', 'U1', 'U2', 'U3', 'U4', 'U5', 'U6', 'U7', 'U8', 'U9', 'U10', 'U11', 'U12', 'U13', 'U14', 'U15']) assert.ok(g.includes(id), id + ' is in Appendix G');
   assert.match(g, /\*\*Not as reported\.\*\*/); assert.match(g, /The remedy proposed \(-1\.5 dB when panned\) was measured and is worse/); assert.match(g, /### G\.3 What only ears can say/);
-  assert.match(doc, /Revision 6 \(2026-10-29, the fourth repair round\)/); assert.match(doc, /Appendix D, E, F and G the four repair rounds/);
+  assert.match(doc, /Revision 6 \(2026-10-29, the fourth repair round\)/); assert.match(doc, /Appendix D, E, F, G and H the five repair rounds/);
   assert.ok(!/10 dB lower, interface 6 dB lower/.test(doc), 'the Classroom figure is 8 everywhere'); assert.ok(!/game 10\b/.test(src('scripts/audio-check.mjs')));
 });

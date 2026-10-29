@@ -152,7 +152,7 @@ const screens = {
       onDebrief: () => go('debrief'),
       onAcademy: (id) => openAcademy(() => go('game'), typeof id === 'string' ? id : undefined),
       onJoin: (room) => { S.reset(); pending = { room }; go('setup'); },
-      onReset: () => { S.reset(); pending = null; go('title'); },
+      onReset: () => { S.reset(); pending = null; pendingRoom(null); go('title'); }, // Start over leaves the room for certain: the Classroom rule is given back now, not at the next Draft
     });
     cleanup = () => m.destroy();
   },

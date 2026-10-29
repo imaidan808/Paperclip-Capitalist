@@ -12,7 +12,7 @@ import { startRun, modelOf, tForPos, STAGE_LABEL } from '../deal.js';
 import { pos as dialPos } from '../play/repair.js';
 import { countUp } from './polish.js';
 import { audio, toggleMute, audible } from '../audio/index.js';
-import { dialInfo, dialEarText, dialShortText, dialAnnounceText, dialSwitchHTML, toggleHTML, toggleDial, tellOnce } from '../audio/dialtone.js';
+import { dialInfo, dialEarText, dialShortText, dialAnnounceText, dialSwitchHTML, toggleHTML, toggleDial, tellOnce, dialsDrawn, DIAL_SWITCH_DIALS } from '../audio/dialtone.js';
 import { settings as appSettings, applySettings } from './common.js';
 
 const num = (x, d = 0) => (Number.isFinite(x) ? x : d);
@@ -202,7 +202,7 @@ export function fixHTML(m) {
           <div class="row"><button class="btn" data-deal="stop" data-snd data-fid="stop" autofocus>Stop here</button></div></div>`
       : `<div class="dial" role="group" aria-label="Repair timing"><div class="dial-track" aria-hidden="true">${zone}<i class="dial-mark" style="left:50%"></i></div>
           <p class="small mute" id="dial-help">Watch the marker. Press <b>Stop</b> (or Space, or Enter) when it is inside the green zone.</p>
-          <p class="small mute" id="dial-ear">${esc(m.dialLong === false ? dialShortText(m.dialInfo) : dialEarText(m.dialInfo))}</p>
+          <p class="small mute" id="dial-ear">${esc(m.dialLong === false ? dialShortText(m.dialInfo, !!m.dialSwitch) : dialEarText(m.dialInfo))}</p>
           ${m.dialLong === false ? '' : `<span class="sr" id="dial-short">${esc(dialShortText(m.dialInfo))}</span>`}
           <div class="row"><button class="btn big" data-deal="stop" data-snd data-fid="stop" aria-describedby="${m.dialLong === false ? 'dial-ear' : 'dial-short'}" autofocus>Stop</button></div></div>`; // the long line is for the first repair of a run, and even then Stop is described by the short one: forty words read at every cursor stop of every step were too many
     dial += `<div class="row"><button class="btn ghost" data-deal="careful" data-snd data-fid="care">Careful: pay more, no timing</button></div>`;
@@ -269,6 +269,7 @@ export function viewModel(session) {
   m.sound = session.sound ? session.sound() : true;
   m.tone = !!(session.toneWanted && session.toneWanted()); // the repair tone is on: the slider's own detents are silent (docs/AUDIO.md 4.5)
   m.dialLong = session.longEar !== false; // the first repair of a run says it all (dialtone.js tellOnce), a later one a short line
+  m.dialSwitch = !!session.dialSwitch; // and the first two dials of a run, while the tone is off, say where its switch is
   m.dialInfo = session.dialInfo ? session.dialInfo() : null; // what the room says about the tone: on or off, held off by Classroom, heard or not (js/audio/dialtone.js)
   return m;
 }
@@ -571,10 +572,13 @@ export function createSession(ctx, run) {
     // the world waits while you deal (unless a classroom clock is in charge)
     if (S && S.clock && !S.clock.paused && (S.mode ? S.mode === 'solo' : S.canSetClock && S.canSetClock())) { S.setPaused(true); ses.paused = true; } // a solo run only: never the class's clock
     // a repair opens on a dial whose track is a picture: the first one of a run says in words what to press and how to do it without timing or sight (once per run: tellOnce), on the page and aloud
-    ses.longEar = run.key === 'fix' && !run.res.fix && !ses.reduced() && tellOnce(kv, S && S.worldSeed);
+    // ...but only for a repair that HAS a dial: one the player cannot afford has none (the stage never starts), and it used to spend the once-per-run explanation on a dial that was not there (fifth round, U4)
+    const dialUp = run.key === 'fix' && !run.res.fix && !ses.reduced() && !!run.view();
+    ses.longEar = dialUp && tellOnce(kv, S && S.worldSeed);
+    ses.dialSwitch = dialUp && dialsDrawn(S && S.worldSeed) <= DIAL_SWITCH_DIALS;
     paint();
-    const dialSay = ses.longEar ? ` ${dialAnnounceText(ses.dialInfo())}` : '';
-    ctx.announce?.(`${titleOf(modelOf(run))}. ${run.plan.cast.name} says: ${run.plan.cast.hello}${dialSay}`);
+    const dialSay = ses.longEar ? ` ${dialAnnounceText(ses.dialInfo())}` : '', blocked = run.key === 'fix' && run.plan.blocker ? ` ${run.plan.blocker}` : ''; // a repair that cannot be afforded says so instead
+    ctx.announce?.(`${titleOf(modelOf(run))}. ${run.plan.cast.name} says: ${run.plan.cast.hello}${blocked}${dialSay}`);
   };
   ses.paint = paint;
   return ses;

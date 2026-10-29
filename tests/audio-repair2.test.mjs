@@ -199,7 +199,7 @@ function observerRig() {
   const sup = Object.getOwnPropertyDescriptor(page, 'supported'); Object.defineProperty(page, 'supported', { get: () => true, configurable: true }); // key M does nothing in a browser with no Web Audio (fourth round, U15)
   wire._resetForTest?.();
   observers = [];
-  wire.initAudio({ settings, save: () => {}, announce: (m) => said.push(m), toast: () => {}, kv });
+  wire.initAudio({ settings, save: () => {}, announce: (m) => said.push(m), toast: (m) => said.push(m), kv }); // what key M says goes to a toast (fifth round, U3): both are collected here, in order
   return { played, said, settings, restore() { for (const k of Object.keys(saved)) page[k] = saved[k]; if (sup) Object.defineProperty(page, 'supported', sup); else delete page.supported; wire._resetForTest?.(); } };
 }
 const toastEl = (cls, dataset = {}) => ({ classList: { contains: (c) => c === 'toast' || cls.includes(c) }, dataset });
@@ -289,7 +289,7 @@ test('key M at volume 0 turns the volume up and says so; at a heard volume it mu
     press();
     assert.equal(r.settings.audio.master, 70); assert.equal(r.settings.audio.mute, false); assert.equal(r.said.at(-1), 'Sound on at 70 percent.'); assert.deepEqual(r.played.map((p) => p[0]), ['ui.ok'], 'the ok plays: it can be heard');
     r.played.length = 0; press();
-    assert.equal(r.settings.audio.mute, true); assert.equal(r.said.at(-1), 'Sound off.'); assert.deepEqual(r.played, []);
+    assert.equal(r.settings.audio.mute, true); assert.equal(r.said.at(-1), 'Sound off. Press M to turn it back on.'); assert.deepEqual(r.played, []);
     press(); assert.equal(r.settings.audio.mute, false); assert.equal(r.said.at(-1), 'Sound on.'); assert.equal(r.settings.audio.master, 70);
     r.settings.audio = { ...audioDefaults(), ui: false, game: false }; r.played.length = 0; const before = r.settings.audio;
     press();

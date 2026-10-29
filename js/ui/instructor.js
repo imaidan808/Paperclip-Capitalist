@@ -16,6 +16,24 @@ const own = (o, k) => typeof k === 'string' && Object.prototype.hasOwnProperty.c
 const topZone = (st) => Math.min(ZONE_COUNT, Math.max(1, Math.round(st?.zones) || 1));
 const perksOf = (st) => (Array.isArray(st?.perks) ? st.perks.filter((id) => own(PERKS, id)) : []);
 
+/**
+ * Put `text` on the clipboard where the page can (fifth round, W2-1). The async clipboard exists only on a secure origin (https, localhost): on plain http at a LAN address, which is how a shared lab
+ * runs `server/static.mjs` with HOST=0.0.0.0, `navigator.clipboard` is undefined and Copy student link did nothing at all. There the older command still works from a click: a read-only field
+ * holds the text, is selected, copied and removed, and the cursor goes back to where it was. Resolves true when it was copied and false when nothing could; it never throws. `env` is for a test.
+ */
+export async function copyText(text, env = globalThis) {
+  const nav = env && env.navigator, doc = env && env.document;
+  try { if (nav && nav.clipboard && typeof nav.clipboard.writeText === 'function') { await nav.clipboard.writeText(text); return true; } } catch { /* refused (a permission) or throws: the command below may still work */ }
+  try {
+    if (!doc || typeof doc.createElement !== 'function' || typeof doc.execCommand !== 'function' || !doc.body) return false;
+    const t = doc.createElement('textarea'), was = doc.activeElement;
+    t.value = text; t.setAttribute('readonly', ''); t.setAttribute('aria-hidden', 'true'); t.style.cssText = 'position:fixed;top:0;left:-9999px;opacity:0';
+    doc.body.appendChild(t); t.select(); t.setSelectionRange?.(0, String(text).length);
+    let ok = false; try { ok = !!doc.execCommand('copy'); } finally { t.remove(); was?.focus?.({ preventScroll: true }); }
+    return ok;
+  } catch { return false; }
+}
+
 /** Two small icons for a student's Backgrounds, each named for assistive technology. */
 export const bgIcons = (st) => {
   const ids = perksOf(st);
@@ -145,7 +163,7 @@ export function mountInstructor(root, S, hooks) {
     settings() { settingsDialog(); },
     close() { hooks.onClose(); },
     linkquiet(b) { U.quietLink = !!b.checked; render(); }, // the student link carries ?sound=quiet, or not
-    copylink(b) { navigator.clipboard?.writeText(b.dataset.link).then(() => toast(b.dataset.quiet ? 'Student link copied, with quiet sound.' : 'Student link copied.', 'good'), () => toast(b.dataset.link, 'info', 9000)); }, // the box comes first and the toast says what the link carries: copying before ticking left a link without the flag, and nothing said so
+    copylink(b) { copyText(b.dataset.link).then((ok) => (ok ? toast(b.dataset.quiet ? 'Student link copied, with quiet sound.' : 'Student link copied.', 'good') : toast(`Could not copy it by itself. The student link is ${b.dataset.link}`, 'info', 9000))); }, // the box comes first and the toast says what the link carries: copying before ticking left a link without the flag, and nothing said so. With no way to copy the link is in the words, for nine seconds
     start() { S.clock.set({ hour: 0, paused: false }); S._sendClock(); render(); toast('Simulation started.', 'good'); },
     pause() { S.setPaused(!S.clock.paused); },
     speed(b) { S.setSpeed(+b.dataset.v); },

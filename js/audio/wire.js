@@ -6,7 +6,7 @@
 // RULE OF THE GAME: sound never carries hidden information. Nothing here reads `buy.fake`, `inspect.caught`, a lot's truth, a rival's limit or an auction's `surplus`.
 import { audio } from './instance.js';
 import { moneySize } from './palette.js';
-import { joinRoom, leaveRoom, toggleMute, HINT_PAGE_TEXT } from './settings.js';
+import { joinRoom, leaveRoom, leftRoomText, toggleMute, HINT_PAGE_TEXT } from './settings.js';
 import { ZONES } from '../config.js';
 
 const calls = (...c) => c.filter(Boolean);
@@ -197,7 +197,7 @@ const CRATE = new Set(L('stock-pick stock-pickzone stock-clear market-use travel
 const SLIDER = new Set(L('crew-hamt bank-pct bank-amt'));
 const DIALOG = new Set(L('help menu settings breakdown crew-hire crew-edit a11y'));
 const PRESS = new Set(L('debrief academy joinroom codex-replay ac-start ac-continue ac-why-next ac-teach-next ac-reward-next resume solo join instr instr-resume instr-recover')); // the last six are the title's (4.3)
-const OK = new Set(L('savefile bank-csv copylink gradecsv md')); // market-send and crew-fill can be refused: they tick at the click and the outcome speaks (a good toast is the ok)
+const OK = new Set(L('savefile bank-csv gradecsv md')); // market-send, crew-fill and copylink can fail or be refused: they tick at the click and the outcome speaks (a good toast is the ok). Copy student link was here: with no clipboard it chimed for a copy that never happened (fifth round, W2-1)
 const ASK = new Set(L('reset ac-skip-yes ac-leave'));
 const ASK_NORMAL = new Set(L('ac-skip')); // opens the question "skip this lesson?"
 const CLOSE = new Set(L('leave market-decline market-withdraw close back'));
@@ -278,9 +278,12 @@ export function applyRoomRule(d, inRoom) {
     return 'joined';
   }
   if (!inRoom && before) {
-    d.kv.del(BEFORE_ROOM);
-    const next = leaveRoom(a, before);
-    if (next !== a) { d.settings.audio = { ...next }; d.save?.(); }
+    const next = leaveRoom(a, before); // what the room changed goes back, what the student did stays (settings.js)
+    d.kv.del(BEFORE_ROOM); // the remembered values have been used
+    if (next !== a) {
+      d.settings.audio = { ...next }; d.save?.();
+      if (a.quiet && !next.quiet && !next.mute) d.toast?.(leftRoomText(next), 'info'); // one note, only when the rule was released and a sound can be heard: the earlier values used to vanish without a word (fifth round, U1)
+    }
     return 'left';
   }
   return null;
@@ -360,7 +363,10 @@ export function initAudio(d = {}) {
     const a = A(); if (!deps.settings?.audio || a.mKey === false) return; // the shortcut can be switched off (a single-key shortcut with no way out fails WCAG 2.1.4); the speaker button stays
     const r = toggleMute(a); // the same switch as the speaker button and the Deal Room's: at volume 0 "on" brings the volume back and says so, and nothing claims a sound nobody can hear
     if (r.changed) { deps.settings.audio = r.next; deps.save?.(); }
-    deps.announce?.(r.said);
+    // A toast, so that a sighted player sees that M worked wherever they are (the title, the Draft and the dashboard have no speaker button, and the only feedback was a live region). toast() speaks it
+    // itself, so it is not announced twice. Inside an open sheet (the Deal Room, the settings) a toast is under the backdrop: there the words are spoken in the sheet (fifth round, U3).
+    const sheet = document.getElementById('dlg');
+    if (deps.toast && !(sheet && sheet.open)) deps.toast(r.shown, 'info'); else deps.announce?.(r.shown);
     if (r.changed && !r.next.mute) { audio.unlock(); if (r.hears) audio.play('ui.ok'); }
   }), opts);
   // 4. the control table

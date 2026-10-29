@@ -7,6 +7,9 @@
 import { audible } from './settings.js';
 
 export const DIAL_NAME = 'Repair dial tone';
+const DIAL_SWITCH = 'Dial tone switch next to Sound';
+/** How many of a run's dials say where the tone's switch is while it is off: the first (the long line) and the second (the short line with the switch). */
+export const DIAL_SWITCH_DIALS = 2;
 const CAREFUL = 'Prefer not to time it? Choose Careful: pay more, no timing.';
 
 /**
@@ -27,15 +30,17 @@ export function dialEarText(i) {
   if (info.quiet) return `Repair dial tone is off in Classroom. ${CAREFUL}`;
   if (info.on && info.heard) return `Repair dial tone is on: low on the left, high on the right, and brighter inside the green zone. ${CAREFUL}`;
   if (info.on) return `Repair dial tone is on, but you will not hear it because ${info.why}. ${CAREFUL}`;
-  return `Prefer to listen? Turn on Repair dial tone with the Dial tone button at the top of this window, or in Display and sound. ${CAREFUL}`;
+  return `Prefer to listen? Turn on Repair dial tone with the Dial tone switch next to Sound, or in Display and sound. ${CAREFUL}`; // "next to Sound", not "at the top of this window": at a large text size the header is not on the screen (fifth round, U5)
 }
 
 /**
  * The short line: the state of the tone and the way that needs no timing, in a dozen words. Stop is described by it every time the cursor lands on it (Stop takes the cursor at each of the three steps of
  * every repair), and it is the line under the dial after the first repair of a run: the long line (`dialEarText`) is for the first one (fourth round, U9).
  */
-export function dialShortText(i) {
+export function dialShortText(i, withSwitch = false) {
   const info = i || dialInfo({});
+  // While the tone is off the first two dials of a run say where its switch is (fifth round, U4): the long line is spent on the first, and a player who looked away from it had only "Dial tone is off."
+  if (withSwitch && !info.on && !info.quiet) return `Dial tone is off: use the ${DIAL_SWITCH} to follow it by ear. Careful needs no timing.`;
   const tone = info.quiet ? 'Dial tone is off in Classroom.' : info.on && info.heard ? 'Dial tone is on.' : info.on ? 'Dial tone is on, but you will not hear it.' : 'Dial tone is off.';
   return `${tone} Careful needs no timing.`;
 }
@@ -80,7 +85,16 @@ export function toggleDial(a) {
 }
 
 // ---- once per run: the long announcement (the first Fix stage of a run), remembered for the page's life and, through `kv`, across a reload
-const told = { run: null };
+const told = { run: null }, drawn = { run: null, n: 0 };
+/**
+ * The dials a run has drawn so far, counting the one being drawn: 1 for the first. Asked only for a repair that HAS a dial (not for one the player cannot afford, which has none: that room used to
+ * spend the one-time explanation on a dial that was not there, fifth round, U4). The first `DIAL_SWITCH_DIALS` of a run say where the switch is while the tone is off.
+ */
+export function dialsDrawn(run) {
+  const key = String(run ?? 'solo');
+  if (drawn.run !== key) { drawn.run = key; drawn.n = 0; }
+  return ++drawn.n;
+}
 /** True the first time it is asked for a run, false after: the first Fix stage says it all, a later repair in the same run does not say it again. `kv` is optional (a private window has none). */
 export function tellOnce(kv, run) {
   const key = String(run ?? 'solo');
@@ -93,4 +107,4 @@ export function tellOnce(kv, run) {
   return true;
 }
 /** A test hook. */
-export const _resetTold = () => { told.run = null; };
+export const _resetTold = () => { told.run = null; drawn.run = null; drawn.n = 0; };

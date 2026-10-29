@@ -46,8 +46,9 @@ test('A1: a pending join (the Draft with a room code) is a room for sound: Class
   assert.equal(wire.applyRoomRule(d, true), null, 'the game\'s own check does not toast again'); assert.equal(d.toasts.length, 1);
   // Back out of the Draft before joining: nothing was joined, so the earlier values come back
   assert.equal(wire.pendingRoom(null, d), 'left'); assert.deepEqual(d.settings.audio, before); assert.equal(d.kv.get(wire.BEFORE_ROOM), null);
+  assert.equal(d.toasts.length, 2, 'the rule was released: one note says so (fifth round, U1: the earlier values used to come back without a word)'); assert.match(d.toasts[1][0], /^Sound is back to Full:/);
   // joining again after Back: told again, because the rule changed again
-  assert.equal(wire.pendingRoom({ code: 'ABCD' }, d), 'joined'); assert.equal(d.toasts.length, 2);
+  assert.equal(wire.pendingRoom({ code: 'ABCD' }, d), 'joined'); assert.equal(d.toasts.length, 3);
 });
 test('A1: a player who has changed a sound setting by hand keeps it, and a player already in Classroom is told once per room', () => {
   const mine = deps({ touched: true, master: 90 });
@@ -160,7 +161,7 @@ test('A4: the words about the tone, for every state it can be in', () => {
   assert.match(dialInfo({ dial: true, mute: true }).why, /sound is off/); assert.match(dialInfo({ dial: true, master: 0 }).why, /volume is at 0/); assert.match(dialInfo({ dial: true, game: false }).why, /game sounds are off/);
   assert.equal(dialInfo({ dial: true, mute: true }).heard, false); assert.equal(dialInfo({ dial: true, mute: true }).on, true, 'it is on, and it is not heard');
   const off = dialEarText(dialInfo({}));
-  assert.match(off, /^Prefer to listen\? Turn on Repair dial tone with the Dial tone button at the top of this window, or in Display and sound\./); assert.match(off, /Careful: pay more, no timing/);
+  assert.match(off, /^Prefer to listen\? Turn on Repair dial tone with the Dial tone switch next to Sound, or in Display and sound\./); assert.match(off, /Careful: pay more, no timing/);
   assert.match(dialEarText(dialInfo({ dial: true })), /^Repair dial tone is on: low on the left, high on the right, and brighter inside the green zone\./);
   assert.match(dialEarText(dialInfo({ dial: true, mute: true })), /is on, but you will not hear it because sound is off \(press Sound\)\./);
   assert.match(dialEarText(dialInfo({ dial: true, quiet: true })), /^Repair dial tone is off in Classroom\./);
@@ -204,7 +205,7 @@ const model = (run, extra = {}) => ({ ...D.modelOf(run, { reduced: !!extra.reduc
 test('A4: the animated Fix stage tells a player who cannot see the dial what to press, where the tone is, and that Careful needs no timing', { skip: !HAS }, () => {
   const g = world(), r = D.startRun(g, brokenCrate(g)), h = UI.fixHTML(model(r));
   assert.match(h, /<div class="dial" role="group" aria-label="Repair timing"><div class="dial-track" aria-hidden="true">/, 'the track is a picture; the group around it is named');
-  assert.match(h, /<p class="small mute" id="dial-ear">Prefer to listen\? Turn on Repair dial tone with the Dial tone button at the top of this window, or in Display and sound\. Prefer not to time it\? Choose Careful: pay more, no timing\.<\/p>/);
+  assert.match(h, /<p class="small mute" id="dial-ear">Prefer to listen\? Turn on Repair dial tone with the Dial tone switch next to Sound, or in Display and sound\. Prefer not to time it\? Choose Careful: pay more, no timing\.<\/p>/);
   assert.match(h, /<button class="btn big" data-deal="stop" data-snd data-fid="stop" aria-describedby="dial-short" autofocus>Stop<\/button>/, 'the cursor lands on Stop, which reads the SHORT line (fourth round, U9: forty words at every cursor stop of every step were too many)');
   assert.match(h, /<span class="sr" id="dial-short">Dial tone is off\. Careful needs no timing\.<\/span>/);
   assert.match(h, /Watch the marker\. Press <b>Stop<\/b> \(or Space, or Enter\)/); assert.match(h, /data-deal="careful"[^>]*>Careful: pay more, no timing</);
