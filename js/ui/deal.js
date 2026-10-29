@@ -12,6 +12,7 @@ import { startRun, modelOf, tForPos, STAGE_LABEL } from '../deal.js';
 import { pos as dialPos } from '../play/repair.js';
 import { countUp } from './polish.js';
 import { audio, toggleMute, audible } from '../audio/index.js';
+import { dialInfo, dialEarText, dialAnnounceText, dialSwitchHTML, toggleDial, tellOnce } from '../audio/dialtone.js';
 import { settings as appSettings, applySettings } from './common.js';
 
 const num = (x, d = 0) => (Number.isFinite(x) ? x : d);
@@ -199,9 +200,10 @@ export function fixHTML(m) {
           <input id="dial-in" type="range"${m.tone ? ' class="snd"' : ''} min="0" max="100" step="1" value="${Math.round((m.slider ?? 0.2) * 100)}" data-deal-input="slider" data-fid="dial-in" aria-valuetext="${dialWord(m.slider ?? 0.2, z)}">
           <p class="small mute" id="dial-say">${dialWord(m.slider ?? 0.2, z)}</p>
           <div class="row"><button class="btn" data-deal="stop" data-snd data-fid="stop" autofocus>Stop here</button></div></div>`
-      : `<div class="dial"><div class="dial-track" aria-hidden="true">${zone}<i class="dial-mark" style="left:50%"></i></div>
-          <p class="small mute">Watch the marker. Press <b>Stop</b> (or Space, or Enter) when it is inside the green zone.</p>
-          <div class="row"><button class="btn big" data-deal="stop" data-snd data-fid="stop" autofocus>Stop</button></div></div>`;
+      : `<div class="dial" role="group" aria-label="Repair timing"><div class="dial-track" aria-hidden="true">${zone}<i class="dial-mark" style="left:50%"></i></div>
+          <p class="small mute" id="dial-help">Watch the marker. Press <b>Stop</b> (or Space, or Enter) when it is inside the green zone.</p>
+          <p class="small mute" id="dial-ear">${esc(dialEarText(m.dialInfo))}</p>
+          <div class="row"><button class="btn big" data-deal="stop" data-snd data-fid="stop" aria-describedby="dial-ear" autofocus>Stop</button></div></div>`;
     dial += `<div class="row"><button class="btn ghost" data-deal="careful" data-snd data-fid="care">Careful: pay more, no timing</button></div>`;
   }
   const cost = !m.stageDone && !m.blocker ? '' : '';
@@ -253,7 +255,7 @@ export function sheetHTML(m) {
     <header class="deal-top"><h2 id="deal-title" tabindex="-1" autofocus>${esc(titleOf(m))}</h2>
       ${z && z.name ? `<span class="deal-zone"><span aria-hidden="true">${z.icon || ''}</span> ${esc(z.short || z.name)}</span>` : ''}
       <label class="deal-assist"><input type="checkbox" data-change-deal="assist" data-fid="assist" ${m.assist ? 'checked' : ''}${lock}> <span>Assist</span></label>
-      ${soundHTML(m)}<button class="btn ghost sm" data-close data-snd data-fid="leave">${m.stage === 'result' ? 'Close' : 'Leave'}</button></header>
+      ${soundHTML(m)}${dialSwitchHTML(m)}<button class="btn ghost sm" data-close data-snd data-fid="leave">${m.stage === 'result' ? 'Close' : 'Leave'}</button></header>
     ${m.stage === 'result' ? '' : stepperHTML(m)}
     <div class="deal-scene">${castHTML(m)}<div class="deal-main">${(BODY[m.stage] || resultHTML)(m)}</div></div>
     ${dockHTML(m)}</div>`;
@@ -265,6 +267,7 @@ export function viewModel(session) {
   m.revealed = !!session.revealed; // the result has been staged once: a later paint (Assist toggled) shows it at rest
   m.sound = session.sound ? session.sound() : true;
   m.tone = !!(session.toneWanted && session.toneWanted()); // the repair tone is on: the slider's own detents are silent (docs/AUDIO.md 4.5)
+  m.dialInfo = session.dialInfo ? session.dialInfo() : null; // what the room says about the tone: on or off, held off by Classroom, heard or not (js/audio/dialtone.js)
   return m;
 }
 
@@ -397,7 +400,10 @@ export function createSession(ctx, run) {
   const stopSounds = () => { for (const h of timers) clearTimeout(h); timers.clear(); clearTimeout(ses.toneT); if (typeof ses.offMute === 'function') ses.offMute(); ses.offMute = null; };
   ses.sound = () => { const a = appSettings.audio; return !a || audible(a); }; // on only when something can be heard (a volume of 0 is not "on")
   ses.toneWanted = () => { const a = appSettings.audio || {}; return a.dial === true && a.mute !== true && a.quiet !== true; };
+  ses.dialInfo = () => dialInfo(appSettings.audio);
   const tone = (p, z) => { const st = toneStep(ses.tone, p, z.lo, z.hi); if (st) { ses.tone = st; try { eng().dial.update(st.pos, z.lo, z.hi); } catch { /* the tone is an addition */ } } };
+  /** The tone's switch was pressed while the animated dial runs: start following the marker at once, or let go of it. (A slider's tone is made per move.) */
+  const retone = () => { if (!ses.raf || ses.reduced()) return; if (ses.toneWanted() && !ses.toneOn) toneOn(); else if (!ses.toneWanted() && ses.toneOn) { ses.toneOn = false; ses.tone = null; try { eng().dial.stop(); } catch { /* gone */ } } };
   const toneOn = () => { try { const d = eng().dial; ses.toneOn = !!(d && typeof d.start === 'function' && d.start()); } catch { ses.toneOn = false; } ses.tone = null; return ses.toneOn; };
   /** What the screen shows now, for the sound to be chosen from: the stage's key, its view, and how many log entries an auction has. */
   const look = () => { const k = run.key; return { k, v: run.view(), n: k === 'bid' && run.st.bid && run.st.bid.events ? run.st.bid.events.length : 0 }; };
@@ -508,6 +514,7 @@ export function createSession(ctx, run) {
     drop() { go({ type: 'drop' }); },
     stop() { const r = stopAt(); if (r.gone) { result(); return; } plan('fix', { type: 'stop' }, { r, acc: r.ok ? lastAcc() : NaN }); say(r); after1(); paint(); },
     careful() { stopDial(); go({ type: 'careful' }); },
+    dialtone() { const r = toggleDial(appSettings.audio || {}); if (r.changed) { appSettings.audio = r.next; try { applySettings(); } catch { /* no page: a test */ } } ctx.announce?.(r.said); retone(); if (r.changed && r.hears) one({ hear: ['ui.toggle', { variant: r.next.dial ? 'on' : 'off' }] }); paint(); }, // the room's switch for the repair tone (docs/AUDIO.md 4.5)
     sound() { const r = toggleMute(appSettings.audio || {}); if (r.changed) { appSettings.audio = r.next; try { applySettings(); } catch { /* no page: a test */ } } ctx.announce?.(r.said); if (r.changed && r.hears) one({ hear: ['ui.toggle', { variant: 'on' }] }); paint(); }, // the room's own switch; key M does the same anywhere
   };
   const changes = {
@@ -553,7 +560,9 @@ export function createSession(ctx, run) {
     // the world waits while you deal (unless a classroom clock is in charge)
     if (S && S.clock && !S.clock.paused && (S.mode ? S.mode === 'solo' : S.canSetClock && S.canSetClock())) { S.setPaused(true); ses.paused = true; } // a solo run only: never the class's clock
     paint();
-    ctx.announce?.(`${titleOf(modelOf(run))}. ${run.plan.cast.name} says: ${run.plan.cast.hello}`);
+    // a repair opens on a dial whose track is a picture: the first one of a run says in words what to press and how to do it without timing or sight (once per run: tellOnce)
+    const dialSay = run.key === 'fix' && !run.res.fix && !ses.reduced() && tellOnce(kv, S && S.worldSeed) ? ` ${dialAnnounceText(ses.dialInfo())}` : '';
+    ctx.announce?.(`${titleOf(modelOf(run))}. ${run.plan.cast.name} says: ${run.plan.cast.hello}${dialSay}`);
   };
   ses.paint = paint;
   return ses;

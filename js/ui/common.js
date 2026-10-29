@@ -45,6 +45,16 @@ export function announce(msg, assertive = false) {
   if (!el) return;
   el.textContent = '';
   setTimeout(() => { el.textContent = msg; }, 30);
+  // An open modal dialog makes the rest of the page inert, and an inert live region is not in the accessibility tree (Chrome: "activeModalDialog"), so what is said while the Deal Room or the
+  // settings are open must be said inside them. The region is made on first use, kept across the sheet's redraws (setHTML keeps `data-keep`) and written the same way: cleared, then the words.
+  const d = $('#dlg');
+  if (d && d.open) {
+    const kind = assertive ? 'alert' : 'status';
+    let r = [...d.children].find((c) => c.dataset && c.dataset.say === kind);
+    if (!r) { r = document.createElement('div'); r.className = 'sr'; r.dataset.say = kind; r.setAttribute('data-keep', ''); r.setAttribute('role', kind); r.setAttribute('aria-live', assertive ? 'assertive' : 'polite'); r.setAttribute('aria-atomic', 'true'); d.appendChild(r); }
+    r.textContent = '';
+    setTimeout(() => { r.textContent = msg; }, 30);
+  }
 }
 export function toast(msg, level = 'info', ms = 4200, o = {}) { // o.refusal: the toast answers an action the engine refused (say(r)); the sound layer plays its "no" for those and for no other bad toast. o.own: its sound is requested by the code that raised it (a reward: the resolver may keep it quiet), so the toast's fallback "ok" stays out
   const box = $('#toasts');
@@ -188,7 +198,7 @@ export function burst({ x, y, color = '#46e38e', n = 90, power = 1 } = {}) {
 export function settingsDialog(onChange) {
   const d = dlg.open(`
     <button class="btn ghost sm x" data-close>Close</button>
-    <h2 tabindex="-1" autofocus>Accessibility and sound</h2>
+    <h2 tabindex="-1" autofocus>Display and sound</h2>
     <p class="mute small">This game targets WCAG 2.2 AA. Everything works with a keyboard: Tab to move, Enter or Space to press, Escape to close windows.</p>
     <div class="grid g2">
       <div><label for="s-contrast">Contrast</label><select id="s-contrast" data-k="contrast"><option value="normal">Standard dark</option><option value="high">High contrast</option></select></div>

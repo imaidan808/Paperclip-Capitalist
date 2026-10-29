@@ -52,5 +52,15 @@ The **Debrief** screen assembles each student's own evidence (ledger rows, Day 4
 ## Tuning for your course
 Instructor sliders: transaction friction, audit frequency, synthetic-classmate count, algorithmic events, EEI floor. Everything else is in `js/config.js` (rates, fees, shocks, the economy's knobs) and `js/data/` (districts, assets, buyers, Backgrounds).
 
+## Sound
+The game makes its sounds in each student's browser (nothing is downloaded or recorded) and plays none until the student presses something. What the room does for you, and what to tell a class:
+
+- **A room is quiet by default.** A student who joins by code or link is put on the **Classroom** sound preset from the moment they press Join, before the Background draft, where the loudest sound of the first minute plays when they press Begin (a whole class presses it on your word). In Classroom the tiny game sounds are off, the medium and loud ones are 10 dB lower, interface sounds 6 dB lower, and the ambient bed, the repair dial tone and the clock sounds (a buyer arriving, the new day, a manager's coin) are off. The student sees one note in the draft saying so, and everything goes back when they leave the room. A student who has changed a sound setting themselves keeps their own.
+- **Quiet sound link.** Tick **Quiet sound link** beside **Copy student link** and the link ends `?sound=quiet`: students who open it start in Classroom sound, even on the title screen. Unlike the room rule it is kept in their browser until they change it under **Display and sound**; if a student has already chosen their own sound settings, the link does not change them.
+- **Mute.** Key **M**, or the speaker button (top right of the game, and in the Deal Room beside Assist), mutes and unmutes in every window. **Display and sound** (the button on your dashboard, the menu and the title) has the volume, a preset (Full, Classroom, Interface only, Off), a test sound and a line that says in words whether sound can be heard.
+- **Opt-in beds and tones.** The ambient bed (a quiet loop for each district) and the **repair dial tone** (a tone that follows the marker in the repair game) are off until the student switches them on, and are off in Classroom. The tone has a **Dial tone** button inside the repair window, beside Sound.
+- **Sound is never the only cue.** Every sound has something drawn or written beside it (a toast, a ledger row, a stamp, the Deal Room's own words), so a student who cannot hear, or has muted the game, loses nothing: the repair timing game also has **Careful: pay more, no timing**, and a slider under reduced motion. Do not grade on what a student heard.
+- **If a student hears nothing:** the device's volume and its silent switch (a browser can be on while the device is silent), the speaker button, and the status line under **Display and sound**.
+
 ## Accessibility and privacy for students
 Keyboard-only play, screen-reader announcements, high-contrast theme, reduced motion, four text sizes. The game asks for an alias, not a name; progress is stored in the student's browser. See `docs/COMPLIANCE.md` for exactly what is and is not implemented.

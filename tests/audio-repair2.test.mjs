@@ -364,7 +364,7 @@ test('a card pressed while a switch holds the engine back is answered in words: 
 });
 test('the audition page reports a silent press on the status line and on the card, and has a way back to the settings of a first visit', () => {
   const js = src('dev/sounds.js'), html = src('dev/sounds.html');
-  assert.match(js, /whyDropped/); assert.match(js, /function said\(heard, id, before, mark\)/); assert.match(js, /'silent: '/); assert.match(js, /classList\.toggle\('silent', !heard\)/);
+  assert.match(js, /explainDrop/); // (third round: the page's reasons come from js/audio/audition.js, which delegates the plain gates to whyDropped) assert.match(js, /function said\(heard, id, before, mark\)/); assert.match(js, /'silent: '/); assert.match(js, /classList\.toggle\('silent', !heard\)/);
   assert.match(js, /const hear = \(id, v, o = \{\}, mark = null\)[^\n]*said\(!!r, id, before, mark\)/, 'every card\'s press asks what became of it');
   assert.match(js, /b\.onclick = \(\) => hear\(id, v, \{\}, c\)/); assert.match(js, /el\('p', 'why', '', c\)/);
   assert.match(html, /id="reset"[^>]*>Reset to Full</); assert.match(js, /\$\('reset'\)\.onclick/); assert.match(html, /\.why:empty/);

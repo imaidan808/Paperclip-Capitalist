@@ -267,6 +267,26 @@ export function applyRoomRule(d, inRoom) {
   }
   return null;
 }
+/** kv key: the room code a student was last told about (one note per room, not one per visit to the Draft). */
+export const TOLD_ROOM = 'audioToldRoom';
+/**
+ * A pending join counts as "in a room" for sound (docs/AUDIO.md 7.1, third round). `S.joinRoom` runs when Begin is pressed, after the Draft, but a whole class presses Begin on the instructor's
+ * word and the Draft's `draft.begin` is a loud sound: with the rule applied only when the game mounts, thirty laptops played a fanfare at full volume. So the rule applies from the moment the
+ * Draft opens with a room code: `room` is the pending join ({ code }) and a falsy value lets it go (Back to the title, or any way out of the Draft that is not a join). It is the same rule as a
+ * room's and idempotent: a player who has touched a sound setting keeps their own, and the earlier values come back when the player leaves (a Back out of the Draft included). A player who is
+ * already in Classroom (the link said `?sound=quiet`, or they chose it) is told once per room, so a quiet game is never an unexplained one. `d` is the page's deps (`initAudio` sets them).
+ * Returns 'joined', 'left', 'told' or null.
+ */
+export function pendingRoom(room, d = deps) {
+  if (!d) return null;
+  const code = room && room.code ? String(room.code) : '';
+  const r = applyRoomRule(d, !!code);
+  if (!code) return r;
+  if (r === 'joined') { try { d.kv?.set(TOLD_ROOM, code); } catch { /* no storage */ } return r; }
+  const a = d.settings && d.settings.audio;
+  if (r === null && a && a.quiet === true && !a.mute && d.kv && d.kv.get(TOLD_ROOM) !== code) { d.kv.set(TOLD_ROOM, code); d.toast?.(ROOM_TOAST, 'info'); return 'told'; }
+  return r;
+}
 
 // ================================================================================ the DOM
 const isField = (el) => !!el && (el.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName)) && !(el.tagName === 'INPUT' && /^(checkbox|radio|button|submit|range)$/.test(el.type));
@@ -294,8 +314,9 @@ export function initAudio(d = {}) {
     audio.touch(); if (audio.state !== 'running') audio.unlock();
     // The first minute (7.4): the title and the Draft play sounds from the first click with no speaker button on the page, so the one-time note is made here when no game is mounted yet
     // (a mounted game says it itself, once, with the button). Not muted, not Classroom, and only once.
-    const a = deps.settings?.audio;
-    if (!gamesWired && a && !a.hinted && !a.mute && !a.quiet && audio.supported && deps.toast) { deps.settings.audio = { ...a, hinted: true }; deps.save?.(); deps.toast(HINT_PAGE_TEXT, 'info'); }
+    // (Not on the press that joins a classroom: the room's own note follows within the moment, and a student who has just typed a code is told one thing about sound, not two.)
+    const a = deps.settings?.audio, joining = typeof e.target?.closest === 'function' && !!e.target.closest('[data-act="join"]');
+    if (!gamesWired && a && !a.hinted && !a.mute && !a.quiet && !joining && audio.supported && deps.toast) { deps.settings.audio = { ...a, hinted: true }; deps.save?.(); deps.toast(HINT_PAGE_TEXT, 'info'); }
   });
   for (const t of ['pointerdown', 'touchend', 'keydown']) document.addEventListener(t, unlock, opts);
   // 2. visibility: hidden stops every voice and suspends; visible resumes after the shell's own tick has run

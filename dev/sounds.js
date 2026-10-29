@@ -1,10 +1,11 @@
 // The audition page (dev only), for the author's ears. Every sound of docs/AUDIO.md on a button, grouped by what it MEANS (gain, loss, neutral, warning, refusal, size, progress, the Deal Room...), each
 // with its tier as a word, its meaning and its trigger in plain sight. Beside the buttons: gain and loss side by side, the size ladders in sequence, every timbre of a pooled sound, the repair dial
 // tone on a slider, the collector's bursts, a minute of ordinary play replayed through the real wiring at 1x or 4x, and the ambient beds. It runs the real engine.
-import { audio, bindSettings, migrateAudio, whyDropped } from '../js/audio/index.js';
+import { audio, bindSettings, migrateAudio } from '../js/audio/index.js';
 import { RECIPES, IDS, variantsOf, tierOf } from '../js/audio/recipes.js';
 import { BED_IDS, ONE_SHOTS } from '../js/audio/ambient.js';
 import { eventCalls, noteCalls, uiCalls, controlFor, newWireState } from '../js/audio/wire.js';
+import { explainDrop, ambientWhy, oneShotWhy, dialWhy, pressBurst, describeMinute } from '../js/audio/audition.js';
 import { SECTIONS, PAIRS, LADDERS, MINUTE } from './sections.js';
 
 const settings = { audio: migrateAudio({}, location.search) };
@@ -15,14 +16,19 @@ const sync = () => { Object.assign(A(), { master: +$('vol').value, mute: $('mute
 for (const id of ['vol', 'mute', 'ui', 'game', 'world', 'amb', 'ambvol', 'quiet']) $(id).addEventListener('input', () => { audio.unlock(); sync(); });
 const press = () => audio.unlock();
 document.addEventListener('pointerdown', press); document.addEventListener('keydown', press);
-// What the last press said about itself: a press the engine drops (Mute, Classroom, a bus off, the world's ticks off...) is silent, and a page built for listening must not leave it to be taken for a broken button.
+// What the last press said about itself: a press the engine drops (Mute, Classroom, a bus off, the world's ticks off, the reward budget...) is silent, and a page built for listening must not leave it
+// to be taken for a broken button. EVERY button either sounds or says here, in words, which rule held it back (or, for Stop and Reset, what it did).
 let lastWhy = '';
 const status = () => { $('state').textContent = 'engine: ' + audio.state + (lastWhy ? ' \u00b7 ' + lastWhy : ''); }; audio.on(status); status();
+const say = (text) => { lastWhy = text || ''; status(); }; // a plain statement, or '' to clear
+const silent = (why) => say(why ? 'silent: ' + why : '');
 const dropped = () => ({ ...audio.stats().dropped });
 const gone = (before) => { const now = dropped(); return Object.keys(now).find((k) => now[k] > (before[k] || 0)); }; // the reason the engine counted since `before`
+const world = () => ({ rs: audio._resolver, now: performance.now(), speed: audio.env.speed, voices: audio._voices, sandbox: audio.env.sandbox });
 /** After a press: if nothing was heard, say which rule held it back, on the status line and on the card. */
 function said(heard, id, before, mark) {
-  lastWhy = heard ? '' : 'silent: ' + whyDropped(gone(before), A(), { id, bus: RECIPES[id]?.bus });
+  lastWhy = heard ? '' : 'silent: ' + explainDrop(gone(before), A(), { id, bus: RECIPES[id]?.bus, ...world() });
+  said.last = { heard, why: lastWhy };
   if (mark) { mark.classList.toggle('silent', !heard); const w = mark.querySelector('.why'); if (w) w.textContent = lastWhy; }
   status();
 }
@@ -37,13 +43,15 @@ const expand = (item) => { const [id, v] = split(item); if (!RECIPES[id]) return
 const hear = (id, v, o = {}, mark = null) => { audio.unlock(); sync(); const before = dropped(), r = audio.play(id, { variant: v, noCooldown: true, player: true, ...o }); said(!!r, id, before, mark); return r; };
 /** Play a list of [id, variant] one after the other, each given the room of its own length (and a breath). */
 let seqToken = 0;
+/** A run of sounds one after another: each press speaks for itself while it plays, and at the end the status line says how many did not sound and why (the last one heard must not hide the ones before). */
 async function sequence(list, gap = 350) {
-  const token = ++seqToken;
-  for (const [id, v] of list) { if (token !== seqToken) return; hear(id, v); await sleep(Math.max(500, (RECIPES[id].dur || 0.5) * 1000) + gap); }
+  const token = ++seqToken; let miss = 0, why = '';
+  for (const [id, v] of list) { if (token !== seqToken) return; hear(id, v); if (!said.last.heard) { miss++; why = said.last.why; } await sleep(Math.max(500, (RECIPES[id].dur || 0.5) * 1000) + gap); }
+  if (token === seqToken) say(miss ? `${why} (${miss} of ${list.length} did not sound)` : '');
 }
-$('stop').onclick = () => { seqToken++; audio.stopAll(60); audio.dial.stop(); };
+$('stop').onclick = () => { seqToken++; audio.stopAll(60); audio.dial.stop(); say('stopped every sound and the repair dial tone.'); };
 // Back to the settings of a first visit, in one press: a bar left on Mute or on the Classroom rule from an earlier test is the likeliest reason for a silent card.
-$('reset').onclick = () => { for (const [id, on] of [['mute', false], ['ui', true], ['game', true], ['world', true], ['amb', false], ['quiet', false]]) $(id).checked = on; $('vol').value = 70; $('ambvol').value = 70; audio.unlock(); sync(); lastWhy = ''; status(); };
+$('reset').onclick = () => { for (const [id, on] of [['mute', false], ['ui', true], ['game', true], ['world', true], ['amb', false], ['quiet', false]]) $(id).checked = on; $('vol').value = 70; $('ambvol').value = 70; audio.unlock(); sync(); say('settings are back to a first visit: volume 70, Interface, Game and World ticks on, Ambient off, no Classroom rule.'); };
 
 // ---- the cards: a sound with its tier (a word, not only a colour), its meaning and its trigger
 function card(parent, id, v) {
@@ -71,7 +79,7 @@ for (const S of SECTIONS) {
 // ---- gain beside loss
 { const sec = el('section', 'grp', null, app); el('h2', null, 'Gain and loss, side by side (A then B)', sec); el('p', 'mute', 'Each pair is played A, a pause, B. The loss twin should be lower, darker and no louder.', sec);
   const row = el('div', 'row', null, sec);
-  for (const [a, b] of PAIRS) { const [ia, va] = split(a), [ib, vb] = split(b), btn = el('button', 'pair', `${a}  then  ${b}`, row); btn.onclick = async () => { const t = ++seqToken; hear(ia, va); await sleep(Math.max(500, RECIPES[ia].dur * 1000) + 300); if (t === seqToken) hear(ib, vb); }; } }
+  for (const [a, b] of PAIRS) { const [ia, va] = split(a), [ib, vb] = split(b), btn = el('button', 'pair', `${a}  then  ${b}`, row); btn.onclick = async () => { const t = ++seqToken; hear(ia, va); const first = said.last; await sleep(Math.max(500, RECIPES[ia].dur * 1000) + 300); if (t === seqToken) { hear(ib, vb); if (!first.heard && said.last.heard) say(first.why + ' (A did not sound)'); } }; } }
 // ---- ladders
 { const sec = el('section', 'grp', null, app); el('h2', null, 'Ladders, smallest first', sec); el('p', 'mute', 'Bigger is brighter, longer and fuller; each step should be heard as a step.', sec);
   const row = el('div', 'row', null, sec);
@@ -84,20 +92,41 @@ for (const S of SECTIONS) {
 { const sec = el('section', 'grp', null, app); el('h2', null, 'Repair dial tone', sec); el('p', 'mute', 'The marker\'s place is the pitch (low left, high right); inside the green zone (40 to 60%) the tone gains an octave and a shimmer and rises 3 dB.', sec);
   const row = el('div', 'row', null, sec); const s = el('input', null, null, row); s.type = 'range'; s.min = 0; s.max = 100; s.value = 20; s.setAttribute('aria-label', 'Marker place');
   const on = el('button', null, 'Start the tone', row), off = el('button', null, 'Stop', row);
-  on.onclick = () => { audio.unlock(); sync(); audio.dial.start(); audio.dial.update(s.value / 100, 0.4, 0.6); };
-  s.oninput = () => audio.dial.update(s.value / 100, 0.4, 0.6); off.onclick = () => audio.dial.stop(); }
+  const note = el('p', 'why', '', sec);
+  on.onclick = () => { // the engine starts one tone at a time, as a game-bus voice, never in Classroom or through a mute
+    audio.unlock(); sync();
+    const why = dialWhy(A(), audio.state), ok = !why && (audio.dial.active || audio.dial.start());
+    if (ok) audio.dial.update(s.value / 100, 0.4, 0.6);
+    on.classList.toggle('silent', !ok); note.textContent = ok ? '' : 'silent: ' + (why || 'the tone did not start.');
+    silent(ok ? '' : why || 'the tone did not start.');
+  };
+  s.oninput = () => { if (!audio.dial.active) { silent('the tone is not running: press Start the tone first.'); return; } audio.dial.update(s.value / 100, 0.4, 0.6); };
+  off.onclick = () => { audio.dial.stop(); on.classList.remove('silent'); note.textContent = ''; say('the repair dial tone stopped.'); }; }
 
 // ---- the collector: a recorded burst goes through the resolver, which makes at most two sentences of it
+// Each burst is a function of `req`, the page's `audio.request` (with a fresh press it asks to skip cooldowns and to draw from the player's bucket: see pressBurst).
 const bursts = {
-  'a sale that levels you up and finishes a quest': () => { audio.request('level.up', { meta: { level: 3 } }); audio.request('quest.complete'); audio.request('sale.win', { variant: 'w', with: [['cash.in', { size: 'm', gainDb: -4 }], ['streak', { params: { n: 3 } }]] }); },
-  'a sale with an xl coin that levels you up': () => { audio.request('sale.win', { variant: 'w', with: [['cash.in', { size: 'xl', gainDb: -4 }], ['streak', { params: { n: 3 }, gainDb: 5 }]] }); audio.request('level.up', { meta: { level: 3 } }); },
-  'five levels in one go': () => { for (let i = 1; i <= 5; i++) audio.request('level.up', { meta: { level: i } }); },
-  'four Codex pages and an achievement': () => { for (let i = 0; i < 4; i++) audio.request('codex.unlock'); audio.request('achievement', { variant: 'rare' }); },
-  'a margin call during a fanfare': () => { audio.request('milestone', { variant: 'm2' }); setTimeout(() => audio.request('alert.margin-call'), 200); },
-  'a busy minute': () => { audio.request('sale.pioneer', { variant: 'p', with: [['cash.in', { size: 'l' }]] }); audio.request('level.up', { meta: { level: 5 } }); audio.request('achievement', { variant: 'epic' }); audio.request('daily.done'); },
+  'a sale that levels you up and finishes a quest': (req) => { req('level.up', { meta: { level: 3 } }); req('quest.complete'); req('sale.win', { variant: 'w', with: [['cash.in', { size: 'm', gainDb: -4 }], ['streak', { params: { n: 3 } }]] }); },
+  'a sale with an xl coin that levels you up': (req) => { req('sale.win', { variant: 'w', with: [['cash.in', { size: 'xl', gainDb: -4 }], ['streak', { params: { n: 3 }, gainDb: 5 }]] }); req('level.up', { meta: { level: 3 } }); },
+  'five levels in one go': (req) => { for (let i = 1; i <= 5; i++) req('level.up', { meta: { level: i } }); },
+  'four Codex pages and an achievement': (req) => { for (let i = 0; i < 4; i++) req('codex.unlock'); req('achievement', { variant: 'rare' }); },
+  'a margin call during a fanfare': (req) => { req('milestone', { variant: 'm2' }); setTimeout(() => req('alert.margin-call'), 200); },
+  'a busy minute': (req) => { req('sale.pioneer', { variant: 'p', with: [['cash.in', { size: 'l' }]] }); req('level.up', { meta: { level: 5 } }); req('achievement', { variant: 'epic' }); req('daily.done'); },
 };
-{ const sec = el('section', 'grp', null, app); el('h2', null, 'Bursts through the collector', sec); const row = el('div', 'row', null, sec);
-  for (const [name, fn] of Object.entries(bursts)) { const b = el('button', null, name, row); b.onclick = () => { audio.unlock(); sync(); audio.setEnv({ lastPress: performance.now() }); const before = dropped(); fn(); const k = ['mute', 'bus', 'quiet', 'locked'].find((x) => dropped()[x] > (before[x] || 0)); lastWhy = k ? 'silent: ' + whyDropped(k, A(), { bus: 'game' }) : ''; status(); }; } }
+{ const sec = el('section', 'grp', null, app); el('h2', null, 'Bursts through the collector', sec);
+  el('p', 'mute', 'Each button sends a recorded burst through the real collector, which plays at most two sentences of it. The real reward budget allows one full reward every 10 s and the big moments play one at a time, so pressed in a row the later bursts would lose their rewards: with the box ticked (the default) each press puts the budget back and waits out the last big moment; untick it to hear the budget as the game does, and the status line names what it held back.', sec);
+  const fresh = el('label', null, null, sec), fb = el('input', null, null, fresh); fb.type = 'checkbox'; fb.id = 'fresh'; fb.checked = true; fresh.append(' Fresh budget before each burst');
+  const row = el('div', 'row', null, sec); let chain = Promise.resolve();
+  for (const [name, fn] of Object.entries(bursts)) {
+    const b = el('button', null, name, row);
+    b.onclick = () => { // presses queue one behind another, so two quick presses are two bursts in order, never one on top of the other
+      audio.unlock(); sync();
+      chain = chain.then(async () => {
+        const r = await pressBurst(audio, fn, { fresh: fb.checked, a: A(), speed: 1, say });
+        b.classList.toggle('silent', !r.heard.length); say(r.text);
+      }).catch((e) => say('the burst failed: ' + (e && e.message)));
+    };
+  } }
 
 // ---- a typical minute, through the real wiring at 1x or 4x
 { const sec = el('section', 'grp', null, app); el('h2', null, 'A typical minute of play', sec);
@@ -113,19 +142,30 @@ const bursts = {
         if (kind === 'control') { audio.touch(); const c = controlFor(p); if (c) run([c]); } else if (kind === 'event') run(eventCalls(p, st, hooks)); else if (kind === 'note') run(noteCalls(p, st, hooks)); else if (kind === 'ui') run(uiCalls({ type: 'ui', ...p }, st, hooks));
       } catch (e) { console.warn('minute:', e); }
     }, at * 1000 / speed));
-    $('state').textContent = `engine: ${audio.state}; playing a minute at ${speed}x`;
+    const s0 = audio.stats(), at0 = { played: { ...s0.played }, dropped: { ...s0.dropped } };
+    say(`playing a minute at ${speed}x`);
+    timers.push(setTimeout(() => { const s1 = audio.stats(); say(describeMinute(at0.played, at0.dropped, s1.played, s1.dropped, A(), { ...world(), speed })); }, MINUTE[MINUTE.length - 1][0] * 1000 / speed + 3000)); // when it is over: how many sounds, and what the rules held back
   };
-  el('button', null, 'Play the minute at 1x', row).onclick = () => play(1); el('button', null, 'Play it at 4x', row).onclick = () => play(4); el('button', null, 'Stop the minute', row).onclick = () => { stop(); status(); }; }
+  el('button', null, 'Play the minute at 1x', row).onclick = () => play(1); el('button', null, 'Play it at 4x', row).onclick = () => play(4); el('button', null, 'Stop the minute', row).onclick = () => { stop(); say('the minute was stopped.'); }; }
 
 // ---- the ambient bed: pick a district, then night, rain and wealth
 { const sec = el('section', 'grp', null, app); el('h2', null, 'Ambient beds (turn Ambient on in the bar)', sec); const row = el('div', 'row', null, sec);
   const st = { theme: 'scrap', tier: 1, night: 0, rain: false, surge: false, tariff: false, paused: false, speed: 1 };
-  const push = () => { audio.unlock(); sync(); audio.ambient({ ...st }); };
-  for (const id of BED_IDS) { const b = el('button', null, 'bed ' + id, row); b.onclick = () => { st.theme = id; push(); }; }
+  // A bed plays only when the settings let it: Ambient ticked in the bar, no Classroom rule, no mute, a level above 0. Pressed with Ambient off a button used to do nothing and say nothing; now it is marked
+  // silent and the status line says why. (A first press may find the engine still starting: the bed is looked for again after a moment before anything is claimed.)
+  const push = (btn) => {
+    audio.unlock(); sync(); audio.ambient({ ...st });
+    const why = ambientWhy(A(), audio.state); btn.classList.toggle('silent', !!why); silent(why);
+    if (why && /^The audio engine is not running/.test(why)) setTimeout(() => { const w = ambientWhy(A(), audio.state), ok = !w && audio.stats().ambient.playing; btn.classList.toggle('silent', !ok); silent(ok ? '' : w || 'the bed did not start.'); }, 450);
+  };
+  for (const id of BED_IDS) { const b = el('button', null, 'bed ' + id, row); b.onclick = () => { st.theme = id; push(b); }; }
   const row2 = el('div', 'row', null, sec);
-  for (const [label, fn] of [['night', () => { st.night = st.night ? 0 : 1; }], ['rain', () => { st.rain = !st.rain; }], ['tariff', () => { st.tariff = !st.tariff; }], ['wealth tier 3', () => { st.tier = st.tier >= 3 ? 1 : 3; }], ['wealth tier 4', () => { st.tier = st.tier >= 4 ? 1 : 4; }]]) { const b = el('button', null, label, row2); b.onclick = () => { fn(); push(); }; }
+  for (const [label, fn] of [['night', () => { st.night = st.night ? 0 : 1; }], ['rain', () => { st.rain = !st.rain; }], ['tariff', () => { st.tariff = !st.tariff; }], ['wealth tier 3', () => { st.tier = st.tier >= 3 ? 1 : 3; }], ['wealth tier 4', () => { st.tier = st.tier >= 4 ? 1 : 4; }]]) { const b = el('button', null, label, row2); b.onclick = () => { fn(); push(b); }; }
   const row3 = el('div', 'row', null, sec);
-  for (const o of ONE_SHOTS) { const b = el('button', null, o.id, row3); b.title = o.recipe; b.onclick = () => { audio.unlock(); sync(); audio.playOneShot?.(o.id); }; }
+  for (const o of ONE_SHOTS) {
+    const b = el('button', null, o.id, row3); b.title = o.recipe;
+    b.onclick = () => { audio.unlock(); sync(); const v = audio.playOneShot?.(o.id), why = oneShotWhy(A(), audio.state) || (v ? '' : 'the engine is not running yet (press anywhere once), or the tab is hidden.'); b.classList.toggle('silent', !!why); silent(why); };
+  }
 }
 // ---- the meter
 const meter = $('meter').firstElementChild, dbEl = $('db'), buf = new Float32Array(1024);
@@ -136,4 +176,4 @@ function tick() {
   requestAnimationFrame(tick);
 }
 if (!new URLSearchParams(location.search).has('check')) requestAnimationFrame(tick);
-window.audioAudition = { audio, settings };
+window.audioAudition = { audio, settings, say }; // (the tests of the page press its buttons through this)

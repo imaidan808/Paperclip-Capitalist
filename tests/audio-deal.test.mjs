@@ -421,7 +421,7 @@ test('the room\'s sounds are chosen from what the screen shows: the sound sectio
 test('every room sound comes out of an act or a plan: the DOM half has no sound call the plan does not own', () => {
   const half = src('js/ui/deal.js').slice(src('js/ui/deal.js').indexOf('// ------------------------------------------------------------------ the DOM half'));
   const direct = half.match(/\beng\(\)\.play\(|\bone\(\{ hear/g) || [];
-  assert.equal(direct.length, 3, 'the plan\'s player, the opening voice and the switch\'s own tone');
+  assert.equal(direct.length, 4, 'the plan\'s player, the opening voice and the two switches\' own tones (Sound, and the repair dial tone: third round)');
   assert.match(half, /const plan = \(key, action, o\) => \{ try \{ play\(soundsFor\(key, action, o\)\); \} catch/, 'one guarded place chooses and plays: a fault in choosing a sound is the sound\'s, never the deal\'s');
   assert.ok(!/[^a-z]play\(soundsFor\(/.test(half.replace(/const plan = .*\n/, '')), 'every move goes through it');
   assert.ok(!/sfx\.play|audio\.request/.test(half), 'the cause sounds go over the bus, not around it');
