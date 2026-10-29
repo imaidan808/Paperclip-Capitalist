@@ -6,7 +6,7 @@
 // RULE OF THE GAME: sound never carries hidden information. Nothing here reads `buy.fake`, `inspect.caught`, a lot's truth, a rival's limit or an auction's `surplus`.
 import { audio } from './instance.js';
 import { moneySize } from './palette.js';
-import { joinRoom, leaveRoom, leftRoomText, toggleMute, HINT_PAGE_TEXT } from './settings.js';
+import { joinRoom, leaveRoom, leftRoomText, toggleMute, ownSoundText, audible, HINT_PAGE_TEXT } from './settings.js';
 import { ZONES } from '../config.js';
 
 const calls = (...c) => c.filter(Boolean);
@@ -258,9 +258,16 @@ export function controlFor(c) {
   return ['play', 'ui.tick', { variant: c.big ? 'full' : 'light' }];
 }
 
-// ---- the Classroom rule (7.1): a student who joins a room and has never touched a sound setting gets Classroom, with one toast; the earlier values come back when they leave
+// ---- the Classroom rule (7.1): a student who joins a room and has never chosen a sound setting (a volume is not one) gets Classroom, with one toast; the earlier values come back when they leave
 export const BEFORE_ROOM = 'audioBeforeRoom';
 export const ROOM_TOAST = 'Sound is set to Classroom (quieter) in this room. Press M to mute, or change it under Display and sound.'; // the title, the Draft and the game all have a Display and sound button; M works everywhere
+/**
+ * What an address asked of the sound (`?sound=quiet|off`), or '' (sixth round, UX2): a student who has sound settings of their own is told what stays, and what the instructor's link had asked for.
+ * `search` is for a test; the page reads its own address.
+ */
+export function linkSound(search) {
+  try { const v = (new URLSearchParams(search ?? (typeof location !== 'undefined' ? location.search : '')).get('sound') || '').toLowerCase(); return v === 'off' ? 'off' : v === 'quiet' || v === 'classroom' ? 'quiet' : ''; } catch { return ''; }
+}
 /**
  * d: { settings, save(), toast(msg, level), kv }. inRoom: the student is in a room now. Idempotent: it acts only on the way in (nothing remembered yet) and on the way out (something remembered).
  * Returns 'joined', 'left' or null.
@@ -294,8 +301,9 @@ export const TOLD_ROOM = 'audioToldRoom';
  * A pending join counts as "in a room" for sound (docs/AUDIO.md 7.1, third round). `S.joinRoom` runs when Begin is pressed, after the Draft, but a whole class presses Begin on the instructor's
  * word and the Draft's `draft.begin` is a loud sound: with the rule applied only when the game mounts, thirty laptops played a fanfare at full volume. So the rule applies from the moment the
  * Draft opens with a room code: `room` is the pending join ({ code }) and a falsy value lets it go (Back to the title, or any way out of the Draft that is not a join). It is the same rule as a
- * room's and idempotent: a player who has touched a sound setting keeps their own, and the earlier values come back when the player leaves (a Back out of the Draft included). A player who is
- * already in Classroom (the link said `?sound=quiet`, or they chose it) is told once per room, so a quiet game is never an unexplained one. `d` is the page's deps (`initAudio` sets them).
+ * room's and idempotent: a player who has chosen a sound setting keeps their own, and the earlier values come back when the player leaves (a Back out of the Draft included). A player who is
+ * already in Classroom (the link said `?sound=quiet`, or they chose it) is told once per room, so a quiet game is never an unexplained one; so is a player who keeps a mix of their own that can be heard,
+ * with what stays and how to get quieter (sixth round, UX2). `d` is the page's deps (`initAudio` sets them).
  * Returns 'joined', 'left', 'told' or null.
  */
 export function pendingRoom(room, d = deps) {
@@ -305,7 +313,13 @@ export function pendingRoom(room, d = deps) {
   if (!code) return r;
   if (r === 'joined') { try { d.kv?.set(TOLD_ROOM, code); } catch { /* no storage */ } return r; }
   const a = d.settings && d.settings.audio;
-  if (r === null && a && a.quiet === true && !a.mute && d.kv && d.kv.get(TOLD_ROOM) !== code) { d.kv.set(TOLD_ROOM, code); d.toast?.(ROOM_TOAST, 'info'); return 'told'; }
+  if (r === null && a && d.kv && d.kv.get(TOLD_ROOM) !== code) {
+    const say = (text) => { d.kv.set(TOLD_ROOM, code); d.toast?.(text, 'info'); return 'told'; };
+    if (a.quiet === true && !a.mute) return say(ROOM_TOAST);
+    // A student with a mix of their own that can be heard keeps it, and nobody else will tell them (sixth round, UX2): the room was told "sound is quiet", their Begin fanfare is at their own volume, and the
+    // instructor cannot see who they are. One note, once per room: what stays, and how to get quieter.
+    if (a.touched && !a.quiet && audible(a)) return say(ownSoundText(a, linkSound()));
+  }
   return r;
 }
 

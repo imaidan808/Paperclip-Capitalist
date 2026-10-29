@@ -256,3 +256,86 @@ test('WA-1: a new run keeps the reward budget, and so does leaving a game: a fan
   t.audio.newRun(); assert.deepEqual(KEPT_FIELDS.map((k) => rs[k]), budget, 'newRun');
   t.audio.release(KEEP_MS); assert.deepEqual(KEPT_FIELDS.map((k) => rs[k]), budget, 'release');
 });
+
+// ================================================================================ UX2: a volume is not a choice about the mix, and a student whose own mix stays is told
+import * as S from '../js/audio/settings.js';
+import * as wire from '../js/audio/wire.js';
+/** The Sound section as stand-ins, one element for each id of the markup, bound to a settings object: enough to press a control and see what it stored. */
+function section(settings) {
+  const audio = { state: 'running', sync() {}, play() {}, unlock() {}, on: () => () => {} };
+  const html = S.audioSettingsHTML(settings.audio, 'running'), made = {};
+  const keyOf = { 's-preset': 'preset', 's-vol': 'master', 's-mute': 'mute', 's-ui': 'ui', 's-game': 'game', 's-world': 'worldTicks', 's-clock': 'clockSounds', 's-amb': 'ambient', 's-ambvol': 'ambientLevel', 's-dial': 'dial', 's-mkey': 'mKey' };
+  for (const [, id] of html.matchAll(/id="(s-[a-z-]+)"/g)) {
+    const type = /vol$/.test(id) ? 'range' : id === 's-preset' ? 'select' : id === 's-sample' ? 'button' : /-h$/.test(id) || id === 's-status' ? 'span' : 'checkbox';
+    const e = { id, type, checked: false, value: '', disabled: false, textContent: '', dataset: {}, setAttribute() {}, querySelector: () => null, appendChild() {}, ownerDocument: { createElement: () => ({}) }, remove() {} };
+    if (keyOf[id]) e.dataset.snd = keyOf[id];
+    made[id] = e;
+  }
+  const sec = { querySelector: (sel) => (sel.startsWith('#') ? made[sel.slice(1)] || null : null), querySelectorAll: () => [] };
+  const root = { isConnected: true, querySelector: (sel) => (sel === 'fieldset.snd' ? sec : sel.startsWith('#') ? made[sel.slice(1)] || null : null), querySelectorAll: (sel) => (sel === '[data-snd]' ? Object.values(made).filter((e) => e.dataset.snd) : []) };
+  S.bindAudioSettings(root, { audio, settings, save() {}, announce() {} });
+  return made;
+}
+/** The page layer's deps for pendingRoom and applyRoomRule: the settings, a key-value store and the toasts it raised. */
+function depsOf(audio = {}) {
+  const m = new Map(), toasts = [];
+  return { settings: { audio: { ...audioDefaults(), ...audio } }, kv: { get: (k) => (m.has(k) ? m.get(k) : null), set: (k, v) => { m.set(k, v); return true; }, del: (k) => { m.delete(k); } }, save() {}, toast: (msg, level) => toasts.push([msg, level]), toasts };
+}
+test('UX2: moving the volume or the ambience level is not a choice about the mix: it leaves `touched` as it was, and every other control still sets it', () => {
+  assert.deepEqual(S.LEVEL_KEYS, ['master', 'ambientLevel']);
+  const settings = { audio: audioDefaults() }, made = section(settings);
+  made['s-vol'].value = '30'; made['s-vol'].oninput(); made['s-vol'].onchange();
+  assert.equal(settings.audio.master, 30); assert.equal(settings.audio.touched, false, 'the volume alone: a student who only turned it down is still a student the room can put in its rule');
+  made['s-ambvol'].value = '40'; made['s-ambvol'].oninput(); made['s-ambvol'].onchange();
+  assert.equal(settings.audio.ambientLevel, 40); assert.equal(settings.audio.touched, false, 'and so is the ambience level');
+  for (const id of ['s-mute', 's-ui', 's-game', 's-world', 's-clock', 's-amb', 's-dial', 's-mkey']) {
+    settings.audio = audioDefaults(); const e = made[id]; e.checked = !e.checked; e.onchange();
+    assert.equal(settings.audio.touched, true, `${id} is a choice of the mix`);
+  }
+  settings.audio = audioDefaults(); made['s-preset'].value = 'classroom'; made['s-preset'].onchange(); assert.equal(settings.audio.touched, true, 'a preset is a choice');
+  settings.audio = { ...audioDefaults(), touched: true }; made['s-vol'].value = '55'; made['s-vol'].oninput(); assert.equal(settings.audio.touched, true, 'and a volume moved after a choice does not take the choice back');
+  settings.audio = audioDefaults(); assert.equal(S.toggleMute(settings.audio).next.touched, true, 'key M and the speaker button are choices (a mute)');
+});
+test('UX2: a student who only moved the volume is put in the room\'s rule like any other, at the volume they chose; a volume of 0 stays 0', () => {
+  const settings = { audio: audioDefaults() }, made = section(settings);
+  made['s-vol'].value = '35'; made['s-vol'].oninput();
+  const j = S.joinRoom(settings.audio);
+  assert.ok(j, 'the join reaches them: it was refused for a student who had only turned the volume down');
+  assert.equal(j.next.quiet, true); assert.equal(j.next.master, 35, 'their volume is theirs'); assert.equal(j.next.touched, false); assert.equal(j.before.master, 35);
+  const zero = S.joinRoom({ ...audioDefaults(), master: 0 });
+  assert.equal(zero.next.quiet, true); assert.equal(zero.next.master, 0, 'a student who turned the volume to 0 to be quiet is not un-silenced by the room');
+  assert.equal(S.applyPreset({ ...audioDefaults(), master: 0 }, 'classroom').master, 70, 'the control: a preset the student chooses still raises 0 to 70 (Full at 0 would be silent)');
+  assert.deepEqual(S.roomPreset({ ...audioDefaults(), master: 0, touched: true }), { ...S.applyPreset(audioDefaults(), 'classroom'), master: 0, touched: false }, 'the room\'s preset: Classroom, the volume kept, not a choice');
+  const left = S.leaveRoom(j.next, j.before); assert.equal(left.quiet, false); assert.equal(left.master, 35); assert.equal(left.touched, false);
+});
+test('UX2: the note for a student whose own sound stays says what stays, in words, and how to get quieter; and what the instructor\'s link had asked for', () => {
+  const full = { ...audioDefaults(), master: 80, touched: true };
+  assert.equal(S.ownSoundText(full), 'Your own sound settings stay in this room (Full, 80 percent). Press M to mute, or choose Classroom (quieter) under Display and sound.');
+  assert.match(S.ownSoundText({ ...full, game: false, ambient: true }), /\(your own mix, 80 percent\)/);
+  assert.match(S.ownSoundText({ ...full, game: false, clockSounds: true }), /\(Interface only, 80 percent\)/);
+  assert.equal(wire.linkSound('?room=ABCD&sound=quiet'), 'quiet'); assert.equal(wire.linkSound('?sound=classroom'), 'quiet'); assert.equal(wire.linkSound('?room=ABCD&sound=OFF'), 'off');
+  assert.equal(wire.linkSound('?room=ABCD'), ''); assert.equal(wire.linkSound('?sound=full'), ''); assert.equal(wire.linkSound('garbage'), '');
+  assert.match(S.ownSoundText(full, 'quiet'), /^Your instructor's link asked for quiet sound, but your own sound settings stay in this room \(Full, 80 percent\)\. Press M to mute/);
+  assert.match(S.ownSoundText(full, 'off'), /^Your instructor's link asked for no sound, but your own sound settings stay in this room/);
+});
+test('UX2: a student with sound of their own who joins a room gets ONE note, once per room; a student who hears nothing, or who is in Classroom, or who only moved the volume, gets the note that is theirs', () => {
+  const d = depsOf({ touched: true, master: 80 }), before = { ...d.settings.audio };
+  assert.equal(wire.pendingRoom({ code: 'ABCD' }, d), 'told', 'nothing was said to them: no Classroom, no toast, no line in the Draft, and Begin played at full volume');
+  assert.deepEqual(d.toasts, [['Your own sound settings stay in this room (Full, 80 percent). Press M to mute, or choose Classroom (quieter) under Display and sound.', 'info']]);
+  assert.deepEqual(d.settings.audio, before, 'and their settings stay exactly as they were');
+  assert.equal(wire.pendingRoom({ code: 'ABCD' }, d), null, 'the Draft drawn again says nothing more'); assert.equal(wire.applyRoomRule(d, true), null, 'nor does the game\'s own check at Begin'); assert.equal(d.toasts.length, 1);
+  assert.equal(wire.pendingRoom({ code: 'WXYZ' }, d), 'told', 'another room is another note'); assert.equal(d.toasts.length, 2);
+  for (const [name, over] of [['muted', { mute: true }], ['volume 0', { master: 0 }], ['both buses off', { ui: false, game: false }]]) {
+    const x = depsOf({ touched: true, ...over }); assert.equal(wire.pendingRoom({ code: 'ABCD' }, x), null, name); assert.equal(x.toasts.length, 0, `${name}: told nothing about a sound they cannot hear`);
+  }
+  const q = depsOf({ touched: true, quiet: true }); assert.equal(wire.pendingRoom({ code: 'ABCD' }, q), 'told'); assert.deepEqual(q.toasts, [[wire.ROOM_TOAST, 'info']], 'in Classroom by their own choice: the Classroom note, as before');
+  const v = depsOf({ master: 35 }); assert.equal(wire.pendingRoom({ code: 'ABCD' }, v), 'joined', 'a volume alone is no choice: the room\'s rule applies'); assert.deepEqual(v.toasts, [[wire.ROOM_TOAST, 'info']]); assert.equal(v.settings.audio.master, 35); assert.equal(v.settings.audio.quiet, true);
+});
+test('UX2: the faculty kit\'s class script is true for every student (press M now, or use headphones), and it no longer says that a volume keeps a student out of Classroom', () => {
+  const kit = src('docs/FACULTY_KIT.md');
+  assert.match(kit, /press \*\*M\*\* now, or use headphones/i);
+  assert.ok(!/tell them sound is quiet in a room/.test(kit), 'step 2 told the class something that was not true for a student with settings of their own');
+  assert.ok(!/Sound is quiet in a room; press/.test(kit), 'and so did the script under Sound');
+  assert.ok(!/the volume alone included, keeps their own/.test(kit), 'the volume is no longer such a setting');
+  assert.match(kit, /Your own sound settings stay in this room/, 'the kit says what such a student is told');
+});

@@ -17,7 +17,7 @@ import * as D from '../js/deal.js';
 import * as UI from '../js/ui/deal.js';
 import { audio as page } from '../js/audio/index.js';
 import { createAudio } from '../js/audio/engine.js';
-import { audioDefaults, migrateAudio, audioSettingsHTML } from '../js/audio/settings.js';
+import { audioDefaults, migrateAudio, audioSettingsHTML, ownSoundText } from '../js/audio/settings.js';
 import * as wire from '../js/audio/wire.js';
 import { dialInfo, dialEarText, dialShortText, dialAnnounceText, dialSwitchHTML, toggleDial, tellOnce, _resetTold } from '../js/audio/dialtone.js';
 import { instructorParts } from '../js/ui/instructor.js';
@@ -50,9 +50,10 @@ test('A1: a pending join (the Draft with a room code) is a room for sound: Class
   // joining again after Back: told again, because the rule changed again
   assert.equal(wire.pendingRoom({ code: 'ABCD' }, d), 'joined'); assert.equal(d.toasts.length, 3);
 });
-test('A1: a player who has changed a sound setting by hand keeps it, and a player already in Classroom is told once per room', () => {
+test('A1: a player who has changed a sound setting by hand keeps it (and, since the sixth round, UX2, is told so once), and a player already in Classroom is told once per room', () => {
   const mine = deps({ touched: true, master: 90 });
-  assert.equal(wire.pendingRoom({ code: 'ABCD' }, mine), null); assert.equal(mine.settings.audio.quiet, false); assert.equal(mine.settings.audio.master, 90); assert.equal(mine.toasts.length, 0);
+  assert.equal(wire.pendingRoom({ code: 'ABCD' }, mine), 'told', 'it was null and silent: a student whose own mix stays met the room\'s fanfares with nothing said'); assert.equal(mine.settings.audio.quiet, false); assert.equal(mine.settings.audio.master, 90);
+  assert.deepEqual(mine.toasts, [[ownSoundText(mine.settings.audio), 'info']], 'one note, with what stays'); assert.equal(wire.pendingRoom({ code: 'ABCD' }, mine), null, 'once for this room'); assert.equal(mine.toasts.length, 1);
   const q = deps({ quiet: true, touched: true }); // the link said ?sound=quiet, or they chose it
   assert.equal(wire.pendingRoom({ code: 'ABCD' }, q), 'told'); assert.deepEqual(q.toasts, [[wire.ROOM_TOAST, 'info']], 'a quiet game is never an unexplained one');
   assert.equal(wire.pendingRoom({ code: 'ABCD' }, q), null, 'once for this room'); assert.equal(q.toasts.length, 1);

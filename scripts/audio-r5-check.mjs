@@ -97,7 +97,7 @@ try {
     await p.eval(`[...document.querySelectorAll('#dlg button')].find(b=>/display and sound/i.test(b.textContent)).click()`); await sleep(400);
     await p.eval(`(()=>{ const e = document.querySelector('#s-vol'); e.value = 50; e.dispatchEvent(new Event('input', { bubbles: true })); e.dispatchEvent(new Event('change', { bubbles: true })); })()`); await sleep(300);
     let a = await p.eval(settingsOf);
-    ok(a.master === 50 && a.touched === true && a.quiet === true, 'U1: the volume is 50 and the room is still Classroom: ' + JSON.stringify({ master: a.master, touched: a.touched, quiet: a.quiet }));
+    ok(a.master === 50 && a.touched === false && a.quiet === true, 'U1: the volume is 50, the room is still Classroom and the volume did not make the student "touched" (sixth round, UX2: it is not a choice about the mix): ' + JSON.stringify({ master: a.master, touched: a.touched, quiet: a.quiet }));
     await p.key('Escape'); await sleep(300);
     await p.clickSel('[data-act="menu"]'); await sleep(300);
     await p.clickSel('#dlg [data-act="reset"]'); await sleep(400);

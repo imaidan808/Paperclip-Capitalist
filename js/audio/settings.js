@@ -40,11 +40,13 @@ export function audioDefaults() {
     quiet: false,      // the Classroom rule (3.2): tiny game sounds off, medium and loud 8 dB lower, interface 6 dB lower, ambient, dial and clock sounds off
     worldTicks: true,  // the world's hover ticks and footsteps (the most frequent game sounds; Calm and Classroom drop them anyway). Off silences those two and nothing else
     mKey: true,        // key M mutes and unmutes (a single-key shortcut needs a way out, WCAG 2.1.4); the speaker button stays
-    touched: false,    // the player has changed a sound setting by hand (stops the automatic Classroom preset), or a saved "sound off" was migrated
+    touched: false,    // the player has CHOSEN a mix by hand (a preset, a switch, a mute, key M): stops the automatic Classroom preset. A volume alone is not a choice about the mix (sixth round, UX2). Also set when a saved "sound off" was migrated
     hinted: false,     // the one-time "sound is on" note has been shown
   };
 }
 const NUM = { master: [0, 100, 5], ambientLevel: [0, 100, 5] };
+/** The two levels: moving one is not a choice about the mix, and does not set `touched` (sixth round, UX2). */
+export const LEVEL_KEYS = ['master', 'ambientLevel'];
 const BOOL = ['mute', 'ui', 'game', 'ambient', 'dial', 'clockSounds', 'quiet', 'worldTicks', 'mKey', 'touched', 'hinted'];
 function num(v, lo, hi, step, d) { const n = typeof v === 'number' ? v : typeof v === 'string' && v.trim() !== '' ? Number(v) : NaN; return Number.isFinite(n) ? Math.min(hi, Math.max(lo, Math.round(n / step) * step)) : d; }
 /** Clamp every field to its range and drop unknown keys: a saved value is never trusted (numbers to their range and step, booleans only when exactly true or false). */
@@ -77,6 +79,12 @@ export function applyPreset(a, name) {
   else if (PRESETS[name]) { Object.assign(next, PRESETS[name]); next.mute = false; if (!(next.master > 0)) next.master = 70; }
   return next;
 }
+/**
+ * The Classroom rule as a ROOM applies it (the join, and the instructor's link with a room code): the preset, with the volume left exactly where the student put it and `touched` false, because the rule
+ * is the room's and not the student's choice. A preset the student chooses raises a volume of 0 to 70 (Full at 0 would be silent); a room does not: a student who turned the volume to 0 to be quiet
+ * stays at 0 (sixth round, UX2: a volume alone no longer makes the student `touched`, so the join reaches them, and it must not undo that).
+ */
+export const roomPreset = (a) => ({ ...applyPreset(a, 'classroom'), master: a.master, touched: false });
 /** Can anything be heard at all? Not muted, not at volume 0, and at least one of the two buses on. */
 export const audible = (a) => !a.mute && a.master > 0 && (a.ui || a.game);
 /**
@@ -147,12 +155,14 @@ export function mirrorFlat(settings) {
   settings.sound = !a.mute; settings.vol = a.master; settings.sfxUi = a.ui; settings.sfxGame = a.game; settings.ambient = a.ambient;
   return settings;
 }
-/** Joining a classroom room: a student who has never touched a sound setting gets the Classroom rule, the earlier values are kept. Returns { next, before } or null. */
+/**
+ * Joining a classroom room: a student who has never CHOSEN a sound setting (a volume is not one) gets the Classroom rule, the earlier values are kept. Returns { next, before } or null.
+ */
 export function joinRoom(a) {
   if (a.touched) return null;
   // Quiet and never touched by hand: the room's link put it there (`fromAddress`). The player's earlier values are the Full preset on the volume they have, which is what they come back to on leaving.
   if (a.quiet) return { before: { ...a, ...PRESETS.full }, next: { ...a } };
-  return { before: { ...a }, next: { ...applyPreset(a, 'classroom'), touched: false } };
+  return { before: { ...a }, next: roomPreset(a) };
 }
 /** The fields the Classroom preset sets (and the mute it clears): the only ones the room changed, so the only ones `leaveRoom` gives back. The volume, the ambience level, the world ticks and the M shortcut are the player's own throughout. */
 const ROOM_KEYS = ['mute', 'ui', 'game', 'ambient', 'dial', 'clockSounds', 'quiet'];
@@ -164,7 +174,7 @@ const ROOM_KEYS = ['mute', 'ui', 'game', 'ambient', 'dial', 'clockSounds', 'quie
  */
 export function leaveRoom(a, before) {
   if (!before) return a;
-  const room = { ...applyPreset(before, 'classroom'), touched: false }; // what joining made of the earlier values
+  const room = roomPreset(before); // what joining made of the earlier values
   const next = { ...a };
   let theirs = false;
   for (const k of ROOM_KEYS) { if (a[k] === room[k]) next[k] = before[k]; else theirs = true; }
@@ -178,6 +188,16 @@ export function leaveRoom(a, before) {
 export function leftRoomText(next) {
   const p = presetOf(next || {});
   return `Sound is back to ${p === 'full' || p === 'interface' ? PRESET_NAMES[p] : 'how you had it'}: Classroom sound applies only in a room.`;
+}
+/**
+ * The one note for a student who joins a room with sound settings of their own (sixth round, UX2). Nobody told them anything: they got no Classroom, no toast and no line in the Draft, their Begin fanfare
+ * played at full volume in a room that had been told "sound is quiet", and the instructor cannot see who they are. It names what stays (the preset and the volume, in words) and how to get quieter.
+ * `link` is what the instructor's address asked for ('quiet', 'off' or ''): a link that asked for a sound this student is not getting says so.
+ */
+export function ownSoundText(a, link = '') {
+  const p = presetOf(a || {}), what = p === 'custom' ? 'your own mix' : PRESET_NAMES[p], at = `${what}, ${Number.isFinite(+a?.master) ? +a.master : 70} percent`;
+  const asked = link === 'off' ? "Your instructor's link asked for no sound, but your own" : link === 'quiet' ? "Your instructor's link asked for quiet sound, but your own" : 'Your own';
+  return `${asked} sound settings stay in this room (${at}). Press M to mute, or choose Classroom (quieter) under Display and sound.`;
 }
 
 // ---- the Sound section (7.2)
@@ -308,7 +328,9 @@ export function testSaid(a) {
 export function bindAudioSettings(root, deps) {
   const { audio, settings, save, announce } = deps;
   const A = () => settings.audio;
-  const set = (patch, store = true) => { settings.audio = { ...A(), ...patch, touched: true }; if (store) save?.(); else audio.sync?.(); };
+  // A change of LEVEL (the volume, the ambience level) is not a choice about the mix (sixth round, UX2): it leaves `touched` as it was, so a student who only turned the volume down is still put in the
+  // room's rule when they join one (it used to exempt them for good, and they met the fanfares of a room told "sound is quiet" with nothing said). Every other change is a choice and stops the rule.
+  const set = (patch, store = true) => { const choice = Object.keys(patch).some((k) => !LEVEL_KEYS.includes(k)); settings.audio = { ...A(), ...patch, ...(choice ? { touched: true } : {}) }; if (store) save?.(); else audio.sync?.(); };
   const refresh = () => syncAudioSettings(root, A(), audio.state);
   let testing = false;
   for (const el of root.querySelectorAll('[data-snd]')) {
