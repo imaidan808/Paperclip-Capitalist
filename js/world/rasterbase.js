@@ -10,6 +10,8 @@ import { seaRamp, SEA, SAND, GRASS, ROCK, ROCKHI, SKY, LIGHT } from './palette.j
 import { FS, FAR_D } from './coastgeo.js';
 import { lnoise, vnoise, smooth } from './noise.js';
 
+/** A fast integer hash of two cell indices to -0.5..0.5 (per-pixel grain and dither). */
+const cellNoise = (ix, iy) => { let h = Math.imul(ix, 374761393) ^ Math.imul(iy, 668265263); h = Math.imul(h ^ (h >>> 13), 1274126177); h ^= h >>> 16; return (h & 255) / 255 - 0.5; };
 const HW = 32, HH = 16;
 const TILE_PER_WPX = 1 / 25;       // tiles of coast distance per world pixel across the coast (it is 1/22.6 to 1/28.6 by the direction the coast runs): the width of one pixel in distance units
 
@@ -97,8 +99,8 @@ export function seaPass(buf, W, H, S, ox, oy, sc, skipLand = false) {
         const w00 = (1 - tx) * (1 - ty), w10 = tx * (1 - ty), w01 = (1 - tx) * ty, w11 = tx * ty;
         const r = nr[k] * w00 + nr[k1] * w10 + nr[k2] * w01 + nr[k3] * w11, g = ng[k] * w00 + ng[k1] * w10 + ng[k2] * w01 + ng[k3] * w11, b = nb[k] * w00 + nb[k1] * w10 + nb[k2] * w01 + nb[k3] * w11;
         let o = (py * W + px) * 4, o2 = (py1 * W + px) * 4; const two = px + 1 < W;
-        buf[o] = r; buf[o + 1] = g; buf[o + 2] = b; buf[o + 3] = 255; buf[o2] = r; buf[o2 + 1] = g; buf[o2 + 2] = b; buf[o2 + 3] = 255;
-        if (two) { buf[o + 4] = r; buf[o + 5] = g; buf[o + 6] = b; buf[o + 7] = 255; buf[o2 + 4] = r; buf[o2 + 5] = g; buf[o2 + 6] = b; buf[o2 + 7] = 255; }
+        let q = cellNoise(px, py) * 2.2; buf[o] = r + q; buf[o + 1] = g + q; buf[o + 2] = b + q; buf[o + 3] = 255; q = cellNoise(px + 5, py1 + 3) * 2.2; buf[o2] = r + q; buf[o2 + 1] = g + q; buf[o2 + 2] = b + q; buf[o2 + 3] = 255; // (a level of dither, so the gradient is never a band)
+        if (two) { q = cellNoise(px + 1, py + 9) * 2.2; buf[o + 4] = r + q; buf[o + 5] = g + q; buf[o + 6] = b + q; buf[o + 7] = 255; q = cellNoise(px + 8, py1 + 1) * 2.2; buf[o2 + 4] = r + q; buf[o2 + 5] = g + q; buf[o2 + 6] = b + q; buf[o2 + 7] = 255; }
       } else {
         const bx = ox + xc * inv, by = oy + yc * inv, bgx = bx / 64 + by / 32, bgy = by / 32 - bx / 64, nf = lnoise(bgx * 2.3 + 7, bgy * 2.3), nt = lnoise(bgx * 1.4 + 3, bgy * 1.4 + 11); // the scallop noise varies over twenty pixels: one sample a block
         for (let qy = py; qy <= py1; qy++) for (let qx = px; qx <= px + 1 && qx < W; qx++) { if (useIds) { const id = ids[qy * W + qx]; if (id !== 0 && TRI[id * TS + 18] === 1) continue; } const cx = (qx + 0.5) * isk, cy = (qy + 0.5) * isk; exact(qx, qy, (qy * W + qx) * 4, k, k1, k2, k3, cx - ci, cy - cj, nf, nt); }
@@ -109,8 +111,6 @@ export function seaPass(buf, W, H, S, ox, oy, sc, skipLand = false) {
 
 // ---------------------------------------------------------------- rock: strata by absolute height
 const RK = new Float64Array(3);
-/** A fast integer hash of two cell indices to -0.5..0.5 (per-pixel grain). */
-const cellNoise = (ix, iy) => { let h = Math.imul(ix, 374761393) ^ Math.imul(iy, 668265263); h = Math.imul(h ^ (h >>> 13), 1274126177); h ^= h >>> 16; return (h & 255) / 255 - 0.5; };
 /**
  * The colour of a rock face at height `z` (pixels above the sea) and across position `xs` (the screen's x in tiles, gx - gy: the same on a wall and on the steep ground above it, so the layers run on
  * from one to the other): wavy strata nine pixels thick, stepping light to shade, sandstone below 40 pixels and lilac rock above, a line between layers never under 1.5 world pixels. Written into RK.
@@ -192,7 +192,9 @@ export function landShade(buf, W, H, S, sc) {
       const xc = px + 0.5;
       let r = r0 + xc * rx + yc * ry, g = g0 + xc * gxx + yc * gyy, b = b0 + xc * bx + yc * by;
       const gx = x0 + xc * xx + yc * xy, gy = y0 + xc * yx + yc * yy;
-      const gr = cellNoise(Math.floor(gx * GK), Math.floor(gy * GK)) * grainAmp; r += r * gr; g += g * gr; b += b * gr;
+      let gr = cellNoise(Math.floor(gx * GK), Math.floor(gy * GK)) * grainAmp;
+      if (g > r + 6 && isDeep === 1) gr += cellNoise(Math.floor((gx - gy) * GK * 1.5), Math.floor((gx + gy) * GK * 0.4) + 977) * grainAmp * 0.9; // grass: blade-long streaks, standing upright on the screen
+      r += r * gr; g += g * gr; b += b * gr;
       let alpha = 1; const steep = steepT;
       const z = steep > 4.6 || isDeep === 0 ? z0 + xc * zx + yc * zy : 0;
       if (steep > 4.6) { // a cliff face: the strata of the rock by height, lit by which way the slope looks
@@ -218,6 +220,7 @@ export function landShade(buf, W, H, S, sc) {
           if (fm > 0) { const a = fm * 0.55 * (1 - (1 - low) * 0.7); r += (foam[0] - r) * a; g += (foam[1] - g) * a; b += (foam[2] - b) * a; }
         }
       }
+      const dth = cellNoise(px * 7 + 3, py * 13 + 1) * 2.4; r += dth; g += dth; b += dth; // a level or so of dither, so a slow gradient is never a band
       if (alpha >= 1) { buf[o] = r; buf[o + 1] = g; buf[o + 2] = b; } else { buf[o] += (r - buf[o]) * alpha; buf[o + 1] += (g - buf[o + 1]) * alpha; buf[o + 2] += (b - buf[o + 2]) * alpha; }
     }
   }
@@ -295,6 +298,6 @@ export function wallPass(buf, W, H, S, ox, oy, sc) {
 }
 
 /** Bake a buffer: the land is rasterised first (so the sea skips what is opaque land), then the sea, the cliff walls and the land shaded over them. */
-export function bakeBase(buf, W, H, S, ox, oy, sc, view) { landRaster(W, H, S, ox, oy, sc, view); seaPass(buf, W, H, S, ox, oy, sc, true); wallPass(buf, W, H, S, ox, oy, sc); landShade(buf, W, H, S, sc); }
+export function bakeBase(buf, W, H, S, ox, oy, sc, view) { for (let i = 3, n = W * H * 4; i < n; i += 4) buf[i] = 255; /* opaque everywhere, whatever the buffer held before */ landRaster(W, H, S, ox, oy, sc, view); seaPass(buf, W, H, S, ox, oy, sc, true); wallPass(buf, W, H, S, ox, oy, sc); landShade(buf, W, H, S, sc); }
 /** The land alone, rasterised and shaded (tests and the Node renderer). */
 export function landPass(buf, W, H, S, ox, oy, sc, view) { landRaster(W, H, S, ox, oy, sc, view); landShade(buf, W, H, S, sc); }

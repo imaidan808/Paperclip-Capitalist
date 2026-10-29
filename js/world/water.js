@@ -29,12 +29,12 @@ export function motifCell(ci, cj) {
   const key = ci * 4096 + cj; let c = CELLS.get(key); if (c) return c;
   const coast = coastOf(), crest = [], curl = [], glint = [];
   const place = (n, seed, fn) => { for (let i = 0; i < n; i++) { const gx = (ci + h2(ci * 7 + seed, cj * 13 + i * 2 + 1)) * CELL, gy = (cj + h2(ci * 11 + seed + 5, cj * 17 + i * 2)) * CELL, d = coast.dist(gx, gy); if (d < 1.6 || d > 60 || bridgeNear(gx, gy, 3.6)) continue; fn(gx, gy, d, h2(ci * 3 + i, cj * 5 + seed)); } };
-  place(3, 1, (gx, gy, d, ph) => { // a crest runs along the shore: perpendicular to the gradient of the distance
+  place(2, 1, (gx, gy, d, ph) => { // a crest runs along the shore: perpendicular to the gradient of the distance
     const e = 0.5, nx = coast.dist(gx + e, gy) - coast.dist(gx - e, gy), ny = coast.dist(gx, gy + e) - coast.dist(gx, gy - e), l = Math.hypot(nx, ny) || 1;
     crest.push(gx, gy, -ny / l, nx / l, d, ph);
   });
   place(2, 2, (gx, gy, d, ph) => { if (d < 12 && h2(ci + gx * 3, cj + gy * 5) < 0.55) curl.push(gx, gy, ph); });
-  place(3, 3, (gx, gy, d, ph) => { glint.push(gx, gy, ph); });
+  place(2, 3, (gx, gy, d, ph) => { glint.push(gx, gy, ph); });
   c = { crest: Float32Array.from(crest), curl: Float32Array.from(curl), glint: Float32Array.from(glint) };
   if (CELLS.size > 4000) CELLS.clear(); CELLS.set(key, c); return c;
 }
@@ -61,7 +61,7 @@ export function drawMotifs(ctx, view, zoom, t, lod) {
       const ph = cr[q + 5], gx = cr[q] + dgx, gy = cr[q + 1] + dgy, x = (gx - gy) * HWd, y = (gx + gy) * HHd;
       if (x < view.x0 || x > view.x1 || y < view.y0 || y > view.y1) continue;
       const d = cr[q + 4], L = Math.max(15 + Math.min(d, 14) * 0.9, 14 / zoom) * 0.5, Tc = Math.max(5, 3.5 / zoom), sx = (cr[q + 2] - cr[q + 3]) * HWd, sy = (cr[q + 2] + cr[q + 3]) * HHd, sl = Math.hypot(sx, sy) || 1, ux = sx / sl, uy = sy / sl;
-      const a = (still ? 0.6 : 0.5 + 0.1 * Math.sin(TAU * (t / 17 + ph * 1.7))) * dm; // a slow breath: the crest is there, brightening and softening a little if (a < 0.03) continue;
+      const a = (still ? 0.52 : 0.44 + 0.08 * Math.sin(TAU * (t / 17 + ph * 1.7))) * dm; // a slow breath: the crest is there, brightening and softening a little if (a < 0.03) continue;
       for (let pass = 0; pass < 2; pass++) { // a soft wide glow under a crisper highlight: a crest, not a dash
         const th = pass ? Tc : Tc * 2.2, ll = pass ? L : L * 1.18; ctx.globalAlpha = pass ? a : a * 0.22;
         ctx.beginPath(); ctx.moveTo(x - ux * ll, y - uy * ll); ctx.quadraticCurveTo(x - uy * th, y + ux * th, x + ux * ll, y + uy * ll); ctx.quadraticCurveTo(x + uy * th, y - ux * th, x - ux * ll, y - uy * ll); ctx.fill();

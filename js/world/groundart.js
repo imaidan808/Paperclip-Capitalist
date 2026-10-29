@@ -3,9 +3,9 @@
 // Owner: T1 TERRAIN, COAST AND WATER (docs/RENDER_PLAN.md). Each is a layer of stack.js (`shore`, `terrain`, `roads`, `blocks`), registered here and drawn into a ground chunk (groundchunks.js) by the ground pass: they draw only
 // from their arguments and the world's state, never from the camera, and every mark is a filled shape (nothing is stroked thinner than 1.5 world pixels).
 import { registerLayer } from './stack.js';
-import { LAYOUT, DIST, EDGES, zAt, BW, BD } from './layout.js';
-import { ROAD, PAVE, SAND, WOOD, LIGHT, SEA, TOY, groundSet, veiled } from './palette.js';
-import { mix, clamp } from './iso.js';
+import { LAYOUT, DIST, EDGES, zAt, BW, BD, GW, GH } from './layout.js';
+import { ROAD, PAVE, SAND, WOOD, LIGHT, SEA, TOY, GRASS, BLOOM, groundSet, veiled } from './palette.js';
+import { mix, clamp, h2 } from './iso.js';
 import { bakeBase } from './rasterbase.js';
 import { decalV2 } from './decalart.js';
 import { VEIL } from './terrainfield.js';
@@ -26,7 +26,38 @@ function drawShore(ctx, view, env, w, a) {
   if (ch.img) ctx.putImageData(ch.img, 0, 0);
 }
 registerLayer('shore', drawShore, 'inherit', () => 1);
-registerLayer('terrain', () => {}, 'inherit', () => 1); // the terrain is part of the base pass; dressing is added here when it is made
+// ---------------------------------------------------------------- the terrain's dressing: tufts and flowers
+const TUFT = [GRASS.hi, GRASS.shade, GRASS.deep, GRASS.coolShade];
+const zOn = (gx, gy) => { const { ZV, VW } = LAYOUT, x = clamp(gx, 0, GW - 1e-6), y = clamp(gy, 0, GH - 1e-6), i = x | 0, j = y | 0, fx = x - i, fy = y - j; return (ZV[j * VW + i] * (1 - fx) + ZV[j * VW + i + 1] * fx) * (1 - fy) + (ZV[(j + 1) * VW + i] * (1 - fx) + ZV[(j + 1) * VW + i + 1] * fx) * fy; };
+/**
+ * `terrain`: the dressing laid on the baked ground, near and close only (it fades in with the level of detail, so nothing pops): small tufts of three curved blades in three greens and the odd cluster of
+ * flowers, hashed per tile, never on a road, a block, a pad or within a tile and a half of the coast. At most 1,500 marks in a chunk; it is baked with the chunk, so a pan never draws it.
+ */
+function drawTerrain(ctx, view, env, w, a) {
+  const ch = a && a.chunk, lod = env.lod ? env.lod.detail : null; if (!ch || !lod || lod[2] < 0.04) return;
+  const T = ch.scene.terr, { land, core } = LAYOUT, VW = LAYOUT.VW;
+  let a0 = 1e9, a1 = -1e9, b0 = 1e9, b1 = -1e9;
+  for (const [x, y] of [[view.x0, view.y0], [view.x1, view.y0], [view.x0, view.y1], [view.x1, view.y1]]) for (const zz of [0, 60]) { const u = x / 64 + (y + zz) / 32, v = (y + zz) / 32 - x / 64; a0 = Math.min(a0, u); a1 = Math.max(a1, u); b0 = Math.min(b0, v); b1 = Math.max(b1, v); }
+  const per = 0.7 + 1.1 * lod[3]; let budget = 1500; ctx.globalAlpha = lod[2] * 0.9;
+  for (let j = Math.max(0, Math.floor(b0)); j <= Math.min(GH - 1, Math.ceil(b1)) && budget > 0; j++) for (let i = Math.max(0, Math.floor(a0)); i <= Math.min(GW - 1, Math.ceil(a1)); i++) {
+    const k = j * GW + i; if (!land[k] || core[k]) continue;
+    const kv = j * VW + i; if (T.inl[kv] > -1.5 || T.inl[kv + 1] > -1.5 || T.inl[kv + VW] > -1.5 || T.inl[kv + VW + 1] > -1.5) continue; // the beach and the coast keep their own look
+    const n = per + h2(i, j + 4000) * per, cnt = (n | 0) + (h2(i + 91, j) < n - (n | 0) ? 1 : 0);
+    for (let q = 0; q < cnt; q++) {
+      const gx = i + h2(i * 7 + q, j * 3 + 17), gy = j + h2(i * 5 + 3, j * 11 + q * 5 + 1); if (LAYOUT.footAt(gx, gy)) continue;
+      const z = zOn(gx, gy), x = px(gx, gy), y = py(gx, gy, z), hh = h2(i * 13 + q, j * 29 + 5);
+      if (hh > 0.86 - 0.06 * lod[3]) { // a few flowers in a small cluster
+        const c = [BLOOM.white, BLOOM.butter, BLOOM.pink, BLOOM.lilac][(hh * 97 | 0) % 4];
+        ctx.fillStyle = c; ctx.beginPath(); for (let f = 0; f < 3; f++) { const fx = x + (h2(i + f, j * 3) - 0.5) * 7, fy = y + (h2(i * 3, j + f) - 0.5) * 3.5; ctx.moveTo(fx + 1.5, fy); ctx.arc(fx, fy, 1.5, 0, 6.2832); } ctx.fill(); budget -= 3; continue;
+      }
+      const col = TUFT[(hh * 31 | 0) % 4], hgt = 5 + hh * 3.4; ctx.fillStyle = col; ctx.beginPath(); // a tuft: three blades, each a leaning, tapering triangle
+      for (let bl = -1; bl <= 1; bl++) { const bx = x + bl * 1.7, lean = bl * 1.5 + (hh - 0.5) * 2; ctx.moveTo(bx - 0.9, y); ctx.lineTo(bx + lean, y - hgt * (bl === 0 ? 1 : 0.78)); ctx.lineTo(bx + 0.9, y); ctx.closePath(); }
+      ctx.fill(); budget -= 3;
+    }
+  }
+  ctx.globalAlpha = 1;
+}
+registerLayer('terrain', drawTerrain, 'inherit', () => 1);
 
 // ---------------------------------------------------------------- shapes in the ground plane
 /** A rounded rectangle in grid units at height z, as a path (corner arcs of five segments). */
@@ -120,10 +151,11 @@ function drawRoads(ctx, view, env, w, a) {
     const col = e.path ? FOOT : V(open ? mix(ROAD.mid, ROAD.light, 0.12) : mix(ROAD.light, ROAD.kerb, 0.2), open ? 0 : 0.5), kerb = e.path ? FOOT_EDGE : V(ROAD.kerb, open ? 0 : 0.5), kb = e.path ? 0.14 : 0.2;
     let i0 = 0, runs = [[0, d.length - 1]];
     if (gap) { const ia = d.findIndex((p) => p[5] >= gap[0]), ib = d.findIndex((p) => p[5] >= gap[1]); runs = [[0, Math.max(0, ia - 1)], [ib, d.length - 1]]; }
-    for (const [r0, r1] of runs) {
-      ctx.fillStyle = kerb; strip(ctx, d, -hw, hw, 0, r0, r1); ctx.fillStyle = col; strip(ctx, d, -hw + kb, hw - kb, 0.1, r0, r1);
-      for (let q = r0 + 1; q < r1; q++) { const p = d[q], a2 = d[q - 1], b2 = d[q + 1], turn = Math.abs(a2[2] * b2[3] - a2[3] * b2[2]); if (turn > 0.15) { ctx.fillStyle = kerb; const x = px(p[0], p[1]), y = py(p[0], p[1], p[4]); ctx.beginPath(); ctx.ellipse(x, y, hw * HW * 1.42, hw * HH * 1.42, 0, 0, 6.2832); ctx.fill(); ctx.fillStyle = col; ctx.beginPath(); ctx.ellipse(x, y + 0.1, (hw - kb) * HW * 1.42, (hw - kb) * HH * 1.42, 0, 0, 6.2832); ctx.fill(); } } // rounded joins at every bend
-    }
+    const bends = (r0, r1, rad, lift) => { // rounded joins at every bend: a disc of the ground's own circle (an ellipse on the screen)
+      for (let q = r0 + 1; q < r1; q++) { const p = d[q], a2 = d[q - 1], b2 = d[q + 1], turn = Math.abs(a2[2] * b2[3] - a2[3] * b2[2]); if (turn > 0.15) { ctx.beginPath(); ctx.ellipse(px(p[0], p[1]), py(p[0], p[1], p[4] + lift), rad * HW * 1.4142, rad * HH * 1.4142, 0, 0, 6.2832); ctx.fill(); } }
+    };
+    for (const [r0, r1] of runs) { ctx.fillStyle = kerb; strip(ctx, d, -hw, hw, 0, r0, r1); bends(r0, r1, hw, 0); } // the kerb under everything, then the asphalt inside it
+    for (const [r0, r1] of runs) { ctx.fillStyle = col; strip(ctx, d, -hw + kb, hw - kb, 0.1, r0, r1); bends(r0, r1, hw - kb, 0.1); }
     if (!e.path && open && zoom >= 0.3) { // the centre dashes: painted bands 0.35 tile wide, 0.9 long, 0.8 apart
       ctx.fillStyle = ROAD.dash;
       for (let s = 1.2; s < e.len - 1; s += 1.7) { if (gap && s > gap[0] - 1 && s < gap[1] + 1) continue; const p = at(d, s), q = at(d, Math.min(e.len, s + 0.9)); ctx.beginPath(); for (const [pt, o] of [[p, -0.175], [q, -0.175], [q, 0.175], [p, 0.175]]) { const gx = pt[0] + pt[2] * o, gy = pt[1] + pt[3] * o; ctx.lineTo(px(gx, gy), py(gx, gy, pt[4] + 0.2)); } ctx.closePath(); ctx.fill(); }

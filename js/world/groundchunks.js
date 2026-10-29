@@ -63,24 +63,26 @@ export function chunkPass(w, ctx) {
   const e = Math.round(dpr * (w.W / 2 - cam.x * cam.z)), f = Math.round(dpr * (w.H / 2 - cam.y * cam.z));
   const key = `${w.unlockHash}|${groundKey(w)}|${cw}x${ch}`;
   cs.frame++;
-  const moved = e !== cs.lastE || f !== cs.lastF, zoomed = S !== cs.lastS;
+  const shx = e - cs.lastE, shy = f - cs.lastF, moved = shx !== 0 || shy !== 0 || cs.lastE !== cs.lastE, zoomed = S !== cs.lastS;
   cs.still = moved || zoomed ? 0 : cs.still + 1; cs.zStable = zoomed ? 0 : cs.zStable + 1; cs.lastE = e; cs.lastF = f; cs.lastS = S;
-  if (!cs.cur || cs.cur.S !== S || cs.cur.key !== key) { // a new scale, or a new state of the ground: the old set stays on show, scaled, until the new one is made
-    if (cs.old) cs.old.free();
-    cs.old = cs.cur && cs.cur.size ? cs.cur : null; if (!cs.old && cs.cur) cs.cur.free();
+  if (!cs.cur || cs.cur.S !== S || cs.cur.key !== key) { // a new scale, or a new state of the ground: the fullest set stays on show, scaled, until the exact one is made
+    const was = cs.cur;
+    if (was && was.size && (!cs.old || was.size >= cs.old.size)) { if (cs.old) cs.old.free(); cs.old = was; } else if (was) was.free(); // (a zoom that changes every frame must not replace a full old set with the one or two chunks a frame made)
     cs.cur = new ChunkSet(S, key);
   }
   const set = cs.cur, old = cs.old, i0 = Math.floor(-e / C), i1 = Math.floor((cw - 1 - e) / C), j0 = Math.floor(-f / C), j1 = Math.floor((ch - 1 - f) / C), cx = (cw / 2 - e) / C, cy = (ch / 2 - f) / C;
   const need = [];
   for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) need.push({ i, j, d: (i + 0.5 - cx) ** 2 + (j + 0.5 - cy) ** 2 });
   need.sort((a, b) => a.d - b.d);
-  let budget = !old && !set.size ? Infinity : cs.still >= 1 ? Infinity : cs.zStable >= 3 ? 4 : 2; // the first ground, and a camera at rest, bake what they need; a moving one a few chunks a frame
-  const t0 = typeof performance !== 'undefined' ? performance.now() : 0;
+  // What may be baked this frame. The very first ground (nothing to show yet) is baked whole. After that a frame bakes for about 9 ms, 14 with the camera at rest (always one chunk, if one is missing; the shot rig bakes everything at once): a camera at rest or a pan
+  // fills in what it needs; a zoom on the move bakes nothing (the scale changes every frame) while there is an old set to show.
+  const first = !old && !set.size, hold = !!old && (zoomed || (cs.still < 1 && cs.zStable < 3)), rig = typeof window !== 'undefined' && !!window.__rig, t0 = typeof performance !== 'undefined' ? performance.now() : 0, ms = cs.still >= 1 ? 14 : 9;
+  let baked = 0; const may = () => first || rig || (!hold && (baked === 0 || (typeof performance === 'undefined' || performance.now() - t0 < ms)));
   set.stamp = cs.frame; ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0);
   let missing = 0;
   for (const n of need) {
     let c = set.get(n.i, n.j);
-    if (!c && budget > 0) { c = bake(w, cs, set, n.i, n.j); budget--; cs.stats.baked++; }
+    if (!c && may()) { c = bake(w, cs, set, n.i, n.j); baked++; cs.stats.baked++; }
     const dx = e + n.i * C, dy = f + n.j * C;
     if (c) { c.stamp = cs.frame; ctx.drawImage(c.s.c, BLEED, BLEED, C, C, dx, dy, C, C); cs.stats.blits++; continue; }
     missing++;
@@ -93,9 +95,13 @@ export function chunkPass(w, ctx) {
   }
   ctx.restore();
   if (!missing && old) { old.free(); cs.old = null; } // the exact scale is complete: the old one goes
-  if (!missing && cs.still >= 2 && cs.zStable >= 3) { // nothing missing and a camera at rest: bake the ring beyond the window, one chunk a frame, so a pan finds it ready
-    let done = false;
-    for (let r = 1; r <= 1 && !done; r++) for (let j = j0 - r; j <= j1 + r && !done; j++) for (let i = i0 - r; i <= i1 + r; i++) { if ((i >= i0 && i <= i1 && j >= j0 && j <= j1) || set.get(i, j)) continue; if (bake(w, cs, set, i, j)) { done = true; cs.stats.baked++; break; } }
+  if (!missing && !hold && may()) { // nothing missing: bake one chunk of the ring beyond the window, the one the camera is heading for, so a pan finds it ready
+    let best = null, bs = -1e9; const ax = -shx, ay = -shy;
+    for (let j = j0 - 1; j <= j1 + 1; j++) for (let i = i0 - 1; i <= i1 + 1; i++) {
+      if ((i >= i0 && i <= i1 && j >= j0 && j <= j1) || set.get(i, j)) continue;
+      const sc = (i + 0.5 - cx) * ax + (j + 0.5 - cy) * ay - 0.001 * ((i + 0.5 - cx) ** 2 + (j + 0.5 - cy) ** 2); if (sc > bs) { bs = sc; best = [i, j]; }
+    }
+    if (best && (cs.still >= 1 || (shx !== 0 || shy !== 0))) { bake(w, cs, set, best[0], best[1]); cs.stats.baked++; }
   }
   // keep the set to the window and the ring round it: the chunks unused for the longest go back to the pool
   const cap = (i1 - i0 + 1 + 2) * (j1 - j0 + 1 + 2);

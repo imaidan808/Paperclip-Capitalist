@@ -57,7 +57,7 @@ export function decalV2(ctx, d, z, k, S, detail) {
       break;
     }
     case 'grid': { // hairlines become pavers: every other tile of the grid a shade apart, joints between them
-      const c = tone(d.col, k); if (!c || detail[2] < 0.05) break; const s = d.step; ctx.fillStyle = c; ctx.beginPath();
+      const c = tone(d.col, k); if (!c || detail[2] < 0.05) break; const s = d.step > 1.05 ? d.step / 2 : d.step; ctx.fillStyle = c; ctx.beginPath(); // pavers no bigger than a tile
       for (let i = 0; i * s < w - 0.01; i++) for (let j = 0; j * s < dd - 0.01; j++) if ((i + j) % 2) quad(ctx, x + i * s + 0.035, y + j * s + 0.035, Math.min(s, w - i * s) - 0.07, Math.min(s, dd - j * s) - 0.07, z);
       ctx.fill(); break;
     }
