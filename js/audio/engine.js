@@ -44,6 +44,27 @@ function peakAlive(others, mine) {
   return pk;
 }
 const clamp = (x, lo, hi) => Math.min(hi, Math.max(lo, x));
+
+// ---- the repair dial tone's level (docs/AUDIO.md 4.5, sixth round R3-2). The marker's place 0 to 1 is quantized to these eleven notes.
+export const DIAL_NOTES = ['D4', 'E4', 'F#4', 'A4', 'B4', 'D5', 'E5', 'F#5', 'A5', 'B5', 'D6'];
+// The tone was one level, -33 dBFS at the peak, a flat sine, and the two listeners of the calibration hear a sine of one level very differently across its range: the quiet laptop (a 220 Hz high-pass and
+// the A-weighting of the ear at a low level) takes 8 dB more off D4 than off D6, so the low notes sat 3 to 12 dB under the quietest tiny sound there (the tone has no recipe and no level check looked at it).
+// Its level is now a gain per note, and `scripts/audio-check.mjs --dial` holds every note, steady, in the green zone and out of it, within 3 dB of the tiny tier's median under both models, at 44.1 and 48 kHz.
+//   BASE   the peak of the fundamental at D6 out of the zone (it was -33: the tone is 2.2 dB louder everywhere, because at D6 it was 4.7 dB under the tiny median on a flat speaker and 2.9 on the laptop);
+//   TILT   what each lower note adds to it, tapering to 0 at D6: not the whole 9 dB that would make the laptop level, because the flat speaker would then hear D4 above the tiny sounds;
+//   RISE   what the zone adds to the fundamental (it was 3 dB for every note): less at the lowest four, where the tilt has lifted the tone to the top of the flat speaker's window and the octave partial
+//          and the shimmer that the zone also adds carry the "now" (they are 1.6 to 3.8 dB louder to the laptop at every note).
+// Each is a table, so that nothing in a note's level has to be computed, and a gain is reached with the same 20 ms time constant as before (no step, no click). The peak of the loudest note, in the zone at D4,
+// is about -21 dBFS: far under the tiny ceiling of -6.
+export const DIAL_BASE_DB = -30.8;
+export const DIAL_TILT_DB = [6.6, 5.7, 4.5, 3.0, 2.2, 1.4, 1.1, 0.9, 0.7, 0.4, 0];
+export const DIAL_RISE_DB = [-1.0, -0.2, 1.0, 2.5, 2.5, 2.5, 2.5, 2.5, 2.5, 2.5, 2.5];
+/** The gain of the tone's fundamental, in dB, for note `i` of DIAL_NOTES, in the green zone or out of it. */
+export const dialGainDb = (i, inZone) => DIAL_BASE_DB + DIAL_TILT_DB[i] + (inZone ? DIAL_RISE_DB[i] : 0);
+// The zone's glass shimmer is A5. At A4 the octave partial is A5 already and at A5 the fundamental is: two oscillators on one pitch add by the phase between them, which the history of the glide decides
+// and nothing in the game controls, so the zone at those two notes was 1.2 dB louder or quieter to the laptop from one repair to the next. The shimmer is left out where its pitch is already in the tone.
+const SHIMMER_HZ = hz('A5');
+export const sharesShimmer = (f) => Math.abs(f - SHIMMER_HZ) < 1 || Math.abs(2 * f - SHIMMER_HZ) < 1;
 const DEFAULT_SETTINGS = { master: 70, mute: false, ui: true, game: true, ambient: false, ambientLevel: 70, dial: false, clockSounds: true, quiet: false, worldTicks: true };
 
 /**
@@ -362,8 +383,8 @@ export function createAudio(cfg = {}) {
     } catch (e) { logOnce('request', e); return false; }
   }
 
-  // ---- the repair dial tone (4.5): the one sound that is not a recipe; it follows a value
-  const NOTES = ['D4', 'E4', 'F#4', 'A4', 'B4', 'D5', 'E5', 'F#5', 'A5', 'B5', 'D6'];
+  // ---- the repair dial tone (4.5): the one sound that is not a recipe; it follows a value. Its level by note is DIAL_BASE_DB, DIAL_TILT_DB and DIAL_RISE_DB (above).
+  const NOTES = DIAL_NOTES;
   let dial = null;
   const dialApi = {
     start() {
@@ -372,7 +393,7 @@ export function createAudio(cfg = {}) {
         const t = ctxNow(), g = ctx.createGain(), main = ctx.createOscillator(), oct = ctx.createOscillator(), shim = ctx.createOscillator(), og = ctx.createGain(), sg = ctx.createGain();
         main.type = 'sine'; oct.type = 'sine'; shim.type = 'sine';
         main.frequency.value = hz(NOTES[0]); oct.frequency.value = hz(NOTES[0]) * 2; shim.frequency.value = hz('A5');
-        fadeIn(g.gain, t, 0.03, dB(-33)); // 6 dB under a tiny sound (-36 dB active level; a sine's peak is 3 dB over its level)
+        fadeIn(g.gain, t, 0.03, dB(dialGainDb(0, false))); // the tone starts on D4 (the marker's first place) and the first update moves it to the note it is on
         og.gain.value = 0.0001; sg.gain.value = 0.0001;
         main.connect(g); oct.connect(og); shim.connect(sg); og.connect(g); sg.connect(g); g.connect(chain.buses.game);
         for (const o of [main, oct, shim]) o.start(t);
@@ -380,15 +401,15 @@ export function createAudio(cfg = {}) {
         return true;
       } catch (e) { logOnce('dial', e); dial = null; return false; }
     },
-    /** pos: the marker's place 0 to 1; lo and hi: the green zone. Left is low, right is high; in the zone the tone gains an octave partial and a glass shimmer and rises 3 dB. */
+    /** pos: the marker's place 0 to 1; lo and hi: the green zone. Left is low, right is high; in the zone the tone gains an octave partial and a glass shimmer and rises (DIAL_RISE_DB). */
     update(pos, lo, hi) {
       if (!dial || !ctx) return;
       try {
-        const t = ctxNow(), p = clamp(Number.isFinite(+pos) ? +pos : 0, 0, 1), f = hz(NOTES[Math.round(p * (NOTES.length - 1))]);
+        const t = ctxNow(), p = clamp(Number.isFinite(+pos) ? +pos : 0, 0, 1), i = Math.round(p * (NOTES.length - 1)), f = hz(NOTES[i]);
         const inZone = Number.isFinite(+lo) && Number.isFinite(+hi) && p >= lo && p <= hi;
         dial.main.frequency.setTargetAtTime(f, t, 0.035 / 3); dial.oct.frequency.setTargetAtTime(f * 2, t, 0.035 / 3);
-        dial.og.gain.setTargetAtTime(inZone ? 0.35 : 0.0001, t, 0.02); dial.sg.gain.setTargetAtTime(inZone ? 0.18 : 0.0001, t, 0.02);
-        dial.g.gain.setTargetAtTime(dB(inZone ? -30 : -33), t, 0.02);
+        dial.og.gain.setTargetAtTime(inZone ? 0.35 : 0.0001, t, 0.02); dial.sg.gain.setTargetAtTime(inZone && !sharesShimmer(f) ? 0.18 : 0.0001, t, 0.02);
+        dial.g.gain.setTargetAtTime(dB(dialGainDb(i, inZone)), t, 0.02); // the level follows the note with the same 20 ms as the zone's: no step, no click
       } catch { /* the tone is an addition */ }
     },
     stop(fade = 0.015) {

@@ -10,6 +10,7 @@
 //   --pools      also render the other members of every pool (`id#variant@k`); the calibration, and the 32 plays of every variant (R1, R7), always include them
 //   --leak       only the start-click sweep (I1): every variant muted, started at the engine's real start times at 44.1 and 48 kHz
 //   --first      only the first sound of a context (R3-1): the real engine, a sound played at currentTime 0 against the same sound at 1 s, at 44.1 and 48 kHz
+//   --dial       only the repair dial tone (R3-2): every note, in the green zone and out of it, against the tiny tier's medians (it renders the sounds once for those)
 //   --json file  write the full rows
 // Needs headless Chrome (scripts/cdp.mjs). Server on PORT (default 8401), Chrome on CDP (default 9901).
 import { createServer } from 'node:http';
@@ -56,6 +57,9 @@ const PAN_PROBES = ['ui.tick#full', 'sale.win#w', 'level.up#l', 'cash.out#m', 'a
 const FIRST_KEYS = ['ui.tick#light', 'ui.select#i0', 'world.step#a', 'ui.toggle#on', 'draft.pick#slot2', 'ui.ok#o', 'sale.win#w'];
 const FIRST_TOL = 1.0;  // dB: the first sound's K-weighted Fast level, the quiet laptop's and its peak, against the same sound at 1 s
 const FIRST_IDLE = 30;  // s of silence after which a compressor that has gone quiet must not be cold again
+// The repair dial tone (sixth round, R3-2): every note, steady, in the green zone and out of it, is held within this many dB of the tiny tier's median under the K-weighted Fast level and under the quiet laptop's.
+const DIAL_TOL = 3.0, DIAL_PEAK_MAX = -12; // dB; and the loudest sample of the tone at the most (the tiny ceiling is -6: "far under" is 6 dB or more under it)
+
 
 /** The start-click sweep (I1): a muted voice leaves nothing but a leak. Runs at 44.1 and 48 kHz with the engine's own start times (js/audio/palette.js env(), fadeIn()). */
 async function leakCheck(call, pools) {
@@ -94,12 +98,39 @@ async function firstSoundCheck(call) {
   } else fail('first sound: the sound after a silence was not heard');
 }
 
+/** The tiny tier's medians as the table reads them: the K-weighted Fast level and the quiet laptop's (A-weighted Fast after the 220 Hz high-pass) of the variants themselves, not their pool members. */
+const tinyMedians = (rows) => { const L = rows.filter((r) => r.tier === 'tiny' && !r.key.includes('@')); return { fast: median(L.map((r) => r.fast)), lapFastA: median(L.map((r) => r.lapFastA)) }; };
+/**
+ * The repair dial tone (R3-2). It is the one continuous voice and has no recipe, so no level check covered it, and on the quiet laptop its low notes sat 3 to 11 dB under the quietest tiny sound. The real
+ * engine plays each of its eleven notes, in the green zone and out of it, in an OfflineAudioContext at 44.1 and 48 kHz; the steady state is read through the master chain under the two models and held within
+ * DIAL_TOL of the tiny tier's median under both, and its loudest sample is held far under the tiny ceiling.
+ */
+async function dialCheck(call, med) {
+  const NAMES = ['D4', 'E4', 'F#4', 'A4', 'B4', 'D5', 'E5', 'F#5', 'A5', 'B5', 'D6'];
+  console.log(`\nrepair dial tone against the tiny tier's medians (K-weighted Fast ${f1(med.fast)} dB, quiet laptop ${f1(med.lapFastA)} dB; limit +-${DIAL_TOL} dB):`);
+  for (const sr of [44100, 48000]) {
+    const rows = await call(`m.dialTone(${sr})`);
+    console.log(`  ${sr} Hz   out of the zone: K, laptop   |   in the zone: K, laptop     (level less the median, dB)`);
+    for (const r of rows.filter((x) => !x.inZone)) {
+      const z = rows.find((x) => x.i === r.i && x.inZone), sgn = (x) => [x.k - med.fast, x.a - med.lapFastA].map((v) => (v >= 0 ? '+' : '') + f1(v).padStart(4));
+      console.log(`    ${NAMES[r.i].padEnd(4)}      ${sgn(r).join(' ')}              |   ${sgn(z).join(' ')}      peak ${f1(Math.max(r.pk, z.pk))} dBFS`);
+      for (const x of [r, z]) {
+        const dk = Math.abs(x.k - med.fast), da = Math.abs(x.a - med.lapFastA), where = `${NAMES[x.i]} ${x.inZone ? 'in the zone' : 'out of the zone'} at ${sr} Hz`;
+        if (!Number.isFinite(dk) || !Number.isFinite(da)) { fail(`dial tone: ${where} is silent (the tone did not start)`); continue; }
+        if (dk > DIAL_TOL) fail(`dial tone: ${where} is ${f1(x.k - med.fast)} dB from the tiny tier's median under the K-weighted Fast level (limit ${DIAL_TOL}): a flat speaker plays it ${x.k < med.fast ? 'under' : 'over'} a tiny sound`);
+        if (da > DIAL_TOL) fail(`dial tone: ${where} is ${f1(x.a - med.lapFastA)} dB from the tiny tier's median under the quiet laptop's A-weighted Fast level (limit ${DIAL_TOL}): a quiet laptop plays it ${x.a < med.lapFastA ? 'under' : 'over'} a tiny sound`);
+        if (x.pk > DIAL_PEAK_MAX) fail(`dial tone: ${where} peaks at ${f1(x.pk)} dBFS (limit ${DIAL_PEAK_MAX}: it is the quietest voice and sits far under the tiny ceiling)`);
+      }
+    }
+  }
+}
+
 const srv = createServer(handler).listen(PORT, '127.0.0.1');
 const b = await launch(CDP);
 const fails = [], warns = [];
 const fail = (m) => fails.push(m), warn = (m) => warns.push(m);
 const f1 = (x) => (Math.round(x * 10) / 10).toFixed(1);
-/** The ends of a run that checks one thing only (--leak, --first). */
+/** The ends of a run that checks one thing only (--leak, --first, --dial). */
 const quit = (ok) => { b.close(); srv.close(); for (const f of fails) console.log(' -', f); console.log(fails.length ? fails.length + ' problems' : ok); process.exit(fails.length ? 1 : 0); };
 try {
   const p = await open(b, `http://127.0.0.1:${PORT}/dev/sounds.html?check=1`);
@@ -107,6 +138,10 @@ try {
   const pools = args.has('--pools');
   if (args.has('--leak')) { await leakCheck(call, pools); quit('no start clicks'); }
   if (args.has('--first')) { await firstSoundCheck(call); quit('the first sound of a context is as loud as the same sound later'); }
+  if (args.has('--dial')) { // the tiny tier's medians come from one render of the sounds with the written trims
+    const t0 = (await import('../js/audio/trims.js')).TRIMS, r0 = await call(`m.run(${JSON.stringify({ ...t0.sounds, ...t0.oneShots })}, false, { n: ${SURVEY_N}, lists: ${JSON.stringify(t0.noiseAt || {})} })`);
+    await dialCheck(call, tinyMedians(r0.rows)); quit('every note of the dial tone is within the tiny tier\'s window');
+  }
   let trims = {};
   const makeup = await call('m.makeupGain()');
 
@@ -253,8 +288,8 @@ try {
   // ---- start clicks
   if (!args.has('--fast')) await leakCheck(call, pools);
 
-  // ---- the first sound after the context is made (R3-1): the real engine, through the master chain, at both sample rates
-  if (!args.has('--fast')) await firstSoundCheck(call);
+  // ---- the first sound after the context is made (R3-1) and the repair dial tone (R3-2): the real engine, through the master chain, at both sample rates
+  if (!args.has('--fast')) { await firstSoundCheck(call); await dialCheck(call, tierMedian.tiny); }
 
   // ---- pan: a panned sound is as loud as a centred one (total power of both channels)
   for (const k of PAN_PROBES) {

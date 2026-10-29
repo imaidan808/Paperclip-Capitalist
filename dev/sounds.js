@@ -115,7 +115,7 @@ for (const S of SECTIONS) {
   const row = el('div', 'row', null, sec);
   for (const id of IDS) { const e = RECIPES[id]; if (!e.pool) continue; for (const v of variantsOf(id)) for (let k = 0; k < e.pool; k++) { const b = el('button', null, `${id} / ${v} / member ${k + 1}`, row); b.dataset.tier = tierOf(id, v); b.onclick = () => hear(id, v, { poolIndex: k }, b); } } }
 // ---- the repair dial tone
-{ const sec = el('section', 'grp', null, app); el('h2', null, 'Repair dial tone', sec); el('p', 'mute', 'The marker\'s place is the pitch (low left, high right); inside the green zone (40 to 60%) the tone gains an octave and a shimmer and rises 3 dB.', sec);
+{ const sec = el('section', 'grp', null, app); el('h2', null, 'Repair dial tone', sec); el('p', 'mute', 'The marker\'s place is the pitch (low left, high right); inside the green zone (40 to 60%) the tone gains an octave and a shimmer and rises (by up to 2.5 dB). Each note has a level of its own: the low ones are lifted over the high ones because a quiet laptop takes 9 dB more off D4 than off D6 (docs/AUDIO.md 4.5).', sec);
   const row = el('div', 'row', null, sec); const s = el('input', null, null, row); s.type = 'range'; s.min = 0; s.max = 100; s.value = 20; s.setAttribute('aria-label', 'Marker place');
   const on = el('button', null, 'Start the tone', row), off = el('button', null, 'Stop', row);
   const note = el('p', 'why', '', sec);

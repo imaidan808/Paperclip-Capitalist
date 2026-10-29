@@ -432,4 +432,23 @@ export async function firstSound(sr, keys, { idle = 0 } = {}) {
   return out;
 }
 
+/**
+ * The repair dial tone through the REAL engine (sixth round, R3-2): each of its eleven notes, once out of the green zone and once in it, read as a steady state through the master chain at `sr`, as the
+ * two listeners of the calibration hear it: K-weighted, and the quiet laptop (a 220 Hz high-pass, then A-weighting). The tone starts with the context, the marker is put on the note 0.2 s later and the
+ * 0.6 s that end at 1.6 s are read (the glide of 35 ms and the gain's 20 ms are long over). Returns [{ i, inZone, k, a, pk }] (dB; the peak, the loudest sample of the window, in dBFS).
+ */
+export async function dialTone(sr, { settings = {} } = {}) {
+  const out = [], NOTES = 11;
+  for (let i = 0; i < NOTES; i++) for (const inZone of [false, true]) {
+    const p = i / (NOTES - 1), zone = inZone ? [Math.max(0, p - 0.04), Math.min(1, p + 0.04)] : p < 0.5 ? [0.9, 1] : [0, 0.1];
+    const rig = engineRig({ sr, lengthSec: 1.7, settings: { dial: true, ...settings }, seed: 3 });
+    if (!rig.audio.dial.start()) { out.push({ i, inZone, k: NaN, a: NaN, pk: NaN }); continue; }
+    rig.at(0.2, (au) => au.dial.update(p, zone[0], zone[1]));
+    const L = (await rig.render()).getChannelData(0), from = Math.round(1.0 * sr), to = Math.round(1.6 * sr);
+    let pk = -99; for (let n = from; n < to; n++) { const v = Math.abs(L[n]); if (v > 0) pk = Math.max(pk, db(v)); }
+    out.push({ i, inZone, k: steadyDb(wt.k(L, sr), from, to), a: steadyDb(wt.a(wt.hp(L, sr), sr), from, to), pk });
+  }
+  return out;
+}
+
 export { IDS, firstVariant, dB };

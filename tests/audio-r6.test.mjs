@@ -121,3 +121,60 @@ test('R3-1: the weightings the render checks use at the context\'s own rate are 
   assert.ok(Math.abs(gain(1000, 44100, (x, sr) => wt.a(x, sr))) < 0.05 && Math.abs(gain(1000, 48000, (x, sr) => wt.a(x, sr))) < 0.05, 'the A-weighting reads 0 dB at 1 kHz at both rates');
   assert.ok(Math.abs(gain(100, 48000, (x, sr) => wt.a(x, sr)) + 19.1) < 0.3, 'and -19.1 dB at 100 Hz (IEC 61672)');
 });
+
+// ================================================================================ R3-2: the repair dial tone's level by note
+import * as engine from '../js/audio/engine.js';
+const NOTE_HZ = { D4: 293.66, E4: 329.63, 'F#4': 369.99, A4: 440, B4: 493.88, D5: 587.33, E5: 659.26, 'F#5': 739.99, A5: 880, B5: 987.77, D6: 1174.66 };
+test('R3-2: the dial tone\'s gain table is finite, tapers from D4 to nothing at D6, and the loudest note stays far under the tiny ceiling', () => {
+  const { DIAL_NOTES, DIAL_BASE_DB, DIAL_TILT_DB, DIAL_RISE_DB, dialGainDb } = engine;
+  assert.deepEqual(DIAL_NOTES, ['D4', 'E4', 'F#4', 'A4', 'B4', 'D5', 'E5', 'F#5', 'A5', 'B5', 'D6'], 'the eleven notes of the marker\'s bar');
+  assert.ok(Array.isArray(DIAL_TILT_DB) && Array.isArray(DIAL_RISE_DB) && Number.isFinite(DIAL_BASE_DB), 'the tables exist');
+  for (const t of [DIAL_TILT_DB, DIAL_RISE_DB]) { assert.equal(t.length, DIAL_NOTES.length, 'a gain for every note'); for (const v of t) assert.ok(Number.isFinite(v), 'finite: ' + v); }
+  for (let i = 1; i < DIAL_TILT_DB.length; i++) assert.ok(DIAL_TILT_DB[i] <= DIAL_TILT_DB[i - 1], `the tilt tapers: ${DIAL_NOTES[i]} (${DIAL_TILT_DB[i]}) is not above ${DIAL_NOTES[i - 1]} (${DIAL_TILT_DB[i - 1]})`);
+  assert.equal(DIAL_TILT_DB.at(-1), 0, 'and is nothing at D6');
+  assert.ok(DIAL_TILT_DB[0] >= 6 && DIAL_TILT_DB[0] <= 9, `D4 is lifted by about 8 dB over D6 (${DIAL_TILT_DB[0]}): a quiet laptop takes 8 dB more off D4 than off D6`);
+  assert.ok(DIAL_TILT_DB[3] > 2 && DIAL_TILT_DB[3] < DIAL_TILT_DB[1], 'A4 is lifted by a few dB, less than E4');
+  for (const v of DIAL_RISE_DB) assert.ok(v >= -2 && v <= 3, `the zone adds at most the 3 dB it always did (${v})`);
+  // the in-zone tone is the fundamental with an octave partial of 0.35 and a shimmer of 0.18: its peak, with the loudest gain of any note, is far under the tiny ceiling of -6 dBFS
+  const loudest = Math.max(...DIAL_NOTES.flatMap((_, i) => [dialGainDb(i, false), dialGainDb(i, true)])), peak = loudest + 20 * Math.log10(1 + 0.35 + 0.18);
+  assert.ok(peak <= -12, `the loudest note peaks at ${peak.toFixed(1)} dBFS at the most`);
+  // it was one level, -33 out of the zone and -30 in it
+  assert.ok(dialGainDb(0, false) - dialGainDb(10, false) > 5, 'D4 is well above D6 now');
+  assert.ok(dialGainDb(10, false) > -33, 'and the whole tone is louder than the -33 dBFS it was (D6 was 4.7 dB under the tiny median on a flat speaker)');
+});
+test('R3-2: the engine\'s tone is at the table\'s gain for the note the marker is on, in the zone and out of it, reached with the same 20 ms as before (no step)', () => {
+  const t = rig({ dial: true });
+  assert.ok(t.audio.dial.start());
+  const [g, main, oct, shim, og, sg] = t.ctx.nodes.slice(-6), dB = (x) => 10 ** (x / 20); // the tone's own six nodes are the last made
+  assert.equal(g.kind, 'gain'); assert.equal(main.kind, 'osc'); assert.equal(sg.kind, 'gain');
+  const ramp = g.gain.calls.find((c) => c[0] === 'linear');
+  assert.ok(Math.abs(ramp[1] - dB(engine.dialGainDb(0, false))) < 1e-12, 'it starts on D4 at D4\'s gain, from silence, in 30 ms');
+  const last = () => g.gain.calls.at(-1);
+  for (const [pos, lo, hi, i, zone] of [[0.5, 0.4, 0.6, 5, true], [0, 0.9, 1, 0, false], [1, 0, 0.1, 10, false], [0.3, 0.2, 0.4, 3, true], [0.2, 0.9, 1, 2, false], [0.1, 0, 0.2, 1, true]]) {
+    t.audio.dial.update(pos, lo, hi);
+    assert.equal(last()[0], 'target', 'the gain moves toward its value, it is never set (a step would click)'); assert.equal(last()[3], 0.02, '20 ms');
+    assert.ok(Math.abs(last()[1] - dB(engine.dialGainDb(i, zone))) < 1e-12, `${engine.DIAL_NOTES[i]} ${zone ? 'in' : 'out of'} the zone`);
+  }
+  assert.equal(g.gain.calls.filter((c) => c[0] === 'set').length, 1, 'only the fade-in\'s own start is a set');
+});
+test('R3-2: no two oscillators of the tone share a pitch: the shimmer (A5) is left out at A4, whose octave is A5, and at A5 itself', () => {
+  const t = rig({ dial: true }); t.audio.dial.start();
+  const [, main, oct, shim, og, sg] = t.ctx.nodes.slice(-6), f =(o) => o.frequency.calls.filter((c) => c[0] === 'target').at(-1)?.[1] ?? o.frequency.value, on = (gn) => gn.gain.calls.filter((c) => c[0] === 'target').at(-1)?.[1] ?? gn.gain.value;
+  for (const [i, name] of engine.DIAL_NOTES.entries()) {
+    t.audio.dial.update(i / 10, i / 10 - 0.01, i / 10 + 0.01); // in the zone
+    const voices = [[f(main), 1], [f(oct), on(og)], [f(shim), on(sg)]].filter(([, g]) => g > 0.001);
+    assert.ok(Math.abs(f(main) - NOTE_HZ[name]) < 0.5, `${name} is ${f(main)}`);
+    for (let a = 0; a < voices.length; a++) for (let b = a + 1; b < voices.length; b++) assert.ok(Math.abs(voices[a][0] - voices[b][0]) > 20, `${name}: two oscillators at ${voices[a][0].toFixed(1)} and ${voices[b][0].toFixed(1)} Hz add by their phase, which nothing controls`);
+    t.audio.dial.update(i / 10, i < 5 ? 0.9 : 0, i < 5 ? 1 : 0.1); // out of it: a plain sine
+    assert.ok(on(og) < 0.001 && on(sg) < 0.001, `${name} out of the zone is a sine`);
+  }
+  assert.ok(engine.sharesShimmer(440) && engine.sharesShimmer(880) && !engine.sharesShimmer(370) && !engine.sharesShimmer(1174.66));
+  t.audio.dial.update(0.3, 0.29, 0.31); assert.ok(on(sg) < 0.001, 'A4 in the zone: octave only'); t.audio.dial.update(0.2, 0.19, 0.21); assert.ok(on(sg) > 0.1, 'F#4 in the zone: octave and shimmer');
+});
+test('R3-2: AUDIO.md 4.5 says what the level is now and scripts/audio-check.mjs holds every note against the tiny tier at both rates', () => {
+  const doc = src('docs/AUDIO.md'), s = doc.slice(doc.indexOf('### 4.5 The one continuous voice'), doc.indexOf('## 5. What is deliberately silent'));
+  assert.ok(!/\*\*Level\*\*: 6 dB under a tiny sound/.test(s), 'the old level');
+  assert.match(s, /DIAL_TILT_DB/); assert.match(s, /within 3 dB of the tiny tier's median/);
+  const check = src('scripts/audio-check.mjs');
+  assert.match(check, /DIAL_TOL = 3\.0/); assert.match(check, /m\.dialTone\(\$\{sr\}\)/); assert.match(check, /--dial/); assert.match(check, /await dialCheck\(call, tierMedian\.tiny\)/);
+});
