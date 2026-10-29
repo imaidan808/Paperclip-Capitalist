@@ -6,7 +6,7 @@
 // world pixels (a building of two and a half tiles has a 9 pixel fillet: about 9 screen pixels at the working zoom, a form and not a hairline) and the two edges inside the silhouette (the front vertical edge, the
 // top-front edges) by a band of the same radius that shades across the corner like a cylinder; no line thinner than 1.5 world pixels; light faces lean warm and shade faces violet-blue (palette.faceTone); the sun is
 // upper left, so the rim band runs along the back-left and front-left top edges and the ambient-occlusion band along the foot of both walls.
-import { P, box, clamp, mix } from './iso.js';
+import { P, box, clamp, mix, rgb, hex, luma } from './iso.js';
 import { faceTone, LIGHT, GRASS } from './palette.js';
 import { EDGE_WPX } from './shadow.js';
 
@@ -95,3 +95,124 @@ export function puff(ctx, x, y, r, body = GRASS.mid, hi = GRASS.hi, shd = GRASS.
 
 /** The points of a prism's outline on screen, in the order roundedBox rounds them (for tests and for hit shapes that follow the silhouette). */
 export const outlineOf = (gx, gy, w, d, h, z = 0) => [P(gx, gy + d, z), P(gx + w, gy + d, z), P(gx + w, gy, z), P(gx + w, gy, z + h), P(gx, gy, z + h), P(gx, gy + d, z + h)];
+
+
+// ================================================================ the toy kit: colour ramps, the chunky box and the elevation of a wall
+// What the buildings are made of (docs/ART_DIRECTION.md 2.1, 3.1, 3.2). Colour is a ramp of five stops from one body colour, hue-shifted the way a painter shifts it (light towards warm, shade towards violet-blue,
+// never just darker), a prism is a toyBox (bigger fillet than roundedBox, a glossy sun side, a bounce-lit shade side, a contour that is a darker tone of the fill) and everything painted on a wall is drawn in the
+// wall's own elevation (onWall: x along the wall, y up, sheared into the iso picture) so a window, a sign or a row of bricks is an ordinary rounded rectangle there.
+const HSL = new Map();
+/** [h 0..360, s 0..1, l 0..1] of a #rrggbb colour (memoised). */
+export function toHsl(c) {
+  let v = HSL.get(c); if (v) return v;
+  const [R, G, B] = rgb(c), r = R / 255, g = G / 255, b = B / 255, mx = Math.max(r, g, b), mn = Math.min(r, g, b), l = (mx + mn) / 2, dl = mx - mn;
+  let h = 0, s = 0;
+  if (dl > 1e-9) { s = dl / (1 - Math.abs(2 * l - 1)); h = mx === r ? ((g - b) / dl + 6) % 6 : mx === g ? (b - r) / dl + 2 : (r - g) / dl + 4; h *= 60; }
+  v = Object.freeze([h, s, l]); if (HSL.size > 3000) HSL.clear(); HSL.set(c, v); return v;
+}
+/** #rrggbb of an hsl triple. */
+export function fromHsl(h, s, l) {
+  h = ((h % 360) + 360) % 360; s = clamp(s, 0, 1); l = clamp(l, 0, 1);
+  const c = (1 - Math.abs(2 * l - 1)) * s, x = c * (1 - Math.abs(((h / 60) % 2) - 1)), m = l - c / 2;
+  const [r, g, b] = h < 60 ? [c, x, 0] : h < 120 ? [x, c, 0] : h < 180 ? [0, c, x] : h < 240 ? [0, x, c] : h < 300 ? [x, 0, c] : [c, 0, x];
+  return hex((r + m) * 255, (g + m) * 255, (b + m) * 255);
+}
+/** The hue `deg` degrees closer to `to` along the shorter way round the wheel. */
+const hueToward = (h, to, deg) => { const d = ((to - h + 540) % 360) - 180; return h + Math.sign(d) * Math.min(Math.abs(d), deg); };
+const RAMPS = new Map();
+/**
+ * The five-stop ramp of a body colour `c` (rule 2.1): hi (sun-struck: lifted and warmed), light, mid (c itself), shade (a lightness 0.15 down, 14 degrees towards violet-blue, saturation 5 points up) and deep (twice that).
+ * Frozen and shared.
+ */
+export function rampOf(c) {
+  let r = RAMPS.get(c); if (r) return r;
+  const [h, s, l] = toHsl(c);
+  r = Object.freeze({
+    hi: mix(fromHsl(hueToward(h, 55, 7), s, Math.min(0.97, l + 0.1)), '#fff7dc', 0.18), light: fromHsl(hueToward(h, 55, 4), s, Math.min(0.96, l + 0.045)), mid: c,
+    shade: fromHsl(hueToward(h, 255, 14), Math.min(1, s + 0.05), Math.max(0.05, l - 0.15)), deep: fromHsl(hueToward(h, 255, 28), Math.min(1, s + 0.08), Math.max(0.04, l - 0.30)),
+  });
+  if (RAMPS.size > 3000) RAMPS.clear(); RAMPS.set(c, r); return r;
+}
+const TOYS = new Map();
+/**
+ * The three face colours of a toy prism of body colour `c`: the top is the colour lifted towards warm cream, the sun side (left) is the colour a little eased, the shade side (right) is the ramp's shade pulled
+ * a touch towards violet. The steps are what makes a pastel read as a solid (the luma falls at least 12% from the top to the sun side and at least 14% from the sun side to the shade side for every plaster,
+ * tile, brick, metal and toy colour: tests/world-buildings.test.mjs). Same shape as faceTone: { t, l, r }, frozen and shared.
+ */
+export function toyTone(c) {
+  let v = TOYS.get(c); if (v) return v;
+  const [h, s, l] = toHsl(c);
+  const top = mix(fromHsl(hueToward(h, 55, 5), s, Math.min(0.97, l + (l > 0.7 ? 0.05 : 0.085))), '#fff6d8', 0.12), left = fromHsl(hueToward(h, 55, 2), s, l > 0.7 ? l - 0.075 : l - 0.025);
+  const right = mix(fromHsl(hueToward(h, 255, 12), s > 0.8 ? s - 0.06 : Math.min(1, s + 0.02), Math.max(0.05, l - (l > 0.7 ? 0.2 : 0.15))), '#6a58b8', 0.15);
+  v = Object.freeze({ t: top, l: left, r: right }); if (TOYS.size > 3000) TOYS.clear(); TOYS.set(c, v); return v;
+}
+
+
+/** The corner radius of a toy prism with footprint w x d tiles in world pixels: a seventh of the shorter side, 3.5 to 14 (a house of two and a half tiles has a 12 pixel fillet: you see it as round, not as a bevelled edge). */
+export const toyRadius = (w, d) => clamp(Math.min(w, d) * EDGE_WPX * 0.13, 3.5, 14);
+
+/** The tone-on-tone contour colour of a fill (art direction 3: a darker, more violet version of the fill, never black). */
+export const contourOf = (c) => mix(rampOf(c).deep, '#4a3f88', 0.25);
+
+const rgba = (c, a) => { const [r, g, b] = rgb(c); return `rgba(${r},${g},${b},${a})`; };
+/**
+ * A toy prism: the chunky, glossy box the buildings stand on. Standing on [gx, gx + w] x [gy, gy + d], `h` high from elevation o.z, body colour `c`; faces in toyTone(c) (or o.tone), clipped to a silhouette whose corners
+ * are rounded by `r` (toyRadius), and finished like a cartoon solid: the sun side has light over its top third and a darker foot, the shade side a cool top and a warm bounce light over its lowest fifth, a fillet strip down
+ * the front corner shaded like a cylinder, a chamfer band along both front top edges with the sun's streak on the lit one, ambient occlusion at the foot of both walls, and (o.contour, in world pixels) a tone-on-tone contour
+ * round the silhouette. Returns { left, right, top, r } exactly as roundedBox does (the faces are box()'s, so hit shapes and wall grids are unchanged).
+ * o: { z, r, tone, contour (0 = none), rim: false, ao: false, edge: false, gloss (1) }. Every stroke is at least 1.5 world pixels.
+ */
+export function toyBox(ctx, gx, gy, w, d, h, c, o = {}) {
+  const tone = o.tone || toyTone(c), r = o.r ?? toyRadius(w, d), z0 = o.z || 0, z1 = z0 + h, gl = o.gloss ?? 1;
+  const A = P(gx, gy, z1), B = P(gx + w, gy, z1), C = P(gx + w, gy + d, z1), D = P(gx, gy + d, z1), B0 = P(gx + w, gy, z0), C0 = P(gx + w, gy + d, z0), D0 = P(gx, gy + d, z0);
+  const sil = [D0, C0, B0, B, A, D], prevAlpha = ctx.globalAlpha, fine = Math.min(r, h * 0.45);
+  ctx.save();
+  roundedPoly(ctx, sil, r); ctx.fillStyle = tone.l; ctx.fill(); ctx.clip();               // silhouette first in the sun-side tone: no crack can show where two faces meet
+  const yTop = Math.min(A[1], B[1], D[1]) , yBot = Math.max(C0[1], D0[1], B0[1]);
+  // the shade side, then the sun side, then the top
+  ctx.beginPath(); ctx.moveTo(C[0], C[1]); ctx.lineTo(B[0], B[1]); ctx.lineTo(B0[0], B0[1]); ctx.lineTo(C0[0], C0[1]); ctx.closePath(); ctx.fillStyle = tone.r; ctx.fill();
+  const gr = ctx.createLinearGradient(0, Math.min(C[1], B[1]), 0, Math.max(C0[1], B0[1])); gr.addColorStop(0, rgba('#9fb4ff', 0.10 * gl)); gr.addColorStop(0.3, rgba('#9fb4ff', 0)); gr.addColorStop(0.74, rgba('#ffd7a0', 0)); gr.addColorStop(1, rgba('#ffd7a0', 0.2 * gl));
+  ctx.fillStyle = gr; ctx.fill();
+  ctx.beginPath(); ctx.moveTo(D[0], D[1]); ctx.lineTo(C[0], C[1]); ctx.lineTo(C0[0], C0[1]); ctx.lineTo(D0[0], D0[1]); ctx.closePath(); ctx.fillStyle = tone.l; ctx.fill();
+  const gl2 = ctx.createLinearGradient(0, Math.min(D[1], C[1]), 0, Math.max(D0[1], C0[1])); gl2.addColorStop(0, rgba('#fff4d0', 0.30 * gl)); gl2.addColorStop(0.28, rgba('#fff4d0', 0.04 * gl)); gl2.addColorStop(0.6, rgba('#fff4d0', 0)); gl2.addColorStop(0.86, rgba('#5c4c96', 0)); gl2.addColorStop(1, rgba('#5c4c96', 0.16 * gl));
+  ctx.fillStyle = gl2; ctx.fill();
+  ctx.beginPath(); ctx.moveTo(A[0], A[1]); ctx.lineTo(B[0], B[1]); ctx.lineTo(C[0], C[1]); ctx.lineTo(D[0], D[1]); ctx.closePath(); ctx.fillStyle = tone.t; ctx.fill();
+  if (gl > 0 && w * d > 1.5) { const gt = ctx.createLinearGradient(A[0], A[1], C[0], C[1]); gt.addColorStop(0, rgba('#ffffff', 0.16 * gl)); gt.addColorStop(0.55, rgba('#ffffff', 0)); gt.addColorStop(1, rgba('#7a68c8', 0.07 * gl)); ctx.fillStyle = gt; ctx.fill(); }
+  if (o.edge !== false && h >= 8) { // the front vertical edge: a strip across the corner shaded like a cylinder
+    const k = fine * 1.0, g = ctx.createLinearGradient(C[0] - k, 0, C[0] + k, 0);
+    g.addColorStop(0, tone.l); g.addColorStop(0.34, mix(tone.t, tone.l, 0.35)); g.addColorStop(0.62, mix(tone.l, tone.r, 0.5)); g.addColorStop(1, tone.r);
+    ctx.fillStyle = g; ctx.fillRect(C[0] - k, C[1] + fine * 0.4, 2 * k, C0[1] - C[1] - fine * 0.8);
+  }
+  if (o.rim !== false) {
+    ctx.lineJoin = 'round'; ctx.lineCap = 'round'; ctx.globalAlpha = prevAlpha; ctx.lineWidth = Math.max(1.5, fine * 1.5);
+    ctx.strokeStyle = mix(tone.t, tone.l, 0.55); ctx.beginPath(); ctx.moveTo(D[0], D[1]); ctx.lineTo(C[0], C[1]); ctx.stroke();
+    ctx.strokeStyle = mix(tone.t, tone.r, 0.5); ctx.beginPath(); ctx.moveTo(C[0], C[1]); ctx.lineTo(B[0], B[1]); ctx.stroke();
+    ctx.strokeStyle = LIGHT.rim; ctx.lineWidth = Math.max(1.5, fine * 0.55);
+    ctx.globalAlpha = prevAlpha * 0.7; ctx.beginPath(); ctx.moveTo(D[0], D[1] - fine * 0.5); ctx.lineTo(C[0], C[1] - fine * 0.5); ctx.stroke();
+    ctx.globalAlpha = prevAlpha * 0.32; ctx.beginPath(); ctx.moveTo(C[0], C[1] - fine * 0.5); ctx.lineTo(B[0], B[1] - fine * 0.5); ctx.stroke();
+    ctx.globalAlpha = prevAlpha * 0.55; ctx.lineWidth = Math.max(1.5, fine * 0.9); ctx.beginPath(); ctx.moveTo(A[0], A[1]); ctx.lineTo(D[0], D[1]); ctx.stroke();
+  }
+  if (o.ao !== false && h >= 8) { // the foot of both walls: ambient occlusion where a wall meets the ground
+    ctx.lineJoin = 'round'; ctx.lineCap = 'butt'; ctx.strokeStyle = LIGHT.ao;
+    ctx.globalAlpha = prevAlpha * 0.16; ctx.lineWidth = Math.max(1.5, fine * 2.2); ctx.beginPath(); ctx.moveTo(D0[0], D0[1]); ctx.lineTo(C0[0], C0[1]); ctx.lineTo(B0[0], B0[1]); ctx.stroke();
+    ctx.globalAlpha = prevAlpha * 0.22; ctx.lineWidth = Math.max(1.5, fine); ctx.beginPath(); ctx.moveTo(D0[0], D0[1]); ctx.lineTo(C0[0], C0[1]); ctx.lineTo(B0[0], B0[1]); ctx.stroke();
+  }
+  ctx.globalAlpha = prevAlpha; ctx.restore();
+  if (o.contour > 0) { ctx.save(); roundedPoly(ctx, sil, r); ctx.lineJoin = 'round'; ctx.strokeStyle = contourOf(c); ctx.lineWidth = Math.max(1.5, o.contour); ctx.globalAlpha = prevAlpha * (o.contourAlpha ?? 0.5); ctx.stroke(); ctx.restore(); }
+  void yTop; void yBot;
+  return { left: [D0, C0, C, D], right: [C0, B0, B, C], top: [A, B, C, D], r, sil };
+}
+
+// ---------------------------------------------------------------- a wall in its own elevation
+/**
+ * The frame of a wall face ([bottom-left, bottom-right, top-right, top-left], as box() returns them): its width in screen pixels, its height, and the slope of its foot. A wall is a sheared rectangle (its
+ * verticals are vertical), so one transform paints a plain elevation onto it.
+ */
+export function wallOf(f) { const W = f[1][0] - f[0][0]; return { x0: f[0][0], y0: f[0][1], k: (f[1][1] - f[0][1]) / W, W, H: f[0][1] - f[3][1] }; }
+/** Run `fn(ctx, W, H)` with the context set to the wall's elevation: x runs along the wall from its left foot corner, y runs DOWN from the foot (so a point `up` pixels above the foot is y = -up). Balanced save and restore. */
+export function onWall(ctx, wl, fn) { ctx.save(); ctx.transform(1, wl.k, 0, 1, wl.x0, wl.y0); fn(ctx, wl.W, wl.H); ctx.restore(); }
+/** A rounded rectangle path at (x, y) w x h, corner radius r (a path only). */
+export function rrect(ctx, x, y, w, h, r) {
+  r = Math.max(0, Math.min(r, w / 2, h / 2)); ctx.beginPath(); ctx.moveTo(x + r, y); ctx.lineTo(x + w - r, y); ctx.quadraticCurveTo(x + w, y, x + w, y + r); ctx.lineTo(x + w, y + h - r); ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+  ctx.lineTo(x + r, y + h); ctx.quadraticCurveTo(x, y + h, x, y + h - r); ctx.lineTo(x, y + r); ctx.quadraticCurveTo(x, y, x + r, y); ctx.closePath();
+}

@@ -136,7 +136,7 @@ function build(ctx, p, env, layer, key, dq, nq, fl) {
   const cv = makeCanvas(w, h), g = cv.getContext('2d'); if (!g) return null;
   g.setTransform(s, 0, 0, s, -x0 * s, -y0 * s);
   // a body sees a still world: no clock, no wind, nowhere to put lights; fog and night are the buckets it is keyed by
-  const benv = { t: 0, wind: 0, lights: null, zoff: 0, locked: false, far: false, lite: !!env.lite, crunch: !!(fl & 2), dim: dq / 16, night: nq / 8, hz: env.hz, boardText: null, surge: false, alertAudit: false };
+  const benv = { t: 0, wind: 0, lights: null, zoff: 0, locked: false, far: false, lite: !!env.lite, crunch: !!(fl & 2), dim: dq / 16, night: nq / 8, hz: env.hz, boardText: null, surge: false, alertAudit: false, lod: env.lod, dusk: env.dusk }; // lod: the zoom's ladder (lodOf), read synchronously by a V2 body that draws its near and close marks into the sprite (T3 hook)
   let polys;
   try { polys = layer.body(g, p, benv) || null; } catch (err) { try { cv.width = 0; } catch { /* nothing to free */ } throw err; }
   // an OffscreenCanvas hands its pixels over as an immutable bitmap, the cheapest thing to blit (a canvas source is re-checked for changes at every draw)
