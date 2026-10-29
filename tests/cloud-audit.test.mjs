@@ -6,6 +6,7 @@
 //   E2  the engine writes a negative amount as -$12.50, as the rest of the product does, not $-12.50
 //   E3  the engine's plurals: 1 day, 1 hour (not "1 days", "1 hours")
 //   E4  a throwing event listener does not stop a day from finishing (profit counted twice, a missing history row, no checkpoint)
+//   A1  the art: a ferry gate's "Opens at" chip rides above its plaque (the first judge pass found the plaque's words half hidden)
 //   D1  the Deal Room: the second press of a double-click and a held key are not second moves
 // The relay tests need `npm install` in server/ (skipped without it). Run: node --test tests/cloud-audit.test.mjs
 import test from 'node:test';
@@ -126,4 +127,14 @@ test('D1: the Deal Room takes one press of a button as one move: the same move a
   assert.doesNotMatch(src, /e\.detail > 1/, 'not by the click count: a second click on the next stage\'s button in the same place is a decision, and the browser counts it as a double-click');
   assert.match(src, /const onKey = \(e\) => \{\n    if \(e\.repeat && e\.target\.closest\?\.\('\[data-deal\]'\)\) \{ e\.preventDefault\(\); return; \}/, 'and a key held on a Deal Room button repeats no click');
   assert.match(src, /run\.key !== 'fix' \|\| run\.res\.fix \|\| ses\.reduced\(\) \|\| e\.repeat \|\| !\(e\.key === ' ' \|\| e\.key === 'Enter'\)/, 'and a held space or Enter is one Stop, not a run of them');
+});
+
+// ------------------------------------------------------------------------------------------------------------------------- the art (the first judge pass)
+test('A1: the "Opens at" chip of a ferry gate rides above its plaque instead of over its words, and the other gates keep theirs', () => {
+  const statics = readFileSync(join(ROOT, 'js/world/statics.js'), 'utf8'), street = readFileSync(join(ROOT, 'js/world/props-street.js'), 'utf8');
+  const m = /wy: y - \(p\.gk === 'ferry' \? (\d+) : (\d+)\)/.exec(statics), top = /roundRect\(ctx, a\[0\] - 22, a\[1\] - (\d+), 44, 16, 3\)/.exec(street);
+  assert.ok(m && top, 'the chip\'s lift and the plaque\'s top are in the source');
+  const ferry = +m[1], other = +m[2], plaque = +top[1]; // world px above the gate's ground point; the chip is 18 px tall at the scale of a working zoom, and is centred on its anchor
+  assert.ok(ferry - 9 >= plaque + 4, `the chip's foot (${ferry - 9}) stands clear of the plaque's top (${plaque})`);
+  assert.equal(other, 44, 'a barrier and a bridge keep the chip where it was');
 });

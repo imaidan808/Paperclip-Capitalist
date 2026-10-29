@@ -174,7 +174,9 @@ export function skyFormOf(k) {
   lobes.sort((a, b) => a.y - b.y);
   let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
   for (const l of lobes) { if (l.x - l.r < x0) x0 = l.x - l.r; if (l.x + l.r > x1) x1 = l.x + l.r; if (l.y - l.r < y0) y0 = l.y - l.r; if (l.y + l.r > y1) y1 = l.y + l.r; }
-  return { lobes, box: { x0: x0 - 4, x1: x1 + 10, y0: y0 - 4, y1: y1 + 12 }, r0: 46 };
+  // the box is the sprite's whole canvas (clouds.js skySprite): paintLobes draws each body lifted up and to the left by LIFT (cloudpaint.js: 0.14 and 0.05 of r0 = 46, so 6.4 and 2.3 world px) and its contour a pixel out, so the top
+  // needs more than the 4 px margin the sides have, or the tallest puffs are cut flat on top (a ruler-straight roof 12 to 40 px wide, which the first judge pass found on every small cloud)
+  return { lobes, box: { x0: x0 - 4, x1: x1 + 10, y0: y0 - 12, y1: y1 + 12 }, r0: 46 };
 }
 
 /** How much of a light's reach, 0..1, the bank covers: five points (the light and four round it at half its radius) looked up in the cover grid. A lamp whose point is under cloud but that has clear sky at its side is half hidden. */

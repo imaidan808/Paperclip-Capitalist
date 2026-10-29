@@ -4,6 +4,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { DIST, LAYOUT } from '../js/world/layout.js';
+import { LIFT } from '../js/world/cloudpaint.js';
 import { formOf, windowsOf, windowCount, insideOf, coverAt, coverOf, paintedCover, touchOf, touches, lightCover, skyFormOf, castsShadow, FORM, REACH, TOUCH, SHADOW } from '../js/world/cloudform.js';
 import { shadowLength } from '../js/world/shadow.js';
 import { structure, bankPuffs, puffRadius } from '../js/world/cloudbank.js';
@@ -84,6 +85,16 @@ test('the box holds every lobe, the reach holds the shadow, and a rectangle outs
     // the diamond's empty corner (the box's top left) is not touched, so a chunk store never bakes it
     assert.equal(touches(f, box.x0, box.y0, box.x0 + TOUCH - 1, box.y0 + TOUCH - 1), false, 'the top left corner of the box is empty');
     let blocks = 0, set = 0; for (const b of f.touch.bits) { blocks++; if (b) set++; } assert.ok(set / blocks < 0.85, `the bank and its shadow touch ${(100 * set / blocks).toFixed(0)}% of the blocks of their box`);
+  }
+});
+
+test('a small sky cloud\'s box holds all of its paint: every body (lifted towards the sun by LIFT) and its contour is inside, so no puff is cut flat on top', () => {
+  for (let k = 0; k < 400; k++) {
+    const f = skyFormOf(k * 977 + 13), lx = LIFT.x * f.r0, ly = LIFT.y * f.r0, cw = 1.2; // the contour is a pixel or so out (cloudpaint.js: cw)
+    for (const l of f.lobes) {
+      assert.ok(l.y - ly - l.r - cw >= f.box.y0, `cloud ${k}: the top of a lifted body and its contour (${(l.y - ly - l.r - cw).toFixed(1)}) is inside the box (${f.box.y0.toFixed(1)})`);
+      assert.ok(l.x - lx - l.r - cw >= f.box.x0 && l.x + l.r + cw <= f.box.x1 && l.y + l.r + cw <= f.box.y1, `cloud ${k}: the sides and the foot too`);
+    }
   }
 });
 

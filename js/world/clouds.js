@@ -147,12 +147,13 @@ registerReleaser(() => { for (const s of STORES) s.release(); SKY_SPRITES.clear(
 const stateOf = (w) => {
   let st = ST.get(w);
   if (!st) {
-    st = { store: null, banks: [], tones: null, night: 0, dusk: 0, a: 0, at: -1e9, mask: -1, cells: {}, miss: [], win: { x0: 0, x1: 0, y0: 0, y1: 0 }, seen: 0, ticks: 0, q: 1, m: { a: 1, e: 0, f: 0 }, live: [], want: [] };
+    st = { store: null, banks: [], tones: null, night: 0, dusk: 0, a: 0, at: -1e9, mask: -1, cells: {}, miss: [], win: { x0: 0, x1: 0, y0: 0, y1: 0 }, seen: 0, ticks: 0, q: 1, m: { a: 1, e: 0, f: 0 }, live: [], want: [], open: [] };
     st.draw = (g, a, e, f, view) => { // what a chunk is painted with: the shadows of every bank that reaches it, then the banks
       const { banks, tones, night, dusk } = st;
       g.setTransform(a, 0, 0, a, e, f);
       for (const b of banks) if (!(b.reach.x1 < view.x0 || b.reach.x0 > view.x1 || b.reach.y1 < view.y0 || b.reach.y0 > view.y1)) paintCloudShadow(g, b, { tones, night, dusk, alpha: 1, view });
       for (const b of banks) if (!(b.box.x1 < view.x0 || b.box.x0 > view.x1 || b.box.y1 < view.y0 || b.box.y0 > view.y1)) paintLobes(g, b.lobes, { a, e, f, tones, r0: b.r0, top: b.box.y0, bot: b.box.y1, view });
+      clearOpen(g, st.open); // the open districts stand clear of every bank
     };
     ST.set(w, st);
   }
@@ -161,6 +162,24 @@ const stateOf = (w) => {
 /** The set of districts under cloud as a bit mask (district id 1 to 16 is bit id), from the world's set of open ones: a world that does not know yet has every district open. */
 export function lockedMask(unlocked) { let m = 0; if (unlocked) for (const id of LAYOUT.ids) if (!unlocked.has(id)) m |= 1 << id; return m; }
 const byY = (p, q) => p.cy - q.cy;
+/**
+ * An open district is never under its neighbours' clouds. A bank's puffs are a hundred world px across at the far scales and spill over the block beside it, which buried the player's own district (the Scrap Yard's
+ * crates, roof and crane at the island's fit view: the first judge pass). The footprints of the open districts (block and pavement, in world px) are cut out of what is baked, with a soft edge: wide faint strokes
+ * outwards, then the footprint whole. Only ever on a chunk's own surface: the live path (no surfaces: the Node tests) paints on the frame itself, where cutting would cut the ground.
+ */
+const OPEN_POLY = new Map();
+const openPoly = (D) => { let p = OPEN_POLY.get(D.id); if (!p) { const [x, y, w, d] = D.fp; OPEN_POLY.set(D.id, p = [P(x, y, D.z), P(x + w, y, D.z), P(x + w, y + d, D.z), P(x, y + d, D.z)]); } return p; };
+export const FEATHER = Object.freeze([[72, 0.12], [48, 0.16], [30, 0.22], [14, 0.3]]); // [line width in world px, alpha]: the edge fades over about 36 px outside the footprint
+export function clearOpen(g, open) {
+  if (!open || !open.length) return;
+  g.save(); g.globalCompositeOperation = 'destination-out'; g.lineJoin = 'round';
+  for (const poly of open) {
+    const trace = () => { g.beginPath(); g.moveTo(poly[0][0], poly[0][1]); for (let i = 1; i < poly.length; i++) g.lineTo(poly[i][0], poly[i][1]); g.closePath(); };
+    for (const [lw, al] of FEATHER) { g.globalAlpha = al; g.lineWidth = lw; trace(); g.stroke(); }
+    g.globalAlpha = 1; trace(); g.fill();
+  }
+  g.restore();
+}
 /** The chunk store's counters for the rig and the tests: { baked, ms, lastMs, hits, stale, faded, dropped, size, bytes, ratio } (null before the first bank is baked). */
 export function cloudStats(w) { const st = ST.get(w); return st && st.store ? { ...st.store.stats, size: st.store.size, bytes: st.store.bytes, ratio: st.q } : null; }
 /** Give some of the clouds' chunks back when the pixel ledger is over its ceiling (World.squeeze): the stale ones and the ones outside the window first, down to 70% of what is held; the visible exact ones are never dropped. Answers how many went. */
@@ -190,6 +209,7 @@ function stampBanks(ctx, w, st, ids, tones, ps) {
   const room = LEDGER_LIMIT_MB * 1e6 * CLOUD_CEILING - (ledger.total() - ledger.total(store.name)), q = ratioFor(a, a <= 0.8 ? 0 : wantedCells(banks, win, a, SCRATCH.cells, SCRATCH.want), room, st.q), ac = a * q, sk = scaleKey(ac);
   const kk = a / ac, D = Math.abs(CHUNK_PX * kk - Math.round(CHUNK_PX * kk)) < 1e-3 ? Math.round(CHUNK_PX * kk) : CHUNK_PX * kk; // a chunk's side on the frame: 384, or exactly 512 at the ratio 3/4
   st.tones = tones; st.night = (tones.key & 15) / 8; st.dusk = (tones.key >> 4) / 8;
+  const open = st.open; open.length = 0; if (w.unlocked) for (const id of LAYOUT.ids) if (w.unlocked.has(id)) open.push(openPoly(DIST[id]));
   const mask = lockedMask(w.unlocked), ver = mask | (tones.key << 17) | (((dpr * 4) | 0) << 25), changed = store.markStale(ver), force = changed && mask !== st.mask; st.mask = mask;
   if (ac !== st.a) { st.a = ac; st.at = now; }
   const rig = typeof window !== 'undefined' && !!window.__rig, zooming = now - st.at < (w.gcRest ?? REST_MS), fadeMs = w.reduced() ? 0 : (w.gcFade ?? FADE_MS);

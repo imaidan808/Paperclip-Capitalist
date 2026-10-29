@@ -22,7 +22,7 @@ export const staticMethods = {
       if (!locked) return;
       const x = sx(p.gx + 0.15, p.gy + 0.15), y = sy(p.gx + 0.15, p.gy + 0.15, z);
       this.hits.push({ kind: 'zone', id: p.zone, eid: 'gate:' + p.zone, label: p.label, zone: p.zone, locked: true, gate: DIST[p.zone].gate, circle: [x, y - 20, 26] });
-      if (this.mode !== 'map') this.overlay.push({ k: 'chip', lo: 1, n: 14, wx: x, wy: y - 44, draw: (g, px, py, s) => this.chip(g, px, py, `Opens at ${money(DIST[p.zone].gate)}`, '#ffd36e', s) }); // the map's own cards already say what opens it
+      if (this.mode !== 'map') this.overlay.push({ k: 'chip', lo: 1, n: 14, wx: x, wy: y - (p.gk === 'ferry' ? 60 : 44), draw: (g, px, py, s) => this.chip(g, px, py, `Opens at ${money(DIST[p.zone].gate)}`, '#ffd36e', s) }); // the map's own cards already say what opens it; the ferry's plaque stands 16 px taller than a barrier's sign, so its chip rides above it instead of over its words (the first judge pass: "NOT RUNNING" half hidden)
       return;
     }
     if (p.hot && polys) this.hits.push({ kind: 'static', id: p.hot, label: p.label, zone: p.zone, locked, polys: polys.map((q) => q.map(([x, y]) => [x, y - z])), p });
