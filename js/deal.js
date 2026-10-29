@@ -13,11 +13,11 @@ import { clamp, fitLabel, FAKE_VALUE } from './market.js';
 import * as inspect from './play/inspect.js';
 import * as pitch from './play/pitch.js';
 import * as repair from './play/repair.js';
+import * as haggle from './play/haggle.js';
+import * as auction from './play/auction.js';
 import { closedWhy } from './engine.js';
 
-// Haggle and Auction arrive from their own branch; until both are merged the glue still loads and those two stages simply do not exist.
-const optional = async (name) => { try { return await import(`./play/${name}.js`); } catch { return null; } };
-export const GAMES = { inspect, pitch, repair, haggle: await optional('haggle'), auction: await optional('auction') };
+export const GAMES = { inspect, pitch, repair, haggle, auction };
 
 export const QUICK = 0.5, EXPERT = 1;
 export const STAGE_LABEL = { read: 'Read', pitch: 'Pitch', close: 'Close', bid: 'Bid', fix: 'Fix' };

@@ -10,7 +10,7 @@ import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join, posix, resolve, sep } from 'node:path';
 import { gunzipSync } from 'node:zlib';
-import { scanImports, walk, preloadLines, existsExactly, ENTRY, ROOT } from '../scripts/preload.mjs';
+import { scanImports, walk, preloadLines, lazyManifest, existsExactly, ENTRY, ROOT } from '../scripts/preload.mjs';
 import { stage, verify, servePages, injectPreload, withLastmod, pageRefs, stylesheetsOf, pngSize, SITE_URL, BASE_PATH, TOP_FILES, TOP_DIRS } from '../scripts/stage.mjs';
 import { ZONES, PERKS, ASSETS, BUYERS, TOTAL_DAYS, ECON, SWAPS, FMV_BAND, LEVEL_XP, EVENTS, DEBT, SKILL_MAX, PIPE_RULES } from '../js/config.js';
 import { LOCK_MS, RECALL_WAIT_MS } from '../js/session.js';
@@ -93,8 +93,9 @@ test('the walk follows static imports first, then import(), expands a pattern to
   assert.deepEqual(g.static, ['js/main.js', 'js/a.js', 'js/sub/b.js', 'js/b2.js']);
   assert.deepEqual(g.dynamic.sort(), ['js/deep.js', 'js/games/one.js', 'js/games/two.js', 'js/lazy.js']);
   assert.ok(!g.modules.includes('js/unused.js') && !g.modules.some((m) => m.endsWith('.txt')));
-  assert.equal(preloadLines(g).split('\n').length, g.modules.length);
+  assert.equal(preloadLines(g).split('\n').length, g.static.length, 'the preload lines are the static graph: what the first screen needs');
   assert.match(preloadLines(g).split('\n')[0], /^ {2}<link rel="modulepreload" href="js\/main\.js">$/);
+  assert.deepEqual(JSON.parse(lazyManifest(g)), g.dynamic, 'and the modules only import() reaches are listed apart, for the idle prefetch');
 });
 
 test('the walk fails loudly, and lists everything wrong, instead of staging a site that misses a module', () => {
@@ -108,13 +109,14 @@ test('the walk fails loudly, and lists everything wrong, instead of staging a si
   assert.throws(() => walk(root, 'js/nope.js'), /entry module/);
 });
 
-test('the real app: every module main.js reaches exists, deal.js\'s optional games are in the graph, and only the one module the tests alone use is left out', () => {
+test('the real app: every module main.js reaches exists, the later screens are import()s and not in the first fetch, and only the one module the tests alone use is left out', () => {
   const g = walk();
   assert.equal(g.modules[0], ENTRY);
   for (const m of g.modules) assert.ok(exists(m), m);
   for (const m of ['js/session.js', 'js/engine.js', 'js/play/haggle.js', 'js/play/auction.js', 'js/meta/academy.js', 'js/world/world.js']) assert.ok(g.modules.includes(m), m);
-  // haggle.js and auction.js are loaded by deal.js with import(`./play/${name}.js`): the page needs them, so they are staged and preloaded; academy.js is a static import of ui/academy.js and of the Codex drawer
-  assert.ok(g.dynamic.includes('js/play/haggle.js') && g.dynamic.includes('js/play/auction.js') && !g.dynamic.includes('js/meta/academy.js'), 'the lessons are a static import now (tests/finish-repair.test.mjs V5)');
+  // the screens that need the game are loaded the first time they open (js/main.js LOAD), and deal.js imports its two games statically, so they come with the game; academy.js is a static import of ui/academy.js and of the Codex drawer
+  for (const m of ['js/ui/shell.js', 'js/ui/academy.js', 'js/ui/instructor.js', 'js/ui/debrief.js', 'js/world/world.js', 'js/deal.js']) assert.ok(g.dynamic.includes(m) && !g.static.includes(m), `${m} is loaded when a screen opens, not before the first one`);
+  assert.ok(g.dynamic.includes('js/play/haggle.js') && g.dynamic.includes('js/play/auction.js') && g.edges['js/deal.js'].statics.includes('js/play/haggle.js') && g.edges['js/ui/academy.js'].statics.includes('js/meta/academy.js'), 'the Deal Room\'s games are deal.js\'s static imports and the lessons the Academy\'s (tests/finish-repair.test.mjs V5): nothing waits on an import() while it evaluates');
   const all = walkDir(join(ROOT, 'js')).filter((f) => f.endsWith('.js')).map((f) => 'js/' + f);
   assert.deepEqual(all.filter((f) => !g.modules.includes(f)), ['js/audio/audition.js', 'js/meta/ids.js'], 'a module nothing imports is either dead or the tests\' alone: say which in this list'); // audition.js is the audition page's alone (dev/sounds.html, never published); it sits in js/audio/ so the page and the tests reach the engine by one path, and is staged with the folder: moving it under dev/ is a small open item
   assert.ok(!/js\/meta\/ids\.js/.test(Object.values(g.edges).flatMap((e) => [...e.statics, ...e.dynamics]).join(' ')));
@@ -153,15 +155,18 @@ test('the staged site holds the page, the four small files, assets, the linked s
   for (const f of files.filter((f) => !['index.html', 'sitemap.xml'].includes(f))) assert.ok(readFileSync(join(r.out, f)).equals(readFileSync(join(ROOT, f))), f);
 });
 
-test('the staged page has one modulepreload line for each module, in graph order, and the source page has none', () => {
+test('the staged page preloads the static graph, in graph order, lists the later modules apart, and the source page has none', () => {
   const r = staged();
   const html = readFileSync(join(r.out, 'index.html'), 'utf8'), src = read('index.html');
   assert.ok(!/modulepreload/.test(src), 'the source page is plain: npm start and the tests see it as it is');
   const links = [...html.matchAll(/<link rel="modulepreload" href="([^"]+)">/g)].map((m) => m[1]);
-  assert.deepEqual(links, walk().modules);
+  assert.deepEqual(links, walk().static);
   assert.equal(links[0], 'js/main.js');
+  const lazy = JSON.parse((html.match(/<script type="application\/json" id="pc-lazy">([^<]*)<\/script>/) || [])[1] || 'null');
+  assert.deepEqual(lazy, walk().dynamic, 'the modules only a later screen needs are in a data block, not preloaded: the first screen does not wait for them');
+  assert.ok(!lazy.some((m) => links.includes(m)));
   // nothing else of the page changed: take the preload block out and it is the source page again
-  assert.equal(html.replace(/ {2}<!-- modulepreload[^\n]*\n(?: {2}<link rel="modulepreload"[^\n]*\n)+/, ''), src);
+  assert.equal(html.replace(/ {2}<!-- modulepreload[^\n]*\n(?: {2}<link rel="modulepreload"[^\n]*\n)+(?: {2}<script type="application\/json" id="pc-lazy">[^\n]*<\/script>\n)?/, ''), src);
   assert.ok(html.indexOf('modulepreload') > html.lastIndexOf('rel="stylesheet"'), 'the sheets are asked for first: they are what blocks the first paint');
   assert.ok(html.indexOf('modulepreload') < html.indexOf('</head>'));
   assert.throws(() => injectPreload(html, '  <link rel="modulepreload" href="js/x.js">'), /already has modulepreload/);
@@ -201,7 +206,8 @@ test('verify finds a module missing, a module left over, a stray file, a source 
   assert.match(broken((d) => writeFileSync(join(d, 'notes.txt'), 'x')), /notes\.txt is not part of the site/);
   assert.match(broken((d) => writeFileSync(join(d, 'js/rng.js.map'), '{}')), /a source map/);
   assert.match(broken((d) => writeFileSync(join(d, 'js/rng.js'), readFileSync(join(d, 'js/rng.js'), 'utf8') + '\n//# sourceMappingURL=rng.js.map\n')), /names a source map/);
-  assert.match(broken((d) => writeFileSync(join(d, 'index.html'), readFileSync(join(d, 'index.html'), 'utf8').replace('  <link rel="modulepreload" href="js/net.js">\n', ''))), /modulepreload lines are not the module graph/);
+  assert.match(broken((d) => writeFileSync(join(d, 'index.html'), readFileSync(join(d, 'index.html'), 'utf8').replace('  <link rel="modulepreload" href="js/net.js">\n', ''))), /modulepreload lines are not the static module graph/);
+  assert.match(broken((d) => writeFileSync(join(d, 'index.html'), readFileSync(join(d, 'index.html'), 'utf8').replace(/("js\/ui\/shell\.js",)/, ''))), /list of modules loaded later \(pc-lazy\)/);
   assert.match(broken((d) => writeFileSync(join(d, 'assets/share.png'), readFileSync(join(d, 'assets/apple-touch-icon.png')))), /not a 1200 x 630 PNG/);
   assert.match(broken((d) => writeFileSync(join(d, 'index.html'), readFileSync(join(d, 'index.html'), 'utf8').replace('<link rel="stylesheet" href="css/styles.css">', '<link rel="stylesheet" href="https://fonts.example.com/x.css">'))), /asks another host for https:\/\/fonts\.example\.com/);
   assert.match(broken((d) => rmSync(join(d, '404.html'))), /404\.html is missing/);
@@ -436,7 +442,7 @@ test('package.json gives the pipeline its commands, and the test command still r
 test('npm run preload and npm run stage work as programs', () => {
   const lines = spawnSync(process.execPath, [join(ROOT, 'scripts/preload.mjs')], { encoding: 'utf8' });
   assert.equal(lines.status, 0, lines.stderr);
-  assert.equal(lines.stdout.trimEnd(), preloadLines(walk()));
+  assert.equal(lines.stdout.trimEnd(), `${preloadLines(walk())}\n  <script type="application/json" id="pc-lazy">${lazyManifest(walk())}</script>`);
   const out = join(tmp(), 'cli'), r = spawnSync(process.execPath, [join(ROOT, 'scripts/stage.mjs'), out, '--lastmod', '2026-05-06'], { encoding: 'utf8' });
   assert.equal(r.status, 0, r.stderr + r.stdout);
   assert.match(r.stdout, /Staged \d+ files \(\d+ modules, \d+ of them needed before the first screen\)/); assert.match(r.stdout, /The staged site is sound\./);
@@ -787,7 +793,9 @@ test('the staged site, served as Pages serves it, boots in Chrome: no console er
     assert.equal(await p.eval('document.title'), 'Paperclip Capitalist');
     assert.match(await p.eval(`document.querySelector('#app h1').textContent`), /PAPERCLIP\s*CAPITALIST/);
     const seen = await p.eval(`JSON.stringify({ lang: document.documentElement.lang, ld: document.querySelectorAll('script[type="application/ld+json"]').length, preloads: document.querySelectorAll('link[rel=modulepreload]').length, canon: document.querySelector('link[rel=canonical]').href })`);
-    assert.deepEqual(JSON.parse(seen), { lang: 'en', ld: 1, preloads: walk().modules.length, canon: SITE_URL });
+    const s = JSON.parse(seen);
+    assert.deepEqual({ ...s, preloads: 0 }, { lang: 'en', ld: 1, preloads: 0, canon: SITE_URL });
+    assert.ok(s.preloads >= walk().static.length && s.preloads <= walk().modules.length, `the static graph is preloaded and the rest follows while idle (${s.preloads} links)`);
     // 2. the Academy runs: its first lesson opens in the real interface with the coach beside it
     await until(p, `(() => { const b=[...document.querySelectorAll('button')].find(b=>/Academy/.test(b.textContent)); b && b.click(); return !!b; })()`, 'the Academy button');
     await until(p, `document.title.startsWith('Academy')`, 'the Academy screen');

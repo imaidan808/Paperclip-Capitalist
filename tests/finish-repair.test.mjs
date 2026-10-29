@@ -67,6 +67,8 @@ test('F2: the sizes docs/ARCHITECTURE.md quotes are the shipped tree\'s, not the
   assert.equal(m.requests - num(q[1]), grew, 'requests and modules move together');
   if (STRICT) assert.equal(grew, 0, `the document says ${q[2]} modules and the tree has ${m.modules} (node scripts/arch-figures.mjs --write)`);
   else assert.ok(Math.abs(grew) <= ALLOW && grew <= m.world, `the document says ${q[2]} modules and the tree has ${m.modules}: more than ${ALLOW} apart, or growth outside js/world/ (the orchestrator refreshes the document at a merge)`);
+  const f1 = /\| Before the first screen \| (\d+) requests, ([\d,]+) KB gzipped: the page, 12 stylesheets and the (\d+) modules of the static graph \|/.exec(md); assert.ok(f1, 'the first screen\'s row is there');
+  assert.equal(num(f1[3]), m.title.n, 'the static graph is the title screen\'s modules'); assert.equal(num(f1[1]), m.first.requests, 'and the first screen\'s requests are the page, the sheets and those'); close(num(f1[2]), kb(m.first.gz), 'the first screen, gzipped');
   const s = /needs (\d+) modules, ([\d,]+) KB of JavaScript \(([\d,]+) KB gzipped\); the other (\d+), ([\d,]+) KB \(([\d,]+) KB gzipped\)/.exec(md);
   assert.ok(s, 'the split of the title screen and the rest is quoted');
   assert.equal(num(s[1]), m.title.n, 'the title screen\'s own set of modules does not change with the art'); assert.equal(m.rest.n - num(s[4]), grew, 'the rest of the modules moved with the tree');
@@ -395,8 +397,8 @@ test('V5: the Academy\'s lessons are imported statically: a bad deploy fails lou
   assert.match(read('js/ui/academy.js'), /^import \{ ACADEMY as MISSIONS \} from '\.\.\/meta\/academy\.js';$/m);
   assert.match(read('js/ui/drawers/codex.js'), /^import \{ ACADEMY as MISSIONS \} from '\.\.\/\.\.\/meta\/academy\.js';$/m);
   assert.equal(AC.missionList().length, 10, 'and the Academy has its ten lessons');
-  const g = walk(); assert.ok(g.modules.includes('js/meta/academy.js')); assert.ok(!g.dynamic.includes('js/meta/academy.js'), 'it is part of the first fetch, not a late one');
-  assert.ok(g.dynamic.includes('js/play/haggle.js') && g.dynamic.includes('js/play/auction.js'), 'the Deal Room\'s two optional games are still the only late modules');
+  const g = walk(); assert.ok(g.modules.includes('js/meta/academy.js')); assert.ok(g.edges['js/ui/academy.js'].statics.includes('js/meta/academy.js') && !g.edges['js/ui/academy.js'].dynamics.includes('js/meta/academy.js'), 'the Academy has its lessons when it loads, in the same fetch');
+  assert.ok(g.dynamic.includes('js/play/haggle.js') && g.dynamic.includes('js/play/auction.js') && g.dynamic.includes('js/ui/academy.js'), 'the Deal Room\'s games and the Academy come with the game, loaded when a screen opens');
 });
 
 test('V6: the local server serves the page\'s icon, and still never the scenes it is drawn from', async () => {
