@@ -3,6 +3,7 @@
 // What it never does: read game state, touch the DOM, use Math.random (variation comes from the hash functions at the foot), or decide where anything stands.
 // Grid coordinates (gx, gy) are tiles; gz is height in pixels. Screen x grows with gx - gy, screen y with gx + gy.
 // Light: the sun stands to the upper left. Left faces are lit (0.8), right faces shaded (0.6), tops full; cast shadows run towards +gx (screen right and down).
+import { FLAGS } from './stack.js';
 export const TW = 64, TH = 32, HW = TW / 2, HH = TH / 2;
 export const sx = (gx, gy) => (gx - gy) * HW;
 export const sy = (gx, gy, gz = 0) => (gx + gy) * HH - gz;
@@ -39,9 +40,13 @@ export const tone = (h) => {
 };
 export const gray = (h) => { const [r, g, b] = rgb(h), y = 0.3 * r + 0.59 * g + 0.11 * b; return hex(y, y, y); };
 const fogMemo = new Map();
+let veilFn = null;
+/** (T2's hook, the one line this frozen module takes: docs/RENDER_PLAN.md section 8, T5 item 10) While the `clouds` layer is flagged v2, a colour under cloud is `veiled`, never darkened: palette.js hands its veil over here when it loads. */
+export const setVeil = (fn) => { veilFn = fn; };
 /** Fogged colour: desaturated and darkened by k (0 = untouched, 1 = a locked district). */
 export const fogged = (h, k) => {
   if (!(k > 0.01)) return h;
+  if (veilFn !== null && FLAGS.clouds === 'v2') return veilFn(h, k);
   const m = nest(fogMemo, h); let v = m.get(k);
   if (v === undefined) { v = mix(mix(h, gray(h), Math.min(1, k * 1.5)), '#121826', k * 0.5); if (m.size > 48) m.clear(); m.set(k, v); }
   return v;
