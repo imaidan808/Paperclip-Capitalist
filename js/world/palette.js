@@ -41,20 +41,20 @@ export const GRADE = Object.freeze({ day: '#ffffff', dusk: '#ffd0a0', night: '#8
 
 // ---------------------------------------------------------------- 2.4 districts: the daylight palette of all sixteen, keyed by the theme in js/data
 export const DISTRICT_DAY = Object.freeze({
-  scrap: { ground: '#d4c070', walk: '#eddfbb', accent: '#f08a3c', accent2: '#5b8bd0' }, market: { ground: '#f5b98a', walk: '#f3dec0', accent: '#ffc93c', accent2: '#36b5a8' },
+  scrap: { ground: '#ecd29a', walk: '#f2e2c3', accent: '#f08a3c', accent2: '#5b8bd0' }, market: { ground: '#f5b98a', walk: '#f3dec0', accent: '#ffc93c', accent2: '#36b5a8' },
   campus: { ground: '#eab5a4', walk: '#f1ddc5', accent: '#38c06f', accent2: '#fff0d2' }, pawn: { ground: '#8fdcd0', walk: '#e1e4cd', accent: '#f2c14a', accent2: '#ff6fae' },
-  metro: { ground: '#a9bfdc', walk: '#e6dfcf', accent: '#4aa6ff', accent2: '#e8f2ff' }, estate: { ground: '#dcb0d2', walk: '#efdccd', accent: '#f6e8c8', accent2: '#e8c56a' },
-  auto: { ground: '#b0b8d6', walk: '#e7dece', accent: '#ff5a47', accent2: '#f4f6fb' }, harbor: { ground: '#a3bbd9', walk: '#e5dece', accent: '#ff9a2e', accent2: '#2f5fa8' },
-  industrial: { ground: '#adc0d8', walk: '#e6dfce', accent: '#ffd02e', accent2: '#8aa0b8' }, tech: { ground: '#c4d4f0', walk: '#ebe3d2', accent: '#22d9ee', accent2: '#9a6bff' },
+  metro: { ground: '#93bde6', walk: '#e2dfd1', accent: '#4aa6ff', accent2: '#e8f2ff' }, estate: { ground: '#dcb0d2', walk: '#efdccd', accent: '#f6e8c8', accent2: '#e8c56a' },
+  auto: { ground: '#a7b2e2', walk: '#e5ddd0', accent: '#ff5a47', accent2: '#f4f6fb' }, harbor: { ground: '#90bfe4', walk: '#e1dfd0', accent: '#ff9a2e', accent2: '#2f5fa8' },
+  industrial: { ground: '#9dc0dc', walk: '#e4dfcf', accent: '#ffd02e', accent2: '#8aa0b8' }, tech: { ground: '#82c6de', walk: '#dfe0cf', accent: '#22d9ee', accent2: '#9a6bff' },
   farm: { ground: '#9bdc7e', walk: '#e3e4be', accent: '#f1c243', accent2: '#d9553f' }, creative: { ground: '#f0b6dc', walk: '#f2ddcf', accent: '#9a6bff', accent2: '#ff4fa3' },
-  corporate: { ground: '#a8cdf0', walk: '#e6e2d2', accent: '#dff2ff', accent2: '#3f8fe0' }, finance: { ground: '#a8e0c4', walk: '#e6e5cb', accent: '#25b97a', accent2: '#e2b441' },
+  corporate: { ground: '#93c6f2', walk: '#e2e0d3', accent: '#dff2ff', accent2: '#3f8fe0' }, finance: { ground: '#a8e0c4', walk: '#e6e5cb', accent: '#25b97a', accent2: '#e2b441' },
   realty: { ground: '#f1b59a', walk: '#f3ddc3', accent: '#f6dcb5', accent2: '#e8795a' }, exchange: { ground: '#f3dc8e', walk: '#f3e4c1', accent: '#f7c948', accent2: '#2b2417' },
 });
 /** A district's whole daylight set: its table row plus the four colours the rules derive from the ground (hi, alt, pad, road). Undefined for a theme that is not one of the sixteen. */
 export function groundSet(theme) {
   const row = Object.hasOwn(DISTRICT_DAY, theme) ? DISTRICT_DAY[theme] : null; if (!row) return undefined;
   const g = row.ground;
-  return { ...row, hi: mix(g, LIGHT.white, 0.28), alt: mix(g, '#6a5a9c', 0.12), pad: mix(g, '#7a6aa8', 0.18), road: mix(ROAD.mid, g, 0.10) };
+  return { ...row, hi: mix(g, LIGHT.white, 0.28), alt: mix(g, '#6a5a9c', 0.12), pad: mix(g, '#7a6aa8', 0.1), road: mix(ROAD.mid, g, 0.10) };
 }
 
 // ---------------------------------------------------------------- 2.5 crates by tag, 2.6 people
@@ -95,7 +95,7 @@ export function veiled(c, k) {
   if (!(k > 0.01)) return c;
   const kk = Math.round(clamp(k, 0, 1) * 50) / 50; let m = veilMemo.get(c); if (!m) { if (veilMemo.size > 2000) veilMemo.clear(); m = new Map(); veilMemo.set(c, m); }
   let v = m.get(kk);
-  if (v === undefined) { v = mix(mix(c, gray(c), 0.45 * kk), CLOUD.veil, 0.22 * kk); if (m.size > 48) m.clear(); m.set(kk, v); }
+  if (v === undefined) { v = mix(mix(c, gray(c), 0.34 * kk), CLOUD.veil, 0.2 * kk); if (m.size > 48) m.clear(); m.set(kk, v); }
   return v;
 }
 

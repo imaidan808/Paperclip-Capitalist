@@ -24,11 +24,11 @@ function seaLut() {
   for (let i = 0; i < LUT_LEN; i++) { const c = rgb(seaRamp(Math.max(0.3, i / LUT_N))); r[i] = c[0]; g[i] = c[1]; b[i] = c[2]; }
   return { r, g, b };
 }
-/** The wave bands as a table by distance: soft ribbons of lighter water lying along the shore at 2, 4, 6, 8, 10, 12, 14, 17, 20, 24, 28 and 34 tiles (art direction 5.2), each wider the farther out it is. 0..1. */
+/** The wave bands as a table by distance: soft, broad bands of lighter water lying along the shore at 2, 4, 6, 8, 10, 12, 14, 17, 20, 24, 28 and 34 tiles (art direction 5.2), each wider the farther out it is (0.45 tile at the first, a tile and a half at the last: broad enough that no band reads as a contour LINE, which the 0.15 tile ribbons did). 0..1. */
 export const BAND_LEVELS = Object.freeze([2, 4, 6, 8, 10, 12, 14, 17, 20, 24, 28, 34]);
 function bandLut() {
   const t = new Float32Array(LUT_LEN);
-  for (let i = 0; i < LUT_LEN; i++) { const d = i / LUT_N; let v = 0; for (const L of BAND_LEVELS) { const w = 0.13 + 0.012 * L, x = Math.abs(d - L) / w; if (x < 1) v = Math.max(v, 1 - x * x * (3 - 2 * x)); } t[i] = v; }
+  for (let i = 0; i < LUT_LEN; i++) { const d = i / LUT_N; let v = 0; for (const L of BAND_LEVELS) { const w = 0.42 + 0.03 * L, x = Math.abs(d - L) / w; if (x < 1) v = Math.max(v, 1 - x * x * (3 - 2 * x)); } t[i] = v; }
   return t;
 }
 /**
@@ -94,7 +94,7 @@ export function seaPass(buf, W, H, S, ox, oy, sc, skipLand = false) {
       if (d > 0.25) { const tr = clamp((d - 0.3) / aa * 0.5 + 0.5, 0, 1) * clamp((0.58 - d) / aa * 0.5 + 0.5, 0, 1) * smooth(0.5, 0.72, nt) * 0.5; if (tr > fa) fa = tr; }
       if (fa > 0) { r += (foam[0] - r) * fa; g += (foam[1] - g) * fa; b += (foam[2] - b) * fa; }
     }
-    const bv = band[li] * bandAmp; if (bv > 0.02) { const m = bv * 0.16 * nbk; r += (crest[0] - r) * m; g += (crest[1] - g) * m; b += (crest[2] - b) * m; }
+    const bv = band[li] * bandAmp; if (bv > 0.02) { const m = bv * 0.1 * nbk; r += (crest[0] - r) * m; g += (crest[1] - g) * m; b += (crest[2] - b) * m; }
     buf[o] = r; buf[o + 1] = g; buf[o + 2] = b; buf[o + 3] = 255;
   };
   for (let py = 0; py < H; py += 2) {
@@ -108,12 +108,12 @@ export function seaPass(buf, W, H, S, ox, oy, sc, skipLand = false) {
         const w00 = (1 - tx) * (1 - ty), w10 = tx * (1 - ty), w01 = (1 - tx) * ty, w11 = tx * ty;
         let r = nr[k] * w00 + nr[k1] * w10 + nr[k2] * w01 + nr[k3] * w11, g = ng[k] * w00 + ng[k1] * w10 + ng[k2] * w01 + ng[k3] * w11, b = nb[k] * w00 + nb[k1] * w10 + nb[k2] * w01 + nb[k3] * w11;
         const dI = d00 * w00 + d10 * w10 + d01 * w01 + d11 * w11, bv = band[(dI > FAR_D ? FAR_D : dI) * LUT_N | 0] * bandAmp;
-        if (bv > 0.02) { const bx = ox + xc * inv, by = oy + yc * inv, m = bv * 0.16 * smooth(0.42, 0.68, lnoise((bx / 64 + by / 32) * 0.55 + 21, (by / 32 - bx / 64) * 0.55 + 4)); r += (crest[0] - r) * m; g += (crest[1] - g) * m; b += (crest[2] - b) * m; } // soft ribbons of lighter water along the shore, broken by noise
+        if (bv > 0.02) { const bx = ox + xc * inv, by = oy + yc * inv, m = bv * 0.1 * (0.45 + 0.55 * smooth(0.3, 0.7, lnoise((bx / 64 + by / 32) * 0.55 + 21, (by / 32 - bx / 64) * 0.55 + 4))); r += (crest[0] - r) * m; g += (crest[1] - g) * m; b += (crest[2] - b) * m; } // soft ribbons of lighter water along the shore, broken by noise
         let o = (py * W + px) * 4, o2 = (py1 * W + px) * 4; const two = px + 1 < W;
         let q = cellNoise(px, py) * 2.2; buf[o] = r + q; buf[o + 1] = g + q; buf[o + 2] = b + q; buf[o + 3] = 255; q = cellNoise(px + 5, py1 + 3) * 2.2; buf[o2] = r + q; buf[o2 + 1] = g + q; buf[o2 + 2] = b + q; buf[o2 + 3] = 255; // (a level of dither, so the gradient is never a band)
         if (two) { q = cellNoise(px + 1, py + 9) * 2.2; buf[o + 4] = r + q; buf[o + 5] = g + q; buf[o + 6] = b + q; buf[o + 7] = 255; q = cellNoise(px + 8, py1 + 1) * 2.2; buf[o2 + 4] = r + q; buf[o2 + 5] = g + q; buf[o2 + 6] = b + q; buf[o2 + 7] = 255; }
       } else {
-        const bx = ox + xc * inv, by = oy + yc * inv, bgx = bx / 64 + by / 32, bgy = by / 32 - bx / 64, nf = lnoise(bgx * 2.3 + 7, bgy * 2.3), nt = lnoise(bgx * 1.4 + 3, bgy * 1.4 + 11), nbk = smooth(0.42, 0.68, lnoise(bgx * 0.55 + 21, bgy * 0.55 + 4)); // the scallop noise varies over twenty pixels: one sample a block; the bands are broken by noise
+        const bx = ox + xc * inv, by = oy + yc * inv, bgx = bx / 64 + by / 32, bgy = by / 32 - bx / 64, nf = lnoise(bgx * 2.3 + 7, bgy * 2.3), nt = lnoise(bgx * 1.4 + 3, bgy * 1.4 + 11), nbk = 0.45 + 0.55 * smooth(0.3, 0.7, lnoise(bgx * 0.55 + 21, bgy * 0.55 + 4)); // the scallop noise varies over twenty pixels: one sample a block; the bands are broken by noise
         for (let qy = py; qy <= py1; qy++) for (let qx = px; qx <= px + 1 && qx < W; qx++) { if (useIds) { const id = ids[qy * W + qx]; if (id !== 0 && TRI[id * TS + 18] === 1) continue; } const cx = (qx + 0.5) * isk, cy = (qy + 0.5) * isk; exact(qx, qy, (qy * W + qx) * 4, k, k1, k2, k3, cx - ci, cy - cj, nf, nt, nbk); }
       }
     }
@@ -131,7 +131,7 @@ function rockAt(sc, z, xs, wpxLine) {
   const rl = sc.rockLight, rs = sc.rockShade, hl = sc.rockHi, hs = sc.rockHiShade, st = sc.strata;
   let r = rl[0] + (rs[0] - rl[0]) * t, g = rl[1] + (rs[1] - rl[1]) * t, b = rl[2] + (rs[2] - rl[2]) * t;
   if (hi > 0) { const hr = hl[0] + (hs[0] - hl[0]) * t, hg = hl[1] + (hs[1] - hl[1]) * t, hb = hl[2] + (hs[2] - hl[2]) * t; r += (hr - r) * hi; g += (hg - g) * hi; b += (hb - b) * hi; }
-  const grain = cellNoise(Math.floor(xs * 14), Math.floor(z * 0.9)) * 0.1; r += r * grain; g += g * grain; b += b * grain;
+  const grain = (lnoise(xs * 14, z * 0.9) - 0.5) * 0.2; r += r * grain; g += g * grain; b += b * grain;
   if (fr * bt < wpxLine && k > 0) { r += (st[0] - r) * 0.62; g += (st[1] - g) * 0.62; b += (st[2] - b) * 0.62; }
   RK[0] = r; RK[1] = g; RK[2] = b;
 }

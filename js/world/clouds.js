@@ -47,11 +47,19 @@ export const REVEAL_MS = 2600;                       // the engine's (world.js):
 const NOFX = Object.freeze({ dim: 0, fog: 0, lights: 0 });
 const smoothstep = (x, a, b) => smooth((x - a) / (b - a));
 
-/** The shadow of a bank on the land: its footprint swept towards +gx by the length the sun makes of the cloud's height (0.75 x by day, longer at the golden hour, shorter by moon), a soft penumbra round a core, both in the cloud shadow's violet. */
+/**
+ * The shadow of a bank on the land: soft stamps of the cloud shadow's violet under the bank's puffs, swept towards +gx by the length the sun makes of the cloud's height (0.75 x by day, longer at the golden hour, shorter by moon),
+ * each a wide pale ellipse that overlaps its neighbours, so the whole is a soft cloud-shaped dapple and never a plate with an edge (the old shadow was two flat quads of the footprint, which showed through the gaps of the bank as
+ * grey diamonds). At most 48 stamps a bank. `a` is the bank's alpha.
+ */
+export const SHADOW_STAMPS = 48;
 export function paintShadow(ctx, D, bank, a, night, dusk) {
-  const len = shadowLength(night, dusk) * 2.6, o = bank.outline, dx = 32 * len, dy = 16 * len, prev = ctx.globalAlpha, z = D.z - 4, [gx, gy, w, d] = D.fp;
-  ctx.globalAlpha = prev * a * 0.08; quad(ctx, [P(gx - 0.5, gy - 0.5, z), P(gx + w + len * 1.5 + 0.5, gy - 0.5, z), P(gx + w + len * 1.5 + 0.5, gy + d + 0.5, z), P(gx - 0.5, gy + d + 0.5, z)], CLOUD.shadow);
-  ctx.globalAlpha = prev * a * 0.18; quad(ctx, [[o[0][0] + dx, o[0][1] + dy], [o[1][0] + dx, o[1][1] + dy], [o[2][0] + dx, o[2][1] + dy], [o[3][0] + dx, o[3][1] + dy]], CLOUD.shadow);
+  if (!(a > 0.01)) return; // (a bank that has gone has no shadow)
+  const len = shadowLength(night, dusk) * 2.6, dx = 32 * len * 0.55, dy = 16 * len * 0.55, prev = ctx.globalAlpha, z = D.z - 4, puffs = bank.puffs, stride = Math.max(1, Math.ceil(puffs.length / SHADOW_STAMPS));
+  for (let i = 0; i < puffs.length; i += stride) {
+    const p = puffs[i]; if (p.row === 0 && i % 2) continue;
+    stampSoft(ctx, p.x + dx, p.y + p.r * 0.5 + dy + (z - D.z) * 0, p.r * 1.45, p.r * 0.7, a * 0.15, CLOUD.shadow);
+  }
   ctx.globalAlpha = prev;
 }
 

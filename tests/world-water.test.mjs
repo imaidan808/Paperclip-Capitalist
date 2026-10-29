@@ -16,18 +16,18 @@ import '../js/world/groundart.js'; // registers the V2 ground layers
 const coast = coastOf(), RETIRED = ['#121826', '#4b7a4e', '#2f3644', '#1b3b5c', '#cdbb8e'];
 
 test('motifs are hashed from the world: the same cell gives the same motifs, they stay a tile and a half from the coast and out of the bridges\' corridors, and a crest runs along the shore', () => {
-  assert.strictEqual(motifCell(3, -2), motifCell(3, -2)); let crests = 0, curls = 0, glints = 0;
+  assert.strictEqual(motifCell(3, -2), motifCell(3, -2)); let crests = 0, curls = 0, glints = 0, near_n = 0;
   for (let cj = -8; cj < 30; cj++) for (let ci = -8; ci < 40; ci++) {
     const m = motifCell(ci, cj);
     for (let q = 0; q < m.crest.length; q += 6) {
       crests++; const gx = m.crest[q], gy = m.crest[q + 1], d = coast.dist(gx, gy); assert.ok(d >= 1.6, `a crest ${d.toFixed(2)} tiles from the coast`);
       for (const b of LAYOUT.bridges) for (const p of b.pts) assert.ok(Math.hypot(p[0] - gx, p[1] - gy) >= 3.6, 'a crest in a bridge\'s corridor');
       const e = 0.5, nx = coast.dist(gx + e, gy) - coast.dist(gx - e, gy), ny = coast.dist(gx, gy + e) - coast.dist(gx, gy - e), l = Math.hypot(nx, ny) || 1;
-      assert.ok(Math.abs((nx / l) * m.crest[q + 2] + (ny / l) * m.crest[q + 3]) < 0.05, 'the crest is perpendicular to the distance\'s gradient, so it runs along the shore');
+      assert.ok(Math.abs(Math.hypot(m.crest[q + 2], m.crest[q + 3]) - 1) < 1e-4, 'a unit direction'); if (coast.dist(gx, gy) < 8) assert.ok(Math.abs((nx / l) * m.crest[q + 2] + (ny / l) * m.crest[q + 3]) < 0.5, 'near the shore the crest runs along it (within 0.4 radian of the shore\'s line: the lean the hash gives it)'); else near_n++;
     }
     curls += m.curl.length / 3; glints += m.glint.length / 3;
   }
-  assert.ok(crests > 300 && curls > 100 && glints > 300, `${crests} crests, ${curls} curls, ${glints} glints`);
+  assert.ok(crests > 300 && curls > 100 && glints > 300, `${crests} crests, ${curls} curls, ${glints} glints`); assert.ok(near_n > 100, 'out in the open water the crests lie with the wind and not with the coast');
 });
 
 const VIEW = { x0: -700, x1: 700, y0: 1800, y1: 2700 };
@@ -37,7 +37,7 @@ const pointsOf = (r) => r.log.calls.filter((c, i) => c[0] === 'moveTo' && r.log.
 test('motifs are drawn in world space: two views that overlap draw the same motifs at the same world places, so a pan moves them with the island', () => {
   const a = pointsOf(draw(VIEW, 1, 0)), b = pointsOf(draw({ x0: VIEW.x0 + 300, x1: VIEW.x1 + 300, y0: VIEW.y0 + 160, y1: VIEW.y1 + 160 }, 1, 0));
   assert.ok(a.length > 30, `${a.length} points`); const inB = new Set(b); const shared = a.filter((p) => inB.has(p)); assert.ok(shared.length > a.length * 0.3, 'the overlap draws the same points');
-  const sa = new Set(a); for (const p of b) { const [x, y] = p.split(',').map(Number); if (x > VIEW.x0 + 300 && x < VIEW.x1 && y > VIEW.y0 + 160 && y < VIEW.y1) assert.ok(sa.has(p), 'a point inside both views is in both pictures'); }
+  const sa = new Set(a); for (const p of b) { const [x, y] = p.split(',').map(Number); if (x > VIEW.x0 + 300 + 120 && x < VIEW.x1 - 120 && y > VIEW.y0 + 160 + 120 && y < VIEW.y1 - 120) assert.ok(sa.has(p), 'a point inside both views is in both pictures'); }
 });
 
 test('the current is one slow drift for every motif (at most 0.04 tile a second), and under motion off the motifs stand at their resting pose, drawn the same every time', () => {
@@ -96,4 +96,31 @@ test('the swash breathes on the beaches only while motion is on: nothing at rest
   const r = sw(2.5), strokes = r.log.strokes; assert.ok(strokes.length > 8, `${strokes.length} strokes on the beaches in view`); assert.ok(thinnestStroke(r.log) >= 1.5); assert.equal(r.log.depth, 0);
   const alphas = new Set(strokes.map((s) => s.alpha.toFixed(2))); assert.ok(alphas.size > 4, 'the phase differs along the coast');
   const a = sw(2.5).log.strokes.map((s) => s.alpha.toFixed(3)).join(), b = sw(2.5 + 6.5).log.strokes.map((s) => s.alpha.toFixed(3)).join(); assert.equal(a, b, 'the breath has a period of 6.5 seconds');
+});
+
+// ---------------------------------------------------------------------------------------------------------------------------- the redrawn sea (docs/RENDER_PLAN.md, repair round 1)
+import { crestDir, hz, swashStretches } from '../js/world/water.js';
+import { ellKind } from '../js/world/decalart.js';
+
+test('hz: a well-mixed hash in [0, 1) that leaves no rows (the motifs of the sea and the tufts of the meadow stand at hashed places, not on a lattice)', () => {
+  let min = 1, max = 0, sum = 0; const n = 4000; for (let i = 0; i < n; i++) { const v = hz(i % 64, (i / 64) | 0, 7); assert.ok(v >= 0 && v < 1); min = Math.min(min, v); max = Math.max(max, v); sum += v; }
+  assert.ok(min < 0.01 && max > 0.99 && Math.abs(sum / n - 0.5) < 0.03, 'uniform'); assert.equal(hz(3, 4, 5), hz(3, 4, 5)); assert.notEqual(hz(3, 4, 5), hz(4, 3, 5));
+  // no row: the first-difference of consecutive cells is as spread as for independent draws (a lattice leaves neighbours alike)
+  let close = 0; for (let i = 0; i < 2000; i++) if (Math.abs(hz(i, 5, 1) - hz(i + 1, 5, 1)) < 0.02) close++; assert.ok(close < 2000 * 0.06, `${close} neighbours alike`);
+});
+
+test('crestDir: along the shore close in, with the wind far out, always a unit vector, and a hashed lean of at most 0.4 radian either way', () => {
+  const o = [0, 0], dot = (a, b) => a[0] * b[0] + a[1] * b[1];
+  crestDir(2, 1, 0, 0, o); assert.ok(Math.abs(Math.hypot(o[0], o[1]) - 1) < 1e-9); assert.ok(Math.abs(o[0]) < 1e-9 && Math.abs(Math.abs(o[1]) - 1) < 1e-9, 'a shore whose distance grows along gx: the crest runs along gy');
+  const wind = [Math.SQRT1_2, -Math.SQRT1_2]; crestDir(40, 1, 0, 0, o); assert.ok(Math.abs(dot(o, wind)) > 0.999, 'far out the crest lies with the wind: horizontal on the screen');
+  for (const j of [-1, 0.5, 1]) { crestDir(2, 0, 1, j, o); const a = Math.atan2(Math.abs(o[1]), Math.abs(o[0])); assert.ok(a <= 0.4 + 1e-9, 'the lean is at most 0.4 radian'); }
+});
+
+test('swashStretches: the stretches of a coast ring are worked out once (the same object every time), beach only, and every one starts where the ring does', () => {
+  const ring = coast.rings[0], a = swashStretches(ring), b = swashStretches(ring); assert.strictEqual(a, b, 'made once'); assert.ok(a.n > 5, `${a.n} beach stretches`);
+  for (let s = 0; s < a.n; s++) { const i = a.i[s]; assert.ok(a.j[s] > i, 'a stretch has a run of points'); assert.equal(a.x[s], Math.fround((ring[2 * i] - ring[2 * i + 1]) * 32)); assert.ok(a.arc[s] >= 0); if (s) assert.ok(a.arc[s] > a.arc[s - 1], 'the phase runs along the coast'); }
+});
+
+test('ellKind: a blue fill is a puddle, a dark one dirt, a light one a ring; the scrap yard\'s stains are dirt and puddles and never grey ellipses', () => {
+  assert.equal(ellKind('rgba(110,150,190,.32)'), 'puddle'); assert.equal(ellKind('rgba(20,16,12,.3)'), 'dirt'); assert.equal(ellKind('rgba(245,211,106,.18)'), 'ring'); assert.equal(ellKind(''), 'ring'); assert.equal(ellKind('#102030'), 'puddle'); assert.equal(ellKind('#2a2420'), 'dirt');
 });

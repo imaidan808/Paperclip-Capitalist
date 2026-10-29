@@ -135,7 +135,7 @@ export class World {
     return ledger.within();
   }
   start() { if (this.running) return; this.running = true; this.last = performance.now(); this.raf = requestAnimationFrame((t) => this.frame(t)); }
-  stop() { this.running = false; cancelAnimationFrame(this.raf); }
+  stop() { this.running = false; cancelAnimationFrame(this.raf); this.raf = 0; }
   /**
    * The pixel density the canvas is drawn at. The screen's own, to 2; at most SOFT_DPR where the canvas is drawn on the CPU. The quality governor takes a quarter off at
    * its fourth tier, and puts it back only below its second: a picture that tips between two tiers must not reallocate the canvas (and every layer made for it) each time.
@@ -404,24 +404,29 @@ export class World {
   // ------------------------------------------------------------------ frame loop
   frame(ts) {
     if (!this.running) return;
+    this.raf = 0;
+    if (document.hidden) { this.raf = requestAnimationFrame((t) => this.frame(t)); return; } // a hidden tab costs nothing (its callbacks do not run); one stays pending so the loop is alive when it is shown
+    if (!this.vis) return;                       // a canvas that is not on screen costs nothing: the observer that sees it again marks it dirty, which wakes the loop
+    const calm = this.reduced(), G = this.gov;
+    const animating = !calm || this.camTo || this.player.path.length || this.fx.active || this.revealing();
+    if (!animating && !this.dirty) { G.prev = 0; return; } // nothing moves and nothing changed: no frame is asked for at all (a still picture), and the pause is never judged as a slow frame; the setter of `dirty` wakes the loop
     this.raf = requestAnimationFrame((t) => this.frame(t));
-    if (document.hidden || !this.vis) return; // a hidden tab or a canvas that is not on screen costs nothing
     const dt = Math.min(0.1, (ts - this.last) / 1000);
     if (ts - this.last < 1000 / this.fps - 1) return;
-    const t0 = performance.now(), G = this.gov, gap = G.prev && ts - G.prev < 250 ? ts - G.prev : 0; // the gap between two drawn frames (0 after a pause)
+    const t0 = performance.now(), gap = animating && G.prev && ts - G.prev < 250 ? ts - G.prev : 0; // the gap between two CONTINUOUS drawn frames (0 after a pause, and 0 for a frame drawn on demand: the redraws of a still picture are a quarter second apart and are not late)
     this.last = ts; this.t = ts;
-    const calm = this.reduced();
-    const animating = !calm || this.camTo || this.player.path.length || this.fx.active || this.revealing();
-    if (!animating && !this.dirty) return;
     this.update(dt);
     this.draw();
-    this.dirty = false; G.prev = ts;
+    this.dirty = false; G.prev = animating ? ts : 0;
     this.govern(performance.now() - t0, gap);
-    if ((this.ledgerN = (this.ledgerN | 0) + 1) % 90 === 0) { this.ledgerSync(); if (!ledger.within(LEDGER_LIMIT_MB)) this.squeeze(); } // every few seconds: the pixel ledger against its ceiling
+    if ((this.ledgerN = (this.ledgerN | 0) + 1) % 20 === 0) { this.ledgerSync(); if (!ledger.within(LEDGER_LIMIT_MB)) this.squeeze(); } // every few seconds: the pixel ledger against its ceiling
     this.fps = this.slow > 4 ? 15 : this.slow > 2 ? 20 : 30; if (this.moving && this.slow < 3) this.fps = 60; // the 30 fps cap is for a still camera's idle motion: a camera that moves draws every refresh while the machine keeps up (docs/RENDER_PLAN.md section 5, DIAGNOSIS P4)
     this.lite = this.slow > 2;
     if (Math.abs(this.targetDpr() - this.dpr) > 0.01) this.resize();
   }
+  /** Is the picture out of date? Setting it asks the loop for a frame when the loop has gone idle (a still picture asks for none), so every `this.dirty = true` in this file and its mixins is also a wake-up. */
+  get dirty() { return this._dirty; }
+  set dirty(v) { this._dirty = v; if (v && this.running && !this.raf) this.raf = requestAnimationFrame((t) => this.frame(t)); }
   /** Is any district still opening? One that has finished is swept here (fxOf only sweeps the districts in view, and a reveal nobody looks at must not hold the ground cache off). */
   revealing() { let on = false; for (const k in this.reveal) { const r = this.reveal[k]; if (this.t - r.t0 >= r.dur) delete this.reveal[k]; else on = true; } return on; }
   /**

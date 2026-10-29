@@ -3,7 +3,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { recCtx } from './helpers/recctx.mjs';
-import { Grade, hazeAt, airSteps, stepKey, STEPS, HAZE_STEPS, GOLD_STEPS, SHAFT_STEPS, gradeOf } from '../js/world/grade.js';
+import { Grade, LAMP_GAIN, hazeAt, airSteps, stepKey, STEPS, HAZE_STEPS, GOLD_STEPS, SHAFT_STEPS, gradeOf } from '../js/world/grade.js';
 import { tintFor, GRASS, ROAD, SAND, PLASTER, TILE, SEA, GRADE } from '../js/world/palette.js';
 import { luma, rgb } from '../js/world/iso.js';
 import { ledger, releaseAll } from '../js/world/gfx.js';
@@ -90,13 +90,26 @@ test('the V2 grade layer is registered in screen space and one Grade is made for
   const w = { light: { perFrame: 3 } }, g = gradeOf(w); assert.strictEqual(gradeOf(w), g); assert.equal(g.perFrame, 3); assert.notStrictEqual(gradeOf({}), g); assert.ok(releaseAll() >= 0);
 });
 
-test('a lamp under a cloud shines a third as strongly as one in the open (the cloud is in front of it), and every other light is stamped as Lighting.lights stamps it', () => {
+test('a lamp under a cloud shines a third as strongly as one in the open (the cloud is in front of it), and every other light is stamped as Lighting.lights stamps it, LAMP_GAIN stronger, with a bright core', () => {
   installOffscreen();
   try {
     const g = new Grade(), seen = [], ctx = { globalAlpha: 1, globalCompositeOperation: 'source-over', save() {}, restore() {}, drawImage() { seen.push(+this.globalAlpha.toFixed(3)); } };
     const D = DIST[3], inside = [(D.bb[0] + D.bb[2]) / 2, (D.bb[1] + D.bb[3]) / 2], outside = [DIST[1].bb[0] + 200, DIST[1].bb[1] + 400], cam = { x: 0, y: 0, z: 1 };
     const mk = (pt, unlocked) => ({ W: 20000, H: 20000, cam: { x: pt[0], y: pt[1], z: 1 }, unlocked, lights: [{ wx: pt[0], wy: pt[1], r: 40, c: '255,233,168', a: 0.6 }] }); void cam;
     g.lights(ctx, mk(inside, new Set([1])), 160); g.lights(ctx, mk(inside, new Set([1, 3])), 160); g.lights(ctx, mk(outside, new Set([1])), 160);
-    assert.deepEqual(seen, [0.18, 0.6, 0.6], 'under cloud 0.3 of the strength; once its district is open, in full; a light elsewhere in full');
+    const gain = Math.min(1, 0.6 * LAMP_GAIN), halo = (k) => +(gain * k).toFixed(3), core = (k) => +(gain * k * 0.9).toFixed(3);
+    assert.deepEqual(seen, [halo(0.3), core(0.3), halo(1), core(1), halo(1), core(1)], 'under cloud 0.3 of the strength; once its district is open, in full; a light elsewhere in full: each a halo and a bright core');
+  } finally { delete globalThis.OffscreenCanvas; }
+});
+
+test('a released grade holds no canvas (the mix and the air contexts keep their canvases alive, so they are let go too), leaves the set that lists it, and a world that draws again is listed again: three mounts leave no full-window surface behind', () => {
+  const log = installOffscreen(); ledger.clear();
+  try {
+    const main = recCtx(), w = world(), grades = [];
+    for (let mount = 0; mount < 3; mount++) {
+      const g = gradeOf(w); grades.push(g); g.ambient(main.ctx, w); assert.ok(g.airG && g.mixG, 'it holds surfaces while it draws');
+      assert.equal(releaseAll() >= 0, true); assert.equal(g.air, null); assert.equal(g.airG, null, 'the context of the air no longer keeps the canvas alive'); assert.equal(g.mixG, null); assert.equal(ledger.total('light.air'), 0, 'and the ledger agrees');
+    }
+    assert.ok(log.surfaces.length > 0); assert.strictEqual(gradeOf(w), grades[0], 'one grade per world, made again on demand after a release');
   } finally { delete globalThis.OffscreenCanvas; }
 });

@@ -8,11 +8,13 @@ import { ROAD, PAVE, SAND, WOOD, LIGHT, SEA, TOY, GRASS, BLOOM, groundSet, veile
 import { mix, clamp, h2 } from './iso.js';
 import { bakeBase } from './rasterbase.js';
 import { surface } from './gfx.js';
-import { LATTICE } from './noise.js';
+import { LATTICE, hz } from './noise.js';
 import { decalV2 } from './decalart.js';
 import { VEIL } from './terrainfield.js';
 
 const HW = 32, HH = 16;
+/** How far the district's stage stands proud of the ground, in world pixels (a lip along its two near edges). */
+export const PLINTH = 5;
 const px = (gx, gy) => (gx - gy) * HW, py = (gx, gy, z) => (gx + gy) * HH - z;
 const SETS = new Map();
 /** A district's daylight colours (the palette's row for its theme), memoised. */
@@ -37,17 +39,18 @@ const zOn = (gx, gy) => { const { ZV, VW } = LAYOUT, x = clamp(gx, 0, GW - 1e-6)
  */
 function drawTerrain(ctx, view, env, w, a) {
   const ch = a && a.chunk, lod = env.lod ? env.lod.detail : null; if (!ch || !lod || lod[2] < 0.04) return;
-  const T = ch.scene.terr, { land, core } = LAYOUT, VW = LAYOUT.VW;
+  const T = ch.scene.terr, { land, core } = LAYOUT, VW = LAYOUT.VW, ZV0 = LAYOUT.ZV;
   let a0 = 1e9, a1 = -1e9, b0 = 1e9, b1 = -1e9;
   for (const [x, y] of [[view.x0, view.y0], [view.x1, view.y0], [view.x0, view.y1], [view.x1, view.y1]]) for (const zz of [0, 60]) { const u = x / 64 + (y + zz) / 32, v = (y + zz) / 32 - x / 64; a0 = Math.min(a0, u); a1 = Math.max(a1, u); b0 = Math.min(b0, v); b1 = Math.max(b1, v); }
   const per = 0.7 + 1.1 * lod[3]; let budget = 1500; ctx.globalAlpha = lod[2] * 0.9;
   for (let j = Math.max(0, Math.floor(b0)); j <= Math.min(GH - 1, Math.ceil(b1)) && budget > 0; j++) for (let i = Math.max(0, Math.floor(a0)); i <= Math.min(GW - 1, Math.ceil(a1)); i++) {
     const k = j * GW + i; if (!land[k] || core[k]) continue;
     const kv = j * VW + i; if (T.inl[kv] > -1.5 || T.inl[kv + 1] > -1.5 || T.inl[kv + VW] > -1.5 || T.inl[kv + VW + 1] > -1.5) continue; // the beach and the coast keep their own look
-    const n = per + h2(i, j + 4000) * per, cnt = (n | 0) + (h2(i + 91, j) < n - (n | 0) ? 1 : 0);
+    const kz = j * VW + i, hi = Math.max(ZV0[kz], ZV0[kz + 1], ZV0[kz + VW], ZV0[kz + VW + 1]), lo = Math.min(ZV0[kz], ZV0[kz + 1], ZV0[kz + VW], ZV0[kz + VW + 1]); if (hi - lo > 6) continue; // a slope steep enough to be a cliff face is rock: no grass grows up a wall
+    const n = per + hz(i, j, 4000) * per, cnt = (n | 0) + (hz(i, j, 4001) < n - (n | 0) ? 1 : 0);
     for (let q = 0; q < cnt; q++) {
-      const gx = i + h2(i * 7 + q, j * 3 + 17), gy = j + h2(i * 5 + 3, j * 11 + q * 5 + 1); if (LAYOUT.footAt(gx, gy)) continue;
-      const z = zOn(gx, gy), x = px(gx, gy), y = py(gx, gy, z), hh = h2(i * 13 + q, j * 29 + 5);
+      const gx = i + hz(i, j, q * 3 + 1), gy = j + hz(i, j, q * 3 + 2); if (LAYOUT.footAt(gx, gy)) continue;
+      const z = zOn(gx, gy), x = px(gx, gy), y = py(gx, gy, z), hh = hz(i, j, q * 3 + 3);
       if (hh > 0.86 - 0.06 * lod[3]) { // a few flowers in a small cluster
         const c = [BLOOM.white, BLOOM.butter, BLOOM.pink, BLOOM.lilac][(hh * 97 | 0) % 4];
         ctx.fillStyle = c; ctx.beginPath(); for (let f = 0; f < 3; f++) { const fx = x + (h2(i + f, j * 3) - 0.5) * 7, fy = y + (h2(i * 3, j + f) - 0.5) * 3.5; ctx.moveTo(fx + 1.5, fy); ctx.arc(fx, fy, 1.5, 0, 6.2832); } ctx.fill(); budget -= 3; continue;
@@ -74,6 +77,8 @@ const fillQuad = (ctx, x, y, w, d, z, c) => { ctx.beginPath(); ctx.moveTo(px(x, 
 
 // ---------------------------------------------------------------- the districts' blocks
 let GRAIN;
+/** The strongest speck of the grain, of 255 (it was 46: a heavy sandpaper that read as dust at the finest zoom). */
+export const GRAIN_MAX = 15;
 /** A 64 x 64 tile of fine speckle (light and violet-dark specks at a few percent), made once: laid over a block it gives plaza, asphalt and dirt a weathered surface. It is a pattern in world space, so it runs on across chunks. */
 function grainPattern(ctx) {
   if (GRAIN !== undefined) return GRAIN;
@@ -81,7 +86,7 @@ function grainPattern(ctx) {
   try {
     const f = surface(64, 64); if (!f || typeof ImageData !== 'function' || typeof ctx.createPattern !== 'function') return GRAIN;
     const img = f.g.createImageData(64, 64), d = img.data;
-    for (let i = 0; i < 64 * 64; i++) { const h = LATTICE[(i * 7 + 13) & 65535], dark = h < 0.5, a = Math.abs(h - 0.5) * 2; d[i * 4] = dark ? 74 : 255; d[i * 4 + 1] = dark ? 63 : 247; d[i * 4 + 2] = dark ? 136 : 220; d[i * 4 + 3] = Math.round(a * a * 46); }
+    for (let i = 0; i < 64 * 64; i++) { const h = LATTICE[(i * 7 + 13) & 65535], dark = h < 0.5, a = Math.abs(h - 0.5) * 2, a3 = a * a * a; d[i * 4] = dark ? 112 : 255; d[i * 4 + 1] = dark ? 84 : 248; d[i * 4 + 2] = dark ? 120 : 228; d[i * 4 + 3] = Math.round(a3 * GRAIN_MAX); } // (a speck is a cube of its strength, so most are nothing and a few are a speck: the surface is weathered, not sanded)
     f.g.putImageData(img, 0, 0); GRAIN = ctx.createPattern(f.c, 'repeat') || null;
   } catch { GRAIN = null; /* a context without patterns: the blocks are drawn without the grain */ }
   return GRAIN;
@@ -95,8 +100,12 @@ function drawBlocks(ctx, view, env, w, a) {
   for (const id of LAYOUT.ids) {
     const D = DIST[id], b = D.bb; if (!(b[2] > view.x0 && b[0] < view.x1 && b[3] + 200 > view.y0 && b[1] < view.y1 + 200)) continue;
     const S = setOf(D), k = lockedOf(w, id) ? 1 : 0, z = D.z, ox = D.ox, oy = D.oy, v = (c) => V(c, k);
-    // the contact shadow of the stage on the ground round it (three soft steps, towards +gx)
-    for (let i = 3; i >= 1; i--) fillRR(ctx, ox - 0.5 + i * 0.28, oy - 0.5 + i * 0.12, BW + 1 + i * 0.22, BD + 1 + i * 0.3, 1.6, z, LIGHT.shadow, 0.045);
+    // the contact shadow of the stage on the ground round it (nine soft steps, towards +gx)
+    for (let i = 9; i >= 1; i--) fillRR(ctx, ox - 0.5 + i * 0.1, oy - 0.5 + i * 0.045, BW + 1 + i * 0.1, BD + 1 + i * 0.12, 1.6, z, LIGHT.shadow, 0.016); // (nine steps of a tenth of a tile: the three of 0.28 tile were diagonal stripes across the meadow)
+    if (detail[1] > 0.02) { // the lip: the stage stands PLINTH world pixels proud of the ground, two steps of its own tone darker, so a district is a little tray on the island and not a sheet laid on it
+      const dark = v(mix(S.ground, LIGHT.shadow, 0.38)), mid = v(mix(S.ground, LIGHT.shadow, 0.2));
+      fillRR(ctx, ox, oy, BW, BD, 0.9, z - PLINTH, dark, detail[1]); fillRR(ctx, ox, oy, BW, BD, 0.9, z - PLINTH * 0.5, mid, detail[1]);
+    }
     for (const g of D.ground) {
       if (g.kind === 'block') { fillRR(ctx, g.x, g.y, g.w, g.d, 0.9, z, v(S.ground)); fillRR(ctx, g.x + 0.32, g.y + 0.32, g.w - 0.64, g.d - 0.64, 0.7, z, v(S.hi), 0.16); }
       else if (g.kind === 'walk') fillQuad(ctx, g.x, g.y, g.w, g.d, z, v(S.walk));
@@ -124,7 +133,7 @@ function drawBlocks(ctx, view, env, w, a) {
     ctx.fill();
     for (const g of D.ground) if (g.kind === 'pad') { fillRR(ctx, g.x, g.y, g.w, g.d, 0.5, z, v(S.pad)); fillRR(ctx, g.x + 0.12, g.y + 0.12, g.w - 0.24, g.d - 0.24, 0.4, z, v(S.hi), 0.28); fillRR(ctx, g.x + 0.3, g.y + 0.3, g.w - 0.6, g.d - 0.6, 0.3, z, v(S.pad)); }
     const gp = grainPattern(ctx);
-    if (gp) { ctx.fillStyle = gp; ctx.globalAlpha = 0.85; ctx.beginPath(); rrect(ctx, ox, oy, BW, BD, 0.9, z); ctx.fill(); ctx.globalAlpha = 1; } // a weathered surface
+    if (gp) { ctx.fillStyle = gp; ctx.globalAlpha = 1; ctx.beginPath(); rrect(ctx, ox, oy, BW, BD, 0.9, z); ctx.fill(); ctx.globalAlpha = 1; } // a weathered surface
     if (detail[2] > 0.05) { // near and close: two manholes on the avenue
       if (detail[3] > 0.05) for (const mx of [ox + 4.6, ox + 16.8]) { ctx.globalAlpha = detail[3]; ctx.fillStyle = v(ROAD.manhole); ctx.beginPath(); ctx.ellipse(px(mx, oy + 8.5), py(mx, oy + 8.5, z), 0.3 * HW * 1.42, 0.3 * HH * 1.42, 0, 0, 6.2832); ctx.fill(); ctx.fillStyle = v(ROAD.light); ctx.beginPath(); ctx.ellipse(px(mx, oy + 8.5), py(mx, oy + 8.5, z) - 0.6, 0.2 * HW * 1.42, 0.2 * HH * 1.42, 0, 0, 6.2832); ctx.fill(); ctx.globalAlpha = 1; }
     }

@@ -42,7 +42,7 @@ test('the bank is painted from lobes: the puffs the rules hold and, on the outli
     const D = DIST[id], b = bankOf(D, 1), again = bankOf(D, 1); assert.strictEqual(b, again, 'made once');
     assert.deepEqual(b.puffs.map((p) => [p.x, p.y, p.r]), bankPuffs(D.fp, D.z, 1).map((p) => [p.x, p.y, p.r]), 'the puffs are cloudbank.js\'s, unchanged');
     const kids = b.lobes.filter((l) => l.kid), puffs = b.lobes.filter((l) => !l.kid); assert.equal(puffs.length, b.puffs.length); assert.ok(kids.length >= 6, `district ${id}: ${kids.length} cusp lobes`);
-    for (const k of kids) assert.ok(k.r >= 0.38 * b.r0 * 0.85 && k.r <= 0.62 * b.r0 * 1.15, 'a cusp lobe is 0.4 to 0.6 of its puff');
+    for (const k of kids) assert.ok(k.r >= 0.2 * b.r0 * 0.85 * 0.86 && k.r <= 0.62 * b.r0 * 1.15 * 1.26, 'a cusp lobe is a fifth to six tenths of its puff (the small ones are wisps)');
     assert.ok(puffs.some((p) => p.rim) && puffs.some((p) => !p.rim), 'some puffs stand on the outline and some do not'); assert.deepEqual(b.lobes.map((l) => l.row), [...b.lobes.map((l) => l.row)].sort(), 'back to front');
     assert.deepEqual(lobesOf(bankPuffs(D.fp, D.z, 1)).map((l) => [l.x, l.y, l.r]), lobesOf(bankPuffs(D.fp, D.z, 1)).map((l) => [l.x, l.y, l.r]), 'deterministic');
   }
@@ -77,7 +77,7 @@ test('painting a bank: only discs and one path a tier (no gradient, no blur, no 
   const half = run({ zoom: 1, grow: 0.5 }), full = run({ zoom: 1 }); assert.ok(half.log.calls.filter((c) => c[0] === 'arc').every((c, i) => c[3] <= full.log.calls.filter((k) => k[0] === 'arc')[0][3] + 1), 'a half-grown bank has half-size puffs'); assert.equal(run({ zoom: 1, grow: 0 }).log.calls.length, 0, 'a bank that has not begun to grow paints nothing');
   const off = recCtx(); assert.equal(paintBank(off.ctx, b, { tones, view: { x0: 1e7, x1: 1e7 + 5, y0: 0, y1: 5 }, zoom: 1, floor: 0 }), 0, 'a bank out of view paints nothing');
   const sheet = run({ zoom: 1, floor: 0 }); assert.ok(sheet.log.fills.length < near1.log.fills.length, 'the floor is a fill a tier');
-  assert.equal(LOOK.floor > 0 && LOOK.floor < 1, true); assert.equal(SHELLS.length, 4);
+  assert.equal(LOOK.floor > 0 && LOOK.floor < 1, true); assert.equal(SHELLS.length, 3);
 });
 
 test('the dissolve: a lobe waits for the opening to reach it (near the gate first), then lifts and fades over 1.1 s, and the whole bank is gone by the end of REVEAL_MS', () => {
@@ -91,11 +91,14 @@ test('the dissolve: a lobe waits for the opening to reach it (near the gate firs
   const r = recCtx(); r.state.globalAlpha = 1; paintBank(r.ctx, b, { tones, view, zoom: 1, dis: dis(1800) }); near(r.state.globalAlpha, 1);
 });
 
-test('the layers: a puff is three fills; the bank\'s shadow is two quads of the cloud shadow violet and longer at dusk; the padlock is gold and draws nothing when faded out', () => {
+test('the layers: a puff is three fills; the bank\'s shadow is soft stamps of the cloud shadow violet under its puffs, never a flat plate of the footprint, and longer at dusk; the padlock is gold and draws nothing when faded out', () => {
   const p = recCtx(); paintPuff(p.ctx, 10, 10, 20, bankTones(0, 0).tiers[2], 0.8); assert.equal(p.log.fills.length, 3); near(p.state.globalAlpha, 1);
   const D = DIST[3], b = bankOf(D, 1), day = recCtx(), dusk = recCtx(); paintShadow(day.ctx, D, b, 1, 0, 0); paintShadow(dusk.ctx, D, b, 1, 0, 1);
-  assert.equal(day.log.fills.length, 2); for (const f of day.log.fills) assert.equal(f.style, CLOUD.shadow); assert.ok(day.log.fills[0].alpha < day.log.fills[1].alpha, 'a pale penumbra under a core');
-  const xs = (r) => r.log.calls.filter((c) => c[0] === 'lineTo').map((c) => c[1]); assert.ok(Math.max(...xs(dusk)) > Math.max(...xs(day)), 'the golden hour throws it further');
+  const stamps = (r) => r.log.calls.filter((c) => c[0] === 'ellipse'); // (without an OffscreenCanvas a stamp is two flat ellipses: the sprite path is the same stamp, scaled)
+  assert.ok(stamps(day).length >= 20 && stamps(day).length <= 2 * 48, `${stamps(day).length} ellipses: a soft dapple of at most 48 stamps`);
+  assert.equal(day.log.calls.filter((c) => c[0] === 'moveTo' || c[0] === 'lineTo').length, 0, 'no quad: the shadow has no straight edge to show through the gaps of the bank');
+  for (const f of day.log.fills) { const a = +String(f.style).match(/,([\d.]+)\)$/)?.[1]; assert.ok(!(a > 0.2), 'every stamp is faint, the overlap builds the shadow'); }
+  const xs = (r) => stamps(r).map((c) => c[1]); assert.ok(Math.max(...xs(dusk)) > Math.max(...xs(day)), 'the golden hour throws it further');
   const gone = recCtx(); paintShadow(gone.ctx, D, b, 0, 0, 0); assert.ok(gone.log.fills.every((f) => f.alpha === 0), 'a faded bank has no shadow');
   const lock = recCtx(); paintPadlock(lock.ctx, 0, 0, 0, 1); assert.ok(lock.log.fills.some((f) => f.style === '#ffd84d'), 'gold'); assert.ok(lock.log.strokes.every((s) => s.lw >= 3), 'no hairline'); assert.equal(lock.log.depth, 0);
   const none = recCtx(); paintPadlock(none.ctx, 0, 0, 0, 0.01); assert.equal(none.log.calls.length, 0);
@@ -145,4 +148,14 @@ test('the sky\'s own clouds: a cell holds at most one, deterministic, drifting e
   const view = { x0: -4400, x1: 6300, y0: -200, y1: 5200 }, w = { cam: { z: 0.13 }, dusk: 0, env: { t: 30000, night: 0 }, reveal: {}, hits: [], overlay: [], lights: [], dirty: false, toWorld() {}, toScreen() {}, fxOf: () => ({ dim: 0, fog: 0, lights: 0 }), reduced: () => false, t: 30000 };
   const arcs = (z) => { w.cam.z = z; const r = recCtx(); setFlag('clouds', 'v2'); try { runLayer('clouds', w, r.ctx, view, new Set()); } finally { setFlag('clouds', 'legacy'); } return r.log.calls.filter((c) => c[0] === 'arc').length; };
   assert.ok(arcs(0.13) > 20, 'small clouds over the sea at the whole-island view'); assert.equal(arcs(1.2), 0, 'none at the working zoom: the player is looking at the ground'); assert.equal(arcs(0.13), arcs(0.13), 'deterministic');
+});
+
+test('the painted lobes are the bank\'s own and varied: copies of the puffs (the geometry the rules hold is untouched), each its own size within 0.86 to 1.26 of its puff, every one with the chance it stands, the outline mostly and the inside in mounds, and a wisp is a small lobe on a standing puff', () => {
+  for (const id of [1, 3, 11]) {
+    const D = DIST[id], b = bankOf(D, 1), puffs = b.lobes.filter((l) => !l.kid);
+    assert.equal(puffs.length, b.puffs.length); const sizes = new Set(puffs.map((l) => Math.round(l.r * 10))); assert.ok(sizes.size > puffs.length / 3, 'the sizes vary: no two rows alike');
+    for (const l of puffs) { assert.ok(l.dens >= 0 && l.dens <= 1 && l.k2 >= 0 && l.k2 < 1); if (l.rim) assert.ok(l.dens >= 0.79, 'the outline mostly stands'); }
+    const standing = puffs.filter((l) => l.k2 <= Math.max(l.dens, LOOK.solid)).length; assert.ok(standing > puffs.length * 0.35 && standing < puffs.length * 0.95, `${standing} of ${puffs.length} stand: a bank with gaps, never a slab and never nothing`);
+    assert.ok(b.lobes.some((l) => l.wisp), 'small wisps on the edge'); for (const l of b.lobes.filter((q) => q.wisp)) assert.ok(l.r < 0.4 * b.r0 * 1.3, 'a wisp is small');
+  }
 });

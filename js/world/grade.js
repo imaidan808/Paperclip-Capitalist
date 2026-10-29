@@ -13,6 +13,8 @@ import { registerLayer } from './stack.js';
 import { DIST, LAYOUT } from './layout.js';
 import { stampGlow } from './gfx.js';
 
+/** How much stronger than the props ask a light of the night stands (a lamp, a window): the evening glows, it does not just tint. */
+export const LAMP_GAIN = 1.55;
 const SCALE = 4;          // the five sources are a quarter of the window
 const BANDS = 4;          // `air` is stretched in this many bands (one a frame while the light moves)
 export const STEPS = 24;  // the crossfade of day and night, in twenty-fourths
@@ -40,10 +42,10 @@ const lin = (g, x0, y0, x1, y1, stops) => { const gr = g.createLinearGradient(x0
 /** Day: the sun's warm wash from the upper left against a cool one from the lower right, and a vignette of warm violet that is a tenth at the corners and clear over the middle three quarters. */
 function bakeDay(g, w, h) {
   g.clearRect(0, 0, w, h);
-  g.fillStyle = lin(g, 0, 0, w, h, [[0, 'rgba(255,242,189,0.12)'], [0.45, 'rgba(255,242,189,0)'], [1, 'rgba(106,143,224,0.07)']]); g.fillRect(0, 0, w, h);
+  g.fillStyle = lin(g, 0, 0, w, h, [[0, 'rgba(255,244,214,0.05)'], [0.45, 'rgba(255,244,214,0)'], [1, 'rgba(106,143,224,0.04)']]); g.fillRect(0, 0, w, h);
   g.save(); g.translate(w / 2, h * 0.5); g.scale(w / h, 1);
   const R = h * 0.82, gr = g.createRadialGradient(0, 0, R * 0.55, 0, 0, R);
-  gr.addColorStop(0, 'rgba(106,90,156,0)'); gr.addColorStop(0.7, 'rgba(106,90,156,0.04)'); gr.addColorStop(1, 'rgba(106,90,156,0.12)');
+  gr.addColorStop(0, 'rgba(106,90,156,0)'); gr.addColorStop(0.7, 'rgba(106,90,156,0.03)'); gr.addColorStop(1, 'rgba(106,90,156,0.09)');
   g.fillStyle = gr; g.fillRect(-h * 3, -h * 3, h * 6, h * 6); g.restore();
 }
 /** Haze: the air's pale blue-white over the far (upper) part of the picture, thickest at the top and gone by 60% of the height; its strength is the camera's pull back (hazeAt). */
@@ -54,10 +56,10 @@ function bakeHaze(g, w, h) {
 /** Night: a periwinkle moonlit air from the top, a soft lift over everything so the picture is never murky, and a plum vignette at the corners. */
 function bakeNight(g, w, h) {
   g.clearRect(0, 0, w, h);
-  g.fillStyle = lin(g, 0, 0, 0, h, [[0, 'rgba(158,174,252,0.26)'], [0.4, 'rgba(140,156,240,0.12)'], [1, 'rgba(112,120,214,0.06)']]); g.fillRect(0, 0, w, h);
-  g.save(); g.translate(w * 0.7, h * 0.08); g.scale(w / h, 1); const m = g.createRadialGradient(0, 0, 0, 0, 0, h * 0.7); m.addColorStop(0, 'rgba(210,222,255,0.16)'); m.addColorStop(1, 'rgba(210,222,255,0)'); g.fillStyle = m; g.fillRect(-h, -h, h * 2, h * 2); g.restore();
+  g.fillStyle = lin(g, 0, 0, 0, h, [[0, 'rgba(30,38,128,0.34)'], [0.45, 'rgba(26,34,120,0.3)'], [1, 'rgba(22,28,108,0.26)']]); g.fillRect(0, 0, w, h); // a deep indigo air: the night is darker than the day, still blue and never grey
+  g.save(); g.translate(w * 0.7, h * 0.08); g.scale(w / h, 1); const m = g.createRadialGradient(0, 0, 0, 0, 0, h * 0.7); m.addColorStop(0, 'rgba(210,222,255,0.2)'); m.addColorStop(1, 'rgba(210,222,255,0)'); g.fillStyle = m; g.fillRect(-h, -h, h * 2, h * 2); g.restore();
   g.save(); g.translate(w / 2, h * 0.5); g.scale(w / h, 1);
-  const R = h * 0.82, gr = g.createRadialGradient(0, 0, R * 0.5, 0, 0, R); gr.addColorStop(0, 'rgba(60,56,120,0)'); gr.addColorStop(1, 'rgba(60,56,120,0.2)');
+  const R = h * 0.82, gr = g.createRadialGradient(0, 0, R * 0.5, 0, 0, R); gr.addColorStop(0, 'rgba(40,36,110,0)'); gr.addColorStop(1, 'rgba(40,36,110,0.26)');
   g.fillStyle = gr; g.fillRect(-h * 3, -h * 3, h * 6, h * 6); g.restore();
 }
 /** Gold: the evening's rose sky across the top and the low sun's glow in the upper left, over everything a little warm. */
@@ -87,7 +89,7 @@ export class Grade extends Lighting {
     this.stats = { remix: 0, bands: 0 }; this.locked = [];
   }
   release() {
-    super.release(); this.S = { day: null, haze: null, night: null, gold: null, shafts: null, mix: null }; this.sizeKey = ''; this.air = null; this.airKey = ''; this.airAt = -1; this.mixKey = -1; this.band = BANDS;
+    super.release(); this.S = { day: null, haze: null, night: null, gold: null, shafts: null, mix: null }; this.sizeKey = ''; this.air = null; this.airG = null; this.mixG = null; this.airKey = ''; this.airAt = -1; this.mixKey = -1; this.band = BANDS; ALL.delete(this); // (airG and mixG hold their canvases: a released grade must let go of both, and of the set that lists it, or every mount of the world leaks one full-window surface)
     ledger.release('light.air'); ledger.release('light.src');
   }
 
@@ -114,8 +116,10 @@ export class Grade extends Lighting {
       if (n++ >= cap) break;
       const x = l.wx * z + ox, y = l.wy * z + oy, r = l.r * z; if (x < -r || x > W + r || y < -r * 2 || y > H + r * 2) continue;
       let k = 1; for (let i = 0; i < lk.length; i++) { const b = lk[i]; if (l.wx > b[0] && l.wx < b[2] && l.wy > b[1] && l.wy < b[3]) { k = 0.3; break; } }
-      if (l.gy !== undefined) stampGlow(ctx, l.c, x, l.gy * z + oy, r * 1.3, l.a * 0.9 * k, 0.5);
-      if (!stampGlow(ctx, l.c, x, y, r, l.a * k)) { const g = ctx.createRadialGradient(x, y, 1, x, y, r); g.addColorStop(0, `rgba(${l.c},${l.a * k})`); g.addColorStop(1, `rgba(${l.c},0)`); ctx.fillStyle = g; ctx.fillRect(x - r, y - r, r * 2, r * 2); }
+      const a = Math.min(1, l.a * LAMP_GAIN) * k;
+      if (l.gy !== undefined) stampGlow(ctx, l.c, x, l.gy * z + oy, r * 1.3, a * 0.9, 0.5);
+      if (!stampGlow(ctx, l.c, x, y, r * 1.12, a)) { const g = ctx.createRadialGradient(x, y, 1, x, y, r); g.addColorStop(0, `rgba(${l.c},${a})`); g.addColorStop(1, `rgba(${l.c},0)`); ctx.fillStyle = g; ctx.fillRect(x - r, y - r, r * 2, r * 2); }
+      else if (a > 0.2) stampGlow(ctx, l.c, x, y, r * 0.36, Math.min(1, a * 0.9)); // a bright core in the middle of a lamp or a window: the light has a source
     }
     ctx.globalAlpha = 1; ctx.restore();
   }
@@ -173,7 +177,8 @@ export class Grade extends Lighting {
 const GRADES = new WeakMap(), ALL = new Set();
 /** The world's V2 grade (made on first use, one per world). */
 export function gradeOf(w) {
-  let g = GRADES.get(w); if (!g) { g = new Grade(); g.perFrame = w.light?.perFrame ?? Infinity; GRADES.set(w, g); ALL.add(g); }
+  let g = GRADES.get(w); if (!g) { g = new Grade(); g.perFrame = w.light?.perFrame ?? Infinity; GRADES.set(w, g); }
+  ALL.add(g); // (a released grade leaves the set; a world that is attached again and draws takes it back, so the next release finds it)
   return g;
 }
 registerReleaser(() => { for (const g of ALL) g.release(); });

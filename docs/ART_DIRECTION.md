@@ -111,23 +111,23 @@ Format: `hi / light / mid / shade / deep`.
 
 ### 2.4 Districts: the daylight palette for all sixteen
 
-The district's identity hue comes from `palette[0]` in the data (`js/data/tier*.js`); the data stays as it is and is an input only. The daylight ground is the same hue lifted into a bright pastel (hue within 40 degrees of the data hue where the data colour has any saturation; luma at least 0.60; both machine-checked). `walk` is `mix('#f3e6cc', ground, 0.18)`. For every district: `ground.hi = mix(g, '#fffaf0', 0.28)`, `ground.alt = mix(g, '#6a5a9c', 0.12)` (the checker or stripe partner), `pad = mix(g, '#7a6aa8', 0.18)` (the stash yard), road asphalt = `mix(ROAD.mid, g, 0.10)`. `layout.js` stops deriving ground from the data palette's luma and reads this table keyed by theme.
+The district's identity hue comes from `palette[0]` in the data (`js/data/tier*.js`); the data stays as it is and is an input only. The daylight ground is the same hue lifted into a bright pastel (hue within 40 degrees of the data hue where the data colour has any saturation; luma at least 0.60; both machine-checked). `walk` is `mix('#f3e6cc', ground, 0.18)`. For every district: `ground.hi = mix(g, '#fffaf0', 0.28)`, `ground.alt = mix(g, '#6a5a9c', 0.12)` (the checker or stripe partner), `pad = mix(g, '#7a6aa8', 0.1)` (the stash yard), road asphalt = `mix(ROAD.mid, g, 0.10)`. `layout.js` stops deriving ground from the data palette's luma and reads this table keyed by theme.
 
 | # | Theme | District | Data ground / accent | DAY ground | walk | accent | accent 2 | Roofs | Mood |
 |---|---|---|---|---|---|---|---|---|---|
-| 1 | `scrap` | The Scrap Yard | #5b5b1f / #b5651d | `#d4c070` | `#eddfbb` | `#f08a3c` | `#5b8bd0` | rust corrugated | sun-baked junkyard: ochre dirt, rust, cornflower blue, crane yellow |
+| 1 | `scrap` | The Scrap Yard | #5b5b1f / #b5651d | `#ecd29a` | `#f2e2c3` | `#f08a3c` | `#5b8bd0` | rust corrugated | sun-baked junkyard: ochre dirt, rust, cornflower blue, crane yellow |
 | 2 | `market` | Flea Market Row | #c4571a / #ffc93c | `#f5b98a` | `#f3dec0` | `#ffc93c` | `#36b5a8` | striped canvas | bazaar of scalloped awnings: tomato, marigold, teal, pink on peach cobbles |
 | 3 | `campus` | Campus Quad | #9b3b2f / #2f9e5b | `#eab5a4` | `#f1ddc5` | `#38c06f` | `#fff0d2` | slate-blue on brick | red-brick halls round a bright lawn quad: brick, cream trim, emerald |
 | 4 | `pawn` | Pawn District | #0e6f6b / #e3b341 | `#8fdcd0` | `#e1e4cd` | `#f2c14a` | `#ff6fae` | flat, neon trim | mint-teal shopfronts with gold lettering and pink or cyan neon edging |
-| 5 | `metro` | Metro Hub | #3d4f66 / #3b9bff | `#a9bfdc` | `#e6dfcf` | `#4aa6ff` | `#e8f2ff` | flat glass slabs | blue-grey city blocks, glass towers, azure signage |
+| 5 | `metro` | Metro Hub | #3d4f66 / #3b9bff | `#93bde6` | `#e2dfd1` | `#4aa6ff` | `#e8f2ff` | flat glass slabs | blue-grey city blocks, glass towers, azure signage |
 | 6 | `estate` | Estate Sales | #6b2d5c / #f2e3c6 | `#dcb0d2` | `#efdccd` | `#f6e8c8` | `#e8c56a` | plum tile hip roofs | lilac gravel and clipped hedges, cream manors with plum roofs, gold trim |
-| 7 | `auto` | Auto Row | #383b3f / #e63b2e | `#b0b8d6` | `#e7dece` | `#ff5a47` | `#f4f6fb` | white flat and saw | cool concrete forecourts, white showrooms, red banding, rows of toy cars |
-| 8 | `harbor` | Harbor Docks | #14305a / #ff8c1a | `#a3bbd9` | `#e5dece` | `#ff9a2e` | `#2f5fa8` | navy saw-tooth | blue-grey quay, orange gantry and bollards, navy hulls, bright containers |
-| 9 | `industrial` | Industrial Park | #4b5a6a / #f5c518 | `#adc0d8` | `#e6dfce` | `#ffd02e` | `#8aa0b8` | steel saw-tooth | pale steel-blue yards, safety-yellow bands, fat tanks and striped stacks |
-| 10 | `tech` | Tech Corridor | #0a0f1c / #19e3f2 | `#c4d4f0` | `#ebe3d2` | `#22d9ee` | `#9a6bff` | white slabs, cyan strip | pale periwinkle plazas, slate-violet server halls, cyan and violet light |
+| 7 | `auto` | Auto Row | #383b3f / #e63b2e | `#a7b2e2` | `#e5ddd0` | `#ff5a47` | `#f4f6fb` | white flat and saw | cool concrete forecourts, white showrooms, red banding, rows of toy cars |
+| 8 | `harbor` | Harbor Docks | #14305a / #ff8c1a | `#90bfe4` | `#e1dfd0` | `#ff9a2e` | `#2f5fa8` | navy saw-tooth | blue-grey quay, orange gantry and bollards, navy hulls, bright containers |
+| 9 | `industrial` | Industrial Park | #4b5a6a / #f5c518 | `#9dc0dc` | `#e4dfcf` | `#ffd02e` | `#8aa0b8` | steel saw-tooth | pale steel-blue yards, safety-yellow bands, fat tanks and striped stacks |
+| 10 | `tech` | Tech Corridor | #0a0f1c / #19e3f2 | `#82c6de` | `#dfe0cf` | `#22d9ee` | `#9a6bff` | white slabs, cyan strip | pale periwinkle plazas, slate-violet server halls, cyan and violet light |
 | 11 | `farm` | Farmland Co-op | #2e6b34 / #e3b93c | `#9bdc7e` | `#e3e4be` | `#f1c243` | `#d9553f` | barn-red gambrel | fresh green fields in gold and green stripes, red barn, cream silos |
 | 12 | `creative` | Creative Quarter | #9d1c6b / #8f5bff | `#f0b6dc` | `#f2ddcf` | `#9a6bff` | `#ff4fa3` | flat, confetti colour | pink-lilac studio streets, magenta and violet signs, yellow confetti |
-| 13 | `corporate` | Corporate Valley | #2b6cb0 / #cfeaff | `#a8cdf0` | `#e6e2d2` | `#dff2ff` | `#3f8fe0` | flat glass | cerulean plazas, ice-blue and azure glass towers, fountain and flags |
+| 13 | `corporate` | Corporate Valley | #2b6cb0 / #cfeaff | `#93c6f2` | `#e2e0d3` | `#dff2ff` | `#3f8fe0` | flat glass | cerulean plazas, ice-blue and azure glass towers, fountain and flags |
 | 14 | `finance` | Financial District | #1f6b4f / #0c1a24 | `#a8e0c4` | `#e6e5cb` | `#25b97a` | `#e2b441` | slate-green pediment | mint marble plazas, emerald, brass and ink lettering, bull statue |
 | 15 | `realty` | Real Estate Row | #b8553a / #f0d2a8 | `#f1b59a` | `#f3ddc3` | `#f6dcb5` | `#e8795a` | terracotta tile gable | peach and coral terraces, terracotta roofs, sand trim, for-sale signs |
 | 16 | `exchange` | Global Exchange | #c8a02c / #14110a | `#f3dc8e` | `#f3e4c1` | `#f7c948` | `#2b2417` | ink and gold pediment | champagne plazas, gold, ink-brown lettering, flags, the turning globe |
@@ -924,8 +924,8 @@ Allowed: baked offscreen bitmaps in world space; `Path2D` in world pixels; cache
   },
   "districts": {
     "scrap": {
-      "ground": "#d4c070",
-      "walk": "#eddfbb",
+      "ground": "#ecd29a",
+      "walk": "#f2e2c3",
       "accent": "#f08a3c",
       "accent2": "#5b8bd0"
     },
@@ -948,8 +948,8 @@ Allowed: baked offscreen bitmaps in world space; `Path2D` in world pixels; cache
       "accent2": "#ff6fae"
     },
     "metro": {
-      "ground": "#a9bfdc",
-      "walk": "#e6dfcf",
+      "ground": "#93bde6",
+      "walk": "#e2dfd1",
       "accent": "#4aa6ff",
       "accent2": "#e8f2ff"
     },
@@ -960,26 +960,26 @@ Allowed: baked offscreen bitmaps in world space; `Path2D` in world pixels; cache
       "accent2": "#e8c56a"
     },
     "auto": {
-      "ground": "#b0b8d6",
-      "walk": "#e7dece",
+      "ground": "#a7b2e2",
+      "walk": "#e5ddd0",
       "accent": "#ff5a47",
       "accent2": "#f4f6fb"
     },
     "harbor": {
-      "ground": "#a3bbd9",
-      "walk": "#e5dece",
+      "ground": "#90bfe4",
+      "walk": "#e1dfd0",
       "accent": "#ff9a2e",
       "accent2": "#2f5fa8"
     },
     "industrial": {
-      "ground": "#adc0d8",
-      "walk": "#e6dfce",
+      "ground": "#9dc0dc",
+      "walk": "#e4dfcf",
       "accent": "#ffd02e",
       "accent2": "#8aa0b8"
     },
     "tech": {
-      "ground": "#c4d4f0",
-      "walk": "#ebe3d2",
+      "ground": "#82c6de",
+      "walk": "#dfe0cf",
       "accent": "#22d9ee",
       "accent2": "#9a6bff"
     },
@@ -996,8 +996,8 @@ Allowed: baked offscreen bitmaps in world space; `Path2D` in world pixels; cache
       "accent2": "#ff4fa3"
     },
     "corporate": {
-      "ground": "#a8cdf0",
-      "walk": "#e6e2d2",
+      "ground": "#93c6f2",
+      "walk": "#e2e0d3",
       "accent": "#dff2ff",
       "accent2": "#3f8fe0"
     },

@@ -29,7 +29,7 @@ export class ChunkCache {
   /** Every chunk of the other scales that could stand in for scale `a` (within the plan's ratio window), furthest first, into a reused list. */
   standIns(a, sk, now = 0) {
     this.lastA = a; this.now = now; const L = this.list; L.length = 0; const sc = this.scales || (this.scales = new Map()); sc.clear();
-    for (const c of this.map.values()) if (c.sk !== sk && staleRatio(c.a, a)) { L.push(c); sc.set(c.sk, c.a); }
+    for (const c of this.map.values()) if (c.sk !== sk && staleRatio(c.a, a, c.coarse)) { L.push(c); sc.set(c.sk, c.a); }
     L.sort((p, q) => Math.abs(Math.log(q.a / a)) - Math.abs(Math.log(p.a / a)));
     const sl = this.scaleList || (this.scaleList = []); sl.length = 0; for (const [k, a0] of sc) sl.push([k, a0, Math.abs(Math.log(a0 / a))]); sl.sort((p, q) => p[2] - q[2]); // the scales found, nearest first
     return L;
@@ -54,7 +54,7 @@ export class ChunkCache {
    * Bake the chunk (i, j) of render scale `a` at canvas density `dpr`. `draw(g, view)` paints the still ground for the world rectangle `view` into `g`, whose transform is already set for the chunk. Answers the chunk, or
    * null when there is no surface to bake into (no OffscreenCanvas: the caller draws directly). The cost is added to stats.ms.
    */
-  bake(draw, a, i, j, dpr) {
+  bake(draw, a, i, j, dpr, coarse = false) {
     const t0 = typeof performance !== 'undefined' ? performance.now() : 0, ss = superSample(dpr), S = CHUNK_FULL * ss, sk = scaleKey(a);
     const key = chunkKey(sk, i, j), old = this.map.get(key); if (old && !old.stale) return old;
     let work = null;
@@ -91,7 +91,7 @@ export class ChunkCache {
         const own = this.make(CHUNK_PX, CHUNK_PX); if (own) { own.g.drawImage(fin.c, BLEED, BLEED, CHUNK_PX, CHUNK_PX, 0, 0, CHUNK_PX, CHUNK_PX); img = own.c; }
       }
     }
-    const c = { fadeEnd: 0, sk, a, i, j, img, empty, bytes: empty ? 0 : CHUNK_PX * CHUNK_PX * 4, last: ++this.tick, sealed };
+    const c = { fadeEnd: 0, coarse, sk, a, i, j, img, empty, bytes: empty ? 0 : CHUNK_PX * CHUNK_PX * 4, last: ++this.tick, sealed };
     if (old) this.drop(old); // (a stale chunk of the same cell: replaced)
     this.map.set(key, c); this.sync();
     const ms = (typeof performance !== 'undefined' ? performance.now() : 0) - t0; this.stats.baked++; if (sealed) this.stats.sealed++; this.stats.ms += ms; this.stats.lastMs = ms;
@@ -109,7 +109,7 @@ export class ChunkCache {
     for (const c of this.map.values()) {
       n++;
       if (c.sk === sk) continue;
-      const k = staleRatio(c.a, a), s0 = CHUNK_PX / c.a, x0 = c.i * s0, x1 = x0 + s0, y0 = c.j * s0, y1 = y0 + s0;
+      const k = staleRatio(c.a, a, c.coarse), s0 = CHUNK_PX / c.a, x0 = c.i * s0, x1 = x0 + s0, y0 = c.j * s0, y1 = y0 + s0;
       let gone = !k;
       if (!gone) { // off the view's cells (in world pixels, a cell of the exact grid is win.s wide)
         const w = win.s; if (x1 < (win.i0 - 1) * w || x0 > (win.i1 + 2) * w || y1 < (win.j0 - 1) * w || y0 > (win.j1 + 2) * w) gone = true;
