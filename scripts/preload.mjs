@@ -175,14 +175,21 @@ export function walk(root = ROOT, entry = ENTRY) {
   return { modules: [...statics, ...dynamic], static: statics, dynamic, edges };
 }
 
-/** The <link> lines for a page whose script is `entry`: the static graph first (all of it is needed before the entry can run), then the modules loaded by import(). */
+/**
+ * The <link> lines for a page whose script is `entry`: the static graph only (all of it is needed before the entry can run). The modules that only an import() brings in are the later screens' (the game, the Academy, the
+ * dashboard, the debrief): preloading them here would make the title screen wait for them, so the page lists them apart (`lazyManifest`) and js/main.js asks for them once the browser is idle.
+ */
 export function preloadLines(graph, { indent = '  ' } = {}) {
-  return graph.modules.map((m) => `${indent}<link rel="modulepreload" href="${m}">`).join('\n');
+  return graph.static.map((m) => `${indent}<link rel="modulepreload" href="${m}">`).join('\n');
+}
+/** The modules that only import() reaches, as the JSON the staged page carries (`<script type="application/json" id="pc-lazy">`): a flat list of paths, breadth first. */
+export function lazyManifest(graph) {
+  return JSON.stringify(graph.dynamic);
 }
 
 const isMain = () => { try { return process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url); } catch { return false; } };
 if (isMain()) {
   const g = walk();
   if (process.argv.includes('--json')) console.log(JSON.stringify({ static: g.static, dynamic: g.dynamic }, null, 1));
-  else console.log(preloadLines(g));
+  else console.log(preloadLines(g) + (g.dynamic.length ? `\n  <script type="application/json" id="pc-lazy">${lazyManifest(g)}</script>` : ''));
 }

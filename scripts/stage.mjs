@@ -17,7 +17,7 @@ import { tmpdir } from 'node:os';
 import { dirname, extname, join, relative, resolve, sep, posix } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { gzipSync } from 'node:zlib';
-import { ENTRY, ROOT, existsExactly, preloadLines, walk } from './preload.mjs';
+import { ENTRY, ROOT, existsExactly, preloadLines, lazyManifest, walk } from './preload.mjs';
 
 // The address of the published site, spelled exactly as GitHub spells the repository. A Pages address is case-sensitive: https://imaidan808.github.io/Paperclip-Capitalist/ is the site
 // and the same address in lower case is a 404 on the real host. This line is the one source of the spelling: BASE_PATH (where the stand-in below mounts the site), REPO_NAME and
@@ -78,12 +78,16 @@ export function stylesheetsOf(html) {
   return [...html.matchAll(/<link\b[^>]*\brel\s*=\s*["']stylesheet["'][^>]*>/gi)].map((m) => (m[0].match(/\bhref\s*=\s*"([^"]*)"/i) || [])[1]).filter(Boolean);
 }
 
-/** index.html with the preload lines before </head>. Throws if the page already carries some (a staged page is never staged again) or has no head to put them in. */
-export function injectPreload(html, lines) {
+/**
+ * index.html with the preload lines before </head> and, when some modules are only loaded later (`lazy`, a JSON list of paths), the list in a data block that js/main.js reads once the page is idle. Throws if the
+ * page already carries some (a staged page is never staged again) or has no head to put them in.
+ */
+export function injectPreload(html, lines, lazy = '') {
   if (html.includes(MARK) || /rel\s*=\s*["']modulepreload["']/i.test(html)) throw new Error('index.html already has modulepreload links: stage the source page, not a staged one');
   const at = html.indexOf('</head>');
   if (at < 0) throw new Error('index.html has no </head>');
-  return `${html.slice(0, at)}  ${MARK}\n${lines}\n${html.slice(at)}`;
+  const list = lazy && lazy !== '[]' ? `\n  <script type="application/json" id="pc-lazy">${lazy}</script>` : '';
+  return `${html.slice(0, at)}  ${MARK}\n${lines}${list}\n${html.slice(at)}`;
 }
 
 /** sitemap.xml with every <lastmod> set to `day` (YYYY-MM-DD). */
@@ -127,7 +131,7 @@ export function stage({ root = ROOT, out = DEFAULT_OUT, lastmod } = {}) {
   const copy = (p) => { mkdirSync(dirname(join(out, p)), { recursive: true }); cpSync(join(root, p), join(out, p)); };
 
   const preload = preloadLines(graph);
-  put('index.html', injectPreload(html, preload));
+  put('index.html', injectPreload(html, preload, lazyManifest(graph)));
   for (const f of ['404.html', 'robots.txt', 'llms.txt']) copy(f);
   put('sitemap.xml', lastmod ? withLastmod(read(root, 'sitemap.xml'), lastmod) : read(root, 'sitemap.xml'));
   for (const s of new Set(sheets)) {
@@ -199,7 +203,9 @@ export function verify(out) {
       for (const f of inJs) if (!g.modules.includes(f)) bad.push(`${f}: staged but nothing imports it`);
       const html = existsSync(join(out, 'index.html')) ? readFileSync(join(out, 'index.html'), 'utf8') : '';
       const pre = [...html.matchAll(/<link rel="modulepreload" href="([^"]+)">/g)].map((m) => m[1]);
-      if (pre.join('\n') !== g.modules.join('\n')) bad.push('index.html: the modulepreload lines are not the module graph of js/');
+      if (pre.join('\n') !== g.static.join('\n')) bad.push('index.html: the modulepreload lines are not the static module graph of js/ (what the first screen needs)');
+      const lazy = (html.match(/<script type="application\/json" id="pc-lazy">([^<]*)<\/script>/) || [])[1] || '[]';
+      if (lazy !== lazyManifest(g)) bad.push('index.html: the list of modules loaded later (pc-lazy) is not the modules only import() reaches');
     }
   } else bad.push(`${ENTRY} is missing`);
   // the css folder is the sheets index.html links

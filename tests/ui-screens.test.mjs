@@ -419,9 +419,9 @@ test('main.js routes title, draft, Academy, game, debrief and instructor with no
   assert.ok(!/tutorial\.js/.test(main), 'the Level 0 tutorial is not imported');
   assert.ok(!/mountTutorial|PROFILES|tutDone|'tutorial'|Level 0|profile/i.test(main), 'no profiles and no Level 0');
   assert.ok(!STALE.test(main.replace(/'academyDone'/g, '')), `stale term ${STALE.exec(main)?.[0]}`);
-  assert.match(main, /from '\.\/ui\/shell\.js'/);
+  assert.match(main, /import\('\.\/ui\/shell\.js'\)/, 'the game is loaded when it first opens (tests/page-budget.test.mjs)');
   assert.match(main, /from '\.\/ui\/draft\.js'/);
-  assert.match(main, /from '\.\/ui\/academy\.js'/);
+  assert.match(main, /import\('\.\/ui\/academy\.js'\)/);
   assert.match(main, /root\._acts = \{\};/, 'the action table is reset before every screen');
   assert.match(main, /root\.focus\(\{ preventScroll: true \}\)/, 'focus moves to the page on every route change');
   assert.match(main, /kv\.get\('academyDone'\)/, 'the Academy runs on a first visit only');

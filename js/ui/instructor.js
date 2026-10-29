@@ -4,6 +4,7 @@ import { ZONES, ZONE_IDS, ZONE_COUNT, ASSETS, BUYERS, PERKS, PERK_IDS, EVENTS, A
 import { gini, fmtMoney as money, nicheKey, demandOf } from '../market.js';
 import { median } from '../cohort.js';
 import { $, esc, setHTML, delegate, dlg, toast, settingsDialog } from './common.js';
+import { FOLLOW_NOTE, RECOVER_WAIT_SECONDS } from './room-notes.js';
 
 export const PRESETS = [
   ['Demo: 1 virtual day = 30 s', 168 / 30],
@@ -44,12 +45,9 @@ export const bgIcons = (st) => {
 /** How long a student's browser listens to the instructor it already knows after that one has gone quiet, before it believes a different Founder ID that says it is the instructor (js/session.js `_isInstructor`:
  *  60 000 ms; tests/finish-ui.test.mjs plays it). The relay hands the seat to the owner's new connection at once, but the students do not follow at once: for this long they ignore the new ID's clock, shocks and rewinds. */
 export const FOLLOW_SECONDS = 60;
-/** How long a room taken back waits to hear the class's clock before it starts paused (js/session.js `RECOVER_WAIT_MS`, 15 000 ms; tests/finish-repair.test.mjs holds the two together). */
-export const RECOVER_WAIT_SECONDS = 15;
 /** Where the grading rubric is: docs/ is not published with the site, so the dashboard links to the file in the repository. */
 export const KIT_URL = 'https://github.com/imaidan808/Paperclip-Capitalist/blob/main/docs/FACULTY_KIT.md';
-/** The one sentence the dashboard and the title screen both say about that wait. */
-export const FOLLOW_NOTE = `Students follow your new Founder ID once the old one has been silent for about a minute, not at once. Wait that long before you change the pace, deploy a shock or rewind, because until then they ignore it.`;
+export { FOLLOW_NOTE, RECOVER_WAIT_SECONDS }; // (room-notes.js: the title screen says them too, without loading this dashboard)
 
 /** The panel that keeps the room: what runs only here, the recovery code (hidden until asked for, because the dashboard is often on a projector) and what to do with it. Pure; built from the session alone. */
 export function recoveryHTML(S) {

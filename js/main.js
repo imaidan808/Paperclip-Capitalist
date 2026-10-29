@@ -5,11 +5,21 @@ import { Session, Clock, kv, cleanOwner, describeSave } from './session.js';
 import { roomCode, cleanCode } from './net.js';
 import { $, esc, delegate, applySettings, initDialog, settingsDialog, dlg, toast } from './ui/common.js';
 import { mountDraft, replaceRunHTML } from './ui/draft.js';
-import { mountAcademy, claimPendingRewards } from './ui/academy.js';
-import { mountGame } from './ui/shell.js';
-import { mountInstructor, FOLLOW_NOTE, RECOVER_WAIT_SECONDS } from './ui/instructor.js';
-import { mountDebrief } from './ui/debrief.js';
+import { FOLLOW_NOTE, RECOVER_WAIT_SECONDS } from './ui/room-notes.js';
 import { pendingRoom } from './audio/index.js';
+
+// What the title screen and the Draft need is imported above; the screens that need the game (the world and its art, the Academy's sandbox, the instructor's dashboard, the debrief) are loaded the first time
+// they open, with import(): the page used to fetch all 135 modules (952 KB gzipped) before it could show a heading. `LOAD` names each by a literal path (scripts/preload.mjs reads them), and the staged page
+// asks the browser to fetch the rest once it is idle (`prefetchRest`), so Begin does not wait for the network on a connection that has had a minute.
+const LOAD = {
+  academy: () => import('./ui/academy.js'),
+  game: () => import('./ui/shell.js'),
+  instructor: () => import('./ui/instructor.js'),
+  debrief: () => import('./ui/debrief.js'),
+};
+const NEEDS = { academy: ['academy'], game: ['game'], instructor: ['instructor'], debrief: ['debrief'] };
+const mods = {}; // the loaded modules, by LOAD's names
+const load = (name) => (mods[name] ? Promise.resolve(mods[name]) : LOAD[name]().then((m) => (mods[name] = m)));
 
 const S = new Session();
 window.pc = { S }; // handy for classroom demos and debugging in the console
@@ -23,6 +33,10 @@ initDialog();
 const TITLES = { title: 'Paperclip Capitalist', setup: 'Draft your build', academy: 'Academy', game: 'The world', instructor: 'Instructor dashboard', debrief: 'Debrief' };
 
 let route = 0;
+/**
+ * Show a screen. The old one is put away at once; a screen whose modules are not loaded yet waits for them (a short "Loading" note stands in the meantime, read out by a screen reader), and a second `go`
+ * while it waits wins (`route`). A screen that is already loaded opens in this call, as it always did.
+ */
 function go(screen, arg) {
   const mine = ++route;
   try { cleanup?.(); } catch { /* old screen already gone */ }
@@ -30,6 +44,17 @@ function go(screen, arg) {
   root._acts = {};
   dlg.close();
   window.scrollTo(0, 0);
+  const need = (NEEDS[screen] || []).filter((n) => !mods[n]);
+  if (!need.length) return show(screen, arg, mine);
+  root.innerHTML = '<p class="loading mono mute" role="status">Loading&hellip;</p>';
+  return Promise.all(need.map(load)).then(() => { if (mine === route) show(screen, arg, mine); }, (e) => {
+    console.error(e);
+    if (mine !== route) return;
+    toast('That screen could not load. Check the connection and try again: you are back at the title, and your run is saved (use Resume).', 'bad', 7000);
+    go('title');
+  });
+}
+function show(screen, arg, mine) {
   try { screens[screen](arg); } catch (e) {
     console.error(e);
     if (screen === 'title') throw e;
@@ -131,9 +156,11 @@ const screens = {
         const begin = () => {
           if (room) S.joinRoom({ ...room, role: 'student', handle: handle || undefined });
           S.startGame({ perks, specialty, handle });
-          claimPendingRewards(S.game); // lessons played from the title screen wait until there is a run to pay
           pending = null;
-          if (kv.get('academyDone')) enter(); else openAcademy(() => go('game'));
+          // lessons played from the title screen wait until there is a run to pay (kv 'academyRewards', academy-sandbox.js KEYS.rewards): the Academy's module is loaded for that only when something is waiting
+          const next = () => { if (kv.get('academyDone')) enter(); else openAcademy(() => go('game')); };
+          if (!kv.get('academyRewards')) { next(); return; }
+          load('academy').then((m) => { m.claimPendingRewards(S.game); next(); }, () => next());
         };
         // There is one save slot for a founder, so this writes over the run saved for it (a solo run, or a classroom's): say so first, and name it. Keeping it leaves the draft as it was.
         const old = describeSave(kv.get('save'));
@@ -155,13 +182,13 @@ const screens = {
       kv.set('academyDone', true);
       setTimeout(afterAcademy, 0); // never from inside the mount: the router has not stored this screen's cleanup yet
     };
-    const m = mountAcademy(root, S, { onDone: finish, onSkip: finish, only });
+    const m = mods.academy.mountAcademy(root, S, { onDone: finish, onSkip: finish, only });
     cleanup = () => { live = false; if (typeof m === 'function') m(); else m?.destroy?.(); };
   },
 
   game() {
     if (!S.game) return go('title');
-    const m = mountGame(root, S, {
+    const m = mods.game.mountGame(root, S, {
       onDebrief: () => go('debrief'),
       onAcademy: (id) => openAcademy(() => go('game'), typeof id === 'string' ? id : undefined),
       onJoin: (room) => { S.reset(); pending = { room }; go('setup'); },
@@ -171,13 +198,13 @@ const screens = {
   },
 
   instructor() {
-    const m = mountInstructor(root, S, { onClose: () => { S.leaveRoom(); kv.del('instr'); S.mode = 'solo'; go('title'); } });
+    const m = mods.instructor.mountInstructor(root, S, { onClose: () => { S.leaveRoom(); kv.del('instr'); S.mode = 'solo'; go('title'); } });
     cleanup = () => m.destroy();
   },
 
   debrief() {
     if (!S.game) return go('title');
-    const m = mountDebrief(root, S, { onBack: () => go('game') });
+    const m = mods.debrief.mountDebrief(root, S, { onBack: () => go('game') });
     cleanup = () => m.destroy();
   },
 };
@@ -225,6 +252,23 @@ setInterval(() => {
 }, 250);
 document.addEventListener('visibilitychange', () => { if (!document.hidden) S.tick(); else S.save(true); });
 addEventListener('pagehide', () => { S.save(true); kv.tab.release(); });
+
+// ---- the rest of the game, fetched while the browser is idle
+// The staged page (scripts/stage.mjs) lists the modules that only a later screen needs in <script type="application/json" id="pc-lazy">, and does not preload them: the title screen is not held up by
+// the world's art, the Academy or the dashboard. Once the page has loaded and the browser has a moment, they are asked for as low-priority module preloads, a few at a time, so by the time the Draft is done
+// Begin finds them in the module map. Nothing is fetched on a connection that asks for less data, and the source page (npm start) has no list: there every screen is loaded when it opens.
+function prefetchRest() {
+  let list = [];
+  try { list = JSON.parse(document.getElementById('pc-lazy')?.textContent || '[]'); } catch { list = []; }
+  if (!Array.isArray(list) || !list.length || navigator.connection?.saveData) return;
+  const idle = (f) => (window.requestIdleCallback ? window.requestIdleCallback(f, { timeout: 2000 }) : setTimeout(f, 300));
+  const pump = () => {
+    for (const href of list.splice(0, 8)) { const l = document.createElement('link'); l.rel = 'modulepreload'; l.href = href; l.setAttribute('fetchpriority', 'low'); document.head.append(l); }
+    if (list.length) idle(pump);
+  };
+  idle(pump);
+}
+if (document.readyState === 'complete') prefetchRest(); else addEventListener('load', prefetchRest, { once: true });
 
 // ---- boot
 if (S.game == null && kv.get('save') && params.get('resume') === '1') { if (tryResume()) enter(); else go('title'); } else go('title');
