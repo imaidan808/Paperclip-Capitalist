@@ -22,10 +22,23 @@ function farDraw(ctx, p, env) {
   const f = box(ctx, p.gx, p.gy, p.w, p.d, Math.max(4, p.h), body(c, env));
   return p.hot ? hot(f) : null;
 }
+/**
+ * A prop while the zoom crosses FAR_ZOOM (env.farMix between 0 and 1): the far block at full strength until the full prop is half in, then fading out, and the full prop at the mix's own alpha (its sprite is
+ * blitted with it, a direct draw is drawn under it). A small prop (`sm`) has no far version (it is not drawn far out at all): only the full prop fades in. The full prop sees `env.far` false, as it will when the zoom is over.
+ */
+function blendFar(ctx, p, env, m) {
+  const ga = ctx.globalAlpha, was = env.far, mix = env.farMix; let far = null, full = null;
+  if (!p.sm) { ctx.globalAlpha = ga * (m < 0.5 ? 1 : 1 - (m - 0.5) * 2); far = farDraw(ctx, p, env); }
+  env.far = false; env.farMix = 1; ctx.globalAlpha = ga * m;
+  try { full = drawProp(ctx, p, env); } finally { env.far = was; env.farMix = mix; ctx.globalAlpha = ga; }
+  return m > 0.5 ? full : (far ?? full);
+}
 const KEEP_FAR = new Set(['board', 'bank', 'ipo', 'tower', 'crane', 'gantry', 'rentrow', 'exchange', 'hall', 'ship', 'gate', 'lookout']);
 /** Draw one prop: through its sprite when it is a layer and the cache can serve it, else straight onto the scene. env.hz carries the prop's haze for the length of the call. */
 export function drawProp(ctx, p, env) {
-  if (env.far && !KEEP_FAR.has(p.t)) return farDraw(ctx, p, env);
+  const m = env.farMix;
+  if (m > 0.001 && m < 0.999 && !KEEP_FAR.has(p.t)) return blendFar(ctx, p, env, m); // the zoom is crossing FAR_ZOOM: the block fades out as the full prop fades in
+  if (env.far && !KEEP_FAR.has(p.t) && !(m > 0.001)) return farDraw(ctx, p, env);
   const prev = env.hz; env.hz = hazeAt(p.z || 0);
   try {
     const v = propV2(p.t); // the V2 drawer of this kind, when its owner has registered one and flagged it (stack.js): the same path, with its own definition

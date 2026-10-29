@@ -20,7 +20,7 @@ import { clearSprites, setSpriteBudget, trimSprites } from './sprites.js';
 import { FAR_ZOOM, FOG_DIM, money } from './common.js';
 import { runLayer } from './stack.js';
 import { releaseShadows } from './shadow.js';
-import { lodOf } from './lod.js';
+import { lodOf, farMix } from './lod.js';
 import { lookOf, CARS } from './ents-actors.js';
 import { seaMethods } from './sea.js';
 import { groundMethods } from './ground.js';
@@ -74,7 +74,7 @@ export class World {
     this.decals = new Map();                                                                      // per district: its animated decals (water, pulses) drawn live over the cached ground
     this.player = { x: 0, y: 0, path: [], zone: 1, moving: false, dir: 1, speed: 16, placed: false };
     this.zpip = new Uint8Array(3 * (Math.max(...LAYOUT.ids) + 1));                                // per district: pipelines running, paused, starved (for the whole-island pips)
-    this.env = { t: 0, night: 0, wind: 1, dim: 0, tier: 0, surge: false, crunch: false, tariff: false, far: false, lite: false, locked: false, zoff: 0, lights: this.lights };
+    this.env = { t: 0, night: 0, wind: 1, dim: 0, tier: 0, farMix: 1, surge: false, crunch: false, tariff: false, far: false, lite: false, locked: false, zoff: 0, lights: this.lights };
     this.reveal = {}; this.far = false;
     this.running = false; this.dirty = true; this.pointers = new Map(); this.drag = null; this.hitsLabel = {};
     this.bindInput();
@@ -491,7 +491,7 @@ export class World {
   draw() {
     const ctx = this.ctx, { W, H } = this, cam = this.cam, map = this.mode === 'map';
     this.hits.length = 0; this.overlay.length = 0; this.lights.length = 0; this.env.lights = this.lights;
-    this.far = cam.z < FAR_ZOOM; this.env.far = this.far; this.env.lite = this.lite; this.env.tier = this.slow; this.env.lod = lodOf(cam.z, this.lod);
+    this.far = cam.z < FAR_ZOOM; this.env.far = this.far; this.env.lite = this.lite; this.env.tier = this.slow; this.env.lod = lodOf(cam.z, this.lod); this.env.farMix = farMix(cam.z, FAR_ZOOM); // (farMix: the far blocks fade into the full props over the zoom either side of FAR_ZOOM: no pop)
     const view = this.view || (this.view = { x0: 0, x1: 0, y0: 0, y1: 0 });
     view.x0 = cam.x - W / 2 / cam.z - 80; view.x1 = cam.x + W / 2 / cam.z + 80; view.y0 = cam.y - H / 2 / cam.z - 260; view.y1 = cam.y + H / 2 / cam.z + 80;
     runLayer('sea', this, ctx, view); this.toWorld(ctx);
@@ -501,7 +501,7 @@ export class World {
     const seeBox = (b) => b[2] > view.x0 && b[0] < view.x1 && b[3] > view.y0 && b[1] < view.y1;
     for (const id of LAYOUT.ids) {
       const D = DIST[id]; if (!seeBox(D.bb)) continue; vz.add(id);
-      for (const p of D.props) { if (p.sm && (this.far || this.lite && cam.z < 0.6)) continue; if (p.bb[2] > view.x0 && p.bb[0] < view.x1 && p.bb[3] > view.y0 && p.bb[1] < view.y1) this.push(p.key, 's', p); }
+      for (const p of D.props) { if (p.sm && (this.env.farMix <= 0.001 || this.lite && cam.z < 0.6)) continue; if (p.bb[2] > view.x0 && p.bb[0] < view.x1 && p.bb[3] > view.y0 && p.bb[1] < view.y1) this.push(p.key, 's', p); }
     }
     for (const e of this.ents.values()) {
       if (e.type === 'truck') { const [gx, gy] = this.truckPos(e), x = sx(gx, gy), y = sy(gx, gy, zAt(gx, gy)); if (x > view.x0 && x < view.x1 && y > view.y0 && y < view.y1 + 60) this.push(gx + gy + 0.8, 'e', e); }

@@ -7,6 +7,7 @@
 //   node scripts/world-metrics.mjs DIR --unpainted                                                    exit 1 when any shot has a pixel the world never painted (black or transparent: a sea that ends where its bitmap does)
 //
 // Per shot (all in scripts/lib/imagemetrics.mjs, each proved on synthetic pictures by tests/world-metrics.test.mjs):
+//   landSeams the same scan at 4 levels (minDiff) over the land only: the faint crack where two tiles of the ground meet, which the 18-level scan cannot see (the sea's own dashes are not counted: they are the water's)
 //   seams    thin 1 or 2 pixel lines that differ from both neighbours although the neighbours match and stay flat for 4 css px each side (a lone hairline through a plain surface: the gap between two tiles,
 //            a stray outline; stripes, fences and text do not count): segments of at least 10 css px; `perMpx` is the count of seam pixels per megapixel. Drawn outlines on flat ground count too: read it against the picture
 //   coast    staircase along the land and water boundary, per1000 = corners per 1000 css px of coast (diamond tiles: many; a shaped shore: few), meanRun = css px between corners; null when little coast shows
@@ -92,6 +93,10 @@ for (const n of names) {
   const t0 = Date.now(), img = load(dir, n), dsf = dsfOf(man, n, img), mask = waterMask(img), row = { size: [img.width, img.height], dsf, hash: fnv1a(img.data) };
   if (!arg('skip-slow', false)) {
     row.seams = seamScan(img, { minLen: Math.round(10 * dsf), flat: Math.round(4 * dsf) });
+    // the faint seams: a line a few levels off its neighbours between two tiles of the ground (the crack where two anti-aliased edges meet shows 4 to 12 levels of the sea or the fog through), which the 18-level
+    // scan above never sees. Land only (the water's own dashes are the sea's, T1), and only a line that is lone: flat on both sides for 4 css px.
+    const land = new Uint8Array(mask.length); for (let i = 0; i < mask.length; i++) land[i] = mask[i] ? 0 : 1;
+    row.landSeams = seamScan(img, { minLen: Math.round(10 * dsf), flat: Math.round(4 * dsf), minDiff: 4, tolSame: 3, region: land });
     row.coast = coastJag(img, { dsf, water: mask });
     row.water = bandPattern(img, mask, [2, 8, 32].map((s) => Math.round(s * dsf)));
   }
@@ -105,7 +110,7 @@ out({
   summary: {
     shots: names.length, averagedOver: pool.length,
     ...(has ? {
-      seamPixelsPerMpx: mean(pool.map((r) => r.seams.perMpx)), seamSegments: pool.reduce((s, r) => s + r.seams.segments, 0),
+      seamPixelsPerMpx: mean(pool.map((r) => r.seams.perMpx)), seamSegments: pool.reduce((s, r) => s + r.seams.segments, 0), landSeamPixelsPerMpx: mean(pool.map((r) => r.landSeams.perMpx)), landSeamSegments: pool.reduce((s, r) => s + r.landSeams.segments, 0),
       coastJagPer1000: mean(pool.map((r) => r.coast.per1000)), coastMeanRunCss: mean(pool.map((r) => r.coast.meanRun)),
       waterPatternRms: mean(pool.filter((r) => r.water.waterShare > 0.03).map((r) => r.water.total)),
       waterPatternByScale: [0, 1, 2].map((k) => mean(pool.filter((r) => r.water.waterShare > 0.03).map((r) => r.water.scales[k].rms))),
