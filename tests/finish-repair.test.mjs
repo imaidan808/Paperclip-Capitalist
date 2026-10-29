@@ -311,9 +311,9 @@ test('A7: the card is placed again when the drawer scrolls, stays off the drawer
   const src = read('js/ui/academy.js'), css = read('css/ui-academy.css');
   assert.match(src, /ctx\.el\.drawer\.addEventListener\('scroll', later, true\)/); assert.match(src, /ctx\.el\.drawer\.removeEventListener\('scroll', later, true\)/, 'and lets go of it');
   assert.match(src, /for \(const e of body\.querySelectorAll\(CONTROLS\)\) add\(e, 2, 0, false, clip, true\)/, 'the drawer\'s visible controls count, clipped to the body they scroll in');
-  assert.match(src, /const TIERS = \{ full: '', slim: 'slim', compact: 'compact', min: 'compact min' \}/);
+  assert.match(src, /const TIERS = \{ full: '', slim: 'slim', compact: 'compact', min: 'compact min', narrow: 'slim narrow', handle: 'handle' \}/, 'the four sizes are as they were; the narrow card and the handle are the Deal Room\'s (tests/rep-card.test.mjs)');
   assert.deepEqual(A.CARD_SIZES, ['full', 'slim', 'compact', 'min'], 'the slim card is tried first: it keeps the step\'s words');
-  assert.match(src, /const pick = chooseSize\(fit\);/, 'and the runner asks for the size by one pure rule');
+  assert.match(src, /const pick = chooseSize\(fit, \{ handle: foldable && !open, narrow: foldable, words: foldable && open \}\);/, 'and the runner asks for the size by one pure rule');
   assert.match(css, /\.ac-coach\.slim :is\(\.ac-hint, \.ac-look, \.ac-where\) \{ display: none; \}/); assert.doesNotMatch(css, /\.ac-coach\.slim[^{]*\.ac-say/, 'the words stay');
 });
 
@@ -493,7 +493,8 @@ test('round 2 A1: on the lesson-1 page at 640x360 and 640x400 the card stands cl
   assert.ok(n >= 60, `${n} placements held`);
   // the runner asks for the size by this rule, and counts the dock's buttons among the controls it keeps clear
   const src = read('js/ui/academy.js');
-  assert.match(src, /const fit = \(t\) => \{ setTier\(t\);[^}]*target: !!spot && rectsOverlap\(\{ x: p\.x, y: p\.y, w: s\.w, h: s\.h \}, spot\)/, 'fit says whether the card is over the target');
+  assert.match(src, /const fit = \(t\) => \{ setTier\(t\); return fitCard\(t, sizeOf\(\), spot, view, keep\); \};/, 'the runner weighs each size by the one pure rule (fitCard)');
+  { const spot = { x: 100, y: 100, w: 50, h: 50 }, view = { w: 400, h: 400 }, f = A.fitCard('full', { w: 400, h: 400 }, spot, view, []); assert.equal(f.target, true, 'fitCard says whether the card is over the target (a card as big as the view cannot miss it)'); assert.equal(A.fitCard('min', { w: 40, h: 40 }, spot, view, []).target, false, 'and that it is not, where it is clear'); }
   assert.match(src, /for \(const e of ctx\.el\.dock\.querySelectorAll\(CONTROLS\)\) add\(e, 2, 0, false, null, true\)/, 'the dock\'s buttons are controls the card keeps off');
 });
 

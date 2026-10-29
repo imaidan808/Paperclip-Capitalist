@@ -39,6 +39,17 @@
 .ac-coach.slim :is(.ac-hint, .ac-look, .ac-where) { display: none; }
 /* ...and when even that covers the control the keyboard is on, the card is only its head and its two buttons: a card over the cursor hides the one thing a keyboard player needs to see */
 .ac-coach.min :is(.ac-say, .ac-hint, .ac-look, .ac-lost, .ac-where), .ac-coach.min [data-act="ac-restart"] { display: none; }
+/* handle (a Deal Room only, js/ui/academy.js): where even the head-and-two-buttons card would cover a button of the room, the card folds to a one-line tab that opens it. The words stay in the page, clipped and not display: none, so a screen reader still has them. */
+.ac-coach.narrow { width: min(15rem, calc(100vw - 1rem)); } /* slim in a column: a phone on its side has an empty one beside the room's buttons (a Deal Room only) */
+.ac-grab { display: none; }
+.ac-coach.handle { width: max-content; max-width: calc(100vw - 1rem); }
+.ac-coach.handle::before { display: none !important; }
+.ac-coach.handle .ac-coach-in { padding: 0; max-height: none; overflow: visible; }
+.ac-coach.handle :is(.ac-head, .ac-btns) { display: none; }
+.ac-coach.handle :is(.ac-say, .ac-hint, .ac-look, .ac-where, .ac-lost) { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; border: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.ac-coach.handle .ac-grab { display: flex; align-items: center; gap: .45rem; min-height: 2.5rem; padding: .3rem .7rem; border: 0; border-radius: 2px; background: transparent; color: var(--gold); font: inherit; font-size: .74rem; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; white-space: nowrap; cursor: pointer; }
+.ac-coach.handle .ac-grab::after { content: "\25B8"; }
+.ac-coach.handle .ac-grab:hover { background: color-mix(in srgb, var(--gold) 14%, transparent); }
 /* the caret is a turned square that carries the card's own colour at the edge it sits on (the lit top for "below", the plain panel elsewhere), so it joins the frame without a seam */
 .ac-coach::before { content: ""; position: absolute; display: none; width: 12px; height: 12px; background: var(--panel); border: var(--bw) solid var(--gold); transform: rotate(45deg); }
 .ac-coach[data-side="below"]::before { display: block; top: -8px; left: clamp(1.1rem, var(--ac-ax, 50%), calc(100% - 1.5rem)); margin-left: -6px; border-right: 0; border-bottom: 0; background: var(--ac-top); }

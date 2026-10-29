@@ -28,7 +28,7 @@ import { ZONES } from '../config.js';
 import { Progress, CODEX_BY_ID } from '../meta/progress.js';
 import { ACADEMY as MISSIONS } from '../meta/academy.js';
 import {
-  parseAnchor, resolveAnchor, hitMatches, placeCard, chooseSize, coverScore, rectsOverlap, coverOf, pointInRect, startRun, feedRun, coachFor, satisfiedNow, shortSay, hintDue,
+  parseAnchor, resolveAnchor, hitMatches, keepClear, fitCard, chooseSize, coverScore, rectsOverlap, coverOf, pointInRect, startRun, feedRun, coachFor, satisfiedNow, shortSay, hintDue,
   newTeach, pickTeach, revealTeach, teachDone, teachFirstTry, readAcademy, markMission, nextIndex, rewardPlan, applyRewards,
   readPending, addPending, claimPending, codexSeed, emptyMeta, makeSandboxSession, featuresFor, KEYS,
   newLookout, hireSnapshot, hireCoach, unseenNote,
@@ -68,6 +68,7 @@ export function introHTML(m, { index, total, st, concept, replay, missions = [] 
  * The coach card's inside. o = { showMe, hint (bool), confirm (bool), manual (bool), title, where, framed, exists, clipped }. The runner says what the player can really see: `framed` (a gold frame is
  * drawn round the thing), `exists` (the thing is on screen but too big to frame) and `where` (a sentence for a thing that is not on screen yet, or is under a window: academy-sandbox.js,
  * unseenNote). A card made without them (a test, a print) says what it always said. The card never claims a frame there is none of: Show me is honest about it.
+ * `fold` (a Deal Room: the card may fold to a tab) adds the tab's button, `open` (the player opened it) the Fold away button.
  */
 export function coachHTML(c, o = {}) {
   const dots = Array.from({ length: Math.min(12, Math.max(0, c.total | 0)) }, (_, i) => `<i${c.finishing || i <= c.index ? ' class="on"' : ''}></i>`).join('');
@@ -77,11 +78,15 @@ export function coachHTML(c, o = {}) {
       <div class="ac-btns"><button class="btn sm" data-act="ac-skip-yes">Yes, skip it</button><button class="btn sm ghost" data-act="ac-skip-no">Keep going</button></div>`;
   }
   const framed = o.framed !== false;
+  // In a Deal Room the card can fold to a one-line tab (css `handle`) where it would cover the room's buttons: the tab is a button that opens the card, and the open card has Fold away. The words stay in the page for a screen reader.
+  const step = c.finishing ? 'last step' : `step ${c.index + 1} of ${c.total}`;
+  const grab = o.fold ? `<button class="ac-grab" data-act="ac-expand" aria-expanded="false" title="Read the lesson card" aria-label="${esc(`Lesson card, ${step}${o.hint ? ', with a hint' : ''}. Open it to read.`)}">${o.hint ? 'Hint' : c.finishing ? 'Last step' : `Step ${c.index + 1} of ${c.total}`}</button>` : '';
+  const foldBtn = o.fold && o.open ? '<button class="btn sm ghost" data-act="ac-fold" aria-expanded="true">Fold away</button>' : '';
   const look = !o.showMe ? '' : framed ? 'It is the control with the gold frame.' : o.clipped ? 'It is lower down this panel.' : o.exists ? 'It is too big for a frame: it covers most of the screen.' : 'Nothing to frame yet.';
-  return `${head}<p class="ac-say" id="ac-say">${esc(c.say)}</p>
+  return `${head}${grab}<p class="ac-say" id="ac-say">${esc(c.say)}</p>
     ${o.where ? `<p class="ac-where" role="note">${esc(o.where)}</p>` : ''}${look ? `<p class="ac-look" role="note">${esc(look)}</p>` : ''}
     ${o.hint ? `<p class="ac-hint" role="note"><b>Hint:</b> ${esc(c.hint)}</p>` : ''}
-    <div class="ac-btns">${o.manual ? '<button class="btn sm" data-act="ac-continue">Continue</button>' : ''}<button class="btn sm ghost" data-act="ac-showme" aria-pressed="${!!o.showMe}">Show me</button><button class="btn sm ghost" data-act="ac-skip">Skip lesson</button>${o.hint ? '<button class="btn sm ghost" data-act="ac-restart">Restart</button>' : ''}</div>`;
+    <div class="ac-btns">${o.manual ? '<button class="btn sm" data-act="ac-continue">Continue</button>' : ''}<button class="btn sm ghost" data-act="ac-showme" aria-pressed="${!!o.showMe}">Show me</button><button class="btn sm ghost" data-act="ac-skip">Skip lesson</button>${o.hint ? '<button class="btn sm ghost" data-act="ac-restart">Restart</button>' : ''}${foldBtn}</div>`;
 }
 
 /** The coach card when the lesson can no longer be finished (c = { say, hint } from strandedFor): what happened, then Restart as the one primary button. */
@@ -262,7 +267,9 @@ export function mountAcademy(root, S, { onDone, onSkip, only, missions, store = 
         if (r.width > 0 && r.height > 0) out.push({ x: r.x - pad, y: r.y - pad, w: r.width + pad * 2, h: r.height + pad * 2, wt, focus, ctl });
       };
       if (host === dlg.el) {
-        for (const e of host.querySelectorAll(CONTROLS)) add(e, 1);
+        // every button and link of the room (the stage's, the footer's, the title bar's) is a control a tap may be aimed at: `ctl`, so the card is sized and placed to touch the fewest, and cut to the sheet they scroll in (keepClear)
+        const mine = [...host.querySelectorAll(CONTROLS)].filter((e) => e !== cardEl && !cardEl?.contains(e));
+        for (const r of keepClear({ controls: mine.map((e) => e.getBoundingClientRect()), clip: host.getBoundingClientRect() })) out.push({ ...r, focus: false });
         add(host.querySelector('.deal-top'), 1);
         // and what a lesson asks the player to READ in the room: the seller's reply, the stage's result line and the cells of the foot (Cash, Fair price, the quote). They count for less than a control,
         // so the card prefers the empty part of the stage, and stands over them only where nothing is emptier
@@ -304,6 +311,7 @@ export function mountAcademy(root, S, { onDone, onSkip, only, missions, store = 
 
     let placed = null; // where the card stands: { x, y, key } (a crowded dialog keeps a place that is still about as good, see the end of paintCoach)
     let said = ''; // what the card says about a thing it cannot frame (unseenNote), kept for the announcement a new step makes
+    let open = false, openFor = '', foldedSaid = ''; // a Deal Room's card folded to its tab and opened by the player: it stays open until Fold away, a press elsewhere or the next step (openFor); foldedSaid: the step the fold was last announced for
     function paintCoach(force, snap) {
       if (dead || gone || sheet || winPending || run.won) return;
       ensureLayer();
@@ -316,12 +324,14 @@ export function mountAcademy(root, S, { onDone, onSkip, only, missions, store = 
       const exists = !!res && res.via !== 'fallback'; // on screen and reachable, framed or (a whole panel) too big to frame
       const modal = modalKind(), where = c.stranded ? '' : unseenNote(c.anchor, c.wait, { exists, clipped, modal, deal: modal === 'deal' ? dealOf?.() : null });
       said = where;
-      const key = [c.id, c.stranded || c.inDialog ? c.say : '', hintOn, showMe, confirm, !!manual, where, spot ? 1 : 0, exists ? 1 : 0, clipped ? 1 : 0].join('|');
+      const dealRoom = host === dlg.el && modal === 'deal', foldable = dealRoom && !confirm && !c.stranded; // only a Deal Room's card may fold to a tab, and not the one that asks "Skip this lesson?" or says the lesson is closed
+      if (openFor !== c.id || !dealRoom) { open = false; openFor = c.id; }
+      const key = [c.id, c.stranded || c.inDialog ? c.say : '', hintOn, showMe, confirm, !!manual, where, spot ? 1 : 0, exists ? 1 : 0, clipped ? 1 : 0].join('|') + (foldable ? (open ? '|open' : '|fold') : '');
       if (force || key !== lastKey) {
         const news = key !== lastKey && c.inDialog; // the dialog's words are spoken once, when they change
         lastKey = key;
         const had = cardEl.contains(document.activeElement) ? document.activeElement.dataset.act : null;
-        bodyEl.innerHTML = c.stranded && !confirm ? strandedHTML(c, { title: m.title }) : coachHTML(c, { showMe, hint: hintOn, confirm, manual: !!manual, title: m.title, where, framed: !!spot, exists, clipped });
+        bodyEl.innerHTML = c.stranded && !confirm ? strandedHTML(c, { title: m.title }) : coachHTML(c, { showMe, hint: hintOn, confirm, manual: !!manual, title: m.title, where, framed: !!spot, exists, clipped, fold: foldable, open: foldable && open });
         cardEl.classList.toggle('stranded', !!c.stranded);
         if (had) cardEl.querySelector(`[data-act="${had}"]`)?.focus({ preventScroll: true });
         if (news) announce(c.say);
@@ -333,24 +343,30 @@ export function mountAcademy(root, S, { onDone, onSkip, only, missions, store = 
       const over = (p, s) => !!cursor && rectsOverlap({ x: p.x, y: p.y, w: s.w, h: s.h }, cursor);
       const sizeOf = () => { const b = cardEl.getBoundingClientRect(); return { w: b.width || 320, h: b.height || 150 }; };
       if (cursor && over(cardEl.getBoundingClientRect(), sizeOf())) snap = true; // the card is over the cursor now: it leaves at once, whatever moved the cursor or the card
-      const TIERS = { full: '', slim: 'slim', compact: 'compact', min: 'compact min' }; // slim: the words without the notes (a drawer's buttons are in the way); compact: head, hint and buttons; min: head and two buttons
-      const tier = () => (cardEl.classList.contains('min') ? 'min' : cardEl.classList.contains('compact') ? 'compact' : cardEl.classList.contains('slim') ? 'slim' : 'full'), was = tier();
-      const setTier = (t) => { for (const k of ['slim', 'compact', 'min']) cardEl.classList.toggle(k, TIERS[t].split(' ').includes(k)); };
+      const TIERS = { full: '', slim: 'slim', compact: 'compact', min: 'compact min', narrow: 'slim narrow', handle: 'handle' }; // slim: the words without the notes (a drawer's buttons are in the way); narrow: slim in a column 15rem wide; compact: head, hint and buttons; min: head and two buttons; handle: a one-line tab that opens the card (the last three a Deal Room only)
+      const tier = () => (cardEl.classList.contains('handle') ? 'handle' : cardEl.classList.contains('min') ? 'min' : cardEl.classList.contains('compact') ? 'compact' : cardEl.classList.contains('narrow') ? 'narrow' : cardEl.classList.contains('slim') ? 'slim' : 'full'), was = tier();
+      const setTier = (t) => { for (const k of ['slim', 'narrow', 'compact', 'min', 'handle']) cardEl.classList.toggle(k, TIERS[t].split(' ').includes(k)); };
       // The card is placed at its full size first, then at each smaller size while the place it would take is over the control the keyboard is on (a phone on its side, a dialog of wide cards, a window at 200% zoom that
-      // is 640 by 360 CSS pixels with the Bid and Drop out buttons in the middle of it: compact, then min) or over a button of the drawer (a tap that lands on the card is lost, and a drawer on a phone leaves the card
-      // nowhere else to stand: slim, which keeps the step's words). The first size that is clear wins; when none is, the one that hides the cursor least, then the control the step names, then the fewest buttons (`chooseSize`), and the full card when every one hides the cursor. What a smaller card
+      // is 640 by 360 CSS pixels with the Bid and Drop out buttons in the middle of it: compact, then min) or over a button (the drawer's, the dock's and, in a Deal Room, every button of the room: a tap that lands on the card is lost, and a drawer
+      // on a phone leaves the card nowhere else to stand: slim, which keeps the step's words). The first size that is clear wins; when none is, the one that hides the cursor least, then the control the step names, then the fewest buttons (`chooseSize`), and the full card when every one hides the cursor.
+      // In a Deal Room, where even the smallest card covers a button (a phone: the room is buttons from edge to edge), the card folds to its tab, which stands in a gap a card cannot; opened by the player, it is the full card, wherever it covers least. What a smaller card
       // drops was read out when it arrived and is there again, in full, the moment nothing is under the card.
-      const touches = (p, s) => keep.filter((r) => r.ctl && rectsOverlap({ x: p.x, y: p.y, w: s.w, h: s.h }, r)).length;
-      const fit = (t) => { setTier(t); const s = sizeOf(), p = placeCard(spot, s, view, 14, 8, keep); return { t, s, p, cursor: over(p, s), target: !!spot && rectsOverlap({ x: p.x, y: p.y, w: s.w, h: s.h }, spot), n: touches(p, s) }; };
-      const pick = chooseSize(fit);
+      const fit = (t) => { setTier(t); return fitCard(t, sizeOf(), spot, view, keep); };
+      const pick = chooseSize(fit, { handle: foldable && !open, narrow: foldable, words: foldable && open });
       setTier(pick.t);
       let size = pick.s, at = pick.p;
       if (tier() !== was) snap = true;
+      { // the key that was under the player's finger may be hidden by the smaller card now (display: none drops the cursor): it goes to the first button the card still shows, and a fold is said once a step
+        const f = document.activeElement;
+        if (f && f !== cardEl && cardEl.contains(f) && !f.getClientRects().length) [...cardEl.querySelectorAll('button')].find((b) => b.getClientRects().length)?.focus({ preventScroll: true });
+        if (tier() === 'handle' && was !== 'handle' && foldedSaid !== c.id) { foldedSaid = c.id; announce('The lesson card is folded to a tab so it does not cover the buttons. Press C, then Enter, to open it.'); }
+      }
       const here = `${c.id}|${host === dlg.el ? 'dlg' : 'page'}|${Math.round(size.w)}x${Math.round(size.h)}`;
       if (placed && placed.key === here && !snap) { // a crowded place (nothing is clear) does not follow every scroll of the sheet: the old place stays while it covers about what a new one would
         const mine = { x: placed.x, y: placed.y, w: size.w, h: size.h }, now = coverScore({ x: at.x, y: at.y, w: size.w, h: size.h }, spot, keep), was = coverScore(mine, spot, keep);
         const staysOff = !spot || !rectsOverlap(mine, spot) || rectsOverlap({ x: at.x, y: at.y, w: size.w, h: size.h }, spot); // the old place is not kept when it is over the target and the new one is not
-        if (now > 0 && was <= now * 1.25 + 400 && staysOff) at = { ...at, x: placed.x, y: placed.y };
+        const buttons = (b) => keep.filter((r) => r.ctl && rectsOverlap(b, r)).length; // nor when it is over more buttons than the new one
+        if (now > 0 && was <= now * 1.25 + 400 && staysOff && buttons(mine) <= buttons({ x: at.x, y: at.y, w: size.w, h: size.h })) at = { ...at, x: placed.x, y: placed.y };
       }
       placed = { x: at.x, y: at.y, key: here };
       cardEl.dataset.side = at.side;
@@ -423,7 +439,7 @@ export function mountAcademy(root, S, { onDone, onSkip, only, missions, store = 
     document.addEventListener('click', onClick, true);
     const onKey = (e) => { // C jumps to the coach card (in a window that carries it too)
       if ((e.key !== 'c' && e.key !== 'C') || e.metaKey || e.ctrlKey || e.altKey || sheet || (dlg.el.open && !(cardEl && dlg.el.contains(cardEl))) || e.target.matches?.('input, select, textarea, [contenteditable]')) return;
-      cardEl?.querySelector('button')?.focus(); e.preventDefault();
+      [...(cardEl?.querySelectorAll('button') || [])].find((b) => b.getClientRects().length)?.focus(); e.preventDefault(); // the first button the card shows: the tab, when it is folded
     };
     document.addEventListener('keydown', onKey);
     const onResize = () => paintCoach();
@@ -522,6 +538,15 @@ export function mountAcademy(root, S, { onDone, onSkip, only, missions, store = 
       },
     });
 
+    // ---- the Deal Room's folded card: the tab opens it, Fold away (or a press anywhere else in the room) puts it back
+    Object.assign(ctx.acts, {
+      'ac-expand'() { open = true; paintCoach(true); cardEl.querySelector('[data-act="ac-fold"]')?.focus({ preventScroll: true }); },
+      'ac-fold'() { open = false; paintCoach(true); [...cardEl.querySelectorAll('button')].find((b) => b.getClientRects().length)?.focus({ preventScroll: true }); },
+    });
+    const onAway = (e) => { if (open && cardEl && !cardEl.contains(e.target)) { open = false; paintCoach(true); } }; // after the press has been handled by what it landed on (the listener is on the capture phase of `click`, which only reads)
+    document.addEventListener('click', onAway, true);
+    dlg.el.addEventListener('scroll', later, true); // the room's sheet scrolls under the card (scroll does not bubble: capture), so the card looks again at once
+
     // ---- the heartbeat: the sandbox clock, the hint, a card waiting for a dialog to close
     let beats = 0;
     const beat = setInterval(() => {
@@ -541,6 +566,7 @@ export function mountAcademy(root, S, { onDone, onSkip, only, missions, store = 
         gone = true; clearInterval(beat); for (const f of off) f();
         document.removeEventListener('click', onClick, true); document.removeEventListener('keydown', onKey); window.removeEventListener('resize', onResize); document.removeEventListener('focusin', onFocus);
         mo.disconnect(); if (raf) cancelAnimationFrame(raf); ctx.el.drawer.removeEventListener('scroll', later, true);
+        document.removeEventListener('click', onAway, true); dlg.el.removeEventListener('scroll', later, true);
         for (const k of inerted) k.inert = false;
         layer?.remove(); sheet?.remove();
         try { mounted.destroy(); } catch (e) { console.error(e); }
