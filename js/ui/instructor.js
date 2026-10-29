@@ -68,11 +68,13 @@ export function instructorParts(S, U) {
   const stuck = students.filter((s) => s.online !== false && s.autoEligible && (hour - (s.lastAutoHour ?? hour)) / 24 > 3); // (one who is away is not stalled, they are not there)
   const lobby = S.clock.paused && hour < 1;
   const room = S.roomInfo || { code: '', relay: '' };
-  const link = `${typeof location !== 'undefined' ? location.origin + location.pathname : ''}?room=${room.code}${room.relay ? '&relay=' + encodeURIComponent(room.relay) : ''}`;
+  const link = `${typeof location !== 'undefined' ? location.origin + location.pathname : ''}?room=${room.code}${room.relay ? '&relay=' + encodeURIComponent(room.relay) : ''}${U.quietLink ? '&sound=quiet' : ''}`; // `sound=quiet`: students who open it start in Classroom sound (docs/AUDIO.md 7.1); never over a sound setting a student has changed
   const dist = distribution(students), drafted = draftCounts(students), here = U.zone && ZONES[U.zone] ? U.zone : busiest(dist);
 
   const head = `<div class="grow"><h1 tabindex="-1" style="margin:0;font-size:1.3rem">Instructor dashboard</h1><span class="small mute">Room <b class="mono gold" style="font-size:1.2rem">${esc(room.code)}</b> &middot; ${S.room?.kind === 'relay' ? 'relay server (' + esc(S.room.state) + ')' : 'this browser only (open other tabs with ?room=' + esc(room.code) + ')'} &middot; <b>${onlineN}</b> student${onlineN === 1 ? '' : 's'} online${real.length > onlineN ? ' (' + (real.length - onlineN) + ' away)' : ''}${S.demo ? ' + ' + S.demo + ' demo' : ''}</span></div>
-      <button class="btn sm ghost" data-act="copylink" data-link="${esc(link)}">Copy student link</button><button class="btn sm ghost" data-act="settings">Access</button><button class="btn sm danger" data-act="close">Close room</button>`;
+      <button class="btn sm ghost" data-act="copylink" data-link="${esc(link)}">Copy student link</button>
+      <div class="in-quietlink" style="display:grid;gap:.15rem;max-width:12.5rem"><label class="row" style="color:var(--ink);margin:0"><input type="checkbox" data-change="linkquiet" data-fid="lq" aria-describedby="lq-h"${U.quietLink ? ' checked' : ''}> Quiet sound link</label><span class="tiny mute" id="lq-h">Adds ?sound=quiet: students start in Classroom sound.</span></div>
+      <button class="btn sm ghost" data-act="settings">Display and sound</button><button class="btn sm danger" data-act="close">Close room</button>`;
 
   const events = Object.values(EVENTS).map((e) => `<option value="${e.id}" ${U.ev === e.id ? 'selected' : ''}>${esc(e.name)}</option>`).join('') + Object.entries(ALGO_EVENTS).map(([k, e]) => `<option value="${k}" ${U.ev === k ? 'selected' : ''}>${esc(e.name)} (algorithmic)</option>`).join('');
   const c1 = `
@@ -130,7 +132,7 @@ export function gradebookCSV(S) {
 }
 
 export function mountInstructor(root, S, hooks) {
-  const U = { zone: null, bg: 'all', ev: 'fed', when: '0', replace: true };
+  const U = { zone: null, bg: 'all', ev: 'fed', when: '0', replace: true, quietLink: false };
   root.innerHTML = `<header class="panel row" id="ih"></header><div class="gap main"><div class="col" id="icol1"></div><div class="col" id="icol2"></div></div><section class="panel gap" id="igrade"></section>`;
   const el = { head: $('#ih'), c1: $('#icol1'), c2: $('#icol2'), grade: $('#igrade') };
 
@@ -142,6 +144,7 @@ export function mountInstructor(root, S, hooks) {
   const acts = {
     settings() { settingsDialog(); },
     close() { hooks.onClose(); },
+    linkquiet(b) { U.quietLink = !!b.checked; render(); }, // the student link carries ?sound=quiet, or not
     copylink(b) { navigator.clipboard?.writeText(b.dataset.link).then(() => toast('Student link copied.', 'good'), () => toast(b.dataset.link, 'info', 9000)); },
     start() { S.clock.set({ hour: 0, paused: false }); S._sendClock(); render(); toast('Simulation started.', 'good'); },
     pause() { S.setPaused(!S.clock.paused); },

@@ -13,6 +13,8 @@ this file says how it is built and where the engine chose differently from the d
 | `engine.js` | `createAudio()`: the context, buses and chain, voices and stealing, rank-aware cooldowns, token buckets, ducking, the ambient bed, the dial tone, hidden-tab and idle handling |
 | `settings.js` | `settings.audio`: defaults, migration, presets, the one mute switch (`toggleMute`, `speakerState`), the Sound section of the settings dialog, `whyDropped` |
 | `wire.js` | `initAudio()` (page-wide), `wireGame(ctx)` (per game), `wireAudio(ctx)` (both), and the pure tables `eventCalls`, `noteCalls`, `uiCalls`, `dealCalls`, `controlFor` |
+| `dialtone.js` | the repair dial tone as the Deal Room says it (the Dial tone switch, the line under the dial, the one announcement per run): `dialInfo`, `dialEarText`, `dialAnnounceText`, `dialSwitchHTML`, `toggleDial`, `tellOnce`. Pure |
+| `audition.js` | what the audition page tells its listener: `explainDrop` (every reason the engine can count, `budget` told apart by state), `ambientWhy`, `oneShotWhy`, `dialWhy`, `pressBurst`, `describeBurst`, `describeMinute`. No DOM; the engine is a parameter |
 | `instance.js`, `index.js` | the one engine of the page; the public face and `legacySfx` |
 
 Checks: `node --test tests/audio.test.mjs` (no browser; a recording fake context) and `npm run audio` (renders every sound offline in headless Chrome and holds the levels, peaks, DC, clipping,
@@ -43,3 +45,4 @@ lengths, brightness, the mid body, the ladders, the beds and the tier gaps throu
   the dock and the drawer's close button (the click, then the shell's `open-drawer`/`close-drawer` event), and a dialog opened or closed by a press (the click, then the dialog observer). Counted in headless Chrome
   against `audio.stats().played`: each of those admits exactly one voice.
 - Still not wired: the engine's `kind`/`reason`/`delay`/`pid` fields (the wiring matches the note text and treats a pool sale as immediate until they land); `repair.stop` by precision needs the room's own answer.
+- Third round, track X (docs/AUDIO.md Appendix F): `pendingRoom(room)` in `wire.js` applies the Classroom rule from the Draft on (the Draft is before `S.joinRoom`, and `draft.begin` is loud); the Deal Room's repair switch, line and announcement live in `dialtone.js`; `announce()` (`js/ui/common.js`) also writes inside an open modal dialog, because a live region outside it is not in the accessibility tree. `node --test tests/audio-r2x.test.mjs tests/audio-r2x-page.test.mjs` and `node scripts/audio-r2x-check.mjs` (headless Chrome) hold them.

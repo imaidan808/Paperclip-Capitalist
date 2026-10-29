@@ -9,6 +9,7 @@ import { mountAcademy, claimPendingRewards } from './ui/academy.js';
 import { mountGame } from './ui/shell.js';
 import { mountInstructor } from './ui/instructor.js';
 import { mountDebrief } from './ui/debrief.js';
+import { pendingRoom } from './audio/index.js';
 
 const S = new Session();
 window.pc = { S }; // handy for classroom demos and debugging in the console
@@ -115,6 +116,7 @@ const screens = {
 
   // The Background draft: two of twelve, a specialty, an alias. Begin starts the run, then the Academy on a first visit.
   setup() {
+    pendingRoom(pending?.room); // a student with a room code is in the room for sound from the Draft on: Begin is pressed by the whole class at once (docs/AUDIO.md 7.1)
     const m = mountDraft(root, S, {
       room: pending?.room,
       onBack: () => { pending = null; go('title'); },
@@ -127,7 +129,7 @@ const screens = {
         if (kv.get('academyDone')) enter(); else openAcademy(() => go('game'));
       },
     });
-    cleanup = () => m.destroy();
+    cleanup = () => { m.destroy(); if (S.roomInfo?.role !== 'student') pendingRoom(null); }; // leaving the Draft any way but joining (Back) puts the earlier sound settings back
   },
 
   // The Academy mounts its own sandbox; done or skipped, it is not shown again by itself.
