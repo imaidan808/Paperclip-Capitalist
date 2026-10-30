@@ -10,6 +10,7 @@
 import { registerLayer } from './stack.js';
 import { BUYERS } from '../config.js';
 import { zAt } from './layout.js';
+import { leadAlpha } from './common.js';
 import { P, strHash, h2, clamp } from './iso.js';
 import { PEOPLE, TOY, INK, GRASS, BLOOM, WOOD, METAL, personLook } from './palette.js';
 import { mix, shade, hi, shd, disc, rr, bar, poly, stand, stampSoft, FONT } from './toys.js';
@@ -209,7 +210,9 @@ function pulse(g, x, y, k, col) { const r = 14 + 2.4 * k; g.globalAlpha *= 0.28 
 function drawLeadV2(ctx, view, env, w, e) {
   const z = zAt(e.x, e.y), [x, y] = P(e.x, e.y, z), B = BUYERS[e.seg], l = e.lead, hov = w.hover && w.hover.eid === e.id, t = env.t, pl = w.player;
   const V = e.v2 || (e.v2 = { look: lookV2(e), nextHop: 0, hopAt: -1, stopAt: -1, was: false, near: false });
-  if (e.leaving) ctx.globalAlpha = clamp(1 - (w.t - e.leaveAt) / 4200, 0.2, 1);
+  const a = !t ? (e.leaving ? 0 : 1) : leadAlpha(e.born, e.leaving ? e.leaveAt : null, w.t); // (under reduced motion, t is 0: nothing fades, a buyer that is leaving is simply gone)
+  if (a <= 0.004) return;
+  if (a < 1) ctx.globalAlpha = a;
   const zoom = w.cam.z;
   if (env.far) { // a pill in the shirt colour (a golden one when the buyer is in a hurry), 5 by 8 screen pixels
     const pw = clamp(5 / zoom, 5, 11), ph = clamp(8 / zoom, 8, 19);
@@ -231,7 +234,8 @@ function drawLeadV2(ctx, view, env, w, e) {
   }
   if (!e.leaving && l) {
     w.hits.push({ eid: e.id, kind: 'lead', id: e.id.slice(5), zone: e.zone, label: `${B.name}${l.need ? ', urgent' : ''}`, circle: [x, y - 16, 20], lead: l });
-    if (zoom > 0.5 || hov) w.overlay.push({ k: 'bub', n: 6, wx: x, wy: y - 46, draw: (g, px, py, s) => w.leadBubble(g, px, py, s, B, l, hov) });
+    if ((zoom > 0.5 || hov) && a >= 0.6) w.overlay.push({ k: 'bub', n: 6, wx: x, wy: y - 46, // (a buyer that is still coming in shows no price yet)
+       draw: (g, px, py, s) => w.leadBubble(g, px, py, s, B, l, hov) });
   }
 }
 const strHashOf = (id) => strHash(String(id));

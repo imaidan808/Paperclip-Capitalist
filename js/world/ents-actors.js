@@ -1,6 +1,7 @@
 // Things that move: buyers, the player, freight trucks and the traffic on the roads. LEGACY drawers.
 // Owner: T4 PROPS, NATURE AND CHARACTERS (docs/RENDER_PLAN.md).
 import { BUYERS, ZONES } from '../config.js';
+import { leadAlpha } from './common.js';
 import { P, box, shadow, ellipse, person, tone, shade, clamp, strHash } from './iso.js';
 import { LAYOUT, DIST, EDGES, zAt, polyAt, polyInfo } from './layout.js';
 import './vehicles.js'; // the V2 drawers of the truck and car layers register themselves too
@@ -15,7 +16,8 @@ export const actorMethods = {
   drawLead(ctx, e) {
     const z = zAt(e.x, e.y), [x, y] = P(e.x, e.y, z), B = BUYERS[e.seg], l = e.lead, calm = this.reduced();
     const hov = this.hover?.eid === e.id;
-    if (e.leaving) ctx.globalAlpha = clamp(1 - (this.t - e.leaveAt) / 4200, 0.2, 1);
+    const a = calm ? (e.leaving ? 0 : 1) : leadAlpha(e.born, e.leaving ? e.leaveAt : null, this.t); if (a <= 0.004) return;
+    if (a < 1) ctx.globalAlpha = a;
     if (this.far) { ctx.fillStyle = l?.need ? '#ffd36e' : e.look.shirt; ctx.fillRect(x - 2.5, y - 8, 5, 8); ctx.globalAlpha = 1; }
     else {
       if (l?.need && !e.leaving) { const k = 0.5 + 0.5 * Math.sin(this.vt / 300); ellipse(ctx, x, y + 1, 15 + 3 * k, 7 + 1.5 * k, `rgba(255,211,110,${0.28 + 0.2 * k})`); }
@@ -25,7 +27,7 @@ export const actorMethods = {
     void calm;
     if (!e.leaving && l) {
       this.hits.push({ eid: e.id, kind: 'lead', id: e.id.slice(5), zone: e.zone, label: `${B.name}${l.need ? ', urgent' : ''}`, circle: [x, y - 16, 20], lead: l });
-      if (this.cam.z > 0.5 || hov) this.overlay.push({ k: 'bub', n: 6, wx: x, wy: y - 40, draw: (g, px, py, s) => this.leadBubble(g, px, py, s, B, l, hov) });
+      if ((this.cam.z > 0.5 || hov) && a >= 0.6) this.overlay.push({ k: 'bub', n: 6, wx: x, wy: y - 40, draw: (g, px, py, s) => this.leadBubble(g, px, py, s, B, l, hov) });
     }
   },
 
