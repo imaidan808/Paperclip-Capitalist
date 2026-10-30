@@ -1,6 +1,6 @@
 # Paperclip Capitalist
 
-> A free browser game for university entrepreneurship courses. Everyone starts with one paperclip and $0, drafts two of twelve Backgrounds and trades up through sixteen districts over a virtual 90-day run. It teaches arbitrage, working capital, customer acquisition, negotiation and risk. A class shares one economy, so the obvious deal gets crowded and the Creativity Engine punishes the herd.
+> A browser game for university entrepreneurship courses. Everyone starts with one paperclip and $0, drafts two of twelve Backgrounds and trades up through sixteen districts over a virtual 90-day run. It teaches arbitrage, working capital, customer acquisition, negotiation and risk. A class shares one economy, so the obvious deal gets crowded and the Creativity Engine punishes the herd.
 
 The site is a static web app: HTML, CSS and JavaScript modules served as they are, with no build step, no server code and no database. It is one page. The title screen, the Background draft, the Academy, the game world, the instructor dashboard and the debrief are all drawn by JavaScript on that page, so there is nothing else on the site to crawl.
 

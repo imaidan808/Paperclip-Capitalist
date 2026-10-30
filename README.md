@@ -1,6 +1,6 @@
 # Paperclip Capitalist
 
-A free browser game for university entrepreneurship courses. You start with **one paperclip and $0** and trade your way up through sixteen districts over a virtual **90-day** run, learning asset valuation and arbitrage, working capital, customer acquisition cost against lifetime value, negotiation and macro risk by doing them. A class shares one economy, so the obvious deal gets crowded and the Creativity Engine punishes the herd.
+A browser game for university entrepreneurship courses. You start with **one paperclip and $0** and trade your way up through sixteen districts over a virtual **90-day** run, learning asset valuation and arbitrage, working capital, customer acquisition cost against lifetime value, negotiation and macro risk by doing them. A class shares one economy, so the obvious deal gets crowded and the Creativity Engine punishes the herd.
 
 Play it at **https://imaidan808.github.io/Paperclip-Capitalist/**. It is a folder of static files that runs entirely in the browser: no build step, no dependencies, no accounts, no tracking.
 
