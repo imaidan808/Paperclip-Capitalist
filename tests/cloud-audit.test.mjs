@@ -421,3 +421,12 @@ test('X5: an Academy lesson\'s sandbox is a scripted world: a Read there tells t
   assert.equal(fake.xp, Math.round(8 + 22 * 0.8), 'and it is scored on its accuracy, as before');
   assert.equal(fake.lot.readScore, undefined, 'nothing is held back to be told later');
 });
+
+test('M2: a Chrome that dies at once is reported with its exit code and what it wrote, not as "fetch failed" nine seconds later', async () => {
+  const { chromeReady } = await import('../scripts/chrome.mjs');
+  const { spawn } = await import('node:child_process');
+  const dead = spawn(process.execPath, ['-e', "console.error('No usable sandbox! Update your kernel'); process.exit(3)"], { stdio: ['ignore', 'ignore', 'pipe'] });
+  await assert.rejects(() => chromeReady(dead, 9, 20), (e) => { assert.match(e.message, /exited with 3/); assert.match(e.message, /No usable sandbox/); assert.match(e.message, /debugging port 9/); return true; });
+  const quiet = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 4000)'], { stdio: ['ignore', 'ignore', 'pipe'] });
+  try { await assert.rejects(() => chromeReady(quiet, 9, 3), /still running after/); } finally { quiet.kill('SIGKILL'); }
+});

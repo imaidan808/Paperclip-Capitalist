@@ -12,7 +12,7 @@ export const BASE = process.env.DIAG_BASE || 'http://localhost:8090';
 export const CDP = +(process.env.DIAG_CDP || 9333);
 export const OUT = process.env.DIAG_OUT || tmpdir() + '/render-diag';
 mkdirSync(OUT, { recursive: true });
-import { CHROME as CH, chromeArgs } from '../chrome.mjs';
+import { CHROME as CH, chromeArgs, chromeReady } from '../chrome.mjs';
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 async function launchChrome(port, gpu) {
@@ -20,8 +20,8 @@ async function launchChrome(port, gpu) {
   if (!CH) throw new Error('No Chrome or Chromium found: set CHROME_BIN to one (scripts/chrome.mjs)');
   const args = [...chromeArgs(), `--remote-debugging-port=${port}`, `--user-data-dir=${dir}`, 'about:blank'];
   if (gpu) args.splice(args.indexOf('--disable-gpu'), 1);
-  const proc = spawn(CH, args, { stdio: 'ignore' });
-  for (let i = 0; i < 60; i++) { try { const r = await fetch(`http://127.0.0.1:${port}/json/version`); if (r.ok) break; } catch {} await sleep(150); }
+  const proc = spawn(CH, args, { stdio: ['ignore', 'ignore', 'pipe'] });
+  try { await chromeReady(proc, port); } catch (e) { try { proc.kill('SIGKILL'); } catch {} try { rmSync(dir, { recursive: true, force: true }); } catch {} throw e; }
   return { port, pid: proc.pid, close: () => { // the browser's helpers outlive it: end every process of this one profile, by PID (never pkill)
     try { proc.kill('SIGKILL'); } catch {}
     try { for (const id of execSync(`pgrep -f ${dir}`, { encoding: 'utf8' }).split('\n').filter(Boolean)) { try { process.kill(+id, 'SIGKILL'); } catch {} } } catch {}
