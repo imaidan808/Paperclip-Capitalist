@@ -16,6 +16,7 @@ import { Labels } from './labels.js';
 import { surface, softwareRaster, releaseAll, ledger, LEDGER_LIMIT_MB, builds } from './gfx.js';
 import { snapTranslation } from './chunks.js';
 import { SLOW_MS, FAST_MS, GOV_WAIT, GOV_DOWN, BUILD_GRACE, judge } from './governor.js';
+import { veilAt, VEIL_MAX_MS, VEIL_FADE_MS } from './veil.js';
 import { clearSprites, setSpriteBudget, trimSprites } from './sprites.js';
 import { FAR_ZOOM, FOG_DIM, money, leaveEnd } from './common.js';
 import { runLayer } from './stack.js';
@@ -69,7 +70,8 @@ export class World {
     this.fx = new Fx(); this.light = new Lighting(); this.light.perFrame = 1; this.labels = new Labels(); this.rainOn = false;
     this.gov = { cost: 0, bad: 0, good: 0, wait: GOV_WAIT, upAt: -1e9, prev: 0 };            // the quality governor's smoothed state
     this.waterGr = null; this.seaStrip = undefined; this.seaKey = -1;                          // the sea: its colours for the light step, and the one strip it is painted into (made on first use)
-    this.gc = null; this.gcKey = new Float64Array(9); this.gcSeen = 0; this.gcValid = false; // the ground cache: an offscreen copy of the terrain for a still camera
+    this.gc = null; this.gcKey = new Float64Array(9); this.gcSeen = 0; this.gcValid = false; this.gcHoles = 0; this.gcMore = false; // the ground cache: an offscreen copy of the terrain for a still camera; the pieces of the window nothing covers (the sea shows); the ground wants another frame
+    this.veil = null; this.veilHold = false;                                                  // the canvas held clear while its first ground is made (veil.js)
     this.items = []; this.itemPool = []; this.vz = new Set(); this.carList = Array.from({ length: CARS }, () => ({ gx: 0, gy: 0, i: 0, key: 0, horiz: true, fade: 1 }));
     this.vis = true; this.dprDown = false; this.mm = null; this.mmFn = null; this.ledLast = undefined; this.tod = { night: 0, dusk: 0 }; this.unlockHash = 0; this.itemN = 0;                                                         // is the canvas on screen; the last ledger entry the world has seen
     this.lod = lodOf(0.9); this.gnd = { zoom: 1, far: false, mode: 0, see: null };                // the zoom's level-of-detail record (lod.js) and the ground pass's record for its layers (stack.js), both reused every frame
@@ -94,7 +96,7 @@ export class World {
   // ------------------------------------------------------------------ lifecycle
   attach(host) {
     host.replaceChildren(this.cv);
-    this.host = host;
+    this.host = host; this.holdVeil();
     if (!this.ro) { this.ro = new ResizeObserver(() => this.resize()); }
     this.ro.disconnect(); this.ro.observe(host);
     // a canvas that is not on screen (a hidden panel, a covered tab) is not drawn: the loop keeps its place and costs nothing until it is seen again
@@ -138,7 +140,28 @@ export class World {
     return ledger.within();
   }
   start() { if (this.running) return; this.running = true; this.last = performance.now(); this.raf = requestAnimationFrame((t) => this.frame(t)); }
-  stop() { this.running = false; cancelAnimationFrame(this.raf); this.raf = 0; this.zin.cancel(); }
+  stop() { this.running = false; cancelAnimationFrame(this.raf); this.raf = 0; this.zin.cancel(); this.liftVeil(true); } // (a loop that is stopped will not show the canvas by itself)
+
+  // ------------------------------------------------------------------ the veil (veil.js)
+  /** Hold the canvas clear until its ground is made. Not for the rig (it bakes the whole window at once and reads pixels), not where there is nothing to wait for (no offscreen surfaces: the ground is drawn straight). */
+  holdVeil() {
+    this.veil = null; this.veilHold = false;
+    if ((typeof window !== 'undefined' && window.__rig) || typeof OffscreenCanvas !== 'function' || (this.gcValid && this.gc && this.gc.size)) return;
+    const v = this.veil = { on: true, t0: 0 }; this.veilHold = true; this.cv.style.transition = 'none'; this.cv.style.opacity = '0';
+    if (typeof setTimeout === 'function') { const t = setTimeout(() => { if (this.veil === v && v.t0) this.liftVeil(); }, VEIL_MAX_MS + 100); t?.unref?.(); } // (a loop that sleeps under reduced motion or on a hidden panel must not keep the canvas clear)
+  }
+  /** One frame of the veil: its age is counted from the first frame the world draws (the modules and the scene are not the ground's time), and what it asks of the ground is `veilHold` (veil.js). */
+  stepVeil(now) {
+    const v = this.veil; if (!v || !v.on) return; if (!v.t0) v.t0 = now;
+    const what = veilAt(now - v.t0, this.gcValid, this.gcHoles === 0); this.veilHold = what === 'hold';
+    if (what === 'show') this.liftVeil();
+  }
+  /** Bring the canvas in: over VEIL_FADE_MS, or at once (`now`, and under reduced motion). */
+  liftVeil(now = false) {
+    const v = this.veil; if (!v || !v.on) return; v.on = false; this.veilHold = false;
+    const fade = !now && !this.reduced(); this.cv.style.transition = fade ? `opacity ${VEIL_FADE_MS}ms ease-out` : 'none'; this.cv.style.opacity = '1';
+    if (typeof setTimeout === 'function') { const t = setTimeout(() => { if (this.veil === v) { this.cv.style.transition = ''; this.cv.style.opacity = ''; } }, VEIL_FADE_MS + 100); t?.unref?.(); } // (and the inline style goes: a canvas that is shown has nothing of its own to say)
+  }
   /**
    * The pixel density the canvas is drawn at. The screen's own, to 2; at most SOFT_DPR where the canvas is drawn on the CPU. The quality governor takes a quarter off at
    * its fourth tier, and puts it back only below its second: a picture that tips between two tiers must not reallocate the canvas (and every layer made for it) each time.
@@ -435,7 +458,7 @@ export class World {
     if (document.hidden) { this.raf = requestAnimationFrame((t) => this.frame(t)); return; } // a hidden tab costs nothing (its callbacks do not run); one stays pending so the loop is alive when it is shown
     if (!this.vis) return;                       // a canvas that is not on screen costs nothing: the observer that sees it again marks it dirty, which wakes the loop
     const calm = this.reduced(), G = this.gov;
-    const animating = !calm || this.camTo || this.zin.pending || this.player.path.length || this.fx.active || this.revealing();
+    const animating = !calm || this.camTo || this.zin.pending || this.player.path.length || this.fx.active || this.revealing() || this.gcMore || (this.veil && this.veil.on); // (a ground that is not whole, or a canvas held back, keeps the loop going even when nothing moves: under reduced motion it would sleep on a half-made ground)
     if (!animating && !this.dirty) { G.prev = 0; return; } // nothing moves and nothing changed: no frame is asked for at all (a still picture), and the pause is never judged as a slow frame; the setter of `dirty` wakes the loop
     this.raf = requestAnimationFrame((t) => this.frame(t));
     const dt = Math.min(0.1, (ts - this.last) / 1000);
@@ -444,6 +467,7 @@ export class World {
     this.last = ts; this.t = ts;
     this.update(dt);
     this.draw();
+    if (this.veil && this.veil.on) this.stepVeil(ts);
     this.dirty = false; G.prev = animating ? ts : 0; this.repickHover();
     this.govern(performance.now() - t0, gap, builds.n !== b0); // (a frame that filled a cache is not judged: governor.js BUILD_GRACE)
     if ((this.ledgerN = (this.ledgerN | 0) + 1) % 20 === 0) { this.ledgerSync(); if (!ledger.within(LEDGER_LIMIT_MB)) this.squeeze(); } // every few seconds: the pixel ledger against its ceiling

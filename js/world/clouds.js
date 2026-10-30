@@ -123,6 +123,7 @@ function paintSky(ctx, view, env, w, zoom, tones, t, m) {
 
 // ---------------------------------------------------------------- the banks in chunks
 const REST_MS = 90, FADE_MS = 140, BAKE_MS = [12, 7];
+const FORCE_MARGIN = 60; // world px round the reach of a bank whose district changed state: the soft cut (FEATHER, below) it makes in a neighbour's bank reaches about this far
 /**
  * The share of the frame's scale the clouds are baked at, by what the pixel ledger can spare. 1 is the rule: a chunk is baked at the frame's own scale and stamped 1:1 on whole pixels, which is the cheap blit (about
  * 0.7 ms a megapixel on a CPU-drawn canvas; a scaled one is 4). Only when the window's cells at 1 would not fit in what the ledger has left under its ceiling do the clouds fall back, to 0.75 (stamped 4/3 larger: a chunk
@@ -147,7 +148,7 @@ registerReleaser(() => { for (const s of STORES) s.release(); SKY_SPRITES.clear(
 const stateOf = (w) => {
   let st = ST.get(w);
   if (!st) {
-    st = { store: null, banks: [], tones: null, night: 0, dusk: 0, a: 0, at: -1e9, mask: -1, cells: {}, miss: [], win: { x0: 0, x1: 0, y0: 0, y1: 0 }, seen: 0, ticks: 0, q: 1, m: { a: 1, e: 0, f: 0 }, live: [], want: [], open: [] };
+    st = { store: null, banks: [], tones: null, night: 0, dusk: 0, a: 0, at: -1e9, mask: -1, cells: {}, miss: [], win: { x0: 0, x1: 0, y0: 0, y1: 0 }, seen: 0, ticks: 0, q: 1, m: { a: 1, e: 0, f: 0 }, live: [], want: [], open: [], force: [], part: [], holes: 0 };
     st.draw = (g, a, e, f, view) => { // what a chunk is painted with: the shadows of every bank that reaches it, then the banks
       const { banks, tones, night, dusk } = st;
       g.setTransform(a, 0, 0, a, e, f);
@@ -180,8 +181,10 @@ export function clearOpen(g, open) {
   }
   g.restore();
 }
-/** The chunk store's counters for the rig and the tests: { baked, ms, lastMs, hits, stale, faded, dropped, size, bytes, ratio } (null before the first bank is baked). */
-export function cloudStats(w) { const st = ST.get(w); return st && st.store ? { ...st.store.stats, size: st.store.size, bytes: st.store.bytes, ratio: st.q } : null; }
+/** The chunk store's counters for the rig and the tests: { baked, ms, lastMs, hits, stale, faded, dropped, size, bytes, ratio, holes } (null before the first bank is baked; `holes`: the pieces of the banks that nothing covered in the last frame). */
+export function cloudStats(w) { const st = ST.get(w); return st && st.store ? { ...st.store.stats, size: st.store.size, bytes: st.store.bytes, ratio: st.q, holes: st.holes | 0 } : null; }
+/** The world's cloud chunk store (the rig and the tests read it; null before the first bank is baked). */
+export function cloudStore(w) { const st = ST.get(w); return st && st.store ? st.store : null; }
 /** Give some of the clouds' chunks back when the pixel ledger is over its ceiling (World.squeeze): the stale ones and the ones outside the window first, down to 70% of what is held; the visible exact ones are never dropped. Answers how many went. */
 export function shrinkClouds(w) { const st = ST.get(w); if (!st || !st.store || !st.store.size) return 0; return st.store.shrink(Math.max(8, Math.ceil(st.store.size * 0.7)), st.cells, st.a); }
 
@@ -210,31 +213,43 @@ function stampBanks(ctx, w, st, ids, tones, ps) {
   const kk = a / ac, D = Math.abs(CHUNK_PX * kk - Math.round(CHUNK_PX * kk)) < 1e-3 ? Math.round(CHUNK_PX * kk) : CHUNK_PX * kk; // a chunk's side on the frame: 384, or exactly 512 at the ratio 3/4
   st.tones = tones; st.night = (tones.key & 15) / 8; st.dusk = (tones.key >> 4) / 8;
   const open = st.open; open.length = 0; if (ps > 1 && w.unlocked) for (const id of LAYOUT.ids) if (w.unlocked.has(id)) open.push(openPoly(DIST[id]));
-  const mask = lockedMask(w.unlocked), ver = mask | (tones.key << 17) | (((dpr * 4) | 0) << 25), changed = store.markStale(ver), force = changed && mask !== st.mask; st.mask = mask;
+  const mask = lockedMask(w.unlocked), ver = mask | (tones.key << 17) | (((dpr * 4) | 0) << 25), changed = store.markStale(ver), was = st.mask; st.mask = mask;
+  // The cells that a district opening must have made again in this frame: those its bank (and the soft cut it makes in its neighbours', the feather) can reach, so the dissolve never plays over a bank that is still in the chunks. The
+  // other cells are stale too (the light of the hour changed their key) but are the same picture until the next few frames replace them, one chunk at a time, with the stale ones on show. A first frame makes every cell (below).
+  const fr = st.force; fr.length = 0;
+  if (changed && mask !== was && was >= 0) for (const id of LAYOUT.ids) if ((mask ^ was) & (1 << id)) { const r = bankOf(DIST[id], ps).reach; fr.push(r.x0 - FORCE_MARGIN, r.y0 - FORCE_MARGIN, r.x1 + FORCE_MARGIN, r.y1 + FORCE_MARGIN); }
   if (ac !== st.a) { st.a = ac; st.at = now; }
   const rig = typeof window !== 'undefined' && !!window.__rig, zooming = now - st.at < (w.gcRest ?? REST_MS), fadeMs = w.reduced() ? 0 : (w.gcFade ?? FADE_MS);
   wantedCells(banks, win, ac, st.cells, st.want); const cells = st.cells, s = cells.s, cx = (cw / 2 - e) / a, cy = (ch / 2 - f) / a, want = st.want;
   if (changed) { const keep = new Set(); for (let n = 0; n < want.length; n += 2) keep.add(chunkKey(sk, want[n], want[n + 1])); for (const c of [...store.map.values()]) if (c.stale && c.sk === sk && !keep.has(chunkKey(c.sk, c.i, c.j))) store.drop(c); } // (a stale chunk of a cell no bank reaches any more has nothing to stand for)
+  const forced = (i, j) => { for (let p = 0; p < fr.length; p += 4) if ((i + 1) * s > fr[p] && i * s < fr[p + 2] && (j + 1) * s > fr[p + 1] && j * s < fr[p + 3]) return true; return false; };
   // ---- which wanted cells are not baked at the exact scale, and bake what the budget allows (the nearest to the middle of the window first)
-  const miss = st.miss; miss.length = 0; let baked = 0; const all = force || rig || store.size === 0, pts = [];
+  const miss = st.miss; miss.length = 0; let baked = 0; const all = rig || store.size === 0, pts = []; store.begin();
   for (let n = 0; n < want.length; n += 2) { const c0 = store.map.get(chunkKey(sk, want[n], want[n + 1])); if (!c0 || c0.stale) pts.push([want[n], want[n + 1], Math.hypot((want[n] + 0.5) * s - cx, (want[n + 1] + 0.5) * s - cy)]); }
+  const bare = st.part;
   if (pts.length) {
     pts.sort((p, q2) => p[2] - q2[2]); const budget = st.seen >= 1 ? (w.gcBudget?.[0] ?? BAKE_MS[0]) : (w.gcBudget?.[1] ?? BAKE_MS[1]), t0 = performance.now();
-    if (zooming || fadeMs > 0) store.standIns(ac, sk, now);
-    const ab = Math.round(Math.pow(2, Math.round(Math.log2(ac) * 4) / 4) * 1e5) / 1e5, sb = CHUNK_PX / ab; // the quarter-octave bucket: what is baked while the scale moves is baked here, so the frames of one stretch of a zoom share their chunks
+    store.standIns(ac, sk, now);
+    // COVER FIRST (as the ground's): a cell that no stand-in covers is made coarse (about half the scale, four cells to a chunk) before any exact chunk, unless every cell is made in this frame anyway, the budget is the whole window's
+    // (a test), or the canvas is held back (the veil: nobody sees the clouds being made)
+    const cover = !all && budget < 1e6 && !w.veilHold; let bareLeft = false;
+    if (cover) { const ab = Math.round(Math.pow(2, Math.round(Math.log2(ac) * 4) / 4 - 0.9) * 1e5) / 1e5; bareLeft = store.cover(pts, s, win, sk, ac, now, ab, (ci, cj) => { const c = store.bake(st.draw, ab, ci, cj, true); if (c) baked++; return c; }, () => baked === 0 || performance.now() - t0 < budget); }
     for (const [i, j] of pts) {
-      const ok = all || baked === 0 || performance.now() - t0 < budget;
-      if (!zooming) { if (ok) { const c = store.bake(st.draw, ac, i, j); if (c) { baked++; if (fadeMs > 0 && store.covered((i + 0.5) * s, (j + 0.5) * s)) c.fadeEnd = performance.now() + fadeMs; continue; } } }
-      else { const mx = (i + 0.5) * s, my = (j + 0.5) * s; if (!store.covered(mx, my) && ok) { const c = store.bake(st.draw, ab, Math.floor(mx / sb), Math.floor(my / sb)); if (c) { baked++; store.standIns(ac, sk); } } }
+      if (forced(i, j) || (!zooming && !bareLeft && (all || baked === 0 || performance.now() - t0 < budget))) {
+        const c = store.bake(st.draw, ac, i, j);
+        if (c) { baked++; bare.length = 0; if (fadeMs > 0 && store.list.length && !store.bareOf(i, j, s, bare, win)) c.fadeEnd = performance.now() + fadeMs; continue; } // (no fade over a stand-in that leaves part of the cell bare: the fade would run over the land with no cloud)
+      }
       miss.push(i, j);
     }
   }
-  // ---- stamp: stale stand-ins first (not where an exact chunk goes, unless that chunk is still fading in), then the exact chunks on whole pixels
+  // ---- stamp: the chunk of any other scale that has what no stand-in covers (soft), the stale stand-ins (not where an exact chunk goes, unless that chunk is still fading in), then the exact chunks on whole pixels
   ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0);
-  const X = (i) => i * D + e, Y = (j) => j * D + f, tNow = performance.now(); let fading = 0;
+  const X = (i) => i * D + e, Y = (j) => j * D + f, tNow = performance.now(); let fading = 0, holes = 0;
   for (let n = 0; n < want.length; n += 2) { const c = store.map.get(chunkKey(sk, want[n], want[n + 1])); if (c && c.fadeEnd) { if (c.fadeEnd > tNow) fading++; else c.fadeEnd = 0; } }
   if (miss.length || fading) {
     const L = store.standIns(ac, sk, tNow);
+    bare.length = 0; for (let n = 0; n < want.length; n += 2) { const ex = store.map.get(chunkKey(sk, want[n], want[n + 1])); if (!ex || ex.fadeEnd > tNow) store.bareOf(want[n], want[n + 1], s, bare, win); }
+    if (bare.length) { store.soften(ctx, bare, a, e, f); holes = bare.length >> 2; }
     if (L.length) {
       ctx.save(); ctx.beginPath(); ctx.rect(0, 0, cw, ch);
       for (let n = 0; n < want.length; n += 2) { const c = store.map.get(chunkKey(sk, want[n], want[n + 1])); if (c && !(c.fadeEnd > tNow) && !c.stale) ctx.rect(X(want[n]), Y(want[n + 1]), D, D); }
@@ -242,7 +257,7 @@ function stampBanks(ctx, w, st, ids, tones, ps) {
       for (const c of L) {
         const k2 = a / c.a, dx = c.i * CHUNK_PX * k2 + e, dy = c.j * CHUNK_PX * k2 + f, sz = CHUNK_PX * k2;
         if (dx + sz + k2 < 0 || dy + sz + k2 < 0 || dx - k2 > cw || dy - k2 > ch) continue;
-        c.last = ++store.tick; if (c.empty || store.hidden(c, sk, s)) continue; ctx.drawImage(c.img, dx - k2 * 0.5, dy - k2 * 0.5, sz + k2, sz + k2);
+        if (c.empty || store.hidden(c, sk, s)) { c.last = ++store.tick; continue; } store.use(c); ctx.drawImage(c.img, dx - k2 * 0.5, dy - k2 * 0.5, sz + k2, sz + k2);
       }
       ctx.restore(); store.stats.stale += L.length;
     }
@@ -253,8 +268,8 @@ function stampBanks(ctx, w, st, ids, tones, ps) {
     ctx.drawImage(c.img, X(i), Y(j), D, D); store.stats.hits++;
   }
   ctx.restore(); if (fading) w.dirty = true; // (a fade is a few frames of its own: the loop keeps drawing until it is over)
-  st.seen = w.moving ? 0 : st.seen + 1;
-  st.q = q; store.sweep(cells, ac, cloudCap(W, H, dpr, q)); // every frame: what the window no longer shows, or no longer needs to stand in for, is given back at once (the ledger holds the clouds to a share of the plan's memory)
+  st.seen = w.moving ? 0 : st.seen + 1; st.holes = holes; if (miss.length) w.gcMore = true; // (the loop does not sleep on clouds that are not whole)
+  st.q = q; { const cap = cloudCap(W, H, dpr, q); store.sweep(cells, ac, cap, performance.now(), Math.ceil(cap * 1.25), !miss.length && !zooming && !fading); } // every frame: what the window no longer shows, or no longer needs to stand in for, is given back at once (the ledger holds the clouds to a share of the plan's memory); a stand-in on show is kept past the cap, up to a fifth more
   return miss.length === 0;
 }
 

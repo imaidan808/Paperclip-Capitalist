@@ -53,6 +53,27 @@ export function cellsFor(r, a, out = {}) {
   const s = CHUNK_PX / Math.max(a, 1e-6);
   out.i0 = Math.floor(r.x0 / s); out.i1 = Math.floor((r.x1 - 1e-9) / s); out.j0 = Math.floor(r.y0 / s); out.j1 = Math.floor((r.y1 - 1e-9) / s); out.s = s; return out;
 }
+/**
+ * Cut the rectangle (x0, y0, x1, y1) out of every rectangle in `parts`, a flat list of [x0, y0, x1, y1] quadruples, in place: what is left of each is up to four pieces. Pieces no wider or taller than `eps` are
+ * hairs (the same edge worked out two ways) and are left out. Answers the new length. The coverage of the ground is this: the part of a cell that nothing stands under is what is left after every stand-in is cut from it.
+ */
+/** How many cells must be bare before the ground is covered coarse first: fewer are made exact at once, the nearest first, which is no dearer than one coarse chunk and leaves no soft picture to be replaced (a pan that reveals a cell or two used to make a coarse chunk and an exact one for each). */
+export const COVER_MIN = 3;
+const CUT = [];
+export function cutParts(parts, x0, y0, x1, y1, eps = 1e-3) {
+  const out = CUT; out.length = 0;
+  for (let p = 0; p < parts.length; p += 4) {
+    const a0 = parts[p], b0 = parts[p + 1], a1 = parts[p + 2], b1 = parts[p + 3];
+    if (x0 >= a1 - eps || x1 <= a0 + eps || y0 >= b1 - eps || y1 <= b0 + eps) { out.push(a0, b0, a1, b1); continue; }
+    const lo = Math.max(b0, y0), hi = Math.min(b1, y1), l = Math.max(a0, x0), r = Math.min(a1, x1);
+    if (b0 < y0 - eps) out.push(a0, b0, a1, y0);   // above the cut
+    if (b1 > y1 + eps) out.push(a0, y1, a1, b1);   // below it
+    if (a0 < l - eps) out.push(a0, lo, l, hi);     // to its left
+    if (a1 > r + eps) out.push(r, lo, a1, hi);     // and to its right
+  }
+  parts.length = out.length; for (let q = 0; q < out.length; q++) parts[q] = out[q];
+  return parts.length;
+}
 /** A chunk's integer key: its scale key, column and row (cells stay within +-2,000 at any zoom the world allows, and a scale key within 0 to 2^20). */
 export const chunkKey = (sk, i, j) => (sk * 4096 + (i + 2048)) * 4096 + (j + 2048);
 /**

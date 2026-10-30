@@ -11,6 +11,12 @@
 //     scaled chunk at rest;
 //   - what moves on the ground (water, pulses: stage mode 2) is drawn live over the chunks, as before.
 // A district opening is drawn directly while it lasts (its fog is moving), exactly as before.
+//
+// The V2 ground (the base is painted per pixel: 20 to 70 ms a chunk on a laptop four times slower than a Mac) has no direct drawing, so a cell that is not made shows the sea. What keeps that off the screen, in order:
+//   - the exact chunk, stamped 1:1; else the stand-ins of the nearer scales (the store keeps them for as long as the picture needs them: chunkcache.js); else the chunk of ANY scale that has the area, soft (`soften`);
+//   - what no chunk has is made COARSE first: a chunk baked at about half the scale covers four cells, so a soft whole picture exists in a quarter of the frames, and the exact chunks follow and fade in over it;
+//   - while the canvas is held back (the veil, world.js: nobody sees the ground being made) the cells are made exact at once, as they were: coarse chunks would only be work thrown away.
+// `gcHoles` counts the pieces of the window that nothing at all covers after all of that (the sea shows there), and `gcMore` says the ground wants another frame.
 import { groundKey, slotFor } from './stack.js';
 import { CHUNK_PX, scaleKey, chunkKey, cellsFor, chunkCap, snapTranslation } from './chunks.js';
 import { ChunkCache } from './chunkcache.js';
@@ -39,7 +45,7 @@ export const groundCacheMethods = {
   groundPass(ctx, view) {
     const { W, H, dpr } = this, cam = this.cam, k = this.gcKey;
     const v2 = slotFor('shore').impl === 'v2', rig = v2 && typeof window !== 'undefined' && !!window.__rig; // the V2 ground is a base painted per pixel into chunks: it has no direct drawing, so a district that is opening is served from chunks too (its clouds are a layer of their own) and a cell not baked yet shows the sea under it
-    if (!this.cacheOK() || (!v2 && this.revealing())) { this.gcSeen = 0; this.gcValid = false; k[6] = -1; this.moving = !(k[0] === cam.x && k[1] === cam.y && k[2] === cam.z); k[0] = cam.x; k[1] = cam.y; k[2] = cam.z; this.drawGround(ctx, view, 0); return; } // a district is opening, or there is no canvas to bake into: the ground is drawn directly, as it always was
+    if (!this.cacheOK() || (!v2 && this.revealing())) { this.gcSeen = 0; this.gcValid = false; this.gcHoles = 0; this.gcMore = false; k[6] = -1; this.moving = !(k[0] === cam.x && k[1] === cam.y && k[2] === cam.z); k[0] = cam.x; k[1] = cam.y; k[2] = cam.z; this.drawGround(ctx, view, 0); return; } // a district is opening, or there is no canvas to bake into: the ground is drawn directly, as it always was
     const moved = !(k[0] === cam.x && k[1] === cam.y && k[2] === cam.z && k[3] === W && k[4] === H && k[5] === dpr);
     if (moved) { k[0] = cam.x; k[1] = cam.y; k[2] = cam.z; k[3] = W; k[4] = H; k[5] = dpr; this.gcSeen = 0; } else this.gcSeen++;
     this.moving = moved; // (the loop reads it: a camera that moves draws every refresh)
@@ -47,6 +53,7 @@ export const groundCacheMethods = {
     let store = this.gc; if (!(store instanceof ChunkCache)) { if (store) this.gc = null; store = this.gc = new ChunkCache('ground.chunks'); }
     const ver = (Math.imul(this.unlockHash | 0, 31) + gk) | 0;
     if (v2 ? store.markStale(ver) : store.setVer(ver)) this.gcValid = false;
+    store.begin();
     const a = this.renderScale(), sk = scaleKey(a), snap = this.snap || (this.snap = [0, 0]); snapTranslation(W, H, dpr, cam.x, cam.y, a, snap);
     const now = performance.now(); if (a !== this.gcA) { this.gcUp = a > (this.gcA ?? a) ? 1 : this.gcUp === 1 && a === this.gcA ? 1 : a < (this.gcA ?? a) ? 0 : this.gcUp; this.gcA = a; this.gcAt = now; }
     const zooming = now - (this.gcAt ?? -1e9) < (this.gcRest ?? ZOOM_REST_MS); // the scale is changing (a pinch, a wheel, a glide): nothing is baked at a scale that is gone in the next frame; stand-ins and direct cells cover the window, and the exact scale is baked once it rests
@@ -60,19 +67,37 @@ export const groundCacheMethods = {
     const cx = (cw / 2 - e) / (a * 1), cy = (ch / 2 - f) / (a * 1), s = cells.s;
     for (let j = cells.j0; j <= cells.j1; j++) for (let i = cells.i0; i <= cells.i1; i++) { const c0 = store.map.get(chunkKey(sk, i, j)); if (c0 && !c0.stale) have++; else miss.push(i, j); }
     let baked = 0; const all = v2 && rig; // (the shot rig bakes the whole window at once; a real start bakes it over a few frames, the first chunk of a frame always and then the frame's budget, so the first screen is never a 450 ms freeze)
+    const bare = this.gcPart || (this.gcPart = []);
     if (miss.length) {
       const pts = []; for (let n = 0; n < miss.length; n += 2) pts.push([miss[n], miss[n + 1], Math.hypot((miss[n] + 0.5) * s - cx, (miss[n + 1] + 0.5) * s - cy)]); pts.sort((p, q) => p[2] - q[2]);
       const budget = zooming ? (this.gcBudget?.[1] ?? ZOOM_BAKE_MS) : this.gcSeen >= 1 ? (this.gcBudget?.[0] ?? (v2 ? V2_BAKE_MS[0] : BAKE_MS_STILL)) : (this.gcBudget?.[1] ?? (v2 ? V2_BAKE_MS[1] : BAKE_MS_MOVING)), t0 = performance.now(); miss.length = 0; // (all: the first ground, and the shot rig, bake the whole window at once) // (this.gcBudget: a test's own milliseconds [still, moving])
-      if (zooming || fadeMs > 0) store.standIns(a, sk, now);
+      if (zooming || fadeMs > 0 || v2) store.standIns(a, sk, now);
       const ab = Math.round(Math.pow(2, Math.round(Math.log2(a) * 4) / 4 - (this.gcUp ? 0.9 : 0)) * 1e5) / 1e5, sb = CHUNK_PX / ab; // the quarter-octave bucket, a zoom IN bakes at 0.54 of the scale it is at (a chunk of 3.4 times the world area, so a third of the chunks cover the window, and the per-pixel base costs a third; magnified 1.9 to 3.2 times while the zoom lasts), a zoom OUT at the scale it is at (shrunk to a half); the frames of one stretch of a zoom share their chunks
-      for (const [i, j] of pts) {
-        const ok = all || baked === 0 || performance.now() - t0 < budget;
-        if (!zooming) { if (ok) { const c = store.bake(draw, a, i, j, dpr); if (c) { baked++; if (fadeMs > 0 && !c.empty && store.covered((i + 0.5) * s, (j + 0.5) * s)) c.fadeEnd = performance.now() + fadeMs; continue; } } } // (a chunk baked where a stand-in was showing fades in over it)
-        else { // while the scale changes a cell is baked only when nothing stands in for it (the cells a zoom out reveals), at the bucket scale: that chunk stands in for the next frames of the zoom, and costs a bake once where a direct draw costs every frame
-          const mx = (i + 0.5) * s, my = (j + 0.5) * s;
-          if (!store.covered(mx, my) && ok) { const c = store.bake(draw, ab, Math.floor(mx / sb), Math.floor(my / sb), dpr, true); if (c) { baked++; store.standIns(a, sk); } }
+      if (v2) {
+        // ---- COVER FIRST: a cell that no stand-in covers is made coarse (about half the scale: four cells to a chunk) before any exact chunk, unless the canvas is held back or the budget is the whole window's (a test)
+        const whole = budget >= 1e6, cover = !all && !whole && !this.veilHold; let bareLeft = false; // (held back: nobody sees the cells being made, and a canvas that is just attached is a scale that "just changed")
+        if (cover) {
+          const ac = Math.round(Math.pow(2, Math.round(Math.log2(a) * 4) / 4 - 0.9) * 1e5) / 1e5;
+          bareLeft = store.cover(pts, s, win, sk, a, now, ac, (ci, cj) => { const c = store.bake(draw, ac, ci, cj, dpr, true); if (c) baked++; return c; }, (made) => baked === 0 || performance.now() - t0 < budget); // (the first bake of a frame always goes ahead)
         }
-        miss.push(i, j);
+        // ---- then the exact chunks, the nearest to the middle first (not while the scale changes: it is gone in the next frame); one made over a stand-in that covers all of its cell fades in over it
+        for (const [i, j] of pts) {
+          if (!zooming && !bareLeft && (all || baked === 0 || performance.now() - t0 < budget)) {
+            const c = store.bake(draw, a, i, j, dpr);
+            if (c) { baked++; bare.length = 0; if (fadeMs > 0 && !c.empty && store.list.length && !store.bareOf(i, j, s, bare, win)) c.fadeEnd = performance.now() + fadeMs; continue; } // (no fade over a stand-in that leaves part of the cell bare: the fade would run over the sea)
+          }
+          miss.push(i, j);
+        }
+      } else {
+        for (const [i, j] of pts) {
+          const ok = all || baked === 0 || performance.now() - t0 < budget;
+          if (!zooming) { if (ok) { const c = store.bake(draw, a, i, j, dpr); if (c) { baked++; if (fadeMs > 0 && !c.empty && store.covered((i + 0.5) * s, (j + 0.5) * s)) c.fadeEnd = performance.now() + fadeMs; continue; } } } // (a chunk baked where a stand-in was showing fades in over it)
+          else { // while the scale changes a cell is baked only when nothing stands in for it (the cells a zoom out reveals), at the bucket scale: that chunk stands in for the next frames of the zoom, and costs a bake once where a direct draw costs every frame
+            const mx = (i + 0.5) * s, my = (j + 0.5) * s;
+            if (!store.covered(mx, my) && ok) { const c = store.bake(draw, ab, Math.floor(mx / sb), Math.floor(my / sb), dpr, true); if (c) { baked++; store.standIns(a, sk); } }
+          }
+          miss.push(i, j);
+        }
       }
     }
     // ---- stamp: stale stand-ins first (not where an exact chunk goes, unless that chunk is still fading in), the cells with nothing to stand in drawn directly, then the exact chunks 1:1
@@ -80,8 +105,13 @@ export const groundCacheMethods = {
     const X = (i) => i * CHUNK_PX + e, Y = (j) => j * CHUNK_PX + f, tNow = performance.now();
     let fading = 0;
     for (let j = cells.j0; j <= cells.j1; j++) for (let i = cells.i0; i <= cells.i1; i++) { const c = store.map.get(chunkKey(sk, i, j)); if (c && c.fadeEnd) { if (c.fadeEnd > tNow) fading++; else c.fadeEnd = 0; } }
+    let holes = 0;
     if (miss.length || fading) {
       const L = store.standIns(a, sk, tNow), direct = this.gcDirect || (this.gcDirect = []); direct.length = 0;
+      if (v2) { // the pieces of the window that no stand-in covers, in the cells with no finished chunk of their own: the chunk of any other scale that has the area is drawn into them, soft; what is left is the sea
+        bare.length = 0; for (let j = cells.j0; j <= cells.j1; j++) for (let i = cells.i0; i <= cells.i1; i++) { const ex = store.map.get(chunkKey(sk, i, j)); if (!ex || ex.fadeEnd > tNow) store.bareOf(i, j, s, bare, win); }
+        if (bare.length) { store.soften(ctx, bare, a, e, f); holes = bare.length >> 2; }
+      }
       if (L.length) {
         ctx.save(); ctx.beginPath(); ctx.rect(0, 0, cw, ch);
         for (let j = cells.j0; j <= cells.j1; j++) for (let i = cells.i0; i <= cells.i1; i++) { const c = store.map.get(chunkKey(sk, i, j)); if (c && !(c.fadeEnd > tNow)) ctx.rect(X(i), Y(j), CHUNK_PX, CHUNK_PX); }
@@ -89,11 +119,11 @@ export const groundCacheMethods = {
         for (const c of L) {
           const kk = a / c.a, dx = c.i * CHUNK_PX * kk + e, dy = c.j * CHUNK_PX * kk + f, sz = CHUNK_PX * kk;
           if (dx + sz + kk < 0 || dy + sz + kk < 0 || dx - kk > cw || dy - kk > ch) continue;
-          c.last = ++store.tick; if (c.empty || store.hidden(c, sk, s)) continue; ctx.imageSmoothingEnabled = kk < NEAREST_ABOVE; ctx.drawImage(c.img, dx - kk * 0.5, dy - kk * 0.5, sz + kk, sz + kk); // (a pixel larger than its cell, so scaled neighbours overlap and never leave a hairline)
+          if (c.empty || store.hidden(c, sk, s)) { c.last = ++store.tick; continue; } store.use(c); ctx.imageSmoothingEnabled = kk < NEAREST_ABOVE || !zooming; ctx.drawImage(c.img, dx - kk * 0.5, dy - kk * 0.5, sz + kk, sz + kk); // (a pixel larger than its cell, so scaled neighbours overlap and never leave a hairline; magnified past 1.6 it is drawn without smoothing only while the scale moves)
         }
         ctx.restore(); store.stats.stale += L.length;
       }
-      for (let n = 0; n < miss.length; n += 2) { // a cell no stand-in covers (its middle is in no stale chunk) is drawn directly
+      if (!v2) for (let n = 0; n < miss.length; n += 2) { // a cell no stand-in covers (its middle is in no stale chunk) is drawn directly
         const i = miss[n], j = miss[n + 1], mx = (i + 0.5) * s, my = (j + 0.5) * s; let covered = false;
         for (const c of L) { const s0 = CHUNK_PX / c.a; if (mx >= c.i * s0 && mx < (c.i + 1) * s0 && my >= c.j * s0 && my < (c.j + 1) * s0) { covered = true; break; } }
         if (!covered) direct.push(i, j);
@@ -121,13 +151,13 @@ export const groundCacheMethods = {
       }
       if (bs > -1e9) { const c = store.bake(draw, a, bi, bj, dpr); if (c) baked++; }
     }
-    this.gcValid = miss.length === 0;
-    if (baked || miss.length === 0 || moved) store.sweep(cells, a, chunkCap(W, H, dpr));
+    this.gcValid = miss.length === 0; this.gcHoles = holes; this.gcMore = v2 && miss.length > 0; // (gcMore: a ground that is not whole asks for the next frame, or a loop that sleeps under reduced motion stops on a half-made one)
+    if (baked || miss.length === 0 || moved) { const cap = chunkCap(W, H, dpr); store.sweep(cells, a, cap, performance.now(), Math.ceil(cap * 1.25), v2 && !miss.length && !zooming && !fading); } // (a stand-in on show is kept past the cap, up to a fifth more: a hole is worse than a few chunks)
     this.drawGround(ctx, view, 2); // what moves on the ground, live over the chunks (the caller's world transform is back)
   },
 
   /** Give the ground cache's bitmaps back (World.release). */
-  releaseGround() { if (this.gc && typeof this.gc.release === 'function') this.gc.release(); this.gc = null; this.gcValid = false; this.gcSeen = 0; },
+  releaseGround() { if (this.gc && typeof this.gc.release === 'function') this.gc.release(); this.gc = null; this.gcValid = false; this.gcHoles = 0; this.gcMore = false; this.gcSeen = 0; },
 
   cacheOK() { return typeof OffscreenCanvas === 'function' && this.cv.width > 0; },
 };

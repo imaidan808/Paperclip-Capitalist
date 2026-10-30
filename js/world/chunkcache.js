@@ -6,7 +6,11 @@
 // Under density 1.5 it is baked at twice that and drawn down once (a smooth coast and no crack on a 1x screen). Then the bitmap is SEALED (seal.js: gaps of one or two pixels between shapes that share an edge are closed),
 // the cell's own 384 x 384 is handed to the browser as an immutable ImageBitmap (a cell of open sea has none: it is marked `empty` and never stamped), and that is the cheapest thing to blit. Stamped 1:1 on the whole pixel
 // at `i CHUNK_PX + e`, it is the picture the ground layers would have drawn straight onto the canvas at this camera, pixel for pixel, minus the cracks.
-import { CHUNK_PX, CHUNK_FULL, BLEED, scaleKey, chunkKey, staleRatio, superSample } from './chunks.js';
+//
+// What stands in while the exact chunks are being made is judged by the AREA it covers, never by a few points of it (a stand-in hidden behind chunks that cover five points of it leaves the rest of it bare), and a chunk is
+// kept for as long as something on show needs it: the cap and the sweep give up what is not on show first, a stand-in is never taken from under a chunk that is still fading in, and a chunk of a scale too far from the
+// frame's to stand in properly is kept as a last resort (`soft`) until the cells that replace it are baked: soft and whole is better than the sea.
+import { CHUNK_PX, CHUNK_FULL, BLEED, scaleKey, chunkKey, staleRatio, superSample, cutParts, COVER_MIN } from './chunks.js';
 import { surface as makeSurface, ledger, builds } from './gfx.js';
 import { closeAlpha } from './seal.js';
 
@@ -16,7 +20,7 @@ export class ChunkCache {
   /** `name` is the ledger holder; `make` is the surface factory (tests hand in a stand-in). */
   constructor(name = 'ground.chunks', make = makeSurface) {
     this.name = name; this.make = make; this.map = new Map(); this.ver = NaN; this.bytes = 0; this.tick = 0;
-    this.work = null; this.fin = null; this.cell = null; this.scratch = null; this.scratchN = 0; this.list = [];
+    this.work = null; this.fin = null; this.cell = null; this.scratch = null; this.scratchN = 0; this.list = []; this.soft = []; this.parts = []; this.fno = 0; this.now = 0; this.made = 0;
     this.stats = { baked: 0, sealed: 0, dropped: 0, ms: 0, lastMs: 0, direct: 0, stale: 0, hits: 0, faded: 0 };
   }
   get size() { return this.map.size; }
@@ -26,28 +30,104 @@ export class ChunkCache {
   markStale(ver) { if (ver === this.ver) return false; for (const c of this.map.values()) c.stale = true; this.ver = ver; return true; }
   get(sk, i, j) { const c = this.map.get(chunkKey(sk, i, j)); if (c) c.last = ++this.tick; return c; }
   has(sk, i, j) { return this.map.has(chunkKey(sk, i, j)); }
-  /** Every chunk of the other scales that could stand in for scale `a` (within the plan's ratio window), furthest first, into a reused list. */
-  standIns(a, sk, now = 0) {
-    this.lastA = a; this.now = now; const L = this.list; L.length = 0; const sc = this.scales || (this.scales = new Map()); sc.clear();
-    for (const c of this.map.values()) if (c.sk !== sk && staleRatio(c.a, a, c.coarse)) { L.push(c); sc.set(c.sk, c.a); }
+  /** A frame begins: what it draws (`use`) is what is on show, and the cap will not take that while anything else can go. */
+  begin() { this.fno++; }
+  /** This chunk is on show this frame: it is the most recently used, and the sweep at the frame's end will not take it for the cap. */
+  use(c) { c.last = ++this.tick; c.need = this.fno; }
+  /**
+   * Every chunk of the other scales that could stand in for scale `a` (within the plan's ratio window), furthest first, into a reused list; the others (`soft`: a scale too far to stand in properly, which the picture
+   * takes only for a piece nothing else covers) apart, the nearest scale first. `now` is the clock the fades are read by (it stays what it was when it is not given).
+   */
+  standIns(a, sk, now = this.now) {
+    this.lastA = a; this.now = now; const L = this.list; L.length = 0; const S = this.soft; S.length = 0; const sc = this.scales || (this.scales = new Map()); sc.clear();
+    for (const c of this.map.values()) { if (c.sk === sk) continue; if (staleRatio(c.a, a, c.coarse)) { L.push(c); sc.set(c.sk, c.a); } else S.push(c); }
     L.sort((p, q) => Math.abs(Math.log(q.a / a)) - Math.abs(Math.log(p.a / a)));
+    S.sort((p, q) => Math.abs(Math.log(p.a / a)) - Math.abs(Math.log(q.a / a)));
     const sl = this.scaleList || (this.scaleList = []); sl.length = 0; for (const [k, a0] of sc) sl.push([k, a0, Math.abs(Math.log(a0 / a))]); sl.sort((p, q) => p[2] - q[2]); // the scales found, nearest first
     return L;
   }
   /** Is the world point (x, y) under a stand-in (of the scales the last standIns call found)? An empty cell of open sea counts: there is nothing to stand in for. */
   covered(x, y) { for (const [sk0, a0] of this.scales || []) { const s0 = CHUNK_PX / a0; if (this.map.has(chunkKey(sk0, Math.floor(x / s0), Math.floor(y / s0)))) return true; } return false; }
+  /** Cut the chunks of scale key `sk` (cells `t` world pixels on a side) that exist, and are not still fading in, out of `parts` (world rectangles). */
+  cut(parts, sk, t) {
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    for (let p = 0; p < parts.length; p += 4) { x0 = Math.min(x0, parts[p]); y0 = Math.min(y0, parts[p + 1]); x1 = Math.max(x1, parts[p + 2]); y1 = Math.max(y1, parts[p + 3]); }
+    const i0 = Math.floor(x0 / t), i1 = Math.floor((x1 - 1e-6) / t), j0 = Math.floor(y0 / t), j1 = Math.floor((y1 - 1e-6) / t);
+    for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) { const c = this.map.get(chunkKey(sk, i, j)); if (c && !(c.fadeEnd > this.now)) { cutParts(parts, i * t, j * t, (i + 1) * t, (j + 1) * t); if (!parts.length) return; } }
+  }
   /**
-   * Is a stand-in wholly hidden behind exact chunks (scale key `sk`, cell size `s` world pixels) and stand-ins that are nearer in scale than it? Five points of its area (the middle and four corners pulled in a little) are
-   * looked up; when every one is covered it need not be drawn at all, which saves the blit (a scaled one is 0.3 ms on a CPU-drawn canvas) wherever the sets of two scales overlap.
+   * Is a stand-in wholly hidden behind exact chunks (scale key `sk`, cell size `s` world pixels) and stand-ins that are nearer in scale than it? Its area is cut by every one of them; when nothing of it is left it need
+   * not be drawn at all, which saves the blit (a scaled one is 0.3 ms on a CPU-drawn canvas) wherever the sets of two scales overlap. A chunk that is still fading in hides nothing. (This looked at five points of the
+   * area and hid a chunk that exact chunks covered at those five: the rest of it was the sea.)
    */
   hidden(c, sk, s) {
-    const s0 = CHUNK_PX / c.a, x0 = c.i * s0, y0 = c.j * s0, me = Math.abs(Math.log(c.a / this.lastA)), sl = this.scaleList || [];
-    for (let q = 0; q < 5; q++) {
-      const x = x0 + s0 * (q === 4 ? 0.5 : q & 1 ? 0.88 : 0.12), y = y0 + s0 * (q === 4 ? 0.5 : q & 2 ? 0.88 : 0.12); const ex = this.map.get(chunkKey(sk, Math.floor(x / s), Math.floor(y / s))); let hit = !!ex && !(ex.fadeEnd > this.now); // (an exact chunk that is still fading in hides nothing)
-      for (let n = 0; !hit && n < sl.length && sl[n][2] < me - 1e-9; n++) { const t0 = CHUNK_PX / sl[n][1]; if (this.map.has(chunkKey(sl[n][0], Math.floor(x / t0), Math.floor(y / t0)))) hit = true; }
-      if (!hit) return false;
+    const s0 = CHUNK_PX / c.a, x0 = c.i * s0, y0 = c.j * s0, P = this.parts; P.length = 0; P.push(x0, y0, x0 + s0, y0 + s0);
+    this.cut(P, sk, s); if (!P.length) return true;
+    const me = Math.abs(Math.log(c.a / this.lastA)), sl = this.scaleList || [];
+    for (let n = 0; n < sl.length && sl[n][2] < me - 1e-9; n++) { this.cut(P, sl[n][0], CHUNK_PX / sl[n][1]); if (!P.length) return true; }
+    return false;
+  }
+  /**
+   * The part of the exact cell (i, j) (cells `s` world pixels on a side) that no stand-in of the last standIns call covers, as world rectangles pushed to `out` (flat quadruples), clipped to `win` (a world rectangle,
+   * or null). Answers how many pieces. A cell with a chunk of its own is not asked about: this is what shows the sea if nothing else is done.
+   */
+  bareOf(i, j, s, out, win) {
+    let x0 = i * s, y0 = j * s, x1 = x0 + s, y1 = y0 + s;
+    if (win) { x0 = Math.max(x0, win.x0); y0 = Math.max(y0, win.y0); x1 = Math.min(x1, win.x1); y1 = Math.min(y1, win.y1); if (x1 - x0 <= 1e-3 || y1 - y0 <= 1e-3) return 0; }
+    const P = this.parts; P.length = 0; P.push(x0, y0, x1, y1);
+    for (const c of this.list) { const s0 = CHUNK_PX / c.a, cx = c.i * s0, cy = c.j * s0; cutParts(P, cx, cy, cx + s0, cy + s0); if (!P.length) return 0; }
+    for (let q = 0; q < P.length; q++) out.push(P[q]);
+    return P.length >> 2;
+  }
+  /** The same for a cell of the frame's exact grid that may have a chunk of its own: one that exists (a stale one too: it is stamped) and has finished fading in covers it, so it has nothing bare. */
+  bareIn(i, j, sk, s, now, out, win) { const ex = this.map.get(chunkKey(sk, i, j)); if (ex && !(ex.fadeEnd > now)) return 0; out.length = 0; return this.bareOf(i, j, s, out, win); }
+  /**
+   * COVER FIRST. For the cells `pts` ([i, j, distance] triples, the nearest to the middle of the window first) of the frame's exact grid (scale key `sk`, cells `s` world pixels, frame scale `a`) that have a bare piece, bake
+   * the chunk of a coarser grid (scale `ac`, about half the frame's: it covers four cells) that holds the middle of the largest bare piece, and look again: a soft whole picture exists in a quarter of the bakes, and the exact
+   * chunks are made over it. `bake(i, j)` makes the chunk of the coarse grid and answers it (null: no surface); `ok(made)` says whether the frame may spend more time (its first bake is always allowed). Answers whether
+   * anything is still bare, and counts the bakes in `this.made`.
+   */
+  cover(pts, s, win, sk, a, now, ac, bake, ok, min = COVER_MIN) {
+    const sc = CHUNK_PX / ac, bare = this.covering || (this.covering = []); let left = false; this.made = 0;
+    let few = 0; for (const q of pts) { q[3] = this.bareIn(q[0], q[1], sk, s, now, bare, win) ? 1 : 0; few += q[3]; }
+    if (few < min) { pts.sort((q, r) => (r[3] - q[3]) || (q[2] - r[2])); return false; } // (a few bare cells are made exact at once, before the cells that have a stand-in under them, the nearest first: no dearer than a coarse chunk, and no soft picture to be replaced)
+    for (const [i, j] of pts) {
+      for (let tries = 0; tries < 3; tries++) { // (one coarse chunk may cover only part of what is bare of a cell: the next takes the rest)
+        if (!this.bareIn(i, j, sk, s, now, bare, win)) break;
+        if (!ok(this.made)) { left = true; break; }
+        let bx = 0, by = 0, best = -1; for (let p = 0; p < bare.length; p += 4) { const ar = (bare[p + 2] - bare[p]) * (bare[p + 3] - bare[p + 1]); if (ar > best) { best = ar; bx = (bare[p] + bare[p + 2]) / 2; by = (bare[p + 1] + bare[p + 3]) / 2; } }
+        if (!bake(Math.floor(bx / sc), Math.floor(by / sc))) { left = true; break; }
+        this.made++; this.standIns(a, sk, now);
+      }
+      if (left) break;
     }
-    return true;
+    if (!left) for (const [i, j] of pts) if (this.bareIn(i, j, sk, s, now, bare, win)) { left = true; break; }
+    return left;
+  }
+  /**
+   * The last resort for the pieces `parts` (world rectangles, flat quadruples) that no stand-in covers: the chunks of the scales the ratio window refuses, the nearest scale first, are drawn into them (scaled to this
+   * frame's scale `a`, from the translation e, f, clipped to the piece, and a pixel larger than their cell as a stand-in is), and what a chunk covers is cut from `parts`. Soft, but it is the picture, and the sea is not.
+   * What is left in `parts` is what nothing covers. Answers how many chunks were drawn.
+   */
+  soften(ctx, parts, a, e, f) {
+    let draws = 0;
+    for (const c of this.soft) {
+      if (!parts.length) break;
+      const s0 = CHUNK_PX / c.a, x0 = c.i * s0, y0 = c.j * s0, x1 = x0 + s0, y1 = y0 + s0;
+      let hit = false; for (let p = 0; p < parts.length; p += 4) if (x0 < parts[p + 2] - 1e-3 && x1 > parts[p] + 1e-3 && y0 < parts[p + 3] - 1e-3 && y1 > parts[p + 1] + 1e-3) { hit = true; break; }
+      if (!hit) continue;
+      if (!c.empty && c.img) {
+        ctx.save(); ctx.beginPath();
+        for (let p = 0; p < parts.length; p += 4) {
+          const qx0 = Math.max(x0, parts[p]), qy0 = Math.max(y0, parts[p + 1]), qx1 = Math.min(x1, parts[p + 2]), qy1 = Math.min(y1, parts[p + 3]);
+          if (qx1 - qx0 > 1e-3 && qy1 - qy0 > 1e-3) ctx.rect(qx0 * a + e, qy0 * a + f, (qx1 - qx0) * a, (qy1 - qy0) * a);
+        }
+        ctx.clip(); const k = a / c.a, sz = CHUNK_PX * k; ctx.imageSmoothingEnabled = true;
+        ctx.drawImage(c.img, c.i * CHUNK_PX * k + e - k * 0.5, c.j * CHUNK_PX * k + f - k * 0.5, sz + k, sz + k); ctx.restore(); draws++;
+      }
+      this.use(c); cutParts(parts, x0, y0, x1, y1);
+    }
+    return draws;
   }
 
   /**
@@ -101,30 +181,29 @@ export class ChunkCache {
   /** Give one chunk back. */
   drop(c) { if (this.map.delete(chunkKey(c.sk, c.i, c.j))) { try { if (c.img && typeof c.img.close === 'function') c.img.close(); } catch { /* already gone */ } this.stats.dropped++; this.sync(); } }
   /**
-   * End of a frame: free what is no longer wanted. A chunk of another scale goes when the exact chunks cover its whole area (it has nothing left to stand in for), when it is off the view's cells by more than a ring, or when
-   * the scale has moved past the ratio window; then, over `cap`, the chunks furthest from the view's middle (stale first), never one of the visible exact ones. `win` is the visible cell range { i0, i1, j0, j1, s } at the scale `a`.
+   * End of a frame: free what is no longer wanted. A chunk of another scale goes when it is off the view's cells by more than a ring, or when the exact chunks cover the whole of it that the window can show, and have
+   * finished fading in (a stand-in taken from under a fade lets the sea show through it); a scale too far from the frame's to stand in is kept (`soft`) until then, a last resort and not a reason to drop. Over `cap`,
+   * what is not on show this frame goes first, the least recently used first, never one of the visible exact ones; what IS on show (a stand-in, `use`d this frame) stays until the hard limit `hard` (a hole in the
+   * window is worse than a few chunks over the cap), and then the one farthest from the middle of the window goes first. `win` is the visible cell range { i0, i1, j0, j1, s } at the scale `a`; `now` the clock of the fades.
    */
-  sweep(win, a, cap) {
-    const sk = scaleKey(a), dead = []; let n = 0;
+  sweep(win, a, cap, now = this.now, hard = cap, whole = false) {
+    const sk = scaleKey(a), dead = [], w = win.s; let n = 0;
     for (const c of this.map.values()) {
       n++;
       if (c.sk === sk) continue;
-      const k = staleRatio(c.a, a, c.coarse), s0 = CHUNK_PX / c.a, x0 = c.i * s0, x1 = x0 + s0, y0 = c.j * s0, y1 = y0 + s0;
-      let gone = !k;
-      if (!gone) { // off the view's cells (in world pixels, a cell of the exact grid is win.s wide)
-        const w = win.s; if (x1 < (win.i0 - 1) * w || x0 > (win.i1 + 2) * w || y1 < (win.j0 - 1) * w || y0 > (win.j1 + 2) * w) gone = true;
-      }
-      if (!gone) { // covered: every exact cell under this chunk's area exists
-        const ci0 = Math.floor(x0 * a / CHUNK_PX), ci1 = Math.floor((x1 * a - 1e-6) / CHUNK_PX), cj0 = Math.floor(y0 * a / CHUNK_PX), cj1 = Math.floor((y1 * a - 1e-6) / CHUNK_PX);
-        let all = true; for (let j = cj0; j <= cj1 && all; j++) for (let i = ci0; i <= ci1; i++) if (!this.map.has(chunkKey(sk, i, j))) { all = false; break; }
-        gone = all;
-      }
-      if (gone) dead.push(c);
+      const s0 = CHUNK_PX / c.a, x0 = c.i * s0, x1 = x0 + s0, y0 = c.j * s0, y1 = y0 + s0;
+      if (whole || x1 < (win.i0 - 1) * w || x0 > (win.i1 + 2) * w || y1 < (win.j0 - 1) * w || y0 > (win.j1 + 2) * w) { dead.push(c); continue; } // off the view's cells (in world pixels, a cell of the exact grid is win.s wide), or `whole`: the window is made at the exact scale and the scale is not moving, so a chunk of another scale has nothing left to stand for
+      const ci0 = Math.max(win.i0, Math.floor(x0 / w)), ci1 = Math.min(win.i1, Math.floor((x1 - 1e-6) / w)), cj0 = Math.max(win.j0, Math.floor(y0 / w)), cj1 = Math.min(win.j1, Math.floor((y1 - 1e-6) / w));
+      if (ci0 > ci1 || cj0 > cj1) continue; // (in the ring beyond the window: nothing to cover)
+      let all = true; for (let j = cj0; j <= cj1 && all; j++) for (let i = ci0; i <= ci1; i++) { const ex = this.map.get(chunkKey(sk, i, j)); if (!ex || ex.fadeEnd > now) { all = false; break; } }
+      if (all) dead.push(c);
     }
     for (const c of dead) { this.drop(c); n--; }
-    if (n > cap) { // over the cap: the least recently used outside the visible cells (stale or not) first
+    if (n > cap) {
       const rest = []; for (const c of this.map.values()) { const vis = c.sk === sk && c.i >= win.i0 && c.i <= win.i1 && c.j >= win.j0 && c.j <= win.j1; if (!vis) rest.push(c); }
-      rest.sort((p, q) => p.last - q.last); for (const c of rest) { if (n <= cap) break; this.drop(c); n--; }
+      const need = this.fno, cx = (win.i0 + win.i1 + 1) / 2 * w, cy = (win.j0 + win.j1 + 1) / 2 * w, away = (c) => { const s0 = CHUNK_PX / c.a; return Math.hypot((c.i + 0.5) * s0 - cx, (c.j + 0.5) * s0 - cy); };
+      rest.sort((p, q) => ((p.need === need) - (q.need === need)) || (p.need === need ? away(q) - away(p) : p.last - q.last));
+      for (const c of rest) { if (n <= cap || (c.need === need && n <= hard)) break; this.drop(c); n--; }
     }
   }
   /** Over a memory ceiling: drop chunks (stale first, then the least recently used outside the visible cells) until `n` are left. Answers how many went. */
