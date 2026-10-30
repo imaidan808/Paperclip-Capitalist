@@ -243,12 +243,15 @@ export function chooseSize(fit, { handle = false, narrow = true, words = false }
   const clean = (f) => !f.cursor && !f.target && !f.n && !f.cut;
   const sizes = narrow ? [...CARD_SIZES, NARROW_SIZE] : CARD_SIZES.slice();
   if (words) { for (const t of OPEN_SIZES) { const f = fit(t); if (!f.cut) return f; } return fit(OPEN_SIZES[OPEN_SIZES.length - 1]); } // the player's own card: where it covers least, but never with its words behind its own scroll if another shape shows them all
-  let pick = null;
+  // What the lesson asks the player to READ (the seller's reply, the result line: `read`) is not a control, so a size that covers it and no control is still a clean one (else the card would be its tab wherever nothing is emptier), but a
+  // later size that covers none of it is better: the first such wins, and where every clean size covers some, the first clean one stands. (A wider font makes the card taller than the room under it: it stood over the reply's top.)
+  let pick = null, over = null;
   for (const t of sizes) {
     const f = fit(t);
-    if (clean(f)) return f;
+    if (clean(f)) { if (!f.read) return f; over ||= f; continue; }
     if (!pick || (!f.cursor && (pick.cursor || lessHarm(f, pick)))) pick = f;
   }
+  if (over) return over;
   if (handle && !words) return fit(HANDLE_SIZE);
   return pick.cursor ? fit(sizes[0]) : pick;
 }
@@ -284,7 +287,7 @@ export function rescueButton(card, f) {
 export function fitCard(t, s, spot, view, keep, strip = null, cut = false) {
   if (t === HANDLE_SIZE && strip && strip.h > 0) { const p = tabSpot(view, strip.h, s); return { t, s, p, cursor: false, target: false, n: 0, cut: false }; } // the strip is outside everything: the tab there hides nothing
   const p = placeCard(spot, s, view, 14, 8, keep), box = { x: p.x, y: p.y, w: s.w, h: s.h }, cur = keep.find((r) => r.focus);
-  return { t, s, p, cursor: !!cur && rectsOverlap(box, cur), target: !!spot && rectsOverlap(box, spot), n: keep.filter((r) => r.ctl && rectsOverlap(box, r)).length, cut: !!cut };
+  return { t, s, p, cursor: !!cur && rectsOverlap(box, cur), target: !!spot && rectsOverlap(box, spot), n: keep.filter((r) => r.ctl && rectsOverlap(box, r)).length, read: keep.filter((r) => r.read && rectsOverlap(box, r)).length, cut: !!cut };
 }
 
 // ------------------------------------------------------------------ the step resolver

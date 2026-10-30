@@ -28,9 +28,24 @@ export function applySettings() {
 export const reduced = () => settings.motion === 'reduce' || (typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches);
 
 // ---- rendering that does not steal focus or clobber typing
-export function setHTML(el, html) {
+// A tap is a press and a release on the same button, and the click is made of the two. A panel that is drawn again between them puts new buttons where the old ones were: the release lands on a
+// button the press never touched and the click goes to neither (tests/press-in-flight.test.mjs: the Academy's Borrow, lost three taps in six). So a panel that asks for it ({ press: true }) is not drawn
+// while a press that began inside it is down. Nothing is lost by it: setHTML says "not drawn" and keeps the old markup as the drawn one, so the next draw writes the new (a tick, or `then`, told when the
+// press is over). Only a caller that draws again by itself when the press is over asks (the shell's panels): a draw held back from one that does not would stay held back.
+const PRESS_MAX = 2500; // ms: a release that has not come by then is not coming (the window lost the pointer), and a panel must not stay frozen for it
+let pressing = null; // { el, at }: where the pointer went down, while it is down
+const pressedIn = (el) => !!pressing && Date.now() - pressing.at < PRESS_MAX && typeof el.contains === 'function' && el.contains(pressing.el);
+/** Watches the page's presses until the function it returns is called. `then` is called when a press has ended, after the click its release makes (which comes in the same task) has been handled. */
+export function watchPress(doc, win, then) {
+  const start = (e) => { pressing = { el: e.target, at: Date.now() }; };
+  const end = () => { if (!pressing) return; pressing = null; setTimeout(then, 0); };
+  doc.addEventListener('pointerdown', start, true); doc.addEventListener('pointerup', end, true); doc.addEventListener('pointercancel', end, true); win.addEventListener('blur', end);
+  return () => { doc.removeEventListener('pointerdown', start, true); doc.removeEventListener('pointerup', end, true); doc.removeEventListener('pointercancel', end, true); win.removeEventListener('blur', end); pressing = null; };
+}
+export function setHTML(el, html, { press = false } = {}) {
   if (!el) return false;
   if (el._html === html) return false;
+  if (press && pressedIn(el)) return false;
   const a = document.activeElement;
   if (a && el.contains(a) && a.matches('input:not([type=checkbox]):not([type=radio]), select, textarea')) return false; // never re-render under a typing user
   const fid = a && el.contains(a) ? a.dataset.fid : null;

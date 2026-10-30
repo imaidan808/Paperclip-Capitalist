@@ -4,24 +4,38 @@
 import { spawn } from "node:child_process";
 import { writeFileSync, mkdtempSync, rmSync, mkdirSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { CHROME as CH, chromeArgs } from "./chrome.mjs"; // the Chrome this machine has (CHROME_BIN names one): scripts/chrome.mjs
+import { CHROME as CH, chromeArgs, chromeReady } from "./chrome.mjs"; // the Chrome this machine has (CHROME_BIN names one): scripts/chrome.mjs
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 export async function launch(port = 9333) {
   const base = process.env.CHROME_PROFILES || tmpdir();
   mkdirSync(base, { recursive: true });
   const dir = mkdtempSync(base + "/pl-chrome-");
   if (!CH) throw new Error("No Chrome or Chromium found: set CHROME_BIN to one (scripts/chrome.mjs looks for the usual places)");
-  const proc = spawn(CH, [...chromeArgs(), `--remote-debugging-port=${port}`, `--user-data-dir=${dir}`, "about:blank"], { stdio: "ignore" });
-  for (let i = 0; i < 60; i++) { try { const r = await fetch(`http://127.0.0.1:${port}/json/version`); if (r.ok) break; } catch {} await sleep(150); }
+  const proc = spawn(CH, [...chromeArgs(), `--remote-debugging-port=${port}`, `--user-data-dir=${dir}`, "about:blank"], { stdio: ["ignore", "ignore", "pipe"] });
+  try { await chromeReady(proc, port); } catch (e) { try { proc.kill("SIGKILL"); } catch {} try { rmSync(dir, { recursive: true, force: true }); } catch {} throw e; } // (the reason, not "fetch failed" later)
   return { port, close: () => { try { proc.kill("SIGKILL"); } catch {} setTimeout(() => { try { rmSync(dir, { recursive: true, force: true }); } catch {} }, 700); } };
 }
+// A page's DevTools socket: opened, or an error that says which socket and why (a socket that never opens used to leave `open` waiting for ever, and a test then ended only at its own timeout, 15 minutes later)
+const connect = (url, ms = 30000) => new Promise((ok, no) => {
+  const ws = new WebSocket(url), fail = (why) => { clearTimeout(timer); no(new Error(`the page's DevTools socket ${why}: ${url}`)); }, timer = setTimeout(() => fail(`did not open in ${ms / 1000} s`), ms);
+  ws.addEventListener("open", () => { clearTimeout(timer); ok(ws); }, { once: true });
+  ws.addEventListener("error", () => fail("could not be opened"), { once: true });
+  ws.addEventListener("close", () => fail("closed before it opened"), { once: true });
+});
 export async function open(b, url, { w = 1280, h = 900, mobile = false, dsf = 1, reduced = false } = {}) {
-  const t = await (await fetch(`http://127.0.0.1:${b.port}/json/new?about:blank`, { method: "PUT" })).json();
-  const ws = new WebSocket(t.webSocketDebuggerUrl);
-  await new Promise(r => ws.addEventListener("open", r));
-  let id = 0; const pend = new Map(), logs = [];
+  const root = `http://127.0.0.1:${b.port}`;
+  let t, ws; // a page that would not open its socket is closed and another is made: three tries
+  for (let tries = 1; ; tries++) {
+    t = await (await fetch(`${root}/json/new?about:blank`, { method: "PUT", signal: AbortSignal.timeout(30000) })).json();
+    try { ws = await connect(t.webSocketDebuggerUrl); break; }
+    catch (e) { try { await fetch(`${root}/json/close/${t.id}`, { signal: AbortSignal.timeout(5000) }); } catch {} if (tries >= 3) throw e; await sleep(300 * tries); }
+  }
+  let id = 0, ending = false; const pend = new Map(), logs = [];
+  // a socket that closes by itself (Chrome let the page go) answers every request that is waiting with an error; one that this side closes (`close`) leaves them as they were
+  let why = ""; // what Chrome said when it let the page go (a code and a reason: 1006 is a connection that was cut), for the error of every request that was, or comes, after
+  ws.addEventListener("close", (ev) => { if (ending) return; why = `closed (code ${ev.code}${ev.reason ? ", " + ev.reason : ""})`; for (const f of pend.values()) f({ error: { message: "the page's DevTools socket " + why } }); pend.clear(); });
   ws.addEventListener("message", ev => { const m = JSON.parse(ev.data); if (m.id && pend.has(m.id)) { pend.get(m.id)(m); pend.delete(m.id); } else if (m.method === "Runtime.consoleAPICalled") logs.push(m.params.type + ": " + m.params.args.map(a => a.value ?? a.description).join(" ")); else if (m.method === "Runtime.exceptionThrown") logs.push("EXC: " + (m.params.exceptionDetails.exception?.description || m.params.exceptionDetails.text)); });
-  const send = (method, params = {}) => new Promise((res, rej) => { const i = ++id; pend.set(i, m => m.error ? rej(new Error(method + ": " + m.error.message)) : res(m.result)); ws.send(JSON.stringify({ id: i, method, params })); });
+  const send = (method, params = {}) => new Promise((res, rej) => { if (ws.readyState !== 1 && !ending) return rej(new Error(method + ": the page's DevTools socket is " + (why || "closed"))); const i = ++id; pend.set(i, m => m.error ? rej(new Error(method + ": " + m.error.message)) : res(m.result)); ws.send(JSON.stringify({ id: i, method, params })); });
   await send("Page.enable"); await send("Runtime.enable");
   await send("Emulation.setDeviceMetricsOverride", { width: w, height: h, deviceScaleFactor: dsf, mobile });
   if (reduced) await send("Emulation.setEmulatedMedia", { features: [{ name: "prefers-reduced-motion", value: "reduce" }] });
@@ -39,7 +53,7 @@ export async function open(b, url, { w = 1280, h = 900, mobile = false, dsf = 1,
     async mouse(type, x, y, o = {}) { await send("Input.dispatchMouseEvent", { type, x, y, button: type === "mouseMoved" && !o.down ? "none" : "left", buttons: o.down ? 1 : 0, clickCount: type === "mouseMoved" ? 0 : 1, modifiers: o.mod || 0 }); },
     async drag(a, b, o = {}) { await api.mouse("mouseMoved", a.x, a.y); await api.mouse("mousePressed", a.x, a.y, { down: true }); const n = o.steps || 8; for (let i = 1; i <= n; i++) { await api.mouse("mouseMoved", a.x + (b.x - a.x) * i / n, a.y + (b.y - a.y) * i / n, { down: true, mod: o.mod }); await sleep(20); } if (o.mid) await o.mid(); await api.mouse("mouseReleased", b.x, b.y, { down: false, mod: o.mod }); await sleep(250); },
     async rect(sel) { return await api.eval(`(()=>{const e=document.querySelector(${JSON.stringify(sel)});if(!e)return null;const b=e.getBoundingClientRect();return {x:b.x,y:b.y,w:b.width,h:b.height,cx:b.x+b.width/2,cy:b.y+b.height/2}})()`); },
-    sleep, close: async () => { try { ws.close(); await fetch(`http://127.0.0.1:${b.port}/json/close/${t.id}`); } catch {} },
+    sleep, close: async () => { ending = true; try { ws.close(); await fetch(`${root}/json/close/${t.id}`); } catch {} },
   };
   return api;
 }

@@ -99,10 +99,14 @@ test('a same-browser classroom works as the dashboard says: the plain student li
     assert.deepEqual([sa.state.handle, sa.state.pid, sa.mode, sa.room.code], ['Ada', pidAda, 'student', code]);
     assert.deepEqual([sg.state.handle, sg.state.pid, sg.mode, sg.room.code], ['Grace', pidGrace, 'student', code]);
     assert.notEqual(await local(inst, `pc.key.${slotAda}`), await local(inst, `pc.key.${slotGrace}`));
-    const graceRaw = await local(inst, `pc.save.${slotGrace}`);
     await ada.eval(`pc.S.game.s.cash += 321; pc.S.save(true)`);
-    assert.equal(await local(inst, `pc.save.${slotGrace}`), graceRaw, 'Ada\'s play does not touch Grace\'s saved run');
-    assert.equal((await saveOf(slotAda)).state.cash > sa.state.cash, true);
+    // Two timings of a loaded machine are allowed for. A tab reads another tab's localStorage a moment after the write (Chrome mirrors it between its processes: the runner read the old value and failed here once),
+    // so Ada's saved run is waited for. And Grace's tab saves itself every 4 s at this pace, so her run is compared by what is hers (who she is and her cash), not byte for byte.
+    const graceNow = JSON.parse(await local(inst, `pc.save.${slotGrace}`));
+    assert.deepEqual([graceNow.state.handle, graceNow.state.pid, graceNow.state.cash, graceNow.room.code], [sg.state.handle, sg.state.pid, sg.state.cash, code], 'Ada\'s play does not touch Grace\'s saved run');
+    const adaSaved = await until(inst, `(() => { const s = JSON.parse(localStorage.getItem('pc.save.${slotAda}')); return s.state.cash > ${sa.state.cash} && s.state.cash; })()`, 'Ada\'s saved run, with her 321 more, to reach the other tabs', 20000)
+      .catch(async (e) => assert.fail(`${e.message}; Ada's tab holds ${await ada.eval('pc.S.game.s.cash')}, the save the instructor's tab reads holds ${(await saveOf(slotAda)).state.cash}, and before her 321 it held ${sa.state.cash}`));
+    assert.ok(adaSaved > sa.state.cash, `Ada's play is saved in Ada's slot (${adaSaved} against ${sa.state.cash})`);
     for (const n of ['pid', 'key', 'handle', 'save']) assert.equal(await local(inst, `pc.${n}.main`), oldKeys[n], `the browser's own pc.${n}.main is byte for byte what the solo run left`);
 
     // ---- 6. a student who refreshes is the same student, and the instructor still counts two

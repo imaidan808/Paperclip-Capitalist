@@ -184,6 +184,14 @@ test('chooseSize: the first size that stands clear of the cursor, the target and
   assert.equal(A.chooseSize(fits({ full: { cursor: true }, slim: { n: 2 }, narrow: { n: 5 } })).t, 'slim', 'never over the cursor while one size is not');
   assert.equal(A.chooseSize(fits({ full: { n: 2 }, slim: { n: 2 }, narrow: { n: 2 } })).t, 'full', 'a tie goes to the larger card');
   assert.equal(A.chooseSize(fits({ full: { cursor: true }, slim: { cursor: true }, narrow: { cursor: true } })).t, 'full', 'every size over the cursor: the full card, as it always was');
+  // what the lesson asks the player to READ (the seller's reply, the result line) is not a control: a size that covers it gives way to a smaller one that does not (a wider font made the full card 11 px taller than the room under it on a runner, and it stood over the top of the reply), but never to the tab, and never over a control
+  assert.equal(A.chooseSize(fits({ full: { read: 1 } }), { handle: true }).t, 'slim', 'a size that covers a reply gives way to the next that does not');
+  assert.equal(A.chooseSize(fits({ full: { read: 1 }, slim: { read: 2 }, narrow: { read: 1 } }), { handle: true }).t, 'full', 'where every size covers something to read, the first that touches no control stands (not the tab)');
+  assert.equal(A.chooseSize(fits({ full: { read: 1 }, slim: { n: 1 }, narrow: { n: 1 } }), { handle: true }).t, 'full', 'a control covered outranks a reply covered: the card that covers the reply stands, not the one that covers a button');
+  assert.equal(A.chooseSize(fits({ full: { read: 1 }, slim: { read: 0 } })).t, 'slim', 'the card that must be shown follows the same preference');
+  const all = { x: 0, y: 0, w: 1000, h: 800, wt: 0.4, ctl: false, read: true }, f = A.fitCard('full', { w: 100, h: 100 }, null, { w: 1000, h: 800 }, [all]);
+  assert.equal(f.read, 1, 'fitCard counts what to read that the card covers'); assert.equal(f.n, 0, 'and it is not a control');
+  assert.equal(A.fitCard('full', { w: 100, h: 100 }, null, { w: 1000, h: 800 }, []).read, 0);
   // the card the player opened: the full card, wherever it covers least, never the tab
   order.length = 0; assert.equal(A.chooseSize(rec({ full: { n: 4 } }), { handle: true, words: true }).t, 'full'); assert.deepEqual(order, ['full']);
   // ... and in a window too short for its words (they would scroll inside it and hide the hint): the same words across the strip's width, then that without the notes; where none fits, the shortest, as it scrolls

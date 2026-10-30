@@ -287,10 +287,10 @@ export function mountAcademy(root, S, { onDone, onSkip, only, missions, store = 
     }
     function keepRects(host, view) {
       const out = [], inDlg = host === dlg.el, root = inDlg ? host : ctx.el.stage;
-      const add = (e, wt, pad = 0, focus = false, ctl = false) => {
+      const add = (e, wt, pad = 0, focus = false, ctl = false, read = false) => {
         if (!e || e === cardEl || layer?.contains(e) || !e.isConnected) return;
         const r = seenBox(e, view);
-        if (r) out.push({ x: r.x - pad, y: r.y - pad, w: r.w + pad * 2, h: r.h + pad * 2, wt, focus, ctl });
+        if (r) out.push({ x: r.x - pad, y: r.y - pad, w: r.w + pad * 2, h: r.h + pad * 2, wt, focus, ctl, read });
       };
       clipMemo.clear();
       const shown = (e) => { try { return e.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true }); } catch { return e.offsetWidth > 0 || e.offsetHeight > 0; } };
@@ -298,7 +298,7 @@ export function mountAcademy(root, S, { onDone, onSkip, only, missions, store = 
         if (layer?.contains(e) || e.tagName === 'CANVAS' || e.matches(':disabled') || e.closest('[inert]') || !shown(e)) continue;
         add(e, 2, 0, false, true);
       }
-      if (inDlg) { add(host.querySelector('.deal-top'), 1); for (const e of host.querySelectorAll(READ)) add(e, 0.4); }
+      if (inDlg) { add(host.querySelector('.deal-top'), 1); for (const e of host.querySelectorAll(READ)) add(e, 0.4, 0, false, false, true); /* `read`: chooseSize prefers a size of the card that does not cover it */ }
       else if (!ctx.el.drawer.hidden) add(ctx.el.drawer, 3);
       const f = document.activeElement;
       if (f && f !== document.body && f !== document.documentElement && f.tagName !== 'CANVAS' && !cardEl?.contains(f)) { // the world's canvas is the whole window: it is never "covered"

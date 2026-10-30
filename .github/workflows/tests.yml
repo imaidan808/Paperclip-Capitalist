@@ -1,0 +1,37 @@
+name: Tests
+# The whole suite on every pull request, on the same kind of machine that gates the Pages deploy (ubuntu-latest), so a failure that only that machine shows is seen before a merge and not after it.
+# It publishes nothing. A manual run (Actions, Run workflow) can name test files and a test-name pattern, to look at one failure without waiting for the rest.
+on:
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      files:
+        description: Test files for node --test, separated by spaces
+        default: tests/*.test.mjs
+      pattern:
+        description: Run only the tests whose name matches this regular expression (empty runs them all)
+        default: ''
+permissions:
+  contents: read
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30 # a hung test ends the run, with its log, instead of running for six hours
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with: { node-version: 22 }
+      - run: npm ci --prefix server
+      - name: Run the tests
+        shell: bash
+        env:
+          TEST_FILES: ${{ inputs.files || 'tests/*.test.mjs' }}
+          TEST_PATTERN: ${{ inputs.pattern }}
+        run: |
+          set -o pipefail
+          if [ -n "$TEST_PATTERN" ]; then node --test --test-name-pattern="$TEST_PATTERN" $TEST_FILES 2>&1 | tee test.log; else node --test $TEST_FILES 2>&1 | tee test.log; fi
+          # A test marked todo is a known fault and does not change the exit code: stop here, as the deploy does.
+          if grep -Eq 'todo [1-9][0-9]*$' test.log; then echo 'A test is marked todo, which means a known fault.'; exit 1; fi

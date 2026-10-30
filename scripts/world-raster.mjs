@@ -46,9 +46,9 @@ const PAN = (steps) => `(()=>{
     const dx=0.25*k, dy=0.15*k; w.cam.x=x0-dx/a; w.cam.y=y0-dy/a; w.dirty=true; const B=read();
     const sx=Math.round(dpr*(w.W/2-w.cam.x*w.cam.z))-e0, sy=Math.round(dpr*(w.H/2-w.cam.y*w.cam.z))-f0;
     // B(x,y) should equal A(x - sx, y - sy), away from the borders (a margin for what scrolls in) and not under the screen-space layers that are fixed to the window (the map's minimap)
-    let n=0,bad=0; const m=60;
-    for (let y=m;y<M-m;y+=1) for (let x=m;x<N-m;x+=1) { const ax=x-sx, ay=y-sy; if (ax<0||ay<0||ax>=N||ay>=M) continue; const i=(y*N+x)*4, j=(ay*N+ax)*4; n++; const d=Math.max(Math.abs(B[i]-A[j]),Math.abs(B[i+1]-A[j+1]),Math.abs(B[i+2]-A[j+2])); if (d>12) bad++; }
-    out.push({k, shift:[sx,sy], share:+(bad/n).toFixed(5)});
+    let n=0,bad=0; const m=60, box=[1e9,1e9,-1,-1], samples=[], rows={};
+    for (let y=m;y<M-m;y+=1) for (let x=m;x<N-m;x+=1) { const ax=x-sx, ay=y-sy; if (ax<0||ay<0||ax>=N||ay>=M) continue; const i=(y*N+x)*4, j=(ay*N+ax)*4; n++; const d=Math.max(Math.abs(B[i]-A[j]),Math.abs(B[i+1]-A[j+1]),Math.abs(B[i+2]-A[j+2])); if (d>12) { bad++; if (x<box[0]) box[0]=x; if (y<box[1]) box[1]=y; if (x>box[2]) box[2]=x; if (y>box[3]) box[3]=y; if (samples.length<8) samples.push([x,y,[A[j],A[j+1],A[j+2]],[B[i],B[i+1],B[i+2]]]); const bx=(x/120|0)*120, by=(y/120|0)*120; rows[bx+','+by]=(rows[bx+','+by]||0)+1; } }
+    out.push({k, shift:[sx,sy], share:+(bad/n).toFixed(5), ...(bad ? { bad, box, samples, blocks:rows } : {})}); // (where the pixels that are not rigid are, in 120 px blocks: a machine whose raster differs from the author's says which part of the picture it is)
   }
   w.cam.x=x0; w.cam.y=y0; return out;
 })()`;
@@ -77,7 +77,7 @@ for (const dsf of DSFS) {
     if (ONLY.has('pan') && (dsf === 2 || dsf === 1.5)) for (const [label, sc, z] of SCENES) {
       const [wx, wy] = SCEN[sc]; await view(p, { z, wx, wy }); await p.eval(SETTLE);
       const r = await p.eval(PAN(16)), mean = r.reduce((s, q) => s + q.share, 0) / r.length, worst = Math.max(...r.map((q) => q.share));
-      result.pan.push({ dsf, scene: label, rigidShare: +mean.toFixed(5), worst: +worst.toFixed(5), steps: r.length });
+      result.pan.push({ dsf, scene: label, rigidShare: +mean.toFixed(5), worst: +worst.toFixed(5), steps: r.length, diag: r.find((q) => q.share === worst && q.bad) || null });
       if (hasChunks && mean > 0.005) result.failed.push(`pan: ${(mean * 100).toFixed(2)}% of the pixels are not rigid at dsf ${dsf}, ${label}`);
     }
     if (ONLY.has('settle') && dsf === 2 && hasChunks) for (const [label, sc, z] of SCENES) {

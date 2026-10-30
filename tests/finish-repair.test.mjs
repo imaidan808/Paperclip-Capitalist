@@ -255,7 +255,7 @@ test('A3: the Deal Room\'s whole-deal Quick carries the lesson\'s frame, and the
 test('A4: the Deal Room\'s card keeps off what the lessons ask the player to read', () => {
   const src = read('js/ui/academy.js');
   assert.match(src, /const READ = '\.deal \.bubble, \.deal-stage \.callout, \.deal-result \.rhead, \.deal-result \.rlines, \.deal-score > div';/);
-  assert.match(src, /for \(const e of host\.querySelectorAll\(READ\)\) add\(e, 0\.4\);/, 'at a weight under a control\'s');
+  assert.match(src, /for \(const e of host\.querySelectorAll\(READ\)\) add\(e, 0\.4, 0, false, false, true\);/, 'at a weight under a control\'s, and marked `read` (not a control): chooseSize prefers a size of the card that does not cover it');
   // the selectors name things the room really draws
   const m = M('m01'), g = A.makeSandboxSession(m.setup, { id: m.id, zone: m.zone }).game, run = D.startRun(g, { kind: 'sell', assetId: g.s.assets[0].id, leadId: 'sim-student' });
   run.quick(); const h = UI.sheetHTML({ ...D.modelOf(run, {}), pick: [], slider: 0.2 });
@@ -717,7 +717,8 @@ test('browser A3, A4, A7: a tap lands on the Market\'s Sell button at 360x640 wh
     // at rest: unchanged for 700 ms, so the card's beat (every 200 ms) and its hold after a press (350 ms) have both passed: two reads a moment apart can agree while the card is still waiting to be placed for what the click changed
     await until(p, `(()=>{const c=document.querySelector('.ac-coach'); const r=c.getBoundingClientRect(); const k=[r.x,r.y,r.width,r.height].join(), n=Date.now(), w=window.__ck; if(!w||w.k!==k){window.__ck={k,since:n}; return false} return n-w.since>=700})()`, 'the card at rest');
     const over = await p.eval(`(()=>{const c=document.querySelector('.ac-coach').getBoundingClientRect(); return [...document.querySelectorAll('.deal .bubble, .deal-stage .callout, .deal-score > div')].map(e=>{const r=e.getBoundingClientRect(); return Math.max(0,Math.min(r.right,c.right)-Math.max(r.left,c.left))*Math.max(0,Math.min(r.bottom,c.bottom)-Math.max(r.top,c.top))}).reduce((a,x)=>a+x,0)})()`);
-    assert.equal(over, 0, 'no pixel of the result line, the seller\'s reply or the footer\'s cells is under the card');
+    const detail = over ? await p.eval(`(()=>{const c=document.querySelector('.ac-coach').getBoundingClientRect(), q=(r)=>[r.left,r.top,r.right,r.bottom].map(Math.round); const hits=[...document.querySelectorAll('.deal .bubble, .deal-stage .callout, .deal-score > div')].map(e=>{const r=e.getBoundingClientRect(), a=Math.max(0,Math.min(r.right,c.right)-Math.max(r.left,c.left))*Math.max(0,Math.min(r.bottom,c.bottom)-Math.max(r.top,c.top)); return a>0?{cls:e.className,text:e.textContent.trim().slice(0,50),rect:q(r),area:Math.round(a)}:null}).filter(Boolean); return {card:q(c),cardClass:document.querySelector('.ac-coach').className,dialog:q(document.querySelector('dialog#dlg').getBoundingClientRect()),win:[innerWidth,innerHeight],font:getComputedStyle(document.body).fontFamily.slice(0,90),hits}})()`) : null; // (what overlaps and where, for a runner whose fonts are not the author's)
+    assert.equal(over, 0, 'no pixel of the result line, the seller\'s reply or the footer\'s cells is under the card: ' + JSON.stringify(detail));
   } finally { await p.close(); }
 });
 
