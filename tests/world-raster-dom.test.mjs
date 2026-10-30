@@ -40,7 +40,7 @@ test('pan, settle and memory: every frame of a quarter-pixel pan is the first fr
   const { code, json } = await measure(['--only', 'pan,settle,memory', '--dsf', '2']);
   assert.equal(code, 0, 'the gate: ' + json.failed.join('; '));
   for (const r of json.pan) assert.ok(r.rigidShare < 0.005, `${r.scene} at dsf ${r.dsf}: ${(r.rigidShare * 100).toFixed(3)}% of the pixels are not rigid (the old build: 0.9% at the coast, 0.3% in a district, 0.8% at the finest zoom)`);
-  const fin = json.pan.find((r) => /finest/.test(r.scene)); assert.ok(fin.rigidShare < 0.0005, 'the finest zoom is rigid to 0.05%: ' + fin.rigidShare);
+  const fin = json.pan.find((r) => /finest/.test(r.scene)); assert.ok(fin.rigidShare < 0.0005, 'the finest zoom is rigid to 0.05%: ' + fin.rigidShare + ' ' + JSON.stringify(fin.diag));
   for (const r of json.settle) { assert.equal(r.valid, true, 'every visible chunk baked'); assert.ok(r.share < 0.01, `${r.scene}: ${(r.share * 100).toFixed(2)}% of the pixels change between the picture during a pan and the picture at rest`); }
   assert.ok(json.memory.total <= 160, 'the pixel ledger holds ' + json.memory.total + ' MB: ' + JSON.stringify(json.memory.entries));
 });
