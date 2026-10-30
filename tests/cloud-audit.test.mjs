@@ -423,8 +423,9 @@ test('X5: an Academy lesson\'s sandbox is a scripted world: a Read there tells t
 });
 
 test('M2: a Chrome that dies at once is reported with its exit code and what it wrote, not as "fetch failed" nine seconds later', async () => {
-  const { chromeReady } = await import('../scripts/chrome.mjs');
+  const { chromeReady, CHROME_WAIT } = await import('../scripts/chrome.mjs');
   const { spawn } = await import('node:child_process');
+  assert.ok(CHROME_WAIT * 0.15 >= 45, `the launchers wait ${CHROME_WAIT * 0.15} s for Chrome to open its port (the first Chrome on a fresh GitHub runner takes 9 to 10 s: nine seconds failed there)`);
   const dead = spawn(process.execPath, ['-e', "console.error('No usable sandbox! Update your kernel'); process.exit(3)"], { stdio: ['ignore', 'ignore', 'pipe'] });
   await assert.rejects(() => chromeReady(dead, 9, 20), (e) => { assert.match(e.message, /exited with 3/); assert.match(e.message, /No usable sandbox/); assert.match(e.message, /debugging port 9/); return true; });
   const quiet = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 4000)'], { stdio: ['ignore', 'ignore', 'pipe'] });

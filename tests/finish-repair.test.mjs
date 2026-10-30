@@ -255,7 +255,7 @@ test('A3: the Deal Room\'s whole-deal Quick carries the lesson\'s frame, and the
 test('A4: the Deal Room\'s card keeps off what the lessons ask the player to read', () => {
   const src = read('js/ui/academy.js');
   assert.match(src, /const READ = '\.deal \.bubble, \.deal-stage \.callout, \.deal-result \.rhead, \.deal-result \.rlines, \.deal-score > div';/);
-  assert.match(src, /for \(const e of host\.querySelectorAll\(READ\)\) add\(e, 0\.4\);/, 'at a weight under a control\'s');
+  assert.match(src, /for \(const e of host\.querySelectorAll\(READ\)\) add\(e, 0\.4, 0, false, false, true\);/, 'at a weight under a control\'s, and marked `read` (not a control): chooseSize prefers a size of the card that does not cover it');
   // the selectors name things the room really draws
   const m = M('m01'), g = A.makeSandboxSession(m.setup, { id: m.id, zone: m.zone }).game, run = D.startRun(g, { kind: 'sell', assetId: g.s.assets[0].id, leadId: 'sim-student' });
   run.quick(); const h = UI.sheetHTML({ ...D.modelOf(run, {}), pick: [], slider: 0.2 });

@@ -38,9 +38,11 @@ export const chromeArgs = () => ['--headless=new', '--disable-gpu', '--hide-scro
 /**
  * Waits for a Chrome started with a debugging port to answer on it, and when it does not, says why. The launchers started it with its stderr thrown away and went on after nine seconds whether it answered or not, so a Chrome
  * that died at once (no usable sandbox on a runner, a flag it does not know, no display) showed up later as "fetch failed" or ECONNREFUSED, with nothing about the cause. Now the error has its exit code and the end of what it wrote.
- * `proc` is the child from spawn with stdio ['ignore', 'ignore', 'pipe'].
+ * `proc` is the child from spawn with stdio ['ignore', 'ignore', 'pipe']. It waits up to 60 s (400 tries of 150 ms) and returns the moment Chrome answers: the first Chrome on a fresh GitHub runner takes 9 to 10 s to open its port,
+ * and the nine seconds the launchers used to wait (60 tries) gave up on it at the edge, which is how the browser tests failed there with "fetch failed" and ECONNREFUSED.
  */
-export async function chromeReady(proc, port, tries = 60) {
+export const CHROME_WAIT = 400; // tries of 150 ms: 60 s
+export async function chromeReady(proc, port, tries = CHROME_WAIT) {
   let err = '', code = null; proc.stderr?.on('data', (d) => { err = (err + d).slice(-3000); }); proc.once('exit', (c, sig) => { code = c ?? sig; });
   for (let i = 0; i < tries; i++) { try { const r = await fetch(`http://127.0.0.1:${port}/json/version`); if (r.ok) return; } catch { /* not yet */ } if (code != null) break; await new Promise((r) => setTimeout(r, 150)); }
   throw new Error(`Chrome did not open its debugging port ${port} (${code == null ? 'still running after ' + (tries * 0.15).toFixed(0) + ' s' : 'exited with ' + code}): ${err.trim().slice(-1500) || 'it wrote nothing'}`);
