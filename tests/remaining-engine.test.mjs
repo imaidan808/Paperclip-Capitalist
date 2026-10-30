@@ -614,11 +614,16 @@ test('Relay owner (low): an instructor who has lost the browser\'s storage, or c
     // and the old holder is a student again
     first.send({ t: 'clock', hour: 9, speed: 64, paused: false }); await sleep(250);
     assert.ok(!stud.got.some((m) => m.t === 'clock' && m.hour === 9), 'the seat moved with the token');
-    // a room that was never bound to a token is claimed as before: first come, then nobody else
-    const p1 = sock(relay, 'OWN2', 'PC-P1', 'instructor'), p2 = sock(relay, 'OWN2', 'PC-P2', 'student'); await Promise.all([p1.ready, p2.ready]);
-    const p3 = sock(relay, 'OWN2', 'PC-P3', 'instructor', '&owner=' + tok); await p3.ready; p3.send({ t: 'clock', hour: 77, speed: 1, paused: true }); await sleep(250);
-    assert.ok(!p2.got.some((m) => m.t === 'clock' && m.hour === 77), 'a token cannot take a seat that someone else already holds in a room not bound to it');
-    for (const c of [first, stud, thief, wrong, again, p1, p2, p3]) c.ws.close();
+    // a room that was never bound to a token: without a token it is claimed as before (first come, then nobody else)...
+    const p1 = sock(relay, 'OWN2', 'PC-P1', 'instructor'), p2 = sock(relay, 'OWN2', 'PC-P2', 'student'), p4 = sock(relay, 'OWN2', 'PC-P4', 'instructor'); await Promise.all([p1.ready, p2.ready, p4.ready]);
+    p4.send({ t: 'clock', hour: 55, speed: 1, paused: true }); await sleep(250);
+    assert.ok(!p2.got.some((m) => m.t === 'clock' && m.hour === 55), 'a second connection with no token does not take the seat from the first');
+    // ...and the first token shown binds it and takes the seat, from a holder that never showed one (tests/cloud-audit.test.mjs S1: a stray tab must not leave the room without an owner for good)
+    const p3 = sock(relay, 'OWN2', 'PC-P3', 'instructor', '&owner=' + tok); await p3.ready; p3.send({ t: 'clock', hour: 77, speed: 1, paused: true });
+    await until(() => p2.got.some((m) => m.t === 'clock' && m.hour === 77 && m.from === 'PC-P3' && m.role === 'instructor'));
+    p1.send({ t: 'clock', hour: 78, speed: 1, paused: true }); await sleep(250);
+    assert.ok(!p2.got.some((m) => m.t === 'clock' && m.hour === 78), 'the holder that showed no token is a student once the owner arrives');
+    for (const c of [first, stud, thief, wrong, again, p1, p2, p3, p4]) c.ws.close();
   } finally { await relay.stop(); }
 });
 

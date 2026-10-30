@@ -481,7 +481,8 @@ export class DealRun {
     const done = (k) => res[k] && res[k].done && !res[k].skipped, q = (k) => !!(res[k] && res[k].quick), played = !this.walked;
     if (plan.kind === 'buy') {
       const lot0 = this.lot(), news = !lot0 || !lot0.belief || probedOn(lot0).length > this.probes0; // a lot read before and read with nothing new this time is not a new lesson
-      if (done('read') && res.read.spent > 0 && news) g.recordInspect(plan.zone, plan.lot.id, { ...res.read, quick: q('read'), key: plan.lot.id }); // reading nothing earns nothing, Quick's included
+      const hidden = (this.walked || noDeal) && !(res.bid && res.bid.won === false); // the card's own rule for a lot whose truth stays hidden (onShelf, below): the Read is then paid on the evidence, not on how close it came
+      if (done('read') && res.read.spent > 0 && news) g.recordInspect(plan.zone, plan.lot.id, { ...res.read, quick: q('read'), key: plan.lot.id, hidden }); // reading nothing earns nothing, Quick's included
       if (res.bid && res.bid.won === false) g.passLot(plan.zone, plan.lot.id, `You dropped out of the auction for the ${plan.lot.name}.`);
       else if (deal) r = g.buyLot(plan.zone, plan.lot.id, deal);
       // A haggle or an auction counts as played once the purchase it led to has gone through (or it led to none): a price agreed that the cash could not pay was no deal, and must not count as one closed.

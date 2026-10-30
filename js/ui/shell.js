@@ -329,6 +329,7 @@ export function mountGame(root, S, hooks) {
     if (type === 'offer') cues?.session('offer', data);
     if (type === 'rewound') { attachGame(); cues?.session('rewound'); toast('Your instructor rewound the simulation.', 'warn'); }
   });
+  const refusal = S.roomRefusal?.(); if (refusal) toast(refusal, 'bad', 9000); // the room was refused while the player was still on the draft: the note went by before this screen was here
   const over = setInterval(() => {
     const s = S.game?.s;
     if (s?.over && !U.overShown) { U.overShown = true; queue(`<h2 tabindex="-1" autofocus>The simulation is complete</h2><p>Your final Economic Efficiency Index is <b class="gold">${S.game.eei().toFixed(2)}</b>. Open the debrief to review your decisions and prepare your reflection.</p><div class="row"><button class="btn big" data-act="debrief" autofocus>Open debrief</button><button class="btn ghost" data-close>Keep looking around</button></div>`, { label: 'Complete', sound: 'level' }); }

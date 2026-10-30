@@ -38,7 +38,8 @@ export function hudHTML(ctx) {
     ? `<button class="ibtn" data-anchor="hud-clock" data-act="pause" aria-pressed="${S.clock.paused}" aria-label="${S.clock.paused ? 'Resume the clock' : 'Pause the clock'}">${S.clock.paused ? '▶' : '⏸'}</button>
        <label class="sr" for="spd">Game speed</label><select id="spd" data-change="speed" data-fid="spd">${[0.25, 1, 4, 16, 64].map((v) => `<option value="${v}" ${S.clock.speed === v ? 'selected' : ''}>${v}x</option>`).join('')}</select>`
     : `<span class="chip info">Class clock ${S.clock.paused ? 'paused' : S.clock.speed + 'x'}</span>`;
-  const room = S.roomInfo ? `<span class="chip ${S.room?.state === 'open' ? 'good' : 'warn'}">Room ${esc(S.roomInfo.code)}</span>` : '';
+  const refused = S.room?.state === 'refused';
+  const room = S.roomInfo ? `<span class="chip ${S.room?.state === 'open' ? 'good' : 'warn'}"${refused ? ' title="The relay refused this device: its Founder ID is in use in this room by another connection."' : ''}>Room ${esc(S.roomInfo.code)}${refused ? ' (not joined)' : ''}</span>` : '';
   return `${playerCard(ctx)}
     <div class="res" role="group" aria-label="Your numbers">
       <button class="rs${fl('cash', s.cash)}" data-anchor="hud-cash" data-act="breakdown" data-k="cash" data-fid="r-cash"><small>Cash</small><b class="mono gold">${money(s.cash)}</b></button>

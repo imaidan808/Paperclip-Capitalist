@@ -520,7 +520,9 @@ export class Game {
   }
   _spawnLot(z, byClock = false) {
     const s = this.s, Z = ZONES[z];
-    s.lots[z] = (s.lots[z] || []).filter((l) => l.exp > s.hour);
+    const shelf = s.lots[z] || [];
+    s.lots[z] = shelf.filter((l) => l.exp > s.hour);
+    for (const l of shelf) if (!(l.exp > s.hour)) this._settleRead(l); // gone from the shelf: nobody can buy it now
     const lotRate = 1 / (Z.lotEvery * ECON.lotEvery * (1 - this.P.lotRefresh));
     if (byClock && Math.floor(s.hour * lotRate) === Math.floor((s.hour - 1) * lotRate)) return;
     if (s.lots[z].length >= ECON.lotSlots + this.B.lotSlots) return;
@@ -756,7 +758,12 @@ export class Game {
     const lot = this.s.lots[zone]?.find((l) => l.id === lotId);
     if (!lot || !res?.estimate) return fail('That lot is gone.');
     lot.belief = { quality: clamp(fin(res.estimate.quality, 1), 0.6, 1.2), fakeProb: clamp(fin(res.estimate.fakeProb, 0.2), 0, 1), confidence: clamp(fin(res.confidence, 0), 0, 1) };
-    const caught = lot.truth.fake && res.estimate.fakeProb >= 0.6;
+    // `res.hidden`: the lot stays on the shelf with its truth hidden (the player walked away, or the talks failed: the card does not reveal it). Then nothing paid or said may depend on the truth: the experience and the tally
+    // follow the evidence the Read gathered (its confidence) and not how close it came, and the quests are told no counterfeit was caught, here or on a later visit; else a Read, a Pass and a look at the "+N XP" (or at
+    // Spot the Fake) would be a free check of the lot, to be followed by the purchase. A Read whose lot is bought, or lost at auction, is revealed on the card, so it is scored on its accuracy as before.
+    // (An Academy lesson's sandbox is a scripted world whose lots the lesson names: m02 reads a fake and a genuine watch and says which is which, and its steps wait for the event that carries the truth. Nothing there is a secret.)
+    const hidden = res.hidden === true && !this.sandbox;
+    const caught = !hidden && lot.truth.fake && res.estimate.fakeProb >= 0.6;
     // A Read in which no probe was bought learned nothing: it pays nothing and does not use up the lot's one payment (a real read of the same lot later still pays).
     if (res.spent !== undefined && !(fin(+res.spent, 0) > 0)) return ok('Recorded.', { caught, repeat: true });
     if (!this._firstPlay('inspect', res.key ?? lotId)) {
@@ -765,11 +772,19 @@ export class Game {
       return ok('Recorded.', { caught, repeat: true });
     }
     if (caught) lot.caughtReported = true;
-    const score = clamp(fin(res.score, 0.5), 0, 1); // a number from outside is a number or the neutral default: a string once made the XP, and the debrief's tally, NaN
+    if (hidden) lot.readScore = clamp(fin(res.score, 0.5), 0, 1); // how close this Read came, kept on the lot and told to the quests when the truth stops being a secret (_settleRead)
+    const score = clamp(fin(hidden ? res.confidence : res.score, hidden ? 0 : 0.5), 0, 1); // a number from outside is a number or the neutral default: a string once made the XP, and the debrief's tally, NaN
     this._skillXp('inspect', 8 + 22 * score);
     this._tally('inspect', score, !!res.quick);
-    this.emit('inspect', { score, fake: lot.truth.fake, caught });
+    this.emit('inspect', hidden ? { score: 0, fake: false, caught: false } : { score, fake: lot.truth.fake, caught }); // (a hidden Read still counts as a Read; it claims no accuracy)
     return ok('Recorded.', { caught });
+  }
+  /** The Read of a lot whose truth was hidden when it was made (recordInspect with `hidden`) is told to the quests once the truth is no longer a secret, which is when nobody can act on it any more or the card has shown it:
+   *  the lot is bought, lost at auction, or gone from the shelf. Spot the Fake, Counterfeit Cop and Good Eye are earned then (a counterfeit passed on is caught once it is gone), exactly once. */
+  _settleRead(lot) {
+    if (!lot || lot.readScore === undefined) return;
+    const score = lot.readScore, fake = !!lot.truth?.fake; delete lot.readScore;
+    this.emit('inspect', { score, fake, caught: fake && (lot.belief?.fakeProb ?? 0) >= 0.6 });
   }
   /** Per-game play counts for the debrief and the instructor: s.meta[kind] = { n, sum } (sum of scores), plus how many deals were played by hand and how many were Quick. */
   _tally(kind, score, quick) {
@@ -810,6 +825,7 @@ export class Game {
     const s = this.s, lot = s.lots[zone]?.find((l) => l.id === lotId);
     if (!lot) return fail('That lot is gone.');
     s.lots[zone] = s.lots[zone].filter((l) => l.id !== lotId);
+    this._settleRead(lot);
     if (typeof why === 'string' && why) this.note('info', why.slice(0, 200));
     return ok('Lot gone.');
   }
@@ -822,6 +838,7 @@ export class Game {
     if (held >= this.storeCap(zone)) return fail('Storage is full here (crates in transit and in escrow count). Sell something or ship it out.');
     s.cash -= price;
     s.lots[zone] = s.lots[zone].filter((l) => l.id !== lotId);
+    this._settleRead(lot);
     const a = this._mk(s, lot.cls, { cond: lot.cond, zone, basis: price, from: 'lot' });
     a.truth = lot.truth; a.known = false; a.belief = lot.belief || null;
     s.assets.push(a);
