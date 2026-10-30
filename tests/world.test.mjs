@@ -560,24 +560,6 @@ test('only the primary button acts; lifting one finger after a pinch never jumps
   w.cv._h.pointerup(ev(1, 101, 100, 'pointerup')); assert.equal(acted, 1, 'ending a gesture is not a click');
 });
 
-test('the quality governor ignores cold frames, steps symmetrically, recovers, and never thrashes the canvas', async () => {
-  const g = newGame(3); openTo(g, 5);
-  const { w } = await world(g, { zone: 2, sel: new Set() });
-  window.devicePixelRatio = 2; w.resize(); assert.equal(w.dpr, 2);
-  let reallocs = 0, widthSet = w.cv.width; Object.defineProperty(w.cv, 'width', { get: () => widthSet, set: (v) => { if (v !== widthSet) reallocs++; widthSet = v; } });
-  const realNow = performance.now.bind(performance); let calls = 0, base = 0, cost = 30;
-  performance.now = () => (calls++ % 2 === 0 ? (base += 40) : base + cost);
-  w.running = true; let ts = 1000; const step = () => { w.dirty = true; w.last = 0; w.frame(ts += 40); };
-  try {
-    for (let i = 0; i < 25; i++) step(); assert.equal(w.slow, 0, 'the first frames after a resize are not judged');
-    for (let i = 0; i < 80; i++) step();
-    assert.ok(w.slow >= 5 && w.lite, 'a genuinely slow machine drops to the lite tier'); assert.ok(w.dpr < 2, 'and a lower pixel density');
-    assert.ok(reallocs <= 2, 'with at most one or two reallocations, not one per frame: ' + reallocs);
-    cost = 4; for (let i = 0; i < 120; i++) step();
-    assert.equal(w.slow, 0, 'and it recovers when the load goes away'); assert.equal(w.dpr, 2, 'restoring full sharpness'); assert.equal(w.lite, false);
-  } finally { performance.now = realNow; window.devicePixelRatio = 1; w.stop(); }
-});
-
 // ---------------------------------------------------------------- the buyers' opacity: no pop-in, no ghost that vanishes at a fifth
 test('a buyer fades in when it arrives, stands at full strength while it is new, fades out to nothing when its lead goes and is gone only then (no pop in, no ghost that vanishes at 20%)', async () => {
   const { leadAlpha, leaveEnd, ARRIVE_MS, HOLD_MS, LEAVE_MS } = await import('../js/world/common.js');
@@ -607,4 +589,22 @@ test('the world draws a buyer at the opacity of leadAlpha, and takes it out of t
   w.t = leaveEnd(b, e.leaveAt); w.update(0); assert.ok(!w.ents.has(e.id), 'and is gone when it has');
   // under reduced motion nothing fades: a buyer that is leaving is simply gone
   const e2 = [...w.ents.values()].find((x) => x.type === 'lead' && !x.leaving); assert.ok(e2); w.reduced = () => true; e2.leaving = true; e2.leaveAt = w.t; w.update(0); assert.ok(!w.ents.has(e2.id), 'under reduced motion a leaving buyer goes at once');
+});
+
+test('the quality governor ignores cold frames, steps symmetrically, recovers, and never thrashes the canvas', async () => {
+  const g = newGame(3); openTo(g, 5);
+  const { w } = await world(g, { zone: 2, sel: new Set() });
+  window.devicePixelRatio = 2; w.resize(); assert.equal(w.dpr, 2);
+  let reallocs = 0, widthSet = w.cv.width; Object.defineProperty(w.cv, 'width', { get: () => widthSet, set: (v) => { if (v !== widthSet) reallocs++; widthSet = v; } });
+  const realNow = performance.now.bind(performance); let calls = 0, base = 0, cost = 30;
+  performance.now = () => (calls++ % 2 === 0 ? (base += 40) : base + cost);
+  w.running = true; let ts = 1000; const step = () => { w.dirty = true; w.last = 0; w.frame(ts += 40); };
+  try {
+    for (let i = 0; i < 25; i++) step(); assert.equal(w.slow, 0, 'the first frames after a resize are not judged');
+    for (let i = 0; i < 80; i++) step();
+    assert.ok(w.slow >= 5 && w.lite, 'a genuinely slow machine drops to the lite tier'); assert.ok(w.dpr < 2, 'and a lower pixel density');
+    assert.ok(reallocs <= 2, 'with at most one or two reallocations, not one per frame: ' + reallocs);
+    cost = 4; for (let i = 0; i < 120; i++) step();
+    assert.equal(w.slow, 0, 'and it recovers when the load goes away'); assert.equal(w.dpr, 2, 'restoring full sharpness'); assert.equal(w.lite, false);
+  } finally { performance.now = realNow; window.devicePixelRatio = 1; w.stop(); }
 });
