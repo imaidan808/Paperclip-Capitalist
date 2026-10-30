@@ -3,6 +3,11 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      skip_tests:
+        description: Publish without running the tests. A one-off, manual choice (Actions, Run workflow, tick this) for a build the tests have already passed on the author's machine; a push to main always runs them first.
+        type: boolean
+        default: false
 permissions:
   contents: read
   pages: write
@@ -12,6 +17,7 @@ concurrency:
   cancel-in-progress: true
 jobs:
   test:
+    if: ${{ !inputs.skip_tests }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -26,6 +32,8 @@ jobs:
           if grep -Eq 'todo [1-9][0-9]*$' test.log; then echo 'A test is marked todo, which means a known fault. Fix it before deploying.'; exit 1; fi
   deploy:
     needs: test
+    # a push publishes only when the tests passed; a manual run with skip_tests ticked publishes without them (the test job is skipped then)
+    if: ${{ always() && (needs.test.result == 'success' || (needs.test.result == 'skipped' && inputs.skip_tests)) }}
     runs-on: ubuntu-latest
     environment:
       name: github-pages

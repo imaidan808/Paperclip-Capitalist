@@ -411,6 +411,10 @@ test('the Pages workflow is valid YAML that runs the tests, stages the site with
   assert.deepEqual(wf.permissions, { contents: 'read', pages: 'write', 'id-token': 'write' });
   assert.deepEqual(Object.keys(wf.jobs), ['test', 'deploy']);
   assert.equal(wf.jobs.deploy.needs, 'test');
+  // a manual run can publish without the tests (Actions, Run workflow, skip_tests ticked), for a build the tests have passed on the author's machine while a runner-only failure is being fixed; the switch is off by default and a push to main never skips them
+  const sk = wf.on.workflow_dispatch.inputs.skip_tests; assert.equal(sk.type, 'boolean'); assert.ok(sk.default === false || sk.default === 'false', 'off by default');
+  assert.match(wf.jobs.test.if, /!inputs\.skip_tests/, 'the test job is skipped only by the switch');
+  assert.match(wf.jobs.deploy.if, /needs\.test\.result == 'success'/, 'a push publishes when the tests passed'); assert.match(wf.jobs.deploy.if, /needs\.test\.result == 'skipped' && inputs\.skip_tests/, 'and a test job that was skipped publishes only when the switch asked for it');
   for (const [name, job] of Object.entries(wf.jobs)) { assert.ok(job['runs-on'], name + ' runs on something'); for (const s of job.steps) assert.ok(s.uses || s.run, 'a step does something'); }
   // the actions keep the versions the workflow was written with
   const uses = Object.values(wf.jobs).flatMap((j) => j.steps.map((s) => s.uses).filter(Boolean));
