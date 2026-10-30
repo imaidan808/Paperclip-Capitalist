@@ -43,7 +43,7 @@ test('the descriptor hands the base its chunk: the scale and the origin of the p
 });
 
 test('the first ground is baked whole (a chunk for every cell the window touches, each put through the V2 base and stamped once, 1:1 on whole device pixels, together covering the canvas)', () => {
-  ledger.clear(); made.length = 0; seen.length = 0; const w = world(), main = frame(w);
+  ledger.clear(); made.length = 0; seen.length = 0; const w = world(); w.gcBudget = [1e9, 1e9]; const main = frame(w); // (a frame bakes chunks until its time is spent, the first one always: the test says "the first ground is baked whole" and so gives the frame all the time it wants, or it is a test of how fast the machine is: 18 of 24 chunks on a runner, 1 of 24 when it runs alone, with the island's scene still to build)
   const cw = w.cv.width, ch = w.cv.height, b = blits(main).filter((c) => c.length === 4);
   assert.ok(b.length >= Math.ceil(cw / CHUNK_PX) * Math.ceil(ch / CHUNK_PX), `${b.length} stamps`);
   let covered = 0; const cells = new Set();
