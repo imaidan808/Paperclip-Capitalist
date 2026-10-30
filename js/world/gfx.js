@@ -5,6 +5,9 @@
 /** True when this browser can make offscreen canvases. */
 export const hasOffscreen = () => typeof OffscreenCanvas === 'function';
 
+/** A running count of cache builds (a ground chunk baked, a sprite or an atlas entry made, a cloud chunk baked). The frame loop reads it before and after a frame: a frame that filled a cache paid a cost that is not repeated, and the governor does not judge it (governor.js BUILD_GRACE). */
+export const builds = { n: 0 };
+
 /**
  * An offscreen 2D surface of w x h device pixels as { c, g } (canvas, context), or null when there is no OffscreenCanvas.
  * A surface is a bitmap in memory (tens of megabytes at window size): make one for a thing that lasts and paint it again in place when it changes. Never one per frame or per

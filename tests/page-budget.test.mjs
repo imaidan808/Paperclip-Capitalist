@@ -2,7 +2,7 @@
 //   B1  the static graph of js/main.js (what the staged page preloads and fetches before the title screen) holds no module of the world, of a later screen or of the game's rules and content that only a later screen reads
 //   B2  the first screen's requests and bytes are under the budget, and the whole site is under its own (a regression guard: the sound layer and the art took the page from 71 requests and 561 KB to 150 and 952 KB)
 //   B3  the screens that need the game are import()s of js/main.js, named by a literal path (scripts/preload.mjs reads them), and a screen that has not loaded shows a Loading note
-//   B4  in headless Chrome, served as Pages serves it: the first screen fetches no more than the budget before `load`, no module of the game is among them, and once the page is idle the rest is fetched, none fails
+//   B4  in headless Chrome, served as Pages serves it: the first screen fetches no more than the budget before `load`, no module of the game is among them, and once the page is idle the rest is fetched, none fails, and the island's static scene is built before anyone presses Begin
 // The numbers are in BUDGET, in one place. A change that moves one past its limit says which and by how much; raising a limit is a decision to write down in docs/ARCHITECTURE.md ("The first screen, and the rest").
 // Chrome is needed for B4 (skipped without it, or with PC_NO_BROWSER=1). Run: node --test tests/page-budget.test.mjs
 import test from 'node:test';
@@ -57,6 +57,9 @@ test('B3: the screens that need the game are import()s with literal paths, and a
   assert.match(main, /if \(mine === route\) show\(screen, arg, mine\)/, 'and a second request while it waits wins');
   assert.match(main, /document\.getElementById\('pc-lazy'\)/, 'the rest is prefetched from the list the staged page carries');
   assert.match(main, /navigator\.connection\?\.saveData/, 'and not on a connection that asks for less data');
+  assert.match(main, /const warmWorld = \(\) => \{ import\('\.\/world\/scene\.js'\)\.catch\(\(\) => \{\}\); \};/, 'the island\'s static scene is built while the title is on screen, by an import() with a literal path');
+  assert.match(main, /if \(list\.length\) idle\(pump\); else idle\(warmWorld\);/, 'once the last batch of modules is asked for, in idle time');
+  assert.ok(main.indexOf('navigator.connection?.saveData') < main.indexOf('const warmWorld'), 'and never on a connection that asks for less data');
 });
 
 // ====================================================================================================================================
@@ -87,6 +90,8 @@ test('B4: in Chrome the first screen fetches only the static graph before load, 
     assert.ok(kb(bytes) <= BUDGET.firstKB, `and ${kb(bytes).toFixed(1)} KB gzipped on the wire (budget ${BUDGET.firstKB}); the sheets were ${sheets.length}`);
     // then the browser is idle and fetches the rest, low priority, and every module of the site is in the page's resource list
     await until(`(() => { const have = new Set(performance.getEntriesByType('resource').map((e) => new URL(e.name).pathname.slice(${JSON.stringify(BASE_PATH.length)}))); return ${JSON.stringify(g.modules)}.every((m) => have.has(m)); })()`, 'the idle prefetch of every other module', 90000);
+    // and the island's static scene (its layout, the coast, the opening ground's colours) is built meanwhile, while the title is on screen: a player who presses Begin later finds it made
+    await until(`performance.getEntriesByName('pc:coast').length > 0 && performance.getEntriesByName('pc:scene').length > 0 && !window.pc.world`, 'the scene built while the title is still on screen', 30000);
     // and a player who then presses Play solo finds the Draft, and Begin finds the game, without a failure
     const bad = await p.eval(`performance.getEntriesByType('resource').filter((e) => e.responseStatus >= 400).map((e) => e.name + ' ' + e.responseStatus)`);
     assert.deepEqual(bad, [], 'no request failed');

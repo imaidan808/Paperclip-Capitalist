@@ -9,6 +9,13 @@
 // the canvas density (the one drop that softens, kept because nothing else buys that much); the canvas is reallocated only past tier 3 and given back only under tier 2 (World.targetDpr).
 export const SLOW_MS = 22, FAST_MS = 16;
 export const GOV_WAIT = 10, GOV_DOWN = 3;      // frames of good cost before one step back up (it doubles while the picture keeps tipping over), frames of bad cost before one step down
+/**
+ * Frames in a row that filled a cache (a ground chunk baked, a sprite made, a cloud baked) and are not judged. A cache is filled once: the load of the first view is seconds of such frames on a laptop four times slower than a
+ * Mac, and judging them sent that laptop down five tiers and back up, over and over (the canvas density flipping between 2 and 1.5, which bakes the ground again, and the lights, smoke and people of `lite` going out and
+ * coming back: the picture blinked), where the steady frames would have held tier 0 or 1. The frame after one that was not judged arrives late because of it, so its gap is not held against it either. A build that goes on
+ * longer than this (300 frames: ten seconds of a still picture) is not a load, a cache that cannot hold its set, and is judged as any frame is.
+ */
+export const BUILD_GRACE = 300;
 export const GOV_TOP = 6;                      // the lowest tier
 /** A gap between two drawn frames of more than this many target intervals is a late frame. */
 export const LATE = 1.6;

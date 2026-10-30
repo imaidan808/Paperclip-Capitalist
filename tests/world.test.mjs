@@ -577,3 +577,22 @@ test('the quality governor ignores cold frames, steps symmetrically, recovers, a
     assert.equal(w.slow, 0, 'and it recovers when the load goes away'); assert.equal(w.dpr, 2, 'restoring full sharpness'); assert.equal(w.lite, false);
   } finally { performance.now = realNow; window.devicePixelRatio = 1; w.stop(); }
 });
+
+test('the quality governor does not judge the frames that fill a cache: a slow load leaves the tier and the canvas density where they were, the same cost with nothing building is a slow machine', async () => {
+  const { builds } = await import('../js/world/gfx.js');
+  const g = newGame(3); openTo(g, 5);
+  const { w } = await world(g, { zone: 2, sel: new Set() });
+  window.devicePixelRatio = 2; w.resize(); assert.equal(w.dpr, 2);
+  let reallocs = 0, widthSet = w.cv.width; Object.defineProperty(w.cv, 'width', { get: () => widthSet, set: (v) => { if (v !== widthSet) reallocs++; widthSet = v; } });
+  const realNow = performance.now.bind(performance); let calls = 0, base = 0; const cost = 30;
+  performance.now = () => (calls++ % 2 === 0 ? (base += 40) : base + cost);
+  const realDraw = w.draw.bind(w); let building = true; w.draw = () => { if (building) builds.n++; return realDraw(); };
+  w.running = true; let ts = 1000; const step = () => { w.dirty = true; w.last = 0; w.frame(ts += 40); };
+  try {
+    for (let i = 0; i < 25; i++) step();
+    for (let i = 0; i < 150; i++) step();
+    assert.equal(w.slow, 0, 'frames that each filled a cache and cost 30 ms leave the tier alone: ' + w.slow); assert.equal(w.dpr, 2, 'and the canvas density'); assert.equal(reallocs, 0, 'and the canvas is never reallocated for them'); assert.equal(w.lite, false);
+    building = false; for (let i = 0; i < 80; i++) step();
+    assert.ok(w.slow >= 5 && w.lite, 'the same 30 ms with nothing building is a genuinely slow machine: ' + w.slow);
+  } finally { performance.now = realNow; window.devicePixelRatio = 1; w.stop(); }
+});

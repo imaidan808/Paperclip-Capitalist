@@ -7,7 +7,7 @@
 // the cell's own 384 x 384 is handed to the browser as an immutable ImageBitmap (a cell of open sea has none: it is marked `empty` and never stamped), and that is the cheapest thing to blit. Stamped 1:1 on the whole pixel
 // at `i CHUNK_PX + e`, it is the picture the ground layers would have drawn straight onto the canvas at this camera, pixel for pixel, minus the cracks.
 import { CHUNK_PX, CHUNK_FULL, BLEED, scaleKey, chunkKey, staleRatio, superSample } from './chunks.js';
-import { surface as makeSurface, ledger } from './gfx.js';
+import { surface as makeSurface, ledger, builds } from './gfx.js';
 import { closeAlpha } from './seal.js';
 
 const READ = { willReadFrequently: true };
@@ -94,7 +94,7 @@ export class ChunkCache {
     const c = { fadeEnd: 0, coarse, sk, a, i, j, img, empty, bytes: empty ? 0 : CHUNK_PX * CHUNK_PX * 4, last: ++this.tick, sealed };
     if (old) this.drop(old); // (a stale chunk of the same cell: replaced)
     this.map.set(key, c); this.sync();
-    const ms = (typeof performance !== 'undefined' ? performance.now() : 0) - t0; this.stats.baked++; if (sealed) this.stats.sealed++; this.stats.ms += ms; this.stats.lastMs = ms;
+    const ms = (typeof performance !== 'undefined' ? performance.now() : 0) - t0; this.stats.baked++; builds.n++; if (sealed) this.stats.sealed++; this.stats.ms += ms; this.stats.lastMs = ms;
     return c;
   }
 

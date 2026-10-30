@@ -7,8 +7,9 @@ import { makeScene } from './rasterbase.js';
 
 let COAST = null;
 const SCENES = new Map();
+const mark = (n) => { try { performance.mark(n); } catch { /* no User Timing here: nothing to mark */ } }; // (`pc:coast` and `pc:scene` show in a profile's timings, and the browser test reads them: the scene is built while the title is on screen)
 /** The smooth coast of the island (rings in grid units, the fine and coarse signed distance fields, `dist(gx, gy)`): made once, about 130 ms. */
-export function coastOf() { if (!COAST) COAST = buildCoast({ land: LAYOUT.land, FV: LAYOUT.FV, GW, GH }, { wobble: COAST_WOBBLE }); return COAST; }
+export function coastOf() { if (!COAST) { COAST = buildCoast({ land: LAYOUT.land, FV: LAYOUT.FV, GW, GH }, { wobble: COAST_WOBBLE }); mark('pc:coast'); } return COAST; }
 /** The ids of the districts under cloud, from the world's set of open ones (a world that does not know yet has every district open, as the engine does). */
 export const lockedOf = (unlocked) => (unlocked ? LAYOUT.ids.filter((id) => !unlocked.has(id)) : []);
 /** Everything a bake reads for one set of locked districts (the terrain's colours depend on which are under cloud): the last two sets are kept. */
@@ -19,7 +20,7 @@ export function sceneOf(locked = []) {
     const coast = coastOf(), terr = terrainField({ ZV: LAYOUT.ZV, VW: LAYOUT.VW, GW, GH, land: LAYOUT.land, ids: LAYOUT.ids, DIST }, coast, new Set(locked));
     s = makeScene(coast, terr, LAYOUT.bounds, LAYOUT.ZV, LAYOUT.VW, GW, GH);
     if (SCENES.size >= 2) SCENES.delete(SCENES.keys().next().value);
-    SCENES.set(key, s);
+    SCENES.set(key, s); mark('pc:scene');
   }
   return s;
 }
