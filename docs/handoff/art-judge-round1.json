@@ -1,0 +1,1778 @@
+{
+ "note": "The first independent judge pass of the cloud session (2026-10-29): 6 of 12 judges reported before the run was stopped (areas: the whole island from far; coast, sea and bridges at working zoom; three lenses each). Scores 0 to 10 of the pictures as built then (before the three repairs listed in docs/RENDER_PLAN.md section 14). Judge brief: docs/handoff/workflows/art-judge.js.",
+ "judges": [
+  {
+   "area": "Whole island from far away: island-far, island-mid, fog-far, tod-h08-island-far (byte-identical to island-far and to hour 13), tod-h19-island-far",
+   "lens": "Art direction and first impression (creative director): toy-diorama charm, light direction, soft shadows, warm palette, silhouettes, life and scale, and whether the change over adcd991 is unmistakable",
+   "scores": {
+    "change": 9,
+    "quality": 6.2,
+    "edges": 5.9
+   },
+   "perShot": [
+    {
+     "shot": "island-far",
+     "change": 9.5,
+     "quality": 6.5,
+     "edges": 6,
+     "note": "Navy-grey flat tile diagram becomes a bright, soft-edged tropical toy ocean with a turquoise lagoon, foam shores and rock islets: unmistakable. But a near-white cloud blanket hides every district, road and bridge, the palette is cold (about 1% warm pixels), clouds cast no shadow, the sea is empty, 27 black/yellow UI chips dominate, and islet rock and halos are low-res and stair-stepped."
+    },
+    {
+     "shot": "island-mid",
+     "change": 9,
+     "quality": 7,
+     "edges": 6,
+     "note": "The Scrap Yard is the best proof of the new look (warm sand, crane, trucks, trees, foamy coast, cool lilac cliff shade). Weak spots: the name tag sits on the yard crossing, grey crates and warehouse are flat boxes with no contact shadow, locked districts are ghost-lilac, cliff strata are hazy and stair-stepped, a flat tan ribbon crosses the east coast."
+    },
+    {
+     "shot": "fog-far",
+     "change": 8,
+     "quality": 5.5,
+     "edges": 5.5,
+     "note": "Clouds fill about 65% of the frame and the few peepholes show washed lilac ghost districts, so there is no district character. The lagoon at bottom-left is lovely. Flat tan jetty and ramp ribbons look like stickers; hard tint seam between district grounds; hairline seams at cliff corners."
+    },
+    {
+     "shot": "tod-h08-island-far",
+     "change": 9.5,
+     "quality": 6.5,
+     "edges": 6,
+     "note": "Identical to island-far and to tod-h13 (same sha256): hour 8 has no morning character. Same notes as island-far."
+    },
+    {
+     "shot": "tod-h19-island-far",
+     "change": 9,
+     "quality": 5.5,
+     "edges": 6,
+     "note": "Readable now (BEFORE was navy on navy) and the indigo sea is attractive, but the clouds crush to flat dusty mauve (about 161,150,178), there is no warm sunset light, and the UI chips stay at day brightness."
+    }
+   ],
+   "issues": [
+    {
+     "shot": "island-far",
+     "severity": "major",
+     "track": "atmosphere-clouds-grade",
+     "region": [
+      0.14,
+      0.18,
+      0.83,
+      0.66
+     ],
+     "problem": "The fog is one near-white blanket (roughly a quarter of the frame here, about 65% of fog-far) over every locked district: colours, street grid, bridges and buildings are gone, so the island reads as a heap of whipped cream with 27 UI chips on it, not as a diorama of places. BEFORE at least showed colour-coded districts; AFTER the warm-colour share falls from about 6% to 1.4%. The eye lands on the middle of the cloud, not on district 1 at the far-left tip, and nothing under the fog tells the player what a district will be.",
+     "fix": "Keep fog-of-war but make it a low, broken skirt hugging each locked footprint (puff layers lower than rooftop height), thin the middle to a translucent veil so district hue and the road grid ghost through, vary puff size and height, leave streets as gaps, and cut a warm clearing around district 1 so it becomes the focal point."
+    },
+    {
+     "shot": "island-far",
+     "severity": "major",
+     "track": "atmosphere-clouds-grade",
+     "region": [
+      0,
+      0,
+      1,
+      1
+     ],
+     "problem": "Palette and light are cold and unlit: periwinkle/cobalt sea, lavender-white clouds, blue-grey crates, only about 1% warm pixels. No visible key light on sea or clouds (puffs are radial balls lit from their centre, no sun glints, no golden rim), so it reads fresh and clean but not warm, cozy or sunlit as the brief asks.",
+     "fix": "Choose one sun (upper-left, warm cream-yellow) and apply it everywhere: warm highlights on cloud tops, cliff tops and roofs, cool lilac shadow on the opposite side, sparkling sun glints and a soft warm bloom on the sea; shift mid-sea toward aqua/teal and keep cobalt for the far corners."
+    },
+    {
+     "shot": "tod-h19-island-far",
+     "severity": "major",
+     "track": "atmosphere-clouds-grade",
+     "region": [
+      0.14,
+      0.18,
+      0.83,
+      0.66
+     ],
+     "problem": "Dusk is a flat violet multiply: clouds collapse to one dusty mauve (about 161,150,178) with the outline almost the same value, so the volume dies and the bank looks like smoke or mud. There is no warm sunset light anywhere, and the black pills and yellow chips stay at day brightness, floating unlit above a dim world.",
+     "fix": "Grade dusk with a warm key: peach/pink rim light on the sun side of each puff, indigo-lilac bellies, keep the cloud value range wide instead of crushing to mid-grey, add a warm glint path on the sea and lit windows/lamps in visible districts, and give the UI chips the same grade (slightly dimmed, warm edge glow)."
+    },
+    {
+     "shot": "island-far",
+     "severity": "major",
+     "track": "atmosphere-clouds-grade",
+     "region": [
+      0.42,
+      0.62,
+      0.3,
+      0.22
+     ],
+     "problem": "Clouds cast no shadow on the island or sea: brightness drops straight from about 250 to 157 at the cloud edge with no dark band beneath, and every puff has the same thin lavender outline, so the bank looks like a die-cut sticker laid on the map instead of something floating above it. The drifting clouds' shadows are a barely visible smudge.",
+     "fix": "Add a soft blue-violet multiply shadow under the bank on both terrain and sea (offset down-right about one puff radius, 25-35% alpha, wide penumbra); replace the uniform outline with soft underside occlusion plus a top-left highlight so puffs read as volume."
+    },
+    {
+     "shot": "island-far",
+     "severity": "major",
+     "track": "props-nature-characters",
+     "region": [
+      0,
+      0.66,
+      0.4,
+      0.34
+     ],
+     "problem": "The sea is empty: big dead areas at bottom-left, top-left and right hold only six tiny clouds. The only hint of traffic is a trail of 3-px specks under the 'Opens at $2.5M' chip (about 0.79,0.50) that reads as dirt, not boats. No toy boats, wakes, buoys, gulls, fins or lighthouse, so the 'tiny handmade world with life' is missing at first glance.",
+     "fix": "Add 4-6 chunky toy props with soft wakes and a little bob (sailboat, tug, ferry on the dotted route, buoys, gull flock, whale tail) sized to read at fit zoom (at least about 15 px tall), plus a lighthouse or palm on an islet for scale."
+    },
+    {
+     "shot": "island-far",
+     "severity": "major",
+     "track": "other",
+     "region": [
+      0.12,
+      0.41,
+      0.1,
+      0.09
+     ],
+     "problem": "The '1 Scrap Yard' tag sits directly on the only unlocked district and hides its crates, buyers' sign and road crossing (same in island-mid, tag at about 0.29,0.55). Overall the 16 black monospace name pills and 11 yellow 'Opens at' chips are the highest-contrast things in the picture, so UI outshouts the diorama and reads as a dev overlay rather than toy signage; the chips float at district seams with no pointer to what they unlock.",
+     "fix": "Lift the active district's tag above the yard on a small pole or flag with a pointer tail; restyle tags as warm cream/wood signs with soft shadow and chunky rounded type, colour-keyed to the district hue; at fit zoom shrink the 'Opens at' chips to coin badges that expand on hover. Keep contrast high enough to read."
+    },
+    {
+     "shot": "fog-far",
+     "severity": "major",
+     "track": "buildings",
+     "region": [
+      0.435,
+      0.9,
+      0.16,
+      0.09
+     ],
+     "problem": "Bridges/jetties are flat pale-tan ribbons with no thickness, rails, piers or shadow. The long one stops in open water with a clean diagonal cut; the one on the west cliff (about 0.17-0.21, 0.50-0.58) ends in a flat cut on the rock; the same ribbon crosses the east coast in island-mid (about 0.80-0.89, 0.70-0.74). They look like stickers or a bug, not wooden toy bridges.",
+     "fix": "Extrude the deck (2-3 px darker side face), add plank lines and rope rails, 2-4 piers or an arch with ripple rings and a soft shadow on the water, and land both ends on ramps or abutments; warm the wood colour to the toy palette."
+    },
+    {
+     "shot": "island-far",
+     "severity": "minor",
+     "track": "raster-edges",
+     "region": [
+      0.42,
+      0.74,
+      0.075,
+      0.065
+     ],
+     "problem": "Rock islets, cliff strata and shallow-water halos look like a lower-resolution layer upscaled without smoothing: islet and strata silhouettes are stair-stepped (2-px steps visible at 100%), foam is blocky, and the mint halo around the south-west islet has a visible square edge (x about 0.49). They sit beside perfectly smooth clouds and pills, so the resolution mismatch shows. The top islet (about 0.42-0.465, 0.155-0.20) is also washed lilac-grey instead of saturated toy rock.",
+     "fix": "Render those layers at device resolution (or 2x supersampled) with smoothing on, feather halos with a radial falloff instead of a tile mask, and re-saturate rock and grass tops toward warm brown and fresh green."
+    },
+    {
+     "shot": "island-far",
+     "severity": "minor",
+     "track": "terrain-coast-sea",
+     "region": [
+      0.42,
+      0.57,
+      0.56,
+      0.27
+     ],
+     "problem": "The south, south-east and east coasts are dead-straight diagonals with a paper-thin cliff band (about 7 px at fit zoom) and no contact shadow on the water, so the island reads as a tile-map slab rather than a hand-modelled miniature; only the west peninsula has an organic coast.",
+     "fix": "Break the edge with coves, rock points, beach scallops and jetty stubs; thicken the base (2-3 earth/rock layers, darker underside) and add a soft dark contact shadow and foam ring on the water along the S and E edges."
+    },
+    {
+     "shot": "fog-far",
+     "severity": "minor",
+     "track": "terrain-coast-sea",
+     "region": [
+      0.05,
+      0.345,
+      0.085,
+      0.075
+     ],
+     "problem": "Locked districts sit under a milky lilac veil that makes grass, roads and plots look ghosted and muddy; where two district grounds meet there is a hard diagonal seam with a pale translucent strip, and farm stripes show over the road (wrong overlap).",
+     "fix": "Replace the lilac wash with a per-district desaturated warm tint clipped exactly to its footprint (or opaque pastel), feather or overlap the tile edges, and draw roads and sidewalks above field stripes."
+    },
+    {
+     "shot": "island-far",
+     "severity": "minor",
+     "track": "terrain-coast-sea",
+     "region": [
+      0,
+      0,
+      0.45,
+      0.25
+     ],
+     "problem": "The upper-left sea is a milky grey-lavender (about 158,183,219) against saturated cobalt (52,101,179) below and a vivid halo around the island; the top third looks like haze or smog rather than water.",
+     "fix": "Keep the depth gradient but hold saturation: move the far water toward clean aqua-blue, cut the lavender in the haze, and tint the streak highlights slightly cyan."
+    },
+    {
+     "shot": "tod-h08-island-far",
+     "severity": "minor",
+     "track": "atmosphere-clouds-grade",
+     "region": [
+      0,
+      0,
+      1,
+      1
+     ],
+     "problem": "Hour 8 is pixel-identical to hour 13 (same file hash): the morning view, the first thing a new player sees, has no dawn or morning character.",
+     "fix": "Add a 06:00-10:00 grade: warm peach key light, lower sun with longer softer shadows, a little mist over the sea; ease back to neutral by noon."
+    },
+    {
+     "shot": "island-mid",
+     "severity": "minor",
+     "track": "buildings",
+     "region": [
+      0.28,
+      0.485,
+      0.15,
+      0.12
+     ],
+     "problem": "The scrap crates and warehouse are flat blue-grey boxes with no contact shadow, edge highlight or material detail; they look left over from the old diagram next to the warm, textured sand, crane and trucks. The cliff beside them is blurred and stair-stepped compared with their crisp edges.",
+     "fix": "Warm-tint the faces, add a soft contact shadow toward the south-east, a bevel highlight on top edges, stripe/rust/label detail or stacked-scrap silhouettes, and render the cliff face at the same resolution."
+    },
+    {
+     "shot": "island-far",
+     "severity": "minor",
+     "track": "atmosphere-clouds-grade",
+     "region": [
+      0.44,
+      0.17,
+      0.14,
+      0.12
+     ],
+     "problem": "Cloud puffs are near-identical radially shaded balls with the same outline and similar radii, so the bank reads as bubble-bath foam or cotton balls with little billowing; the six drifting clouds (about 50 px) are tiny next to the 200-px cumulus towers, so cloud scale is inconsistent.",
+     "fix": "Vary puff radius, flatten some bases into wispy strata, put one key highlight per puff toward the sun with cool belly shading, and match the scale of the drifting clouds to the bank."
+    },
+    {
+     "shot": "fog-far",
+     "severity": "minor",
+     "track": "raster-edges",
+     "region": [
+      0.155,
+      0.572,
+      0.012,
+      0.02
+     ],
+     "problem": "At cliff corners the strata of the two faces do not match: they cross in an X with hairline dark and pale seams (visible at about 4x), and shoreline foam is made of square pixel blocks.",
+     "fix": "Mitre the corner or share one strata function across both faces, soften the join by 1 px, and use a smoothed foam sprite."
+    }
+   ],
+   "verdict": "The change is unmistakable and genuinely better: a dark navy-grey tile diagram has become a bright, soft-edged tropical toy ocean with a lovely turquoise lagoon, foam shores, cliff strata and a charming Scrap Yard (change about 9). There are no blockers, but I would not ship it as a creative director yet. The cloud blanket hides every district, road and bridge (a readability regression against BEFORE), the palette is cold with no key light or cloud shadows (clouds look like stickers), dusk is a muddy mauve, the sea has no life, the black UI pills outshout the diorama and the active district's own tag covers it, bridges are flat tan ribbons, and rock/halo layers are low-res and stair-stepped. Fix order: (1) thin and re-light the fog and give district 1 a warm clearing, (2) one warm sun with cloud shadows plus warm morning and dusk grades, (3) boats and life on the sea, thick wooden bridges and friendlier tags, (4) render rocks and halos at device resolution."
+  },
+  {
+   "area": "Whole island from far away: island-far, island-mid, fog-far, tod-h08-island-far, tod-h19-island-far",
+   "lens": "Technical edges and glitches (seams, aliasing, clipping, halos, banding, z-order, text)",
+   "scores": {
+    "change": 9,
+    "quality": 6.5,
+    "edges": 5.5
+   },
+   "perShot": [
+    {
+     "shot": "island-far",
+     "change": 9,
+     "quality": 6.5,
+     "edges": 5.5,
+     "note": "Dark navy tile map became a bright turquoise-and-cobalt archipelago with cliffs, foam and puffy clouds; the change is instant. Defects: fog buries part of the unlocked Scrap Yard, about 70% of the island is one white puff texture, every ambient cloud has a shaved-flat top, shore glow has blocky notches."
+    },
+    {
+     "shot": "island-mid",
+     "change": 9,
+     "quality": 7.5,
+     "edges": 6,
+     "note": "Strongest picture: the Scrap Yard peninsula reads as a charming miniature with clean roads, trees and layered cliffs. Edges: un-antialiased 2-px staircases on land and strata, tiny stray mauve ticks on the shore, a detached smudge shadow under the ambient cloud, a flat-topped ambient cloud."
+    },
+    {
+     "shot": "fog-far",
+     "change": 9,
+     "quality": 6,
+     "edges": 5.5,
+     "note": "Two thirds of the frame is cloud; the large puffs have almost no value change, so it reads as a blank marshmallow field. Visible: flat-roofed lagoon cloud, flat ribbon jetties with cut ends, lilac rock ledge with hairline seam cracks."
+    },
+    {
+     "shot": "tod-h08-island-far",
+     "change": 9,
+     "quality": 6.5,
+     "edges": 5.5,
+     "note": "Byte-identical to island-far (and to tod-h13): no morning light at all, same defects as island-far."
+    },
+    {
+     "shot": "tod-h19-island-far",
+     "change": 8.5,
+     "quality": 5.5,
+     "edges": 5.5,
+     "note": "Much more readable than the near-black BEFORE, but the dusk is a flat lilac-grey multiply: clouds turn dusty mauve with no warm light; same geometry defects as island-far."
+    }
+   ],
+   "issues": [
+    {
+     "shot": "island-far",
+     "severity": "major",
+     "track": "atmosphere-clouds-grade",
+     "region": [
+      0.149,
+      0.389,
+      0.075,
+      0.078
+     ],
+     "problem": "At far zoom the cloud bank spills onto the player's own unlocked district: the Scrap Yard's six grey scrap crates, the warehouse roof and the crane are buried under puffs (all clearly visible in BEFORE and in island-mid), leaving only the orange name pill over bare sand. Puff size looks fixed in screen pixels, so at z 0.13 the puffs overshoot the district edge and hide roughly a third of the yard. Identical in tod-h08 and tod-h19.",
+     "fix": "Make puff radius scale with world zoom, or swap to a coarser far-LOD bank with a clearance mask: no puff centre or rim inside the unlocked district footprint plus a margin of about 60 world units, with a soft fade at the edge. Crates, warehouse and crane must stay fully clear."
+    },
+    {
+     "shot": "island-far",
+     "severity": "major",
+     "track": "atmosphere-clouds-grade",
+     "region": [
+      0.095,
+      0.044,
+      0.035,
+      0.031
+     ],
+     "problem": "Every small ambient cloud (10 in island-far, plus the lagoon cloud in fog-far, the NW cloud in island-mid, and all ten again at dusk) has the top of its tallest puffs shaved flat: a ruler-straight horizontal roof 12 to 40 px wide, with two neighbouring puffs often cut at exactly the same pixel row. The sprite canvas is a few px too short at the top, so the clouds read as loaves or cut-out stickers rather than round puffs. Visible at 1:1 and at laptop size; sides and bottoms are fine.",
+     "fix": "Pad the cached cloud sprite by outline plus blur radius plus about 4 px on every side (take the bounds from the union of puff circles), re-render, and re-check at device scale 2."
+    },
+    {
+     "shot": "island-far",
+     "severity": "major",
+     "track": "atmosphere-clouds-grade",
+     "region": [
+      0.055,
+      0.156,
+      0.925,
+      0.684
+     ],
+     "problem": "About 70% of the island footprint (66% of the whole frame in fog-far) is hidden under one repeated white puff texture, so what a player reads from afar, the district colour map, roads, bridges and buildings, is gone. BEFORE showed pink Creative, orange Real Estate, gold Exchange; now only the coast outline and the name pills tell districts apart, and the island reads as a heap of marshmallows with labels.",
+     "fix": "At far zoom thin the fog to a one-puff-deep rim plus a translucent, district-tinted veil (pink Creative, gold Exchange, green Farmland) so ground colour and roads show through; leave open gaps and raise a few towering cumulus on top instead of carpeting every tile."
+    },
+    {
+     "shot": "tod-h19-island-far",
+     "severity": "major",
+     "track": "atmosphere-clouds-grade",
+     "region": [
+      0.055,
+      0.156,
+      0.925,
+      0.684
+     ],
+     "problem": "The dusk grade is a flat lilac-grey multiply: every cloud loses its white highlight and shading and becomes dusty mauve, like smog or grey cotton wool, with no warm key light, no peach or pink lit edges and no glow on the sea; the coast and sea turn violet-blue. It reads muddy and heavy, not cozy golden hour.",
+     "fix": "Grade by light, not by multiply: warm coral-peach rim on the sun-side puffs, indigo-lavender undersides, keep a bright highlight ramp, add a warm horizon haze and a few warm glints on the sea, and keep saturation up."
+    },
+    {
+     "shot": "island-far",
+     "severity": "minor",
+     "track": "atmosphere-clouds-grade",
+     "region": [
+      0.475,
+      0.664,
+      0.25,
+      0.176
+     ],
+     "problem": "Cloud banks are unions of near-identical circles, each with its own hard lavender rim, so silhouettes are chains of same-size beads (bubble wrap or popcorn) and the cusps between circles leave star-shaped windows onto the ground. The big banks cast no shadow on terrain or sea (only a 1-px dark ring), so they look pasted on top of the map instead of floating above it.",
+     "fix": "Vary puff radii (a few big body puffs, small accents, no repeats), soften or inner-shade the rims instead of outlining every ball, add a cool-lavender underside and warm top highlight, and cast a soft blurred contact shadow (offset down-right about half a puff radius) on ground and sea under each bank."
+    },
+    {
+     "shot": "island-far",
+     "severity": "minor",
+     "track": "raster-edges",
+     "region": [
+      0.413,
+      0.733,
+      0.097,
+      0.083
+     ],
+     "problem": "The pale shallow-water glow around the small islets and along the SE coast is a coarse low-res raster upscaled without smoothing: axis-aligned rectangular notches (for example a straight vertical edge on the right of the bottom-left islet) and stepped diagonals along the SE shore. It reads as a blocky halo, not a soft ring. Seen at 1:1, obvious at 2x.",
+     "fix": "Build the shore glow as a full-resolution distance-field falloff, or blur the low-res mask (bicubic plus 6-8 px blur) and add 1-px noise dither so cell edges cannot show; run it along the coast contour rather than on a grid."
+    },
+    {
+     "shot": "island-mid",
+     "severity": "minor",
+     "track": "raster-edges",
+     "region": [
+      0.608,
+      0.161,
+      0.139,
+      0.117
+     ],
+     "problem": "Land, sand rim and cliff strata are drawn without anti-aliasing: every iso diagonal is a 1-row, 2-px staircase and the strata lines are serrated; along the NW coast of the peninsula the green meets the foam as a bare staircase. It clashes with the smooth anti-aliased clouds and labels on top, and the strata look pixel-art next to the painterly ground.",
+     "fix": "Feather the land mask and strata edges by about 0.75 px (render the ground bake at 2x and downsample, or stroke the contours with AA) and keep the sand rim continuous under the foam."
+    },
+    {
+     "shot": "fog-far",
+     "severity": "minor",
+     "track": "terrain-coast-sea",
+     "region": [
+      0.435,
+      0.896,
+      0.16,
+      0.096
+     ],
+     "problem": "Jetties are flat cream ribbons with no thickness, plank seams, posts or contact shadow: one runs straight out over open water and stops in a ruler-cut end, another climbs the cliff and disappears under a cloud (a third pokes out of the cloud into the lagoon in island-far). They read as a road painted on the sea, the only truly flat-vector objects in an otherwise painterly water scene.",
+     "fix": "Give jetties a visible side face, plank lines, pilings or bollards every ~40 px, a T-head or ladder at the end, and a soft dark contact shadow plus foam where they meet the water."
+    },
+    {
+     "shot": "fog-far",
+     "severity": "minor",
+     "track": "terrain-coast-sea",
+     "region": [
+      0.155,
+      0.488,
+      0.055,
+      0.096
+     ],
+     "problem": "The L-shaped pier ends in a razor-flat horizontal cut in the middle of a lilac rock ledge with no support or landing; the ledge is a grey-lilac slab with zig-zag contour lines, thin hairline diagonal cracks cross the strata (mesh or polygon seams) and a comb of 1-px teeth sits on the upper shoulder.",
+     "fix": "End the pier on a bollard or landing or tuck it under the rock; close the polygon seams (overlap faces by 0.5 px or stroke shared edges); keep the ledge in the warm brown strata family instead of flat lilac."
+    },
+    {
+     "shot": "island-far",
+     "severity": "minor",
+     "track": "terrain-coast-sea",
+     "region": [
+      0.417,
+      0.156,
+      0.05,
+      0.044
+     ],
+     "problem": "The northern islet (and the north coast behind it) is veiled in lilac: the rock reads grey-mauve and the grass pale, with hard polygon-edged patches where the haze stops. Beside the saturated left and south islets it looks dirty and out of family.",
+     "fix": "Use aerial perspective only as a gentle cooler, lighter shift in value and hue, keep the brown and green saturation, and feather the veil edges so no polygon-shaped patches remain."
+    },
+    {
+     "shot": "island-far",
+     "severity": "minor",
+     "track": "terrain-coast-sea",
+     "region": [
+      0.694,
+      0.722,
+      0.306,
+      0.278
+     ],
+     "problem": "Wave streaks are long, perfectly horizontal, evenly spaced strokes (roughly 40-50 px apart in the bottom-right and bottom-left sea), like ruled paper or speed lines; the far north sea is a dusty grey-periwinkle (saturation about 0.3-0.4) so the top corners read as grey-blue haze rather than cheerful water.",
+     "fix": "Vary stroke length, angle and opacity, cluster streaks into loose rafts, break the regular row spacing, add short curved crest dashes along the isometric axes, and push the far sea toward cleaner cyan/ultramarine."
+    },
+    {
+     "shot": "island-far",
+     "severity": "minor",
+     "track": "terrain-coast-sea",
+     "region": [
+      0.306,
+      0.683,
+      0.028,
+      0.019
+     ],
+     "problem": "On the left islet's SW shore the foam is blown out to pure white and meets the grass in a bare stair-stepped line with no sand strip between them, so that edge of the islet looks cut out.",
+     "fix": "Cap the foam at about 85% white with an aqua edge, let a sand strip show below the grass, and anti-alias the grass/foam boundary."
+    },
+    {
+     "shot": "island-mid",
+     "severity": "minor",
+     "track": "raster-edges",
+     "region": [
+      0.064,
+      0.583,
+      0.052,
+      0.069
+     ],
+     "problem": "Tiny mauve-grey ticks (about 5x3 px) sit on the shoreline at the sand/foam edge, at the west tip and on the south shore of the peninsula; they look like dirt or leftover polygon fragments.",
+     "fix": "Find the stray mooring, rock or polygon fragments and delete them, or turn them into deliberate props (posts, rocks) at a readable size."
+    },
+    {
+     "shot": "island-far",
+     "severity": "minor",
+     "track": "terrain-coast-sea",
+     "region": [
+      0.615,
+      0.576,
+      0.365,
+      0.256
+     ],
+     "problem": "The NE and SE shores are ruler-straight 2:1 diagonals with one uniform cliff band and a hairline of foam, while the west peninsula is organic; they read as a tile edge, not a handmade miniature coast.",
+     "fix": "Break the straight shores with coves, a beach strip, rock stacks, breakwaters and small jetties; round the iso corners and vary cliff height."
+    },
+    {
+     "shot": "island-far",
+     "severity": "minor",
+     "track": "props-nature-characters",
+     "region": [
+      0,
+      0.5,
+      0.382,
+      0.5
+     ],
+     "problem": "The open sea has no life at the first-glance zoom: no sailboats, wakes, gulls or shoals; the only things that look alive are the small clouds. The island's scale is carried by labels alone.",
+     "fix": "Add 3-5 sailboats with wakes, a ferry line between districts, a gull flock and a whale spout, sized about 40 px wide at z 0.13."
+    },
+    {
+     "shot": "island-far",
+     "severity": "minor",
+     "track": "props-nature-characters",
+     "region": [
+      0.792,
+      0.496,
+      0.017,
+      0.022
+     ],
+     "problem": "Five 3x5 px pink and white specks in a diagonal line on the water just east of Harbor (under the 'Opens at $2.5M' tag) read as dirt or noise, not as boats or people.",
+     "fix": "Enlarge them into readable tiny boats or figures with a wake, or remove them."
+    },
+    {
+     "shot": "island-mid",
+     "severity": "minor",
+     "track": "atmosphere-clouds-grade",
+     "region": [
+      0.149,
+      0.281,
+      0.052,
+      0.022
+     ],
+     "problem": "Ambient-cloud shadows are faint grey-violet smears 80-100 px below and detached from their clouds; they read as stains on the water rather than shadows (same on island-far and fog-far).",
+     "fix": "Offset the shadow by about half a cloud height, multiply it in a deeper saturated blue with a soft edge, or drop it."
+    },
+    {
+     "shot": "fog-far",
+     "severity": "minor",
+     "track": "atmosphere-clouds-grade",
+     "region": [
+      0,
+      0.056,
+      0.278,
+      0.306
+     ],
+     "problem": "At z 0.45 the puffs are 100-150 px in radius with almost no value change, so two thirds of the frame is a blank white-lavender field with faint circle outlines: no form, no light direction, no material.",
+     "fix": "Add 2-3 value steps inside each bank (warm white lit top-left, lavender core shadow, cool bounce at lower right), vary puff scale, and add a few darker inner crevices."
+    },
+    {
+     "shot": "island-far",
+     "severity": "minor",
+     "track": "other",
+     "region": [
+      0.555,
+      0.3,
+      0.087,
+      0.045
+     ],
+     "problem": "The 'Opens at $X' tags float on white with their striped gates buried under cloud, so nothing shows what each tag is attached to (in BEFORE each sat on its gate).",
+     "fix": "Draw the gate sprites above the cloud layer, or anchor each tag with a short stalk or ribbon to the gate so it reads as pointing at an entrance."
+    },
+    {
+     "shot": "tod-h08-island-far",
+     "severity": "minor",
+     "track": "atmosphere-clouds-grade",
+     "region": [
+      0,
+      0,
+      1,
+      1
+     ],
+     "problem": "The 08:00 and 13:00 renders are byte-identical to the default frame, so the morning has no warm light, soft long shadows or peach haze; the time-of-day change is not visible at 08:00.",
+     "fix": "Add an hour ramp for 06-10: warm gold key light, soft long cloud shadows cast toward the SW, peach horizon haze, slightly cooler sea."
+    }
+   ],
+   "verdict": "The AFTER far view is an unmistakable, better game: a dark navy tile map became a bright turquoise-and-cobalt archipelago with cliffs, foam and puffy clouds, charming at laptop size, with the island-mid peninsula the strongest frame. Technical cleanliness is mostly good: I found no chunk or tile seams (no vertical hard-edge run over 100 px in any of the three scenes, none in the visible ground), no banding in the sea gradient, no black or unpainted pixels, clean picture borders and crisp, legible labels. What stops it shipping: (1) at far zoom the cloud bank overshoots onto the player's own unlocked Scrap Yard and hides its crates, warehouse and crane; (2) every ambient cloud has a shaved-flat top, the one glitch you cannot unsee; (3) about 70% of the island is the same white bead-edged puff texture, so district colours, roads and bridges are unreadable from afar; (4) the dusk grade turns the clouds into flat mauve smog. Smaller polish: blocky shallow-water glow notches, un-antialiased land and strata stairs, flat ribbon jetties, lilac-veiled islet, ruled wave streaks, straight coasts, empty sea, and 08:00 identical to 13:00. Crops and gradient maps are in /tmp/claude-0/-home-user-Paperclip-Capitalist/1d72620b-fc09-5087-a886-a31983090cf4/scratchpad/artjudge-island/."
+  },
+  {
+   "area": "Whole island from far away: island-far, island-mid, fog-far, tod-h08-island-far (pixel-identical to island-far, as is tod-h13), tod-h19-island-far",
+   "lens": "The player: can I read the world as a game (districts, roads, bridges, lots, crates, buyers, plots, tags), is it calm yet alive, and did anything get worse than BEFORE adcd991. Hover and selection states are not visible in these frames and motion is frozen, so pointer feedback and animation could not be judged.",
+   "scores": {
+    "change": 8.9,
+    "quality": 6.8,
+    "edges": 6.6
+   },
+   "perShot": [
+    {
+     "shot": "island-far",
+     "change": 9,
+     "quality": 7,
+     "edges": 6.5,
+     "note": "Dark flat tile map becomes a bright tropical diorama: organic coast with foam and turquoise shallows, strata cliffs, four islets, a calm layered sea, about ten small clouds. The cost is information: the fog blanket covers roughly two thirds of the island, district colours/roads/bridges/buildings are gone, and puffs spill over the unlocked Scrap Yard. Labels stay legible, but the black pills are now the harshest element and nothing in the picture shows life."
+    },
+    {
+     "shot": "island-mid",
+     "change": 9,
+     "quality": 7.5,
+     "edges": 7,
+     "note": "Best frame of the set. The Scrap Yard (sand pad, dashed roads, crane with windsock, wooden 6 BUYERS sign, capsule people, lollipop trees) is clearly distinct from the fogged districts and the unlocked/locked contrast is instant. Crates and warehouse are still blank slate slabs with no contact shadow, the empty lot is a faint cream outline, 39 percent of the frame is cloud, gate barriers are hidden so price pills float, and a small cloud has a flat-cut top."
+    },
+    {
+     "shot": "fog-far",
+     "change": 8.5,
+     "quality": 6,
+     "edges": 6.5,
+     "note": "About 65 percent of the frame is the same white puff pattern (mean luma 219 of 255): a white-out with no focal point. Through the holes the locked plots with padlocks, the glass tower and the $500k gate barrier are charming and readable, but all locked land is one cold lilac-grey. Tan jetty decks end in mid-air and a hairline district seam crosses the ghosted land; the lagoon coast is lovely at 1x."
+    },
+    {
+     "shot": "tod-h08-island-far",
+     "change": 9,
+     "quality": 7,
+     "edges": 6.5,
+     "note": "Pixel-identical to island-far (and to tod-h13): same verdict, same issues."
+    },
+    {
+     "shot": "tod-h19-island-far",
+     "change": 9,
+     "quality": 6.5,
+     "edges": 6.5,
+     "note": "Near-black night map becomes a readable lilac twilight over an ultramarine sea; tags and pills stay crisp. The cloud mass flattens to one mauve-grey tone with no warm light, so it reads as cold overcast rather than a cozy sunset. Same fog coverage and Scrap Yard overlap as day."
+    }
+   ],
+   "issues": [
+    {
+     "shot": "island-far",
+     "severity": "major",
+     "track": "atmosphere-clouds-grade",
+     "region": [
+      0.055,
+      0.18,
+      0.925,
+      0.66
+     ],
+     "problem": "The fog blanket buries about two thirds of the island at whole-island zoom (measured about 67 percent of the island footprint is cloud). Everything a player reads the map by is gone: the per-district colours (pink Creative, green Farmland, teal Pawn, orange Flea Market, gold Exchange), the road ring, the bridges, building silhouettes and locked lots. Only the 16 black tags still say where the districts are. BEFORE showed all of that, dim but readable, so this is a loss of map clarity and not just a restyle. tod-h08 and tod-h19 share it.",
+     "fix": "Turn the blanket into gauze. Use fewer, smaller, lower puffs that hug each locked district footprint (flat bases with a few towers instead of an even heap) and cap total cover near 40 to 50 percent. Keep a pastel but still district-coloured ghost visible underneath by tinting cloud bellies and the ground veil with the district hue. Open keyholes along the road ring and bridges and around the next district to unlock. Do not let puff size inflate at far zoom."
+    },
+    {
+     "shot": "island-far",
+     "severity": "major",
+     "track": "atmosphere-clouds-grade",
+     "region": [
+      0.12,
+      0.385,
+      0.1,
+      0.12
+     ],
+     "problem": "At z 0.13 puffs from the locked district to the north spill onto the UNLOCKED Scrap Yard. They hide the six crates, most of the warehouse and the buyer sign, and only the crane boom tip pokes out beside the name tag like a floating fragment. At z 0.30 (island-mid) the same yard is clear, so the fog footprint changes with zoom. The player's own work area is the one place that must never be covered, and it looks like a z-order bug in the first picture a player sees. Same in tod-h08 and tod-h19.",
+     "fix": "Mask unlocked districts (plus a one to two tile margin) out of the cloud layer at every zoom, or draw the fog beneath unlocked-district props. Clamp puff radius and offset at far zoom so a puff cannot reach beyond its own locked footprint."
+    },
+    {
+     "shot": "fog-far",
+     "severity": "major",
+     "track": "atmosphere-clouds-grade",
+     "region": [
+      0,
+      0,
+      1,
+      1
+     ],
+     "problem": "About 65 percent of the frame is the same white puff pattern (mean luma 219 of 255), so it reads as a white-out. There is no focal point, puffs are near-uniform in size, and the interiors are flat white with detail only on the silhouettes. The glimpsed land through the holes is one cold lilac-grey wash, so Tech, Industrial, Finance and Corp. Valley all look the same colour. The few readable things (locked plots with padlocks, blue glass tower, $500k gate barrier) are charming but tiny and scattered. BEFORE showed buildings and roads clearly at this zoom.",
+     "fix": "Thin the veil at this zoom (fewer puffs, larger gaps) and let LOD open it further as the camera approaches. Add large-scale cloud form with flat bases, a few taller towers and small wisps, shade each mass as a whole from a sunlit top to a cool belly, and tint the ghosted land warm and per district (peach, butter, mint) instead of one lilac-grey."
+    },
+    {
+     "shot": "island-far",
+     "severity": "minor",
+     "track": "atmosphere-clouds-grade",
+     "region": [
+      0.19,
+      0.53,
+      0.19,
+      0.2
+     ],
+     "problem": "The fog clouds cast no shadow on the sea or the land and meet the coast with no contact shading, so they look pasted over the island instead of floating above it. Each puff carries its own pale violet outline (sticker-like), and puff sizes are nearly uniform, so big masses read as bubble-bath foam with flat white interiors.",
+     "fix": "Add a soft multiply shadow offset away from the sun onto water and land (blurred, teal-violet, 25 to 35 percent alpha). Shade each mass as a whole (warm top, cool grey-lilac belly), fade the per-puff rim, and vary puff radius (big towers, medium lumps, tiny satellites)."
+    },
+    {
+     "shot": "island-far",
+     "severity": "minor",
+     "track": "other",
+     "region": [
+      0.055,
+      0.25,
+      0.9,
+      0.62
+     ],
+     "problem": "The 16 name tags and 14 'Opens at' pills are near-black monospace plates and are now the highest-contrast, flattest, most engineering-diagram objects on a bright toy world. The eye goes to the labels before the island, and the 30 pills together make the far view busy. They stay legible (about 8.5 to 1 on white cloud), but they do not belong to the diorama style.",
+     "fix": "Restyle the HUD chips to match the world: warm cream or wood signboards with a district-colour stripe, rounded sans type and a soft shadow, keeping at least 7 to 1 contrast. At far zoom collapse or fade the price pills so only the next-to-unlock gate shows."
+    },
+    {
+     "shot": "island-mid",
+     "severity": "minor",
+     "track": "other",
+     "region": [
+      0.39,
+      0.65,
+      0.19,
+      0.09
+     ],
+     "problem": "The 'Opens at $20', '$250' and '$150k' pills hover over cloud and sea because the red/white gate barrier they used to sit on is hidden by fog (it is only visible where a gap opens, as at $500k in fog-far). In BEFORE every pill had its barrier arm under it. The pill text is only about 8 css px, the smallest type in the game.",
+     "fix": "Pin each price pill to a gate post or flag that is drawn above the fog, or make the fog leave a small clearing at each gate. Raise the pill type to at least 10 css px."
+    },
+    {
+     "shot": "island-far",
+     "severity": "minor",
+     "track": "other",
+     "region": [
+      0.13,
+      0.435,
+      0.085,
+      0.025
+     ],
+     "problem": "The home tag '1 Scrap Yard' uses bronze text on near-black (about 4 to 1), the lowest contrast of any label and dimmer than the locked tags (about 8.5 to 1). The player's own district is the least luminous name on the map.",
+     "fix": "Use cream-gold text, a brighter rim and a faint glow so the home district is the brightest label on the island."
+    },
+    {
+     "shot": "island-mid",
+     "severity": "minor",
+     "track": "props-nature-characters",
+     "region": [
+      0.28,
+      0.48,
+      0.17,
+      0.13
+     ],
+     "problem": "The six crates, the core trade object, are untextured slate-grey cubes with three flat shades and no contact shadow, so they read as generic blocks and look slightly afloat on the sand. The warehouse is a blank slab with no door, windows or roof trim. They are only recoloured from BEFORE, while the crane, the buyer sign and the people are much more developed.",
+     "fix": "Give the crates a chamfer, slat or strap lines, a lid highlight, slight size and rotation variation, and a soft contact shadow. Give the warehouse a roof rib, door, windows, trim and an awning, plus a base shadow."
+    },
+    {
+     "shot": "island-far",
+     "severity": "minor",
+     "track": "props-nature-characters",
+     "region": [
+      0,
+      0,
+      1,
+      1
+     ],
+     "problem": "Nothing at far zoom suggests life or an economy: no boats at the harbour, no gulls, no wakes or smoke. The sea carries only about ten small clouds with near-identical silhouettes. It is calm, but empty.",
+     "fix": "Add a few tiny boats with wakes in the shallow ring and at the Harbor, a gull flock, bobbing buoys and sparkle glints. Vary the small-cloud silhouettes. If these already exist in motion, keep at least one static cue visible in frozen frames."
+    },
+    {
+     "shot": "island-far",
+     "severity": "minor",
+     "track": "raster-edges",
+     "region": [
+      0.098,
+      0.045,
+      0.05,
+      0.055
+     ],
+     "problem": "The small drifting clouds are lower resolution and blurry next to the crisp fog puffs. Several have a flat horizontal cut across the top puff (top-left cloud here, right-middle cloud at about 0.98, 0.47, and the one at top-left of island-mid), so the sprite canvas is clipping. Their shadows are faint, detached smudges.",
+     "fix": "Render the cloud sprites at 2x and downsample, add padding to the sprite canvas so the top puff is not clipped, vary the shapes, and tighten the shadow offset."
+    },
+    {
+     "shot": "fog-far",
+     "severity": "minor",
+     "track": "raster-edges",
+     "region": [
+      0,
+      0.4,
+      0.4,
+      0.35
+     ],
+     "problem": "Cliff strata lines and foam are stair-stepped at 3x or more, the turquoise shallows glow is blocky and low-resolution, and the cliff shows zig-zag contour creases. At 1x it reads as slightly crunchy rather than broken. The same stair-steps appear on the island-far south coast and islets.",
+     "fix": "Supersample the terrain raster at 2x or smooth the strata paths before rasterising, soften the foam line, and render the shallows glow at a higher resolution or with dithering."
+    },
+    {
+     "shot": "fog-far",
+     "severity": "minor",
+     "track": "raster-edges",
+     "region": [
+      0.05,
+      0.33,
+      0.1,
+      0.1
+     ],
+     "problem": "A thin dark hairline with a pale bevel strip runs diagonally across the ghosted locked land (district border between the lawn and the farmland stripes), cutting through the lilac road and lots like a tile seam.",
+     "fix": "Fade the border line under the fog veil or draw it once with matched alpha, and remove the double-drawn bevel."
+    },
+    {
+     "shot": "fog-far",
+     "severity": "minor",
+     "track": "buildings",
+     "region": [
+      0.43,
+      0.89,
+      0.17,
+      0.1
+     ],
+     "problem": "The tan bridge or jetty decks are flat pale strips with square-cut ends. One runs out over the lagoon and stops in open water, the other starts mid-cliff on a rock outcrop. They have no piers, rails or water shadow and read as paper strips, so they fail as bridges.",
+     "fix": "Add posts or pillars, railings and end caps or ramps, drop a soft shadow on the water, or hide the deck until the bridge is unlocked."
+    },
+    {
+     "shot": "island-far",
+     "severity": "minor",
+     "track": "terrain-coast-sea",
+     "region": [
+      0,
+      0.68,
+      0.25,
+      0.12
+     ],
+     "problem": "The sea's wave streaks are same-length combed ribbons, some with sharp V-kink chevrons (left edge and right edge at about 0.9, 0.27). The left and right sea margins look patterned and repetitive compared with the soft gradient near the island.",
+     "fix": "Vary streak length, alpha and spacing, replace the V-kinks with soft S-curves, fade streaks toward the horizon, and add a few foam sparkles."
+    },
+    {
+     "shot": "island-mid",
+     "severity": "minor",
+     "track": "props-nature-characters",
+     "region": [
+      0.23,
+      0.545,
+      0.07,
+      0.06
+     ],
+     "problem": "The empty lot in the Scrap Yard is only a pale cream outline on the sand pad. It is much less distinct than the dark inset in BEFORE, so the plot is hard to spot as a placeable area.",
+     "fix": "Give the lot its own material (gravel or dirt fill, white painted bay lines, small corner stakes) with clear value separation from the pad, and a slightly raised rim that can carry a hover state."
+    },
+    {
+     "shot": "island-far",
+     "severity": "minor",
+     "track": "atmosphere-clouds-grade",
+     "region": [
+      0,
+      0,
+      1,
+      1
+     ],
+     "problem": "At far zoom almost everything is cool (blue, cyan, lilac, white), and the only warm accents are the tiny Scrap Yard and the gold pills. The picture is bright and harmonious, but not yet cozy: there is no golden key light on land, sand or cloud tops.",
+     "fix": "Add a warm key-light tint on land and cloud tops with a sandy beach rim, and keep shadows cool. This gives the cozy warmth while holding the harmonious palette."
+    }
+   ],
+   "verdict": "The change is unmistakable: a dark, flat, tile-stepped navy map becomes a bright tropical toy island with a foam coast, turquoise shallows, strata cliffs, islets, a calm layered sea and soft clouds. The Scrap Yard at mid zoom is close to shippable. From the player's seat, though, the new look costs information. The cloud blanket covers about two thirds of the island at far zoom and about 65 percent of fog-far, so district colours, roads, bridges, buildings and lots that were readable BEFORE are gone and only the black tags identify districts. At z 0.13 the fog even spills over the unlocked Scrap Yard and hides its crates, warehouse, buyer sign and crane, which looks like a z-order bug in the very first picture. Labels stay legible, but they are now the harshest, flattest element, and the price pills float without their gate barriers. Clouds have no cast shadows and read as uniform bubbles, dusk goes flat lilac, and nothing shows life at far zoom. Edge quality is clean at 1x, with flaws appearing at 3x or more: stair-stepped cliffs, blurry flat-topped small clouds, jetty decks ending in mid-air and one hairline seam. Not ship-ready yet. Fix the fog density and its footprint around unlocked districts first, then the cloud shading and the HUD style."
+  },
+  {
+   "area": "coast, sea and bridges at working zoom",
+   "lens": "art direction and first impression: toy-diorama charm, light direction, palette, silhouette, composition, mood",
+   "scores": {
+    "change": 10,
+    "quality": 7,
+    "edges": 5
+   },
+   "perShot": [
+    {
+     "shot": "coast-west",
+     "change": 10,
+     "quality": 7.5,
+     "edges": 5.5,
+     "note": "Best frame of the set: sunny teal bay with mint shallows and white foam, lime meadow, sandy lots, terracotta roofs, soft tree shadows. Reads as a cozy toy diorama at once and buyers, lots and crates stay readable. Held back by the ruler-straight sand-less beach tip at left, crunchy foam on the south beach, a stray mauve dash on the sand, and a sea that is a smooth gradient with a few faint wisps."
+    },
+    {
+     "shot": "coast-close",
+     "change": 9.5,
+     "quality": 7,
+     "edges": 6,
+     "note": "Palette and foam line are still charming, but at z2.4 the terrain is out-of-focus airbrush under crisp tufts and sprites, sand/grass blends turn olive mud, the foam edge is saw-toothed, and the water is pale milky smudges with no wave shapes."
+    },
+    {
+     "shot": "sea-open",
+     "change": 10,
+     "quality": 7.5,
+     "edges": 5.5,
+     "note": "Icon shot: glowing teal lagoon ringed by lilac-rimmed cumulus, strata cliffs, and a lone cloud with a soft lower-right shadow (the one place the light direction reads). Clouds cover about 60 percent of the frame, the lone cloud has a flat-clipped top, the pier is a flat ribbon, and nothing lives on the water."
+    },
+    {
+     "shot": "sea-zoom-1",
+     "change": 10,
+     "quality": 7.5,
+     "edges": 5.5,
+     "note": "Same lagoon at z0.6 with pier-heads (bench, telescope) and a tiny building poking out of the clouds. Charming, but that building is sliced by a straight horizontal line, the north pier runs through a purple cliff-top bowl, and foam and strata edges are stair-stepped."
+    },
+    {
+     "shot": "sea-zoom-2",
+     "change": 9,
+     "quality": 6,
+     "edges": 6.5,
+     "note": "Anchored to the world (wisps and deep-blue core line up with sea-zoom-1 at zero offset, band-pass correlation 0.61) but about 80 percent of the frame is one smooth gradient with three faint wisps: pretty, empty, not toy-like. The ambient cloud and shadow seen at z0.5/0.6 have vanished."
+    },
+    {
+     "shot": "bridge-or-ferry",
+     "change": 10,
+     "quality": 7,
+     "edges": 4.5,
+     "note": "Ferry plus red/white buoy line is the most charming narrative detail in the set and the strait reads well. Spoiled by the razor-straight, sand-less sage-grey east bank, a V-shaped hole in the north cliff, the Opens-at pill covering the NOT RUNNING plaque, a cliff panel seam, and clouds filling about 40 percent of the frame."
+    },
+    {
+     "shot": "sea-pan-a",
+     "change": 10,
+     "quality": 7.5,
+     "edges": 5.5,
+     "note": "Same camera as sea-open: sea, coasts and cliffs are pixel-identical (only cloud outline antialiasing differs by sub-pixel amounts). Same strengths and the same glitches as sea-open."
+    },
+    {
+     "shot": "sea-pan-b",
+     "change": 10,
+     "quality": 7.5,
+     "edges": 5.5,
+     "note": "Second camera on the same sea: wisps, deep core, coasts and piers match sea-pan-a at exactly the expected (-600,-320) device-pixel shift (best match at zero residual offset), so the water is world-anchored. Adds a translucent ghost cloud on the water at left and faint duplicate padlocks above the district pills."
+    }
+   ],
+   "issues": [
+    {
+     "shot": "bridge-or-ferry",
+     "severity": "major",
+     "track": "terrain-coast-sea",
+     "region": [
+      0.75,
+      0.53,
+      0.22,
+      0.17
+     ],
+     "problem": "The east bank (lower right) is cut by a ruler-straight diagonal with no shore treatment at all: water changes to grey-sage grass (about RGB 160,181,150, saturation 0.15 versus 0.5 for the lime meadow) in a single pixel step. No sand rim, no foam line, no wet sand. It reads as an unfinished tile edge beside the organic coasts around it, and the grass looks dead and muddy.",
+     "fix": "Run every bank through the same shore stack as the other coasts: 6-10 px sand and wet-sand rim, white foam line with a 2 px feather, darker rim under the foam. Break the straight tile edge with a low-frequency wobble of 4-6 px and a few rocks or reeds. Replace the grey multiply haze on locked ground with a light lilac veil over saturated meadow green so the grass stays lime, not sage."
+    },
+    {
+     "shot": "coast-west",
+     "severity": "major",
+     "track": "terrain-coast-sea",
+     "region": [
+      0.048,
+      0.395,
+      0.13,
+      0.105
+     ],
+     "problem": "At the left tip of the north beach the sand band and its rounded darker rim stop dead, and the grass meets the foam along a ruler-straight, stair-stepped diagonal about 360 device px long. It looks like a chunk or tile clip and is visible at normal 1:1 size on the main coast of the hero frame.",
+     "fix": "Generate the beach from one continuous shoreline path instead of per chunk, so the sand band and rim stroke carry along that segment. Bend the shoreline with the same noise so no segment is straight, and anti-alias the clip (feathered 1.5 px edge or draw the sand over the grass boundary)."
+    },
+    {
+     "shot": "coast-close",
+     "severity": "major",
+     "track": "raster-edges",
+     "region": [
+      0.24,
+      0.36,
+      0.3,
+      0.22
+     ],
+     "problem": "Foam line and shallow-water contour bands have non-antialiased, per-column sheared edges: saw-tooth comb serrations and stair-steps, visible without magnification at z2.4 and at 1.4x on the south beach of coast-west and at every cliff base (sea-open, bridge-or-ferry, sea-zoom-1). It looks crunchy next to the smooth cloud and sprite outlines.",
+     "fix": "Build foam as smooth closed paths (Catmull-Rom through noise-displaced points every 6-8 px) stroked 3-4 px white with a 1.5-2 px feather instead of raster column displacement. Render the shore cache at device pixel ratio and sample bilinear with mipmaps. Blur the contour bands 1-2 px."
+    },
+    {
+     "shot": "sea-zoom-2",
+     "severity": "major",
+     "track": "terrain-coast-sea",
+     "region": [
+      0,
+      0,
+      1,
+      0.62
+     ],
+     "problem": "At z1.2 about two thirds of the frame is one smooth airbrushed teal-to-azure gradient with three faint, smudged wisps: no crisp wave shapes, glints, depth steps or foam dots. It reads as watercolor wash or fog, not chunky toy water. The same pale smoky patches fill the sea of coast-close (z2.4) and the open lagoon of coast-west, so the sea lacks the toy language that the props and buildings have.",
+     "fix": "Add a second, crisp, world-anchored water layer: short curved white wave dashes (3-5 px thick, 55-70 percent alpha, 20-50 px long, grouped in 2-4s, slow drift), 6-10 four-point sparkle glints per screen that twinkle, 2-3 flat posterised depth tones with 3 px soft borders, foam dots near shore. Raise contrast of the existing wisps about 1.5x and sharpen their tips."
+    },
+    {
+     "shot": "sea-open",
+     "severity": "major",
+     "track": "props-nature-characters",
+     "region": [
+      0.76,
+      0.57,
+      0.18,
+      0.1
+     ],
+     "problem": "The pier or boardwalk reaching into the lagoon is a flat beige ribbon with no plank thickness, pilings, contact shadow or ripple ring where it meets the water. At z0.5 it just ends in a square cut (the pier-head with bench, posts and telescope only pops in at z0.6). It reads as a paper strip pasted on the sea, in the one prop that should say handmade miniature. Same ribbon in sea-zoom-1 (0.80,0.48,0.16,0.13).",
+     "fix": "Give the walkway a 4-6 px darker plank side face, plank-gap lines, 2-3 chunky pilings per span, a soft lower-right contact shadow and a 2-ring ripple at each piling. Show the pier-head at all zoom levels (scale it down instead of hiding it)."
+    },
+    {
+     "shot": "bridge-or-ferry",
+     "severity": "major",
+     "track": "terrain-coast-sea",
+     "region": [
+      0.7,
+      0.075,
+      0.03,
+      0.045
+     ],
+     "problem": "A V-shaped hole is cut into the top-right corner of the north cliff: a sea-coloured wedge shows through the rock and reads as a teal check mark at 1:1. It looks like a missing triangle between the cliff top face and its front wall.",
+     "fix": "Close the cliff polygon so top lid and wall share the corner vertex (watertight cliff corners). Add a small unit test that every cliff top polygon is covered by its wall silhouette."
+    },
+    {
+     "shot": "bridge-or-ferry",
+     "severity": "major",
+     "track": "other",
+     "region": [
+      0.374,
+      0.334,
+      0.075,
+      0.04
+     ],
+     "problem": "The Opens at $2.5M pill sits on top of the ferry's NOT RUNNING plaque and hides the upper half of its text, so the sign is cut and illegible.",
+     "fix": "Anchor the pill about 14 px above the plaque, or hide the plaque while the pill is shown, or merge the cost into the plaque so there is a single label."
+    },
+    {
+     "shot": "coast-close",
+     "severity": "minor",
+     "track": "raster-edges",
+     "region": [
+      0.19,
+      0.3,
+      0.45,
+      0.26
+     ],
+     "problem": "Terrain material boundaries (sand to grass, cliff to grass) are wide soft smears that look rendered at a fraction of output resolution, so the ground reads out-of-focus under crisp vector tufts, flowers and sprites. Where sand and lime blend they mix through olive-khaki mud, and a dull olive fringe runs along the meadow-to-lot border. Same smear on the cliff-to-grass blends of the sea-open island.",
+     "fix": "Render blend masks at device resolution. Use a 3-4 px soft edge plus stippled or scalloped tufts instead of a 25 px gaussian. Keep sand and grass hues apart (blend through a light yellow-green, never grey-olive). Add a thin darker rim under each boundary like a painted toy."
+    },
+    {
+     "shot": "sea-open",
+     "severity": "minor",
+     "track": "atmosphere-clouds-grade",
+     "region": [
+      0.3,
+      0.62,
+      0.7,
+      0.38
+     ],
+     "problem": "Cloud banks are built from near-identical circles with the same lilac rim and cover about 60 percent of sea-open and sea-pan-b, 48 percent of sea-zoom-1 and 40 percent of bridge-or-ferry. The lagoon becomes a hole in bubble wrap, shorelines and pier ends are buried, and the composition is dominated by white.",
+     "fix": "Vary puff radii in three sizes, add a few flat-bottomed puffs with warm peach underlight, feather the fringe to 70-85 percent alpha so cliff corners and piers stay visible, cap coverage near the shoreline, and break repetition with a few elongated cloud strips."
+    },
+    {
+     "shot": "sea-open",
+     "severity": "minor",
+     "track": "atmosphere-clouds-grade",
+     "region": [
+      0.51,
+      0.505,
+      0.095,
+      0.09
+     ],
+     "problem": "The top-left puff of the lone ambient cloud is sliced flat by its sprite bounds (a straight chord about 33 px wide, visible at 1:1). Same in sea-pan-a and sea-zoom-1.",
+     "fix": "Pad the cloud's offscreen canvas by puff radius plus outline width on all four sides before rendering."
+    },
+    {
+     "shot": "sea-open",
+     "severity": "minor",
+     "track": "props-nature-characters",
+     "region": [
+      0.2,
+      0.25,
+      0.5,
+      0.45
+     ],
+     "problem": "The lagoon has no life: no gulls, sailboats, ducks, fish rings or floating leaves. The only charm objects on the water are one cloud and its shadow, which falls short of the charm and life in the brief.",
+     "fix": "Add 3-4 slow ambient props: a small sailboat, two gulls with tiny shadows, a duck family, an occasional fish ripple ring, all anchored in world space."
+    },
+    {
+     "shot": "bridge-or-ferry",
+     "severity": "minor",
+     "track": "props-nature-characters",
+     "region": [
+      0.39,
+      0.375,
+      0.085,
+      0.08
+     ],
+     "problem": "The ferry, the largest object on the water, sits with no wake, foam collar or visible hull shadow, while the tiny buoys get a pale ripple ring and shadow. The biggest object has the least contact with the sea.",
+     "fix": "Add a two-ring ripple or foam collar and a soft lower-right shadow under the hull, a 1 px bob, and a V wake when running."
+    },
+    {
+     "shot": "coast-west",
+     "severity": "minor",
+     "track": "atmosphere-clouds-grade",
+     "region": [
+      0,
+      0,
+      1,
+      1
+     ],
+     "problem": "Light is even and flat: no sun wash, and cliffs, headlands, piers and the ferry cast nothing onto the sea. The upper-left light direction is legible only from small shadows under trees, buoys and the lone cloud, so the diorama lacks depth drama.",
+     "fix": "Add a soft-light warm wash from the upper left (peach, 8-10 percent) with a cool lilac fill toward the lower right, 20-30 px cast shadows of cliffs and piers on the water, and AO under props."
+    },
+    {
+     "shot": "sea-zoom-2",
+     "severity": "minor",
+     "track": "atmosphere-clouds-grade",
+     "region": [
+      0.53,
+      0.35,
+      0.22,
+      0.22
+     ],
+     "problem": "The lone cloud and its shadow that sit mid-lagoon at z0.5 and z0.6 are gone at z1.2 with the same camera centre, so the sea looks emptier and the cloud pops out when zooming in.",
+     "fix": "Keep ambient clouds at every zoom (gentle parallax or a 0.3-zoom-unit fade) and keep their shadows, or place a smaller replacement cloud as a focal point."
+    },
+    {
+     "shot": "bridge-or-ferry",
+     "severity": "minor",
+     "track": "terrain-coast-sea",
+     "region": [
+      0.43,
+      0.2,
+      0.03,
+      0.1
+     ],
+     "problem": "Two cliff wall panels meet at a diagonal seam where the strata lines jump and a pale hairline shows along the joint; at 1:1 it reads as a crack or light line on the rock.",
+     "fix": "Generate strata from one continuous world-space function across panels, overlap panel joins by 1 px and darken the joint with a soft shade."
+    },
+    {
+     "shot": "sea-open",
+     "severity": "minor",
+     "track": "raster-edges",
+     "region": [
+      0.727,
+      0.72,
+      0.14,
+      0.12
+     ],
+     "problem": "Cliff strata bands and silhouettes (island cliff here, also the north cliffs of bridge-or-ferry and the headlands of sea-zoom-1) have non-antialiased 1 px stair-steps, visible from about 2.5x magnification and worse at device pixel ratio 1.",
+     "fix": "Stroke strata as anti-aliased paths, or render the cliff cache at 2x and downsample."
+    },
+    {
+     "shot": "sea-zoom-1",
+     "severity": "minor",
+     "track": "buildings",
+     "region": [
+      0.597,
+      0.835,
+      0.057,
+      0.05
+     ],
+     "problem": "A blue-roofed building pokes out of the cloud bank with its walls cut off by a hard straight horizontal line; the small puff in front covers only the middle, so it reads as a clipped sprite.",
+     "fix": "Draw the building under the cloud layer so tall puffs overlap it, or fade its lower third with a soft 10 px gradient."
+    },
+    {
+     "shot": "sea-pan-b",
+     "severity": "minor",
+     "track": "atmosphere-clouds-grade",
+     "region": [
+      0.01,
+      0.805,
+      0.09,
+      0.105
+     ],
+     "problem": "A half-transparent ghost cloud with a hard scalloped lilac outline floats over the water at the left edge. It looks like a stencil at partial alpha, not a cloud.",
+     "fix": "Apply alpha to the whole puff group (fill, shading and outline together) or drop fringe clouds that would render below 50 percent alpha."
+    },
+    {
+     "shot": "sea-open",
+     "severity": "minor",
+     "track": "raster-edges",
+     "region": [
+      0.84,
+      0.688,
+      0.04,
+      0.047
+     ],
+     "problem": "Tiny dark hairline ticks (about 3 x 12 px) stick out of the foam at coast corners: island tips here, the left shore corners at (0.36,0.66) and (0.38,0.70), and the cliff corner of sea-zoom-2 at (0.22,0.80).",
+     "fix": "Clip the cliff-wall outline to the cliff polygon and drop zero-length wall segments."
+    },
+    {
+     "shot": "coast-west",
+     "severity": "minor",
+     "track": "terrain-coast-sea",
+     "region": [
+      0.065,
+      0.865,
+      0.014,
+      0.015
+     ],
+     "problem": "A stray mauve-brown dash (about 25 x 8 px) lies on the foam at the south beach and matches nothing (not a rock or log).",
+     "fix": "Remove it, or turn it into a proper rock sprite with a contact shadow."
+    },
+    {
+     "shot": "sea-zoom-1",
+     "severity": "minor",
+     "track": "atmosphere-clouds-grade",
+     "region": [
+      0.45,
+      0,
+      0.07,
+      0.09
+     ],
+     "problem": "The cliff-top plateau under the north pier path turns lavender-purple from the haze tint, so the boardwalk runs through a purple bowl that is off-palette next to the warm brown strata.",
+     "fix": "Tint haze with a warm light lilac at 12-15 percent instead of blue-violet at about 40 percent, and keep the cliff top the same tan as the strata."
+    },
+    {
+     "shot": "sea-pan-b",
+     "severity": "minor",
+     "track": "other",
+     "region": [
+      0.418,
+      0.813,
+      0.015,
+      0.018
+     ],
+     "problem": "Faint duplicate padlock icons hover above the district pills (5 Metro, 9 Industrial, 7 Auto Row) and are half-covered by clouds, reading as stray clutter beside the pill's own lock.",
+     "fix": "Drop the world-space padlock when the pill already carries a lock, or draw both in front of the cloud together."
+    }
+   ],
+   "verdict": "Change is unmistakable: navy low-poly water and grey-olive tiles became a luminous teal lagoon with mint shallows, foam lines, sand rims, a lime meadow, strata cliffs, lilac-rimmed cumulus, buoys, and a lone cloud casting a soft shadow. The palette is coherent (teal, mint, sand, lime, terracotta, lilac), the first impression is bright, warm and cozy, coves, headlands and cliffs read as silhouettes at a glance, and sea-pan and sea-zoom confirm that water, foam and wisps are anchored to the world. Readability holds: district pills, lock tags and Opens-at pills stay legible at every zoom; only the ferry plaque collision hurts. As a creative director I would not yet call it a finished toy diorama. The sea is airbrushed watercolor with no crisp toon wave crests, glints, depth steps or life, so wide frames such as sea-zoom-2 feel empty. Terrain blends are soft-focus next to crisp sprites. Light direction is legible only from small shadows (cloud, buoys, trees); cliffs, piers and the ferry cast nothing on the sea and there is no sun wash. The cloud rings are repetitive circles covering 40-60 percent of the sea shots. Visible glitches cap the edges score: razor-straight sand-less shore segments (coast-west beach tip, the east bank in bridge-or-ferry in muddy sage), non-antialiased foam and cliff strata, a V-shaped hole in a cliff, a flat-clipped lone cloud, and a pill covering the ferry plaque. Fix those and add a crisp second water layer plus a few living props, and this reaches ship quality."
+  },
+  {
+   "area": "coast, sea and bridges at working zoom (coast-west, coast-close, sea-open, sea-zoom-1, sea-zoom-2, bridge-or-ferry, sea-pan-a)",
+   "lens": "technical edges and glitches (seams, chunk joins, aliasing, clipped sprites, z-order, resampling, banding)",
+   "scores": {
+    "change": 9.4,
+    "quality": 7,
+    "edges": 5.4
+   },
+   "perShot": [
+    {
+     "shot": "coast-west",
+     "change": 10,
+     "quality": 8,
+     "edges": 5,
+     "note": "Charming beach, meadow, trees, cliff strata. But the west shore is a ruler-straight, un-antialiased clip with no beach, the cliff-top fade is smeared, and a stray mauve dash sits on the SW foam."
+    },
+    {
+     "shot": "coast-close",
+     "change": 10,
+     "quality": 7.5,
+     "edges": 6,
+     "note": "Soft sand, foam and turquoise read as a different game. Faint faults: a hard-edged tone-step polygon in the grass shading, stacked-strip banding along the lot edge, stair-stepped foam and contour bands, visible decal rims."
+    },
+    {
+     "shot": "sea-open",
+     "change": 9,
+     "quality": 7,
+     "edges": 5.5,
+     "note": "Water is seamless and well graded. The lone cloud has a flat-cut top, there are 1-2 px mauve hairlines at coast vertices, a tiny crack at the cliff/cloud junction, and the piers are flat ribbons with bare tips."
+    },
+    {
+     "shot": "sea-zoom-1",
+     "change": 9,
+     "quality": 7,
+     "edges": 5.5,
+     "note": "Same sea, correctly anchored to sea-open. Flat-cut lone cloud, a district teaser building sliced flat at its base, vertical hairlines at coast vertices."
+    },
+    {
+     "shot": "sea-zoom-2",
+     "change": 9,
+     "quality": 6,
+     "edges": 6.5,
+     "note": "Technically the cleanest picture: no seams, bands or banding, and it matches sea-zoom-1 when warped. It is a very empty soft gradient with no glints or life; two 1-px hairlines at the coast."
+    },
+    {
+     "shot": "bridge-or-ferry",
+     "change": 9.5,
+     "quality": 6.5,
+     "edges": 4.5,
+     "note": "Lovely flow-line water, buoys and cliffs. Three visible faults: the east bank is an un-antialiased straight clip with no shore treatment, a teal V crack in the north cliff wall, and the lock pill covers the NOT RUNNING sign text."
+    },
+    {
+     "shot": "sea-pan-a",
+     "change": 9,
+     "quality": 7,
+     "edges": 5,
+     "note": "Water is bit-identical to sea-open (anchored). The cloud layer is softer than the same camera in sea-open, and the lone cloud has the same flat-cut top."
+    }
+   ],
+   "issues": [
+    {
+     "shot": "bridge-or-ferry",
+     "severity": "major",
+     "track": "terrain-coast-sea",
+     "region": [
+      0.75,
+      0.48,
+      0.25,
+      0.21
+     ],
+     "problem": "The east bank of the strait is a ruler-straight, iso-aligned (slope about 0.5) land edge, about 800 px long, with a hard 1-px un-antialiased step (water 194,241,228 to khaki 159,182,151 in one pixel at x=2400,y=1116). It has no foam, no sand lip, no wet rim, and a grey-khaki fill. Every other coast in this set has a sand band, foam strip and aqua halo, so this stretch reads as an unfinished clip even for a fogged district, and the stair-step jaggies show along the whole diagonal.",
+     "fix": "Run the same shoreline pass on every land-mask edge, including straight iso stretches and fogged districts. Displace the mask with +-8-12 world px low-frequency noise, anti-alias or feather the edge 1-2 px, and add the sand/wet-sand rim, white foam strip and aqua halo. Overlap the coast pass past chunk/tile borders so a clip edge is never the shoreline."
+    },
+    {
+     "shot": "coast-west",
+     "severity": "major",
+     "track": "terrain-coast-sea",
+     "region": [
+      0,
+      0.4,
+      0.18,
+      0.14
+     ],
+     "problem": "The west shore of the grass peninsula is a ruler-straight iso diagonal (slope about 0.5, about 550 px, from the left picture edge up to the beach apex near x=0.17,y=0.40) with a 1-px hard un-antialiased step (foam 251,255,253 to grass 138,205,112 in one pixel). It has no sand band and no dark wet-rim, while the beach right next to it is soft and organic. The sand wedge is sliced off by the same line at its apex, so it reads as a clip or chunk border and is visible at normal size.",
+     "fix": "Extend the organic coast pass (sand band, wet rim, foam) over this edge and overlap it beyond the chunk/tile border. Wobble and anti-alias the land mask. End the beach with a rounded taper instead of the diagonal cut."
+    },
+    {
+     "shot": "bridge-or-ferry",
+     "severity": "major",
+     "track": "terrain-coast-sea",
+     "region": [
+      0.7,
+      0.08,
+      0.035,
+      0.05
+     ],
+     "problem": "The north headland's cliff wall is cracked open. A bright teal V in water colour, about 70x58 px, cuts through the strata at the convex corner (x 2030-2100, y 157-215). A second light hairline slit runs down the wall at about x=0.455,y=0.20-0.23. The wall quads do not meet at the shared vertex, so the background shows through.",
+     "fix": "Overlap adjacent wall quads by 1-2 px at shared vertices and paint a cliff-coloured backing polygon under the wall pass, or close the corner with a mitred quad. Add a 1-px AO line along the seam."
+    },
+    {
+     "shot": "bridge-or-ferry",
+     "severity": "major",
+     "track": "other",
+     "region": [
+      0.37,
+      0.33,
+      0.085,
+      0.047
+     ],
+     "problem": "The 'Opens at $2.5M' pill sits on top of the ferry's NOT RUNNING board and hides the upper half of its text. Garbled red letters and the pill's drop shadow show beneath it. It is a text collision on the one prop this picture is about, and it also appeared in BEFORE.",
+     "fix": "Anchor the lock pill above the board (offset by the board height), or hide the board text while the pill is shown. Never overlap two text elements."
+    },
+    {
+     "shot": "sea-pan-a",
+     "severity": "minor",
+     "track": "atmosphere-clouds-grade",
+     "region": [
+      0,
+      0,
+      1,
+      1
+     ],
+     "problem": "This is the same camera as sea-open (448,2592 z0.5) but not the same picture. The water is bit-identical, yet the whole cloud layer (about 60% of the frame) comes from a lower-resolution cache. Cloud edge contrast drops 24-32% (99.5th-percentile gradient 23 vs 31 in the bottom bank, 22 vs 31 top-left), the lavender rim stroke dissolves and puff contours go mushy. A player who arrives by panning always sees the soft version, and BEFORE was bit-identical for this pair.",
+     "fix": "Bake cloud sprites at device-pixel scale for the current zoom bucket (ceil(z*dpr)) and rebuild when zoom/dpr settle after a pan. Make cloud output a pure function of (world, camera, clock) so a pan stop equals a direct jump."
+    },
+    {
+     "shot": "sea-open",
+     "severity": "minor",
+     "track": "atmosphere-clouds-grade",
+     "region": [
+      0.512,
+      0.505,
+      0.093,
+      0.093
+     ],
+     "problem": "The lone cloud in the middle of the sea, the picture's only isolated focal object, has its top-left puff sliced flat. There is a 32-px horizontal lid at y=912 (x 1540-1571) where the cached sprite canvas is too short for the puff plus rim. The same bug is at the same spot in sea-pan-a.",
+     "fix": "Pad the cloud sprite bake canvas by at least puff radius + rim + blur (about 12 px) on every side, or compute bounds from the real puff extents."
+    },
+    {
+     "shot": "sea-zoom-1",
+     "severity": "minor",
+     "track": "atmosphere-clouds-grade",
+     "region": [
+      0.515,
+      0.427,
+      0.11,
+      0.106
+     ],
+     "problem": "The same lone-cloud clip as in sea-open: the top puff has a 38-px flat lid at y=771 (x 1560-1597).",
+     "fix": "Pad the cloud sprite cache canvas (same fix as sea-open); check every cloud size bucket."
+    },
+    {
+     "shot": "coast-close",
+     "severity": "minor",
+     "track": "terrain-coast-sea",
+     "region": [
+      0.915,
+      0.735,
+      0.085,
+      0.08
+     ],
+     "problem": "There is a hard-edged tone step inside otherwise soft grass/sand shading, beside the lower-right cloud. A darker khaki polygon has two straight edges, one from about (2645,1348) to (2722,1432) and a shallower one to (2810,1456), with a 5-8 level jump and no feather. The soft blur stops dead at a polygon edge. The slopes are not iso-aligned, so it is a clipped shading shape rather than a tile edge.",
+     "fix": "Feather clipped shading polygons (24 px or more) or bake with chunk overlap so the soft AO / wet-sand layer fades out instead of ending on a straight cut."
+    },
+    {
+     "shot": "sea-open",
+     "severity": "minor",
+     "track": "props-nature-characters",
+     "region": [
+      0.76,
+      0.565,
+      0.18,
+      0.105
+     ],
+     "problem": "The long pier (and the west pier at about x=0.20,y=0.47) is a flat cream ribbon pasted on the water. It has no plank thickness or side face, no drop shadow, no pylons and no foam where it crosses the water. At z0.5 its tip is a bare square cut. The wooden dock platforms with bollards seen at z0.6 in sea-zoom-1 pop in only above that zoom. It reads as a painted stripe, off-style for a chunky miniature.",
+     "fix": "Give the pier a 3-4 px darker side plank, a 2-3 px soft shadow, pylons every about 60 px and a foam crescent at the waterline. Draw the dock platform at every zoom of 0.4 or more so tips are never bare."
+    },
+    {
+     "shot": "coast-west",
+     "severity": "minor",
+     "track": "terrain-coast-sea",
+     "region": [
+      0.71,
+      0.21,
+      0.12,
+      0.1
+     ],
+     "problem": "The grass-to-cliff junction mixes edge languages. A crisp straight-edged grass lip (about x 2063-2143, y 397-427) sits over a blur-smeared muddy brown-green fade, right beside razor-sharp, aliased strata edges. The cliff base looks smudged. The same crisp/blur mix appears on the island cliff tops in sea-open, sea-zoom-1 and sea-zoom-2.",
+     "fix": "Pick one language: a crisp painted lip (dark green edge plus 2 px highlight), or a feathered AO fade using the same blur radius on both sides. Anti-alias the strata polygons."
+    },
+    {
+     "shot": "sea-zoom-1",
+     "severity": "minor",
+     "track": "atmosphere-clouds-grade",
+     "region": [
+      0.598,
+      0.838,
+      0.058,
+      0.05
+     ],
+     "problem": "The locked-district teaser building inside the cloud bank is sliced flat at its base. There is a hard horizontal cut at y=1591 across x 1727-1886, the small puff in front does not cover the ends, and two wall stubs are visible.",
+     "fix": "Let the icon sprite include its base, or mask it with a feathered puff-shaped edge. Place the puff over both corners."
+    },
+    {
+     "shot": "coast-west",
+     "severity": "minor",
+     "track": "terrain-coast-sea",
+     "region": [
+      0.064,
+      0.865,
+      0.014,
+      0.016
+     ],
+     "problem": "A stray 25x16 px mauve, cliff-coloured, hard-edged dash lies on the foam at the SW shoreline (x 193-218, y 1563-1580). It reads as a glitch, not driftwood.",
+     "fix": "Skip cliff-wall faces shorter than about 4 px or clip them to their polygon; remove cliff-wall faces where a coast vertex steps."
+    },
+    {
+     "shot": "sea-zoom-2",
+     "severity": "minor",
+     "track": "terrain-coast-sea",
+     "region": [
+      0.165,
+      0.715,
+      0.06,
+      0.11
+     ],
+     "problem": "Two 1-2 px vertical mauve hairlines, 30 px tall, sit at coast vertices: x=478,y 1292-1324 and x=633,y 1446-1478. They are the same stray cliff-wall slivers as in coast-west.",
+     "fix": "Same fix as the coast-west dash: drop or clip sub-4-px wall faces."
+    },
+    {
+     "shot": "sea-zoom-1",
+     "severity": "minor",
+     "track": "terrain-coast-sea",
+     "region": [
+      0.33,
+      0.605,
+      0.032,
+      0.058
+     ],
+     "problem": "Two thin vertical mauve hairlines sit at coast vertices, at (958-961, 1096-1113) and (1036-1037, 1172-1187). They are visible at 1:1 as tiny dark ticks on the foam line.",
+     "fix": "Same fix: clip or skip tiny cliff-wall faces at coast steps."
+    },
+    {
+     "shot": "sea-open",
+     "severity": "minor",
+     "track": "terrain-coast-sea",
+     "region": [
+      0.356,
+      0.652,
+      0.012,
+      0.02
+     ],
+     "problem": "A 1-2 px mauve hairline, 15 px tall, sits at the west-shore coast vertex (x 1039, y 1183-1198). Another is on the island coast at about (0.845,0.69). There is also a tiny teal triangle gap in the cliff at the cloud/cliff junction (about x 2399-2428, y 850-868), the same wall-crack family as the V in bridge-or-ferry.",
+     "fix": "Clip or skip tiny wall faces, and overlap wall quads at corners with a backing polygon."
+    },
+    {
+     "shot": "bridge-or-ferry",
+     "severity": "minor",
+     "track": "terrain-coast-sea",
+     "region": [
+      0.43,
+      0.9,
+      0.1,
+      0.1
+     ],
+     "problem": "The south cliff top at the bottom centre meets the water with a bare, stair-stepped, un-antialiased lip: lilac facets with hard 1-px steps and a thin olive rim, no foam, no wet rim. The north cliffs in the same picture have foam, so the shoreline treatment is inconsistent.",
+     "fix": "Give every cliff base the same foam strip and anti-aliased outline."
+    },
+    {
+     "shot": "coast-close",
+     "severity": "minor",
+     "track": "terrain-coast-sea",
+     "region": [
+      0.38,
+      0.05,
+      0.25,
+      0.22
+     ],
+     "problem": "The olive shade strip on the grass along the lot edge is built from about 10 stacked straight translucent bands rather than a smooth falloff. It shows as ruled diagonal lines (steps of 4-5 levels) parallel to the curb, from about (1180,140) to (1600,350) and on under the freight shed.",
+     "fix": "Replace the stack with one blurred gradient/shadow (blur 30 px or more) or dither it so steps are 1 level or less."
+    },
+    {
+     "shot": "coast-close",
+     "severity": "minor",
+     "track": "raster-edges",
+     "region": [
+      0.24,
+      0.39,
+      0.22,
+      0.14
+     ],
+     "problem": "The foam and shallow-water contour layers are low-resolution cut-outs. Foam blobs have serrated comb teeth, and 4-5 flat depth bands run along the shore pool (about x 700-1340, y 700-960) with stair-stepped, un-antialiased edges. At z2.4 they look pixel-stepped next to the smooth sand. The same comb teeth appear on the SW foam of coast-west.",
+     "fix": "Render the foam and contour layers at device resolution or blur them 0.6-1 px, and anti-alias the band edges. Avoid nearest-neighbour upscaling of the foam mask."
+    },
+    {
+     "shot": "coast-close",
+     "severity": "minor",
+     "track": "terrain-coast-sea",
+     "region": [
+      0.5,
+      0.01,
+      0.45,
+      0.25
+     ],
+     "problem": "Large translucent circular wear/stain decals on the sand lot and asphalt have visible hard rims. Rings about 200-300 px wide sit at (1440-1640, 30-230), (2080-2300, 290-420) and (2400-2700, 90-250), reading as stamped discs rather than soft dirt.",
+     "fix": "Radially feather the decals to alpha 0 at the rim, or use irregular noise-eroded blobs."
+    },
+    {
+     "shot": "sea-zoom-2",
+     "severity": "minor",
+     "track": "terrain-coast-sea",
+     "region": [
+      0.1,
+      0.05,
+      0.8,
+      0.6
+     ],
+     "problem": "At z1.2 the sea is a smooth airbrushed gradient with three or four faint streaks and nothing else. A pixel scan finds no glint specks on the open water, and there are no crest dashes, no foam rings, no boat or duck. The lone cloud and its shadow seen at z0.5-0.6 have vanished. It is a large dead area, soft-focus rather than chunky toy water, and the lower-left of coast-close is equally empty.",
+     "fix": "Add world-anchored chunky cues: 2-3 px white crest dashes riding the wave bands, 3-4 px star glints at sun-facing crests, a small boat or ducks, and slow foam rings around cliffs and piers. Keep the lone cloud visible at z1.2 (scale or fade it later)."
+    }
+   ],
+   "verdict": "The change is unmistakable. The navy, stair-stepped engineering diagram is now a bright turquoise toy diorama with foam, sand bands, strata cliffs and cartoon clouds, and anyone sees it at once. The sea itself is the strongest technical result. A pixel scan found no tile or chunk seams in the water or the meadow. The water is bit-identical between sea-open and sea-pan-a, and sea-open warped onto sea-zoom-1 matches (mean diff 5 sum-RGB). Pan A/B and zoom 1/2 line up, so it is the same anchored water at every camera. Picture borders are fully opaque with no black or unpainted pixels, and cloud outlines, text pills and sprites are crisp and well anti-aliased. Edges are held under 6 by four visible faults. Two shorelines (the west shore in coast-west, the east bank in bridge-or-ferry) are straight iso land-mask clips with a 1-px un-antialiased step and no sand or foam, the north cliff in bridge-or-ferry has a teal V crack, and the lock pill covers the ferry sign text. Smaller faults repeat across the shots: the lone cloud's flat-cut top, the softer cloud cache in sea-pan-a, stray 1-2 px mauve wall slivers at coast vertices, one hard-edged shading polygon, and stacked-strip banding. Quality is capped near 7 by empty, glint-free water at working zoom, flat ribbon piers with bare tips, and heavily repeated bubble-wrap cloud puffs. Fix order: the shoreline pass on every land-mask edge, the cliff-wall corner overlap, the cloud sprite padding and zoom-bucket baking, then the pill/sign collision."
+  },
+  {
+   "area": "coast, sea and bridges at working zoom (coast-west, coast-close, sea-open, sea-zoom-1, sea-zoom-2, bridge-or-ferry, sea-pan-a; sea-pan-b used to test anchoring)",
+   "lens": "the player: can I read the world as a game (buyers, lots, crates, plots, buildings, gates, labels), is it calm enough for an hour yet alive, and did anything get worse than BEFORE",
+   "scores": {
+    "change": 9,
+    "quality": 6.5,
+    "edges": 5.5
+   },
+   "perShot": [
+    {
+     "shot": "coast-west",
+     "change": 10,
+     "quality": 8,
+     "edges": 6,
+     "note": "Best picture of the set and a different, better game: olive stair-step diagram became a lime meadow with sand strip, white foam, striated cliff, crates, barrels, fence and cute buyers. Buyers, price pills, 'You' tag, crates, lot, FREIGHT/SKILLS/BUYERS signs are all legible and distinct from scenery. Remaining: west end of the shoreline is a ruler-straight sand-less line, one stray mauve dash on the foam, stair-stepped foam/cliff strata when magnified, empty plot is the same cream as pavement and yard."
+    },
+    {
+     "shot": "coast-close",
+     "change": 9,
+     "quality": 7,
+     "edges": 6,
+     "note": "Beach, foam ribbon, grass tufts, road cracks and FREIGHT building at z=2.4 are charming and crisp. But the sand/grass ground is visibly softer (airbrushed) than every sprite on top, and the shallow-water foam contour shows 3-tone stair steps. No seams."
+    },
+    {
+     "shot": "sea-open",
+     "change": 9,
+     "quality": 6,
+     "edges": 5,
+     "note": "Lake is lovely (depth gradient, foam, cliffs, tree island, boardwalks) but clouds cover roughly 60 percent of the frame, the 'Opens at' pills float on cloud with their gate props hidden, the hero cloud has a flat-sliced top puff, and pier heads are missing at this zoom."
+    },
+    {
+     "shot": "sea-zoom-1",
+     "change": 9,
+     "quality": 6.5,
+     "edges": 5.5,
+     "note": "Same water as sea-open from a closer camera; pier heads with bench and telescope now appear (LOD pop from z0.5). About half the frame is cloud, hero cloud still flat-topped, a ghost-blue building sits on the fog with a hard clipped base."
+    },
+    {
+     "shot": "sea-zoom-2",
+     "change": 8,
+     "quality": 6,
+     "edges": 7,
+     "note": "Cleanest edges of the set (smooth, no seams, no banding at normal view). Water is anchored: it matches sea-zoom-1 scaled 2x. But about 80 percent of the frame is a featureless blue gradient with three faint streaks, zero glints, nothing floating: calm but lifeless, airbrushed rather than handmade."
+    },
+    {
+     "shot": "bridge-or-ferry",
+     "change": 9,
+     "quality": 6.5,
+     "edges": 5,
+     "note": "Pretty strait with buoys and a toy ferry, but 40 percent cloud, the destination dock hidden, the ferry pale on pale water with no wake, 'NOT RUNNING' sign cut by the pill, a mint V-hole and a hairline seam in the cliff, and a muddy straight foam-less right bank."
+    },
+    {
+     "shot": "sea-pan-a",
+     "change": 9,
+     "quality": 6,
+     "edges": 5,
+     "note": "Identical camera to sea-open; water is pixel-identical, cloud edges differ by under 0.6 grey levels (no popping). Anchoring versus sea-pan-b passes: water texture correlation 0.98-0.995 at exactly the 600,320 px shift (BEFORE failed at the left patch). Same issues as sea-open."
+    }
+   ],
+   "issues": [
+    {
+     "shot": "sea-open",
+     "severity": "major",
+     "track": "atmosphere-clouds-grade",
+     "region": [
+      0,
+      0,
+      1,
+      1
+     ],
+     "problem": "The cloud bank covers roughly 60 percent of the picture (about 49 percent of sea-zoom-1, 40 percent of bridge-or-ferry; same in sea-pan-a/b). At the zoom where the sea is actually used, the coasts, docks, bridges and neighbouring districts that make it a game are buried under uniform white cotton-ball puffs; the picture reads as 'lake in a cloud'. BEFORE showed the locked districts dimly but legibly (Tech blocks, Campus park, Metro bank); AFTER shows only two small scalloped windows (Library, Tech). Heavy, bright, mostly the same white for an hour of play.",
+     "fix": "Thin the fog: fewer, smaller puffs and lower alpha toward the shoreline, keep a fog-free coastal band (about 150-250 world px) so coast, piers, ferry route and gates always show, and let the fog thicken only inland. Let covered districts show as a pale ghost silhouette instead of opaque white. Keep the scalloped-window trick and use it more."
+    },
+    {
+     "shot": "sea-open",
+     "severity": "major",
+     "track": "atmosphere-clouds-grade",
+     "region": [
+      0.2,
+      0.915,
+      0.06,
+      0.02
+     ],
+     "problem": "The 'Opens at $1.0k', 'Opens at $50k' (right edge, y 0.31) and 'Opens at $6.0k' (bottom right, y 0.98) pills now float on solid cloud. In BEFORE each sat on a visible object (striped ferry dock, hazard-stripe barrier); in AFTER those gate props are hidden, so the player cannot tell what the price unlocks or where to go. District tags get cloud windows, gates do not. Same in sea-pan-a, sea-zoom-1 ($1.0k pill at 0.15-0.20, 0.92-0.94) and sea-pan-b.",
+     "fix": "Cut a scalloped window (like the Library/Tech ones) around every gate, dock, barrier and ferry at all zooms of 0.4 and above, or draw gate props above the fog layer; add a short leader or pin from each pill to its prop or a ghost silhouette of it."
+    },
+    {
+     "shot": "sea-zoom-2",
+     "severity": "major",
+     "track": "terrain-coast-sea",
+     "region": [
+      0.05,
+      0.04,
+      0.9,
+      0.62
+     ],
+     "problem": "At working zoom the open sea is a smooth blue-teal gradient with three or four faint white streaks and nothing else: no glints or sparkles at all (measured: BEFORE had about 30 small bright glints in the same area, AFTER has zero; local contrast never exceeds 7 grey levels), no crest highlights, no ripple rings, nothing floating. Calm, but it reads as an airbrushed backdrop rather than a handmade miniature, and the BEFORE motion cues (wave lines, glints) are gone. Same empty look in the top-left water of coast-west.",
+     "fix": "Add sparse world-anchored glints (small four-point twinkles and short bright dashes, 1-2 per 300 px, slow phase offsets), a second wave layer of hard-edged paper-cut crests with a darker underside in two sizes, a few life props (duck, sailboat, fish shadow, gull shadow), ripple rings around buoys, pier posts and the ferry, and a very light paper or felt grain so the water has a material."
+    },
+    {
+     "shot": "sea-open",
+     "severity": "major",
+     "track": "raster-edges",
+     "region": [
+      0.525,
+      0.499,
+      0.02,
+      0.012
+     ],
+     "problem": "The small hero cloud floating over the lake has its top-left puff sliced off by a hard horizontal line (a roughly 12 CSS px wide flat cut against saturated blue), the signature of a sprite cache canvas that is too short. Same sprite in sea-pan-a, sea-pan-b and sea-zoom-1 (around 0.537-0.548, 0.426). It is the only object in the middle of the sea so the cut is easy to see.",
+     "fix": "Pad the cloud sprite cache by at least one puff radius plus shadow blur on top and left, or draw the cloud directly instead of from a cached bitmap."
+    },
+    {
+     "shot": "bridge-or-ferry",
+     "severity": "major",
+     "track": "terrain-coast-sea",
+     "region": [
+      0.7,
+      0.085,
+      0.03,
+      0.04
+     ],
+     "problem": "A pale mint V-shaped sliver cuts through the north cliff face just right of the cloud edge, like a check mark, and the cliff end below it is a ruler-straight vertical cut with no foam. It reads as a hole between two cliff facets with water showing through, visible at normal size.",
+     "fix": "Close the gap between the cliff facets (shared vertices or a skirt polygon under the cliff top), give the cliff end a rounded or stepped finish and a foam ribbon."
+    },
+    {
+     "shot": "bridge-or-ferry",
+     "severity": "major",
+     "track": "terrain-coast-sea",
+     "region": [
+      0.74,
+      0.535,
+      0.26,
+      0.165
+     ],
+     "problem": "The right bank is a muddy sage/olive strip with a perfectly straight diagonal edge: no sand fringe, no foam, no shallows band, no wobble. Every other coast in the set has a sand strip, white foam and lime grass; this one looks unfinished and desaturated (fog haze tint on the grass), and it is the main bank beside the ferry route.",
+     "fix": "Run the same shoreline pass (wobbled edge, sand fringe, foam ribbon, shallow band) on this edge, and lift the haze desaturation on banks that are lit so the grass keeps the lime of the home meadow."
+    },
+    {
+     "shot": "bridge-or-ferry",
+     "severity": "minor",
+     "track": "props-nature-characters",
+     "region": [
+      0.39,
+      0.375,
+      0.19,
+      0.22
+     ],
+     "problem": "The ferry (the key bridge object) is a pale grey-white deck on pale turquoise: lower contrast than BEFORE's grey slab on navy. It has no wake, ripple ring or contact foam while the buoys have light-blue rings, so it looks pasted on. The dashed route line is replaced by five buoys that lead straight into a cloud, so the destination is not visible.",
+     "fix": "Add a dark blue contact shadow, foam ring and short wake; warm up the deck (cream and a bolder red or blue hull stripe) to separate it from the water; keep the destination dock or pier visible at the end of the buoy line."
+    },
+    {
+     "shot": "bridge-or-ferry",
+     "severity": "minor",
+     "track": "other",
+     "region": [
+      0.374,
+      0.335,
+      0.075,
+      0.03
+     ],
+     "problem": "The 'Opens at $2.5M' pill sits on top of the ferry's 'NOT RUNNING' sign and covers its upper half, so the sign text is sliced in half and unreadable (carried over from BEFORE, not a regression, but now more visible because the sign is pale).",
+     "fix": "Lift the pill by the sign's height, or hide the sign text while the price pill is shown, or merge them into one tag."
+    },
+    {
+     "shot": "sea-open",
+     "severity": "minor",
+     "track": "props-nature-characters",
+     "region": [
+      0.76,
+      0.565,
+      0.18,
+      0.105
+     ],
+     "problem": "At z=0.5 the boardwalk tips end in a bare flat cut hanging over the water (and the north walkway, about 0.46-0.51, 0.10-0.20, ends in a rock bowl). At z=0.6 (sea-zoom-1) a platform with rail posts, bench and telescope suddenly appears, so the pier head pops in during a normal zoom. Even then it floats: no piles, shadow or foam ring where posts meet the water.",
+     "fix": "Keep a simplified pier head (platform plus shadow) at all zooms of 0.35 and above, cross-fade the detailed head, and add pile shadows and a small foam ring."
+    },
+    {
+     "shot": "coast-close",
+     "severity": "minor",
+     "track": "raster-edges",
+     "region": [
+      0,
+      0.28,
+      0.9,
+      0.34
+     ],
+     "problem": "At z=2.4 the ground paint (sand fringe, grass patches, shallow water blotches) is visibly soft, airbrushed, while tufts, trees, road, pavement and the FREIGHT building are crisp; it looks out of focus under crisp sprites. The inner foam contour shows 3-tone stair steps and 1-device-pixel jaggies at 6x.",
+     "fix": "Re-rasterise the terrain/foam masks at device resolution above z=1.5, add a thin crisp sand edge line, and blur foam masks by about 1 px before thresholding."
+    },
+    {
+     "shot": "coast-west",
+     "severity": "minor",
+     "track": "raster-edges",
+     "region": [
+      0.58,
+      0,
+      0.14,
+      0.3
+     ],
+     "problem": "Foam ribbons and cliff strata are stair-stepped and blocky when magnified (white foam cells with notched edges, strata with 1-2 px saw teeth, a double ghost contour on foam), visible on a 2x screen at z 1 and above. Same on the ferry cliffs (0,0.45,0.2,0.3) and the tree island in sea-open (0.69-0.87, 0.69-0.84).",
+     "fix": "Draw strata as anti-aliased vector strokes rather than banded raster, smooth the foam mask (blur then soft threshold) before compositing."
+    },
+    {
+     "shot": "coast-west",
+     "severity": "minor",
+     "track": "raster-edges",
+     "region": [
+      0.066,
+      0.866,
+      0.012,
+      0.014
+     ],
+     "problem": "A stray mauve-brown dash (about 25 by 12 device px) sits on the white foam band, a leftover cliff-wall sliver. Similar one-pixel dark ticks appear at coast corners (sea-open at about 0.847,0.693 and 0.869,0.728), and the cliff top-left corner at about 0.62-0.65, 0.0-0.03 is a chamfered straight cut with a dark hairline and a stretch without foam.",
+     "fix": "Cull cliff wall segments shorter than the foam width and clip wall polygons to the coast outline; add foam under every cliff base."
+    },
+    {
+     "shot": "coast-west",
+     "severity": "minor",
+     "track": "terrain-coast-sea",
+     "region": [
+      0,
+      0.4,
+      0.18,
+      0.14
+     ],
+     "problem": "The west end of the shoreline is a ruler-straight 30 degree line where lime grass meets white foam with no sand strip, unlike the organic beach just to its right; reads as an unfinished edge.",
+     "fix": "Apply the sand-fringe and wobble pass to the whole coastline, not only to curved stretches."
+    },
+    {
+     "shot": "bridge-or-ferry",
+     "severity": "minor",
+     "track": "raster-edges",
+     "region": [
+      0.45,
+      0.2,
+      0.015,
+      0.055
+     ],
+     "problem": "A thin pale hairline runs down the cliff face under the cloud, with the strata shifting phase across it (lilac left, brown right): a seam between two cliff facets that does not meet flush. Visible at normal size.",
+     "fix": "Share edge vertices or overlap facets by 1 px, and continue the strata texture across the join."
+    },
+    {
+     "shot": "coast-west",
+     "severity": "minor",
+     "track": "buildings",
+     "region": [
+      0.36,
+      0.55,
+      0.34,
+      0.25
+     ],
+     "problem": "The empty plot is the same cream-sand as the pavement and the yard (plot fill RGB about 246,218,168 versus pavement 246,217,164 and yard 243,206,143); only a faint rounded outline separates it, so 'plot' reads as bare ground. BEFORE had the same weakness, so this is not a regression, but plots should pop in a toy diorama.",
+     "fix": "Tint plot fill toward fresh green or blue-grey, add a dashed white boundary, four corner stakes with flags and a FOR SALE sign."
+    },
+    {
+     "shot": "sea-zoom-1",
+     "severity": "minor",
+     "track": "atmosphere-clouds-grade",
+     "region": [
+      0.6,
+      0.84,
+      0.055,
+      0.045
+     ],
+     "problem": "A ghost-blue building with a red beacon sits on top of the cloud bank with its base chopped by a hard horizontal line, hidden only by one small puff; it looks like a clipped sprite rather than a landmark peeking out of the fog.",
+     "fix": "Fade the base into the cloud or cover it with a full row of puffs; use the same scalloped-window treatment as the Library and Tech windows."
+    },
+    {
+     "shot": "sea-open",
+     "severity": "minor",
+     "track": "atmosphere-clouds-grade",
+     "region": [
+      0.845,
+      0.87,
+      0.14,
+      0.1
+     ],
+     "problem": "Cloud outlines are inconsistent: outer puffs carry a thick lilac rim, while inside the mass thin lilac hairline arcs of buried puffs cut across the face of front puffs (bottom right). Also pale ghost padlock icons sit half hidden behind the 'Campus' and 'Tech' tag pills (about 0.06,0.76), duplicating the lock in the pill and adding clutter.",
+     "fix": "Draw the rim only on the union silhouette of the cloud (or per cluster, behind the fill), and drop the ghost padlock behind tag pills."
+    }
+   ],
+   "verdict": "Unmistakable and mostly lovely: the navy/olive stair-step diagram is now a turquoise-and-lime toy diorama with organic foam-edged coasts, striated cliffs, a depth-graded sea, buoys and a charming ferry, and coast-west reads superbly as a game (buyers, price pills, You tag, crates, lot and signs all legible and distinct). The sea is now genuinely anchored to the world (pan A/B water correlates 0.98-0.995 at the exact shift; zoom-1 matches zoom-2 scaled 2x; BEFORE did not) and I found no tile seams, black, transparent or unpainted pixels. Not shippable yet for three reasons. (1) As a player I lose the world at overview zoom: clouds cover about 60 percent of sea-open/pan, half of sea-zoom-1 and 40 percent of the ferry shot, and the gate/dock props that the 'Opens at' pills belong to are hidden, so the pills float on cloud (regression versus BEFORE, where gates and districts were visible). (2) The water at z>=1 is calm but lifeless: no glints at all (BEFORE had about 30), no ripples, no sea life. (3) A handful of glitches you cannot unsee cap edges at 6: the hero cloud's top puff is sliced flat, a mint V-hole and a hairline seam in the ferry-shot cliffs, a stray mauve dash on coast-west foam, ruler-straight sand-less/foam-less shorelines (west end of coast-west, right bank of the ferry shot), plus stair-stepped foam/strata and soft-versus-crisp ground at z=2.4. Fix order: fog windows and a fog-free coastal band with gate windows; cloud sprite padding, cliff facet gap and seam; glints and a little sea life; one uniform shoreline pass for straight edges; then raster polish. Not assessable from stills: which object is highlighted under the pointer (no pointer in any picture) and whether the sea animates. Brightness and saturation roughly doubled versus BEFORE, so check the dusk/night grade still reads calm for long sessions."
+  }
+ ]
+}

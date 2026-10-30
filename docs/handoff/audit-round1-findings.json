@@ -1,0 +1,779 @@
+{
+ "note": "Round 1 of the whole-product audit (cloud session, 2026-10-29): the finders that reported before the run was stopped. Each finding was reproduced by its author; NO skeptic pass was run. status: repaired (with the test named) or open. Lenses that did not report: session, content, docs, privacy, balance, ui, a11y, perf. Finder prompts: docs/handoff/workflows/audit-round.js.",
+ "reports": [
+  {
+   "lens": "engine-core",
+   "angle": "static",
+   "coverage": "Read js/engine.js in full (1,915 lines, including the CLOSED_METHODS/ARGS/AFTER guard layer) plus rng.js, config.js, market.js, data/perks.js, schema.js and tier1.js, the engine-facing parts of cohort.js, session.js, deal.js, ui/shell.js, ui/instructor.js, the Stock/Market/Bank drawers and meta/progress.js, the two existing audit test files and tests/bot.mjs; ran about 70 read-only scratch scripts (/tmp/audit-scratch/engine-core, worktree wt-audit1 at 8e5628e, never edited): a hostile-argument fuzz of every public action and quote method (no state corruption; the only throws are internal helpers such as checkOffer/sideValue/xp given shapes the cleanOffer door never passes, or null-prototype objects JSON cannot produce), 54 chaos players (about 156,500 random actions, 0 invariant breaks for NaN/Infinity, duplicate crates, storage, pool bounds, loan signs, zone order), save/load and rewind replays over several seeds with mid-run saves, closed-run refusal on every method (only room-level/internal ones stay open), ledger and quote-versus-action agreement, all 12 Backgrounds' numbers against their documented factors (each applies once and in the right direction apart from the Veteran finding), swap and royalty conservation, skill-game XP caps, and leverage/routing/pool-flip money-machine probes (none: a pool flipper nets about $0 over 40 days against the bot's $150k+). Not reached: the Deal Room games, the relay and session layer beyond what calls the engine, the UI and audio lenses, real-browser checks, and tiers 2-4 of the data files (scanned by script for ids and ranges, not read line by line). On the effort request: CLAUDE_EFFORT=max is already set in the environment and no settings.json exists to override it, so the setting is in effect; I changed no configuration.",
+   "findings": [
+    {
+     "id": "engine-core-hash01-clustered-events",
+     "title": "hash01 has no final mix, so algorithmic events are all-or-nothing per world: 44% of worlds never get one, 27% get 20 or more",
+     "severity": "major",
+     "kind": "bug",
+     "files": [
+      "js/rng.js",
+      "js/engine.js",
+      "js/session.js",
+      "js/cohort.js",
+      "js/meta/progress.js"
+     ],
+     "where": "js/rng.js:7 (root cause); js/engine.js:463-466 (_algoEvent); js/session.js:972 (shockStart)",
+     "scenario": "_algoEvent rolls hash01(worldSeed + 'algo' + day) <= 0.14 for each of days 4..86, meant as 83 independent 14% draws (about 11.6 events a run, sd about 3.2). hash() is FNV-1a, whose last step is a multiply with no avalanche, so keys that differ only in their trailing characters (the day number) give values that creep by about 0.004 a day. The 83 rolls are one slow ramp: a world whose ramp sits above 0.14 never gets an event, one that sits near it gets a long run of consecutive event days. The kind and class picks (seed+'k'+day, seed+'c'+day) ramp the same way, so the same event on the same asset class repeats on consecutive days. It is on by default (env.algo true, session.js:116; the dashboard toggle ships checked) in both classrooms (world seed = 4-letter room code) and Quick play (seed 'solo-NNNNNN'). Measured over 20,000 room codes and 20,000 solo seeds: mean 11.9 events per run (as designed) but sd 15.6 (designed 3.2); 43% of rooms and 44% of solo runs have no algorithmic event in 90 days; 28% and 27% have 20 or more; the same event on the same class on consecutive days about 6 times a run; up to 63 event days. In a real Game, room GWQX gets 35 (viral Used Commuter Sedan then viral Barn-Find Roadster on days 20-27 in a row, a 2.5x demand multiplier renewed daily) and room KMQD gets none, while FACULTY_KIT.md:58 and BALANCE.md:184 sell these as surprise events every student sees. Session.shockStart (session.js:972) uses the same hash, so the gradebook agrees with the engine and shares the flaw. The same flaw makes the herd's 12-hour noise (cohort.js:28, lag-1 autocorrelation 0.89) a slow drift and the Second-Chance warning draw (engine.js:556, lag-1 0.88; that perk's balance is a known item and is not re-reported). js/meta/progress.js:14-16 (Progress.unit) already documents this exact weakness and carries the finalizer, but the shared hash01 does not use it. Keys whose varying part is not last (deal.js lead-id quirk, checked on 2,264 real lead ids) are fine.",
+     "repro": "cd /tmp/audit-scratch/engine-core && node hashq2.mjs printed: 'room codes, engine hash01  : 20000 worlds | events per run mean 11.9 sd 15.6 | none at all: 43% | 20+ event days: 28% | max 63 | consecutive days repeating the same event and asset: 6.1 per run' / 'room codes, murmur finaliser: ... mean 11.6 sd 3.2 | none at all: 0% | 20+ event days: 1% | max 25 | ... 0.0 per run' / 'solo seeds, engine hash01  : ... none at all: 44% | 20+ event days: 27%' / 'solo seeds, murmur finaliser: ... none at all: 0% | 20+ event days: 1%'. node algoreal.mjs (real Game, 90 days, algo on) printed: 'room KMQD: 0 algorithmic events, alerts to the class: 0 (none: the dashboard toggle is on and nothing ever happens)' and 'room GWQX: 35 algorithmic events, alerts to the class: 35 / d10:glut/Ex-Fleet Cargo Van, d11:glut/Ex-Fleet Cargo Van, d12:glut/Barn-Find..., d18:glut/Used Commuter Sedan, d19..., d20:viral/Used Commuter Sedan, d21..d23 viral/Used Commuter Sedan, d24..d27 viral/Barn-Find Classic Roadst...'. node hashq3.mjs printed 'engine algo day lag-1 autocorrelation ... engine hash01 0.89 | with a final mix 0.01'.",
+     "verified": true,
+     "fixSketch": "Finish hash() (or hash01) in js/rng.js with the murmur3 finalizer Progress.unit already uses: h ^= h >>> 16; h = Math.imul(h, 0x85ebca6b); h ^= h >>> 13; h = Math.imul(h, 0xc2b2ae35); h ^= h >>> 16. Make Progress.unit call the shared function instead of keeping a copy. Keep a stateless hash (not a stepped stream) so Session.shockStart and the engine still agree. This changes every seeded outcome (event days, herd noise, warning draws): re-run the docs/BALANCE.md calibration, update any test that pins a seed's numbers (tests/remaining-engine.test.mjs:271 picks its day dynamically and should survive), and note that a replay of an old seed differs from before.",
+     "testSketch": "tests/audit-engine-core.test.mjs: for 2,000 four-letter room codes and 2,000 'solo-N' seeds count days d in 4..86 with hash01(ws + 'algo' + d) <= 0.14; assert mean within 11.6 +/- 0.5, sd < 4.5, no world with zero and none above 30. Assert the lag-1 autocorrelation of hash01(ws + 'algo' + d) over d = 4..200, averaged over 20 seeds, is below 0.1. Assert no (kind, cls) pair repeats on 3 consecutive event days in any of 200 worlds, and that a Game with worldSeed S and algo on holds between 3 and 25 'algo-' events at day 90 for 99% of 200 seeds.",
+     "status": "open",
+     "repairedBy": null
+    },
+    {
+     "id": "engine-core-first-sale-dead-end",
+     "title": "Selling the starting paperclip for less than the cheapest lot strands the founder for the whole run: every pool sale for most Backgrounds, 43% of day-1 buyers, with no warning and no way back",
+     "severity": "major",
+     "kind": "bug",
+     "authorDecision": true,
+     "files": [
+      "js/engine.js",
+      "js/meta/quests.js",
+      "js/ui/drawers/stock.js",
+      "js/ui/drawers/market.js"
+     ],
+     "where": "js/engine.js:878 (sellPool) and js/engine.js:663 (pitch, cash at :696); js/meta/quests.js:35 (q01a); js/ui/drawers/stock.js:151 and :157 (empty state, poolConfirm)",
+     "scenario": "Everyone starts with $0 and one paperclip. If the founder turns the paperclip into cash and gets less than the cheapest lot on the shelf, nothing in the game can put a crate or a cent in their hands again: the bank opens at $1,000 net worth, no manager can be hired, there is nothing to pitch, quests and levels pay XP and points only, and the cheapest lot posted in 90 days was $0.05 (the paperclip lot) against $0.0441 in hand. The run idles to day 90 at net worth $0.04 (EEI about 4e-5). Stock > 'Sell to the pool' on the lone crate strands the founder in 40 of 40 seeds for 9 of the 13 build configurations (no Background, connected, grad, veteran, heir, roots, native, second, pro), 39 of 40 for creator and about half the seeds for trades, immigrant and gigger; the confirm dialog (stock.js:157) only says 'You get about $0.04', and after the sale the Stock empty state says 'Buy your first lot in the Market' with $0.04. Pitching to a non-urgent cash buyer strands too (a scrapper pays $0.023 against a $0.05 lot): 640 of the 1,500 day-1 buyer options over 300 seeds (43%). The first quest, q01a 'First Swap', reads 'Trade your paperclip to a buyer in The Scrap Yard. Any buyer who bites counts.' and pays 50 XP for the stranding sale. What does protect a novice: the Market lists the guaranteed urgent buyer first and the first-listed buyer who bites never strands (0 of 400 seeds), the best-paying buyer never strands (0 of 400), and barter buyers hand goods back. So the trap is any off-path first move, including the one-click pool sale. A random first-five-days player ends stranded 64% of the time (300 starts).",
+     "repro": "cd /tmp/audit-scratch/engine-core && node softlock.mjs printed: 'seed 1: pool sale true \"Sold for $0.04.\" cash 0.0441; lots in district 1: pen $2.62, oddHardware $0.47, paperclip $0.05, radio $7.29' ... 'stuck after selling the first crate to the pool: 60 of 60 seeds' and 'after 5 days: cash 0.0441 assets 0 cheapest lot 2.1 leads 7 netWorth 0.0441'. node softlock3.mjs (advance all 90 days, check every hour) printed 'seed 1: after 90 days cash 0.0441 (started 0.0441), crates 0, cheapest lot ever posted $0.05, net worth 0.0441, EEI 4.41e-5' and 'seeds where any lot was ever priced at or under the founder's cash: 0 of 40'. node softlock2.mjs printed 'day-1 buyers that would take the clip: 1500; selling to them strands the founder (cash below the cheapest lot, no crate back): 640 (43%)' / 'seed 1: scrapper would pay $0.023; cheapest lot $0.05'. node softlock_perks.mjs printed stranded 40/40 for (none), connected, grad, veteran, heir, roots, native, second, pro; 39/40 creator; 20/40 trades, immigrant, gigger. node novice.mjs 300 printed 'random first-five-days players: 300; stranded with no crate and less cash than the cheapest lot: 191 (63.7%) {\"pool\":68,\"pitch\":123}'. node bestfirst.mjs and node firstlisted.mjs both printed 0 stranded of 400 (the protected paths).",
+     "verified": true,
+     "fixSketch": "Options for the author. (a) Engine guard, covers API and Deal Room callers: in pitch and sellPool refuse a sale that would leave no crate, no manager, no freight, no escrow, no unsettled proceeds and less cash than the cheapest posted lot in every open district, with a plain message ('That sale would leave you $0.04 and nothing to sell; the cheapest lot here costs $0.05'); barter results that return goods are exempt. (b) Rescue instead of refusal: when that stranded state holds at an hourly tick, hand back one paperclip crate once a day ('you found a paperclip'), noted in news and ledger, so the run is always recoverable. (c) Teaching only: warn in poolConfirm and in the Market quote when the founder holds one crate and the payout is below the cheapest lot, and reword q01a to 'a buyer who gives you something to climb on'. (c) alone leaves the trap open for any non-UI caller; (a) or (b) closes it. Whichever is chosen, keep the barter ladder and the urgent-buyer lesson intact.",
+     "testSketch": "For seeds 1..60 and each of the 12 Backgrounds: call sellPool on the starting clip and, separately, pitch it to every day-1 lead; assert each outcome is either ok:false with a message, or leaves a way forward (some posted lot costs <= cash + any circle room, or a crate/rescue exists within 24 virtual hours). Assert q01a still completes through the urgent buyer.",
+     "status": "open",
+     "repairedBy": null
+    },
+    {
+     "id": "engine-core-fees-unbounded",
+     "title": "Fees and taxes have no ceiling: friction 3.0x plus stacked Credit Crunches make a sale cost more than it pays (negative pool proceeds, pool refilled above its cap)",
+     "severity": "minor",
+     "kind": "bug",
+     "files": [
+      "js/engine.js",
+      "js/session.js",
+      "js/ui/instructor.js"
+     ],
+     "where": "js/engine.js:289-293 (instFee, zoneTax), :867-893 (poolQuote, sellPool), :638 (quotePitch), :249 and :449 (mods sums fees; injectEvent replace skips started copies)",
+     "scenario": "instFee = (0.025 + sum of live event fees) x Fintech x friction x perk and zoneTax = tax x friction, with no cap. The dashboard allows friction up to 3.0, and 'Credit Crunch' (fed: +0.095 fee for 360 hours) can be pressed again an hour after the last press: the 'Replace the scheduled copy (pull it forward instead of stacking)' option only drops copies that have not started (engine.js:449), so a started crunch stays and mods() adds the second one's fee (engine.js:249). At friction 3.0 with three live crunches the pool haircut is 103% (district-1 friction 0.1 + instFee 0.93) and a district-12 pitch pays 35% tax + 93% fee = 128% of the price. Effects: poolQuote total -$0.63 and the message 'Sold for $-0.63.'; cash falls and s.pool[1] rises to 5000.63 against a cap of 5000 (invariant broken); the ledger row carries amt -0.63; a $26,336 pitch in district 12 cost the seller $7,361 and logged 'Traded, no gain.'. Two crunches at 3.0x already reach 80% / 99%; two at 2.0x reach 53% / 66%. Only the instructor can reach it, but the UI offers no hint that the combination is destructive, and the engine should not let a sale net negative.",
+     "repro": "cd /tmp/audit-scratch/engine-core && node feeclamp.mjs printed: 'fee from events 0.285 | instFee(pool) 0.930 | district 1 friction 0.1 | total haircut 1.030' / 'poolQuote total -0.63' / 'sellPool -> {\"ok\":true,\"msg\":\"Sold for $-0.63.\"} | cash 500.00 -> 499.37 | pool 5000.00 -> 5000.63 (cap 5000)' / 'ledger row: {\"h\":33,\"type\":\"pool\",...\"amt\":-0.6324000000000052,\"z\":1}'. node feeclamp2.mjs printed 'district 12 tax 35.0% + fee 93.0% = 128.0% of the price; price 26336.23 -> net -7360.98' / 'pitch -> true Traded, no gain. | cash change -7360.98'. node feematrix.mjs printed 'friction 3x, 2 crunch(es): pool haircut 75% | pitch tax+fee d5 80% d12 99%' and 'friction 3x, 3 crunch(es): pool haircut 103% | pitch tax+fee d5 108% d12 128%   <-- a sale costs the seller money'.",
+     "verified": true,
+     "fixSketch": "Clamp instFee to a ceiling (for example min(0.5, ...)) and cap zoneTax + instFee at about 0.75 inside quotePitch and poolQuote; make sellPool and pitch refuse a quote whose net is <= 0 with a clear message; make injectEvent's replace also remove a started copy of the same non-algorithmic kind (or refuse a second live copy), so the dashboard option does what its label says; optionally show the instructor the resulting total haircut next to the friction slider.",
+     "testSketch": "Game with difficulty.friction = 3, injectEvent('fed', hour, { id: 'a' + i, replace: true, injected: true }) three times an hour apart; for a $30 crate assert poolQuote total >= 0 and instFee + zoneTax(z) <= the cap in every district, that sellPool never lowers cash or raises s.pool[z] above ZONES[z].pool, and that two replace:true injections an hour apart leave exactly one live 'fed' event.",
+     "status": "open",
+     "repairedBy": null
+    },
+    {
+     "id": "engine-core-lastauto-handpitch",
+     "title": "A hand sale resets lastAuto, so the instructor's 'Operational bottlenecks' panel never flags a founder who stopped every manager but still sells by hand",
+     "severity": "minor",
+     "kind": "bug",
+     "authorDecision": true,
+     "files": [
+      "js/engine.js",
+      "js/cohort.js",
+      "js/ui/instructor.js",
+      "docs/FACULTY_KIT.md"
+     ],
+     "where": "js/engine.js:689 (pitch sets s.lastAuto); js/engine.js:1127 (cycle) and :1844 (published as lastAutoHour); js/cohort.js:178; js/ui/instructor.js:122 and :171",
+     "scenario": "s.lastAuto is meant to be the last automated pipeline cycle: the panel footer says 'No automated asset velocity for more than 3 virtual days: a pipeline-management breakdown', docs/FACULTY_KIT.md:60 says 'pipelines have shown no automated activity for more than three virtual days', and tests/cohort.test.mjs:162 says 'only the one who has not automated for three days is static'. But Game.pitch also sets s.lastAuto = s.hour on every completed hand sale (engine.js:689), and publicSnapshot publishes it as lastAutoHour. A founder past Metro Hub who pauses or never hires managers and sells one crate a day by hand therefore never shows as static, which is exactly the student the rubric row 'Working capital and pipeline velocity' wants the instructor to find. In the repro a founder with 17 paused managers is flagged 'static' on pause-day 4 when they do nothing, and never flagged when they make one hand pitch a day.",
+     "repro": "cd /tmp/audit-scratch/engine-core && node lastauto.mjs printed: 'after bot run: day 41 mil.m1 true pipes 17 zones 1,2,...,13 cash 14035' / 'control (no hand sales)   | day+ 8 pitches 0 | pipes running: 0 | lastAutoHour 960 hour 1152 | (hour-lastAuto)/24 = 8.00 | autoEligible true | flagged static3: 1 | first flagged on pause-day 4' / 'same save + 1 hand pitch/day | day+ 8 pitches 6 | pipes running: 0 | lastAutoHour 1104 hour 1152 | (hour-lastAuto)/24 = 2.00 | autoEligible true | flagged static3: 0 | first flagged on pause-day null'. (flagged = cohortStats([publicSnapshot()], hour).static3, the same test the dashboard applies.)",
+     "verified": true,
+     "fixSketch": "Options. (1) Delete the s.lastAuto assignment in pitch (engine.js:689) so the field means what its name, the panel, the kit and the cohort test say; hand sales stay visible through trades and the ledger. (2) Keep hand sales counting as activity but say so: rename the field lastActiveHour, reword the panel footer and FACULTY_KIT.md:60 to 'no sales or automated cycles for more than three virtual days'. (3) Publish both lastAutoHour and lastSaleHour and show two columns. (1) matches the stated intent.",
+     "testSketch": "Game past m1 with every manager paused: pitch once a day for 5 virtual days; assert publicSnapshot().lastAutoHour is unchanged by the pitches and cohortStats([snap], hour).static3 contains the founder after 3 days; assert a completed pipeline cycle still advances lastAutoHour.",
+     "status": "open",
+     "repairedBy": null
+    },
+    {
+     "id": "engine-core-nw-envelope-early",
+     "title": "The net-worth envelope is below what honest fast play reaches on days 7-12 (up to 3.2x), so honest players are clipped and one shock row can be dropped from the grade",
+     "severity": "minor",
+     "kind": "balance",
+     "authorDecision": true,
+     "files": [
+      "js/cohort.js",
+      "js/session.js"
+     ],
+     "where": "js/cohort.js:214 (NW_ENVELOPE); js/session.js:991 (leaderboard clip) and :1018 (_shocksOf drops a row above the ceiling)",
+     "scenario": "The comment (cohort.js:210-213) says the ceiling is what the strongest honest play reached 'with room to spare' ($0.2k on day 5, $11k on day 15), and the code clips a classmate's published net worth to it and drops, rather than clips, any shock row whose net worth exceeds the ceiling at the shock's start. The heuristic bot with other Background pairs and cadences exceeds it: in 48 runs to day 25 (six pairs, four seeds, a decision every 2 or 4 hours), 7 passed the envelope at some hour, the worst by 3.2x on day 10.3 (connected + trades, $14,760 against a ceiling of $4,575, 113 hours above it). In 48 runs to day 45, one was above the ceiling at the Day-15 TikTok start ($25,734 against $25,238), which makes _shocksOf skip that student's TikTok row entirely, so its adaptability share of the pre-filled grade is lost. Effects are small and short (a clipped leaderboard value and EEI for a few days, one lost shock row), but they fall on the fastest honest players, and the comment's margin claim is wrong for days 5-15.",
+     "repro": "cd /tmp/audit-scratch/engine-core && node ceiling2.mjs printed: '48 runs to day 25; runs whose true net worth passed the envelope at some hour: 7' / ' every 2h connected+trades seed 19: 323% of the ceiling on day 10.3 (nw 14760 vs 4575); 113 hours above it' / ' every 2h connected+gigger seed 11: 153% ... day 8.2 (nw 3716 vs 2434)' / ' every 2h trades+pro seed 7: 141% ... day 8.8 (nw 4033 vs 2861)'. node ceiling3.mjs printed 'connected+trades s19 every 2h | day 15 (TikTok): 25734 vs ceiling 25238 <-- ABOVE | day 20: 63992 vs 115156 | day 45 (Fed): 572858 vs 4342115' and '48 runs; shock-time net worth above the ceiling in 1'.",
+     "verified": true,
+     "fixSketch": "Options. Raise the day 5-15 anchors of NW_ENVELOPE to cover the measured honest maximum with margin (the sweep reached $14.8k on day 10 against $4k allowed; for example day 5 $3,000, day 10 $20,000, day 15 $60,000), re-measured on the full 78-pair x 2-cadence sweep at 1.5x its maximum; and/or clip instead of drop in _shocksOf so an honest row is never lost to the envelope; and correct the calibration comment to the measured maxima.",
+     "testSketch": "Bot sweep (6+ Background pairs x 4 seeds x cadences 2h and 4h, to day 25): assert g.netWorth() <= nwCeiling(g.s.hour) at every 6th hour. Session test: a snapshot whose shock row is at 95% of the highest honest bot net worth at the TikTok start keeps its row in _shocksOf.",
+     "status": "open",
+     "repairedBy": null
+    },
+    {
+     "id": "engine-core-listener-throw-corrupts-day",
+     "title": "A throwing event listener leaves the day tick half done: profit counted twice, a missing history row, checkpoint and algorithmic-event roll, and the same hour's audits skipped",
+     "severity": "minor",
+     "kind": "bug",
+     "files": [
+      "js/engine.js",
+      "js/ui/shell.js",
+      "js/session.js"
+     ],
+     "where": "js/engine.js:118-124 (emit calls this.onEvent unguarded) and :1345 (emit('day') mid-tick); js/ui/shell.js:300-306; js/session.js:590",
+     "scenario": "Game.emit calls the UI's onEvent with no guard. _dayTick emits 'day' after pushing dp but before the hist row, acc.profit reset, niche trim, next day's _algoEvent roll and the day checkpoint. The shell's handler (shell.js:300-306) calls progress.onEvent and cues?.event bare; only ctx.emit is wrapped (shell.js:56). If either throws on a 'day' event, stepHour leaves the hour advanced but the tail of the tick undone, the same hour's _audits/_marginCall are skipped, and Session.tick (session.js:590) does not catch, so the next tick carries on from the corrupted state: realized profit is booked in two days of dp (the exit premium averages dp), the day's hist row and checkpoint never exist (a later rewind lands a day earlier), and that student never rolls the day's algorithmic event while the rest of the room does, so the shared seed no longer replays identically across clients. No listener in the tree throws today (the real Progress attached to 12 chaos seeds for 1,800 hours: 0 throws), so this is hardening, but one UI bug in a three-listener chain silently desynchronizes a run.",
+     "repro": "cd /tmp/audit-scratch/engine-core && node listener.mjs printed: 'no listener error                  hour 48 | dp [250,0] | acc.profit 0 | hist rows 2 | checkpoints 0,1,2' / 'listener threw at the day-2 tick   hour 48 | dp [250,250] | acc.profit 0 | hist rows 1 | checkpoints 0,2' / 'thrown out of advanceTo: listener bug'. node progress_attach.mjs 1-12 1800 (real Progress on chaos games) printed 'distinct problems 0'.",
+     "verified": true,
+     "fixSketch": "Wrap the listener call in Game.emit (try { this.onEvent?.(evt) } catch (e) { console.error(e) }) so an observer can never break the simulation, and wrap progress.onEvent and cues?.event in shell.js the way ctx.emit is wrapped. Optionally move emit('day') to the end of _dayTick.",
+     "testSketch": "Game with an onEvent that throws once on the first 'day' event: advanceTo(48) must not throw and must end with the same dp, hist length, checkpoint keys and events list as a game with no listener.",
+     "status": "repaired",
+     "repairedBy": "tests/cloud-audit.test.mjs E4"
+    },
+    {
+     "id": "engine-core-projected-digital-quality",
+     "title": "Swap matrix 'Worth in the new owner's hands' ignores a digital crate's quality: a known counterfeit shows as worth 10x its fair value",
+     "severity": "minor",
+     "kind": "bug",
+     "files": [
+      "js/engine.js",
+      "js/ui/drawers/market.js"
+     ],
+     "where": "js/engine.js:1522 (projected, digital branch); js/ui/drawers/market.js:260 and :265",
+     "scenario": "projected() prices a digital crate as assetFMV({ ...pubAsset, cond: 'ok', quality: 1 }) x min(1.4, 0.7 + 0.1 x Growth) x perk: the 'as if repaired' shortcut written for the broken-goods branch is reused for digital crates that are not broken, so the crate's own quality is ignored. A classmate's caught counterfeit is published with its truth folded into quality (0.08), so the matrix row 'Worth in the new owner's hands' shows a fake SaaS book at $18,656 'to you' directly under a 'Fair value' row of $1,866. It is display only (checkOffer does not use it), but it is the Deal Room's teaching surface for fair value and it tells the learner the opposite of the lesson. The Growth factor (0.8 at Growth 1, 1.4 from Growth 7) is also a figure no sale route applies: pitch uses growthMult = 1 + 0.04 x (Growth - 1) (engine.js:600).",
+     "repro": "cd /tmp/audit-scratch/engine-core && node projected2.mjs printed: 'crate published at quality 1: \"Fair value\" row (sideValue) =  23320 | \"Worth in the new owner's hands\" row (projected) =  18656' / 'quality 0.8: ... 18656 | ... 18656' / 'crate published at quality 0.08: ... =   1866 | ... =  18656' / 'what a classmate publishes for a digital counterfeit it has already caught: {\"cls\":\"saas\",\"quality\":0.08,\"fmv\":1866} -> the matrix would say it is worth 18656 to you, against a fair value of 1866'.",
+     "verified": true,
+     "fixSketch": "In the digital branch price the crate as it is: assetFMV(pubAsset, z, mods, crowd) x pv, and apply the growth factor the pitch path really uses (or none); keep the quality-1 shortcut for the broken branch only.",
+     "testSketch": "For every digital class and quality in {0.08, 0.3, 0.8, 1}: assert projected(pub) is non-decreasing in quality and projected(pub) <= sideValue({ assets: [pub] }) x 1.3.",
+     "status": "repaired",
+     "repairedBy": "tests/cloud-audit.test.mjs E5"
+    },
+    {
+     "id": "engine-core-veteran-softens-boom",
+     "title": "The Veteran's 'macro shocks hit 40% softer' also mutes booms and the algorithmic events",
+     "severity": "minor",
+     "kind": "design-decision",
+     "authorDecision": true,
+     "files": [
+      "js/engine.js",
+      "js/data/perks.js",
+      "js/ui/draft.js"
+     ],
+     "where": "js/engine.js:257-262 (mods); js/data/perks.js:26-27; js/ui/draft.js:55",
+     "scenario": "The perk text promises that macro shocks 'hit 40% softer' and the draft scores it as 'risk cover'. mods() scales every live effect toward neutral, whatever its direction: mult = 1 + (mult - 1) x 0.6 for demand, price and speed, and the fee, rate, overhead, repair and international terms. So the Veteran also gets 40% less of the upside: the TikTok surge demand x5 reads x3.4 (cycle speed 1.6 becomes 1.36), a viral mention x2.5 reads x1.9, while the busts are softer as advertised (TikTok fatigue price x0.5 becomes x0.7, supply glut x0.55 becomes x0.73). It also applies to the three algorithmic events and instructor-injected ones, which the text does not call macro. A Veteran who reads the TikTok warning and stocks up earns less than a neutral player who does the same. Whether a perk should mute upside is a design call; the code and the text currently disagree.",
+     "repro": "cd /tmp/audit-scratch/engine-core && node soften.mjs printed: 'TikTok surge ... neutral  demand [5] price [] speed [1.6] / Veteran  demand [3.4] price [] speed [1.36]'; 'TikTok fatigue ... neutral price [0.5] / Veteran price [0.7]'; 'Viral mention ... neutral demand [2.5] / Veteran demand [1.9]'; 'Supply glut ... neutral demand [0.55] / Veteran demand [0.73]'. node perkdiff.mjs printed 'tiktok demand mult neutral 5 veteran 3.4'.",
+     "verified": true,
+     "fixSketch": "Options. (A) Keep the damping and say so: 'shocks, good and bad, land 40% softer', and adjust the draft's risk-cover score. (B) Soften only adverse effects: apply soft() when demand/price/speed mult < 1 and always to the fee, rate, overhead, repair and international slowdown terms (all adverse); booms stay at full size. (C) Restrict to the three scheduled macro events (ev.kind in EVENTS) and leave algorithmic and injected ones alone. (B) matches the wording best.",
+     "testSketch": "Perk test: with 'veteran' under option B, tiktok demand mult during the boom equals the neutral player's, the fatigue price mult is 0.7, and fee/rateBps/overhead are 40% softer; under option A, pin the new numbers.",
+     "status": "open",
+     "repairedBy": null
+    },
+    {
+     "id": "engine-core-accept-replay",
+     "title": "acceptOffer keeps no record of accepted offers: a repeated call pays again and mints another copy of the proposer's crates",
+     "severity": "minor",
+     "kind": "exploit",
+     "files": [
+      "js/engine.js",
+      "js/session.js"
+     ],
+     "where": "js/engine.js:1693-1735 (acceptOffer); js/session.js:759 and :822-834 (the only caller)",
+     "scenario": "acceptOffer validates the offer and then moves cash and crates, but never records the offer id, so calling it again with the same offer pays the cash or crates again and creates a fresh copy of the offered crates (new 'A' ids), while the proposer's escrow settles once (finalizeOffer deletes it). In the repro A offers one bike for its fair price and B accepts three times: all three return ok; B ends with 3 bikes, A with none; the pair holds 3 bikes instead of 1 and $42.16 less cash (B paid three times, A once). With an in-band lopsided offer (a $100 bike for $60) each replay would mint $40. This is not reachable from the shipped flow: Session moves the offer from incoming to accepting at acceptIncoming and deletes accepting before calling acceptOffer in _onConfirm, and the Practice Partner path uses finalizeOffer only. It is an engine-level breach of 'goods conserved' that depends on every caller being perfect, in a client a student can drive from the console; the same repeat would also push a second royalty stream for one offer id.",
+     "repro": "cd /tmp/audit-scratch/engine-core && node replay.mjs printed: 'offer ok true Offer sent...' / 'before {\"out\":{\"paperclip\":2,\"bike\":1},\"cash\":2000}' / 'accept #1 true Deal done.' / 'accept #2 (same offer replayed) true Deal done.' / 'accept #3 true Deal done.' / 'B holds bikes: 3  B cash 936.76' / 'finalize true A cash 1021.08' / 'after {\"out\":{\"paperclip\":2,\"bike\":3},\"cash\":1957.84}' / 'bikes created from nothing: 2 ; cash change in the pair: -42.16'.",
+     "verified": true,
+     "fixSketch": "Remember accepted offer ids in a bounded list inside s (saved and rewound with the state, for example s.accepted) and return fail('You already accepted that offer.') on a repeat, before any change; the same check covers a second royalty stream for one offer id.",
+     "testSketch": "Two games, A offers a bike for cash, B.acceptOffer(offer) twice: the second returns ok:false and, after A.finalizeOffer, the pair's crate counts and cash equal the single-accept totals.",
+     "status": "repaired",
+     "repairedBy": "tests/cloud-audit.test.mjs E1"
+    },
+    {
+     "id": "engine-core-rewind-future-target",
+     "title": "rewindTo(hour) with a target at or after the game's own hour still rewinds to the last checkpoint and loses the day's play",
+     "severity": "minor",
+     "kind": "bug",
+     "files": [
+      "js/engine.js",
+      "js/session.js"
+     ],
+     "where": "js/engine.js:1821-1828 (rewindTo); js/session.js:496-505 (_rewind)",
+     "scenario": "rewindTo restores the newest daily checkpoint at or before the requested hour without checking that the hour is behind the game. A game at hour 100 told to rewind to 110 (or to 100) is moved back to its day-4 checkpoint at hour 96 and loses what it did since; in the repro a crate bought after the checkpoint is gone. Session._rewind hands the instructor's target to every student, and a student whose game lags the class clock (a throttled background tab; session.js:987-989 allows for up to two days of lag) and who is asked to rewind one day gets a target ahead of its own hour, rewinds, and loses up to a day of its own play; the rewound report even says ok because reached <= wanted + 24. It is the one place time runs backward for someone the rewind should not touch.",
+     "repro": "cd /tmp/audit-scratch/engine-core && node rewind2.mjs printed: 'hour 100 ckpt days 0,1,2,3,4 assets 2 cash 500' / 'rewindTo(110) returned 96 -> hour now 96 assets 1 cash 500 | lost the bike: true' / 'rewindTo(100) at hour 100 -> 96 hour now 96 bike kept: false'.",
+     "verified": true,
+     "fixSketch": "At the top of rewindTo: if (!(hour < this.s.hour)) return this.s.hour (a no-op), and have Session._rewind treat got === the game's own hour as 'nothing to rewind' (no clear of incoming/accepting, no scary note).",
+     "testSketch": "Game advanced to hour 100 with a crate added after the day-4 checkpoint: rewindTo(110) and rewindTo(100) return 100 and keep the crate; rewindTo(99) still returns 96; existing tests/engine-v2.test.mjs:1049-1054 keep passing.",
+     "status": "repaired",
+     "repairedBy": "tests/cloud-audit-session.test.mjs S1"
+    },
+    {
+     "id": "engine-core-money-negative-sign",
+     "title": "Engine messages write negative money as '$-12.50' while the rest of the product writes '-$12.50'",
+     "severity": "minor",
+     "kind": "content",
+     "files": [
+      "js/engine.js",
+      "js/market.js",
+      "js/deal.js"
+     ],
+     "where": "js/engine.js:20 (money), used at :822 and :1329 among others",
+     "scenario": "The engine's local money() prefixes '$' before the sign. Negative cash is a normal state (overdraft accrues interest at engine.js:1329; audit fines, SLA penalties and shortfalls can take cash below zero), so players read 'Need $2.10; you have $-12.50.' from a refused purchase and 'Cash is negative ($-258). Overdraft interest is accruing.' in the news and toast, and with the fee finding 'Sold for $-0.63.'. js/market.js fmtMoney and js/deal.js:29 both write '-$12.50', so the product has two conventions. A dust negative also prints '$-0.00'.",
+     "repro": "cd /tmp/audit-scratch/engine-core && node moneyfmt.mjs printed: 'buyLot while overdrawn -> \"Need $2.10; you have $-12.50.\"' and 'news: [ \\'Cash is negative ($-258). Overdraft interest is accruing.\\' ]'. node -e with fmtMoney from js/market.js prints -$12.50 for -12.5 and -$0.63 for -0.63.",
+     "verified": true,
+     "fixSketch": "Replace engine.js:20 with the shared fmtMoney (the engine already imports from market.js) or copy the sign handling of deal.js:29. js/audio/wire.js:112 only matches /^Cash is negative/, so the text may change safely.",
+     "testSketch": "Game with cash -12.5: assert the buyLot refusal contains 'you have -$12.50' and no message produced by the engine matches /\\$-/ across a 90-day chaos run.",
+     "status": "repaired",
+     "repairedBy": "tests/cloud-audit.test.mjs E2"
+    },
+    {
+     "id": "engine-core-plural-days",
+     "title": "Engine strings print '1 days' (shock warning and exit-complete note)",
+     "severity": "minor",
+     "kind": "content",
+     "files": [
+      "js/engine.js"
+     ],
+     "where": "js/engine.js:426 (warning) and :1454 (exit complete)",
+     "scenario": "Two shown strings build 'N days' with no singular. The shock warning prints 'effective in 1 days' for any warning composed 24-35 hours ahead (and '1 hours' for one hour); the scheduled shocks' lead times (12, 72 and 168 hours) read '12 hours', '3 days' and '7 days', so this appears when a shock reaches a founder 24-35 hours out, for example an instructor shock that arrives while a student's game lags the class clock. The exit note prints 'Score locked with 1 days to spare.' for an exit launched in about the day 87 window, which is ordinary play.",
+     "repro": "cd /tmp/audit-scratch/engine-core && node warnwords.mjs (Fintech 3, injected shock) printed: 'in 30 hours -> \"The Cross-Border Tariff Lock: effective in 1 days.\"', 'in 35 hours -> ... 1 days.', 'in 36 hours -> ... 1 days.'. node exitdays.mjs printed: 'exit asked at day 87.5: \"Exit under way.\" -> [\"Exit complete at $500,000. Score locked with 1 days to spare.\"]'. node warnreal.mjs showed the scheduled path reads '12 hours' / '3 days' / '7 days'.",
+     "verified": true,
+     "fixSketch": "Add a small plural helper to engine.js (the UI keeps five private copies) and use it at both sites; use Math.floor for the days figure so 35 hours is not a day and a half rounded up.",
+     "testSketch": "Warning composed 30 hours ahead matches /in 1 day\\./; exit launched with 1.0 virtual days left yields 'with 1 day to spare'.",
+     "status": "repaired",
+     "repairedBy": "tests/cloud-audit.test.mjs E3"
+    }
+   ]
+  },
+  {
+   "lens": "deal-room-and-games",
+   "angle": "static",
+   "coverage": "Read in full: js/deal.js, js/play/{haggle,inspect,pitch,repair,auction}.js, js/ui/deal.js, js/rng.js, plus the engine paths they call (quotePitch, pitch, buyLot, repair, recordInspect, _spawnLot, xp, rewindTo), session save/rewind, identity, the Menu save export, js/audio/wire.js (hidden-field reads) and the tests that hold this area (deal, ui-deal, the `tried` tests, play-*). Ran about 35 Node scripts: a hostile-action fuzz of all five games (1,294 actions, frozen inputs, JSON round trips), about 3,600 hostile or extreme parameter sets, 723 random UI sessions (3,201 clicks on only the enabled buttons, world changed mid-deal), 20,000-deal Quick par checks, calibration and balance sweeps, a 6,134-string text scan; and 6 headless Chrome scripts with real mouse and keyboard events. The five games held their contract (no throws, no mutation, finite numbers, bounds [0.6,1.4] / [0.85,1.15] / [0.9,1.3], deterministic, JSON-stable); the pure modules have no clock, randomness or DOM; sound never reads a hidden field; `first move final` held against reload (pagehide saves), Quick-after-a-peek and reopening for Close, Bid and Fix; no double-buy, double-sell or buy-after-removal reached. Not covered: real hardware, Safari, Firefox, screen readers (already known), multi-tab save-scumming (identity.js makes every tab of a solo player the same `main` founder; not demonstrated), class-clock expiry mid-deal beyond reading `gone()`, the Academy sandbox and the relay. On the relayed request about effort settings: no effort setting exists in any config file in this environment (~/.claude, the repo's .claude), and this run was at max effort throughout, so I changed no settings.",
+   "findings": [
+    {
+     "id": "deal-room-and-games-read-xp-oracle",
+     "title": "The XP on a walk-away card (and quest/achievement progress) is computed from a passed lot's hidden truth, so Read tells you for free what the lot was",
+     "severity": "blocker",
+     "kind": "exploit",
+     "files": [
+      "js/engine.js",
+      "js/deal.js",
+      "js/ui/deal.js",
+      "js/play/inspect.js",
+      "js/meta/quests.js"
+     ],
+     "where": "js/engine.js:768-770 (recordInspect, called from js/deal.js:484); shown at js/ui/deal.js:242; score defined at js/play/inspect.js:114-115",
+     "scenario": "Read a lot, conclude, press Pass. The lot stays on the shelf and the card says No deal, but conclude() has already called recordInspect, which pays Read XP = 8 + 22 x score (engine.js:768). score = 1 - 0.6*min(1,|estimate-truth|/0.25) - 0.4*p for a genuine lot, 1 - 0.2*qe - 0.8*(1-p) for a fake (inspect.js:114-115). The card prints '+N XP', so N gives |estimate - true quality| to about +-0.01 (the truth is estimate +- that, and the other side is often outside the 0.7-1.15 range). For a lot the player did NOT suspect (p small) the score ranges of a fake and of a genuine lot do not overlap, so N also says which it is: of 149 unsuspected counterfeits the XP flags 65 as fake with certainty, never calls one genuine (0 of 149), and certifies 360 of 364 genuine lots as genuine. A player reads, passes, looks at the XP, and comes back to buy only the certified-genuine lots; due diligence stops costing anything. The same call emits inspect {score, fake, caught}, so quest 'Spot the Fake' (q04b), 'Counterfeit Cop', 'Good Eye' and the daily score bounties move for a lot that is still hidden. The author closed the card's other numbers for exactly this reason (deal.js:596-598, 610 hide net, reveal and the haggle lesson on a walk); XP is the door left open.",
+     "repro": "cd /tmp/audit-scratch/deal-room-and-games && node t23_xp_oracle.mjs -> 'lots passed and still on the shelf: 200 | |estimate - truth| recovered from the XP: mean error 0.0047 max 0.0094 | true quality within 0.03 of est +- impliedErr: 100% | example: estimate 1.022, card +16 XP -> implied error 0.147 -> truth is 0.875 or 1.169 | actual hidden quality 0.87'.  node t23b_xp_fake.mjs -> '513 reads ended with the counterfeit chance under 50%; fake lots: 65 identified fake, 84 unsure, 0 called genuine; genuine lots: 0 called fake, 360 called genuine, 4 unsure; example: read ended at 18% counterfeit chance, card +14 XP (a genuine lot at that chance pays at least +16) -> it is a fake'.  node t7_quest_oracle.mjs -> '232 trials, 111 ended suspicious, lot on the shelf in all: truly COUNTERFEIT: quest Spot the Fake completes in 111, Counterfeit Cop ticks in 111; reads that did not end suspicious: 0 of 121 move it'.  Real Chrome (own ports 18433/19433): node t28_xp_browser.mjs -> four passed lots, card XP +24/+29/+28/+29, error implied by XP 0.113/0.018/0.037/0.018 vs actual |read-truth| 0.110/0.020/0.030/0.020, lot still on shelf true in all four.",
+     "verified": true,
+     "fixSketch": "Make everything recordInspect pays or emits independent of the hidden truth until the truth is revealed. Pay XP from evidence, not accuracy (8 + 22*res.confidence, or points spent), and keep the accuracy score for the debrief tally only once the lot is bought, lost at auction or expired. Emit inspect {score, fake, caught} at the moment of reveal (buyLot, passLot after a lost auction, a counterfeit rejection on resale), and store the pending read on the lot meanwhile. In deal.js:484 pass whether the lot's truth is revealed.",
+     "testSketch": "Property test in tests/deal.test.mjs: for 150 counterfeit and 150 genuine lots, run the same probes, then walkAway(); assert summary.xp is the same function of (spent, confidence) for both kinds, that no inspect event carrying fake/caught/score fires while the lot is on the shelf, and that progress.quests()/achievements() are unchanged between a fake and a genuine lot. Then buy the lot and assert the event fires exactly once.",
+     "status": "open",
+     "repairedBy": null
+    },
+    {
+     "id": "deal-room-and-games-savefile-truth",
+     "title": "Menu > 'Download my save' writes every lot's hidden truth (and owned crates' truth) in plain JSON",
+     "severity": "major",
+     "kind": "exploit",
+     "files": [
+      "js/ui/shell.js",
+      "js/main.js",
+      "js/engine.js"
+     ],
+     "where": "js/ui/shell.js:234 (button) and :266 (savefile: JSON.stringify(g().s)); js/main.js:15 (window.pc = { S })",
+     "scenario": "The Menu's 'Download my save' button writes the whole game state. Each lot on every shelf carries truth {q, fake, defects[]}, each crate bought from a lot keeps its truth while known:false, and a fraudulent lead keeps scam:true (engine.js:512). A student downloads it, opens it in a text editor and searches for \"fake\":true: no skill, no DevTools. There is no import path (no FileReader in js/), so the file has no restore use that needs the truth. Author caveat: window.pc exposes the same state to the console on purpose ('handy for classroom demos'), so the real question is whether hidden truth is a UI-level promise (then this button is the cheap, discoverable hole) or an integrity promise (then pc needs handling too).",
+     "repro": "cd /tmp/audit-scratch/deal-room-and-games && node t2_savefile.mjs -> 'lots in file: 25 with a truth object: 25 of which counterfeit: 2 hidden flaws listed: 18; example lot in the file: {\"id\":\"T3\",\"cls\":\"radio\",\"cond\":\"ok\",\"price\":7.48,\"mode\":\"fixed\",\"truth\":{\"q\":0.87,\"fake\":false,\"defects\":[{\"id\":\"d0\",\"label\":\"worn finish\"}]}}'.  node t2b_savefile_native.mjs -> owned crate in the file: {\"cls\":\"radio\",\"from\":\"lot\",\"known\":false,\"truth\":{\"q\":0.86,\"fake\":false,\"defects\":[{\"id\":\"d0\",\"label\":\"worn finish\"}]}}. (My sample had no trades yet, so no scam lead was present; the code writes scam:true on the lead object.)",
+     "verified": true,
+     "fixSketch": "Export a redacted copy: drop lots[].truth and lots[].warn, leads[].scam unless verified, assets[].truth and belief unless known. Nothing reads the file back. If pc stays, say in FACULTY_KIT that the console shows everything.",
+     "testSketch": "Call the savefile export (or capture the Blob in a Chrome test), parse it, and assert no key 'truth' under lots or unknown assets and no 'scam' on an unverified lead.",
+     "authorDecision": true,
+     "status": "open",
+     "repairedBy": null
+    },
+    {
+     "id": "deal-room-and-games-auction-worth-stale",
+     "title": "The Bid stage's estimate and 'true value' are inflated against the engine's value of the lot (stale TUNE.guide 0.8): contradictory result cards, a quest that pays for losses, a toothless winner's-curse lesson",
+     "severity": "major",
+     "kind": "bug",
+     "files": [
+      "js/deal.js",
+      "js/meta/quests.js",
+      "js/market.js",
+      "js/engine.js"
+     ],
+     "where": "js/deal.js:111-112, :117, :128 (M = lot.price / TUNE.guide; trueValue = M*q), :613-622 (lesson and title); lot pricing js/market.js:71 / js/engine.js:539; quest js/meta/quests.js:59",
+     "scenario": "auctionParams assumes a lot is posted at 0.8 of its value (TUNE.guide), but the engine posts a working lot at lotShare = 0.97 falling to 0.84 of fair, and a wreck at 1.0-2.47x its as-is value. So M = price/0.8 and with it the player's displayed estimate and the game's trueValue sit lotShare/0.8 above the engine's own valuation worth(): +21% at Ops 1 down to +5% at Ops 7+ (+18% in the test world), +51% on wrecks. Consequences: (1) the result card contradicts itself: title 'Paid a little too much', line 'worth about $22.11', lesson 'You won at $25.81 against a true value of $26.12: a margin of $0.31. Shading below your estimate paid.' (23% of Quick's wins on working lots, 143 of 632). (2) The auction event's surplus feeds quest q06b 'Beat the Curse' (520 XP + a skill point, 'win for less than the lot is worth'): it counts 417 of 475 working-lot wins, of which 121 (29%) lost money by the engine's value, and 161 of 183 wreck wins, of which 135 (84%) did (mean -13.4% of the price). (3) The advertised lesson cannot be learned on genuine lots: bidding to 100% of your estimate earns +4.0% of the guide price against +4.4% at 90% and +1.5% at 130%.",
+     "repro": "cd /tmp/audit-scratch/deal-room-and-games && node t10_auction_worth.mjs -> 'auction trueValue / engine worth (genuine, working lots): mean 1.181 min 1.180 max 1.182; broken lots 1.512; example: guide $24.58 -> auction worth $26.12 vs card line worth about $22.11'.  node t10b_auction_card.mjs -> 'auctions won by Quick: 632, engine says overpaid but auction reports surplus > 0: 143 (23%)' and the card: title 'Paid a little too much' / line 'It is really 85% of the described condition, worth about $22.11.' / lesson 'You won at $25.81 against a true value of $26.12: a margin of $0.31. Shading below your estimate paid.'.  node t10c_auction_bias.mjs -> 'player estimate / engine worth: working x1.223, broken x1.571; ok wins 475: quest counts 417, 121 (29%) lost money; broken wins 183: counts 161, 135 (84%) lost, mean -13.4%'.  GENUINE=1 node t30_curse.mjs -> profit/guide price by bid-up-to multiple of estimate: 0.9: +4.4%, 1.0: +4.0%, 1.3: +1.5%.",
+     "verified": true,
+     "fixSketch": "Derive the described value from the engine, not from lot.price/0.8: M = g.val(described working crate) (or lot.price / lotShare(ops, cond)), and trueValue = run.worth(secret), so the Bid stage, its lesson and the card read one number. Re-centre the rivals on the same M and re-tune TUNE.rival so Quick still lands near the guide price (tests/deal.test.mjs 'Quick buying lands...'). Decide separately what a wreck is worth (see the wreck-verdict finding).",
+     "testSketch": "For genuine working auction lots assert |auctionParams.trueValue / run.worth(secret) - 1| < 0.03 at Ops 1, 4 and 8; for every won auction over 300 seeds assert sign(bid.surplus) === sign(summary.numbers.net); and assert the winner's-curse curve (profit vs bid multiple) peaks below 1.0 by at least 3 points.",
+     "status": "open",
+     "repairedBy": null
+    },
+    {
+     "id": "deal-room-and-games-wreck-verdict",
+     "title": "Every purchase of a wreck is stamped 'Paid a little too much' because the card values it as it stands, though wrecks are priced for their repair upside",
+     "severity": "major",
+     "kind": "bug",
+     "files": [
+      "js/deal.js"
+     ],
+     "where": "js/deal.js:606, :617-620 (net = worth - price, title), :455 (worth uses the as-is condition); outcomeOf :452 for the Quick/expert nets",
+     "scenario": "summarize() compares the price paid with run.worth(secret), the crate's value as it stands. By design sellers of wrecks ask 1.00x (Ops 1) up to 2.47x their as-is value (docs/BALANCE.md, Broken lots), so net is negative for every wreck: all 602 Quick purchases of a wreck ended 'Paid a little too much' (warn tone), and the 'against what it was really worth' nets for Quick and expert are negative too. The same crates repaired and kept would have netted +12, +568 and +371 (samples), and buy-wreck-repair-resell is the loop the Academy's Fix It lesson teaches. A player who trusts the verdict learns not to buy wrecks.",
+     "repro": "cd /tmp/audit-scratch/deal-room-and-games && node t11_wreck_card.mjs -> \"titles on cards after buying a WRECK (Quick deal): { 'Paid a little too much': 602 }; engine net mean -31.41, share >= 0: 0%\" and samples: paid 29.52, repair cost 14.28, worth now 24.39, repaired 50.82, profit if repaired and kept +12.15 (card said 'worth about $20.00').",
+     "verified": true,
+     "fixSketch": "For cond === 'broken' value the crate at max(as-is, repaired value - repair cost) from g.repairQuoteFor(cls, zone) ({cost, quality, after}) or show both numbers; use it for net, the title and outcomeOf's Quick/expert nets, so 'Good buy' is reachable for a wreck priced under its repaired worth.",
+     "testSketch": "Buy broken lots at Ops 3 through quickAll(); assert the title is 'Good buy' whenever repairQuoteFor.after - cost - price >= 0, and that the line names the repaired value; assert 'Paid a little too much' is not shown for such a lot.",
+     "status": "open",
+     "repairedBy": null
+    },
+    {
+     "id": "deal-room-and-games-pro-assist-hidden",
+     "title": "Seasoned Pro's 'steady hands in haggling' is invisible by default: the Close shows no advice and an unchecked, disabled Assist box",
+     "severity": "major",
+     "kind": "bug",
+     "files": [
+      "js/deal.js",
+      "js/ui/deal.js",
+      "js/data/perks.js"
+     ],
+     "where": "js/deal.js:680 (m.assist = run.assist), :689 (advice gated on run.assist), :105 and :347 (the perk assists the haggle state); js/ui/deal.js:259-263 (box checked from m.assist, disabled from assistLocked)",
+     "scenario": "The perk is haggleAssist:1 (perks.js:62), advertised on the Draft and counted there (+0.08 'selling prices', draft.js:50). At the Close the haggle state is assisted and view().advice exists, but modelOf shows the hint and the checkbox from run.assist, the player's own switch (default off). A Pro who has not ticked Assist at an earlier stage sees no hint, an Assist box that is unchecked yet greyed out (locked), no reason why, and cannot tick it in the Close. The existing test only checks assistLocked and the disabled attribute.",
+     "repro": "cd /tmp/audit-scratch/deal-room-and-games && node t18_pro_assist.mjs -> Seasoned Pro, never touched Assist: run.assist false | haggle state assist true | view().advice exists true | screen shows the Assist hint false | box is locked true | box looks checked false.  (Pro who ticked Assist earlier, or anyone else with it ticked: hint shown true.)",
+     "verified": true,
+     "fixSketch": "In modelOf compute assistNow = run.assist || (key === 'close' && (g.P.haggleAssist || 0) > 0) and use it for m.assist and the advice gate; render the locked box checked with a visible or aria-describedby reason ('Seasoned Pro: always on in the Close').",
+     "testSketch": "Pro world with Assist off: after anchor + hold, UI.closeHTML(model(r)) contains the Assist hint and UI.sheetHTML has the box 'checked' and 'disabled' with a description.",
+     "status": "open",
+     "repairedBy": null
+    },
+    {
+     "id": "deal-room-and-games-double-activation",
+     "title": "A double-click makes the move twice: two concessions, two bids, and one Stop that eats two dial steps",
+     "severity": "major",
+     "kind": "bug",
+     "files": [
+      "js/ui/deal.js"
+     ],
+     "where": "js/ui/deal.js:555 (onClick: no detail/lockout), :558-562 (onKey: no e.repeat check), :489-494 (stopAt takes t from performance.now() with no minimum)",
+     "scenario": "Every move acts on every click; sheet repaints replace the buttons, so the second click of a double-click lands on the new button at the same place. Measured with real mouse events in headless Chrome: at the Close one click on 'Raise your offer (medium)' moves rounds left 4 -> 3, a double-click 4 -> 2; at the auction one click gives one 'You bid' line, a double-click gives two (price $2.15 -> $2.73); at the repair bench one double-click on Stop moves 'Step 1 of 3' to 'Step 3 of 3' with steps 1 and 2 both 'missed' (the second stop landed ~100 ms into step 2). These moves are irreversible and cost money, and the first move at each table is final. Touch double-taps and users with tremor hit this. Key repeat of Enter on a focused button is likely the same (no e.repeat guard) but I did not test it.",
+     "repro": "cd /tmp/audit-scratch/deal-room-and-games && timeout 115 node t22_dblclick_more.mjs (needs Chrome; own ports 18433/19433) -> 'Close, 1 click(s): rounds left 4 of 5 -> 3 of 5 | Close, 2 click(s): rounds left 4 of 5 -> 2 of 5 | Auction, 1 click(s) on Bid: \"You bid\" entries 1, price $2.15 | Auction, 2 click(s): 2 entries, price now $2.73 | after ONE double-click on Stop: Step chip -> 3 of 3 | 1. Strip and clean missed || 2. Fit and tighten missed || 3. Final tune now'.  Also t21_dblclick.mjs: 'DOUBLE-CLICK on Come down (small): rounds spent 1 -> 3 (one click would be 2)'.",
+     "verified": true,
+     "fixSketch": "Ignore repeat activations: in onClick return when e.detail > 1 and keep a ~400 ms lockout after any move or stop; refuse a Stop whose elapsed time since the step began is under ~250 ms; ignore keydown with e.repeat.",
+     "testSketch": "Chrome test: dispatch two clicks 90 ms apart on [data-deal=concede], [data-deal=bid] and [data-deal=stop] and assert rounds, bids and dial steps advance by exactly one. Unit: two stop actions within 200 ms of a step start leave step at 1.",
+     "status": "repaired",
+     "repairedBy": "tests/cloud-audit.test.mjs D1 (a source-shape test; no real double-click test yet)"
+    },
+    {
+     "id": "deal-room-and-games-afford-gates",
+     "title": "The affordability gates disagree with the prices a deal can reach: the Deal Room lets you in at 0.6x, Quick buy at 1.0x, and a failed deal burns the hand-played Close",
+     "severity": "major",
+     "kind": "bug",
+     "files": [
+      "js/deal.js",
+      "js/ui/drawers/market.js"
+     ],
+     "where": "js/deal.js:227-228 (lowest = 0.6 x price, blocker); js/ui/drawers/market.js:209-210 (short = cash < price, Quick buy aria-disabled only then)",
+     "scenario": "No Close can end under about 0.76x the asking price (min over 12,126 Closes at five skill levels), yet planBuy blocks only below 0.6x ('You need at least ...'), so a player holding 70% of the price opens the room with no blocker, reads, plays and ends 'Not bought: Need $28.96; you have $20.27', with the table marked tried. And the Market enables 'Quick buy about $X' once cash >= price although Quick pays 1.00-1.18x (mean 1.044): with cash 1.00-1.05x the price a Quick buy ends 'Not bought' 43% of the time (307 of 720), 4% at 1.10x, 1% at 1.18x. After either failure the lot's Close is Quick's for good (s.tried), so the player who later has the cash can no longer haggle it by hand. Early game, buying with nearly all your cash, is exactly this case.",
+     "repro": "cd /tmp/audit-scratch/deal-room-and-games && node t15_blocker.mjs -> 'lowest price multiplier any of 12126 Closes reached: 0.760 (the blocker lets you in at 0.600)'; 'cash 20.27 lot price 28.96 | blocker: \"\" | Quick available: true'; 'result card: Not bought - Need $28.96; you have $20.27. | tried mark set: {\"buy|4:T28\":1} | lot still on shelf: true | xp paid for the Read: 9'.  node t26_quick_buy_gate.mjs -> cash/price 1.0, 1.02, 1.05: 307 of 720 'Not bought' (43%), each also burnt; 1.10: 27 (4%); 1.18: 8 (1%).",
+     "verified": true,
+     "fixSketch": "For fixed-price lots set planBuy's lowest to the real floor of the haggle (about 0.76 x price; keep 0.6 for auctions, where the opening bid is 0.6). For Quick, either gate the Quick buttons and the Market's Quick buy at 1.18x with an explanation, or let Quick stop at what the player can pay. Do not mark tried for a table that could never have closed.",
+     "testSketch": "For cash = 0.7 x price assert plan.blocker is non-empty on fixed lots; for cash in [1.0, 1.05) x price over 200 seeds assert Quick buy is disabled or never ends 'Not bought'; assert a 'Not bought' ending leaves s.tried unset.",
+     "status": "open",
+     "repairedBy": null
+    },
+    {
+     "id": "deal-room-and-games-read-prior-miscalibrated",
+     "title": "The Read's starting 'Chance it is a counterfeit' is far below the generator's real rate for working lots",
+     "severity": "major",
+     "kind": "bug",
+     "files": [
+      "js/deal.js",
+      "js/engine.js"
+     ],
+     "where": "js/deal.js:75 (prior.fake = fakes * fakeRisk for working lots, floor 0.005); generator js/engine.js:550 (fakes * risk / (meanRisk * (1 - brokenLots)))",
+     "scenario": "Beliefs update correctly (the evidence is a true log-likelihood ratio), but they start from a prior that ignores the generator's normalisation: the district's headline rate is a share of all lots, broken lots cannot be fake, so working lots are counterfeit more often than fakes * risk. Pawn District: screen starts at 18.8% on average, real 28.1% (lots shown '20%' are really 31%, '10%' are 18%, '5%' are 15%). Estate Sales: screen 3.1%, real 11.4% ('0%' lots are 7% fake). Every posterior the player reads, and the Assist advice built on it, is biased low, in the game about information. Lots in districts 1-2 show '1%' though they can never be fake (the prior floor).",
+     "repro": "cd /tmp/audit-scratch/deal-room-and-games && node t32_prior_calib.mjs -> 'district 4 (Pawn): 1560 working lots; overall prior 18.8% vs really counterfeit 28.1%' (prior 5%: 15% real; 10%: 18%; 15%: 17%; 20%: 31%); 'district 6 (Estates): 1477 working lots; overall prior 3.1% vs really counterfeit 11.4%' (prior 0%: 7% real; 5%: 15%).  node t27_prior.mjs -> district 1 and 2 working lots: 'screen says: 1%'.",
+     "verified": true,
+     "fixSketch": "Expose the generator's own probability (e.g. g.fakeRate(zone, cls) = clamp(fakes * riskOf(cls) / (meanRisk * (1 - brokenLots))) over the current class list) and use it for prior.fake; show 0% where the rule is 0.",
+     "testSketch": "For districts 3-16 and each class generate a few thousand lots and assert |empirical fake rate - inspectParams(...).prior.fake| < 0.03 (or inside the binomial interval); assert districts 1-2 and broken lots show 0%.",
+     "status": "open",
+     "repairedBy": null
+    },
+    {
+     "id": "deal-room-and-games-pitch-scout",
+     "title": "The Pitch can be scouted for free: leave after a pick and reopen, ten sittings show every pair",
+     "severity": "minor",
+     "kind": "design-decision",
+     "files": [
+      "js/deal.js",
+      "js/ui/deal.js"
+     ],
+     "where": "js/deal.js:43 (HIDDEN_STAGES omits 'pitch'), :397-405 (walkAway marks only close and bid); evidence in tests/remaining-engine.test.mjs:428-445 and tests/meta-academy.test.mjs:1024",
+     "scenario": "The pick is deterministic by the lead and the crate. Pick a pair, read the verdict (+0.12 fit, buyer is x1.07 as keen, the buyer's own words), press Leave: nothing is marked, the buyer stays, and the same table opens with a fresh Pitch. Ten sittings show all ten pairs and the 11th plays the best (score 1.00, XP for a perfect pitch). Measured effect on money is small because Quick's own pitch is already near the best (150 sells: scouted pitch + Quick close is +0.0% against all-Quick; Quick's pitch scores 0.92): the cost falls on the skill game, since a bad guesser can retry up to par. The repo treats this as normal: remaining-engine.test.mjs sits ten fresh sittings at one buyer, and a comment in meta-academy.test.mjs describes leaving before the Close and tapping the buyer again as the way out of a cool pitch. Yet summarize() withholds the best pair on a walk-away (deal.js:583-588), so the intent for the answer looks mixed.",
+     "repro": "cd /tmp/audit-scratch/deal-room-and-games && node t1_pitch_scout.mjs -> ten rows (utility+price fit 0.161 mult 1.107 score 1; scarcity+story fit -0.071 mult 0.965 score 0 ...), 'tried flags after ten sittings: {}', 'buyer still here: true', '11th sitting: pitch is a fresh stage', 'best pair played at the 11th sitting: utility+price mult 1.107 score 1.00'.  node t1b_pitch_value.mjs -> 'sale price: scouted pitch + Quick close vs all Quick: mean +0.0%, max +0.2%'; 'Quick pitch score 0.92'.",
+     "verified": true,
+     "fixSketch": "If the Pitch is meant to be a read and not a search: count the pick as a move with its own mark (tried[dkey + '|pitch'], so it does not burn the Close) and play a second sitting's pitch at Quick. If practice is intended, say so in the docs and drop the walk-away guard.",
+     "testSketch": "Pick a pair, walkAway(), reopen: assert the second run's pitch is already played at Quick (res.pitch.quick true) and act({type:'pick'}) is refused; assert the Close of the same deal is still hand-playable.",
+     "authorDecision": true,
+     "status": "open",
+     "repairedBy": null
+    },
+    {
+     "id": "deal-room-and-games-rewind-unmarks",
+     "title": "A class rewind restores every table unmarked, with the same lots, the same hidden truths and the same haggle answers",
+     "severity": "minor",
+     "kind": "design-decision",
+     "files": [
+      "js/engine.js",
+      "js/session.js",
+      "js/deal.js"
+     ],
+     "where": "js/engine.js:1815-1830 (_checkpoint / rewindTo restore s whole, including s.tried and the lots); js/session.js:496-510",
+     "scenario": "s.tried lives in the game state, which rewindTo replaces with the checkpoint. After the instructor's 'Rewind 1/3/7 days', tried is {} again, lot ids and their truths come back identical, and the seed of every table is fixed, so a student who remembers the first timeline replays each Close, Bid, Fix and Read with the answers (and knows which lots were counterfeit). The listed bypasses (reload, Quick after a peek, reopening) hold; this one is by construction.",
+     "repro": "cd /tmp/audit-scratch/deal-room-and-games && node t6_rewind.mjs -> 'first timeline: tried = {\"buy|4:T28\":1} | the talk ends: no deal | seller said: Whoa, too little! $24.96! ...'; 'after the rewind to hour 0 | tried = {} | the same lot (same id) is on the shelf: true | same hidden truth: true'; 'second timeline: the Close is a fresh table to play by hand: true; seller says: the same words as the first time'.",
+     "verified": true,
+     "fixSketch": "Carry tried (and lot.probed) across rewindTo: keep the pre-rewind map and merge it into the restored state, or salt table seeds with a per-run rewind counter so the replayed tables differ. Or accept it and tell the instructor in FACULTY_KIT that after a rewind the tables repeat.",
+     "testSketch": "Mark a table, advance, rewindTo(checkpoint), reopen: assert the table is still Quick's (or that its answers differ).",
+     "authorDecision": true,
+     "status": "open",
+     "repairedBy": null
+    },
+    {
+     "id": "deal-room-and-games-slider-dominates-dial",
+     "title": "The reduced-motion slider (a free setting) beats real human timing at every Ops level, so the dial's skill is optional",
+     "severity": "minor",
+     "kind": "balance",
+     "files": [
+      "js/play/repair.js",
+      "js/ui/common.js",
+      "js/ui/deal.js"
+     ],
+     "where": "js/play/repair.js:11 (SLIDER_CAP 0.85); js/ui/common.js:25 and the 'Reduce motion' select at :318; js/ui/deal.js:489-494",
+     "scenario": "Settings > Display and sound > Motion > 'Reduce motion' is available to anyone and turns Fix into a slider; a stop made with it scores min(accuracy, 0.85), and setting the marker to the middle of the visible zone scores 0.85 on every step. A careful human hand (40 ms of timing noise) averages 0.58 precision at Ops 1, 0.70 at Ops 3, 0.78 at Ops 6, 0.81 at Ops 8, and only 5% / 13% / 27% / 40% of hands reach 0.85; Quick averages 0.31-0.62; the flawless expert 0.88-0.95. The slider's net gain after the bill is 94-97% of the expert's from Ops 2 up and 2-3x Quick's at low Ops. The code comment calls the cap 'a good but not a perfect hand', but a good human hand is well below it, so switching the setting on is the dominant strategy for everyone and the 'nothing is timing-only' alternative becomes the only sensible play.",
+     "repro": "cd /tmp/audit-scratch/deal-room-and-games && node t12_repair_options.mjs -> precision careful 0.50 | quick 0.31/0.37/0.42/0.47/0.56/0.62 | slider 0.85 | expert 0.88-0.95 (Ops 1,2,3,4,6,8); net: Ops 3 quick 8.2, slider 10.9, expert 11.3.  node t12b_human_vs_slider.mjs -> 'ops 1, 40 ms: human mean 0.58, share >= 0.85 5% ... ops 8, 40 ms: 0.81, 40%; 70 ms: 0.40 ... 0.67'.",
+     "verified": true,
+     "fixSketch": "Set the cap where typical human timing lands (about 0.55-0.65), or make the slider give up the central zone (hide the exact centre, quantise it), so accessibility parity does not out-play the dial.",
+     "testSketch": "Assert SLIDER_CAP <= the mean precision of a 40 ms-noise human at Ops 4, and that the slider's expected net stays below the expert's by at least 10%.",
+     "authorDecision": true,
+     "status": "open",
+     "repairedBy": null
+    },
+    {
+     "id": "deal-room-and-games-assist-free-solves-close",
+     "title": "Assist is free and its advice is the expert policy: following it reproduces expert play exactly (and makes Pro's perk inert even once it is visible)",
+     "severity": "minor",
+     "kind": "balance",
+     "files": [
+      "js/play/haggle.js",
+      "js/deal.js",
+      "js/data/perks.js",
+      "js/play/auction.js"
+     ],
+     "where": "js/play/haggle.js:191-214 (advise returns expert(pubOf(s))); js/deal.js:105, :347, :680; js/data/perks.js:62",
+     "scenario": "Assist is a checkbox with no cost to XP, score or quests. Doing what the Assist box says at the Close gave the expert bot's result in 300 of 300 sells and 300 of 300 buys (identical deal and price), which sells at x1.184 against Quick's x0.998 with 95% of the deals closing, and buys at x0.982 against x1.044 (93% closing; a failed haggle falls back to Quick's price, so about 5% cheaper overall). So 'Deal-Room-optimal play beats Quick' needs no skill in the Close or Bid, and Seasoned Pro's haggle perk gives nothing every other founder cannot tick. This may be the intended accessibility trade; flagging because the principle 'skill is a choice you make' and the Pro strength both depend on Assist costing something.",
+     "repro": "cd /tmp/audit-scratch/deal-room-and-games && node t13_assist.mjs -> 'SELL Quick deal rate 100% mean price x0.997 | Expert x1.146 | Assist x1.146; BUY Quick x1.061 | Expert x1.017 (deal rate 69%) | Assist x1.017; Assist-follower identical to the expert bot in 300 / 300 sells and 300 / 300 buys'.  node t14_buy_expert.mjs (production parameters) -> 'SELL expert x1.184, 95% deals; BUY expert x0.982, 93% deals; expected price with Quick fallback x0.987 vs Quick x1.044 (-5.4%)'.",
+     "verified": true,
+     "fixSketch": "Options: make Assist cost something (assisted wins pay no XP or do not count for quests and achievements); make it coach the concept and not the exact move; or drop the Pro perk's pretence and give Pro a real haggle edge (a wider read, an extra round).",
+     "testSketch": "Whatever is chosen: assert an Assist-follower's mean price differs from the expert bot's, or that assisted deals are excluded from the skill XP and quest counts.",
+     "authorDecision": true,
+     "status": "open",
+     "repairedBy": null
+    },
+    {
+     "id": "deal-room-and-games-first-move-unwarned",
+     "title": "The player is never told that the first move at a Close, Bid or Fix is final; Leave and Escape silently burn the table",
+     "severity": "minor",
+     "kind": "content",
+     "files": [
+      "js/ui/deal.js",
+      "js/deal.js"
+     ],
+     "where": "js/ui/deal.js:147-151 (the opening buttons carry no warning), :563 (onClose just disposes); js/deal.js:321-323 (the only message, after the table is already burnt)",
+     "scenario": "The rule is in docs/FACULTY_KIT.md, so the instructor is told, but nothing in the product tells the student: no line at the table, no confirmation on Leave or Escape (a native dialog), no Codex text. A student who opens the Close, makes a first offer, finds the price poor and clicks Leave to try again later gets 'You have sat at this table before, and the talk went on without you the way an average dealer would take it' on the next sitting, and that lot's Close is Quick's for the rest of the game. The same happens to a student who presses Escape by mistake after a first stop at the bench.",
+     "repro": "cd /tmp/audit-scratch/deal-room-and-games && grep -n -i \"first move|sat at|for good|point of no return\" ../../..${WT:-}/js/ui/deal.js (no user-facing hit before the move); the rule is held by tests/audit-repair.test.mjs:956-975 (a first anchor marks tried; the next run is Quick's). Browser-level Escape not driven; native <dialog> behaviour read from js/ui/common.js:180-199.",
+     "verified": false,
+     "fixSketch": "One line under the opening buttons and above Stop ('Your first move here is final: leave now and this table is played for you at average skill'), and a confirm on Leave/Escape once tried is set.",
+     "testSketch": "closeHTML at round 0 and fixHTML contain the note; after a first move, Leave raises the confirm and does not dispose until accepted.",
+     "status": "open",
+     "repairedBy": null
+    }
+   ]
+  },
+  {
+   "lens": "relay-and-static-server-security",
+   "angle": "dynamic",
+   "coverage": "Ran server/relay.mjs standalone (spawned on ports 18700-18799) and attacked it with scripts: seat/owner-token race and a direct unit-level isolation of claim(), an 800-connection pid-table filler, a binary-frame flood versus the text rate limiter, a SIGTERM test, Origin/replay/from-spoofing/room-code-guessing checks, and fan-out CPU/bandwidth and slow-reader memory measurements. Ran server/static.mjs standalone (port 18750) against path-traversal encodings, null bytes, backslashes, dotfiles, methods, long URLs, HEAD/Range, and a symlink proof-of-concept using a byte-identical relocated copy of the unmodified file (sha256 verified equal) so the shared worktree was never touched. Read .github/workflows/pages.yml, scripts/stage.mjs, index.html, 404.html and the relevant tests (tests/remaining-engine.test.mjs, tests/multiplayer.test.mjs) to see what is already held and avoid re-reporting it. Did not get to: fuzzing permessage-deflate / compression-specific framing, IPv6/dual-stack binding of static.mjs's HOST=0.0.0.0, or a from-the-browser (headless Chrome) reproduction of the relay findings (they are all server-side and were fully reproducible over raw WebSocket/TCP, which is a stronger proof than driving a browser). One other process was briefly found writing files into this same scratch directory (e1-starve.mjs/e2-squat.mjs, not authored by me); I isolated my own scripts into a `dyn/` subdirectory and every finding below is backed only by output from calls in this transcript, not by those files.",
+   "findings": [
+    {
+     "id": "rs-seat-claim",
+     "title": "A room's owner-recovery token can never bind once any no-token instructor-role connection claims the seat first \u2014 not a race that is sometimes lost, but a deterministic, permanent lock-out",
+     "severity": "blocker",
+     "kind": "security",
+     "files": [
+      "server/relay.mjs"
+     ],
+     "where": "server/relay.mjs:82-90 (claim)",
+     "scenario": "claim() only sets room.ownerProof when `!seat || seat.pid === ws.pid`. The very first instructor-role connection to a fresh/forgotten room that brings NO token (a stray tab with role=instructor and no `owner` param, a second device that hasn't loaded localStorage yet, a classmate who flips the URL's role param out of curiosity, or an attacker) takes the seat via the `!seat` branch without ever setting room.ownerProof. From then on room.ownerProof stays null forever: the real instructor's later connections, however many, with the exact correct 32-char owner token, can never satisfy `(room.ownerProof == null && (!seat || seat.pid === ws.pid))` (seat.pid is the squatter's pid, not theirs), so the token never binds and the instructor can never reclaim the seat for the life of the room. This directly contradicts the file's own header comment (\"the room's owner token... a secret the instructor keeps a copy of\") and docs/ARCHITECTURE.md/docs/FACULTY_KIT.md's entire 'take back a room' story, which both promise the token always wins. It is also the practical outcome of the ordinary scenario the docs explicitly cite: a relay restart (Render/Fly/campus VM redeploy) or a room forgotten after EMPTY_MS both reset `room` to a fresh object, so whichever instructor-role connection reaches the new object first permanently decides whether the token will ever work again.",
+     "repro": "node /tmp/audit-scratch/relay-and-static-server-security/dyn/seat-claim-bug.mjs against the unmodified server/relay.mjs (createRelay() from the worktree, no CLI, no mocking). Printed:\n`after student joins: room.ownerProof = null room.seat = null room.owner = null`\n`after a no-token instructor connects: room.ownerProof = null room.seat = PC-OTHER room.owner = PC-OTHER`\n`attempt 0: real instructor with the CORRECT owner token connects -> room.ownerProof = null, room.seat = PC-OTHER, became seat holder: false` (repeated for attempt 1 and 2, three separate reconnect attempts, all false)\n`student heard a clock from: []` -- the real instructor's clock message never reached the student at all.\nA second script (seat-race.mjs) reproduces the same outcome end-to-end over real WebSocket reconnects after (a) killing and restarting the relay process and (b) letting the room sit empty past EMPTY_MS: in both cases the student only ever hears clock/inject messages `from:\"PC-EVIL\"`, including a fake `hour:999` and an injected 'crash' shock, even after the real instructor reconnects with the correct token on a brand-new Founder ID (the exact 'take back a room' flow docs/FACULTY_KIT.md describes).",
+     "verified": true,
+     "fixSketch": "Bind the token independent of current seat state: the first valid token presented for a room with room.ownerProof still null should always bind, e.g. `if (ownerProof) { if (room.ownerProof == null) room.ownerProof = ownerProof; if (sameHash(room.ownerProof, ownerProof)) { room.owner = ws.pid; room.seat = { pid: ws.pid, ws, left: 0 }; return; } }` (drop the `(!seat || seat.pid === ws.pid)` guard on the binding line only; the sameHash branch already correctly reclaims the seat from whoever holds it).",
+     "testSketch": "Unit test against createRelay(): connect a student, then a no-token instructor (asserts it takes the seat, as today), then a real instructor with a token minted at room creation; assert room.ownerProof is set to that token's hash and room.seat.pid is the real instructor's pid. Add this alongside tests/remaining-engine.test.mjs's existing 'Relay owner' test, which only covers the token-already-bound case and so does not catch this.",
+     "status": "open",
+     "repairedBy": null
+    },
+    {
+     "id": "rs-keytable-lockout",
+     "title": "800 connect-snapshot-and-leave sockets (about 2.5 seconds of one script) permanently fill a room's pid table and lock out every future real student for the rest of the class",
+     "severity": "blocker",
+     "kind": "exploit",
+     "files": [
+      "server/relay.mjs"
+     ],
+     "where": "server/relay.mjs:92-97 (pruneKeys), 130-135 (connection handler)",
+     "scenario": "pruneKeys() only considers evicting a pid when `!k.snapped`. An attacker who knows the room code opens ~800 short-lived connections, each sending one valid `snap` message (satisfying the explicit 20 msg/s rate limit easily) before disconnecting. Every one of those pids is marked `snapped: true` and can never be pruned again, no matter how long ago it left (the `at - k.left > GHOST_MS` check is never reached because `!k.snapped` already fails first). Once `room.keys.size >= MAX_ROOM * 2` (800), every brand-new real student is refused with 1013 'room full' -- forever, as long as the instructor (or anyone) keeps the room's `clients` set non-empty, since the whole-room eviction (EMPTY_MS) only fires when clients.size reaches 0.",
+     "repro": "node /tmp/audit-scratch/relay-and-static-server-security/dyn/keytable-lockout.mjs against the unmodified relay. Printed:\n`attack took 2450 ms; instructor is the only one connected now`\n`real new students: [ 'opened 1013 room full', 'opened 1013 room full', 'opened 1013 room full' ]`\n...then after waiting 32 seconds (past the default 30-second GHOST_MS, specifically to test whether the table ever frees up): `after 32 s: new student: opened 1013 room full` -- confirming the lockout is not transient.",
+     "verified": true,
+     "fixSketch": "Drop the `!k.snapped` condition in pruneKeys()'s eviction test (the file's own comment describing the intent -- \"forget the oldest pid that is gone... and is not the instructor's\" -- never mentions snapshot state at all). `left > 0 && at - k.left > GHOST_MS` already guarantees the pid has had no live connection for 30+ seconds, which is sufficient staleness regardless of whether it ever snapshotted.",
+     "testSketch": "Extend tests/remaining-engine.test.mjs's existing room-limit test: after filling room.keys to MAX_ROOM*2 with pids that each sent one snap and disconnected, advance the test clock past GHOST_MS and assert a brand-new pid is now accepted (today it would still get 1013).",
+     "status": "open",
+     "repairedBy": null
+    },
+    {
+     "id": "rs-binary-bypass",
+     "title": "Binary frames are dropped before the rate limiter is ever consulted, so one connection can sustain unlimited CPU/bandwidth with zero strikes and is never disconnected",
+     "severity": "blocker",
+     "kind": "security",
+     "files": [
+      "server/relay.mjs"
+     ],
+     "where": "server/relay.mjs:153",
+     "scenario": "`if (isBinary || !allow(ws, t, instructor ? 5 : 1)) return;` short-circuits on `isBinary` before calling `allow()`, so a binary frame never consumes a token and never increments `ws.strikes`. The file's own header comment promises \"every socket has... a message rate... limit,\" and the equivalent-sized text traffic is in fact cut off (confirmed: a text burst gets the sender terminated after 60 messages, close code 1006), but the identical volume sent as binary frames is never limited and the socket is never closed.",
+     "repro": "node /tmp/audit-scratch/relay-and-static-server-security/dyn/binflood.mjs against the unmodified relay. Printed:\n`binary: sent 15485 frames of 32 KB (91 MB/s) in 5.3 s; relay CPU 28% of a core; sender still connected: true; closed code null`\n`text: sent 401 small messages in a burst; connected afterwards: false; close code 1006`\n-- one socket, within the room's 400-connection cap, sustaining ~91 MB/s and ~28% of one of this machine's 4 cores indefinitely with no limit and no disconnection, versus the documented and enforced behavior for text frames of the same volume.",
+     "verified": true,
+     "fixSketch": "Call `allow()` unconditionally (it already costs nothing extra to check), then drop the frame if it is binary: `const okRate = allow(ws, t, instructor ? 5 : 1); if (!okRate) return; if (isBinary) return;` -- this keeps binary frames dropped (as intended) but makes them cost a token and count toward strikes/termination like every other frame.",
+     "testSketch": "Node test: open a socket, send binary frames in a tight loop past BURST, assert the socket is eventually terminated (ws.strikes exceeds 300) the same way tests/remaining-engine.test.mjs's 'Relay limits' test already asserts for a text flood.",
+     "status": "repaired",
+     "repairedBy": "tests/cloud-audit.test.mjs R1"
+    },
+    {
+     "id": "rs-sigterm",
+     "title": "No SIGTERM/SIGINT handler: the relay process dies instantly on every normal deploy/restart, dropping all connections with no close frame (code 1006, not a clean close)",
+     "severity": "major",
+     "kind": "bug",
+     "files": [
+      "server/relay.mjs"
+     ],
+     "where": "server/relay.mjs:226-234 (the 'started as a program' block)",
+     "scenario": "The file registers `process.on('uncaughtException', ...)` and `process.on('unhandledRejection', ...)` but no `SIGTERM`/`SIGINT` handler at all. Node's default action for SIGTERM with no listener is immediate termination, so every connected class loses every socket as a raw TCP teardown, not a WebSocket close handshake. The README explicitly recommends deploying this on Render, Fly, or a campus VM, all of which send SIGTERM for ordinary rolling deploys and routine restarts -- meaning any ordinary deploy of a fix abruptly cuts every live classroom with zero warning to students or the instructor, and (compounding rs-seat-claim) immediately opens the exact 'room was just reset, whoever reconnects first with any role=instructor and no token wins the seat forever' window on every single restart.",
+     "repro": "node /tmp/audit-scratch/relay-and-static-server-security/dyn/misc1.mjs section 1 against the unmodified relay, sending SIGTERM to the spawned child while two sockets are connected. Printed: `[SIGTERM] exit {\"code\":null,\"sig\":\"SIGTERM\",\"ms\":56} | client close code 1006 \"\"` -- the process died in 56 ms with the client seeing an unclean close (1006), not the close(1001, 'going away') a graceful shutdown would send.",
+     "verified": true,
+     "fixSketch": "Add `for (const sig of ['SIGTERM','SIGINT']) process.on(sig, () => { for (const ws of wss.clients) ws.close(1001, 'relay restarting'); relay.close().then(() => process.exit(0)); });` in the 'started as a program' block, giving clients a real close code so js/net.js's reconnect logic (which already backs off and retries) can tell the difference between a deploy and a network drop, and giving the author a hook to log/metric restarts.",
+     "testSketch": "Spawn the relay as a child process, connect a socket, send SIGTERM, assert the client's close event fires with code 1001 within e.g. 500ms (today it is 1006).",
+     "status": "repaired",
+     "repairedBy": "tests/cloud-audit.test.mjs R2"
+    },
+    {
+     "id": "rs-symlink",
+     "title": "static.mjs serves a symlink's target verbatim with no realpath containment check: any symlink placed under css/js/assets/docs/dev/tests discloses arbitrary files to the whole LAN in the documented HOST=0.0.0.0 'share a lab' mode",
+     "severity": "major",
+     "kind": "security",
+     "files": [
+      "server/static.mjs"
+     ],
+     "where": "server/static.mjs:35-37",
+     "scenario": "`const full = join(root, r.file); if (full !== root && !full.startsWith(root + sep)) {...}; const data = await readFile(full);` is a plain string-prefix check on the joined path; it never calls realpath, so if `full` is itself a symlink, Node's readFile follows it to wherever it points, on or off the project, and the content is served with the extension-derived content-type. The file's own header comment promises this server \"serves the app and nothing else,\" but that promise has no enforcement against a symlink. The scenario the file explicitly supports -- `HOST=0.0.0.0` \"to share a lab\" -- is exactly the case where this matters: any other account or process on that lab machine that can place a symlink under one of the six served directories (a careless `ln -s`, a compromised dependency's postinstall script touching the checkout, a shared multi-user grading server) turns the server into an arbitrary-file-read oracle for every other device on that LAN.",
+     "repro": "Verified without touching the shared worktree: copied server/static.mjs byte-for-byte (sha256 f9db40e3...ade11 on both the worktree file and the copy) into a scratch directory laid out the same way (index.html, assets/, css/, js/, server/), created `assets/leak.png` as a symlink to a file outside that scratch tree (`/tmp/audit-scratch/.../outside-secret.txt`, containing a timestamped marker), and ran the unmodified copy. `curl -D - http://127.0.0.1:8080/assets/leak.png` returned `HTTP/1.1 200 OK` / `content-type: image/png` with the body `TOP-SECRET-OUTSIDE-THE-SERVED-TREE-1793296580` -- the exact content of the file outside the served tree, served under a `.png` content-type because the symlink's own name has that extension.",
+     "verified": true,
+     "fixSketch": "After computing `full`, resolve it with `realpathSync(full)` and re-check the prefix against `realpathSync(root)` before reading (and treat an ENOENT from realpathSync as 404, not a crash). This is the standard fix for this exact class of static-server bug and costs one extra syscall per request.",
+     "testSketch": "In a scratch tree, create a symlink under one served directory pointing to a file outside the tree; assert the server returns 404 (after the fix) instead of 200 with the outside file's content.",
+     "status": "repaired",
+     "repairedBy": "tests/cloud-audit.test.mjs R3"
+    },
+    {
+     "id": "rs-pages-unpinned",
+     "title": "Every action in the Pages deploy workflow is pinned to a floating major-version tag, not a commit SHA, while the workflow holds id-token:write + pages:write \u2014 enough to deploy to the live production site",
+     "severity": "major",
+     "kind": "security",
+     "files": [
+      ".github/workflows/pages.yml"
+     ],
+     "where": ".github/workflows/pages.yml:17-18,34-37,42,45",
+     "scenario": "`actions/checkout@v7`, `actions/setup-node@v7`, `actions/configure-pages@v6`, `actions/upload-pages-artifact@v5` and `actions/deploy-pages@v5` are all pinned to major-version tags, which move: whatever commit a tag currently points to is whatever code runs with this workflow's permissions. The workflow's own `permissions:` block (`contents: read, pages: write, id-token: write`) is otherwise correctly minimal, but `pages: write` + `id-token: write` together are precisely the permissions needed to publish to the live GitHub Pages site every enrolled student and instructor loads the game from -- so a tag for any one of these five actions being re-pointed (a compromised publisher account, a hijacked release, or a maintainer's compromised token on the actions side) is a direct path to serving arbitrary content to the whole user base. This is the same pattern that caused real supply-chain incidents elsewhere in the Actions ecosystem (e.g. the 2025 tj-actions/changed-files tag-hijack) and is why GitHub's own hardening guidance and tools like OpenSSF Scorecard specifically check for commit-SHA pinning.",
+     "repro": "Read .github/workflows/pages.yml directly: every `uses:` line names a tag (`@v7`, `@v7`, `@v6`, `@v5`, `@v5`), not a 40-character commit SHA. No secrets beyond the ambient OIDC token are referenced, which is good, but it does not offset the floating-tag exposure for the permissions actually granted.",
+     "verified": true,
+     "fixSketch": "Pin each action to the full commit SHA of the version currently used, with the version kept in a trailing comment for readability, e.g. `uses: actions/checkout@<40-char-sha> # v7.x.x`, and add Dependabot (`github-actions` ecosystem) or Renovate so the SHAs get bumped automatically with a reviewable diff.",
+     "testSketch": "A CI lint step (or a one-line grep in the existing `test` job) that fails if any `.github/workflows/*.yml` `uses:` line does not match `@[0-9a-f]{40}`.",
+     "status": "open",
+     "repairedBy": null
+    },
+    {
+     "id": "rs-csp-missing",
+     "title": "No Content-Security-Policy anywhere (no meta tag in index.html, no header from static.mjs), despite the project's explicit 'no third parties' promise",
+     "severity": "minor",
+     "kind": "security",
+     "files": [
+      "index.html",
+      "server/static.mjs"
+     ],
+     "where": "index.html:1-84 (no <meta http-equiv=\"Content-Security-Policy\">); server/static.mjs:38 (response headers: only content-type and cache-control)",
+     "scenario": "docs/FACULTY_KIT.md and docs/COMPLIANCE.md both state the game makes no third-party requests, and scripts/stage.mjs's `verify()` checks this at BUILD time (no remote `<link>/<script>/<img>` and no stylesheet `url()` to another host). That build-time check cannot catch a `fetch()`/`WebSocket`/`<img>` added inside a .js module at runtime, which is exactly what a CSP (`default-src 'self'; connect-src 'self' ws: wss:`) would catch as a live backstop. Grepping the whole project for external URLs found none actually fetched (one is an SVG namespace URI, the other a plain documentation link), so nothing is being exploited today -- this is a verified absence of a defense-in-depth control, not a demonstrated live exploit.",
+     "repro": "grep -n -i \"content-security-policy\\|x-content-type\" across docs/*.md, README.md, server/*.mjs and index.html in the worktree returns nothing; reading index.html head-to-toe (84 lines) confirms no CSP meta tag; reading server/static.mjs's handler() (line 38) confirms the only headers sent are content-type and cache-control.",
+     "verified": true,
+     "fixSketch": "Add `<meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'self'; connect-src 'self' ws: wss:; img-src 'self' data:; style-src 'self'; script-src 'self'; base-uri 'none'; form-action 'none'\">` to index.html's head (adjusting for the inline `application/ld+json` block, which needs either a nonce/hash or `script-src-elem 'self' 'unsafe-inline'` scoped narrowly, or simply moving the JSON-LD into main.js and injecting it at runtime). Optionally also send the same policy as a header from static.mjs and from scripts/stage.mjs's servePages() for parity with what a hardened real deployment would add in front of GitHub Pages.",
+     "testSketch": "Extend tests/finish-site.test.mjs (which already parses index.html) to assert a CSP meta tag is present and its connect-src does not include a wildcard or any host besides 'self'/ws/wss.",
+     "status": "open",
+     "repairedBy": null
+    }
+   ]
+  },
+  {
+   "lens": "relay-and-static-server-security",
+   "angle": "static: full file-by-file read of server/relay.mjs, server/static.mjs, scripts/stage.mjs, index.html, 404.html, .github/workflows/pages.yml, js/net.js, js/session.js's room/identity code, plus every existing test that exercises them, followed by direct measurement of the running relay and one local-filesystem repro.",
+   "coverage": "Read server/relay.mjs, server/static.mjs, scripts/stage.mjs (stage/verify/servePages), index.html, 404.html, .github/workflows/pages.yml in full, plus js/net.js, the room/identity sections of js/session.js, js/main.js's room UI, docs/ARCHITECTURE.md's relay section, docs/COMPLIANCE.md and docs/FACULTY_KIT.md, and every existing test touching the relay or static server (tests/audit-session.test.mjs, audit-repair.test.mjs, remaining-engine.test.mjs, multiplayer.test.mjs, finish-site.test.mjs, leftovers.test.mjs, world-raster-dom.test.mjs) to see what is already held. Ran the real relay (server/relay.mjs with the installed ws) on local ports in 18600-18799 and measured: idle-connection room/slot exhaustion at the 200-room and 400-connection limits; pre-emptive Founder-ID binding against the real js/net.js client; fan-out bandwidth amplification; a slow/non-reading-connection memory probe against an in-process relay; cross-room CPU/latency impact of one flooding connection; client-side (Session._onMsg) cost of ingesting snapshots at scale; and SIGTERM behavior both as a normal child process and as a container's PID 1 (via unshare --pid) \u2014 all of that ran to completion with results captured in-session. Further large-scale connection/resource scripts were then stopped by a safety classifier; I did not continue that line and did not reproduce it. The remaining items (Origin handling, security response headers, CSP, the symlink-containment pattern, workflow permissions/action pinning) were completed by reading the full source of every target file, plus one small local-filesystem-only repro outside the worktree (no network, no multiple connections) for the symlink gap. Not verified: slowloris specifically (reasoned from the absence of any custom header/connection timeout in either server, not empirically timed); the real GitHub-hosted relay or Pages deployment; anything on real hardware or non-Chromium browsers (already flagged as known/unverified).",
+   "findings": [
+    {
+     "id": "relay-1-slot-exhaustion",
+     "title": "A handful of idle, unauthenticated sockets permanently deny the whole relay or one class's room",
+     "severity": "blocker",
+     "kind": "exploit",
+     "files": [
+      "server/relay.mjs"
+     ],
+     "where": "server/relay.mjs:118-127 (MAX_ROOMS check), :127 (MAX_ROOM check)",
+     "scenario": "A room is created and a room/connection slot is consumed the instant a WebSocket upgrade with a syntactically valid room/pid/key completes (server/relay.mjs:106-144) \u2014 before 'hello' or anything else is ever sent, and regardless of whether the room code is real or guessed. Nothing ages these out: pruneKeys (line 92-97) only evicts entries from the per-room `keys` table, and only as a side effect of that table being full; it does nothing to `rooms.size` or `room.clients.size`, which is what MAX_ROOMS/MAX_ROOM actually gate.",
+     "repro": "Ran the real relay and opened 200 WebSocket connections, each to its own never-before-seen room code, sending nothing after the handshake. All 200 opened and stayed open. A real instructor then trying to open a brand-new room for class was refused with close code 1013 'relay full'. Separately, against a fresh relay, 400 idle connections to one specific (e.g. instructor-announced) room code filled that room; a real student joining the same code was refused with 1013 'room full'. In both cases the idle sockets never triggered the rate limiter (they send nothing) and remained open indefinitely; the client's own room-code generator (js/net.js roomCode(): a 4-character code from a 24-letter alphabet, 24^4 = 331,776 possibilities) means an attacker does not even need to know a real code \u2014 guessing new codes creates new rooms just as effectively, hitting MAX_ROOMS the same way.",
+     "verified": true,
+     "fixSketch": "Require a connection to send something meaningful (e.g. 'hello' or a first 'snap') within a short grace window or be dropped and its slot freed; separately, age out a room/connection that has sent nothing within N seconds the same way pruneKeys ages out silent pids, so `rooms.size`/`room.clients.size` reflect real participants, not just completed handshakes.",
+     "testSketch": "Open MAX_ROOMS idle connections to distinct new rooms (as above); assert that after a short timeout a real instructor's new-room connection succeeds (not 1013). Open MAX_ROOM idle connections to one room; assert a real student later joining succeeds.",
+     "authorDecision": false,
+     "status": "open",
+     "repairedBy": null
+    },
+    {
+     "id": "relay-2-pid-squat-silent-lockout",
+     "title": "A classmate who has seen a student's Founder ID can pre-bind it in a new room before the student arrives, silently and durably locking the real student out",
+     "severity": "blocker",
+     "kind": "exploit",
+     "files": [
+      "server/relay.mjs",
+      "js/net.js",
+      "js/session.js"
+     ],
+     "where": "server/relay.mjs:128-135 (first-use binding), :1-13 (the comment claiming this is prevented); js/net.js:38-43 (RelayTransport.onclose silently retries forever)",
+     "scenario": "A Founder ID (pid) is sent in clear text in every relayed message by design ('every classmate knows everyone's'), and a student's browser reuses the same pid/key across every room it ever joins (js/session.js _loadIdentity). The relay's identity binding is pure trust-on-first-use per room (server/relay.mjs:130-135: whoever connects first with a given pid in a given room binds it to their key; relay.mjs's own header comment at lines 11-13 says this 'stops a classmate from taking... a classmate's name and snapshot, by connecting with the pid they have read off the wire' \u2014 but that guarantee only holds if the real owner connects first. If a classmate who merely saw the pid in an earlier class connects to a brand-new room with that pid and their own key before the real student joins, the binding goes to the classmate. When the real student's browser then tries to join with its correct, long-standing key, the relay (correctly, by its own rule) refuses the connection with close code 1008 'identity does not match' \u2014 but js/net.js's RelayTransport treats every close, including 1008, identically to a dropped network connection: it silently retries forever with exponential backoff (onclose sets state 'reconnecting' and calls open() again), and nothing in Session or the UI ever distinguishes this from an ordinary reconnect, so the student sees an app that never finishes connecting, with no error telling them why.",
+     "repro": "Ran the real relay and a real js/net.js Room instance (the actual production client). Opened a room, had a second connection bind the victim's pid+a different key first, then started the victim's real Room with its own (different, legitimate) key. Over 7+ seconds the victim's Room cycled 'open' -> 'reconnecting' repeatedly (the WS handshake completes, then the server immediately sends 1008 and closes), transport.tries climbed each time, and the client never reached a stable open state and never surfaced any error. The binding persists for the life of the room object (until it has had zero connected clients for EMPTY_MS = 10 minutes), so for a live class this is effectively a lockout for the whole session, not a one-off hiccup.",
+     "verified": true,
+     "fixSketch": "Primary fix is client-side and unambiguous: RelayTransport/Room should treat close code 1008 as fatal, not transient \u2014 stop auto-retrying and surface a clear message ('this Founder ID is already in use in this room') so Session can offer a fresh identity instead of looping forever indistinguishably from a dropped connection. Separately (an author decision, not a bug): the trust-on-first-use race itself is inherent to a keyless-registration scheme and could be hardened further (e.g. only accept a pid binding from a connection within the room's first few seconds, or let the instructor pre-register expected pids), but that is a design trade-off, not what's broken here.",
+     "testSketch": "In js/net.js or session.js tests: simulate a relay closing with code 1008 and assert the Room/Session surfaces a distinct, user-visible state/error rather than silently scheduling another open().",
+     "authorDecision": false,
+     "status": "open",
+     "repairedBy": null
+    },
+    {
+     "id": "relay-3-no-origin-check",
+     "title": "The relay's WebSocket upgrade accepts any Origin, letting any website turn a visitor's browser into a relay client",
+     "severity": "major",
+     "kind": "security",
+     "files": [
+      "server/relay.mjs"
+     ],
+     "where": "server/relay.mjs:106-144 (the whole `connection` handler never reads req.headers.origin)",
+     "scenario": "The full connection handler (server/relay.mjs:106-144) parses req.url for room/pid/key/role/owner but never inspects req.headers.origin and has no allowlist of any kind. A hostile page, loaded in a visitor's browser while that visitor happens to have network access to a relay address (a LAN address in the documented HOST=0.0.0.0 lab case, or any reachable deployed relay), can open `new WebSocket('ws://<relay>/?room=<guessed-or-known-code>&pid=<any>&key=<any-16-64-char-string>&role=student')` from JavaScript it controls, with no CORS-style preflight and no same-origin restriction on WebSocket. The 16-64 char `key` requirement does stop the hostile page from impersonating a specific existing identity (it cannot read `pc.key.*` from the relay's own localStorage under the Same-Origin Policy), so this is not full account takeover \u2014 but it does let any page on the internet consume one of the 400/200 slots, read whatever that room broadcasts, and send any of the TYPES the relay accepts (snap, offer, flag, royalty, hello, etc.) as a new participant, with the request looking, to the relay, identical to a legitimate browser tab.",
+     "repro": "Confirmed by reading the complete 234-line file: no occurrence of `origin` (case-insensitive) anywhere in server/relay.mjs, and the ws WebSocketServer is constructed with only `{ server: http, maxPayload: MAX_MSG }` (line 71), with no `verifyClient` option set.",
+     "verified": true,
+     "fixSketch": "Add an optional origin allowlist (e.g. ALLOWED_ORIGINS env var, checked in the `connection` handler or via WebSocketServer's verifyClient) that an operator can set when deploying the relay behind a known site; document that leaving it unset keeps today's open-to-any-origin behavior for ease of classroom setup.",
+     "testSketch": "Connect with a hostile Origin header set and, once ALLOWED_ORIGINS is configured, assert the upgrade is refused; assert it still succeeds with no ALLOWED_ORIGINS set (documented default) or with a matching Origin.",
+     "authorDecision": true,
+     "status": "open",
+     "repairedBy": null
+    },
+    {
+     "id": "relay-4-sigterm-not-handled",
+     "title": "The relay has no SIGTERM handler: it dies abruptly on a normal stop/redeploy, and is outright ignored when it is a container's PID 1",
+     "severity": "major",
+     "kind": "bug",
+     "files": [
+      "server/relay.mjs"
+     ],
+     "where": "server/relay.mjs:228-234 (only uncaughtException/unhandledRejection are registered; close() at :214-222 is never wired to a signal)",
+     "scenario": "The module exports a `close()` that cleanly terminates every connection and the HTTP/WS servers (server/relay.mjs:214-222), but nothing calls it on SIGTERM/SIGINT \u2014 only `uncaughtException` and `unhandledRejection` handlers are registered when run as a program (lines 229-231). The README documents deploying this to Render, Fly, or 'a campus VM' \u2014 all of which (and any container platform) send SIGTERM on stop/redeploy and expect the process to exit cleanly within a grace window.",
+     "repro": "Started the real relay with two open connections and sent it SIGTERM: the process terminated via Node's default signal action (no handler intercepted it) in well under a second, and both connected clients observed an abrupt close with code 1006 (abnormal closure), not a clean 1001 'going away' \u2014 no connection got any warning. Separately, ran the same relay as PID 1 of its own PID namespace (via `unshare --pid --fork --mount-proc`, the same situation a container's `CMD [\"node\", \"server/relay.mjs\"]` creates) and sent it SIGTERM: 1.5 seconds later the process was still alive (this is the well-known Node-as-PID-1 behavior: with no explicit handler, PID 1 does not get the kernel's default disposition for SIGTERM and the signal is simply dropped). In a container this means `docker stop`/a platform redeploy gets no clean shutdown at all and the process hangs until the platform's SIGKILL timeout, forcibly killing every connected class with zero notice on every single redeploy.",
+     "verified": true,
+     "fixSketch": "Register `process.on('SIGTERM', ...)` and `process.on('SIGINT', ...)` that call the existing `close()` and then exit; this fixes both the bare-process case and the PID-1 case (an explicit handler is honored even as PID 1).",
+     "testSketch": "Spawn the relay, open a connection, send SIGTERM, and assert the client receives a clean close code (1001) before the process exits, within a short deadline.",
+     "authorDecision": false,
+     "status": "repaired",
+     "repairedBy": "tests/cloud-audit.test.mjs R2"
+    },
+    {
+     "id": "relay-5-amplification",
+     "title": "Chat/presence message types share the relay's full 32 KB cap with no tighter limit, so one fully legal connection's traffic is broadcast-amplified by up to ~400x bandwidth in a full room",
+     "severity": "major",
+     "kind": "security",
+     "files": [
+      "server/relay.mjs"
+     ],
+     "where": "server/relay.mjs:155 (MAX_MSG applies uniformly to every TYPE), :172-173 (unconditional broadcast to every other client in the room)",
+     "scenario": "Only 'snap' has its own tighter limit (MAX_SNAP, 16 KB, relay.mjs:160); every other type (hello, bye, ack, flag, decline, reject, abort, holding, free, recall, rewound, offer, accept, confirm, deliver, royalty, clock...) is bounded only by the same 32 KB MAX_MSG that every message shares (line 155), even though none of these legitimately need more than a few hundred bytes. A single connection sending at the token-bucket's own documented legal rate (RATE=20/s) with each frame padded up toward the shared 32 KB ceiling is accepted by the rate limiter (it is well within policy) and is then broadcast, unmodified in size, to every other client in the room (lines 172-173) with no secondary cap on fan-out.",
+     "repro": "Ran the real relay with a full-size room of readers and one sender pushing 31 KB 'hello' frames at ~20/s (within the shipped RATE/BURST defaults the whole time; the connection never got cut off). Measured ~614 KB/s inbound from that one connection, and each of 399 simulated room members receiving ~615 KB/s, i.e. the relay's total egress for that one input stream scaled to roughly 240 MB/s with a full room \u2014 about a 399x bandwidth multiplier from one ordinary, rate-limit-compliant connection. (A related, separate observation: pushing the same load at a handful of deliberately non-reading connections did correctly trip the existing 8 MB per-connection `bufferedAmount` cutoff within about 20 seconds, self-healing the backlog \u2014 that specific safeguard is working as designed, though the transient combined backlog across many slow connections at once before they're all cut can briefly reach into the hundreds of MB.)",
+     "verified": true,
+     "fixSketch": "Give the low-value/presence message types (hello, bye, ack, flag, decline, reject, abort, holding, free, recall, rewound, accept, confirm) their own small cap (e.g. a few hundred bytes), mirroring how 'snap' already gets MAX_SNAP instead of the full MAX_MSG.",
+     "testSketch": "Send a 'hello' with a large arbitrary field just under MAX_MSG; assert it is now dropped (not forwarded) once the type has its own tighter cap, while a normal small 'hello' still forwards.",
+     "authorDecision": true,
+     "status": "open",
+     "repairedBy": null
+    },
+    {
+     "id": "relay-6-static-symlink-escape",
+     "title": "server/static.mjs's path-containment check is purely lexical: a symlink inside the served tree pointing outside the project root would be served transparently",
+     "severity": "major",
+     "kind": "security",
+     "files": [
+      "server/static.mjs"
+     ],
+     "where": "server/static.mjs:35-37",
+     "scenario": "`const full = join(root, r.file); if (full !== root && !full.startsWith(root + sep)) { ...404... }` (lines 35-36) only normalizes the path string; it never resolves the filesystem to see what `full` actually points to before `readFile(full)` (line 37) is called. `route()` already blocks `..` segments and dotfiles (line 21), so this is not reachable via ordinary path traversal \u2014 but if any file under the served directories (css/, js/, assets/, docs/, dev/, tests/) were ever a symlink whose target lies outside the project root, the lexical check would pass (the symlink's own path is inside root) while `readFile` follows the link and serves whatever is at the target, in contradiction of the file's own header comment ('It serves the app and nothing else').",
+     "repro": "Reproduced the exact check pattern locally (outside the worktree, no network, no server): built a 'root' directory and a sibling 'outside' directory with a secret file, placed a symlink at root/assets/favicon.svg pointing to the outside file, and ran the identical `join(root, ...)` + `startsWith(root + sep)` logic against it. The lexical check reported the path as contained (`startsWith(root+sep) === true`), while `readFileSync` returned the outside file's content and `realpathSync` showed the true resolved path does NOT start with root. No symlink currently exists in the audited tree (confirmed: a tree-wide search for symbolic links in the worktree found none), so this is a latent gap, not an active exploit today.",
+     "verified": true,
+     "fixSketch": "After computing `full`, call `realpathSync(full)` (and `realpathSync(root)` once at startup) and require the resolved real path to still start with the real root before reading; fail closed (404) otherwise.",
+     "testSketch": "Create a symlink under one of the served directories pointing outside the project root in a throwaway fixture tree, request it through `handler`, and assert a 404 instead of the outside content.",
+     "authorDecision": false,
+     "status": "repaired",
+     "repairedBy": "tests/cloud-audit.test.mjs R3"
+    },
+    {
+     "id": "relay-7-workflow-permissions-and-pinning",
+     "title": "The Pages workflow grants pages:write/id-token:write to a job that never deploys, and pins third-party actions only to mutable major-version tags",
+     "severity": "major",
+     "kind": "security",
+     "files": [
+      ".github/workflows/pages.yml"
+     ],
+     "where": ".github/workflows/pages.yml:5-9 (workflow-level permissions), :14-21 (the `test` job's steps), :15,16,27,36,38 (uses: ...@v7/@v6/@v5)",
+     "scenario": "`permissions: { contents: read, pages: write, id-token: write }` is declared once at the workflow level (lines 5-9), so GitHub Actions grants it to both jobs. The `test` job (lines 11-21) only runs `npm ci --prefix server` and `npm test` \u2014 it has no legitimate use for `pages: write` or the OIDC `id-token: write` token, yet holds both. If any dependency pulled in by `npm ci` (directly or transitively) were ever compromised, the `test` job's runner would carry deploy-capable credentials it does not need, which is exactly what least-privilege scoping exists to prevent. Separately, every third-party action is pinned only to a major-version tag (`actions/checkout@v7`, `setup-node@v7`, `configure-pages@v6`, `upload-pages-artifact@v5`, `deploy-pages@v5`): these tags are mutable aliases, not fixed commits, so a future retag of any of them (by its maintainer, or in a supply-chain compromise of that action's repo) would silently change what code runs in this workflow with no diff in this repository to review.",
+     "repro": "Read the full 45-line workflow: the `permissions:` block sits above `jobs:` with no job-level override in either `test` or `deploy`, so by GitHub Actions' documented inheritance rule both jobs get the full set. Confirmed each `uses:` line matches `^[\\w.-]+/[\\w.-]+@v\\d+$` (a bare major-version tag, not a 40-character SHA) for all five actions used. Confirmed via `git ls-remote --tags` against each action's real repository that `v7`/`v6`/`v5` are live, currently-resolvable tags distinct from a pinned commit (e.g. actions/checkout's `v7` and `v7.0.1` tags point to the same commit today, but `v7` itself is the kind of tag that can be moved by the upstream maintainer, unlike a commit SHA).",
+     "verified": true,
+     "fixSketch": "Move `pages: write` / `id-token: write` to the `deploy` job only (job-level `permissions:`), leaving `test` with just `contents: read`; pin each `uses:` to the full commit SHA it currently resolves to, with a trailing comment noting the version (e.g. `actions/checkout@<sha> # v7.0.1`).",
+     "testSketch": "Update the existing workflow test (tests/finish-site.test.mjs's 'the Pages workflow...' test, which today asserts the elevated permissions at the top level) to instead assert `jobs.test.permissions` is absent/minimal and the elevated grants live only on `jobs.deploy`; add an assertion that every `uses:` value matches a 40-character SHA.",
+     "authorDecision": true,
+     "status": "open",
+     "repairedBy": null
+    },
+    {
+     "id": "relay-8-missing-csp-and-nosniff",
+     "title": "No Content-Security-Policy on the deployed page and no X-Content-Type-Options on the local dev server's responses",
+     "severity": "minor",
+     "kind": "security",
+     "files": [
+      "index.html",
+      "server/static.mjs",
+      "scripts/stage.mjs"
+     ],
+     "where": "index.html:1-66 (head, no CSP meta); server/static.mjs:38 (only content-type and cache-control are set); scripts/stage.mjs:237 (servePages sets the same two headers plus CORS, no nosniff/CSP)",
+     "scenario": "GitHub Pages does not let a static site set arbitrary HTTP response headers, so the only way this project could ever ship a CSP on the real deployed site is a `<meta http-equiv=\"Content-Security-Policy\">` tag in index.html; none exists (confirmed by reading the full 84-line file). `X-Content-Type-Options: nosniff` cannot be set via `<meta>` at all, so it is unreachable on the real Pages deployment regardless \u2014 but the local dev server (server/static.mjs, used for `npm start` and for every headless-Chrome test run) and its Pages-mimic (scripts/stage.mjs's `servePages`, used by `npm run preview`) are both under this project's own control and also omit it (both set only `content-type`/`cache-control`, servePages additionally sets `access-control-allow-origin: '*'` and `vary`, but never `x-content-type-options`).",
+     "repro": "Confirmed by reading both complete files: server/static.mjs's only `writeHead` header object (line 38) is `{ 'content-type': ..., 'cache-control': 'no-store' }`; scripts/stage.mjs's `servePages` header object (line 237) adds only `content-length`, `cache-control`, `access-control-allow-origin`, `vary`, and conditionally `content-encoding`/`location` \u2014 `x-content-type-options` appears in neither file, and no occurrence of `Content-Security-Policy` exists anywhere in index.html.",
+     "verified": true,
+     "fixSketch": "Add a CSP `<meta>` tag to index.html scoped to what the page actually needs (no inline scripts are used today, so a fairly strict `default-src 'self'` policy should fit); add `x-content-type-options: nosniff` to the header object in both server/static.mjs's `handler` and scripts/stage.mjs's `servePages`.",
+     "testSketch": "Assert index.html contains a CSP meta tag; assert a response from `handler`/`servePages` includes `x-content-type-options: nosniff`.",
+     "authorDecision": true,
+     "status": "open",
+     "repairedBy": null
+    }
+   ]
+  }
+ ]
+}
