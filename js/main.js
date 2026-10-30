@@ -122,7 +122,9 @@ const screens = {
               <p class="tiny mute" id="ires-note">${esc(FOLLOW_NOTE)}</p></details></section>
           <section class="panel"><h2>Accessible by design</h2><p class="small mute">Keyboard-only play, screen-reader announcements, high contrast, reduced motion and adjustable text. No account, no tracking, no personal data.</p><button class="btn ghost" data-act="a11y">Display and sound settings</button></section>
         </div>
+        <p class="tiny mute" id="build-note" aria-live="polite"></p>
       </div>`;
+    afterLoad(() => import('./build.js').then(({ stamp }) => stamp($('#build-note', root))).catch(() => {})); // which build this browser runs, and whether a later one is live (js/build.js): not needed for the first screen, so it is fetched after the page has loaded
     delegate(root, {
       resume() { if (tryResume()) enter(); else go('title'); },
       solo() { pending = { solo: true }; go('setup'); },
@@ -254,6 +256,9 @@ setInterval(() => {
 document.addEventListener('visibilitychange', () => { if (!document.hidden) S.tick(); else S.save(true); });
 addEventListener('pagehide', () => { S.save(true); kv.tab.release(); });
 
+/** Run `f` now if the page has loaded, else once it has: what the first screen does not need (the build stamp, the rest of the game) is asked for after the load event, so the first screen's fetches are the static graph and nothing more (tests/page-budget.test.mjs B4). */
+const afterLoad = (f) => (document.readyState === 'complete' ? f() : addEventListener('load', f, { once: true }));
+
 // ---- the rest of the game, fetched while the browser is idle
 // The staged page (scripts/stage.mjs) lists the modules that only a later screen needs in <script type="application/json" id="pc-lazy">, and does not preload them: the title screen is not held up by
 // the world's art, the Academy or the dashboard. Once the page has loaded and the browser has a moment, they are asked for as low-priority module preloads, a few at a time, so by the time the Draft is done
@@ -272,7 +277,7 @@ function prefetchRest() {
   };
   idle(pump);
 }
-if (document.readyState === 'complete') prefetchRest(); else addEventListener('load', prefetchRest, { once: true });
+afterLoad(prefetchRest);
 
 // ---- boot
 if (S.game == null && kv.get('save') && params.get('resume') === '1') { if (tryResume()) enter(); else go('title'); } else go('title');

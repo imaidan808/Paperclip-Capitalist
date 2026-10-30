@@ -146,13 +146,13 @@ test('the staged site holds the page, the four small files, assets, the linked s
   const js = files.filter((f) => f.startsWith('js/')), css = files.filter((f) => f.startsWith('css/')), assets = files.filter((f) => f.startsWith('assets/'));
   assert.deepEqual(js.sort(), walk().modules.slice().sort(), 'js/ is the module graph, exactly');
   assert.deepEqual(css.sort(), stylesheetsOf(read('index.html')).sort(), 'css/ is what index.html links, exactly');
-  assert.deepEqual(assets.sort(), ['assets/apple-touch-icon.png', 'assets/favicon.svg', 'assets/share.png']);
+  assert.deepEqual(assets.sort(), ['assets/apple-touch-icon.png', 'assets/build.json', 'assets/favicon.svg', 'assets/share.png']); // build.json is made here: the stamp of this deploy (tests/build-stamp.test.mjs)
   assert.equal(files.length, js.length + css.length + assets.length + TOP_FILES.length);
   for (const never of ['tests', 'server', 'docs', 'scripts', 'dev', '.git', '.github', 'package.json', 'README.md', '.nojekyll', 'node_modules']) assert.ok(!existsSync(join(r.out, never)), never + ' is not published');
   assert.ok(!files.some((f) => /(^|\/)\./.test(f) || f.endsWith('.map') || f.startsWith('assets/src/')), 'no hidden file, no source map, no scene source');
   for (const f of files) if (/\.(js|css|html)$/.test(f)) assert.ok(!/sourceMappingURL/.test(readFileSync(join(r.out, f), 'utf8')), f + ' names no source map');
-  // every file is the source file byte for byte, except the two that are made: the page (preload lines) and the sitemap (the date)
-  for (const f of files.filter((f) => !['index.html', 'sitemap.xml'].includes(f))) assert.ok(readFileSync(join(r.out, f)).equals(readFileSync(join(ROOT, f))), f);
+  // every file is the source file byte for byte, except the four that are made: the page (preload lines), the sitemap (the date), and the build stamp (js/build.js with the commit written in, assets/build.json)
+  for (const f of files.filter((f) => !['index.html', 'sitemap.xml', 'js/build.js', 'assets/build.json'].includes(f))) assert.ok(readFileSync(join(r.out, f)).equals(readFileSync(join(ROOT, f))), f);
 });
 
 test('the staged page preloads the static graph, in graph order, lists the later modules apart, and the source page has none', () => {
