@@ -18,9 +18,10 @@ export class CloudCache extends ChunkCache {
   constructor() { super('cloud.chunks'); }
   /**
    * Bake chunk (i, j) of render scale `a`. `draw(g, a, e, f, view)` paints the bank world for the world rectangle `view` into `g`, whose matrix is the identity: it sets `a` (device pixels per world pixel) and the
-   * translation `e`, `f` (the cell's own origin) itself. Answers the chunk or null when there is no surface to bake into (the caller then paints the banks straight onto the frame).
+   * translation `e`, `f` (the cell's own origin) itself. `coarse`: a chunk baked at about half the frame's scale to cover what nothing else does, which stands in over the wider window of a coarse chunk (chunks.js). Answers the chunk
+   * or null when there is no surface to bake into (the caller then paints the banks straight onto the frame).
    */
-  bake(draw, a, i, j) {
+  bake(draw, a, i, j, coarse = false) {
     const t0 = now(), sk = scaleKey(a), key = chunkKey(sk, i, j), old = this.map.get(key); if (old && !old.stale) return old;
     let cell = this.cell; if (!cell) { cell = this.cell = this.make(CHUNK_PX, CHUNK_PX); this.sync(); } if (!cell) return null;
     const g = cell.g, e = -i * CHUNK_PX, f = -j * CHUNK_PX, m = MARGIN_PX;
@@ -31,7 +32,7 @@ export class CloudCache extends ChunkCache {
     let img = null;
     if (typeof cell.c.transferToImageBitmap === 'function') { try { img = cell.c.transferToImageBitmap(); } catch { img = null; this.cell = null; } }
     if (!img) { const own = this.make(CHUNK_PX, CHUNK_PX); if (own) { own.g.drawImage(cell.c, 0, 0); img = own.c; } } // no bitmaps to hand over (a test's stand-in canvas): the chunk keeps a surface of its own
-    const c = { fadeEnd: 0, sk, a, i, j, img, empty: false, bytes: CHUNK_PX * CHUNK_PX * 4, last: ++this.tick, sealed: false };
+    const c = { fadeEnd: 0, coarse, sk, a, i, j, img, empty: false, bytes: CHUNK_PX * CHUNK_PX * 4, last: ++this.tick, sealed: false };
     if (old) this.drop(old);
     this.map.set(key, c); this.sync();
     const ms = now() - t0; this.stats.baked++; builds.n++; this.stats.ms += ms; this.stats.lastMs = ms;
