@@ -10,7 +10,7 @@
 // frame (BUILD_MS), and a prop whose turn has not come yet is served by its sprite of the neighbouring night or fog step (or drawn directly if it has none), so a dusk that crosses a bucket never rebuilds the
 // whole district in one frame. Memory is bounded (the budget below, least recently used go first, overlays before bases; the sprite being drawn is never the one to go).
 // Where there is no canvas (a Node test) drawSprite() answers undefined and the caller draws directly, exactly as before.
-import { ledger, registerReleaser } from './gfx.js';
+import { ledger, registerReleaser, builds } from './gfx.js';
 import { closeAlpha } from './seal.js';
 import { DETAIL_MIN } from './lod.js';
 
@@ -151,7 +151,7 @@ export function drawSprite(ctx, p, env, layer, alpha = 1) {
     let own = 0; for (let i = 0; i < arr.length; i++) if (arr[i].L === layer) own++;
     if (own >= PER_PROP) { let o = -1; for (let i = 0; i < arr.length; i++) if (arr[i].L === layer && arr[i] !== built && (o < 0 || arr[i].last < arr[o].last)) o = i; if (o >= 0) { const old = arr[o]; arr.splice(o, 1); drop(old); } }
     built.last = ++tick; // recent before anything can be trimmed: the entry just built must not be the least recently used
-    arr.push(built); ALL.add(built); stats.pixels += built.w * built.h; stats.builds++; if (ov) stats.overlays++; tell();
+    arr.push(built); ALL.add(built); stats.pixels += built.w * built.h; stats.builds++; builds.n++; if (ov) stats.overlays++; tell();
     if (stats.pixels > budget) trim(built);
   }
   e.last = ++tick;

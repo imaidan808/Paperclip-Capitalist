@@ -13,9 +13,9 @@ import { LAYOUT, DIST, SPOTS, PLOTS, SCENERY, BW, BD, zAt, zoneAt } from './layo
 import { Fx } from './fx.js';
 import { Lighting, dayTargets } from './lighting.js';
 import { Labels } from './labels.js';
-import { surface, softwareRaster, releaseAll, ledger, LEDGER_LIMIT_MB } from './gfx.js';
+import { surface, softwareRaster, releaseAll, ledger, LEDGER_LIMIT_MB, builds } from './gfx.js';
 import { snapTranslation } from './chunks.js';
-import { SLOW_MS, FAST_MS, GOV_WAIT, GOV_DOWN, judge } from './governor.js';
+import { SLOW_MS, FAST_MS, GOV_WAIT, GOV_DOWN, BUILD_GRACE, judge } from './governor.js';
 import { clearSprites, setSpriteBudget, trimSprites } from './sprites.js';
 import { FAR_ZOOM, FOG_DIM, money } from './common.js';
 import { runLayer } from './stack.js';
@@ -440,12 +440,12 @@ export class World {
     this.raf = requestAnimationFrame((t) => this.frame(t));
     const dt = Math.min(0.1, (ts - this.last) / 1000);
     if (ts - this.last < 1000 / this.fps - 1) return;
-    const t0 = performance.now(), gap = animating && G.prev && ts - G.prev < 250 ? ts - G.prev : 0; // the gap between two CONTINUOUS drawn frames (0 after a pause, and 0 for a frame drawn on demand: the redraws of a still picture are a quarter second apart and are not late)
+    const t0 = performance.now(), b0 = builds.n, gap = animating && G.prev && ts - G.prev < 250 ? ts - G.prev : 0; // the gap between two CONTINUOUS drawn frames (0 after a pause, and 0 for a frame drawn on demand: the redraws of a still picture are a quarter second apart and are not late)
     this.last = ts; this.t = ts;
     this.update(dt);
     this.draw();
     this.dirty = false; G.prev = animating ? ts : 0; this.repickHover();
-    this.govern(performance.now() - t0, gap);
+    this.govern(performance.now() - t0, gap, builds.n !== b0); // (a frame that filled a cache is not judged: governor.js BUILD_GRACE)
     if ((this.ledgerN = (this.ledgerN | 0) + 1) % 20 === 0) { this.ledgerSync(); if (!ledger.within(LEDGER_LIMIT_MB)) this.squeeze(); } // every few seconds: the pixel ledger against its ceiling
     this.fps = this.slow > 4 ? 15 : this.slow > 2 ? 20 : 30; if (this.moving && this.slow < 3) this.fps = 60; // the 30 fps cap is for a still camera's idle motion: a camera that moves draws every refresh while the machine keeps up (docs/RENDER_PLAN.md section 5, DIAGNOSIS P4)
     this.lite = this.slow > 2;
@@ -463,9 +463,12 @@ export class World {
    * two intervals late counts as slow however cheap its drawing was (the raster or the GPU is behind, which the drawing's own time cannot show).
    * The first frames after a resize are never judged (`warm`): a cold canvas and a fresh surface cost more than the steady state.
    */
-  govern(cost, gap) {
+  govern(cost, gap, built = false) {
     const G = this.gov;
     if (this.warm > 0) { this.warm--; return; }
+    // A frame that filled a cache paid a cost that is not repeated, and the one after it arrives late because of it: neither says what a steady frame costs (governor.js BUILD_GRACE says why, and how long this lasts).
+    if (built) { if ((G.run = (G.run | 0) + 1) <= BUILD_GRACE) { G.after = true; return; } } else G.run = 0;
+    if (G.after) { G.after = false; gap = 0; }
     G.cost += (judge(cost, gap, this.fps) - G.cost) * 0.2; // (the second signal: a frame that arrives late for the loop's own target counts as slow however cheap its drawing was; governor.js)
     if (G.cost > SLOW_MS) {
       G.good = 0;

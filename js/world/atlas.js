@@ -4,7 +4,7 @@
 // and keyed by a name, never by a prop. It follows the same pixel rules (docs/RENDER_PLAN.md section 5): a sprite is built at the exact device scale of the view (rounded to 1/1024 octave), so the blit is a straight
 // copy; while the zoom moves nothing is built and the sprite of the scale before stands in, scaled (never more than the ratio below); a build is a few milliseconds a frame at most; the pixels are
 // counted in the ledger ('props.atlas') and given back by the releaser; with no OffscreenCanvas (the Node tests) every call draws directly, which is the same picture.
-import { ledger, registerReleaser, surface } from './gfx.js';
+import { ledger, registerReleaser, surface, builds } from './gfx.js';
 import { registerProp } from './stack.js';
 import { P } from './iso.js';
 import { vseed } from './toys.js';
@@ -59,7 +59,7 @@ export function blit(ctx, key, rect, draw, ax, ay, dx = 0, dy = 0) {
           let img = f.c; if (typeof f.c.transferToImageBitmap === 'function') { try { img = f.c.transferToImageBitmap(); } catch { img = f.c; } }
           e = { key, sk, s, img, w, h, x0: rect[0], y0: rect[1], last: 0, at: t }; if (!m) MAP.set(key, m = { list: [] });
           m.list.push(e); if (m.list.length > 3) { const old = m.list.shift(); drop(old); }
-          ALL.add(e); stats.pixels += w * h; stats.builds++; ledger.register('props.atlas', stats.pixels * 4); lastCall = now(); spent += lastCall - t;
+          ALL.add(e); stats.pixels += w * h; stats.builds++; builds.n++; ledger.register('props.atlas', stats.pixels * 4); lastCall = now(); spent += lastCall - t;
           e.last = ++tick;
         }
       }

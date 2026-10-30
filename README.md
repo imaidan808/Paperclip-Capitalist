@@ -104,7 +104,7 @@ js/               config.js (every economy number), engine.js (the simulation, n
                   ui/ (the screens and drawers)
 server/           relay.mjs (the optional classroom relay) and static.mjs (the local file server)
 dev/              world-harness.html and .js, the 2.5D world on its own, and sounds.html, the sound audition page (developer pages, never published)
-scripts/          stage.mjs and preload.mjs (the Pages artifact), cdp.mjs, boot.mjs, shots.mjs and perf.mjs (headless Chrome drivers)
+scripts/          stage.mjs and preload.mjs (the Pages artifact), cdp.mjs, boot.mjs, shots.mjs, perf.mjs and perf-load.mjs (headless Chrome drivers)
 tests/            the suite, and the bot and harness scripts (bot.mjs, calibrate.mjs, balance.mjs, tune.mjs)
 docs/             FACULTY_KIT.md, ARCHITECTURE.md, COMPLIANCE.md, BALANCE.md, V2_DESIGN.md, AUDIO.md
 .github/workflows/pages.yml

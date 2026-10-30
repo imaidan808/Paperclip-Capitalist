@@ -87,6 +87,19 @@ test('the world: tiers rise under slow frames, fall again under fast ones, and t
   w.slow = 0; w.fps = 60; w.gov.cost = 8; for (let i = 0; i < 30; i++) w.govern(6, 90); assert.ok(w.slow >= 3, 'cheap JavaScript but a raster that cannot keep up (the interval is 90 ms against 16.7) steps down too: ' + w.slow);
 });
 
+test('the world: a frame that filled a cache is not judged, nor the late frame after it, and a build that never ends is judged after all (a slow load must not send a machine down the tiers)', async () => {
+  const { World } = await import('../js/world/world.js');
+  const mk = () => { const w = Object.create(World.prototype); w.gov = { cost: 0, bad: 0, good: 0, wait: G.GOV_WAIT, upAt: -1e9, prev: 0 }; w.warm = 0; w.slow = 0; w.fps = 30; w.t = 0; return w; };
+  let w = mk(); for (let i = 0; i < 150; i++) w.govern(80, 0, true); assert.equal(w.slow, 0, 'a load of frames that each baked something and cost 80 ms moves nothing');
+  for (let i = 0; i < 60; i++) w.govern(6, 0, false); assert.equal(w.slow, 0, 'and the steady frames after it start from a clean record');
+  w = mk(); w.govern(60, 0, true); w.govern(5, 400, false); assert.ok(w.gov.cost < 5, 'the frame after a build arrives late because of it: its gap is not held against it (' + w.gov.cost.toFixed(1) + ')');
+  w.govern(5, 400, false); assert.ok(w.gov.cost > 40, 'but the next late frame is a late frame (' + w.gov.cost.toFixed(1) + ')');
+  assert.equal(G.BUILD_GRACE, 300, 'the grace is ten seconds of a still picture, named in the governor');
+  w = mk(); for (let i = 0; i < G.BUILD_GRACE + 60; i++) w.govern(80, 0, true); assert.ok(w.slow >= 3, 'a build that never ends is no load: it is judged once the grace is over: ' + w.slow);
+  w = mk(); for (let i = 0; i < 60; i++) w.govern(40, 0, false); assert.ok(w.slow >= 4, 'and a slow frame that built nothing is judged as ever: ' + w.slow);
+  w = mk(); for (let i = 0; i < 250; i++) w.govern(80, 0, true); w.govern(6, 0, false); for (let i = 0; i < 250; i++) w.govern(80, 0, true); assert.equal(w.slow, 0, 'a frame that built nothing starts the count again: two loads of 250 frames are two loads');
+});
+
 // ---------------------------------------------------------------- labels: whole device pixels
 test('labels: a rule is a whole number of device pixels and a text baseline is on a device pixel, at every density', async () => {
   const { Labels } = await import('../js/world/labels.js');

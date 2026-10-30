@@ -8,6 +8,7 @@
 // device pixels square at any zoom, so the store is never more than the window needs (a cell no bank reaches is never made).
 import { CHUNK_PX, scaleKey, chunkKey } from './chunks.js';
 import { ChunkCache } from './chunkcache.js';
+import { builds } from './gfx.js';
 
 const now = () => (typeof performance !== 'undefined' ? performance.now() : 0);
 /** The margin a chunk is painted beyond its cell, in device pixels: a lobe whose edge crosses the cell is painted in this chunk as it is in the next, so nothing has to be stitched. */
@@ -33,7 +34,7 @@ export class CloudCache extends ChunkCache {
     const c = { fadeEnd: 0, sk, a, i, j, img, empty: false, bytes: CHUNK_PX * CHUNK_PX * 4, last: ++this.tick, sealed: false };
     if (old) this.drop(old);
     this.map.set(key, c); this.sync();
-    const ms = now() - t0; this.stats.baked++; this.stats.ms += ms; this.stats.lastMs = ms;
+    const ms = now() - t0; this.stats.baked++; builds.n++; this.stats.ms += ms; this.stats.lastMs = ms;
     return c;
   }
 }
