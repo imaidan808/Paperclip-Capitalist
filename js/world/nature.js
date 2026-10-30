@@ -10,7 +10,7 @@ import { blit, shared, attendOf } from './atlas.js';
 import { DIST } from './layout.js';
 import { GRASS, BLOOM, WOOD, TILE, PAVE, TOY, LIGHT } from './palette.js';
 import { roundedBox, roundedPoly } from './solids.js';
-import { P, col, lifted, hi, shd, ball, disc, poly, bar, rr, stand, stampSoft, drum, mix, shade, clamp, rnd, seedOf, vs, vseed } from './toys.js';
+import { P, col, lifted, hi, shd, ball, disc, poly, bar, rr, stand, stampSoft, drum, mix, shade, clamp, rnd, seedOf, vs, vseed, fade } from './toys.js';
 import { h2 } from './iso.js';
 
 // ---------------------------------------------------------------- species and variants
@@ -37,7 +37,7 @@ function trunk(g, h, w, c, lean = 0) { // a tapered trunk with a flared, rounded
   poly(g, [[-w * 0.5, 0], [w * 0.5, 0], [tw * 0.5 + lean, top], [-tw * 0.5 + lean, top]], shd(c));
   poly(g, [[-w * 0.5, 0], [w * 0.12, 0], [tw * 0.12 + lean, top], [-tw * 0.5 + lean, top]], c);
   disc(g, -w * 0.38, -0.5, w * 0.34, w * 0.2, c); disc(g, w * 0.38, -0.5, w * 0.34, w * 0.2, shd(c)); // the flare of the roots
-  g.globalAlpha *= 0.55; poly(g, [[-w * 0.4, -1], [-w * 0.22, -1], [-tw * 0.22 + lean, top + 2], [-tw * 0.4 + lean, top + 2]], hi(c, 0.75)); g.globalAlpha /= 0.55;
+  { const alpha0 = fade(g, 0.55); poly(g, [[-w * 0.4, -1], [-w * 0.22, -1], [-tw * 0.22 + lean, top + 2], [-tw * 0.4 + lean, top + 2]], hi(c, 0.75)); g.globalAlpha = alpha0; }
 }
 function foot(g, sp, s, env, base) {
   const U = 34 * s;
@@ -48,7 +48,7 @@ function foot(g, sp, s, env, base) {
     const c = col(mix(WOOD.light, WOOD.mid, 0.4), env), seg = [[0, 0, 3 * s, -17 * s, 7 * s], [3 * s, -17 * s, 6 * s, -31 * s, 6 * s], [6 * s, -31 * s, 7 * s, -42 * s, 5 * s]];
     for (const [x0, y0, x1, y1, w] of seg) bar(g, x0, y0, x1, y1, w, shd(c));
     for (const [x0, y0, x1, y1, w] of seg) bar(g, x0 - w * 0.12, y0, x1 - w * 0.12, y1, w * 0.62, c);
-    for (let i = 1; i < 6; i++) { const t = i / 6; g.globalAlpha *= 0.4; disc(g, 3 * s + t * 3.5 * s, -42 * s * t, w2(s, t), 0.9, shd(c)); g.globalAlpha /= 0.4; }
+    for (let i = 1; i < 6; i++) { const t = i / 6; { const alpha0 = fade(g, 0.4); disc(g, 3 * s + t * 3.5 * s, -42 * s * t, w2(s, t), 0.9, shd(c)); g.globalAlpha = alpha0; } }
   } else trunk(g, 24 * s, 7.2 * s, col(WOODC.shade, env));
 }
 const w2 = (s, t) => (3.2 - t * 1.2) * s;
@@ -61,11 +61,11 @@ function puffs(g, list, U, cy, c, tone, dots) {
 }
 const ROUND = [[-0.27, -0.2, 0.3, 1], [0.28, -0.22, 0.29, 1], [-0.37, 0.02, 0.28, 0], [0.37, 0.04, 0.27, 0], [0.0, -0.31, 0.31, 0], [-0.17, 0.13, 0.31, 2], [0.2, 0.15, 0.3, 2]];
 function leafDots(g, U, cy, c) { // little clumps of leaf light inside the front puffs (sub-pixel at a distance, a texture up close)
-  g.globalAlpha *= 0.5;
+  const alpha0 = fade(g, 0.5);
   for (let i = 0; i < 9; i++) { const a = h2(i * 13 + 1, 7), b = h2(i * 17 + 3, 11); disc(g, (a - 0.5) * 0.82 * U, cy + (b * 0.5 - 0.22) * U, 0.07 * U, 0.045 * U, hi(c, 0.8)); }
-  g.globalAlpha /= 0.5;
+  g.globalAlpha = alpha0;
 }
-function appleDots(g, U, cy, c) { leafDots(g, U, cy, c); for (let i = 0; i < 6; i++) { const a = h2(i * 29 + 5, 3), b = h2(i * 11 + 9, 5), x = (a - 0.5) * 0.8 * U, y = cy + (b * 0.5 - 0.2) * U; disc(g, x, y, 0.065 * U, 0.065 * U, TOY.red); g.globalAlpha *= 0.7; disc(g, x - 0.02 * U, y - 0.025 * U, 0.022 * U, 0.02 * U, '#fff7dc'); g.globalAlpha /= 0.7; } }
+function appleDots(g, U, cy, c) { leafDots(g, U, cy, c); for (let i = 0; i < 6; i++) { const a = h2(i * 29 + 5, 3), b = h2(i * 11 + 9, 5), x = (a - 0.5) * 0.8 * U, y = cy + (b * 0.5 - 0.2) * U; disc(g, x, y, 0.065 * U, 0.065 * U, TOY.red); { const alpha0 = fade(g, 0.7); disc(g, x - 0.02 * U, y - 0.025 * U, 0.022 * U, 0.02 * U, '#fff7dc'); g.globalAlpha = alpha0; } } }
 function blossomDots(g, U, cy) { for (let i = 0; i < 10; i++) { const a = h2(i * 19 + 2, 5), b = h2(i * 23 + 1, 9), x = (a - 0.5) * 0.9 * U, y = cy + (b * 0.6 - 0.3) * U; disc(g, x, y, 0.05 * U, 0.05 * U, i % 3 ? BLOOM.white : BLOOM.butter); } }
 function crown(g, sp, s, env, base) {
   const U = 34 * s, cy = -(8.4 * s + 0.45 * U);
@@ -75,14 +75,14 @@ function crown(g, sp, s, env, base) {
       const yb = -(6 * s) - up * U * 0.95, ya = yb - th * U * 1.05, w = hw * U * 1.5, r = 4 * s;
       roundedPoly(g, [[0, ya], [w, yb], [-w, yb]], r * 1.6); g.fillStyle = shd(c); g.fill();
       roundedPoly(g, [[-w * 0.06, ya + 1.5 * s], [w * 0.8 - w * 0.06, yb - 1.4 * s], [-w * 0.86 - w * 0.06, yb - 1.4 * s]], r * 1.5); g.fillStyle = c; g.fill();
-      g.globalAlpha *= 0.5; disc(g, -w * 0.2, yb - th * U * 0.42, w * 0.18, th * U * 0.12, hi(c, 0.8)); g.globalAlpha /= 0.5;
+      { const alpha0 = fade(g, 0.5); disc(g, -w * 0.2, yb - th * U * 0.42, w * 0.18, th * U * 0.12, hi(c, 0.8)); g.globalAlpha = alpha0; }
     }
   } else if (sp === 'palm') {
     const cx = 7 * s, cyp = -42 * s, c = col(GREENS[1], env), n = 7;
     for (let i = 0; i < n; i++) { // fronds, the back ones first
       const a = -Math.PI * (0.06 + 0.88 * (i / (n - 1))), L = (i === 0 || i === n - 1 ? 21 : i % 2 ? 24 : 27) * s, ex = cx + Math.cos(a) * L, ey = cyp + Math.sin(a) * L * 0.6 + L * 0.32, mx = cx + Math.cos(a) * L * 0.55, my = cyp + Math.sin(a) * L * 0.9 - 3 * s;
       g.beginPath(); g.moveTo(cx, cyp); g.quadraticCurveTo(mx, my - 4.2 * s, ex, ey); g.quadraticCurveTo(mx, my + 3.4 * s, cx, cyp + 1.5 * s); g.closePath(); g.fillStyle = i % 2 ? c : mix(c, '#3a8f62', 0.3); g.fill();
-      g.beginPath(); g.moveTo(cx, cyp); g.quadraticCurveTo(mx, my - 4.2 * s, ex, ey); g.quadraticCurveTo(mx, my - 1, cx, cyp - 0.6 * s); g.closePath(); g.globalAlpha *= 0.5; g.fillStyle = hi(c, 0.6); g.fill(); g.globalAlpha /= 0.5;
+      g.beginPath(); g.moveTo(cx, cyp); g.quadraticCurveTo(mx, my - 4.2 * s, ex, ey); g.quadraticCurveTo(mx, my - 1, cx, cyp - 0.6 * s); g.closePath(); { const alpha0 = fade(g, 0.5); g.fillStyle = hi(c, 0.6); g.fill(); g.globalAlpha = alpha0; }
     }
     ball(g, cx - 2.4 * s, cyp + 3 * s, 2.4 * s, '#9c6238'); ball(g, cx + 2.6 * s, cyp + 3.4 * s, 2.4 * s, '#9c6238');
   } else puffs(g, ROUND, U, cy, sp === 'blossom' ? col(BLOOM.pink, env) : base, sp === 'blossom' ? col(BLOOM.lilac, env) : null, sp === 'apple' ? appleDots : sp === 'blossom' ? blossomDots : leafDots);
@@ -121,7 +121,7 @@ function deadTree(g, env, seed) {
   const limbs = [[0, 0, 0, -30, 7.2], [0, -17, -11, -33, 4.6], [0, -23, 10, -39, 4.4], [-8, -28, -15, -33, 3.2], [7, -33, 12, -46, 3.2]];
   for (const [x0, y0, x1, y1, w] of limbs) bar(g, x0, y0, x1, y1, w, shd(c));
   for (const [x0, y0, x1, y1, w] of limbs) bar(g, x0 - w * 0.12, y0, x1 - w * 0.12, y1, w * 0.62, c);
-  g.globalAlpha *= 0.6; bar(g, -2.2, -2, -2.2, -26, 2.2, lit); g.globalAlpha /= 0.6;
+  { const alpha0 = fade(g, 0.6); bar(g, -2.2, -2, -2.2, -26, 2.2, lit); g.globalAlpha = alpha0; }
   for (const [x, y] of [[-14, -35], [13, -48], [11, -40]]) { disc(g, x, y, 3, 2, col(BLOOM.butter, env)); }
   ball(g, 10, -41.4, 2.6, col('#7aa0d8', env)); ball(g, 12.4, -45.6, 2, col('#7aa0d8', env)); poly(g, [[13.8, -46], [16.4, -45], [13.8, -44.4]], col(TOY.orange, env)); disc(g, 12.9, -46.2, 0.55, 0.55, '#2c2a56');
 }
@@ -134,7 +134,7 @@ export function bush(g, x, y, r, c, bloom) {
   if (bloom) for (let i = 0; i < 4; i++) { const a = h2(i + 3, 5), b = h2(i + 8, 2); disc(g, x + (a - 0.5) * r * 1.5, y - r * (0.4 + b * 0.8), r * 0.15, r * 0.15, bloom); }
 }
 /** A rock: a rounded boulder with a lit top and a cool underside (two flat lenses). */
-export function rock(g, x, y, r, c) { stampSoft(g, x + r * 0.4, y + r * 0.1, r * 1.3, r * 0.4, 0.22); disc(g, x, y - r * 0.4, r, r * 0.62, shd(c)); disc(g, x - r * 0.1, y - r * 0.5, r * 0.86, r * 0.5, c); g.globalAlpha *= 0.55; disc(g, x - r * 0.3, y - r * 0.7, r * 0.34, r * 0.16, hi(c, 0.85)); g.globalAlpha /= 0.55; }
+export function rock(g, x, y, r, c) { stampSoft(g, x + r * 0.4, y + r * 0.1, r * 1.3, r * 0.4, 0.22); disc(g, x, y - r * 0.4, r, r * 0.62, shd(c)); disc(g, x - r * 0.1, y - r * 0.5, r * 0.86, r * 0.5, c); { const alpha0 = fade(g, 0.55); disc(g, x - r * 0.3, y - r * 0.7, r * 0.34, r * 0.16, hi(c, 0.85)); g.globalAlpha = alpha0; } }
 /** A reed: three blades and a brown seed head, leaning with `lean` (world pixels at the tip). */
 export function reeds(g, x, y, h, lean, c) {
   for (let i = -1; i <= 1; i++) { const hh = h * (1 - Math.abs(i) * 0.18), tx = x + i * 2.6 + lean * (1 + i * 0.2); g.beginPath(); g.moveTo(x + i * 2.2 - 1.2, y); g.quadraticCurveTo(x + i * 2.4 + lean * 0.3, y - hh * 0.6, tx, y - hh); g.quadraticCurveTo(x + i * 2.6 + lean * 0.5, y - hh * 0.5, x + i * 2.2 + 1.2, y); g.closePath(); g.fillStyle = i === 0 ? hi(c, 0.2) : c; g.fill(); }
@@ -192,7 +192,7 @@ shared('hay', {
       rr(g, bx - R * 1.05, by - R * 1.78, R * 2.1, R * 1.78, R * 0.7, shd(c)); rr(g, bx - R * 1.05, by - R * 1.78, R * 2.1, R * 1.46, R * 0.7, c);
       disc(g, bx - R * 0.78, by - R * 0.92, R * 0.72, R * 0.95, cs); disc(g, bx - R * 0.8, by - R * 0.94, R * 0.64, R * 0.86, hi(c, 0.25));
       for (const k of [0.2, 0.38, 0.56, 0.74]) { g.beginPath(); g.ellipse(bx - R * 0.8, by - R * 0.94, R * 0.64 * k, R * 0.86 * k, 0, 0, 6.3); g.strokeStyle = k > 0.5 ? cs : hi(cs, 0.2); g.lineWidth = 1.5; g.stroke(); }
-      g.globalAlpha *= 0.5; rr(g, bx - R * 0.2, by - R * 1.62, R * 1.1, 2.2, 1.1, hi(c, 0.9)); g.globalAlpha /= 0.5;
+      { const alpha0 = fade(g, 0.5); rr(g, bx - R * 0.2, by - R * 1.62, R * 1.1, 2.2, 1.1, hi(c, 0.9)); g.globalAlpha = alpha0; }
       g.fillStyle = cs; g.fillRect(bx + R * 0.35, by - R * 1.78, 1.8, R * 1.7);
     };
     bale(x - 3, y - 1, 7); if (vseed(p) % 2 === 0) bale(x + 6, y - 9, 6);

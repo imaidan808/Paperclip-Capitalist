@@ -12,7 +12,7 @@ import { stampGlow } from './gfx.js';
 import { money } from './common.js';
 import { blit } from './atlas.js';
 import { roundedBox } from './solids.js';
-import { mix, shade, hi, shd, disc, rr, bar, poly, stand, stampSoft, ball, fq, facePoint, lifted } from './toys.js';
+import { mix, shade, hi, shd, disc, rr, bar, poly, stand, stampSoft, ball, fq, facePoint, lifted, fade } from './toys.js';
 
 const STEEL = METAL.steelMid, PALLET_H = 4;
 /** The colour of a crate of asset class `cls`: its first tag's colour from the palette. */
@@ -36,7 +36,7 @@ export function plankBox(g, gx, gy, w, d, h, z, c, o = {}) {
   }
   for (const [face, u0, u1] of [[F.left, 0.84, 0.99], [F.right, 0.01, 0.16]]) { fq(g, face, u0, u1, 0.0, 0.2, STEEL); fq(g, face, u0, u1, 0.8, 1.0, STEEL); fq(g, face, u0 + (u1 - u0) * 0.2, u0 + (u1 - u0) * 0.5, 0.04, 0.08, hi(STEEL, 0.7)); }
   if (h >= 10) for (const [x, y] of [facePoint(F.left, 0.915, 0.1), facePoint(F.left, 0.915, 0.9), facePoint(F.right, 0.085, 0.1), facePoint(F.right, 0.085, 0.9)]) disc(g, x, y, 1.1, 1.1, '#fffaf0');
-  if (o.arrow !== false && h >= 10) { const A = (u, v) => facePoint(F.left, u, v); g.globalAlpha *= 0.62; poly(g, [A(0.3, 0.45), A(0.5, 0.72), A(0.7, 0.45), A(0.57, 0.45), A(0.57, 0.28), A(0.43, 0.28), A(0.43, 0.45)], '#fffaf0'); g.globalAlpha /= 0.62; }
+  if (o.arrow !== false && h >= 10) { const A = (u, v) => facePoint(F.left, u, v); { const alpha0 = fade(g, 0.62); poly(g, [A(0.3, 0.45), A(0.5, 0.72), A(0.7, 0.45), A(0.57, 0.45), A(0.57, 0.28), A(0.43, 0.28), A(0.43, 0.45)], '#fffaf0'); g.globalAlpha = alpha0; } }
   return F;
 }
 function crate(g, c, o) {

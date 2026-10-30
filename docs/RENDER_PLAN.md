@@ -97,7 +97,7 @@ setFlag(id, 'legacy' | 'v2')                    // or ?layers=sea:v2,static-bldg
 
 | argument | what it is |
 |---|---|
-| `ctx` | the 2D context: the canvas, or the ground cache's own surface. Leave its state (transform, alpha, composite, line style) as you found it: `save`/`restore` balance, `globalAlpha` returns to its value |
+| `ctx` | the 2D context: the canvas, or the ground cache's own surface. Leave its state (transform, alpha, composite, line style) as you found it: `save`/`restore` balance, `globalAlpha` returns to its value: `const alpha0 = fade(g, a); ...; g.globalAlpha = alpha0;` (`toys.js`), never `*=` then `/=`, which a canvas that keeps the alpha as a 32-bit float (Safari, Firefox) does not undo; `tests/world-alpha32.test.mjs` holds every module to it |
 | `view` | `{x0, x1, y0, y1}`, the world-pixel rectangle on screen, with margins (80 px at the sides and below, 260 above) so tall things are not cut. Cull against it; draw nothing outside it |
 | `env` | the presentation record `w.env`: `t` (visual clock), `night`, `wind`, `dim` (the veil strength of the district being drawn: 0.5 under cloud in legacy), `far`, `lite`, `lod` (`lodOf(zoom)`), `lights` (push `{wx, wy, r, c, a}` to light the night), `zoff` |
 | `w` | the World, for reading: `cam`, `unlocked`, `fxOf(zone)`, `reduced()`, `ents`, `player`, `hover`, `dpr`. Layers never write game state and never write the camera |

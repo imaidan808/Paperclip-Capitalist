@@ -10,7 +10,7 @@ import { setAttend, blit } from './atlas.js';
 import { DIST, LAYOUT } from './layout.js';
 import { P, h2, clamp } from './iso.js';
 import { GRASS, BLOOM, TOY, ROAD, SEA, WOOD, TILE } from './palette.js';
-import { disc, rr, poly, bar, ball, drum, stand, stampSoft, mix, shade, hi, shd } from './toys.js';
+import { disc, rr, poly, bar, ball, drum, stand, stampSoft, mix, shade, hi, shd, fade } from './toys.js';
 import { bush, rock, flowers, reeds, swayOf } from './nature.js';
 
 const RICH = new Set(['estate', 'finance', 'exchange', 'corporate']);
@@ -23,7 +23,7 @@ const TOYS = {
   bin(g) { stampSoft(g, 2, 1, 7, 2.6, 0.2); drum(g, 0, 0, 4.6, 9, '#bfe8d4', { ribs: [0.35], ribCol: '#8fc4ae' }); disc(g, 0, -9.4, 5, 2.2, '#8fc4ae'); disc(g, 0, -10, 4.2, 1.8, '#cdeedc'); bar(g, -1.4, -11.4, 1.4, -11.4, 3, '#8fc4ae'); },
   hydrant(g) { stampSoft(g, 2, 1, 6, 2.4, 0.2); drum(g, 0, 0, 3.8, 7, TOY.red, { dome: 3 }); rr(g, -6, -5, 12, 3, 1.5, shade(TOY.red, 0.88)); ball(g, -6, -3.6, 1.9, '#ffd84d'); ball(g, 6, -3.6, 1.9, '#ffd84d'); rr(g, -4.6, 0.6, 9.2, 2, 1, '#8392b4'); },
   cup(g) { stampSoft(g, 1, 0.6, 3.4, 1.4, 0.2); poly(g, [[-2.4, -5], [2.4, -5], [1.6, 0], [-1.6, 0]], '#fffaf0'); poly(g, [[-2.4, -5], [2.4, -5], [2.1, -3], [-2.1, -3]], TOY.red); rr(g, -2.8, -6.2, 5.6, 1.6, 0.8, '#e6e0d0'); bar(g, 0.6, -6.6, 1.4, -9.4, 3, '#ffffff'); },
-  puddle(g) { disc(g, 0, 0, 8, 3.4, '#5ec8d6'); disc(g, -0.6, -0.3, 6.6, 2.7, '#7be0cf'); g.globalAlpha *= 0.8; disc(g, -2.6, -0.8, 1.6, 0.8, '#ffffff'); g.globalAlpha /= 0.8; },
+  puddle(g) { disc(g, 0, 0, 8, 3.4, '#5ec8d6'); disc(g, -0.6, -0.3, 6.6, 2.7, '#7be0cf'); { const alpha0 = fade(g, 0.8); disc(g, -2.6, -0.8, 1.6, 0.8, '#ffffff'); g.globalAlpha = alpha0; } },
   pigeon(g, v) { const c = v % 2 ? '#b6b4d8' : '#c8c4de'; stampSoft(g, 1, 0.4, 4.6, 1.6, 0.18); ball(g, 0, -3.4, 3.6, c); ball(g, v % 3 ? 3 : -3, -6.8, 2.1, mix(c, '#7f7bf0', 0.3)); const d = v % 3 ? 1 : -1; poly(g, [[d * 4.8, -6.8], [d * 7, -6.2], [d * 4.8, -5.4]], TOY.orange); disc(g, d * 3.4, -7.2, 0.55, 0.55, '#2c2a56'); poly(g, [[-d * 3.4, -4.6], [-d * 7, -2.8], [-d * 3, -1.6]], shade(c, 0.84)); bar(g, -1, -0.6, -1, 0.6, 3, '#e8a15a'); bar(g, 1.4, -0.6, 1.4, 0.6, 3, '#e8a15a'); },
   bush(g, v) { bush(g, 0, 0, 7, GRASS.mid, v % 2 ? BLOOM.pink : null); },
   flowers(g, v) { flowers(g, 0, 0, 5, v); },

@@ -53,7 +53,7 @@ const WING = '#fffaf0', WINGSHADE = '#c6cdf0';
 /** One gull: two rounded wings in a shallow V that rise and fall with its flap, a soft shadow on the water. (x, y) on screen, s the wingspan in px. */
 function paintGull(ctx, x, y, s, flap, dir) {
   const lift = flap * s * 0.18, w = s / 2;
-  ctx.globalAlpha *= 1; ctx.fillStyle = 'rgba(74,63,136,.12)'; ctx.beginPath(); ctx.ellipse(x + s * 0.3, y + s * 1.1, s * 0.5, s * 0.14, 0, 0, TAU); ctx.fill();
+  ctx.fillStyle = 'rgba(74,63,136,.12)'; ctx.beginPath(); ctx.ellipse(x + s * 0.3, y + s * 1.1, s * 0.5, s * 0.14, 0, 0, TAU); ctx.fill();
   ctx.lineCap = 'round'; ctx.lineJoin = 'round';
   for (const side of [-1, 1]) {
     const tx = x + side * w, ty = y - lift - s * 0.06, mx = x + side * w * 0.5, my = y - lift * 0.4 - s * 0.14;

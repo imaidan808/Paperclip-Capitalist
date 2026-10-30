@@ -328,7 +328,7 @@ export function chimney(ctx, gx, gy, z, h, o = {}) {
 /** A soft grounding patch under a building: a cream paver apron round its footprint with rounded corners, and the lit stage edge. */
 export function apron(ctx, gx, gy, w, d, m, col, a = 0.7) {
   const pts = [P(gx - m, gy - m), P(gx + w + m, gy - m), P(gx + w + m, gy + d + m), P(gx - m, gy + d + m)], r = 7;
-  ctx.save(); ctx.globalAlpha *= a; ctx.beginPath();
+  ctx.save(); ctx.globalAlpha = ctx.globalAlpha * a; ctx.beginPath(); // (restore() puts the alpha back, exactly)
   for (let i = 0; i < 4; i++) { const p0 = pts[(i + 3) % 4], p1 = pts[i], p2 = pts[(i + 1) % 4], l0 = Math.hypot(p0[0] - p1[0], p0[1] - p1[1]), l2 = Math.hypot(p2[0] - p1[0], p2[1] - p1[1]), t0 = Math.min(r, l0 / 2) / l0, t2 = Math.min(r, l2 / 2) / l2; const s = [p1[0] + (p0[0] - p1[0]) * t0, p1[1] + (p0[1] - p1[1]) * t0], q = [p1[0] + (p2[0] - p1[0]) * t2, p1[1] + (p2[1] - p1[1]) * t2]; if (i) ctx.lineTo(s[0], s[1]); else ctx.moveTo(s[0], s[1]); ctx.quadraticCurveTo(p1[0], p1[1], q[0], q[1]); }
   ctx.closePath(); ctx.fillStyle = col; ctx.fill(); ctx.restore();
 }

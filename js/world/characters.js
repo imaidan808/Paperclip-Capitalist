@@ -13,7 +13,7 @@ import { zAt } from './layout.js';
 import { leadAlpha, bubbleAlpha } from './common.js';
 import { P, strHash, h2, clamp } from './iso.js';
 import { PEOPLE, TOY, INK, GRASS, BLOOM, WOOD, METAL, personLook } from './palette.js';
-import { mix, shade, hi, shd, disc, rr, bar, poly, stand, stampSoft, FONT } from './toys.js';
+import { mix, shade, hi, shd, disc, rr, bar, poly, stand, stampSoft, FONT, fade } from './toys.js';
 
 // ---------------------------------------------------------------- what a buyer wears
 const FAMILIES = [
@@ -88,13 +88,13 @@ function hairFront(g, style, c) { // the cap of hair over the top of the head
   g.beginPath(); g.ellipse(-0.5, -28.6, 7.4, 6.5, 0, Math.PI * 1.02, Math.PI * 1.98); g.fillStyle = c; g.fill();
   if (style === 'short' || style === 'bun' || style === 'long') { disc(g, 3.2, -30.2, 4.6, 2.2, c); disc(g, -2.4, -29.5, 4.2, 2.1, c); }
   if (style === 'crop') rr(g, -7.6, -30.4, 15.2, 2.6, 1.3, c);
-  g.globalAlpha *= 0.45; disc(g, -3, -33.4, 2.6, 1.1, hi(c, 0.85)); g.globalAlpha /= 0.45;
+  { const alpha0 = fade(g, 0.45); disc(g, -3, -33.4, 2.6, 1.1, hi(c, 0.85)); g.globalAlpha = alpha0; }
 }
 function face(g, K, A) { // eyes, cheeks, mouth, brows: the near band adds the first two, the close band the rest
   const gz = K.gaze, ex = 2.7, ey = -26.3 + K.look, blink = K.blink;
   if (A.face > 0.02) {
     const prev = g.globalAlpha; g.globalAlpha = prev * A.face;
-    g.globalAlpha *= 0.4; disc(g, -ex * 1.6 + gz, -23.6, 1.9, 1.2, '#ff9aa8'); disc(g, ex * 1.6 + gz, -23.6, 1.9, 1.2, '#ff9aa8'); g.globalAlpha /= 0.4;
+    { const alpha0 = fade(g, 0.4); disc(g, -ex * 1.6 + gz, -23.6, 1.9, 1.2, '#ff9aa8'); disc(g, ex * 1.6 + gz, -23.6, 1.9, 1.2, '#ff9aa8'); g.globalAlpha = alpha0; }
     for (const sx of [-1, 1]) { const x = sx * ex + gz * 0.9; if (blink) { rr(g, x - 1.5, ey - 0.4, 3, 1.1, 0.55, INK.darkest); } else { disc(g, x, ey, 1.45, 1.6, INK.darkest); disc(g, x - 0.45, ey - 0.55, 0.5, 0.5, '#ffffff'); } }
     if (K.mood === 'o') disc(g, gz * 0.8, -22.4, 1.1, 1.3, '#7a3040'); else if (K.mood === 'flat') rr(g, gz * 0.8 - 1.5, -22.7, 3, 1.1, 0.55, INK.darkest);
     else { g.beginPath(); g.arc(gz * 0.8, -23.4, K.mood === 'smile' ? 2.1 : 1.5, 0.15 * Math.PI, 0.85 * Math.PI); g.strokeStyle = '#7a3040'; g.lineWidth = 1.5; g.lineCap = 'round'; g.stroke(); g.lineCap = 'butt'; }
@@ -108,7 +108,7 @@ function face(g, K, A) { // eyes, cheeks, mouth, brows: the near band adds the f
 }
 function glasses(g, kind, gz) {
   if (kind === 'glasses') { g.strokeStyle = '#5a4a8c'; g.lineWidth = 1.5; for (const sx of [-1, 1]) { g.beginPath(); g.arc(sx * 2.8 + gz * 0.9, -26.2, 2.7, 0, 6.3); g.stroke(); } g.beginPath(); g.moveTo(-0.2 + gz * 0.9, -26.4); g.lineTo(0.2 + gz * 0.9, -26.4); g.stroke(); }
-  else if (kind === 'shades') { for (const sx of [-1, 1]) { rr(g, sx * 2.8 + gz * 0.9 - 2.6, -27.6, 5.2, 3.4, 1.6, '#2c2a56'); } rr(g, -1 + gz * 0.9, -27, 2, 1.2, 0.6, '#2c2a56'); g.globalAlpha *= 0.6; rr(g, -4.6 + gz * 0.9, -27.3, 2.4, 0.9, 0.45, '#8fe0e8'); g.globalAlpha /= 0.6; }
+  else if (kind === 'shades') { for (const sx of [-1, 1]) { rr(g, sx * 2.8 + gz * 0.9 - 2.6, -27.6, 5.2, 3.4, 1.6, '#2c2a56'); } rr(g, -1 + gz * 0.9, -27, 2, 1.2, 0.6, '#2c2a56'); { const alpha0 = fade(g, 0.6); rr(g, -4.6 + gz * 0.9, -27.3, 2.4, 0.9, 0.45, '#8fe0e8'); g.globalAlpha = alpha0; } }
   else if (kind === 'monocle') { g.strokeStyle = '#d9a52c'; g.lineWidth = 1.5; g.beginPath(); g.arc(2.8 + gz * 0.9, -26.2, 2.8, 0, 6.3); g.stroke(); g.beginPath(); g.moveTo(5.4 + gz * 0.9, -24.6); g.lineTo(6.6, -19); g.stroke(); }
 }
 function torsoExtra(g, kind, K) {
@@ -153,7 +153,7 @@ export function drawDoll(g, x, y, s, K, A) {
   // legs and shoes (the step swings them; a stub lifts its foot as it passes)
   for (const [i, sx] of [[0, -1], [1, 1]]) {
     const sw = st ? Math.sin(st + i * Math.PI) : 0, lift = st ? Math.max(0, Math.cos(st + i * Math.PI)) * 1.8 : 0, lx = sx * 3 + sw * 2.6 * K.dir * 0.8;
-    rr(g, lx - 2.7, -8.6 - lift * 0.4, 5.4, 8.2 - lift, 2.6, i ? shd(pants) : pants); g.globalAlpha *= 0.35; rr(g, lx - 1.9, -8.2 - lift * 0.4, 1.5, 6.2 - lift, 0.75, hi(pants, 0.8)); g.globalAlpha /= 0.35; // a round leg with a lit strip
+    rr(g, lx - 2.7, -8.6 - lift * 0.4, 5.4, 8.2 - lift, 2.6, i ? shd(pants) : pants); { const alpha0 = fade(g, 0.35); rr(g, lx - 1.9, -8.2 - lift * 0.4, 1.5, 6.2 - lift, 0.75, hi(pants, 0.8)); g.globalAlpha = alpha0; } // a round leg with a lit strip
     disc(g, lx + K.dir * 0.5, -1.7 - lift, 4.3, 2.5, i ? '#3a2f5e' : '#4a3f78'); disc(g, lx + K.dir * 0.7 - 0.9, -2.6 - lift, 1.8, 0.9, '#7a6aa8'); disc(g, lx + K.dir * 0.5, -0.5 - lift, 4.0, 1.0, '#fffaf0'); // a shoe with a pale sole
   }
   const by = -bob; // the body rides the bob
@@ -164,7 +164,7 @@ export function drawDoll(g, x, y, s, K, A) {
   arm(-K.dir, st ? Math.sin(st) * 0.7 * K.dir : 0.14, false);
   // torso: a chunky bean, cool shade at the lower right
   rr(g, -6.4, -21 + by, 12.8, 13, 5.8, shd(shirt)); rr(g, -6.4, -21 + by, 11.4, 11.8, 5.8, shirt);
-  g.globalAlpha *= 0.4; rr(g, -4.6, -19.8 + by, 3.4, 5.4, 1.7, hi(shirt, 0.8)); g.globalAlpha /= 0.4;
+  { const alpha0 = fade(g, 0.4); rr(g, -4.6, -19.8 + by, 3.4, 5.4, 1.7, hi(shirt, 0.8)); g.globalAlpha = alpha0; }
   g.save(); g.translate(0, by); if (R.torso && A.mid > 0.02) torsoExtra(g, R.torso, K); g.restore();
   if (K.jacket) { rr(g, -0.7, -20 + by, 1.4, 11, 0.7, shd(shirt)); }
   // front arm (waves when told to), hand item
@@ -176,7 +176,7 @@ export function drawDoll(g, x, y, s, K, A) {
   g.save(); g.translate(0, by * 0.8);
   disc(g, -7.5, -26, 1.7, 2, SKIN_SH(skin)); disc(g, 7.5, -26, 1.7, 2, SKIN_SH(skin));
   disc(g, 0, -26.4, 7.7, 7.7, SKIN_SH(skin)); disc(g, -0.5, -26.9, 7.2, 7.2, skin);
-  g.globalAlpha *= 0.4; disc(g, -3, -30, 2.4, 1.4, hi(skin, 0.85)); g.globalAlpha /= 0.4;
+  { const alpha0 = fade(g, 0.4); disc(g, -3, -30, 2.4, 1.4, hi(skin, 0.85)); g.globalAlpha = alpha0; }
   if (A.mid > 0.02) { if (covered) { disc(g, -7.2, -27.4, 2.3, 2.6, K.hair); disc(g, 7.2, -27.4, 2.3, 2.6, shd(K.hair)); } else hairFront(g, K.style, K.hair); }
   face(g, K, A);
   if (R.face && A.face > 0.02) { const p = g.globalAlpha; g.globalAlpha = p * A.face; glasses(g, R.face, K.gaze); g.globalAlpha = p; }
@@ -184,7 +184,7 @@ export function drawDoll(g, x, y, s, K, A) {
   g.restore();
   g.restore();
 }
-const ball = (g, x, y, r, c) => { disc(g, x, y, r, r, shd(c)); disc(g, x - r * 0.12, y - r * 0.14, r * 0.86, r * 0.86, c); g.globalAlpha *= 0.5; disc(g, x - r * 0.38, y - r * 0.44, r * 0.3, r * 0.2, hi(c, 0.85)); g.globalAlpha /= 0.5; };
+const ball = (g, x, y, r, c) => { disc(g, x, y, r, r, shd(c)); disc(g, x - r * 0.12, y - r * 0.14, r * 0.86, r * 0.86, c); { const alpha0 = fade(g, 0.5); disc(g, x - r * 0.38, y - r * 0.44, r * 0.3, r * 0.2, hi(c, 0.85)); g.globalAlpha = alpha0; } };
 
 // ---------------------------------------------------------------- the pose of the moment
 const BAG = [TOY.pink, TOY.violet, TOY.cyan, TOY.orange];
@@ -206,7 +206,7 @@ const detailOf = (env, out = A3) => { const d = env.lod ? env.lod.detail : null;
 
 // ---------------------------------------------------------------- the buyers
 /** The glow a waiting buyer who is in a hurry stands in: a soft warm disc that breathes, not a flat ring. */
-function pulse(g, x, y, k, col) { const r = 14 + 2.4 * k; g.globalAlpha *= 0.28 + 0.16 * k; disc(g, x, y + 0.5, r, r * 0.5, col); g.globalAlpha /= 0.28 + 0.16 * k; g.globalAlpha *= 0.3; disc(g, x, y + 0.5, r * 0.62, r * 0.31, '#fff2bd'); g.globalAlpha /= 0.3; }
+function pulse(g, x, y, k, col) { const r = 14 + 2.4 * k; { const alpha0 = fade(g, 0.28 + 0.16 * k); disc(g, x, y + 0.5, r, r * 0.5, col); g.globalAlpha = alpha0; } { const alpha0 = fade(g, 0.3); disc(g, x, y + 0.5, r * 0.62, r * 0.31, '#fff2bd'); g.globalAlpha = alpha0; } }
 function drawLeadV2(ctx, view, env, w, e) {
   const z = zAt(e.x, e.y), [x, y] = P(e.x, e.y, z), B = BUYERS[e.seg], l = e.lead, hov = w.hover && w.hover.eid === e.id, t = env.t, pl = w.player;
   const V = e.v2 || (e.v2 = { look: lookV2(e), nextHop: 0, hopAt: -1, stopAt: -1, was: false, near: false });

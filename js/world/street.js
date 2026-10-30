@@ -8,7 +8,7 @@ import { DIST } from './layout.js';
 import { ROAD, WOOD, METAL, TOY, PAVE, INK, GLASS, LIGHT, BLOOM } from './palette.js';
 import { roundedBox } from './solids.js';
 import { stampGlow, rgbOf } from './gfx.js';
-import { P, col, lifted, toyOf, hi, shd, ball, disc, rr, poly, bar, post, drum, stand, stampSoft, castShadow, lettering, fq, facePoint, facesOf, mix, shade, clamp, seedOf, FONT } from './toys.js';
+import { P, col, lifted, toyOf, hi, shd, ball, disc, rr, poly, bar, post, drum, stand, stampSoft, castShadow, lettering, fq, facePoint, facesOf, mix, shade, clamp, seedOf, FONT, fade } from './toys.js';
 import { h2 } from './iso.js';
 import { skyOver } from './life.js';
 
@@ -24,7 +24,7 @@ function lampBody(g, p, env, globe, h) {
   drum(g, x, y, 5.4, 4.6, pole, { ribs: [0.55], ribCol: shade(pole, 0.82) });
   poly(g, [[x - 3.1, y - 4], [x + 3.1, y - 4], [x + 2.2, top + 5], [x - 2.2, top + 5]], shd(pole)); poly(g, [[x - 3.1, y - 4], [x + 0.9, y - 4], [x + 0.7, top + 5], [x - 2.2, top + 5]], pole); // a stout tapered shaft (6 pixels at the foot), not a stick
   rr(g, x - 4.4, y - 11.5, 8.8, 3.2, 1.6, shd(pole)); rr(g, x - 4.4, y - 11.5, 7.6, 2.6, 1.3, pole); // a collar above the foot
-  g.globalAlpha *= 0.5; poly(g, [[x - 2.6, y - 5], [x - 1.4, y - 5], [x - 1.1, top + 6], [x - 1.9, top + 6]], hi(pole, 0.8)); g.globalAlpha /= 0.5;
+  { const alpha0 = fade(g, 0.5); poly(g, [[x - 2.6, y - 5], [x - 1.4, y - 5], [x - 1.1, top + 6], [x - 1.9, top + 6]], hi(pole, 0.8)); g.globalAlpha = alpha0; }
   rr(g, x - 4.4, top + 4.4, 8.8, 3.2, 1.6, shd(pole)); rr(g, x - 4.4, top + 4.4, 7.6, 2.6, 1.3, pole);
   ball(g, x, top - 0.4, 5.9, globe); rr(g, x - 3.4, top - 7.6, 6.8, 2.8, 1.4, shd(pole)); rr(g, x - 3.4, top - 7.6, 5.6, 2.2, 1.1, pole);
   return [x, top];
@@ -59,7 +59,7 @@ shared('fence', {
     stampSoft(g, (a[0] + b[0]) / 2 + 5, (a[1] + b[1]) / 2 + 3, Math.abs(b[0] - a[0]) / 2 + 8, Math.abs(b[1] - a[1]) / 2 + 6, 0.18);
     for (const rh of [4.6, 11.4]) { bar(g, a[0], a[1] - rh, b[0], b[1] - rh, 4.4, shd(c)); bar(g, a[0], a[1] - rh - 0.7, b[0], b[1] - rh - 0.7, 2.8, hi(c, 0.35)); } // two chunky rails
     const posts = Math.max(2, Math.round(len / 1.5) + 1), gap = 0.55 / (n - 1);
-    for (let i = 0; i < n; i++) { const u = i / (n - 1); let onPost = false; for (let k = 0; k < posts; k++) if (Math.abs(u - k / (posts - 1)) < gap) onPost = true; if (onPost) continue; const [x, y] = at(u); rr(g, x - 2.4, y - h, 4.8, h, 2.4, shd(c)); rr(g, x - 2.4, y - h, 3.7, h - 0.5, 2.4, c); g.globalAlpha *= 0.4; rr(g, x - 1.6, y - h + 1.6, 1.2, h - 3.2, 0.6, '#fffbe6'); g.globalAlpha /= 0.4; }
+    for (let i = 0; i < n; i++) { const u = i / (n - 1); let onPost = false; for (let k = 0; k < posts; k++) if (Math.abs(u - k / (posts - 1)) < gap) onPost = true; if (onPost) continue; const [x, y] = at(u); rr(g, x - 2.4, y - h, 4.8, h, 2.4, shd(c)); rr(g, x - 2.4, y - h, 3.7, h - 0.5, 2.4, c); { const alpha0 = fade(g, 0.4); rr(g, x - 1.6, y - h + 1.6, 1.2, h - 3.2, 0.6, '#fffbe6'); g.globalAlpha = alpha0; } }
     for (let i = 0; i < posts; i++) { const [x, y] = at(i / (posts - 1)); post(g, x, y, h + 3.2, 6.8, pst, true); }
     return null;
   }, vary: ['col', 'dirY'], ext: [6, 8, 6, 6],
@@ -68,7 +68,7 @@ shared('bollard', {
   body(g, p, env) {
     const [x, y] = P(p.gx + 0.15, p.gy + 0.15), c = col(accOf(p, TOY.orange), env), h = Math.max(9, (p.h || 8) + 2);
     stampSoft(g, x + 3, y + 1.5, 9, 3.4, 0.2); stand(g, x, y, 5.2, 2.4);
-    drum(g, x, y, 5.4, h, c, { dome: 3.4 }); rr(g, x - 5.4, y - h * 0.62, 10.8, 2.6, 1.3, col('#fffaf0', env)); g.globalAlpha *= 0.5; rr(g, x - 4.6, y - h * 0.62 + 0.2, 4.4, 1, 0.5, '#ffffff'); g.globalAlpha /= 0.5;
+    drum(g, x, y, 5.4, h, c, { dome: 3.4 }); rr(g, x - 5.4, y - h * 0.62, 10.8, 2.6, 1.3, col('#fffaf0', env)); { const alpha0 = fade(g, 0.5); rr(g, x - 4.6, y - h * 0.62 + 0.2, 4.4, 1, 0.5, '#ffffff'); g.globalAlpha = alpha0; }
     return null;
   }, vary: ['col'], ext: [6, 6, 6, 6],
 });
@@ -80,7 +80,7 @@ shared('flag', {
     const [x, y] = P(p.gx, p.gy), h = p.h, c = col(accOf(p, TOY.pink), env), k = env.t ? (env.t / 2100) * Math.PI * 2 + p.gx * 3 : 0, A = env.t ? 1.8 * env.wind : 0, top = y - h + 1.5;
     const seg = 3, W = 17, Hh = 11; let px = x + 1.4, ptop = top, pbot = top + Hh;
     for (let i = 1; i <= seg; i++) { const dx = (W / seg) * i, o = Math.sin(k - i * 0.9) * A * (i / seg), nx = x + 1.4 + dx, nt = top + o + i * 0.5, nb = top + Hh + o + i * 0.5; poly(ctx, [[px, ptop], [nx + 0.4, nt], [nx + 0.4, nb], [px, pbot]], i % 2 ? c : mix(c, '#ffffff', 0.12)); px = nx; ptop = nt; pbot = nb; }
-    ctx.globalAlpha *= 0.5; rr(ctx, x + 2.4, top + 4.2, W - 3, 2.2, 1, '#fffaf0'); ctx.globalAlpha /= 0.5; // a trim band that rides the cloth
+    { const alpha0 = fade(ctx, 0.5); rr(ctx, x + 2.4, top + 4.2, W - 3, 2.2, 1, '#fffaf0'); ctx.globalAlpha = alpha0; } // a trim band that rides the cloth
   },
   vary: ['col'], ext: [6, 6, 6, 6],
 });
@@ -90,7 +90,7 @@ shared('lantern', {
     const [x, y] = P(p.gx, p.gy), h = p.h, c = col(accOf(p, TOY.orange), env), sw = env.t ? Math.sin((env.t / 3400) * Math.PI * 2 + p.gx) * 0.035 * env.wind : 0;
     ctx.save(); ctx.translate(x + 6, y - h + 2); ctx.rotate(sw);
     bar(ctx, 0, 0, 0, 3.2, 3, '#7a5a40'); ctx.translate(0, 3.2);
-    disc(ctx, 0, 6.4, 5.6, 6.8, shd(c)); disc(ctx, -0.5, 6, 5, 6.2, c); rr(ctx, -5.4, 4.4, 10.8, 1.9, 0.9, shade(c, 0.8)); rr(ctx, -5.2, 8.4, 10.4, 1.9, 0.9, shade(c, 0.8)); ctx.globalAlpha *= 0.55; disc(ctx, -2.2, 3.2, 1.8, 2.4, '#fffbe6'); ctx.globalAlpha /= 0.55; rr(ctx, -2.8, 12.4, 5.6, 1.8, 0.9, '#d9a52c'); bar(ctx, 0, 13, 0, 16.6, 3, '#f6c94f'); ctx.restore();
+    disc(ctx, 0, 6.4, 5.6, 6.8, shd(c)); disc(ctx, -0.5, 6, 5, 6.2, c); rr(ctx, -5.4, 4.4, 10.8, 1.9, 0.9, shade(c, 0.8)); rr(ctx, -5.2, 8.4, 10.4, 1.9, 0.9, shade(c, 0.8)); { const alpha0 = fade(ctx, 0.55); disc(ctx, -2.2, 3.2, 1.8, 2.4, '#fffbe6'); ctx.globalAlpha = alpha0; } rr(ctx, -2.8, 12.4, 5.6, 1.8, 0.9, '#d9a52c'); bar(ctx, 0, 13, 0, 16.6, 3, '#f6c94f'); ctx.restore();
     if (env.night > 0.1) glowAt(ctx, '255,200,110', x + 6, y - h + 8, 20, 0.5 * env.night);
     if (env.night > 0.1 && env.lights && !env.lite) env.lights.push({ wx: x + 6, wy: y - h + 8 - env.zoff, r: 40, c: '255,200,110', a: 0.5 * env.night });
   },
@@ -134,7 +134,7 @@ shared('pillar', {
     const [x, y] = P(p.gx + 0.25, p.gy + 0.25), c = col(lifted(p.col || '#f0e6c8', 0.8), env), h = p.h;
     shadowOf(g, p, h, 0.5, 0.5, env); stand(g, x, y, 9, 4.2);
     roundedBox(g, p.gx + 0.02, p.gy + 0.02, 0.46, 0.46, 4, c, { r: 2 });
-    const [cx, cy] = P(p.gx + 0.25, p.gy + 0.25, 4); drum(g, cx, cy, 5.2, h - 11, c, { ribs: null }); for (const u of [-0.45, 0, 0.45]) { g.globalAlpha *= 0.22; rr(g, cx + u * 8 - 0.9, cy - (h - 11) + 1, 1.8, h - 13, 0.9, shade(c, 0.6)); g.globalAlpha /= 0.22; }
+    const [cx, cy] = P(p.gx + 0.25, p.gy + 0.25, 4); drum(g, cx, cy, 5.2, h - 11, c, { ribs: null }); for (const u of [-0.45, 0, 0.45]) { { const alpha0 = fade(g, 0.22); rr(g, cx + u * 8 - 0.9, cy - (h - 11) + 1, 1.8, h - 13, 0.9, shade(c, 0.6)); g.globalAlpha = alpha0; } }
     const [tx, ty] = P(p.gx + 0.25, p.gy + 0.25, h - 7); roundedBox(g, p.gx - 0.02, p.gy - 0.02, 0.54, 0.54, 4.2, c, { z: h - 7.2, r: 2.2 }); disc(g, tx, ty - 5.6, 6.4, 2.6, hi(c, 0.35));
     return null;
   }, vary: ['col'], ext: [8, 6, 12, 11],
@@ -180,7 +180,7 @@ shared('spot', {
   body(g, p, env) {
     const [x, y] = P(p.gx + 0.3, p.gy + 0.3), c = col(toyOf(p.col || TOY.violet), env), base = col(POLE, env);
     shadowOf(g, p, 22, 0.5, 0.5, env); stand(g, x, y, 8, 3.6); roundedBox(g, p.gx, p.gy, p.w, p.d, 8, base, { r: 3 }); post(g, x, y - 8, 7, 4, base, false);
-    g.save(); g.translate(x, y - 18); g.rotate(-0.5); rr(g, -6, -6.4, 12, 12.8, 4.2, shd(c)); rr(g, -6, -6.4, 10.6, 11.2, 4.2, c); disc(g, 5.4, 0, 1.9, 5.2, '#fffaf0'); disc(g, 5.8, 0, 1.2, 3.8, '#cfeaff'); g.globalAlpha *= 0.6; disc(g, 5.4, -1.8, 0.7, 1.2, '#ffffff'); g.restore();
+    g.save(); g.translate(x, y - 18); g.rotate(-0.5); rr(g, -6, -6.4, 12, 12.8, 4.2, shd(c)); rr(g, -6, -6.4, 10.6, 11.2, 4.2, c); disc(g, 5.4, 0, 1.9, 5.2, '#fffaf0'); disc(g, 5.8, 0, 1.2, 3.8, '#cfeaff'); { const alpha0 = fade(g, 0.6); disc(g, 5.4, -1.8, 0.7, 1.2, '#ffffff'); g.globalAlpha = alpha0; } g.restore();
     return null;
   },
   live(ctx, p, env) {

@@ -10,7 +10,7 @@ import { P, clamp } from './iso.js';
 import { TOY, GLASS, METAL } from './palette.js';
 import { roundedBox } from './solids.js';
 import { blit } from './atlas.js';
-import { mix, shade, hi, shd, disc, rr, stand, stampSoft, castShadow, fq, facePoint } from './toys.js';
+import { mix, shade, hi, shd, disc, rr, stand, stampSoft, castShadow, fq, facePoint, fade } from './toys.js';
 
 const PLUM = '#4b4770', GLASSC = GLASS.mid;
 function wheel(g, x, y, r) { disc(g, x, y, r, r, '#34315a'); disc(g, x - r * 0.1, y - r * 0.1, r * 0.82, r * 0.82, PLUM); disc(g, x, y, r * 0.42, r * 0.42, METAL.steelLight); }
@@ -25,7 +25,7 @@ function drawTruckV2(ctx, view, env, w, e) {
   const cab = alongY ? [gx - 0.4 * big, gy + lead * big, 0.8 * big, 0.5 * big] : [gx + lead * big, gy - 0.4 * big, 0.5 * big, 0.8 * big];
   if (!env.far) for (const [ox, oy] of [[-0.3, -0.62], [0.3, 0.62], [-0.3, 0.62], [0.3, -0.62]]) { const [wx, wy] = P(gx + (alongY ? ox : oy), gy + (alongY ? oy : ox), 0); wheel(ctx, wx, wy - 3, 4.2); }
   const B = roundedBox(ctx, gx - wd / 2, gy - d / 2, wd, d, 16, '#fffaf0', { z: 3, r: 4.4 }); fq(ctx, B.left, 0.02, 0.98, 0.34, 0.5, '#4a8ff0'); fq(ctx, B.right, 0.02, 0.98, 0.34, 0.5, '#3a6fc0');
-  const C = roundedBox(ctx, cab[0], cab[1], cab[2], cab[3], 12, '#4a8ff0', { z: 3, r: 4 }); fq(ctx, C.left, 0.1, 0.9, 0.5, 0.88, GLASSC); fq(ctx, C.right, 0.1, 0.9, 0.5, 0.88, shade(GLASSC, 0.72)); ctx.globalAlpha *= 0.55; fq(ctx, C.left, 0.14, 0.34, 0.54, 0.86, '#ffffff'); ctx.globalAlpha /= 0.55;
+  const C = roundedBox(ctx, cab[0], cab[1], cab[2], cab[3], 12, '#4a8ff0', { z: 3, r: 4 }); fq(ctx, C.left, 0.1, 0.9, 0.5, 0.88, GLASSC); fq(ctx, C.right, 0.1, 0.9, 0.5, 0.88, shade(GLASSC, 0.72)); { const alpha0 = fade(ctx, 0.55); fq(ctx, C.left, 0.14, 0.34, 0.54, 0.86, '#ffffff'); ctx.globalAlpha = alpha0; }
   if (!env.far) { const [bx, by] = P(cab[0] + cab[2] / 2, cab[1] + cab[3] / 2, 17), lit = blocked || env.night > 0.3 ? (t ? 0.55 + 0.45 * Math.sin((t / 1800) * Math.PI * 2) : 1) : 0; disc(ctx, bx, by, 2.4, 2.4, mix('#a8841f', '#ffb347', 0.3 + 0.7 * lit)); }
   ctx.restore();
   if (t && !blocked && !env.far) for (let i = 0; i < 2; i++) { const k = ((t / 500) + i / 2) % 1; puff(ctx, x + (alongY ? e.hd : -e.hd) * (8 + k * 14), y - 6 - k * 6, 2 + k * 3.2, 0.5 * (1 - k)); }
@@ -41,7 +41,7 @@ function carSprite(g, c, horiz) {
   stampSoft(g, 4, 3, 24, 8, 0.2); stand(g, 0, 2, 19, 7.4);
   for (const [ox, oy] of [[-0.32, -0.22], [0.32, 0.22], [-0.32, 0.22], [0.32, -0.22]]) { const [wx, wy] = P(horiz ? ox * w * 1.7 : oy * w, horiz ? oy * d : ox * d * 1.7, 0); wheel(g, wx, wy - 2.6, 3.2); }
   const B = roundedBox(g, -w / 2, -d / 2, w, d, 5, c, { z: 2.6, r: 3 }), K = roundedBox(g, -w * 0.24, -d * 0.24, w * 0.48, d * 0.48, 4.8, shade(c, 0.95), { z: 7.6, r: 2.8, edge: false });
-  fq(g, K.left, 0.08, 0.92, 0.24, 0.88, GLASSC); fq(g, K.right, 0.08, 0.92, 0.24, 0.88, shade(GLASSC, 0.72)); g.globalAlpha *= 0.55; fq(g, K.left, 0.12, 0.3, 0.32, 0.84, '#ffffff'); g.globalAlpha /= 0.55;
+  fq(g, K.left, 0.08, 0.92, 0.24, 0.88, GLASSC); fq(g, K.right, 0.08, 0.92, 0.24, 0.88, shade(GLASSC, 0.72)); { const alpha0 = fade(g, 0.55); fq(g, K.left, 0.12, 0.3, 0.32, 0.84, '#ffffff'); g.globalAlpha = alpha0; }
   const [hx, hy] = facePoint(B.left, 0.04, 0.5); disc(g, hx, hy, 1.5, 1.5, '#fff3c4');
 }
 const RECT = [-30, -30, 34, 14];

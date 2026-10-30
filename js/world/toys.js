@@ -50,6 +50,12 @@ export const vs = (p) => vseed(p) * 7919 + 13;
 export const rnd = (p, i = 0) => h2(seedOf(p) + (i | 0) * 31, (i | 0) * 7 + 5);
 
 // ---------------------------------------------------------------- shapes
+/**
+ * Scale the canvas alpha by `a` and hand back the alpha it was: `const alpha0 = fade(g, 0.55); ...; g.globalAlpha = alpha0;`. Never scale it in place and divide it back (a compound multiply, then a compound
+ * divide): a canvas that keeps its alpha as a 32-bit float (Safari, Firefox) gives back a quotient a hair over 1, the setter ignores it, and everything drawn after stays faint (a buyer in a hurry
+ * stood there as a ghost and flickered). Putting the old alpha back by assignment is exact on every canvas (tests/world-alpha32.test.mjs keeps the whole renderer to it).
+ */
+export const fade = (g, a) => { const was = g.globalAlpha; g.globalAlpha = was * a; return was; };
 /** Fill a rounded rectangle (x, y is its top-left). */
 export function rr(ctx, x, y, w, h, r, fill) {
   r = Math.min(r, w / 2, h / 2); ctx.beginPath(); ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r); ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath();
@@ -64,12 +70,12 @@ export function ball(ctx, x, y, r, c) { puff(ctx, x, y, r, c, hi(c, 0.55), shd(c
 /** An ellipse with the same two crescents (a lens, a loaf, a lid). Two flat fills and a highlight, no clip. */
 export function lens(ctx, x, y, rx, ry, c) {
   disc(ctx, x, y, rx, ry, shd(c)); disc(ctx, x - rx * 0.06, y - ry * 0.08, rx * 0.9, ry * 0.88, c);
-  ctx.globalAlpha *= 0.55; disc(ctx, x - rx * 0.28, y - ry * 0.36, rx * 0.34, ry * 0.2, hi(c, 0.75)); ctx.globalAlpha /= 0.55;
+  { const alpha0 = fade(ctx, 0.55); disc(ctx, x - rx * 0.28, y - ry * 0.36, rx * 0.34, ry * 0.2, hi(c, 0.75)); ctx.globalAlpha = alpha0; }
 }
 /** A rounded block seen as one face: a pill/plate with a shade strip at its foot and a sunlit one on top (a slat, a plank, a panel). x, y is its top-left. */
 export function slat(ctx, x, y, w, h, r, c) {
   rr(ctx, x, y, w, h, r, shd(c)); rr(ctx, x, y, w, Math.max(r * 1.2, h * 0.74), r, c);
-  if (h > 3.2 && w > 4) { ctx.globalAlpha *= 0.5; rr(ctx, x + w * 0.1, y + h * 0.1, w * 0.8, Math.max(1.2, h * 0.16), 0.6, hi(c, 0.8)); ctx.globalAlpha /= 0.5; }
+  if (h > 3.2 && w > 4) { { const alpha0 = fade(ctx, 0.5); rr(ctx, x + w * 0.1, y + h * 0.1, w * 0.8, Math.max(1.2, h * 0.16), 0.6, hi(c, 0.8)); ctx.globalAlpha = alpha0; } }
 }
 
 /** The faces of a prism exactly as iso.box() returns them ({ left, right, top }, each a polygon), without drawing: the hit shapes of the props that are clickable. */
@@ -86,7 +92,7 @@ export function post(ctx, x, y, h, w, c, cap = true) {
   w = Math.max(3.6, w); const wt = w * 0.9, top = y - h;
   poly(ctx, [[x - w / 2, y], [x + w / 2, y], [x + wt / 2, top], [x - wt / 2, top]], shd(c));
   poly(ctx, [[x - w / 2, y], [x + w * 0.16, y], [x + wt * 0.16, top], [x - wt / 2, top]], c);
-  ctx.globalAlpha *= 0.55; poly(ctx, [[x - w * 0.38, y - 1], [x - w * 0.18, y - 1], [x - wt * 0.18, top + 1], [x - wt * 0.38, top + 1]], hi(c, 0.8)); ctx.globalAlpha /= 0.55;
+  { const alpha0 = fade(ctx, 0.55); poly(ctx, [[x - w * 0.38, y - 1], [x - w * 0.18, y - 1], [x - wt * 0.18, top + 1], [x - wt * 0.38, top + 1]], hi(c, 0.8)); ctx.globalAlpha = alpha0; }
   if (cap) ball(ctx, x, top - w * 0.1, w * 0.62, c);
 }
 
@@ -98,13 +104,13 @@ export function drum(ctx, x, y, rx, h, c, o = {}) {
   const ry = rx * 0.5, top = y - h, t = mix(c, '#fff7dc', 0.18), l = mix(shade(c, 0.9), '#ffd9a8', 0.05), r = mix(shade(c, 0.66), '#5a52a8', 0.2);
   const g = ctx.createLinearGradient(x - rx, 0, x + rx, 0); g.addColorStop(0, l); g.addColorStop(0.2, mix(t, l, 0.35)); g.addColorStop(0.42, c); g.addColorStop(0.78, mix(c, r, 0.55)); g.addColorStop(1, r);
   ctx.beginPath(); ctx.moveTo(x - rx, y); ctx.lineTo(x - rx, top); ctx.lineTo(x + rx, top); ctx.lineTo(x + rx, y); ctx.ellipse(x, y, rx, ry, 0, 0, Math.PI, false); ctx.closePath(); ctx.fillStyle = g; ctx.fill();
-  if (o.ribs) for (const k of o.ribs) { const yy = y - h * k, bw = o.ribW || Math.max(1.8, h * 0.09); ctx.beginPath(); ctx.ellipse(x, yy, rx, ry, 0, 0.02, Math.PI - 0.02, false); ctx.strokeStyle = o.ribCol || shade(c, 0.78); ctx.lineWidth = bw; ctx.stroke(); ctx.beginPath(); ctx.ellipse(x, yy - bw * 0.7, rx, ry, 0, 0.3, Math.PI - 0.5, false); ctx.strokeStyle = hi(c, 0.45); ctx.globalAlpha *= 0.55; ctx.lineWidth = Math.max(1.5, bw * 0.45); ctx.stroke(); ctx.globalAlpha /= 0.55; }
+  if (o.ribs) for (const k of o.ribs) { const yy = y - h * k, bw = o.ribW || Math.max(1.8, h * 0.09); ctx.beginPath(); ctx.ellipse(x, yy, rx, ry, 0, 0.02, Math.PI - 0.02, false); ctx.strokeStyle = o.ribCol || shade(c, 0.78); ctx.lineWidth = bw; ctx.stroke(); ctx.beginPath(); ctx.ellipse(x, yy - bw * 0.7, rx, ry, 0, 0.3, Math.PI - 0.5, false); ctx.strokeStyle = hi(c, 0.45); { const alpha0 = fade(ctx, 0.55); ctx.lineWidth = Math.max(1.5, bw * 0.45); ctx.stroke(); ctx.globalAlpha = alpha0; } }
   if (o.dome) { // a rounded lid: half an ellipse above the rim
     const dh = o.dome; ctx.beginPath(); ctx.ellipse(x, top, rx, dh, 0, Math.PI, 0, false); ctx.lineTo(x + rx, top); ctx.ellipse(x, top, rx, ry, 0, 0, Math.PI, false); ctx.lineTo(x - rx, top); ctx.closePath(); ctx.fillStyle = o.domeCol || t; ctx.fill();
-    ctx.globalAlpha *= 0.55; ctx.beginPath(); ctx.ellipse(x - rx * 0.32, top - dh * 0.55, rx * 0.34, dh * 0.3, -0.5, 0, Math.PI * 2); ctx.fillStyle = hi(o.domeCol || t, 0.85); ctx.fill(); ctx.globalAlpha /= 0.55;
+    { const alpha0 = fade(ctx, 0.55); ctx.beginPath(); ctx.ellipse(x - rx * 0.32, top - dh * 0.55, rx * 0.34, dh * 0.3, -0.5, 0, Math.PI * 2); ctx.fillStyle = hi(o.domeCol || t, 0.85); ctx.fill(); ctx.globalAlpha = alpha0; }
   } else {
     disc(ctx, x, top, rx, ry, shade(c, 0.74)); disc(ctx, x, top, rx * 0.93, ry * 0.9, t); disc(ctx, x + rx * 0.05, top + ry * 0.06, rx * 0.72, ry * 0.68, mix(t, c, 0.35));
-    ctx.globalAlpha *= 0.5; ctx.beginPath(); ctx.ellipse(x, top, rx * 0.93, ry * 0.9, 0, Math.PI * 1.05, Math.PI * 1.62, false); ctx.strokeStyle = '#fffbe6'; ctx.lineWidth = Math.max(1.5, rx * 0.1); ctx.stroke(); ctx.globalAlpha /= 0.5;
+    { const alpha0 = fade(ctx, 0.5); ctx.beginPath(); ctx.ellipse(x, top, rx * 0.93, ry * 0.9, 0, Math.PI * 1.05, Math.PI * 1.62, false); ctx.strokeStyle = '#fffbe6'; ctx.lineWidth = Math.max(1.5, rx * 0.1); ctx.stroke(); ctx.globalAlpha = alpha0; }
   }
 }
 
