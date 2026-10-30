@@ -5,5 +5,5 @@
   "type": "module",
   "scripts": { "start": "node relay.mjs" },
   "dependencies": { "ws": "^8.18.0" },
-  "license": "MIT"
+  "license": "UNLICENSED"
 }

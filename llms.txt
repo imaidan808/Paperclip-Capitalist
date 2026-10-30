@@ -39,4 +39,4 @@ What a player does: drafts two of twelve Backgrounds (each has a real-world basi
 - [Compliance](https://github.com/imaidan808/Paperclip-Capitalist/blob/main/docs/COMPLIANCE.md): what is and is not implemented for privacy, security and accessibility.
 - [Balance notes](https://github.com/imaidan808/Paperclip-Capitalist/blob/main/docs/BALANCE.md): the rules as built and how the economy was tuned.
 
-The source is MIT licensed.
+All rights reserved. The source is published so that it can be read; its [LICENSE](https://github.com/imaidan808/Paperclip-Capitalist/blob/main/LICENSE) grants no right to copy, modify, host or redistribute it without the author's written permission.

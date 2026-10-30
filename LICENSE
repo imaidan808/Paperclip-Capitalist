@@ -1,15 +1,20 @@
-MIT License
+Copyright (c) 2026 Aidan H. Naylor. All rights reserved.
 
-Copyright (c) 2026 Aidan H. Naylor
+This notice covers Paperclip Capitalist: its source code, game design, text,
+artwork, sound and documentation (together, the "Software").
 
-Permission is hereby restricted to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software, the rights to use, copy, modify, merge, publish, distribute, 
-sublicense, and/or sell copies of the Software, and to permit persons to whom 
-the Software is furnished to do so, subject to the following conditions:
+No license is granted. The Software is published in this repository so that it
+can be read. It is not open source. Without the prior written permission of the
+copyright holder, no one may copy, modify, merge, publish, distribute,
+sublicense, sell or host the Software or any part of it, except to the extent
+that the law gives that right whatever this notice says.
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+Publishing this repository on GitHub gives others the permissions that GitHub's
+Terms of Service describe, which are to view and to fork it on GitHub, and
+nothing more.
+
+Software that the Software depends on, such as the ws package that the optional
+relay installs, is not part of the Software and keeps its own license.
 
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,

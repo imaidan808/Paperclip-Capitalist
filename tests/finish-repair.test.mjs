@@ -366,11 +366,20 @@ test('V1: the privacy lines say what "Start over" deletes: the run, not the Foun
 });
 
 test('V2: the licence the site declares is a file in the repository', () => {
+  // The author's decision of 2026-10-30: all rights reserved. The source is published to be read, and the game is sold to universities.
   assert.ok(existsSync(join(ROOT, 'LICENSE')), 'LICENSE');
   const lic = read('LICENSE');
-  assert.match(lic, /^MIT License\n\nCopyright \(c\) 2026 \S+\n/); assert.match(lic, /Permission is hereby granted, free of charge/); assert.match(lic, /THE SOFTWARE IS PROVIDED "AS IS"/);
-  assert.equal(JSON.parse(read('package.json')).license, 'MIT'); assert.match(read('index.html'), /opensource\.org\/licenses\/MIT/); assert.match(read('llms.txt'), /MIT licensed/); assert.match(read('README.md'), /MIT licensed/);
+  assert.match(lic, /^Copyright \(c\) 2026 [^\n]+\. All rights reserved\.\n/); assert.match(lic, /\bNo license is granted\b/); assert.match(lic, /THE SOFTWARE IS PROVIDED "AS IS"/);
+  assert.doesNotMatch(lic, /^MIT License|Permission is hereby|free of charge/im, 'no grant of the MIT kind, whole or restricted');
   assert.ok(!/—/.test(lic), 'no em dash');
+  // every place that names a license names that one: the two package files and the relay's lockfile, the page's JSON-LD (the file's address, as the faculty kit's link is), llms.txt and the README
+  const LICENSE_URL = 'https://github.com/imaidan808/Paperclip-Capitalist/blob/main/LICENSE';
+  for (const f of ['package.json', 'server/package.json']) { const p = JSON.parse(read(f)); assert.equal(p.license, 'UNLICENSED', f); assert.equal(p.private, true, `${f}: unlicensed and private, so npm cannot publish it`); }
+  assert.equal(JSON.parse(read('server/package-lock.json')).packages[''].license, 'UNLICENSED', 'the lockfile says what the package file says');
+  assert.equal(JSON.parse(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/.exec(read('index.html'))[1]).license, LICENSE_URL, 'the page declares the LICENSE file of the repository');
+  assert.ok(read('llms.txt').includes(`](${LICENSE_URL})`), 'llms.txt links to the file'); assert.ok(read('README.md').includes('](LICENSE)'), 'the README links to the file');
+  for (const f of ['llms.txt', 'README.md']) assert.match(read(f), /All rights reserved/, f);
+  for (const f of ['index.html', 'llms.txt', 'README.md', 'package.json', 'server/package.json', 'LICENSE']) assert.doesNotMatch(read(f), /\bMIT\b|opensource\.org/, `${f} still names an open license`);
 });
 
 test('V3: the dashboard\'s grading line links to a rubric a visitor can open (docs/ is not published)', () => {

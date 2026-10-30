@@ -16,5 +16,5 @@
     "stage": "node scripts/stage.mjs",
     "preview": "node scripts/stage.mjs --serve"
   },
-  "license": "MIT"
+  "license": "UNLICENSED"
 }
