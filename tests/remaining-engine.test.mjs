@@ -615,7 +615,8 @@ test('Relay owner (low): an instructor who has lost the browser\'s storage, or c
     first.send({ t: 'clock', hour: 9, speed: 64, paused: false }); await sleep(250);
     assert.ok(!stud.got.some((m) => m.t === 'clock' && m.hour === 9), 'the seat moved with the token');
     // a room that was never bound to a token: without a token it is claimed as before (first come, then nobody else)...
-    const p1 = sock(relay, 'OWN2', 'PC-P1', 'instructor'), p2 = sock(relay, 'OWN2', 'PC-P2', 'student'), p4 = sock(relay, 'OWN2', 'PC-P4', 'instructor'); await Promise.all([p1.ready, p2.ready, p4.ready]);
+    const p1 = sock(relay, 'OWN2', 'PC-P1', 'instructor'); await p1.ready; // ("first come" is the first to connect: the three used to connect at once, and on a busy machine PC-P4 could be the first, take the seat and fail the assertion below; the runner did that once)
+    const p2 = sock(relay, 'OWN2', 'PC-P2', 'student'), p4 = sock(relay, 'OWN2', 'PC-P4', 'instructor'); await Promise.all([p2.ready, p4.ready]);
     p4.send({ t: 'clock', hour: 55, speed: 1, paused: true }); await sleep(250);
     assert.ok(!p2.got.some((m) => m.t === 'clock' && m.hour === 55), 'a second connection with no token does not take the seat from the first');
     // ...and the first token shown binds it and takes the seat, from a holder that never showed one (tests/cloud-audit.test.mjs S1: a stray tab must not leave the room without an owner for good)
