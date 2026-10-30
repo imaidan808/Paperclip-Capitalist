@@ -17,7 +17,7 @@ import { surface, softwareRaster, releaseAll, ledger, LEDGER_LIMIT_MB, builds } 
 import { snapTranslation } from './chunks.js';
 import { SLOW_MS, FAST_MS, GOV_WAIT, GOV_DOWN, BUILD_GRACE, judge } from './governor.js';
 import { clearSprites, setSpriteBudget, trimSprites } from './sprites.js';
-import { FAR_ZOOM, FOG_DIM, money } from './common.js';
+import { FAR_ZOOM, FOG_DIM, money, leaveEnd } from './common.js';
 import { runLayer } from './stack.js';
 import { releaseShadows } from './shadow.js';
 import { lodOf, farMix } from './lod.js';
@@ -496,7 +496,7 @@ export class World {
         const dx = e.tx - e.x, dy = e.ty - e.y, d = Math.hypot(dx, dy);
         e.moving = d > 0.06;
         if (e.moving) { const stp = Math.min(d, (calm ? 40 : sp) * dt); e.x += dx / d * stp; e.y += dy / d * stp; if (Math.abs(dx) > 0.01) e.dir = dx > 0 ? 1 : -1; if (dust) this.footstep(e, dt); }
-        if (e.leaving && (!e.moving || this.t - e.leaveAt > 4500)) this.ents.delete(id);
+        if (e.leaving && (calm || this.t >= leaveEnd(e.born, e.leaveAt))) this.ents.delete(id); // (a buyer goes when it has faded to nothing, wherever it has got to; under reduced motion it goes at once)
       } else if (e.gone && this.t - e.goneAt > 600) this.ents.delete(id);
       if (e.drop) { e.drop = Math.max(0, e.drop - (calm ? 999 : 180) * dt); if (!e.drop && dust) this.landed(e); }
     }
