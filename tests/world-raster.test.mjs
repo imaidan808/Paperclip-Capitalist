@@ -76,6 +76,11 @@ test('the scene is made once per set of locked districts and the last two are ke
   const a = sceneOf([2, 3]), b = sceneOf([2, 3]); assert.strictEqual(a, b); assert.notStrictEqual(sceneOf([4]), a); assert.ok(a.coast === sceneOf([5]).coast, 'the coast is shared by every scene');
 });
 
+test('every cliff wall segment is painted: the count is the array\'s length over the ten numbers a segment is (it was over twelve: the last sixth of the coast\'s cliff, 791 of 4,748 segments, was never painted, which left V-shaped holes and cliffs that end in a flat cut)', () => {
+  const W = buildWalls(SC.coast, LAYOUT.ZV, LAYOUT.VW, GW, GH);
+  assert.ok(Number.isInteger(W.n), `a whole number of segments, not ${W.n}`); assert.equal(W.a.length, W.n * 10, 'the painter reads ten numbers a segment: the array holds exactly n of them');
+});
+
 test('the walls hang from the ground\'s edge to the waterline and run on from the steep ground above them (the same strata at the same height)', () => {
   const W = buildWalls(SC.coast, LAYOUT.ZV, LAYOUT.VW, GW, GH); assert.ok(W.n > 200); for (let q = 0; q < W.n; q += 7) { const z = Math.max(W.a[q * 10 + 2], W.a[q * 10 + 7]); assert.ok(z >= 2.6 && z <= 100); const l = W.a[q * 10 + 4]; assert.ok(l >= -1 && l <= 1, 'light in range'); }
 });

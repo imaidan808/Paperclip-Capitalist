@@ -325,7 +325,7 @@ export function landShade(buf, W, H, S, sc, ox = 0, oy = 0) {
 // ---------------------------------------------------------------- the cliff walls
 /** The height of the ground at a grid point (bilinear on the vertex heights, as layout.js reads it). */
 const zBil = (ZV, VW, GW, GH, gx, gy) => { const x = clamp(gx, 0, GW - 1e-6), y = clamp(gy, 0, GH - 1e-6), i = x | 0, j = y | 0, fx = x - i, fy = y - j; return (ZV[j * VW + i] * (1 - fx) + ZV[j * VW + i + 1] * fx) * (1 - fy) + (ZV[(j + 1) * VW + i] * (1 - fx) + ZV[(j + 1) * VW + i + 1] * fx) * fy; };
-const WALL_MIN = 2.6, WALL_N = 12;
+const WALL_MIN = 2.6, WALL_REACH = 3, WALL_LIFT = 45, WALL_N = 10; // (ten numbers a segment: both ends' x, foot, height, arc length and light. It was 12, so the painter stopped a sixth short and the last 791 segments of the coast had no wall)
 /**
  * The cliff walls of a coast, as flat arrays: for each stretch of coast between two ring points that stands higher than a beach and faces the viewer, the world position of both ends (x, the foot's y and
  * the top's y), the arc length along the coast, the height and the light on its face. Where the coast is below a beach's height there is no wall: the sand does that work.
@@ -335,10 +335,14 @@ export function buildWalls(coast, ZV, VW, GW, GH) {
   for (const ring of coast.rings) {
     const n = ring.length / 2; if (n < 3) continue;
     const gx = (i) => ring[2 * ((i + n) % n)], gy = (i) => ring[2 * ((i + n) % n) + 1];
-    const P = new Float64Array(n * 6);
+    const P = new Float64Array(n * 6), zr = new Float64Array(n);
+    for (let i = 0; i < n; i++) zr[i] = zBil(ZV, VW, GW, GH, gx(i), gy(i));
     for (let i = 0; i < n; i++) {
-      const tx = gx(i + 1) - gx(i - 1), ty = gy(i + 1) - gy(i - 1), tl = Math.hypot(tx, ty) || 1, nx = ty / tl, ny = -tx / tl, z = zBil(ZV, VW, GW, GH, gx(i), gy(i));
-      P[i * 6] = (gx(i) - gy(i)) * HW; P[i * 6 + 1] = (gx(i) + gy(i)) * HH; P[i * 6 + 2] = z; P[i * 6 + 3] = nx; P[i * 6 + 4] = ny; P[i * 6 + 5] = u; u += Math.hypot(gx(i + 1) - gx(i), gy(i + 1) - gy(i));
+      const tx = gx(i + 1) - gx(i - 1), ty = gy(i + 1) - gy(i - 1), tl = Math.hypot(tx, ty) || 1, nx = ty / tl, ny = -tx / tl;
+      // the top of the wall is the highest ground within WALL_REACH ring points of this one: at a corner of the coast the ring point itself can stand low (the height is read at one point), and the wall's top then dips to a V with the
+      // sea showing through above it (a teal check mark in a cliff). The land is painted after the wall and closes anything the wall holds above the ground's edge.
+      let z = zr[i]; for (let k = 1; k <= WALL_REACH; k++) { const a = zr[(i + k) % n], b = zr[(i - k + n) % n]; if (a > z) z = a; if (b > z) z = b; }
+      P[i * 6] = (gx(i) - gy(i)) * HW; P[i * 6 + 1] = (gx(i) + gy(i)) * HH; P[i * 6 + 2] = Math.min(z, zr[i] + WALL_LIFT); P[i * 6 + 3] = nx; P[i * 6 + 4] = ny; P[i * 6 + 5] = u; u += Math.hypot(gx(i + 1) - gx(i), gy(i + 1) - gy(i));
     }
     for (let i = 0; i < n; i++) {
       const a = i * 6, b = ((i + 1) % n) * 6, z0 = P[a + 2], z1 = P[b + 2];
@@ -365,7 +369,7 @@ export function wallPass(buf, W, H, S, ox, oy, sc) {
     if (Math.max(x0, x1) < wx0 || Math.min(x0, x1) > wx1 || Math.max(yb0, yb1) < wy0 || Math.min(yb0, yb1) - Math.max(z0, z1) > wy1) continue;
     if (x1 < x0) { let t = x0; x0 = x1; x1 = t; t = yb0; yb0 = yb1; yb1 = t; t = z0; z0 = z1; z1 = t; t = l0; l0 = l1; l1 = t; } // columns run left to right
     const ax = sx(x0), bx = sx(x1), fa = sy(yb0), fb = sy(yb1), ta = sy(yb0 - z0 - 2), tb = sy(yb1 - z1 - 2), span = bx - ax || 1e-6;
-    const c0 = Math.max(0, Math.ceil(ax - 0.5 - 0.35)), c1 = Math.min(W - 1, Math.floor(bx - 0.5 + 0.35));
+    const c0 = Math.max(0, Math.ceil(ax - 0.5 - 0.9)), c1 = Math.min(W - 1, Math.floor(bx - 0.5 + 0.9)); // (a pixel column beyond each end: two neighbouring stretches overlap, so no hairline of sea shows between them)
     for (let px = c0; px <= c1; px++) {
       const t = clamp((px + 0.5 - ax) / span, 0, 1), foot = fa + (fb - fa) * t, top = ta + (tb - ta) * t, hh = z0 + 2 + (z1 - z0) * t, lit = l0 + (l1 - l0) * t, xs = (x0 + (x1 - x0) * t) / 32, depth = foot - top;
       if (!(depth > 0.01)) continue;
