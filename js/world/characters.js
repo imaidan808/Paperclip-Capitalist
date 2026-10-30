@@ -10,7 +10,7 @@
 import { registerLayer } from './stack.js';
 import { BUYERS } from '../config.js';
 import { zAt } from './layout.js';
-import { leadAlpha } from './common.js';
+import { leadAlpha, bubbleAlpha } from './common.js';
 import { P, strHash, h2, clamp } from './iso.js';
 import { PEOPLE, TOY, INK, GRASS, BLOOM, WOOD, METAL, personLook } from './palette.js';
 import { mix, shade, hi, shd, disc, rr, bar, poly, stand, stampSoft, FONT } from './toys.js';
@@ -232,11 +232,9 @@ function drawLeadV2(ctx, view, env, w, e) {
     const s = hov ? 1.08 : 1;
     ctx.save(); ctx.translate(x, y - hop - (hov ? 1.5 : 0)); ctx.scale(sx, sy); drawDoll(ctx, 0, 0, s, K, A); ctx.restore(); ctx.globalAlpha = 1;
   }
-  if (!e.leaving && l) {
-    w.hits.push({ eid: e.id, kind: 'lead', id: e.id.slice(5), zone: e.zone, label: `${B.name}${l.need ? ', urgent' : ''}`, circle: [x, y - 16, 20], lead: l });
-    if ((zoom > 0.5 || hov) && a >= 0.6) w.overlay.push({ k: 'bub', n: 6, wx: x, wy: y - 46, // (a buyer that is still coming in shows no price yet)
-       draw: (g, px, py, s) => w.leadBubble(g, px, py, s, B, l, hov) });
-  }
+  if (!e.leaving && l) w.hits.push({ eid: e.id, kind: 'lead', id: e.id.slice(5), zone: e.zone, label: `${B.name}${l.need ? ', urgent' : ''}`, circle: [x, y - 16, 20], lead: l });
+  const ba = !l ? 0 : !t ? (e.leaving ? 0 : 1) : bubbleAlpha(e.born, e.leaving ? e.leaveAt : null, w.t); // the request comes in a beat after its buyer and goes out over half a second when the lead does: it does not pop on and off
+  if (ba > 0.01 && (zoom > 0.5 || hov)) w.overlay.push({ k: 'bub', n: 6, wx: x, wy: y - 46, draw: (g, px, py, s) => { const pa = g.globalAlpha; g.globalAlpha = pa * ba; w.leadBubble(g, px, py, s, B, l, hov && !e.leaving); g.globalAlpha = pa; } });
 }
 const strHashOf = (id) => strHash(String(id));
 registerLayer('lead', drawLeadV2, 'inherit');
