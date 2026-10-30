@@ -577,3 +577,34 @@ test('the quality governor ignores cold frames, steps symmetrically, recovers, a
     assert.equal(w.slow, 0, 'and it recovers when the load goes away'); assert.equal(w.dpr, 2, 'restoring full sharpness'); assert.equal(w.lite, false);
   } finally { performance.now = realNow; window.devicePixelRatio = 1; w.stop(); }
 });
+
+// ---------------------------------------------------------------- the buyers' opacity: no pop-in, no ghost that vanishes at a fifth
+test('a buyer fades in when it arrives, stands at full strength while it is new, fades out to nothing when its lead goes and is gone only then (no pop in, no ghost that vanishes at 20%)', async () => {
+  const { leadAlpha, leaveEnd, ARRIVE_MS, HOLD_MS, LEAVE_MS } = await import('../js/world/common.js');
+  const b = 20000;
+  assert.equal(leadAlpha(0, null, 5000), 1, 'a buyer made before the first frame is simply there'); assert.equal(leadAlpha(b, null, b), 0, 'one that arrives starts clear');
+  assert.ok(Math.abs(leadAlpha(b, null, b + ARRIVE_MS / 2) - 0.5) < 1e-9, 'and comes in evenly'); assert.equal(leadAlpha(b, null, b + ARRIVE_MS), 1); assert.equal(leadAlpha(b, null, b + 5 * 60000), 1, 'and stays');
+  assert.equal(leadAlpha(b, b + 100, b + 100), leadAlpha(b, null, b + 100), 'a lead that goes at once changes nothing yet: the buyer is not a ghost before it has been seen');
+  assert.equal(leadAlpha(b, b + 100, b + HOLD_MS), 1, 'a new buyer stands at full strength for HOLD_MS before it starts to go'); assert.ok(Math.abs(leadAlpha(b, b + 100, b + HOLD_MS + LEAVE_MS / 2) - 0.5) < 1e-9, 'and then goes evenly'); assert.equal(leadAlpha(b, b + 100, b + HOLD_MS + LEAVE_MS), 0, 'to nothing, not to a fifth');
+  assert.equal(leaveEnd(b, b + 100), b + HOLD_MS + LEAVE_MS, 'it is gone when it has faded and not before');
+  assert.equal(leadAlpha(b, b + 60000, b + 60000), 1); assert.equal(leadAlpha(b, b + 60000, b + 60000 + LEAVE_MS), 0); assert.equal(leaveEnd(b, b + 60000), b + 60000 + LEAVE_MS, 'an old buyer fades from the moment its lead goes');
+  // never up again once it is going, never down while it is arriving: a buyer's opacity is one rise, a plateau and one fall
+  for (const leaveAt of [b + 10, b + 900, b + 2600, b + 9000, b + 90000]) { let prev = -1, falling = false; for (let t = b; t <= leaveEnd(b, leaveAt) + 100; t += 25) { const a = leadAlpha(b, t >= leaveAt ? leaveAt : null, t); if (a < prev - 1e-12) falling = true; if (falling) assert.ok(a <= prev + 1e-12, `up again at ${t - b} after leaving at ${leaveAt - b}`); prev = a; } assert.equal(prev, 0); }
+});
+
+test('the world draws a buyer at the opacity of leadAlpha, and takes it out of the world only when it has faded', async () => {
+  const { leadAlpha, leaveEnd, ARRIVE_MS, HOLD_MS, LEAVE_MS } = await import('../js/world/common.js');
+  const g = newGame(3); openTo(g, 2); for (let i = 0; i < 4; i++) g._spawnLead(1, false, true);
+  const { w } = await world(g, { zone: 1, sel: new Set() }); w.focusZone(1, false); w.draw();
+  const e = [...w.ents.values()].find((x) => x.type === 'lead'); assert.ok(e, 'a buyer in the world');
+  const alphas = []; for (const m of ['fill', 'fillRect', 'stroke']) w.ctx[m] = () => { alphas.push(w.ctx.globalAlpha); };
+  const strongest = (t) => { w.t = t; w.vt = t; w.env.t = t; alphas.length = 0; w.ctx.globalAlpha = 1; w.drawEnt(w.ctx, e); return alphas.length ? Math.max(...alphas) : 0; };
+  const b = 50000; e.born = b; e.leaving = false;
+  assert.ok(Math.abs(strongest(b + ARRIVE_MS / 2) - 0.5) < 0.02, 'half way in it is drawn at half strength'); assert.equal(strongest(b + ARRIVE_MS), 1); assert.equal(strongest(b + 20000), 1);
+  e.leaving = true; e.leaveAt = b + 100;
+  assert.equal(strongest(b + HOLD_MS), 1, 'its lead has gone but it is new: still at full strength'); assert.ok(Math.abs(strongest(b + HOLD_MS + LEAVE_MS / 2) - 0.5) < 0.02, 'then it fades evenly'); assert.ok(strongest(b + HOLD_MS + LEAVE_MS - 60) < 0.05, 'to nothing, not to a fifth');
+  w.t = leaveEnd(b, e.leaveAt) - 1; w.update(0); assert.ok(w.ents.has(e.id), 'it is still in the world a moment before it has faded');
+  w.t = leaveEnd(b, e.leaveAt); w.update(0); assert.ok(!w.ents.has(e.id), 'and is gone when it has');
+  // under reduced motion nothing fades: a buyer that is leaving is simply gone
+  const e2 = [...w.ents.values()].find((x) => x.type === 'lead' && !x.leaving); assert.ok(e2); w.reduced = () => true; e2.leaving = true; e2.leaveAt = w.t; w.update(0); assert.ok(!w.ents.has(e2.id), 'under reduced motion a leaving buyer goes at once');
+});
