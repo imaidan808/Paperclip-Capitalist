@@ -1,0 +1,17 @@
+# Render Blueprint: one free web service that runs the classroom relay (server/relay.mjs). docs/HOSTING.md says how to use it.
+# On render.com: New > Blueprint > pick this repository. Render reads this file, builds in server/ and gives the service an https address; that address is the relay (the game turns it into wss://).
+services:
+  - type: web
+    name: paperclip-relay
+    runtime: node
+    plan: free
+    rootDir: server
+    buildCommand: npm ci
+    startCommand: npm start
+    healthCheckPath: /health
+    buildFilter:
+      paths:
+        - server/**
+    envVars:
+      - key: NODE_VERSION
+        value: "22"

@@ -147,3 +147,7 @@ export const ALGO_EVENTS = {
 export const WARN_LEAD = { novice: 12, mid: 72, adv: 168 };
 
 export const FRESH = { freightHours: 6, freightCost: 0.045, damageBase: 0.30 };
+
+/** The relay the title screen offers when the link and this browser name none: students on other devices reach each other through it (docs/HOSTING.md). Empty until one is hosted; then its address, written as the browser needs it
+ *  (wss://paperclip-relay.onrender.com), and a student only types the room code. An instructor's link (`?room=CODE&relay=...`) and a relay typed into the form win over it. */
+export const DEFAULT_RELAY = '';

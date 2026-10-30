@@ -10,8 +10,8 @@
 // Layout is css/shell.css (its header draws the layers, the anchors and the layouts). This file's part of it: it measures the HUD, the dock, the ticker and the goal tracker and
 // publishes their heights as --hud-h, --dock-h, --tick-h and --trk-b on <html> (so everything anchored to them follows when they wrap), lets a phone's bottom sheet be dragged
 // shut, and keeps the render path cheap (attributes written only when they change, bars listed once per render and painted only when they move, no work for a hidden tab).
-import { ZONES, TOTAL_HOURS, CLIENTS } from '../config.js';
-import { $, $$, esc, setHTML, delegate, dlg, toast, announce, sfx, burst, reduced, settingsDialog, settings, applySettings } from './common.js';
+import { ZONES, TOTAL_HOURS, CLIENTS, DEFAULT_RELAY } from '../config.js';
+import { $, $$, esc, setHTML, delegate, dlg, toast, announce, sfx, burst, reduced, settingsDialog, settings, applySettings, relayOf } from './common.js';
 import { fitStuck } from './common.js'; // its own line: the shell's other helpers are imported above
 import { kv } from '../session.js';
 import { hudHTML, trackerHTML, tickerHTML } from './hud.js';
@@ -231,7 +231,7 @@ export function mountGame(root, S, hooks) {
     const inRoom = !!S.roomInfo;
     dlg.open(`<button class="btn ghost sm x" data-close>Close</button><h2 tabindex="-1" autofocus>Menu</h2><div class="grid g2">
       <div class="card"><h3>Classroom room</h3>${inRoom ? `<p class="small">In room <b class="mono">${esc(S.roomInfo.code)}</b> via ${S.room.kind === 'relay' ? 'relay server' : 'this browser (other tabs)'}. The instructor's clock is in charge.</p><button class="btn sm ghost" data-act="leave">Leave room</button>`
-        : `<p class="small mute">Joining restarts your run on the instructor's shared clock.</p><label for="m-code">Room code</label><input id="m-code" maxlength="8" style="text-transform:uppercase" autocomplete="off"><label for="m-relay" class="gap">Relay server URL (optional)</label><input id="m-relay" placeholder="wss://your-relay.example" value="${esc(kv.get('relay') || '')}"><button class="btn sm gap" data-act="joinroom">Join</button>`}</div>
+        : `<p class="small mute">Joining restarts your run on the instructor's shared clock.</p><label for="m-code">Room code</label><input id="m-code" maxlength="8" style="text-transform:uppercase" autocomplete="off"><label for="m-relay" class="gap">Relay server URL (optional)</label><input id="m-relay" placeholder="wss://your-relay.example" value="${esc(kv.get('relay') || DEFAULT_RELAY)}"><button class="btn sm gap" data-act="joinroom">Join</button>`}</div>
       <div class="card"><h3>This run</h3><div class="grid"><button class="btn sm" data-act="debrief">Open debrief and reflection</button><button class="btn sm ghost" data-act="academy">Academy: replay a lesson</button><button class="btn sm ghost" data-act="settings">Display and sound</button><button class="btn sm ghost" data-act="savefile">Download my save</button><button class="btn sm danger" data-act="reset">Start over</button></div></div></div>
       <p class="small mute gap">Privacy: your save lives only in this browser. Rooms share a pseudonymous Founder ID, your chosen alias and game numbers, never names or emails.</p>`, { label: 'Menu' });
   }
@@ -260,8 +260,9 @@ export function mountGame(root, S, hooks) {
     academy() { dlg.close(); hooks.onAcademy?.(); },
     leave() { S.leaveRoom(); dlg.close(); toast('Left the room. You keep your solo run.', 'info'); render(); },
     joinroom() {
-      const code = ($('#m-code', dlg.el).value || '').toUpperCase().replace(/[^A-Z0-9]/g, ''), relay = $('#m-relay', dlg.el).value.trim();
+      const code = ($('#m-code', dlg.el).value || '').toUpperCase().replace(/[^A-Z0-9]/g, ''), relay = relayOf($('#m-relay', dlg.el).value);
       if (code.length < 3) { toast('Enter the room code from your instructor.', 'warn'); return; }
+      if (relay === null) return;
       kv.set('relay', relay); dlg.close(); hooks.onJoin({ code, relay });
     },
     savefile() { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([JSON.stringify(g().s)], { type: 'application/json' })); a.download = `paperclip-save-${g().s.pid}.json`; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000); },

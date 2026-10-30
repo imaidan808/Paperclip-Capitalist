@@ -7,6 +7,27 @@ export const roomCode = () => Array.from({ length: 4 }, () => 'ABCDEFGHJKLMNPQRS
 export const cleanCode = (c) => String(c || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8);
 export const MAX_FRAME = 32 * 1024; // the relay's limit (server/relay.mjs): a real message is a few KB, a snapshot about 3
 
+const LAB_HOST = /^(localhost|127\.\d+\.\d+\.\d+|10\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+|\[::1\]|[^/:]+\.(local|lan))$/i;
+/**
+ * The WebSocket address of a relay as a person types or pastes it, or '' when what they gave is not an address. A host gives an instructor an https address (https://paperclip-relay.onrender.com) and the browser needs wss://,
+ * so https becomes wss and http becomes ws; a bare host name is wss, because the game is served over https, where a plain ws:// is blocked as mixed content, unless it names a machine of a lab (localhost, a private
+ * address, .local, .lan), which is ws. A path and a query stay (a relay behind a proxy), a fragment and a trailing slash go. Only ws, wss, http and https are addresses: nothing else is let through.
+ */
+export function cleanRelay(raw) {
+  if (typeof raw !== 'string') return '';
+  let s = raw.trim(); if (!s) return '';
+  if (!/^[a-z][a-z0-9+.-]*:\/\//i.test(s)) { // no scheme: a bare host name, with an optional port and path
+    if (s.startsWith('//') || /\s/.test(s) || /^[a-z][a-z0-9+.-]*:(?!\d)/i.test(s)) return ''; // ('javascript:...', 'data:...': a scheme without the slashes)
+    const host = s.split(/[/?#]/)[0].replace(/:\d+$/, '');
+    if (!/^([a-z0-9]([a-z0-9.-]*[a-z0-9])?|\[[0-9a-f:]+\])$/i.test(host) || !(host.includes('.') || /^localhost$|^\[/i.test(host))) return ''; // ('hello', 'not_a_host', '12345')
+    s = (LAB_HOST.test(host) ? 'ws://' : 'wss://') + s;
+  }
+  let u; try { u = new URL(s); } catch { return ''; }
+  const proto = { 'ws:': 'ws:', 'wss:': 'wss:', 'http:': 'ws:', 'https:': 'wss:' }[u.protocol];
+  if (!proto || !u.hostname) return '';
+  return proto + '//' + u.host + (u.pathname === '/' ? '' : u.pathname.replace(/\/+$/, '')) + u.search;
+}
+
 class LocalTransport {
   constructor(code) {
     this.kind = 'local';
