@@ -10,7 +10,7 @@ import { METAL, TOY, SEA, ROAD, WOOD, GLASS, GRASS, BLOOM, TILE, PAVE, LIGHT } f
 import { roundedBox } from './solids.js';
 import { plankBox } from './stock.js';
 import { stampGlow } from './gfx.js';
-import { P, col, lifted, toyOf, hi, shd, ball, disc, rr, poly, bar, post, drum, stand, stampSoft, castShadow, fq, facePoint, mix, shade, clamp, seedOf } from './toys.js';
+import { P, col, lifted, toyOf, hi, shd, ball, disc, rr, poly, bar, post, drum, stand, stampSoft, castShadow, fq, facePoint, mix, shade, clamp, seedOf, fade } from './toys.js';
 import { h2 } from './iso.js';
 
 const YEL = { hi: '#ffe27a', mid: '#ffd84d', shade: '#f4bb3e', deep: '#cb9022' };
@@ -25,13 +25,13 @@ shared('crane', {
     for (const dx of [-18, 7]) rr(g, x + dx, y - 5, 12, 6.4, 2.4, col(METAL.steelMid, env));
     const Lp = (t) => [x - 15 + 10 * t, y - 2 - 110 * t], Rp = (t) => [x + 15 - 10 * t, y - 2 - 110 * t]; // the lattice between the legs: diagonals, alternating
     for (let i = 0; i < 5; i++) { const a = i % 2 ? Rp(i / 5) : Lp(i / 5), b = i % 2 ? Lp((i + 1) / 5) : Rp((i + 1) / 5); bar(g, a[0], a[1], b[0], b[1], 4.8, c('shade')); }
-    bar(g, x + 15, y - 2, x + 5, top, 7.6, c('deep')); bar(g, x - 15, y - 2, x - 5, top, 7.6, c('shade')); g.globalAlpha *= 0.55; bar(g, x - 16.4, y - 4, x - 6.4, top + 2, 2.4, c('hi')); g.globalAlpha /= 0.55;
+    bar(g, x + 15, y - 2, x + 5, top, 7.6, c('deep')); bar(g, x - 15, y - 2, x - 5, top, 7.6, c('shade')); { const alpha0 = fade(g, 0.55); bar(g, x - 16.4, y - 4, x - 6.4, top + 2, 2.4, c('hi')); g.globalAlpha = alpha0; }
     for (let i = 1; i < 5; i++) { const t = i / 5, xl = x - 15 + 10 * t, xr = x + 15 - 10 * t; bar(g, xl, y - 112 * t, xr, y - 112 * t - 2, 4.6, c('shade')); }
     const jy = top - 4; // the jib: a fat arm out to the left with a striped tip, a counterweight to the right, the cab on the mast
     bar(g, x - 72, jy, x + 26, jy, 7.6, c('mid')); bar(g, x - 72, jy - 1.8, x + 26, jy - 1.8, 2.6, c('hi'));
     for (let i = 0; i < 4; i++) bar(g, x - 70 + i * 5, jy, x - 66 + i * 5, jy, 7.8, i % 2 ? col('#fffaf0', env) : col(TOY.red, env));
     rr(g, x + 14, jy - 8, 16, 14, 3.4, shd(col(METAL.steelMid, env))); rr(g, x + 14, jy - 8, 14.4, 12.6, 3.4, col(METAL.steelLight, env));
-    rr(g, x - 12, jy - 12, 24, 19, 5.4, shd(col('#fffaf0', env))); rr(g, x - 12, jy - 12, 22, 17, 5.4, col('#fffaf0', env)); rr(g, x - 9, jy - 9, 13, 10, 3.6, col(GLASS.mid, env)); g.globalAlpha *= 0.55; rr(g, x - 7, jy - 8, 4, 3, 1.4, '#ffffff'); g.globalAlpha /= 0.55;
+    rr(g, x - 12, jy - 12, 24, 19, 5.4, shd(col('#fffaf0', env))); rr(g, x - 12, jy - 12, 22, 17, 5.4, col('#fffaf0', env)); rr(g, x - 9, jy - 9, 13, 10, 3.6, col(GLASS.mid, env)); { const alpha0 = fade(g, 0.55); rr(g, x - 7, jy - 8, 4, 3, 1.4, '#ffffff'); g.globalAlpha = alpha0; }
     bar(g, x + 6, jy - 12, x + 6, jy - 24, 3, c('shade')); ball(g, x + 6, jy - 25.6, 2.6, col(TOY.red, env));
     return null;
   },
@@ -48,7 +48,7 @@ shared('gantry', {
   body(g, p, env) {
     const [x0, y0] = P(p.gx, p.gy + p.d / 2), [x1, y1] = P(p.gx + p.w, p.gy + p.d / 2), H = p.h, c = col(lifted(p.col || TOY.orange, 0.55), env);
     stampSoft(g, (x0 + x1) / 2 + 8, (y0 + y1) / 2 + 3, Math.abs(x1 - x0) / 2 + 14, 9, 0.2);
-    for (const [x, y] of [[x0, y0], [x1, y1]]) { stand(g, x, y, 12, 5); bar(g, x + 7, y, x + 3, y - H, 7, shade(c, 0.8)); bar(g, x - 7, y, x - 3, y - H, 7, c); bar(g, x - 6, y - H * 0.42, x + 6, y - H * 0.42, 3.4, shade(c, 0.9)); bar(g, x - 7, y - 1, x + 7, y - 1, 5, col(METAL.steelMid, env)); g.globalAlpha *= 0.5; bar(g, x - 8.4, y - 4, x - 4.2, y - H + 2, 2.2, hi(c, 0.8)); g.globalAlpha /= 0.5; }
+    for (const [x, y] of [[x0, y0], [x1, y1]]) { stand(g, x, y, 12, 5); bar(g, x + 7, y, x + 3, y - H, 7, shade(c, 0.8)); bar(g, x - 7, y, x - 3, y - H, 7, c); bar(g, x - 6, y - H * 0.42, x + 6, y - H * 0.42, 3.4, shade(c, 0.9)); bar(g, x - 7, y - 1, x + 7, y - 1, 5, col(METAL.steelMid, env)); { const alpha0 = fade(g, 0.5); bar(g, x - 8.4, y - 4, x - 4.2, y - H + 2, 2.2, hi(c, 0.8)); g.globalAlpha = alpha0; } }
     bar(g, x0, y0 - H, x1, y1 - H, 8, c); bar(g, x0, y0 - H - 2.4, x1, y1 - H - 2.4, 2.6, hi(c, 0.6)); bar(g, x0, y0 - H * 0.5, x1, y1 - H * 0.5, 3.4, shade(c, 0.88)); ball(g, x0, y0 - H - 3, 3, c); ball(g, x1, y1 - H - 3, 3, c);
     return null;
   },
@@ -118,7 +118,7 @@ shared('tank', {
     const cx = p.gx + p.w / 2, cy = p.gy + p.d / 2, [x, y] = P(cx, cy), rx = p.w * 17.6, c = col(lifted(p.col || METAL.steelLight, 0.7), env), acc = col(lifted(p.acc || TOY.yellow, 0.6), env);
     stampSoft(g, x + 12, y + 5, rx * 1.9, rx * 0.9, 0.22); stand(g, x, y + 2, rx * 1.1, rx * 0.5); drum(g, x, y + 3, rx * 1.06, 5, shade(c, 0.9));
     drum(g, x, y, rx, p.h, c, { dome: 8, domeCol: hi(c, 0.35) });
-    for (const k of [0.3, 0.6]) { g.beginPath(); g.ellipse(x, y - p.h * k, rx, rx * 0.5, 0, 0.02, Math.PI - 0.02, false); g.strokeStyle = acc; g.lineWidth = 5; g.stroke(); g.beginPath(); g.ellipse(x, y - p.h * k - 1.4, rx, rx * 0.5, 0, 0.3, Math.PI - 0.6, false); g.strokeStyle = hi(acc, 0.5); g.globalAlpha *= 0.6; g.lineWidth = 1.8; g.stroke(); g.globalAlpha /= 0.6; }
+    for (const k of [0.3, 0.6]) { g.beginPath(); g.ellipse(x, y - p.h * k, rx, rx * 0.5, 0, 0.02, Math.PI - 0.02, false); g.strokeStyle = acc; g.lineWidth = 5; g.stroke(); g.beginPath(); g.ellipse(x, y - p.h * k - 1.4, rx, rx * 0.5, 0, 0.3, Math.PI - 0.6, false); g.strokeStyle = hi(acc, 0.5); { const alpha0 = fade(g, 0.6); g.lineWidth = 1.8; g.stroke(); g.globalAlpha = alpha0; } }
     const lx = x + rx * 0.62, ly = y + rx * 0.3; bar(g, lx, ly, lx, ly - p.h + 2, 3, col(METAL.steelMid, env)); bar(g, lx + 5, ly - 1, lx + 5, ly - p.h + 1, 3, col(METAL.steelMid, env)); for (let i = 1; i < 6; i++) bar(g, lx, ly - i * p.h / 6.4, lx + 5, ly - i * p.h / 6.4, 2.2, col(METAL.steelHi, env));
     bar(g, x - rx - 3, y + 2, x - rx - 16, y + 8, 5, col(METAL.steelMid, env)); ball(g, x - rx - 16, y + 8.4, 3.4, col(METAL.steelLight, env)); ball(g, x - rx - 3, y + 2, 3, col(METAL.steelLight, env));
     return null;
@@ -152,7 +152,7 @@ shared('dome', {
     stampSoft(g, x + 8, y + 5, r * 1.8, r * 0.8, 0.22); stand(g, x, y + 2, r * 1.1, r * 0.5); drum(g, x, y + 1, r, 5, col(METAL.steelLight, env));
     g.beginPath(); g.ellipse(x, y - 5, r, h, 0, Math.PI, 0); g.closePath(); g.fillStyle = shd(c); g.fill(); g.beginPath(); g.ellipse(x - r * 0.06, y - 5.6, r * 0.93, h * 0.96, 0, Math.PI, 0); g.closePath(); g.fillStyle = c; g.fill();
     for (const k of [0.3, 0.62]) { g.beginPath(); g.ellipse(x, y - 5, r * k, h, 0, Math.PI, 0); g.strokeStyle = shade(c, 0.84); g.lineWidth = 2; g.stroke(); } g.beginPath(); g.moveTo(x, y - 5); g.lineTo(x, y - 5 - h); g.strokeStyle = shade(c, 0.84); g.lineWidth = 2; g.stroke();
-    g.globalAlpha *= 0.6; g.beginPath(); g.ellipse(x - r * 0.34, y - h * 0.6, r * 0.2, h * 0.2, -0.6, 0, 6.3); g.fillStyle = '#ffffff'; g.fill(); g.globalAlpha /= 0.6;
+    { const alpha0 = fade(g, 0.6); g.beginPath(); g.ellipse(x - r * 0.34, y - h * 0.6, r * 0.2, h * 0.2, -0.6, 0, 6.3); g.fillStyle = '#ffffff'; g.fill(); g.globalAlpha = alpha0; }
     rr(g, x - 5, y - 16, 10, 14, 5, col('#8392b4', env));
     return null;
   },
@@ -165,7 +165,7 @@ shared('dish', {
   live(ctx, p, env) {
     const [x, y] = P(p.gx + 0.4, p.gy + 0.4), nod = env.t ? Math.sin((env.t / 14000) * Math.PI * 2) * 0.052 : 0, c = col('#fffaf0', env);
     ctx.save(); ctx.translate(x, y - p.h + 3); ctx.rotate(-0.55 + nod);
-    disc(ctx, 0, 0, 15, 8.2, shd(c)); disc(ctx, -1, -0.8, 13.4, 7.2, c); disc(ctx, 1.4, 0.6, 9.4, 4.8, mix(c, '#b8c4e0', 0.5)); ctx.globalAlpha *= 0.55; disc(ctx, -5, -3, 4.4, 1.8, '#ffffff'); ctx.globalAlpha /= 0.55;
+    disc(ctx, 0, 0, 15, 8.2, shd(c)); disc(ctx, -1, -0.8, 13.4, 7.2, c); disc(ctx, 1.4, 0.6, 9.4, 4.8, mix(c, '#b8c4e0', 0.5)); { const alpha0 = fade(ctx, 0.55); disc(ctx, -5, -3, 4.4, 1.8, '#ffffff'); ctx.globalAlpha = alpha0; }
     bar(ctx, 1, 0, 1, -14, 3, col(METAL.steelMid, env)); ball(ctx, 1, -15.4, 2.8, col(accOf(p), env)); ctx.restore();
   },
   vary: [], ext: [9, 6, 6, 6],
@@ -175,7 +175,7 @@ shared('windmill', {
     const cx = p.gx + p.w / 2, cy = p.gy + p.d / 2, [bx, by] = P(cx, cy), [tx, ty] = P(cx, cy, p.h), c = col(lifted(p.col || '#e9e2d0', 0.8), env), cap = col('#c0432a', env);
     stampSoft(g, bx + 10, by + 4, 34, 14, 0.22); stand(g, bx, by + 1, 16, 7);
     g.beginPath(); g.moveTo(bx - 14, by); g.lineTo(tx - 7, ty); g.lineTo(tx + 7, ty); g.lineTo(bx + 14, by); g.ellipse(bx, by, 14, 7, 0, 0, Math.PI, false); g.closePath(); const gr = g.createLinearGradient(bx - 14, 0, bx + 14, 0); gr.addColorStop(0, hi(c, 0.2)); gr.addColorStop(0.5, c); gr.addColorStop(1, shd(c)); g.fillStyle = gr; g.fill();
-    for (const k of [0.25, 0.5, 0.75]) { g.beginPath(); g.ellipse(bx + (tx - bx) * k, by + (ty - by) * k, 14 - 7 * k, (14 - 7 * k) / 2, 0, 0.1, Math.PI - 0.1, false); g.strokeStyle = shade(c, 0.9); g.globalAlpha *= 0.5; g.lineWidth = 2; g.stroke(); g.globalAlpha /= 0.5; }
+    for (const k of [0.25, 0.5, 0.75]) { g.beginPath(); g.ellipse(bx + (tx - bx) * k, by + (ty - by) * k, 14 - 7 * k, (14 - 7 * k) / 2, 0, 0.1, Math.PI - 0.1, false); g.strokeStyle = shade(c, 0.9); { const alpha0 = fade(g, 0.5); g.lineWidth = 2; g.stroke(); g.globalAlpha = alpha0; } }
     rr(g, bx - 4, by - 13, 8, 13, 4, col(WOOD.shade, env)); disc(g, tx, ty, 8.6, 4.4, shade(cap, 0.8)); g.beginPath(); g.ellipse(tx, ty, 8.6, 9, 0, Math.PI, 0); g.fillStyle = shd(cap); g.fill(); g.beginPath(); g.ellipse(tx - 0.6, ty - 0.4, 8, 8.4, 0, Math.PI, 0); g.fillStyle = cap; g.fill();
     for (const [dx, cc] of [[-12, BLOOM.pink], [-8, BLOOM.butter], [9, BLOOM.white], [13, BLOOM.pink]]) { ball(g, bx + dx, by + 1, 2.4, col(GRASS.mid, env)); disc(g, bx + dx, by - 1.6, 1.5, 1.5, col(cc, env)); }
     return null;
@@ -197,7 +197,7 @@ shared('autos', {
       const x = p.gx + i * cw + 0.06, ww = cw - 0.12, c = col(CARCOL[(i * 5 + (p.seed | 0)) % CARCOL.length], env), [mx, my] = P(x + ww / 2, p.gy + p.d / 2);
       stampSoft(g, mx + 6, my + 3, ww * 24, 7, 0.2); stand(g, mx, my + 2, ww * 21, 6.5);
       const B = roundedBox(g, x, p.gy + 0.1, ww, p.d - 0.2, 5, c, { z: 2.6, r: 3 }), K = roundedBox(g, x + ww * 0.22, p.gy + 0.15, ww * 0.52, p.d - 0.3, 4.6, shade(c, 0.94), { z: 7.4, r: 2.6, edge: false });
-      fq(g, K.left, 0.08, 0.92, 0.22, 0.86, col(GLASS.mid, env)); fq(g, K.right, 0.08, 0.92, 0.22, 0.86, shade(col(GLASS.mid, env), 0.72)); g.globalAlpha *= 0.55; fq(g, K.left, 0.12, 0.3, 0.3, 0.82, '#ffffff'); g.globalAlpha /= 0.55;
+      fq(g, K.left, 0.08, 0.92, 0.22, 0.86, col(GLASS.mid, env)); fq(g, K.right, 0.08, 0.92, 0.22, 0.86, shade(col(GLASS.mid, env), 0.72)); { const alpha0 = fade(g, 0.55); fq(g, K.left, 0.12, 0.3, 0.3, 0.82, '#ffffff'); g.globalAlpha = alpha0; }
       for (const u of [0.2, 0.8]) { const [wx, wy] = facePoint(B.left, u, 0.02); disc(g, wx, wy, 3.1, 3.1, col('#4b4770', env)); disc(g, wx, wy, 1.4, 1.4, col(METAL.steelLight, env)); }
       const [hx, hy] = facePoint(B.left, 0.05, 0.55); disc(g, hx, hy, 1.6, 1.6, col('#fff3c4', env));
       const [fx, fy] = P(x + ww * 0.62, p.gy + p.d * 0.5, 12); bar(g, fx, fy, fx, fy - 6, 1.5, '#8392b4'); rr(g, fx, fy - 8, 5.4, 3.6, 1, col(TOY.pink, env));

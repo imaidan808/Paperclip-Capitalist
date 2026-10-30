@@ -10,7 +10,7 @@ import { WOOD, METAL, TOY, SEA, ROAD, PAVE, BLOOM, GRASS, LIGHT, INK, TILE } fro
 import { roundedBox, roundedPoly } from './solids.js';
 import { stampGlow } from './gfx.js';
 import { plankBox } from './stock.js';
-import { P, col, lifted, toyOf, hi, shd, ball, disc, rr, poly, bar, post, drum, stand, stampSoft, castShadow, lettering, fq, facePoint, mix, shade, clamp, seedOf, vs, vseed } from './toys.js';
+import { P, col, lifted, toyOf, hi, shd, ball, disc, rr, poly, bar, post, drum, stand, stampSoft, castShadow, lettering, fq, facePoint, mix, shade, clamp, seedOf, vs, vseed, fade } from './toys.js';
 import { h2 } from './iso.js';
 
 const glowAt = (ctx, rgb, x, y, r, a) => { if (a > 0.02) { const pa = ctx.globalAlpha; ctx.globalCompositeOperation = 'lighter'; stampGlow(ctx, rgb, x, y, r, a); ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = pa; } };
@@ -22,7 +22,7 @@ function tyre(g, x, y, rx, c, c2) { // a fat torus: a side band, a lit top with 
   g.beginPath(); g.moveTo(x - rx, y); g.lineTo(x - rx, y - th); g.lineTo(x + rx, y - th); g.lineTo(x + rx, y); g.ellipse(x, y, rx, ry, 0, 0, Math.PI, false); g.closePath(); g.fillStyle = c2; g.fill();
   g.beginPath(); g.moveTo(x - rx, y); g.lineTo(x - rx, y - th); g.lineTo(x - rx * 0.1, y - th); g.lineTo(x - rx * 0.1, y + ry * 0.99); g.ellipse(x, y, rx, ry, 0, Math.PI * 0.6, Math.PI, false); g.closePath(); g.fillStyle = c; g.fill();
   disc(g, x, y - th, rx, ry, c2); disc(g, x, y - th, rx * 0.96, ry * 0.94, c); disc(g, x + 0.5, y - th + 0.5, rx * 0.52, ry * 0.5, shade(c2, 0.55)); disc(g, x, y - th - 0.4, rx * 0.4, ry * 0.38, mix(c, '#8a86b8', 0.35));
-  g.beginPath(); g.ellipse(x, y - th, rx * 0.86, ry * 0.84, 0, Math.PI * 1.08, Math.PI * 1.62, false); g.strokeStyle = '#fffbe6'; g.globalAlpha *= 0.4; g.lineWidth = Math.max(1.5, rx * 0.12); g.stroke(); g.globalAlpha /= 0.4;
+  g.beginPath(); g.ellipse(x, y - th, rx * 0.86, ry * 0.84, 0, Math.PI * 1.08, Math.PI * 1.62, false); g.strokeStyle = '#fffbe6'; { const alpha0 = fade(g, 0.4); g.lineWidth = Math.max(1.5, rx * 0.12); g.stroke(); g.globalAlpha = alpha0; }
 }
 shared('tires', {
   body(g, p, env) {
@@ -120,7 +120,7 @@ registerProp('gate', {
     stampSoft(ctx, (a[0] + b[0]) / 2 + 6, (a[1] + b[1]) / 2 + 4, Math.abs(b[0] - a[0]) / 2 + 12, 7, 0.2); // a boom barrier across the road
     for (const q of [a, b]) { stand(ctx, q[0], q[1], 7, 3); post(ctx, q[0], q[1], 19, 6.4, pc, true); }
     const n = 8, Z = 14, L = (u) => [a[0] + (b[0] - a[0]) * u, a[1] + (b[1] - a[1]) * u - Z];
-    for (let i = 0; i < n; i++) { const p0 = L(i / n), p1 = L((i + 1) / n); bar(ctx, p0[0] + 1.2, p0[1], p1[0] - 1.2, p1[1], 6.4, i % 2 ? col('#fffaf0', env) : col(TOY.orange, env)); ctx.globalAlpha *= 0.45; bar(ctx, p0[0] + 1.2, p0[1] - 1.5, p1[0] - 1.2, p1[1] - 1.5, 1.6, '#ffffff'); ctx.globalAlpha /= 0.45; }
+    for (let i = 0; i < n; i++) { const p0 = L(i / n), p1 = L((i + 1) / n); bar(ctx, p0[0] + 1.2, p0[1], p1[0] - 1.2, p1[1], 6.4, i % 2 ? col('#fffaf0', env) : col(TOY.orange, env)); { const alpha0 = fade(ctx, 0.45); bar(ctx, p0[0] + 1.2, p0[1] - 1.5, p1[0] - 1.2, p1[1] - 1.5, 1.6, '#ffffff'); ctx.globalAlpha = alpha0; } }
     const [mx, my] = L(0.5); rr(ctx, mx - 8, my - 18, 16, 12.4, 3.4, col('#d9a52c', env)); rr(ctx, mx - 8, my - 18, 15, 11, 3.4, col('#f6c94f', env)); ctx.strokeStyle = col('#d9a52c', env); ctx.lineWidth = 2.2; ctx.beginPath(); ctx.arc(mx, my - 18, 4.4, Math.PI, 0); ctx.stroke(); disc(ctx, mx, my - 13.4, 1.5, 1.5, '#7a4a1c'); rr(ctx, mx - 0.6, my - 13, 1.2, 3.4, 0.5, '#7a4a1c');
     lampOn(ctx, a[0], a[1] - 25, env, 0); lampOn(ctx, b[0], b[1] - 25, env, 3);
     CONE(ctx, a[0] - 11, a[1] + 4, env); CONE(ctx, b[0] + 11, b[1] + 4, env);
@@ -148,7 +148,7 @@ shared('statue', {
     cast(g, p, 26, env); stand(g, x, y + 7, 18, 8);
     const F = roundedBox(g, p.gx - 0.1, p.gy - 0.1, p.w + 0.2, p.d + 0.2, 7, plinth, { r: 3.4 }); fq(g, F.left, 0.34, 0.66, 0.34, 0.7, col('#d9a52c', env));
     for (const lx of [-6.6, -2.6, 2.8, 6.8]) rr(g, x + lx - 1.8, y - 5, 3.6, 6.4, 1.8, lx > 0 ? shade(gold, 0.8) : gold);
-    bar(g, x - 7, y - 9, x + 6, y - 9.4, 11.4, shade(gold, 0.82)); bar(g, x - 7.4, y - 10.4, x + 5, y - 10.6, 9.6, gold); g.globalAlpha *= 0.55; bar(g, x - 5, y - 13, x + 3, y - 13.2, 2.6, '#fff3c4'); g.globalAlpha /= 0.55;
+    bar(g, x - 7, y - 9, x + 6, y - 9.4, 11.4, shade(gold, 0.82)); bar(g, x - 7.4, y - 10.4, x + 5, y - 10.6, 9.6, gold); { const alpha0 = fade(g, 0.55); bar(g, x - 5, y - 13, x + 3, y - 13.2, 2.6, '#fff3c4'); g.globalAlpha = alpha0; }
     bar(g, x - 9.6, y - 10, x - 12.6, y - 5, 3, shade(gold, 0.85)); ball(g, x - 12.8, y - 3.6, 2.2, gold);
     ball(g, x + 10.6, y - 12.2, 4.8, gold); disc(g, x + 13.4, y - 10, 2.6, 2, hi(gold, 0.3)); disc(g, x + 14.2, y - 10.2, 0.5, 0.5, '#7a4a1c');
     for (const [sx, hx, hy] of [[-1, 6.2, -16.6], [1, 12.6, -16.2]]) { g.beginPath(); g.moveTo(x + hx - sx * 0.5, y - 14.4); g.quadraticCurveTo(x + hx - sx * 3.2, y - 17.5, x + hx - sx * 2.4 + (sx > 0 ? 3 : -1), y - 21.6); g.strokeStyle = col('#fff3c4', env); g.lineWidth = 2.6; g.lineCap = 'round'; g.stroke(); g.lineCap = 'butt'; }
@@ -163,7 +163,7 @@ shared('fountain', {
     g.save(); g.translate(x, y); g.scale(s, s); g.translate(-x, -y);
     stampSoft(g, x + 8, y + 6, 54, 22, 0.2);
     drum(g, x, y + 2, 44, 9, stone, { ribs: null }); disc(g, x, y - 7, 39, 19.6, col(SEA.shoal, env)); disc(g, x, y - 6.4, 36, 18, water); disc(g, x + 2, y - 5, 28, 14, col(SEA.lagoon, env));
-    g.globalAlpha *= 0.45; g.beginPath(); g.ellipse(x - 6, y - 8, 22, 10, 0, Math.PI * 1.15, Math.PI * 1.7, false); g.strokeStyle = '#ffffff'; g.lineWidth = 2.4; g.stroke(); g.globalAlpha /= 0.45;
+    { const alpha0 = fade(g, 0.45); g.beginPath(); g.ellipse(x - 6, y - 8, 22, 10, 0, Math.PI * 1.15, Math.PI * 1.7, false); g.strokeStyle = '#ffffff'; g.lineWidth = 2.4; g.stroke(); g.globalAlpha = alpha0; }
     drum(g, x, y - 4, 7.6, 20, stone); drum(g, x, y - 22, 19, 5, stone); disc(g, x, y - 27.4, 15.6, 7.6, col(SEA.shoal, env)); disc(g, x, y - 27, 13.4, 6.6, water); ball(g, x, y - 30, 3.8, stone);
     g.restore(); return null;
   },
