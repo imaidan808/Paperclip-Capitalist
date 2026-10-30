@@ -5,7 +5,7 @@ import { launch, open } from './cdp.mjs';
 export async function startApp({ base = 'http://localhost:8090', w = 1440, h = 900, cdp = 9444, dsf = 1, reduced = false, mobile = false } = {}) {
   const b = await launch(cdp);
   const slot = 'shot' + (Date.now() % 1e6);
-  const p = await open(b, `${base}/?slot=${slot}`, { w, h, dsf, reduced, mobile });
+  const p = await open(b, `${base}/?slot=${slot}${process.env.PC_QUERY || ''}`, { w, h, dsf, reduced, mobile }); // PC_QUERY: more of the query string, e.g. '&layers=clouds:legacy' to look at a picture without one layer
   await p.eval(`localStorage.setItem('pc.academyDone.${slot}', 'true')`);
   return { b, p, close: () => b.close() };
 }

@@ -23,11 +23,11 @@ const TAU = Math.PI * 2;
 // ---------------------------------------------------------------- the colours of the hour (memoised: a still sky builds nothing)
 /** The tones of a tier at the day, golden and night ends: [lit, hi, body, mid, belly], the contour and the glint. The back tier recedes (paler, bluer), the front one is the lit one. */
 const DAY = Object.freeze([
-  Object.freeze({ lit: '#f8faff', hi: '#f2f6ff', body: '#eaf0fe', mid: '#d8e2f9', belly: '#bfcbf0' }),
-  Object.freeze({ lit: '#ffffff', hi: '#f8faff', body: '#eff3ff', mid: '#dde6fa', belly: '#bfcbef' }),
-  Object.freeze({ lit: '#ffffff', hi: '#fdfeff', body: '#f5f8ff', mid: '#e6edfc', belly: '#c4d0f2' }),
+  Object.freeze({ lit: '#faf8f8', hi: '#f1f1fb', body: '#e6e9f8', mid: '#d0d6f1', belly: '#aab4e4' }),
+  Object.freeze({ lit: '#fffaf0', hi: '#faf6f0', body: '#eeeffa', mid: '#d9ddf4', belly: '#aeb7e6' }),
+  Object.freeze({ lit: '#fffbf1', hi: '#fff8ee', body: '#f3f3fb', mid: '#dfe2f6', belly: '#b3bbe9' }),
 ]);
-const GOLD = Object.freeze({ lit: '#fff1d0', hi: '#ffecd2', body: '#ffe9dc', mid: '#f1d6e2', belly: '#bf9fd8', contour: '#c49cc8' });
+const GOLD = Object.freeze({ lit: '#ffe9c4', hi: '#ffdfbc', body: '#fbd7c8', mid: '#e4b6cf', belly: '#9d83cb', contour: '#b48bc4' });
 const NIGHT = Object.freeze([
   Object.freeze({ lit: '#ebe6d3', hi: '#d2cdb8', body: '#b0ab94', mid: '#85826f', belly: '#575557' }),
   Object.freeze({ lit: '#f2eddb', hi: '#dcd7c2', body: '#bab49c', mid: '#8f8b77', belly: '#5d5b5c' }),
@@ -47,12 +47,12 @@ export function bankTones(warm = 0, cool = 0) {
   const tiers = DAY.map((day, row) => {
     const base = {}; for (const k of KEYS) base[k] = mix(mix(day[k], GOLD[k], kw * 0.8), NIGHT[row][k], kn);
     const cols = []; for (let q = 0; q <= SHADES; q++) { const ht = q / SHADES, e = {};
-      e.lit = mix(base.lit, '#ffffff', (1 - ht) * 0.5 * (1 - kc * 0.7)); e.hi = mix(base.hi, e.lit, (1 - ht) * 0.5);
+      e.lit = mix(base.lit, '#fffdf6', (1 - ht) * 0.5 * (1 - kc * 0.7)); e.hi = mix(base.hi, e.lit, (1 - ht) * 0.5);
       e.body = mix(base.body, base.mid, ht * 0.5); e.mid = mix(base.mid, base.belly, ht * 0.45); e.belly = mix(base.belly, mix(base.belly, '#7f8fd2', 0.4), ht * (1 - kc * 0.5));
       cols.push(Object.freeze(e)); }
     return Object.freeze({ cols: Object.freeze(cols) });
   });
-  const contour = mix(mix('#9fb1e6', GOLD.contour, kw * 0.8), '#5c5a58', kc), glint = mix(mix('#ffffff', '#fff3d4', kw * 0.7), '#f4f0e0', kc * 0.8), shade = mix(mix(CLOUD.shadow, '#6a5a9c', kw * 0.4), '#3d3f72', kc * 0.6);
+  const contour = mix(mix('#9fb1e6', GOLD.contour, kw * 0.8), '#5c5a58', kc), glint = mix(mix('#fffdf2', '#fff3d4', kw * 0.7), '#f4f0e0', kc * 0.8), shade = mix(mix(CLOUD.shadow, '#6a5a9c', kw * 0.4), '#3d3f72', kc * 0.6);
   t = Object.freeze({ tiers: Object.freeze(tiers), contour, glint, shade, key, grads: new WeakMap() });
   if (TONES.size > 200) TONES.clear(); TONES.set(key, t); return t;
 }
@@ -141,11 +141,11 @@ export function paintCloudShadow(ctx, form, o) {
   const view = o.view, seen = (x, y, rx, ry) => !view || !(x + rx < view.x0 || x - rx > view.x1 || y + ry < view.y0 || y - ry > view.y1), k = alpha * (1 - 0.45 * clamp(night, 0, 1));
   if (k < 0.004) return 0; // a faded bank has no shadow
   const w = box.x1 - box.x0, h = box.y1 - box.y0, cx = (box.x0 + box.x1) / 2 + sx, cy = box.y0 + h * S.broadAt + sy;
-  if (seen(cx, cy, w * S.broadRx, h * S.broadRy)) { stampSoft(ctx, cx, cy, w * S.broadRx, h * S.broadRy, 0.28 * k, colour); n++; }
+  if (seen(cx, cy, w * S.broadRx, h * S.broadRy)) { stampSoft(ctx, cx, cy, w * S.broadRx, h * S.broadRy, 0.36 * k, colour); n++; }
   for (const l of form.lobes) {
     if (!castsShadow(l)) continue;
     const x = l.x + sx, y = l.y + l.r * S.lobeDown + sy, rx = l.r * S.lobeRx, ry = l.r * S.lobeRy;
-    if (seen(x, y, rx, ry)) { stampSoft(ctx, x, y, rx, ry, 0.24 * k, colour); n++; }
+    if (seen(x, y, rx, ry)) { stampSoft(ctx, x, y, rx, ry, 0.3 * k, colour); n++; }
   }
   ctx.globalAlpha = prev; return n;
 }
