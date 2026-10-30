@@ -31,5 +31,6 @@ export function findChrome(env = process.env) {
 
 export const CHROME = findChrome();
 export const BROWSER = !process.env.PC_NO_BROWSER && !!CHROME;
-/** Flags for a headless launch: the sandbox cannot start for root (a container), a container's small /dev/shm is not used, and the GPU never is. */
-export const chromeArgs = () => ['--headless=new', '--disable-gpu', '--hide-scrollbars', '--no-first-run', ...(process.platform === 'linux' ? ['--disable-dev-shm-usage'] : []), ...(typeof process.getuid === 'function' && process.getuid() === 0 ? ['--no-sandbox'] : [])];
+/** Flags for a headless launch: the sandbox cannot start for root (a container), a container's small /dev/shm is not used, and the GPU never is. It is muted: new-style headless Chrome is the whole browser and plays the game's sound layer
+ *  (a click through a lesson makes the cues), which on a person's own machine came out of the speakers; a muted page still runs its AudioContext, so what the tests read from it is the same. */
+export const chromeArgs = () => ['--headless=new', '--disable-gpu', '--hide-scrollbars', '--no-first-run', '--mute-audio', ...(process.platform === 'linux' ? ['--disable-dev-shm-usage'] : []), ...(typeof process.getuid === 'function' && process.getuid() === 0 ? ['--no-sandbox'] : [])];

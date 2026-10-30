@@ -12,7 +12,8 @@
 //    to use a pid in a room binds the pid to a hash of its key (nothing else is kept of it, and it is never logged), and a later connection for that pid with another key, or none, is refused. That is
 //    what stops a classmate from taking the instructor's seat, or a classmate's name and snapshot, by connecting with the pid they have read off the wire;
 //  - a message with a `to` goes to that founder alone, not to the whole room;
-//  - snapshots are kept only for sockets still connected, are size-capped, and are replayed with their age; rooms, clients, bytes are all bounded.
+//  - snapshots are kept only for sockets still connected, are size-capped, and are replayed with their age; rooms, clients, bytes are all bounded;
+//  - a full room, or a full relay, gives its place to a newcomer by dropping what has said nothing for IDLE_MS (never the instructor's seat), so sockets that only sit there cannot keep a class out.
 //
 // `createRelay({ env, now, log })` builds one without starting it, so a test can run a relay in its own process with the clock it chooses; started as a program (`node relay.mjs`) it reads the environment and listens.
 import { WebSocketServer } from 'ws';
@@ -54,12 +55,13 @@ export function limitsOf(source = process.env) {
     SEAT_GRACE_MS: env('SEAT_GRACE_MS', 0),    // 0: never. How long the instructor's seat is held against a DIFFERENT pid once its holder is gone (the owner takes it back whatever this says)
     GHOST_MS: env('GHOST_MS', 30 * 1000),      // a pid that connected, never sent a snapshot and has been gone this long may be forgotten to make room for a new one
     EMPTY_MS: env('EMPTY_MS', 10 * 60 * 1000), // an empty room is forgotten after this long
+    IDLE_MS: env('IDLE_MS', 5 * 60 * 1000),    // a connection (or a room) that has sent nothing the relay kept or forwarded for this long gives way to a newcomer when its room (or the relay) is full
   };
 }
 
 export function createRelay({ env = process.env, now = Date.now, log = (...a) => console.error(...a) } = {}) {
   const L = limitsOf(env);
-  const { MAX_ROOM, MAX_ROOMS, MAX_MSG, MAX_SNAP, MAX_SNAP_BYTES, RATE, BURST, SEAT_GRACE_MS, GHOST_MS, EMPTY_MS } = L;
+  const { MAX_ROOM, MAX_ROOMS, MAX_MSG, MAX_SNAP, MAX_SNAP_BYTES, RATE, BURST, SEAT_GRACE_MS, GHOST_MS, EMPTY_MS, IDLE_MS } = L;
   const rooms = new Map(); // code -> { clients:Set, snaps:Map<pid,{ws,text,at}>, clock:{text,at}|null, seat:{pid,ws,left}|null, owner:pid|null, ownerProof:hash|null, gone:Timer|null, emptyAt:ms, keys:Map<pid,{proof,snapped,left}> }
   let snapBytes = 0, listening = false, pinger = null;
 
@@ -77,25 +79,40 @@ export function createRelay({ env = process.env, now = Date.now, log = (...a) =>
     try { c.send(text); } catch { /* the socket just closed */ }
   };
   /** The instructor's seat: the first to claim it in a room, kept for its pid; another pid is given it only when the holder has been gone a while.
-   *  The room's owner token is the other way to it. The first instructor to bring one while the seat is free (or is its own) binds the room to a hash of it; from then on whoever brings the same token is the owner,
-   *  from any device and under any Founder ID, and takes the seat from whoever sits in it. A token that does not match changes nothing, and a connection with none claims the seat as before. */
+   *  The room's owner token is the other way to it. The first instructor to bring one binds the room to a hash of it, whoever sits in the seat then (a holder that showed no token is no owner: a stray tab, or the first to
+   *  arrive after a restart, must not leave the room without one for good); from then on whoever brings the same token is the owner, from any device and under any Founder ID, and takes the seat from whoever sits in it.
+   *  A token that does not match the bound one changes nothing, and a connection with none claims the seat as before. */
   const claim = (room, ws, at, ownerProof) => {
     const seat = room.seat;
     if (ownerProof) {
-      if (room.ownerProof == null && (!seat || seat.pid === ws.pid)) room.ownerProof = ownerProof;
+      if (room.ownerProof == null) room.ownerProof = ownerProof;
       if (sameHash(room.ownerProof, ownerProof)) { room.owner = ws.pid; room.seat = { pid: ws.pid, ws, left: 0 }; return; }
     }
     if (!seat) room.owner = ws.pid;
     if (!seat || seat.pid === ws.pid || ws.pid === room.owner || (SEAT_GRACE_MS > 0 && seat.ws.readyState !== 1 && at - seat.left > SEAT_GRACE_MS)) room.seat = { pid: ws.pid, ws, left: 0 };
   };
-  /** Room in the table of pids for a new one: forget the oldest pid that is gone, never sent a snapshot and is not the instructor's. A script that opens connections, greets and leaves fills the table with names that mean nothing; a real student is not kept out by them. */
+  /** Room in the table of pids for a new one: forget a pid that has been gone longer than GHOST_MS and is not the instructor's. A script that opens connections, greets (or sends one snapshot) and leaves fills the table with names that mean nothing;
+   *  a real student is not kept out by them, for good. The names that only greeted go first, and then those that sent a snapshot (a student who has a run keeps their place as long as there is anything cheaper to forget), the one gone longest first. */
   const pruneKeys = (room, at) => {
+    const live = new Set(); for (const c of room.clients) live.add(c.pid);
     let worst = null;
-    for (const [pid, k] of room.keys) if (!k.snapped && k.left > 0 && at - k.left > GHOST_MS && pid !== room.owner && ![...room.clients].some((c) => c.pid === pid) && (!worst || k.left < worst[1].left)) worst = [pid, k];
+    for (const [pid, k] of room.keys) {
+      if (!(k.left > 0 && at - k.left > GHOST_MS) || pid === room.owner || live.has(pid)) continue;
+      if (!worst || +k.snapped < +worst[1].snapped || (+k.snapped === +worst[1].snapped && k.left < worst[1].left)) worst = [pid, k];
+    }
     if (worst) room.keys.delete(worst[0]);
     return !!worst;
   };
   const isInstructor = (room, ws) => room.seat != null && room.seat.pid === ws.pid && ws.wantsSeat;
+  /** A full room's way to make room: the connection that has said nothing for longest, if that is at least IDLE_MS ago, and never the instructor's seat. A handshake costs nothing and a socket that sends nothing is not asked
+   *  for anything (it answers pings by itself), so a script could otherwise fill a room, or every room, and keep the class out for as long as it likes. A student who is in use is the newest, so is never the one. */
+  const idlest = (room, at) => {
+    let idle = null;
+    for (const c of room.clients) if (c !== room.seat?.ws && at - c.lastAt >= IDLE_MS && (!idle || c.lastAt < idle.lastAt)) idle = c;
+    return idle;
+  };
+  /** The last time anyone in a room said something. */
+  const lastSaid = (room) => { let at = room.emptyAt; for (const c of room.clients) if (c.lastAt > at) at = c.lastAt; return at; };
   /** A token bucket: RATE messages a second, BURST at once (the instructor's seat gets five times as many: a slider dragged on the dashboard sends a clock per step). */
   const allow = (ws, at, scale) => {
     ws.tokens = Math.min(BURST * scale, ws.tokens + (at - ws.refilled) / 1000 * RATE * scale); ws.refilled = at;
@@ -118,13 +135,18 @@ export function createRelay({ env = process.env, now = Date.now, log = (...a) =>
       if (rooms.size >= MAX_ROOMS) {
         let old = null;
         for (const [c, r] of rooms) if (!r.clients.size && (!old || r.emptyAt < old[1].emptyAt)) old = [c, r];
+        if (!old) { // no room is empty: the room nobody has said anything in for longest, if that was at least IDLE_MS ago (a class in use always has someone who spoke lately)
+          const t = now(); let quiet = null;
+          for (const [c, r] of rooms) { const at = lastSaid(r); if (t - at >= IDLE_MS && (!quiet || at < quiet[2])) quiet = [c, r, at]; }
+          if (quiet) { old = quiet; for (const c of quiet[1].clients) c.terminate(); quiet[1].clients.clear(); }
+        }
         if (!old) { ws.close(1013, 'relay full'); return; }
         if (old[1].gone) clearTimeout(old[1].gone);
         rooms.delete(old[0]);
       }
       rooms.set(code, (room = { clients: new Set(), snaps: new Map(), clock: null, seat: null, owner: null, ownerProof: null, gone: null, emptyAt: 0, keys: new Map() }));
     }
-    if (room.clients.size >= MAX_ROOM) { ws.close(1013, 'room full'); return; }
+    if (room.clients.size >= MAX_ROOM && !idlest(room, now())) { ws.close(1013, 'room full'); return; }
     // who this is: the pid is the name, the key is the proof (see the head of the file). Refused before anything else is done for the connection: it is not told about the room, and it joins nothing.
     const proof = createHash('sha256').update(code + '|' + pid + '|' + key).digest('hex');
     const bound = room.keys.get(pid);
@@ -135,11 +157,15 @@ export function createRelay({ env = process.env, now = Date.now, log = (...a) =>
     } else bound.left = 0;
     if (room.gone) { clearTimeout(room.gone); room.gone = null; }
     const t0 = now();
-    ws.pid = pid; ws.alive = true; ws.tokens = BURST; ws.refilled = t0; ws.strikes = 0;
+    ws.pid = pid; ws.alive = true; ws.tokens = BURST; ws.refilled = t0; ws.strikes = 0; ws.lastAt = t0;
     ws.wantsSeat = u.searchParams.get('role') === 'instructor';
     if (ws.wantsSeat) {
       const token = u.searchParams.get('owner') || '';
       claim(room, ws, t0, KEY.test(token) ? createHash('sha256').update(code + '|owner|' + token).digest('hex') : null);
+    }
+    if (room.clients.size >= MAX_ROOM) { // the identity is good: the connection that has been silent longest gives its place (it reconnects by itself, if it is a student's)
+      const idle = idlest(room, t0);
+      if (idle) { room.clients.delete(idle); idle.terminate(); }
     }
     room.clients.add(ws);
     if (room.clock) send(ws, room.clock.text.slice(0, -1) + ',"age":' + (t0 - room.clock.at) + '}');
@@ -159,6 +185,7 @@ export function createRelay({ env = process.env, now = Date.now, log = (...a) =>
         if (INSTRUCTOR_ONLY.has(m.t) && !instructor) return;
         if (m.t === 'snap' && (instructor || text.length > MAX_SNAP || typeof m.snap !== 'object' || m.snap === null)) return;
         if (m.t === 'bye') forget(room, ws);
+        ws.lastAt = t; // a frame the relay keeps or forwards is a connection in use (one it drops is not)
         // who it is from, and in what role, is the connection's word, never the message's
         m.from = ws.pid; m.role = instructor ? 'instructor' : 'student'; delete m.age;
         const out = JSON.stringify(m);

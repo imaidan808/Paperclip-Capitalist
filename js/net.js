@@ -36,14 +36,17 @@ class RelayTransport {
     try { this.ws = new WebSocket(this.url); } catch { this.state = 'error'; this.onstate?.(this.state); return; }
     this.ws.onopen = () => { this.state = 'open'; this.tries = 0; this.onstate?.(this.state); for (const m of this.queue.splice(0)) this.ws.send(m); };
     this.ws.onmessage = (e) => { if (typeof e.data !== 'string' || e.data.length > MAX_FRAME) return; try { this.onmsg?.(JSON.parse(e.data)); } catch { /* ignore malformed */ } };
-    this.ws.onclose = () => {
+    this.ws.onclose = (e) => {
       if (this.closed) return;
+      // 1008 is the relay refusing this very connection (a room code it will not take, or a Founder ID that another connection bound first in this room): the same address is refused again, so it is not asked again
+      if (e && e.code === 1008) { this.state = 'refused'; this.reason = e.reason || ''; this.onstate?.(this.state); return; }
       this.state = 'reconnecting'; this.onstate?.(this.state);
       setTimeout(() => this.open(), Math.min(15000, 800 * 2 ** this.tries++));
     };
     this.ws.onerror = () => { try { this.ws.close(); } catch { /* already closed */ } };
   }
   send(m) {
+    if (this.state === 'refused') return; // nobody is listening
     const s = JSON.stringify(m);
     if (s.length > MAX_FRAME) return; // the relay would drop it (and a frame that large is a bug here)
     if (this.ws?.readyState === 1) this.ws.send(s);

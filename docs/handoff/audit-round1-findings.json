@@ -261,8 +261,8 @@
      "verified": true,
      "fixSketch": "Make everything recordInspect pays or emits independent of the hidden truth until the truth is revealed. Pay XP from evidence, not accuracy (8 + 22*res.confidence, or points spent), and keep the accuracy score for the debrief tally only once the lot is bought, lost at auction or expired. Emit inspect {score, fake, caught} at the moment of reveal (buyLot, passLot after a lost auction, a counterfeit rejection on resale), and store the pending read on the lot meanwhile. In deal.js:484 pass whether the lot's truth is revealed.",
      "testSketch": "Property test in tests/deal.test.mjs: for 150 counterfeit and 150 genuine lots, run the same probes, then walkAway(); assert summary.xp is the same function of (spent, confidence) for both kinds, that no inspect event carrying fake/caught/score fires while the lot is on the shelf, and that progress.quests()/achievements() are unchanged between a fake and a genuine lot. Then buy the lot and assert the event fires exactly once.",
-     "status": "open",
-     "repairedBy": null
+     "status": "repaired",
+     "repairedBy": "tests/cloud-audit.test.mjs X1 to X5"
     },
     {
      "id": "deal-room-and-games-savefile-truth",
@@ -512,8 +512,8 @@
      "verified": true,
      "fixSketch": "Bind the token independent of current seat state: the first valid token presented for a room with room.ownerProof still null should always bind, e.g. `if (ownerProof) { if (room.ownerProof == null) room.ownerProof = ownerProof; if (sameHash(room.ownerProof, ownerProof)) { room.owner = ws.pid; room.seat = { pid: ws.pid, ws, left: 0 }; return; } }` (drop the `(!seat || seat.pid === ws.pid)` guard on the binding line only; the sameHash branch already correctly reclaims the seat from whoever holds it).",
      "testSketch": "Unit test against createRelay(): connect a student, then a no-token instructor (asserts it takes the seat, as today), then a real instructor with a token minted at room creation; assert room.ownerProof is set to that token's hash and room.seat.pid is the real instructor's pid. Add this alongside tests/remaining-engine.test.mjs's existing 'Relay owner' test, which only covers the token-already-bound case and so does not catch this.",
-     "status": "open",
-     "repairedBy": null
+     "status": "repaired",
+     "repairedBy": "tests/cloud-audit.test.mjs S1"
     },
     {
      "id": "rs-keytable-lockout",
@@ -529,8 +529,8 @@
      "verified": true,
      "fixSketch": "Drop the `!k.snapped` condition in pruneKeys()'s eviction test (the file's own comment describing the intent -- \"forget the oldest pid that is gone... and is not the instructor's\" -- never mentions snapshot state at all). `left > 0 && at - k.left > GHOST_MS` already guarantees the pid has had no live connection for 30+ seconds, which is sufficient staleness regardless of whether it ever snapshotted.",
      "testSketch": "Extend tests/remaining-engine.test.mjs's existing room-limit test: after filling room.keys to MAX_ROOM*2 with pids that each sent one snap and disconnected, advance the test clock past GHOST_MS and assert a brand-new pid is now accepted (today it would still get 1013).",
-     "status": "open",
-     "repairedBy": null
+     "status": "repaired",
+     "repairedBy": "tests/cloud-audit.test.mjs K1"
     },
     {
      "id": "rs-binary-bypass",
@@ -640,8 +640,8 @@
      "fixSketch": "Require a connection to send something meaningful (e.g. 'hello' or a first 'snap') within a short grace window or be dropped and its slot freed; separately, age out a room/connection that has sent nothing within N seconds the same way pruneKeys ages out silent pids, so `rooms.size`/`room.clients.size` reflect real participants, not just completed handshakes.",
      "testSketch": "Open MAX_ROOMS idle connections to distinct new rooms (as above); assert that after a short timeout a real instructor's new-room connection succeeds (not 1013). Open MAX_ROOM idle connections to one room; assert a real student later joining succeeds.",
      "authorDecision": false,
-     "status": "open",
-     "repairedBy": null
+     "status": "repaired",
+     "repairedBy": "tests/cloud-audit.test.mjs I1, I2"
     },
     {
      "id": "relay-2-pid-squat-silent-lockout",
@@ -660,8 +660,8 @@
      "fixSketch": "Primary fix is client-side and unambiguous: RelayTransport/Room should treat close code 1008 as fatal, not transient \u2014 stop auto-retrying and surface a clear message ('this Founder ID is already in use in this room') so Session can offer a fresh identity instead of looping forever indistinguishably from a dropped connection. Separately (an author decision, not a bug): the trust-on-first-use race itself is inherent to a keyless-registration scheme and could be hardened further (e.g. only accept a pid binding from a connection within the room's first few seconds, or let the instructor pre-register expected pids), but that is a design trade-off, not what's broken here.",
      "testSketch": "In js/net.js or session.js tests: simulate a relay closing with code 1008 and assert the Room/Session surfaces a distinct, user-visible state/error rather than silently scheduling another open().",
      "authorDecision": false,
-     "status": "open",
-     "repairedBy": null
+     "status": "repaired",
+     "repairedBy": "tests/cloud-audit.test.mjs N1, N2 (the client half: a close with 1008 is final and the player is told; the trust-on-first-use race itself is the author's, see docs/CLOUD_HANDOFF.md)"
     },
     {
      "id": "relay-3-no-origin-check",

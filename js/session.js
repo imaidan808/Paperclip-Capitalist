@@ -255,10 +255,15 @@ export class Session {
       if (this.game) this._wire();
     } else { this.clockAdopted = true; this.clockHeard = true; this._loadRoster(code); }
     this.room.on((m) => this._onMsg(m));
-    this.room.onstate = () => this.emit('room');
+    this.room.onstate = () => { this.emit('room'); const why = this.roomRefusal(); if (why) this.emit('note', { level: 'bad', text: why }); };
     this.room.send({ t: 'hello' });
     if (this.game) this._sendSnap(true);
     this.emit('room');
+  }
+  /** The words for a room the relay refused (its close code 1008, which the transport does not retry), or null while it has not. The one thing a player can do is a room that nobody has bound their Founder ID in first. */
+  roomRefusal() {
+    if (this.room?.state !== 'refused' || !this.roomInfo) return null;
+    return `Room ${this.roomInfo.code} would not take this device: its Founder ID is already in use there by another connection. Ask your instructor to open a new room, and join that one.`;
   }
   _closeRoom() {
     if (this.room) this.room.close();
