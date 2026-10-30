@@ -16,6 +16,9 @@ import { stampGlow } from './gfx.js';
 
 /** How much stronger than the props ask a light of the night stands (a lamp, a window): the evening glows, it does not just tint. */
 export const LAMP_GAIN = 1.55;
+/** The most the halo of a lamp, and its bright core, are let add. The stamps are additive and three of them stood on one another at full strength (a halo, a ground pool, a core), so a lamp's light clipped to a white disc five times the
+ *  size of its globe, which bleached the pavers and the buyer beside it (judge round 2). A light is brightest at its source and falls away: the halo stays under the light's own radius and under white. */
+export const HALO_MAX = 0.7, CORE_MAX = 0.6;
 const SCALE = 4;          // the five sources are a quarter of the window
 const BANDS = 4;          // `air` is stretched in this many bands (one a frame while the light moves)
 export const STEPS = 24;  // the crossfade of day and night, in twenty-fourths
@@ -119,10 +122,10 @@ export class Grade extends Lighting {
       const x = l.wx * z + ox, y = l.wy * z + oy, r = l.r * z; if (x < -r || x > W + r || y < -r * 2 || y > H + r * 2) continue;
       let k = 1; for (let i = 0; i < lk.length; i++) { const D = lk[i], b = D.bb; if (l.wx > b[0] && l.wx < b[2] && l.wy > b[1] && l.wy < b[3]) { k = 1 - coverUnder(D, l.wx, l.wy, l.r); break; } }
       if (k < 0.04) continue;
-      const a = Math.min(1, l.a * LAMP_GAIN) * k;
-      if (l.gy !== undefined) stampGlow(ctx, l.c, x, l.gy * z + oy, r * 1.3, a * 0.9, 0.5);
-      if (!stampGlow(ctx, l.c, x, y, r * 1.12, a)) { const g = ctx.createRadialGradient(x, y, 1, x, y, r); g.addColorStop(0, `rgba(${l.c},${a})`); g.addColorStop(1, `rgba(${l.c},0)`); ctx.fillStyle = g; ctx.fillRect(x - r, y - r, r * 2, r * 2); }
-      else if (a > 0.2) stampGlow(ctx, l.c, x, y, r * 0.36, Math.min(1, a * 0.9)); // a bright core in the middle of a lamp or a window: the light has a source
+      const a = Math.min(1, l.a * LAMP_GAIN) * k, ah = Math.min(HALO_MAX, a);
+      if (l.gy !== undefined) stampGlow(ctx, l.c, x, l.gy * z + oy, r * 1.3, ah * 0.9, 0.5); // the warm pool on the ground, flattened
+      if (!stampGlow(ctx, l.c, x, y, r * 0.95, ah)) { const g = ctx.createRadialGradient(x, y, 1, x, y, r); g.addColorStop(0, `rgba(${l.c},${ah})`); g.addColorStop(1, `rgba(${l.c},0)`); ctx.fillStyle = g; ctx.fillRect(x - r, y - r, r * 2, r * 2); }
+      else if (a > 0.2) stampGlow(ctx, l.c, x, y, r * 0.3, Math.min(CORE_MAX, a * 0.9)); // a bright core in the middle of a lamp or a window: the light has a source
     }
     ctx.globalAlpha = 1; ctx.restore();
   }

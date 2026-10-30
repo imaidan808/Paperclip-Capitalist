@@ -3,7 +3,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { recCtx } from './helpers/recctx.mjs';
-import { Grade, LAMP_GAIN, hazeAt, airSteps, stepKey, STEPS, HAZE_STEPS, GOLD_STEPS, SHAFT_STEPS, gradeOf } from '../js/world/grade.js';
+import { Grade, LAMP_GAIN, HALO_MAX, CORE_MAX, hazeAt, airSteps, stepKey, STEPS, HAZE_STEPS, GOLD_STEPS, SHAFT_STEPS, gradeOf } from '../js/world/grade.js';
 import { tintFor, GRASS, ROAD, SAND, PLASTER, TILE, SEA, GRADE } from '../js/world/palette.js';
 import { luma, rgb } from '../js/world/iso.js';
 import { ledger, releaseAll } from '../js/world/gfx.js';
@@ -91,11 +91,22 @@ test('the V2 grade layer is registered in screen space and one Grade is made for
   const w = { light: { perFrame: 3 } }, g = gradeOf(w); assert.strictEqual(gradeOf(w), g); assert.equal(g.perFrame, 3); assert.notStrictEqual(gradeOf({}), g); assert.ok(releaseAll() >= 0);
 });
 
+test('a lamp\'s light is a light and not a white disc: the halo and the core never reach full white on their own (an additive stack of three clipped stamps was a plateau of 245 to 248, 104 px wide round a 20 px globe: judge round 2), and the halo stays inside the light\'s own radius', () => {
+  assert.ok(HALO_MAX <= 0.75 && CORE_MAX <= 0.65 && HALO_MAX > CORE_MAX - 0.2, `halo ${HALO_MAX}, core ${CORE_MAX}`);
+  installOffscreen();
+  try {
+    const g = new Grade(), alpha = [], wide = [], ctx = { globalAlpha: 1, globalCompositeOperation: 'source-over', save() {}, restore() {}, drawImage(s, x, y, w) { alpha.push(this.globalAlpha); wide.push(w); } };
+    g.lights(ctx, { W: 20000, H: 20000, cam: { x: 0, y: 0, z: 1 }, unlocked: new Set([1]), lights: [{ wx: 0, wy: 0, r: 40, c: '255,233,168', a: 0.9 }] }, 160); // the brightest a lamp is asked to be
+    assert.equal(alpha.length, 2); assert.ok(alpha[0] <= HALO_MAX + 1e-9 && alpha[1] <= CORE_MAX + 1e-9, `the stamps' alphas ${alpha}`);
+    assert.ok(wide[0] <= 2 * 40 && wide[1] <= 2 * 40 * 0.4, `the halo is ${wide[0]} px wide (no wider than the light's own diameter, 80) and the core ${wide[1]}`);
+  } finally { delete globalThis.OffscreenCanvas; }
+});
+
 test('a lamp under a cloud is not stamped (the cloud is in front of it: no glowing blobs inside a bank), one in a window of the bank shines in full, and every other light is stamped as Lighting.lights stamps it, LAMP_GAIN stronger, with a bright core', () => {
   installOffscreen();
   try {
-    const g = new Grade(), seen = [], ctx = { globalAlpha: 1, globalCompositeOperation: 'source-over', save() {}, restore() {}, drawImage() { seen.push(+this.globalAlpha.toFixed(3)); } };
-    const gain = Math.min(1, 0.6 * LAMP_GAIN), FULL = [+gain.toFixed(3), +(gain * 0.9).toFixed(3)]; // (the halo, then the core in the middle of it)
+    const g = new Grade(), seen = [], wide = [], ctx = { globalAlpha: 1, globalCompositeOperation: 'source-over', save() {}, restore() {}, drawImage(s, x, y, w) { seen.push(+this.globalAlpha.toFixed(3)); wide.push(w); } };
+    const gain = Math.min(1, 0.6 * LAMP_GAIN), FULL = [+Math.min(HALO_MAX, gain).toFixed(3), +Math.min(CORE_MAX, gain * 0.9).toFixed(3)]; // (the halo, then the core in the middle of it: neither is let reach white)
     const D = DIST[3], form = bankOf(D, 1), win = form.windows[0], under = form.lobes.filter((l) => l.kind === 0 && l.r > 40).sort((p, q) => Math.hypot(p.x - form.cx, p.y - form.cy) - Math.hypot(q.x - form.cx, q.y - form.cy))[0], outside = [DIST[1].bb[0] + 200, DIST[1].bb[1] + 400];
     const mk = (pt, unlocked, r = 40) => ({ W: 20000, H: 20000, cam: { x: pt[0], y: pt[1], z: 1 }, unlocked, lights: [{ wx: pt[0], wy: pt[1], r, c: '255,233,168', a: 0.6 }] });
     assert.equal(coverUnder(D, under.x, under.y, 40), 1, 'the middle of a lobe is wholly under cloud'); assert.equal(coverUnder(D, win.x, win.y, 40), 0, 'the middle of a window is clear sky');
@@ -103,7 +114,7 @@ test('a lamp under a cloud is not stamped (the cloud is in front of it: no glowi
     g.lights(ctx, mk([win.x, win.y], new Set([1])), 160); assert.deepEqual(seen, FULL, 'in a window: in full'); seen.length = 0;
     g.lights(ctx, mk([under.x, under.y], new Set([1, 3])), 160); assert.deepEqual(seen, FULL, 'once its district is open, in full'); seen.length = 0;
     g.lights(ctx, mk(outside, new Set([1])), 160); assert.deepEqual(seen, FULL, 'a light elsewhere in full: a halo and a bright core');
-    const edge = [win.x + win.rx * 0.97, win.y]; seen.length = 0; g.lights(ctx, mk(edge, new Set([1]), 90), 160); assert.ok(seen.length === 0 || seen[0] < FULL[0], 'a light at the edge of a window whose pool reaches under the rim is dimmed, never brighter than in the open');
+    const edge = [win.x + win.rx * 0.97, win.y]; seen.length = 0; g.lights(ctx, mk(edge, new Set([1]), 90), 160); assert.ok(seen.length === 0 || seen[0] <= FULL[0], 'a light at the edge of a window whose pool reaches under the rim is dimmed, never brighter than in the open');
   } finally { delete globalThis.OffscreenCanvas; }
 });
 
