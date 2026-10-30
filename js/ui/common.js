@@ -1,5 +1,6 @@
 // Shared UI plumbing: DOM helpers, focus-safe rendering, announcements, dialogs, settings, sound and pixel fx.
 import { kv } from '../session.js';
+import { cleanRelay } from '../net.js';
 import { audio, bindSettings, initAudio, legacySfx, migrateAudio, mirrorFlat, audioSettingsHTML, bindAudioSettings, rememberLinkRule } from '../audio/index.js';
 export { fmtMoney as money, fmtPct as pct, fmtX as xfmt } from '../market.js';
 
@@ -124,6 +125,12 @@ export function announce(msg, assertive = false) {
     r.textContent = '';
     setTimeout(() => { r.textContent = msg; }, 30);
   }
+}
+/** The relay address a form holds, cleaned (net.js cleanRelay): '' when none was typed, or null, after saying so, when what was typed is not an address (a room that quietly fell back to this browser's tabs would look joined and be alone). */
+export function relayOf(raw) {
+  const typed = String(raw || '').trim(), relay = cleanRelay(typed);
+  if (typed && !relay) { toast('That does not look like a relay address. Paste the address your instructor gave you (it starts with wss:// or https://), or leave it empty.', 'warn', 7000); return null; }
+  return relay;
 }
 export function toast(msg, level = 'info', ms = 4200, o = {}) { // o.refusal: the toast answers an action the engine refused (say(r)); the sound layer plays its "no" for those and for no other bad toast. o.own: its sound is requested by the code that raised it (a reward: the resolver may keep it quiet), so the toast's fallback "ok" stays out
   const box = $('#toasts');

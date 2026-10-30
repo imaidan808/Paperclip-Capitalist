@@ -15,7 +15,7 @@
 //   rewound                a student telling the instructor how far its rewind could go
 import { Game } from './engine.js';
 import { Cohort, makeSynth, synthSnapshot, synthFlags, median, cleanSnap, cleanClock, cleanInject, cleanOffer, cleanAsset, cleanDifficulty, cleanId, DEFAULT_DIFFICULTY, num, text, nwCeiling } from './cohort.js';
-import { Room, cleanCode } from './net.js';
+import { Room, cleanCode, cleanRelay } from './net.js';
 import { openTab, makeKv } from './identity.js';
 import { SEC_PER_HOUR, TOTAL_HOURS, TOTAL_DAYS, EEI_FLOOR_DEFAULT, ASSETS, ZONES, SWAPS, EVENTS } from './config.js';
 import { hash01 } from './rng.js';
@@ -229,7 +229,7 @@ export class Session {
 
   // ---- room
   joinRoom({ code, relay = '', role = 'student', handle, owner, recover = false }) {
-    code = String(code);
+    code = String(code); relay = cleanRelay(relay); // however the address came in (a form, a link, a saved room), the browser needs wss://: a pasted https address is made one
     const switching = this.roomInfo && this.roomInfo.code !== code;
     this._closeRoom();
     if (switching) this._resetRoomSettings();

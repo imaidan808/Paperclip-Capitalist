@@ -2,8 +2,9 @@
 // unless the player joins a classroom room (and then only pseudonymous game numbers).
 // Screens: title -> setup (the Background draft) -> academy (first run only) -> game -> debrief; instructor is its own branch.
 import { Session, Clock, kv, cleanOwner, describeSave } from './session.js';
-import { roomCode, cleanCode } from './net.js';
-import { $, esc, delegate, applySettings, initDialog, settingsDialog, dlg, toast } from './ui/common.js';
+import { roomCode, cleanCode, cleanRelay } from './net.js';
+import { DEFAULT_RELAY } from './config.js';
+import { $, esc, delegate, applySettings, initDialog, settingsDialog, dlg, toast, relayOf } from './ui/common.js';
 import { mountDraft, replaceRunHTML } from './ui/draft.js';
 import { FOLLOW_NOTE, RECOVER_WAIT_SECONDS } from './ui/room-notes.js';
 import { pendingRoom } from './audio/index.js';
@@ -91,7 +92,7 @@ function openAcademy(after, only) { pending = { ...(after ? { after } : {}), ...
 const screens = {
   title() {
     const saved = kv.get('save'), instr = kv.get('instr'), instrKey = instr ? S.recoveryCodeFor(instr.code) : null;
-    const relay = params.get('relay') || kv.get('relay') || '';
+    const relay = cleanRelay(params.get('relay') || kv.get('relay') || DEFAULT_RELAY); // the link's, then the one this browser kept, then the default (js/config.js)
     const room = cleanCode(params.get('room'));
     const academyDone = !!kv.get('academyDone');
     root.innerHTML = `
@@ -126,14 +127,14 @@ const screens = {
       resume() { if (tryResume()) enter(); else go('title'); },
       solo() { pending = { solo: true }; go('setup'); },
       academy() { openAcademy(() => go('title')); },
-      join() { const code = cleanCode($('#jc').value); if (code.length < 3) { toast('Enter the room code from your instructor.', 'warn'); return; } const rl = $('#jr').value.trim(); kv.set('relay', rl); pending = { room: { code, relay: rl } }; go('setup'); },
-      instr() { const rl = $('#ir').value.trim(); kv.set('relay', rl); startInstructor(roomCode(), rl, true); },
+      join() { const code = cleanCode($('#jc').value); if (code.length < 3) { toast('Enter the room code from your instructor.', 'warn'); return; } const rl = relayOf($('#jr').value); if (rl === null) return; kv.set('relay', rl); pending = { room: { code, relay: rl } }; go('setup'); },
+      instr() { const rl = relayOf($('#ir').value); if (rl === null) return; kv.set('relay', rl); startInstructor(roomCode(), rl, true); },
       'instr-resume'() { startInstructor(instr.code, instr.relay, false, instr); },
       'instr-recover'() {
         const code = cleanCode($('#ic').value), owner = cleanOwner($('#ik').value);
         if (code.length < 3) { toast('Enter the room code.', 'warn'); return; }
         if (!owner) { toast('The recovery code is 32 letters and digits, in groups of four. Check it and try again.', 'warn'); return; }
-        const rl = $('#ir').value.trim(); kv.set('relay', rl);
+        const rl = relayOf($('#ir').value); if (rl === null) return; kv.set('relay', rl);
         startInstructor(code, rl, false, null, owner);
       },
       a11y() { settingsDialog(); },
