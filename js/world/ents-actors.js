@@ -1,7 +1,7 @@
 // Things that move: buyers, the player, freight trucks and the traffic on the roads. LEGACY drawers.
 // Owner: T4 PROPS, NATURE AND CHARACTERS (docs/RENDER_PLAN.md).
 import { BUYERS, ZONES } from '../config.js';
-import { leadAlpha } from './common.js';
+import { leadAlpha, bubbleAlpha } from './common.js';
 import { P, box, shadow, ellipse, person, tone, shade, clamp, strHash } from './iso.js';
 import { LAYOUT, DIST, EDGES, zAt, polyAt, polyInfo } from './layout.js';
 import './vehicles.js'; // the V2 drawers of the truck and car layers register themselves too
@@ -25,10 +25,9 @@ export const actorMethods = {
       ctx.globalAlpha = 1;
     }
     void calm;
-    if (!e.leaving && l) {
-      this.hits.push({ eid: e.id, kind: 'lead', id: e.id.slice(5), zone: e.zone, label: `${B.name}${l.need ? ', urgent' : ''}`, circle: [x, y - 16, 20], lead: l });
-      if ((this.cam.z > 0.5 || hov) && a >= 0.6) this.overlay.push({ k: 'bub', n: 6, wx: x, wy: y - 40, draw: (g, px, py, s) => this.leadBubble(g, px, py, s, B, l, hov) });
-    }
+    if (!e.leaving && l) this.hits.push({ eid: e.id, kind: 'lead', id: e.id.slice(5), zone: e.zone, label: `${B.name}${l.need ? ', urgent' : ''}`, circle: [x, y - 16, 20], lead: l });
+    const ba = !l ? 0 : calm ? (e.leaving ? 0 : 1) : bubbleAlpha(e.born, e.leaving ? e.leaveAt : null, this.t);
+    if (ba > 0.01 && (this.cam.z > 0.5 || hov)) this.overlay.push({ k: 'bub', n: 6, wx: x, wy: y - 40, draw: (g, px, py, s) => { const pa = g.globalAlpha; g.globalAlpha = pa * ba; this.leadBubble(g, px, py, s, B, l, hov && !e.leaving); g.globalAlpha = pa; } });
   },
 
   drawPlayer(ctx) {

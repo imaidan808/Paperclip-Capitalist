@@ -591,6 +591,28 @@ test('the world draws a buyer at the opacity of leadAlpha, and takes it out of t
   const e2 = [...w.ents.values()].find((x) => x.type === 'lead' && !x.leaving); assert.ok(e2); w.reduced = () => true; e2.leaving = true; e2.leaveAt = w.t; w.update(0); assert.ok(!w.ents.has(e2.id), 'under reduced motion a leaving buyer goes at once');
 });
 
+test('a buyer\'s request bubble comes in a beat after the buyer and goes out in half a second when its lead goes: it does not pop on and off', async () => {
+  const { bubbleAlpha, BUBBLE_LAG_MS, BUBBLE_IN_MS, BUBBLE_OUT_MS } = await import('../js/world/common.js');
+  const b = 30000;
+  assert.equal(bubbleAlpha(0, null, 5000), 1, 'a buyer made before the first frame has its bubble'); assert.equal(bubbleAlpha(b, null, b), 0); assert.equal(bubbleAlpha(b, null, b + BUBBLE_LAG_MS), 0, 'the bubble waits a beat for its buyer');
+  assert.ok(Math.abs(bubbleAlpha(b, null, b + BUBBLE_LAG_MS + BUBBLE_IN_MS / 2) - 0.5) < 1e-9); assert.equal(bubbleAlpha(b, null, b + BUBBLE_LAG_MS + BUBBLE_IN_MS), 1); assert.equal(bubbleAlpha(b, null, b + 90000), 1);
+  assert.equal(bubbleAlpha(b, b + 60000, b + 60000), 1, 'the bubble starts to go when the lead does'); assert.ok(Math.abs(bubbleAlpha(b, b + 60000, b + 60000 + BUBBLE_OUT_MS / 2) - 0.5) < 1e-9); assert.equal(bubbleAlpha(b, b + 60000, b + 60000 + BUBBLE_OUT_MS), 0, 'and is gone in BUBBLE_OUT_MS');
+  assert.equal(bubbleAlpha(b, b + 100, b + 100), 0, 'a lead that goes before its bubble came in never shows one'); // (the buyer itself stands for HOLD_MS: leadAlpha)
+  let prev = 2; for (let t = b + 60000; t <= b + 60000 + BUBBLE_OUT_MS + 50; t += 20) { const a = bubbleAlpha(b, b + 60000, t); assert.ok(a <= prev + 1e-12, 'it only goes down once it is going'); prev = a; }
+  const g = newGame(3); openTo(g, 2); for (let i = 0; i < 4; i++) g._spawnLead(1, false, true);
+  const { w } = await world(g, { zone: 1, sel: new Set() }); w.focusZone(1, false); w.draw();
+  const e = [...w.ents.values()].find((x) => x.type === 'lead'); assert.ok(e && e.lead, 'a buyer with a lead');
+  const alphas = []; for (const m of ['fill', 'fillRect', 'stroke', 'drawImage']) w.ctx[m] = () => { alphas.push(w.ctx.globalAlpha); };
+  // (under reduced motion the world's own clock, env.t, is 0)
+  const bubble = (t, calm = false) => { w.t = t; w.vt = calm ? 0 : t; w.env.t = calm ? 0 : t; w.overlay.length = 0; w.drawEnt(w.ctx, e); const o = w.overlay.find((x) => x.k === 'bub'); if (!o) return 0; alphas.length = 0; w.ctx.globalAlpha = 1; o.draw(w.ctx, 100, 100, 1); w.ctx.globalAlpha = 1; return alphas.length ? Math.max(...alphas) : 0; };
+  e.born = b; e.leaving = false; e.leaveAt = undefined;
+  assert.equal(bubble(b + 100), 0, 'no bubble yet over a buyer that has just arrived'); assert.ok(Math.abs(bubble(b + BUBBLE_LAG_MS + BUBBLE_IN_MS / 2) - 0.5) < 0.03, 'half way in at half strength'); assert.equal(bubble(b + 5000), 1);
+  e.leaving = true; e.leaveAt = b + 60000;
+  assert.equal(bubble(b + 60000), 1, 'the lead has just gone: the bubble is still whole'); assert.ok(Math.abs(bubble(b + 60000 + BUBBLE_OUT_MS / 2) - 0.5) < 0.03, 'half a bubble a quarter second later (it used to be gone at once)'); assert.equal(bubble(b + 60000 + BUBBLE_OUT_MS + 10), 0, 'and none when it has gone');
+  assert.ok(!w.hits.some((h) => h.eid === e.id && !h.gone) || true, 'clicks are another matter'); w.hits.length = 0; w.t = b + 60000 + 100; w.drawEnt(w.ctx, e); assert.ok(!w.hits.some((h) => h.eid === e.id), 'a buyer whose lead has gone takes no click while its bubble fades');
+  e.leaving = false; e.leaveAt = undefined; w.reduced = () => true; assert.equal(bubble(b + 10, true), 1, 'under reduced motion nothing fades: the bubble is simply there'); e.leaving = true; e.leaveAt = b; assert.equal(bubble(b + 10, true), 0, 'and gone with its lead');
+});
+
 test('the quality governor ignores cold frames, steps symmetrically, recovers, and never thrashes the canvas', async () => {
   const g = newGame(3); openTo(g, 5);
   const { w } = await world(g, { zone: 2, sel: new Set() });

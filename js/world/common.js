@@ -20,3 +20,13 @@ export function leadAlpha(born, leaveAt, now) {
 }
 /** The time a buyer whose lead went at `leaveAt` has faded to nothing and goes out of the world. */
 export const leaveEnd = (born, leaveAt) => fadeFrom(born, leaveAt) + LEAVE_MS;
+
+// ---- the request bubble over a buyer (a price and, when the buyer is in a hurry, a gold "!"): it came on with the buyer at once and went when its lead went, at once, so on a fast clock the requests popped on and off over
+// buyers that now fade. It comes in a beat after the buyer and goes out when the lead does, over half a second (the buyer itself stands for at least HOLD_MS, see leadAlpha).
+export const BUBBLE_LAG_MS = 250, BUBBLE_IN_MS = 400, BUBBLE_OUT_MS = 500;
+/** The opacity of a buyer's bubble, 0 to 1: `born`, `leaveAt` and `now` as for leadAlpha (a buyer made before the first frame has its bubble). Pure. */
+export function bubbleAlpha(born, leaveAt, now) {
+  let a = born > 0 ? Math.min(1, Math.max(0, (now - born - BUBBLE_LAG_MS) / BUBBLE_IN_MS)) : 1;
+  if (leaveAt != null) a *= Math.min(1, Math.max(0, 1 - (now - leaveAt) / BUBBLE_OUT_MS));
+  return a;
+}
