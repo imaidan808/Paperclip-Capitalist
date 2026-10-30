@@ -1,0 +1,133 @@
+/* The Background draft (.dr-*), plus the small pieces shared by the title (.sc-facts), the debrief (.sc-*) and the instructor dashboard (.in-*).
+   Tokens only: every colour comes from styles.css, so standard and high-contrast themes both work. Motion is cut by the global reduced-motion rules. */
+
+/* ---- the draft */
+.dr { max-width: 76rem; margin: .6rem auto 1rem; padding-bottom: 0; }
+@media (min-width: 1800px) { .dr { max-width: 92rem; } .dr-layout { grid-template-columns: minmax(0, 1fr) 28rem; } .dr-grid { grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr)); } }
+.dr-head { display: grid; gap: .4rem; }
+.dr-head h1 { margin: 0; color: var(--gold); text-shadow: 3px 3px 0 rgba(0, 0, 0, .9); font-size: clamp(1.6rem, 4vw, 2.3rem); }
+.dr-head h1:focus { outline: none; }
+.dr-tools { margin: 0; justify-self: start; }
+.dr-lede { max-width: 54rem; margin: 0; color: var(--ink); }
+.dr-layout { display: grid; grid-template-columns: minmax(0, 1fr) 24rem; gap: 1.1rem; align-items: start; margin-top: .9rem; }
+.dr-main { display: grid; gap: 1rem; min-width: 0; }
+.dr-side { position: sticky; top: .6rem; max-height: calc(100vh - 6.5rem); max-height: calc(100dvh - 6.5rem); overflow: auto; min-width: 0; }
+.dr-alias { max-width: 30rem; }
+.dr-alias input { width: 100%; }
+
+.dr-pool { border: 0; padding: 0; margin: 0; min-width: 0; }
+.dr-pool > legend { display: block; padding: 0; margin-bottom: .55rem; width: 100%; } .dr-pool > legend > .mono { margin-left: .8rem; }
+.dr-lg { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; text-transform: uppercase; letter-spacing: .08em; font-size: 1.05rem; color: var(--ink); font-weight: 700; }
+.dr-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(14.5rem, 1fr)); gap: .75rem; }
+
+/* a card in the hand: the native checkbox covers the whole card (invisible), the .dr-box draws the tick */
+.dr-card { position: relative; display: grid; gap: .5rem; align-content: start; padding: .85rem .8rem .8rem; margin: 0; background: var(--panel2); border: var(--bw) solid var(--line); border-top-width: 6px; border-radius: 3px; color: var(--ink); font-size: .9rem; cursor: pointer; transition: transform .14s ease-out, border-color .14s, box-shadow .14s; }
+.dr-card:nth-child(3n + 1) { transform: rotate(-.4deg); } .dr-card:nth-child(3n + 2) { transform: rotate(.3deg); } .dr-card:nth-child(3n) { transform: rotate(-.2deg); }
+.dr-card:hover { border-color: var(--field); transform: translateY(-4px) rotate(0deg); box-shadow: 0 6px 0 rgba(0, 0, 0, .35); }
+.dr-card[data-on="1"] { border-color: var(--gold); background: var(--warn-bg); transform: translateY(-6px) rotate(0deg); box-shadow: inset 0 0 0 1px var(--gold), 4px 6px 0 rgba(0, 0, 0, .5); }
+.dr-grid[data-full="1"] .dr-card[data-on="0"] { border-style: dashed; background: var(--bg2); transform: none; }
+.dr-card:has(.dr-in:focus-visible) { outline: 3px solid var(--focus); outline-offset: 2px; }
+.dr-card > .dr-in { position: absolute; inset: 0; width: 100%; height: 100%; min-height: 0; margin: 0; opacity: 0; cursor: pointer; }
+.dr-top { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: .6rem; align-items: center; }
+.dr-ic { display: grid; place-items: center; width: 2.6rem; height: 2.6rem; font-size: 1.7rem; line-height: 1; border-radius: 50%; background: var(--bg); border: 1px solid var(--line); flex: none; }
+.dr-card[data-on="1"] .dr-ic { border-color: var(--gold); }
+.dr-nm { font-size: 1rem; line-height: 1.15; font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+.dr-box { width: 1.35rem; height: 1.35rem; border: var(--bw) solid var(--field); border-radius: 2px; display: grid; place-items: center; background: var(--bg); }
+.dr-card[data-on="1"] .dr-box { background: var(--gold); border-color: var(--gold); }
+.dr-card[data-on="1"] .dr-box::after { content: "\2713"; color: var(--on-gold); font-weight: 900; font-size: .95rem; line-height: 1; }
+.dr-body { display: grid; gap: .4rem; }
+.dr-basis { color: var(--mute); font-size: .82rem; }
+.dr-line { display: grid; grid-template-columns: 1.1rem minmax(0, 1fr); gap: .3rem; font-size: .84rem; line-height: 1.35; }
+.dr-line > b { font-family: ui-monospace, Menlo, monospace; font-size: 1.1rem; line-height: 1.1; text-align: center; }
+.dr-plus > b { color: var(--green); } .dr-minus > b { color: var(--red); }
+.dr-t { min-width: 0; overflow-wrap: anywhere; }
+
+/* the tray: your build */
+.dr-tray { background: var(--panel); border: var(--bw) solid var(--gold); box-shadow: var(--shadow); padding: .75rem .85rem; display: grid; gap: .55rem; }
+.dr-tray h2 { margin: 0; border-bottom: 1px dashed var(--line); padding-bottom: .35rem; }
+.dr-slots { list-style: none; margin: 0; padding: 0; display: grid; gap: .55rem; }
+.dr-slot { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: .6rem; align-items: start; padding: .6rem .65rem; border: var(--bw) dashed var(--line); background: var(--bg2); min-height: 4.2rem; border-radius: 3px; }
+.dr-slot.dr-full { border-style: solid; border-color: var(--gold); border-left-width: 6px; background: var(--warn-bg); box-shadow: 3px 3px 0 rgba(0, 0, 0, .4); }
+.dr-empty .dr-slotn { border-style: dashed; }
+.dr-slotn { width: 1.9rem; height: 1.9rem; display: grid; place-items: center; border: var(--bw) solid var(--field); border-radius: 50%; font-family: ui-monospace, Menlo, monospace; color: var(--mute); }
+.dr-slotb { display: grid; gap: .3rem; min-width: 0; }
+.dr-slotb > b { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: .92rem; }
+.dr-sum { margin: 0; font-size: .92rem; } .dr-sum > b { margin-right: .35rem; text-transform: uppercase; letter-spacing: .06em; font-size: .72rem; }
+.dr-why { margin: 0; }
+
+/* specialty */
+.dr-spec { border: 0; padding: 0; margin: 0; min-width: 0; }
+.dr-spec > legend { padding: 0; font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; text-transform: uppercase; letter-spacing: .08em; font-size: 1.05rem; color: var(--ink); font-weight: 700; margin-bottom: .2rem; }
+.dr-skills { display: grid; grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr)); gap: .6rem; }
+.dr-skill b { display: block; padding-right: 1.6rem; } .dr-sd { display: block; margin-top: .25rem; }
+.dr-spec:disabled .dr-skill { border-style: dashed; cursor: not-allowed; }
+.dr-spec:disabled label.pick:has(input:checked) { box-shadow: none; border-color: var(--line); }
+
+/* the bar along the foot: always in reach */
+.dr-actions { position: sticky; bottom: 0; z-index: 3; display: flex; flex-wrap: wrap; align-items: center; gap: .7rem; margin: 1rem -1rem -.9rem; padding: .7rem 1rem; background: var(--panel); border-top: var(--bw) solid var(--gold); }
+.dr-need { min-width: 0; } .dr-notice { flex-basis: 100%; }
+/* the notes about sound land above the bar, not on it: a toast at the corner hid the Begin button's label for its 3.5 seconds on a laptop-size window (the bar is about 4.6rem tall; on a phone the need line takes a row of its own) */
+body:has(.dr-actions) #toasts { bottom: calc(max(.5rem, env(safe-area-inset-bottom, 0px)) + 4.9rem); }
+@media (max-width: 640px) { body:has(.dr-actions) #toasts { bottom: calc(max(.5rem, env(safe-area-inset-bottom, 0px)) + 8.6rem); } }
+
+@media (max-width: 640px) {
+  .dr-card { padding: .6rem .65rem .65rem; gap: .35rem; } .dr-card:nth-child(n) { transform: none; } .dr-card:hover, .dr-card[data-on="1"] { transform: none; }
+  .dr-ic { width: 2.2rem; height: 2.2rem; font-size: 1.4rem; } .dr-line { font-size: .8rem; } .dr-grid { gap: .55rem; }
+  .dr-actions { gap: .4rem .6rem; padding: .5rem .8rem; }
+  .dr-need { flex: 1 1 100%; }
+  .dr-actions .grow { display: none; }
+  .dr-actions .btn { flex: 1 1 0; }
+}
+@media (max-width: 980px) {
+  .dr-layout { grid-template-columns: 1fr; }
+  .dr-side { position: static; max-height: none; overflow: visible; }
+}
+@media (prefers-reduced-motion: reduce) { .dr-card, .dr-card:nth-child(n), .dr-card:hover, .dr-card[data-on="1"] { transition: none; transform: none; } }
+:root[data-motion="reduce"] .dr-card, :root[data-motion="reduce"] .dr-card:nth-child(n), :root[data-motion="reduce"] .dr-card:hover, :root[data-motion="reduce"] .dr-card[data-on="1"] { transition: none; transform: none; }
+:root[data-contrast="high"] .dr-card[data-on="1"] { background: var(--warn-bg); }
+
+/* ---- title */
+.sc-facts { list-style: none; display: flex; flex-wrap: wrap; gap: .5rem; justify-content: center; margin: 0 auto; padding: 0; }
+.sc-facts li { border: 1px solid var(--line); background: var(--panel); padding: .2rem .7rem; font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: .8rem; }
+.sc-facts b { color: var(--gold); }
+
+/* ---- debrief */
+/* the headline numbers: the first one is the hero, the rest are a row of plain readouts */
+.sc-stats { grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr)); }
+.sc-stat { display: grid; align-content: start; gap: .15rem; border-top: 3px solid var(--line); min-width: 0; }
+.sc-k { text-transform: uppercase; letter-spacing: .06em; font-size: .7rem; }
+.sc-v { font-size: 1.5rem; line-height: 1.15; overflow-wrap: anywhere; }
+.sc-hero { grid-column: span 2; border-top-color: var(--gold); background: var(--warn-bg); } .sc-hero .sc-v { font-size: 2.2rem; }
+@media (max-width: 520px) { .sc-hero { grid-column: 1 / -1; } .sc-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } .sc-hero .sc-v { font-size: 1.9rem; } }
+#app > .panel > h2 { padding-left: .9rem; background-image: linear-gradient(var(--gold), var(--gold)); background-repeat: no-repeat; background-size: .42rem .42rem; background-position: 0 .5em; }
+.sc-build { display: grid; grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr)); gap: .7rem; }
+.sc-build .card { display: grid; gap: .35rem; }
+.sc-build .card > b { font-family: ui-monospace, Menlo, monospace; }
+.sc-ic { font-size: 1.5rem; margin-right: .35rem; }
+.sc-bg { white-space: nowrap; }
+.sc-plays dd { font-family: ui-monospace, Menlo, monospace; }
+
+/* ---- the title's three panels: a text field fills its panel, so a recovery code (39 characters) and a relay address read in full instead of being cut at the edge of a 20-character box */
+.choices :is(input:not([type="checkbox"]):not([type="radio"])) { width: 100%; }
+
+/* ---- instructor */
+.in-keep .in-code { margin-top: .4rem; }
+.in-keep .in-code > summary { cursor: pointer; padding: .2rem 0; }
+.in-keep .in-key { margin: .45rem 0; padding: .45rem .6rem; border: 1px dashed var(--line); background: var(--panel2); font-size: 1.05rem; letter-spacing: .04em; overflow-wrap: anywhere; user-select: all; }
+.in-keep .btn { margin-bottom: .3rem; }
+/* the recovery code is a secret: it never goes to paper */
+@media print { .in-keep .in-code { display: none; } }
+.in-dist { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(16, minmax(0, 1fr)); gap: 3px; align-items: end; height: 8.5rem; }
+.in-dist li { display: grid; grid-template-rows: auto 1fr auto; justify-items: center; height: 100%; min-width: 0; text-align: center; }
+.in-dist .bx { align-self: end; width: 100%; background: var(--cyan); min-height: 2px; }
+.in-dist li[data-n="0"] .bx { background: var(--line); }
+.in-dist .n { font-size: .68rem; font-family: ui-monospace, Menlo, monospace; color: var(--ink); min-height: 1em; }
+.in-dist .z { font-size: .66rem; font-family: ui-monospace, Menlo, monospace; color: var(--mute); }
+.in-dist li[data-here="1"] .z { color: var(--gold); font-weight: 700; }
+.in-bgs { display: inline-flex; gap: .15rem; font-size: 1.1rem; line-height: 1; vertical-align: middle; }
+.in-chips { display: flex; flex-wrap: wrap; gap: .35rem; margin: .4rem 0 0; padding: 0; list-style: none; }
+.in-chips li { display: inline-flex; gap: .3rem; align-items: center; border: 1px solid var(--line); border-radius: 99px; padding: .08rem .55rem; font-size: .76rem; background: var(--panel2); }
+@media (max-width: 640px) { .in-dist { height: 7rem; gap: 2px; } .in-dist .z { font-size: .58rem; } }
+
+/* print: the headline tiles go back to paper (the global print rule already makes the text black) */
+@media print { .sc-stat, .sc-hero, .sc-build .card { background: transparent; box-shadow: none; } }

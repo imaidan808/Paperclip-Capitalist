@@ -1,0 +1,237 @@
+/* The world-first game screen: stage, HUD, goal tracker, news ticker, dock, drawer, camera buttons, tooltip and the accessible list.
+   Colours and the scales (z-index, type, spacing, radii, elevation, safe-area gutters, anchors) are tokens in styles.css; nothing here writes a bare layer number or a
+   literal colour that a token already names. Nothing in this file changes what a click does: it is how the pieces are placed, layered and drawn.
+
+   THE SCREEN. A stack of absolutely positioned pieces over the 2.5D canvas. .stage is its own stacking context, so 0 to 9 are relative to it; 60 and up are page level.
+   A <dialog> is in the browser's top layer and beats all of it. One ladder (tokens in styles.css):
+      0 --z-world  the canvas and its host        5 --z-hud   the HUD; an open list view       8 --z-drawer   the drawer, or the bottom sheet
+      2 --z-world-ui  camera buttons, list button  6 --z-tip   the tooltip                      9 --z-overlay  coach marks and Academy sheets
+      3 --z-scrim  the two soft gradients         7 --z-dock  the dock                        60 --z-toast  toasts   80 --z-fx  the burst   99 --z-skip
+      4 --z-aux    goal tracker, news ticker
+   No blur or backdrop-filter anywhere over the canvas (it redraws every frame, so a blur is repainted every frame). Depth comes from the scrims, a 1px top light and layered
+   shadows (--elev-1, --elev-2), tokens that high contrast turns off.
+
+   HOW IT IS ANCHORED. Every piece is placed against the HUD above it or the dock below it, never against a guessed height: shell.js measures the bars and writes --hud-h,
+   --dock-h, --tick-h (the ticker) and --trk-b (where the HUD and the goal tracker end) on <html>; the values in styles.css are only the fallbacks for the first frame. So a HUD
+   that wraps, a dock that compacts, a bigger text size or a notch moves everything with it. Gutters are --edge-t/r/b/l, never less than the device's safe-area inset.
+
+   WHO STANDS WHERE (so two pieces never share a place):
+      left   goal tracker at the top; below it the camera buttons (--cam-top), and under those the list button. The camera never starts above --trk-b, so a tall tracker
+             (a big text size on a short screen) cannot cover it. An open list is a panel beside the camera, above the ticker.
+      centre the ticker above the dock; both centred on the screen.
+      right  the drawer; toasts, above the ticker. With a side drawer open the toasts step left of it, as far as the camera buttons allow (--toast-r).
+      A bottom sheet (phones) puts the camera and list buttons on the right instead, and the toasts keep clear of them.
+
+   THREE LAYOUTS.
+      wide     stage wider than 58rem      HUD in one row, numbers centred on the screen; the drawer a panel on the right; tracker a card
+      narrow   58rem and under             HUD in two rows (numbers share the second); the tracker a one-line chip. In rem on the stage itself (a container query), not in
+                                           pixels, so it follows Settings > Text size: the single-row HUD needs the same number of rems at every size
+      sheet    820px and under, and tall   the drawer is a bottom sheet with a grabber (shell.js lets it be dragged shut); the tracker, ticker, camera and list step aside while open
+      compact  520px high and under        a phone on its side: one slim HUD row, icon-only dock, the drawer a panel on the right, the camera 2 by 2
+   The sheet and compact are about the device, so they are media queries; shell.js reads the same sheet query.
+   Checking it: `node scripts/shots.mjs` for pictures at any size and text size, `node scripts/perf.mjs` for the world's cost; tests/a11y.test.mjs holds the colour tokens. */
+
+#app:has(.stage) { max-width: none; padding: 0; }
+body:has(.stage) { background-image: none; overflow: hidden; overscroll-behavior: none; }
+.stage { container: stage / inline-size; position: relative; isolation: isolate; height: 100vh; height: 100dvh; width: 100%; overflow: hidden; background: #0b1a2c; -webkit-user-select: none; user-select: none; }
+.stage :is(.drawer, .wvlist, .wvtip) { -webkit-user-select: text; user-select: text; }
+.worldhost { position: absolute; inset: 0; --cam-top: max(calc(50% - var(--cam-h) / 2), calc(var(--trk-b) + var(--sp-2))); } /* the camera: centred, but never up under the tracker */
+.wvcv { position: absolute; inset: 0; } .worldcv { display: block; touch-action: none; outline-offset: -4px; -webkit-touch-callout: none; }
+
+/* Soft scrims seat the HUD and the dock on the world without hiding it: a long eased gradient, no blur (a blur over a canvas that redraws is dear). They sit under the HUD. */
+.stage::before, .stage::after { content: ""; position: absolute; left: 0; right: 0; z-index: var(--z-scrim); pointer-events: none; }
+.stage::before { top: 0; height: calc(var(--hud-h) + 2rem); background: linear-gradient(180deg, rgba(var(--scrim), .70) 0, rgba(var(--scrim), .56) 32%, rgba(var(--scrim), .28) 64%, rgba(var(--scrim), .08) 88%, rgba(var(--scrim), 0)); }
+.stage::after { bottom: 0; height: calc(var(--dock-h) + 1.4rem); background: linear-gradient(0deg, rgba(var(--scrim), .66) 0, rgba(var(--scrim), .50) 36%, rgba(var(--scrim), .22) 70%, rgba(var(--scrim), 0)); }
+/* The canvas is a Tab stop and its focus ring (3px) is drawn 4px inside its edge, where the two scrims lie over it and dim it to under 3:1 on the top and bottom sides. While the canvas has the ring the scrims
+   start 6px in, so the ring is seen as it is; the 6px strip they leave bare is under the ring's own rows. */
+.stage:has(.worldcv:focus-visible)::before { top: 6px; } .stage:has(.worldcv:focus-visible)::after { bottom: 6px; }
+
+/* ---- the world's own controls: the camera column, and the list button under it ---- */
+.wvctl { position: absolute; z-index: var(--z-world-ui); left: var(--edge-l); top: var(--cam-top); display: grid; gap: var(--sp-2); width: max-content; }
+.wvtip { position: absolute; z-index: var(--z-tip); left: 0; top: 0; width: max-content; max-width: 17rem; padding: var(--sp-2) var(--sp-3); background: var(--plate); border: 1px solid var(--gold); border-radius: var(--r-2); box-shadow: var(--elev-1); font-size: var(--t-sm); line-height: 1.3; overflow-wrap: anywhere; pointer-events: none; will-change: transform; }
+/* The list for keyboards and screen readers. Closed it is one more button of the camera column (same size, same plate); open it is a panel beside the column, above the
+   ticker and the dock, so it never stands under either, and below the tracker. */
+.wvlist { position: absolute; z-index: var(--z-world-ui); left: var(--edge-l); top: calc(var(--cam-top) + var(--cam-h) + var(--sp-2)); width: max-content; background: var(--plate); border: var(--bw) solid var(--line); border-radius: var(--r-2); box-shadow: var(--elev-1); color: var(--ink); transition: border-color .12s ease-out; }
+@media (hover: hover) { .wvlist:not([open]):hover { border-color: var(--gold); } }
+.wvlist > summary { position: sticky; top: 0; display: flex; align-items: center; justify-content: center; gap: var(--sp-2); min-height: calc(var(--target) - 2 * var(--bw)); min-width: calc(var(--target) - 2 * var(--bw)); padding: 0; font-size: var(--t-sm); color: inherit; cursor: pointer; list-style: none; background: inherit; border-radius: inherit; }
+.wvlist > summary::-webkit-details-marker { display: none; }
+.wvlist > summary svg { flex: none; }
+.wvlist > summary .wvl-t, .wvl-x { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; } /* closed: the button's name is read out, not shown */
+.wvlist[open] { z-index: var(--z-hud); top: auto; bottom: calc(var(--dock-h) + var(--tick-h) + var(--sp-3)); left: calc(var(--edge-l) + var(--cam-w) + var(--sp-2));
+  max-width: min(22rem, calc(100% - var(--edge-l) - var(--cam-w) - var(--sp-2) - var(--edge-r)));
+  max-height: max(6rem, min(26rem, calc(100% - var(--dock-h) - var(--tick-h) - var(--sp-3) - var(--trk-b) - var(--sp-2)))); /* from the ticker's top up to the tracker's foot */
+  overflow: auto; overscroll-behavior: contain; padding: 0 var(--sp-2) var(--sp-1); border-color: var(--gold);
+  scroll-padding: calc(var(--sp-2) + var(--stuck-t, 0px)) var(--sp-2) var(--sp-2); } /* a button scrolled to by Tab rests clear of the sticky heading and its ring is not cut (common.js, fitStuck) */
+.wvlist[open] > summary { justify-content: flex-start; margin: 0 calc(-1 * var(--sp-2)); padding: 0 var(--sp-3); border-bottom: 1px dashed var(--line); margin-bottom: var(--sp-2); }
+.wvlist[open] > summary .wvl-t { position: static; width: auto; height: auto; overflow: visible; clip: auto; white-space: normal; } /* open: it is the panel's heading */
+.wvul { list-style: none; padding: 0; margin: 0 0 var(--sp-1); display: grid; gap: var(--sp-1); }
+.wvul .btn { width: 100%; text-align: left; text-transform: none; letter-spacing: 0; font-weight: 600; }
+
+/* ---- HUD: player card, the three numbers, the clock. The middle block is centred on the screen, not between its neighbours. Each part can wrap (the numbers, the controls)
+   or shorten (the card's second line wraps), so a long handle, a room chip or a big text size makes the bar taller, never makes two parts overlap. ---- */
+.hud { position: absolute; z-index: var(--z-hud); inset: 0 0 auto 0; display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: var(--sp-3); padding: var(--edge-t) var(--edge-r) var(--sp-2) var(--edge-l); pointer-events: none; }
+.hud > * { pointer-events: auto; }
+.hud > .pcard { justify-self: start; } .hud > .res { justify-self: center; } .hud > .ctl { justify-self: end; }
+
+.pcard, .rs, .ibtn, .tracker, .tick, .dk { transition: border-color .12s ease-out, transform .06s ease-out, background-color .12s ease-out; }
+@media (hover: hover) { .pcard:hover, .rs:hover, .ibtn:hover, .tracker:hover, .tick:hover, .dk:hover { border-color: var(--gold); } }
+.pcard:active, .rs:active, .ibtn:active, .tracker:active, .tick:active, .dk:active { transform: translateY(1px); }
+
+.pcard { display: flex; align-items: center; gap: var(--sp-2); min-width: 0; max-width: 100%; padding: .3rem var(--sp-3) .3rem .3rem; background: var(--plate); border: var(--bw) solid var(--line); border-radius: var(--r-3); box-shadow: var(--elev-1); color: var(--ink); font: inherit; text-align: left; cursor: pointer; }
+.ring { --p: 0%; position: relative; width: 3rem; height: 3rem; border-radius: 50%; background: conic-gradient(var(--gold) var(--p), var(--line) 0); display: grid; place-items: center; flex: none; }
+.ring .av { width: 2.4rem; height: 2.4rem; border-radius: 50%; background: var(--panel2); display: flex; align-items: center; justify-content: center; font-size: 1rem; }
+.ring .av i { font-style: normal; margin: 0 -.15rem; }
+.ring .lv { position: absolute; right: -.25rem; bottom: -.2rem; background: var(--gold); color: var(--on-gold); font-size: var(--t-micro); min-width: 1.2rem; height: 1.2rem; padding: 0 .2rem; display: grid; place-items: center; border-radius: var(--r-pill); font-family: ui-monospace, Menlo, monospace; line-height: 1; }
+.ring .pip { position: absolute; left: -.1rem; top: -.1rem; width: .7rem; height: .7rem; border-radius: 50%; background: var(--green); border: 2px solid var(--panel); display: none; } /* unspent skill points, where the words have no room */
+.pcard .who { min-width: 0; }
+.pcard .who b { display: block; font-size: var(--t-md); line-height: var(--lh-tight); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pcard .who small { display: block; font-size: var(--t-micro); line-height: var(--lh-tight); color: var(--mute); overflow-wrap: anywhere; } /* wraps to a second line before it would lose the points to spend */
+.pcard .pt { color: var(--green); font-weight: 700; }
+
+.res { display: flex; flex-wrap: wrap; gap: var(--sp-2); justify-content: center; }
+.rs { position: relative; isolation: isolate; display: block; min-width: 6.8rem; padding: .3rem var(--sp-3) .35rem; background: var(--plate); border: var(--bw) solid var(--line); border-radius: var(--r-2); box-shadow: var(--elev-1); color: var(--ink); font: inherit; text-align: left; cursor: pointer; }
+.rs small { display: block; font-size: var(--t-micro); line-height: var(--lh-tight); text-transform: uppercase; letter-spacing: var(--ls-caps); color: var(--mute); }
+.rs b { display: block; font-size: var(--t-lg); line-height: 1.2; white-space: nowrap; }
+.rs .bar { display: block; height: .3rem; margin-top: .15rem; }
+/* A number going up or down tints its tile green or red, then fades. The tint is a layer of its own laid over the plate and under the words: the plate is an opaque gradient
+   (a background-image), so animating the tile's own background-color would be painted over and never show. z-index -1 inside the tile's own stacking context (isolation)
+   puts the layer above the plate's background and below the text; it fades by opacity alone, which the compositor runs. */
+.rs::before { content: ""; position: absolute; inset: 0; z-index: -1; border-radius: max(0px, calc(var(--r-2) - var(--bw))); opacity: 0; pointer-events: none; }
+.rs.up::before { background: var(--good-bg); animation: rs-flash .9s ease-out; }
+.rs.down::before { background: var(--bad-bg); animation: rs-flash .9s ease-out; }
+@keyframes rs-flash { 0% { opacity: 1; } 100% { opacity: 0; } }
+
+.ctl { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--sp-2); align-items: center; min-width: 0; }
+.ctl select { min-height: var(--target); padding: .1rem var(--sp-2); border-radius: var(--r-2); box-shadow: var(--elev-1); }
+.ibtn { appearance: none; display: inline-grid; place-items: center; min-width: var(--target); height: var(--target); padding: 0 var(--sp-2); background: var(--plate); border: var(--bw) solid var(--line); border-radius: var(--r-2); box-shadow: var(--elev-1); color: var(--ink); font: inherit; font-weight: 700; line-height: 1; cursor: pointer; }
+.ibtn[aria-pressed="true"] { border-color: var(--gold); color: var(--gold); }
+
+/* ---- goal tracker and news ticker. The tracker's width is a variable so a layout can say how wide it is (--trk-w) and an open side drawer can say how much it may take (--trk-cap). ---- */
+.trackerhost { --trk-w: min(20rem, calc(100% - var(--edge-l) - var(--edge-r))); --trk-cap: 100%; position: absolute; z-index: var(--z-aux); left: var(--edge-l); top: calc(var(--hud-h) + var(--sp-1)); width: min(var(--trk-w), var(--trk-cap)); max-height: calc(100% - var(--hud-h) - var(--sp-1) - var(--edge-b)); display: flex; } /* it ends above the bottom edge and the strip a lesson's card stands in (--edge-b): at the largest text beside a drawer its title wraps into a narrow column and was 114px tall, 22px into the strip, under the card's tab */
+.trackerhost > .tracker { min-height: 0; max-height: 100%; overflow: hidden; }
+.tracker { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "lb ct" "ti ti" "ds ds" "br br"; gap: .15rem var(--sp-2); align-items: baseline; width: 100%; padding: var(--sp-2) var(--sp-3); background: var(--plate); border: 1px solid var(--line); border-left: 4px solid var(--gold); border-radius: var(--r-2); box-shadow: var(--elev-2); color: var(--ink); font: inherit; text-align: left; cursor: pointer; }
+.tracker small { font-size: var(--t-micro); text-transform: uppercase; letter-spacing: .1em; line-height: var(--lh-tight); }
+.tracker .tk-lb { grid-area: lb; color: var(--gold); } .tracker .tk-ct { grid-area: ct; color: var(--mute); text-transform: none; letter-spacing: 0; }
+.tracker b { grid-area: ti; font-size: var(--t-md); line-height: var(--lh-tight); overflow-wrap: anywhere; }
+.tracker .tk-ds { grid-area: ds; font-size: var(--t-sm); line-height: 1.35; color: var(--mute); }
+.tracker .bar { grid-area: br; margin-top: .2rem; }
+.tickerhost { position: absolute; z-index: var(--z-aux); left: var(--edge-l); right: var(--edge-r); bottom: calc(var(--dock-h) + var(--sp-2)); display: flex; justify-content: center; pointer-events: none; }
+.tick { pointer-events: auto; display: flex; align-items: baseline; gap: var(--sp-2); max-width: min(46rem, 100%); padding: .35rem var(--sp-3); background: var(--plate); border: 1px solid var(--line); border-left: 4px solid var(--cyan); border-radius: var(--r-2); box-shadow: var(--elev-1); color: var(--ink); font: inherit; font-size: var(--t-sm); line-height: 1.3; text-align: left; cursor: pointer; }
+.tick.bad { border-left-color: var(--red); } .tick.warn { border-left-color: var(--gold); } .tick.good { border-left-color: var(--green); }
+.tick small { flex: none; font-size: var(--t-micro); color: var(--mute); white-space: nowrap; }
+.tick .tk-t { min-width: 0; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; overflow-wrap: anywhere; } /* two lines, never a bare ellipsis */
+
+/* ---- dock ---- */
+.dock { position: absolute; z-index: var(--z-dock); left: 50%; bottom: var(--edge-b); transform: translateX(-50%); display: flex; gap: var(--sp-1); max-width: calc(100% - var(--edge-l) - var(--edge-r)); padding: var(--sp-1); background: var(--plate); border: var(--bw) solid var(--line); border-radius: var(--r-3); box-shadow: var(--elev-2); overflow-x: auto; overscroll-behavior: contain; scrollbar-width: none; }
+.dock::-webkit-scrollbar { display: none; }
+.dk { position: relative; appearance: none; flex: 0 0 auto; display: grid; justify-items: center; align-content: center; gap: 0; min-width: 3.6rem; min-height: var(--target); padding: .3rem .5rem; background: transparent; border: var(--bw) solid transparent; border-radius: var(--r-2); color: var(--ink); font: inherit; cursor: pointer; }
+.dk[aria-pressed="true"] { background: var(--panel2); border-color: var(--gold); box-shadow: inset 0 1px 0 var(--hi); }
+.dk:focus-visible { outline-offset: -3px; }
+.dk .ic { font-size: 1.35rem; line-height: 1.2; }
+.dk .lb { font-size: var(--t-micro); line-height: var(--lh-tight); text-transform: uppercase; letter-spacing: .06em; color: var(--mute); }
+.dk[aria-pressed="true"] .lb { color: var(--gold); }
+.dk .bd { position: absolute; top: -.1rem; left: min(calc(50% + .5rem), calc(100% - 1.4rem)); /* on the icon's corner, not the button's: a stretched button (a tablet's dock) would send the badge away from its icon */ min-width: 1.15rem; height: 1.15rem; padding: 0 .28rem; display: grid; place-items: center; background: var(--red); color: #2a0503; font-size: var(--t-micro); font-weight: 800; line-height: 1; border-radius: var(--r-pill); box-shadow: 0 0 0 2px var(--panel); }
+
+/* ---- drawer ---- */
+.drawer { position: absolute; z-index: var(--z-drawer); top: var(--hud-h); right: var(--edge-r); bottom: calc(var(--dock-h) + var(--sp-2)); width: var(--drawer-w); display: flex; flex-direction: column; background: var(--panel); border: var(--bw) solid var(--line); border-radius: var(--r-2); box-shadow: var(--elev-2); overflow: hidden; overflow: clip; /* clip, not hidden: a hidden box is still a scroll container, which a script's scrollIntoView or the browser's own focus scroll can move (a screen-reader-only span at the end of the list, absolutely placed against this box, made it 52px scrollable, and the panel's title bar and Close button slid out of sight above the edge while a tap's own focus scrolled the list under the finger); a clipped box cannot scroll at all, the list's own body does (.db) */ animation: dslide .22s ease-out; }
+.drawer[hidden] { display: none; }
+@keyframes dslide { from { transform: translateX(24px); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes dsheet { from { transform: translateY(32px); opacity: 0; } to { transform: none; opacity: 1; } }
+.dh { position: relative; display: flex; align-items: center; justify-content: space-between; gap: var(--sp-2); padding: var(--sp-2) var(--sp-3); background: var(--plate); border-bottom: 1px dashed var(--line); }
+.dh h2 { margin: 0; min-width: 0; overflow-wrap: anywhere; } .dh h2:focus { outline: none; }
+/* --db-pad is the body's own padding, published so a panel's sticky bar can bleed out to the drawer's edges by exactly that much (ui-quests.css .qs-nav, ui-travel.css .tv-shiprow). */
+.db { --db-pad: var(--sp-3); position: relative; /* the body is the containing block of what is absolutely placed in it (the screen-reader-only spans), so nothing in it widens the panel's own scroll area */ flex: 1; min-height: 0; overflow: auto; overscroll-behavior: contain; padding: var(--db-pad); display: grid; gap: .7rem; align-content: start;
+  scroll-padding: calc(var(--sp-2) + var(--stuck-t, 0px)) var(--sp-2) calc(var(--sp-2) + var(--stuck-b, 0px)); } /* a control scrolled into view by Tab rests this far inside the edge, so its focus ring is never cut by the clip... */
+/* ...and clear of a bar that stands over the scroller's edge (Focus Not Obscured): the Quests jump bar and the Stock selection bar at the top, the Travel ship row at the foot. Each carries data-stuck, and
+   common.js (fitStuck) writes how far they reach as --stuck-t and --stuck-b after the drawer is drawn and when the window changes size: a bar wraps, so its height is not a number to write here. */
+.db .sect > h3 { display: flex; justify-content: space-between; gap: var(--sp-2); border-bottom: 1px dashed var(--line); padding-bottom: var(--sp-1); margin-bottom: var(--sp-2); text-transform: uppercase; letter-spacing: .06em; font-size: var(--t-sm); color: var(--mute); }
+.dtabs { display: flex; gap: .3rem; flex-wrap: wrap; } .dtabs .btn[aria-pressed="true"] { background: var(--gold); color: var(--on-gold); border-color: var(--gold); }
+.overlay { position: absolute; inset: 0; z-index: var(--z-overlay); pointer-events: none; } .overlay > * { pointer-events: auto; }
+/* While the drawer is a side panel the things that run along the bottom and the top left stop at its edge instead of running under it. */
+.stage[data-drawer]:not([data-drawer=""]) .tickerhost { right: calc(var(--edge-r) + var(--drawer-w) + var(--sp-2)); }
+.stage[data-drawer]:not([data-drawer=""]) .trackerhost { --trk-cap: max(8rem, calc(100% - var(--edge-l) - var(--edge-r) - var(--drawer-w) - var(--sp-2))); }
+.stage[data-drawer]:not([data-drawer=""]) .wvlist[open] { max-width: min(22rem, max(14rem, calc(100% - var(--edge-l) - var(--cam-w) - var(--sp-2) - var(--drawer-w) - var(--sp-2) - var(--edge-r)))); }
+
+/* ---- toasts over the game. They stack up from above the ticker on the right. With a side drawer open they step left of it, but never further than the camera column
+   (--toast-r is how far from the right edge they stand; their width is what is left, up to --toast-max). They are aria-hidden: the same words go to the live region. ---- */
+body:has(.stage) #toasts { --toast-r: var(--edge-r); --toast-max: 26rem; left: auto; right: var(--toast-r); bottom: calc(var(--dock-h) + var(--tick-h) + var(--sp-3)); justify-items: end;
+  width: min(var(--toast-max), calc(100vw - var(--toast-r) - var(--edge-l) - var(--cam-w) - var(--sp-2))); }
+body:has(.stage[data-drawer]:not([data-drawer=""])) #toasts { --toast-r: max(var(--edge-r), min(calc(var(--edge-r) + var(--drawer-w) + var(--sp-2)), calc(100vw - var(--edge-l) - var(--cam-w) - var(--sp-2) - 14rem))); }
+
+/* a side drawer with too little room beside it for a toast (the window is small, or the text big): the newest toast only; shell.js sets data-toasts on the stage */
+body:has(.stage[data-toasts="tight"]) #toasts .toast:nth-last-child(n+2) { display: none; }
+
+/* ---- touch: every control the shell owns is 44px (--target) on a coarse pointer; the world's buttons grow with it ---- */
+@media (pointer: coarse) {
+  .dk { min-width: 3.2rem; }
+  .tick, .tracker { min-height: var(--target); }
+  .btn, .btn.sm, .tab { min-height: var(--target); }
+  input, select, textarea { min-height: var(--target); }
+}
+
+/* ---- narrow: the stage is 58rem wide or less (about 930px at Medium text, 1220px at Extra large). The HUD goes to two rows and the tracker to a one-line chip. A container
+   query in rem, so the switch follows the text size; the single-row HUD needs 58rem at every size. ---- */
+@container stage (max-width: 58rem) {
+  .hud { grid-template-columns: minmax(0, 1fr) auto; row-gap: var(--sp-2); }
+  .hud > .res { grid-column: 1 / -1; grid-row: 2; justify-self: stretch; } /* three tiles share the row; a number that cannot fit wraps its tile down instead of being clipped */
+  .rs { flex: 1 1 auto; min-width: 0; padding-inline: var(--sp-2); }
+  :root[data-size="l"] .rs b, :root[data-size="xl"] .rs b { font-size: var(--t-md); } /* three tiles still fit one row at a big text size */
+  .tracker { grid-template-areas: "ti ct" "br br"; align-items: center; padding: var(--sp-1) var(--sp-2) var(--sp-1) var(--sp-3); }
+  .tracker .tk-lb, .tracker .tk-ds { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; } /* read out, not shown */
+  .tracker .bar { margin-top: .1rem; height: .4rem; }
+  .trackerhost { --trk-w: min(18rem, 64%); }
+}
+@media (max-width: 430px) {
+  .pcard .who { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; } /* the ring and level stay; the name is in the button's label */
+  .pcard { padding-right: .3rem; } .ring .pip { display: block; }
+  .ctl { gap: var(--sp-1); }
+}
+
+/* ---- sheet: narrow and tall. The drawer is a bottom sheet with a grabber; the things it covers step aside. The camera and list buttons stand on the right. ---- */
+@media (max-width: 820px) and (min-height: 521px) {
+  .drawer { left: var(--edge-l); right: var(--edge-r); width: auto; top: max(calc(var(--hud-h) + var(--sp-2)), 36dvh); bottom: calc(var(--dock-h) + var(--sp-1)); border-radius: var(--r-3); animation-name: dsheet; transition: transform .2s ease-out; }
+  .drawer.dragging { transition: none; }
+  .dh { padding-top: 1.2rem; touch-action: none; }
+  .dh::before { content: ""; position: absolute; top: .45rem; left: 50%; width: 2.6rem; height: .3rem; margin-left: -1.3rem; border-radius: var(--r-pill); background: var(--field); }
+  .stage[data-drawer]:not([data-drawer=""]) :is(.trackerhost, .tickerhost, .wvctl, .wvlist) { visibility: hidden; }
+  .stage[data-drawer]:not([data-drawer=""]) .tickerhost { right: var(--edge-r); }
+  .stage[data-drawer]:not([data-drawer=""]) .trackerhost { --trk-cap: 100%; } /* it is hidden, and must not be measured narrow */
+  .wvctl, .wvlist { left: auto; right: var(--edge-r); }
+  .wvlist[open] { left: var(--edge-l); right: auto; max-width: min(22rem, calc(100% - var(--edge-l) - var(--edge-r) - var(--cam-w) - var(--sp-2))); } /* leaves the camera column free */
+  body:has(.stage) #toasts, body:has(.stage[data-drawer]:not([data-drawer=""])) #toasts { --toast-r: calc(var(--edge-r) + var(--cam-w) + var(--sp-2)); left: var(--edge-l); right: var(--toast-r); width: auto; justify-items: start; } /* the full width, less the camera column */
+  body:has(.stage[data-drawer]:not([data-drawer=""])) #toasts { --toast-r: var(--edge-r); top: calc(var(--hud-h) + var(--sp-2)); bottom: auto; } /* a sheet covers the lower screen: toasts go above it, under the HUD (the camera is hidden then) */
+  body:has(.stage[data-drawer]:not([data-drawer=""])) #toasts .toast:nth-last-child(n+3) { display: none; } /* the band above the sheet holds two */
+  .dock { left: var(--edge-l); right: var(--edge-r); transform: none; max-width: none; gap: 2px; padding: 3px; justify-content: space-between; }
+  .dk { flex: 1 1 0; min-width: 0; padding-inline: .2rem; } /* seven buttons share the width: 44px each at 390px, and they never scroll at a big text size */
+}
+@media (max-width: 520px) and (min-height: 521px) { .dk .lb { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; } } /* icon-only: 7 buttons do not fit with words, but the words stay in the button's name */
+
+/* ---- compact: a phone on its side. Everything shrinks to one slim row at the top and one at the bottom; the world gets the rest. ---- */
+@media (max-height: 520px) {
+  .hud { grid-template-columns: auto minmax(0, 1fr) auto; gap: var(--sp-2); padding-bottom: var(--sp-1); }
+  .hud > .res { grid-column: auto; grid-row: auto; justify-self: center; } /* undo the two-row layout above: width and height can both be small */
+  .pcard .who { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; } .pcard { padding-right: .3rem; } .ring .pip { display: block; }
+  .ring { width: 2.5rem; height: 2.5rem; } .ring .av { width: 2rem; height: 2rem; font-size: .85rem; }
+  .rs { flex: 0 0 auto; min-width: 5.4rem; padding: .15rem var(--sp-2); } .rs b { font-size: var(--t-md); }
+  .dk .lb { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .dk { min-width: var(--target); padding-block: .1rem; }
+  .tracker { grid-template-areas: "ti ct" "br br"; padding: var(--sp-1) var(--sp-2) var(--sp-1) var(--sp-3); }
+  .tracker .tk-lb, .tracker .tk-ds { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .tracker .bar { margin-top: .1rem; height: .35rem; }
+  .trackerhost { --trk-w: min(15rem, 40%); }
+  .drawer { bottom: calc(var(--dock-h) + var(--sp-1)); }
+  body:has(.stage) #toasts { --toast-max: 20rem; bottom: calc(var(--dock-h) + var(--tick-h) + var(--sp-2)); }
+  body:has(.stage) #toasts .toast:nth-last-child(n+3) { display: none; } /* two at a time: four would cover half of a 390px-high world (all of them are still read out) */
+  .wvctl { grid-template-columns: repeat(2, auto); gap: var(--sp-1); }
+  .tickerhost { bottom: calc(var(--dock-h) + var(--sp-1)); left: calc(var(--edge-l) + var(--cam-w) + var(--sp-2)); right: calc(var(--edge-r) + var(--cam-w) + var(--sp-2)); } .tick .tk-t { -webkit-line-clamp: 1; line-clamp: 1; } /* the camera and list buttons are 3 rows tall here and reach the ticker's row: it stops short of them, still centred */
+}
+/* A phone on its side that is also narrow (a 640x360 window, which is a desktop at 200% zoom) leaves the news line, with a side drawer open, the strip between the camera column and the drawer: 103px, where the
+   headline had 37px and read "Li..." or "Day 2 T...". As in the bottom sheet (above) the line steps aside while the drawer is open; it is back the moment the drawer shuts, an alert still opens over everything, and the
+   same words are read out. Gone (display: none, not hidden) so the toasts, which stand above it, come down by its height and nothing frames a line that cannot be seen. At 844x390 the strip is 259px and stays. */
+@media (max-height: 520px) and (max-width: 720px) {
+  .stage[data-drawer]:not([data-drawer=""]) .tickerhost { display: none; }
+}
+
+@media (prefers-reduced-motion: reduce) { .drawer, .drawer.dragging { animation: none; transition: none; } }
+:root[data-motion="reduce"] .drawer { animation: none; transition: none; }
+@media (forced-colors: active) { .stage::before, .stage::after { display: none; } .ring { forced-color-adjust: none; } }

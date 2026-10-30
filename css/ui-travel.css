@@ -1,0 +1,74 @@
+/* Travel drawer (js/ui/drawers/travel.js). Every colour comes from the tokens in styles.css, so high contrast and the text sizes work for free.
+   State is never carried by colour alone: open, next and locked also differ by a word, a mark and the line style; gains and losses carry an arrow and words. */
+.tv { display: grid; gap: .8rem; min-width: 0; }
+.tv .btn { min-height: 2.75rem; text-transform: none; letter-spacing: 0; white-space: normal; }
+.tv h3, .tv h4 { overflow-wrap: anywhere; }
+.tv .bar { display: block; }
+.tv-ic { font-size: 1.6rem; line-height: 1; flex: none; }
+.tv-meta { margin: 0; font-size: .78rem; color: var(--mute); overflow-wrap: anywhere; }
+.tv-meta b { color: var(--ink); }
+
+/* where you are and how far you have come */
+.tv-sum { background: var(--panel2); border: 1px solid var(--line); border-left: 6px solid var(--gold); padding: .6rem .75rem; display: grid; gap: .5rem; }
+.tv-here { display: flex; align-items: center; gap: .6rem; }
+.tv-here small { display: block; color: var(--mute); font-size: .7rem; text-transform: uppercase; letter-spacing: .08em; }
+.tv-here b { font-size: 1.05rem; overflow-wrap: anywhere; }
+.tv-pips { display: flex; gap: .28rem; flex-wrap: wrap; align-items: center; }
+.tv-pip { width: .95rem; height: .95rem; display: inline-block; border: 2px solid var(--line); }
+.tv-pip.gap { margin-left: .5rem; }
+.tv-pip.open { background: var(--green); border-color: var(--green); }                       /* filled square */
+.tv-pip.next { border-color: var(--gold); transform: rotate(45deg) scale(.8); }              /* hollow diamond */
+.tv-pip.locked { border-style: dashed; }                                                     /* dashed square */
+
+.tv-tabs { display: flex; gap: .4rem; flex-wrap: wrap; }
+.tv-tabs .btn { flex: 1 1 8rem; }
+
+/* the path: a dotted road with one node per district */
+.tv-tier > .tv-meta { margin: -.1rem 0 .6rem; }
+.tv-path { list-style: none; margin: 0; padding: 0 0 0 2.1rem; position: relative; display: grid; gap: .65rem; }
+.tv-path::before { content: ""; position: absolute; left: calc(.8rem - 1.5px); top: 1rem; bottom: 1rem; border-left: 3px dotted var(--line); }
+.tv-d { position: relative; min-width: 0; background: var(--panel2); border: 1px solid var(--line); border-left: 6px solid var(--za, var(--line)); padding: .6rem .75rem; display: grid; gap: .4rem; }
+.tv-node { position: absolute; left: -2.1rem; top: .55rem; width: 1.6rem; height: 1.6rem; border-radius: 50%; display: grid; place-items: center; background: var(--bg); border: 2px solid var(--line); color: var(--mute); font: 700 .7rem ui-monospace, Menlo, monospace; }
+.tv-d.open .tv-node { background: var(--green); border-color: var(--green); color: #04210f; }
+.tv-d.next { border-color: var(--gold); border-left-color: var(--za, var(--gold)); }
+.tv-d.next .tv-node { border-color: var(--gold); color: var(--gold); }
+.tv-d.locked { background: var(--panel); border-style: dashed; border-left-style: solid; }
+.tv-d.here { box-shadow: inset 0 0 0 2px var(--gold); }
+.tv-d.here .tv-node { box-shadow: 0 0 0 3px var(--gold); }
+.tv-dh { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
+.tv-dh h4 { margin: 0; font-size: 1rem; flex: 1 1 8rem; min-width: 0; }
+.tv-rule { margin: 0; font-size: .88rem; overflow-wrap: anywhere; }
+.tv-gate .bar { height: .9rem; }
+.tv-gate .tv-meta { margin-top: .25rem; }
+.tv-acts { display: flex; gap: .45rem; flex-wrap: wrap; justify-content: flex-end; }
+
+/* freight: the destination picker */
+.tv-crates { display: grid; gap: .4rem; background: var(--panel2); border: 1px solid var(--line); padding: .55rem .7rem; margin-bottom: .6rem; }
+.tv-crates p { margin: 0; overflow-wrap: anywhere; }
+.tv-dests { display: grid; gap: .5rem; }
+.tv-dest { appearance: none; width: 100%; text-align: left; font: inherit; color: var(--ink); cursor: pointer; min-height: 2.75rem; display: grid; gap: .2rem; background: var(--panel2); border: var(--bw) solid var(--line); padding: .55rem .7rem; }
+.tv-dest:hover { border-color: var(--gold); }
+.tv-dest.sel { border-color: var(--gold); background: var(--warn-bg); box-shadow: inset 0 0 0 1px var(--gold); }
+.tv-dn { display: flex; gap: .4rem; align-items: center; flex-wrap: wrap; overflow-wrap: anywhere; }
+.tv-q { font-size: .8rem; color: var(--mute); }
+.tv-q b { color: var(--ink); }
+.tv-dest.sel .tv-q { color: var(--ink); }
+.tv-gap { font-size: .84rem; font-weight: 700; }
+.tv-gap.up { color: var(--green); }
+.tv-gap.down { color: var(--red); }
+.tv-warn { margin: 0; font-size: .78rem; color: var(--gold); overflow-wrap: anywhere; }
+.tv-shiprow { position: sticky; bottom: calc(-1 * var(--db-pad, .8rem)); z-index: 1; display: grid; gap: .4rem; margin: .7rem calc(-1 * var(--db-pad, .8rem)) calc(-1 * var(--db-pad, .8rem)); padding: .6rem var(--db-pad, .8rem); background: var(--panel); border-top: 1px dashed var(--line); } /* the Ship button stays in reach of a long list */
+.tv-shiprow .btn.big { width: 100%; }
+.tv-why { margin: 0; color: var(--gold); }
+.tv-empty { display: grid; gap: .5rem; justify-items: center; text-align: center; padding: 1rem; background: var(--panel2); border: 2px dashed var(--line); }
+.tv-empty p { margin: 0; }
+.tv-big { font-size: 2.4rem; line-height: 1; }
+
+/* freight: crates on the road */
+.tv-frs { display: grid; gap: .6rem; }
+.tv-fr { display: grid; gap: .35rem; background: var(--panel2); border: 1px solid var(--line); border-left: 6px solid var(--cyan); padding: .6rem .7rem; }
+.tv-fr header { display: flex; gap: .5rem; align-items: center; flex-wrap: wrap; }
+.tv-fr h4 { margin: 0; flex: 1 1 9rem; min-width: 0; font-size: .95rem; }
+.tv-fr .bar { height: .9rem; }
+
+@media (max-width: 760px) { .tv-acts { justify-content: stretch; } .tv-acts .btn { flex: 1 1 8rem; } }

@@ -6,28 +6,45 @@ This repository is a **static web app plus an optional message relay**. It is bu
 | Area | Status | Detail |
 |---|---|---|
 | No student PII collected | Implemented | The only identifiers are a random Founder ID (`PC-XXXX`) and a self-chosen alias. No names, emails, accounts or analytics scripts. No third-party requests. |
-| Data location | Implemented | Game state lives in the browser's `localStorage` only (`pc.*` keys). Rooms exchange gameplay numbers, never identity. |
-| Relay server | Implemented, minimal | Forwards messages and keeps the **latest snapshot per founder in memory** for late joiners. Nothing is written to disk and payloads are never logged. Rooms are capped at 400. |
+| Data location | Implemented | Game state lives in the browser's `localStorage` only (`pc.*` keys). Rooms exchange gameplay numbers, the random Founder ID and the alias the student chose, never a name or an account. |
+| Relay server | Implemented, minimal | Forwards messages and keeps the **latest snapshot per founder in memory** for late joiners. Nothing is written to disk and payloads are never logged. A room holds 400 connections and a relay 200 rooms (`MAX_ROOM`, `MAX_ROOMS`). A connection brings a secret key its browser keeps beside its Founder ID, and an instructor's also the room's owner token; the relay keeps only a hash of each, to refuse another connection that claims the same ID or the instructor's seat (`docs/ARCHITECTURE.md`, who is who). |
 | Encryption in transit | Deploy-time | Use `wss://` behind TLS (any host that terminates TLS 1.2+ works). The code does not weaken it. |
 | Accessibility | Implemented, self-assessed | WCAG 2.2 AA targeted: contrast ratios are checked in `tests/a11y.test.mjs` for both themes, keyboard operable, native dialogs, live-region announcements, reduced motion, text sizing, 24px minimum targets. A formal audit and a VPAT still need to be done by a human. |
-| Student deletion | Implemented | "Start over" in the menu deletes local data; clearing site data does too. |
+| Student deletion | Implemented | "Start over" in the menu deletes the current run (the save and its daily checkpoints). The Founder ID, alias, identity key, settings, Academy progress and debrief notes stay until the site's data is cleared in the browser, which deletes everything the game kept. |
+| No cookies, no third parties | Implemented, checked | The game stores in `localStorage` (keys that start with `pc.`) and, for a student tab in a room between the tabs of one browser, one entry in that tab's `sessionStorage` (`pc.tab`, the name of the tab's own slot, gone when the tab closes). No cookies, no analytics, no fonts, scripts or images from another host: the staged page and its stylesheets are checked to ask for nothing outside the site (`scripts/stage.mjs`, `tests/finish-site.test.mjs`). The only network connection the code can open is a WebSocket to a relay address a person types in. |
+| What a crawler and a link preview see | Implemented | The page has a description, a canonical address, Open Graph and Twitter cards, a schema.org description, a `noscript` message, a 404 page, `robots.txt`, `sitemap.xml` and `llms.txt`; none of them contains student data (there is none on the site). `robots.txt` and `sitemap.xml` are written for the address https://imaidan808.github.io/Paperclip-Capitalist/ (case-sensitive: the lower-case path is a 404 on the real host, and the staging check and `tests/site-address.test.mjs` refuse it). Crawlers read `robots.txt` only at the root of a host, so on a GitHub project site it takes effect with a custom domain or a user site, and the sitemap can be given to a search engine's console directly. |
+| Custom domain | Not set up | None is configured. With one, the address in `scripts/stage.mjs`, `index.html`, `404.html`, `robots.txt`, `sitemap.xml` and `llms.txt` changes (the launch test lists every place), and a `CNAME` file would be added to what is staged. |
 
 ## What is NOT implemented (and what would be needed)
 | Requirement in the brief | Status | Needed |
 |---|---|---|
 | LTI 1.3 Advantage, grade passback | Not implemented | A hosted backend with a registered tool and JWKS endpoint (for example `ltijs`), then map the gradebook export to Assignment and Grade Services. For now: **export CSV and import it into the LMS gradebook.** |
 | SAML 2.0 / OIDC SSO | Not implemented | Delegate to the LMS launch (LTI) or an identity proxy; never store credentials. |
-| SOC 2 Type II, ISO 27001 hosting | Not applicable to this repo | An organisational attestation for whoever operates the hosted service, plus a cloud account with the matching reports. |
+| SOC 2 Type II, ISO 27001 hosting | Not applicable to this repo | An organizational attestation for whoever operates the hosted service, plus a cloud account with the matching reports. |
 | AES-256 at rest, HSM key management | Not applicable yet | No server-side database exists. A hosted version should use managed disk encryption and a KMS. |
 | 15-minute snapshots, RPO 15 min, RTO 2 h | Not applicable yet | Needs a database. A Postgres host with point-in-time recovery meets this. |
 | Retention schedule (30/90 days, 24 h breach notification) | Process, not code | Write into the contract and the ops runbook. The server-side data model in `docs/ARCHITECTURE.md` is designed so each element can be purged on that schedule. |
 | Authoritative server for tamper resistance | Not implemented | Today clients are trusted (fine for a class, not for an exam). The planned server runs the same `engine.js` and validates trades. |
 
+## Sound (WCAG 2.2: 1.4.2 Audio Control, 2.1.4, never the only cue)
+The sound layer (`docs/AUDIO.md`) is generated in the browser: no audio files, nothing recorded, settings stored only in the student's browser. Status, self-assessed:
+
+| Requirement | Status | Detail |
+|---|---|---|
+| Nothing plays by itself | Implemented | The title is silent and no audio context exists until the first press; a browser that blocks audio, or has none, leaves the game fully playable. |
+| 1.4.2: audio that runs longer than 3 s has a control | Implemented | The only sounds that can run longer than 3 s without a press are the ambient bed and the repair dial tone. Both are opt-in (off until the student switches them on) and off in the Classroom preset. Mute, key **M** and the speaker button stop them in every window; the Deal Room, where the tone runs, has a Sound toggle and a Dial tone switch of its own. |
+| 2.1.4: a single-key shortcut | Implemented | Key M can be switched off under Display and sound; the speaker button stays. |
+| Classroom (a room is not thirty laptops playing coins) | Implemented | A student who joins a room gets the quieter Classroom preset from the Join press, with one note, what the room changed is restored on leaving, with one note, while what the student changed themselves stays; a student's own sound settings are never overridden (a volume alone is not one), and the student is told once that theirs stay. The instructor's **Sound in the student link** (Normal, Quiet, Off) can add `?sound=quiet` or `?sound=off` to the student link, for as long as the student is in the room; in Classroom the loudest rewards and the shock alert play softer voices. |
+| Sound is never the only cue | Implemented, self-assessed | Every sound has a visual or written counterpart (`docs/AUDIO.md` section 9). The one skill game that depends on timing, the repair dial, has **Careful: pay more, no timing**, a slider under reduced motion and an optional tone for players who cannot see it. |
+| Announcements while a dialog is open | Implemented, checked in Chrome's accessibility tree | A live region outside a modal dialog is not in the tree, so what is said while the Deal Room or the settings are open is said inside them. Not yet run with NVDA, JAWS or VoiceOver: a human audit is still needed. |
+| Listening on laptop speakers, Safari and Firefox | Not verified | Levels are measured by program; the ear is a person's job (`docs/AUDIO.md` 10.5). |
+
 ## Data inventory (this build)
 | Element | Where | Retention | Removal |
 |---|---|---|---|
-| Founder ID, alias | Browser; relay memory while connected | Until cleared | Start over, or clear site data; relay forgets on disconnect and restart |
-| Game state and ledger | Browser | Until cleared | As above |
+| Founder ID, alias | Browser; relay memory while connected | Until cleared | Clear site data (Start over keeps them); relay forgets on disconnect and restart |
+| Identity key (every student) and owner token (an instructor's, shown as the recovery code) | Browser; a hash of each in relay memory | Until cleared; the relay forgets a room 10 minutes after it empties | Clear site data (Start over keeps them). Anyone who has an owner token can run that room, so the instructor keeps it like a password |
+| Game state and ledger | Browser | Until cleared | Start over, or clear site data |
 | Gradebook export | Instructor's download | Instructor's control | Delete the file |
 
 ## HECVAT crosswalk (for your IT office's first conversation)

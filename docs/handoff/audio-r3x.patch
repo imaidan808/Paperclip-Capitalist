@@ -1,0 +1,390 @@
+diff --git a/js/audio/index.js b/js/audio/index.js
+index 524f34c..fdca9fe 100644
+--- a/js/audio/index.js
++++ b/js/audio/index.js
+@@ -2,9 +2,9 @@
+ // `legacySfx`, the five names the game has always called (`sfx.kaching()`...). The legacy names are thin aliases: while the wiring is installed they are no-ops for every known call site, so a
+ // call that has not been migrated yet cannot double an event's sound or contradict it; they play only when no wiring is installed (the Node tests, a page without audio).
+ import { audio, bindSettings } from './instance.js';
+-import { initAudio, wireGame, wireAudio, wired, pendingRoom } from './wire.js';
++import { initAudio, wireGame, wireAudio, wired, pendingRoom, softened, rememberLinkRule } from './wire.js';
+ 
+-export { audio, bindSettings, initAudio, wireGame, wireAudio, wired, pendingRoom };
++export { audio, bindSettings, initAudio, wireGame, wireAudio, wired, pendingRoom, softened, rememberLinkRule };
+ export { migrateAudio, mirrorFlat, audioDefaults, audioSettingsHTML, bindAudioSettings, presetOf, applyPreset, joinRoom, leaveRoom, sanitizeAudio, PRESETS, PRESET_NAMES, statusText, audible, whyQuiet, whyDropped, toggleMute, speakerState, syncAudioSettings } from './settings.js';
+ export { moneySize } from './palette.js';
+ export { RECIPES, IDS } from './recipes.js';
+diff --git a/js/audio/settings.js b/js/audio/settings.js
+index a4e0f29..ded1d58 100644
+--- a/js/audio/settings.js
++++ b/js/audio/settings.js
+@@ -40,11 +40,13 @@ export function audioDefaults() {
+     quiet: false,      // the Classroom rule (3.2): tiny game sounds off, medium and loud 8 dB lower, interface 6 dB lower, ambient, dial and clock sounds off
+     worldTicks: true,  // the world's hover ticks and footsteps (the most frequent game sounds; Calm and Classroom drop them anyway). Off silences those two and nothing else
+     mKey: true,        // key M mutes and unmutes (a single-key shortcut needs a way out, WCAG 2.1.4); the speaker button stays
+-    touched: false,    // the player has changed a sound setting by hand (stops the automatic Classroom preset), or a saved "sound off" was migrated
++    touched: false,    // the player has CHOSEN a mix by hand (a preset, a switch, a mute, key M): stops the automatic Classroom preset. A volume alone is not a choice about the mix (sixth round, UX2). Also set when a saved "sound off" was migrated
+     hinted: false,     // the one-time "sound is on" note has been shown
+   };
+ }
+ const NUM = { master: [0, 100, 5], ambientLevel: [0, 100, 5] };
++/** The two levels: moving one is not a choice about the mix, and does not set `touched`. */
++export const LEVEL_KEYS = ['master', 'ambientLevel'];
+ const BOOL = ['mute', 'ui', 'game', 'ambient', 'dial', 'clockSounds', 'quiet', 'worldTicks', 'mKey', 'touched', 'hinted'];
+ function num(v, lo, hi, step, d) { const n = typeof v === 'number' ? v : typeof v === 'string' && v.trim() !== '' ? Number(v) : NaN; return Number.isFinite(n) ? Math.min(hi, Math.max(lo, Math.round(n / step) * step)) : d; }
+ /** Clamp every field to its range and drop unknown keys: a saved value is never trusted (numbers to their range and step, booleans only when exactly true or false). */
+@@ -77,6 +79,12 @@ export function applyPreset(a, name) {
+   else if (PRESETS[name]) { Object.assign(next, PRESETS[name]); next.mute = false; if (!(next.master > 0)) next.master = 70; }
+   return next;
+ }
++/**
++ * The Classroom rule as a ROOM applies it (the join, the instructor's link): the preset, with the volume left exactly where the student put it and `touched` false, because the rule is the room's and
++ * not the student's choice. A preset the student chooses raises a volume of 0 to 70 (Full at 0 would be silent); a room does not: a student who turned the volume to 0 to be quiet stays at 0 (sixth
++ * round, UX2: a volume alone no longer makes the student `touched`, so the join reaches them, and it must not undo that).
++ */
++export const roomPreset = (a) => ({ ...applyPreset(a, 'classroom'), master: a.master, touched: false });
+ /** Can anything be heard at all? Not muted, not at volume 0, and at least one of the two buses on. */
+ export const audible = (a) => !a.mute && a.master > 0 && (a.ui || a.game);
+ /**
+@@ -106,10 +114,12 @@ export function speakerState(a) {
+   return { on: true, title: 'Sound is on. Press to mute (M)' };
+ }
+ /**
+- * `?sound=off|quiet|full`, read before the first save and only while `touched` is false. An instructor can put it in the student link.
+- * `quiet` in a link that carries a room code (`?room=`, which the instructor's link always does) is the room's rule applied early, not a choice of the student's: it is left `touched: false`, so
+- * joining finds the player already in Classroom, remembers the earlier values and puts them back on leaving the room (`joinRoom`). It used to be marked as the student's own, and a class's laptops stayed
+- * in Classroom for solo play at home for good (fourth round, U6). A quiet link with no room (a lecture hall) is a choice made for the student and stays one.
++ * `?sound=off|quiet|full`, read before the first save and only while `touched` is false. An instructor can put it in the student link (the dashboard's "Sound in the student link": Normal, Quiet, Off).
++ * `quiet` and `off` in a link that carries a room code (`?room=`, which the instructor's link always does) are the room's rule applied early, not a choice of the student's: they are left `touched: false`,
++ * so joining finds the player already under the rule, remembers the earlier values and puts them back on leaving the room (`joinRoom`, `leaveRoom`). `quiet` used to be marked as the student's own, and a
++ * class's laptops stayed in Classroom for solo play at home for good (fourth round, U6). `off` is Classroom with Mute on (sixth round, UX3): a student who presses M in the room is not in Full but in
++ * the quieter room, and the mute is told from a student's own by `touched`, which every mute of a student's sets. A quiet or off link with no room (a lecture hall, a hand-made address) is a choice made
++ * for the student and stays one.
+  */
+ function fromAddress(a, search) {
+   if (a.touched || !search) return a;
+@@ -117,11 +127,21 @@ function fromAddress(a, search) {
+   try { const q = new URLSearchParams(search); v = q.get('sound'); room = !!q.get('room'); } catch { /* not a query string */ }
+   if (!v) return a;
+   v = v.toLowerCase();
+-  if (v === 'off') return { ...a, mute: true, touched: true };
+-  if (v === 'quiet' || v === 'classroom') return { ...applyPreset(a, 'classroom'), touched: !room };
++  if (v === 'off') return room ? { ...roomPreset(a), mute: true } : { ...a, mute: true, touched: true };
++  if (v === 'quiet' || v === 'classroom') return room ? roomPreset(a) : { ...applyPreset(a, 'classroom'), touched: true };
+   if (v === 'full') return { ...a, touched: true };
+   return a;
+ }
++/**
++ * The room rule an address applied before the first save (sixth round): { rule: 'quiet' | 'off', before } with `before` the settings it replaced, or null when the address applied none (no sound
++ * flag, no room, settings the student has chosen, or a flag that is the student's own choice). The page remembers it at boot, so a student who opens the link and never joins is given their own sound
++ * back by the first screen that is not the room's (the Draft of a solo run, a game, Start over), and not left muted or in Classroom for good by a link they opened once.
++ */
++export function addressRule(settings, search) {
++  const plain = migrateAudio(settings, ''), linked = migrateAudio(settings, search);
++  if (plain.touched || linked.touched || !(linked.quiet || linked.mute) || (plain.quiet === linked.quiet && plain.mute === linked.mute)) return null;
++  return { rule: linked.mute ? 'off' : 'quiet', before: plain };
++}
+ /**
+  * Read the sound settings out of the saved `settings` object, whatever it holds (7.1). Pure.
+  * 1. `settings.audio` with v === 1: every field clamped. 2. Otherwise the defaults, from the flat keys when they are there; an old `sound: false` becomes `mute` AND `touched`:
+@@ -147,24 +167,29 @@ export function mirrorFlat(settings) {
+   settings.sound = !a.mute; settings.vol = a.master; settings.sfxUi = a.ui; settings.sfxGame = a.game; settings.ambient = a.ambient;
+   return settings;
+ }
+-/** Joining a classroom room: a student who has never touched a sound setting gets the Classroom rule, the earlier values are kept. Returns { next, before } or null. */
++/**
++ * Joining a classroom room: a student who has never CHOSEN a sound setting gets the Classroom rule, the earlier values are kept. Returns { next, before, rule } or null. `rule` is 'quiet' (Classroom)
++ * or 'off' (Classroom with Mute on, the instructor's "Sound: Off" link, sixth round UX3); a student's own mute is `touched`, so an untouched mute is always the room's.
++ */
+ export function joinRoom(a) {
+-  if (a.touched) return null;
+-  // Quiet and never touched by hand: the room's link put it there (`fromAddress`). The player's earlier values are the Full preset on the volume they have, which is what they come back to on leaving.
+-  if (a.quiet) return { before: { ...a, ...PRESETS.full }, next: { ...a } };
+-  return { before: { ...a }, next: { ...applyPreset(a, 'classroom'), touched: false } };
++  if (a.touched || (a.mute && !a.quiet)) return null; // a mute that is not the room's (the room's is Classroom with Mute on) is never undone by a join
++  // Quiet (or off) and never touched by hand: the room's link put it there (`fromAddress`). The player's earlier values are the Full preset on the volume they have, which is what they come back to on leaving.
++  if (a.quiet) return { before: { ...a, ...PRESETS.full, mute: false }, next: { ...a }, rule: a.mute ? 'off' : 'quiet' };
++  return { before: { ...a }, next: roomPreset(a), rule: 'quiet' };
+ }
+-/** The fields the Classroom preset sets (and the mute it clears): the only ones the room changed, so the only ones `leaveRoom` gives back. The volume, the ambience level, the world ticks and the M shortcut are the player's own throughout. */
++/** The fields the Classroom preset sets (and the mute it clears or the room's Off sets): the only ones the room changed, so the only ones `leaveRoom` gives back. The volume, the ambience level, the world ticks and the M shortcut are the player's own throughout. */
+ const ROOM_KEYS = ['mute', 'ui', 'game', 'ambient', 'dial', 'clockSounds', 'quiet'];
+ /**
+  * Leaving the room gives back what the ROOM changed and keeps what the PLAYER did (fifth round, U1). A field still as the room set it goes back to how it was before; a field the player has changed
+  * since (a mute, Interface sounds off, Full chosen under Display and sound) is theirs and stays; the volume and the other fields the rule never touches are carried as they are now. It was
+  * all or nothing: any change at all, and the volume is the commonest one a student makes in a lab, left the student in Classroom for good and the remembered values were deleted unused.
+- * `touched` is theirs only when they chose the mix: a volume is not a choice about it, so the next room is a room again. Returns `a` itself when nothing changes.
++ * `touched` is theirs only when they chose the mix: a volume is not a choice about it, so the next room is a room again. `rule` is what the room set ('quiet', or 'off' for Classroom with Mute on:
++ * a student who pressed M in an Off room has unmuted by their own act, which stays, and the Classroom the room put them in goes). Returns `a` itself when nothing changes.
+  */
+-export function leaveRoom(a, before) {
++export function leaveRoom(a, before, rule = 'quiet') {
+   if (!before) return a;
+-  const room = { ...applyPreset(before, 'classroom'), touched: false }; // what joining made of the earlier values
++  const room = roomPreset(before); // what joining made of the earlier values
++  if (rule === 'off') room.mute = true;
+   const next = { ...a };
+   let theirs = false;
+   for (const k of ROOM_KEYS) { if (a[k] === room[k]) next[k] = before[k]; else theirs = true; }
+@@ -173,11 +198,20 @@ export function leaveRoom(a, before) {
+ }
+ /**
+  * The one note when the room's rule is released: what the sound is now (so a student is told it changed, and to what) and why. Worded for both ways out of a room: leaving it, and a Back out of the Draft
+- * that was told "Classroom (quieter) in this room" before any room was joined.
++ * that was told "Classroom (quieter) in this room" before any room was joined. `rule` 'off' says the mute was the room's.
++ */
++export function leftRoomText(next, rule = 'quiet') {
++  const p = presetOf(next || {}), now = p === 'full' || p === 'interface' ? PRESET_NAMES[p] : 'how you had it';
++  return rule === 'off' ? `Sound is back to ${now}: the room turned it off only while you were in it.` : `Sound is back to ${now}: Classroom sound applies only in a room.`;
++}
++/**
++ * The note for a student who joins with sound settings of their own (sixth round, UX2): nobody tells them anything otherwise, their fanfares play at full volume in a room that was told "sound is quiet",
++ * and the instructor cannot see who they are. It names what stays and how to get quieter. `link` is what the instructor's link asked for ('quiet', 'off' or '').
+  */
+-export function leftRoomText(next) {
+-  const p = presetOf(next || {});
+-  return `Sound is back to ${p === 'full' || p === 'interface' ? PRESET_NAMES[p] : 'how you had it'}: Classroom sound applies only in a room.`;
++export function ownSoundText(a, link = '') {
++  const p = presetOf(a || {}), what = p === 'custom' ? 'your own mix' : PRESET_NAMES[p], at = `${what}, ${Number.isFinite(+a?.master) ? +a.master : 70} percent`;
++  const asked = link === 'off' ? "Your instructor's link asked for no sound, but your own" : link === 'quiet' ? "Your instructor's link asked for quiet sound, but your own" : 'Your own';
++  return `${asked} sound settings stay in this room (${at}). Press M to mute, or choose Classroom (quieter) under Display and sound.`;
+ }
+ 
+ // ---- the Sound section (7.2)
+@@ -308,7 +342,9 @@ export function testSaid(a) {
+ export function bindAudioSettings(root, deps) {
+   const { audio, settings, save, announce } = deps;
+   const A = () => settings.audio;
+-  const set = (patch, store = true) => { settings.audio = { ...A(), ...patch, touched: true }; if (store) save?.(); else audio.sync?.(); };
++  // A change of LEVEL (the volume, the ambience level) is not a choice about the mix (sixth round, UX2): it leaves `touched` as it was, so a student who only turned the volume down is still put in the
++  // room's rule when they join one (it used to exempt them for good, and they met the fanfares of a room told "sound is quiet" with nothing said). Every other change is a choice and stops the rule.
++  const set = (patch, store = true) => { const choice = Object.keys(patch).some((k) => !LEVEL_KEYS.includes(k)); settings.audio = { ...A(), ...patch, ...(choice ? { touched: true } : {}) }; if (store) save?.(); else audio.sync?.(); };
+   const refresh = () => syncAudioSettings(root, A(), audio.state);
+   let testing = false;
+   for (const el of root.querySelectorAll('[data-snd]')) {
+diff --git a/js/audio/wire.js b/js/audio/wire.js
+index 9f09ab0..e94b0dd 100644
+--- a/js/audio/wire.js
++++ b/js/audio/wire.js
+@@ -6,7 +6,7 @@
+ // RULE OF THE GAME: sound never carries hidden information. Nothing here reads `buy.fake`, `inspect.caught`, a lot's truth, a rival's limit or an auction's `surplus`.
+ import { audio } from './instance.js';
+ import { moneySize } from './palette.js';
+-import { joinRoom, leaveRoom, leftRoomText, toggleMute, HINT_PAGE_TEXT } from './settings.js';
++import { joinRoom, leaveRoom, leftRoomText, toggleMute, ownSoundText, addressRule, audible, HINT_PAGE_TEXT } from './settings.js';
+ import { ZONES } from '../config.js';
+ 
+ const calls = (...c) => c.filter(Boolean);
+@@ -14,6 +14,22 @@ export const newWireState = () => ({ sale: null, saleAt: -Infinity, falling: fal
+ const sizeFor = (amount, hooks) => moneySize(amount, hooks?.netWorth?.());
+ const costFor = (amount, hooks) => { const z = sizeFor(amount, hooks); return z === 'xl' ? 'l' : z; };
+ const SPEED_STEPS = [0.25, 1, 4, 16, 64];
++/**
++ * The Classroom rule's softer voices (sixth round, UX3). In a room the tiny game sounds are off and everything else is 6 to 8 dB lower, but a lab of forty laptops still played a loud-tier fanfare
++ * for every level, every milestone, every epic achievement and the same loud alert on every laptop at the moment the instructor deployed a shock. With the rule on, those play the voice one tier
++ * down that the sound map already has, so nothing new is composed and every level of the tiers is as measured: a level plays its everyday run (`level.up` s, never the full fanfare or the big one),
++ * an epic achievement plays the rare one, a milestone the quest-complete run, and the three scheduled shocks play the medium shock voices (TikTok the bright one, the Fed and the tariff the sinking
++ * one). The toast, the ledger row and the breaking-news dialog say what happened in words either way. `quiet` is `settings.audio.quiet`. Returns [id, opts]; with the rule off it is the request unchanged.
++ */
++const SOFT_SHOCK = { tiktok: 'viral', fed: 'glut', tariff: 'glut' };
++export function softened(id, opts = {}, quiet = false) {
++  if (!quiet) return [id, opts];
++  if (id === 'level.up') return [id, { ...opts, variant: 's' }];
++  if (id === 'achievement' && opts.variant === 'epic') return [id, { ...opts, variant: 'rare' }];
++  if (id === 'milestone') return ['quest.complete', { variant: 'quest' }];
++  if (id === 'alert.shock' && Object.prototype.hasOwnProperty.call(SOFT_SHOCK, opts.variant)) return [id, { ...opts, variant: SOFT_SHOCK[opts.variant] }];
++  return [id, opts];
++}
+ /** The engine writes the ledger row of a pool sale (with "(settles in 24h)" when the cash lands later) one line before it emits `sell-pool`, and the event itself carries no delay. */
+ export function poolDelayed(s) { const L = s && Array.isArray(s.ledger) ? s.ledger : [], r = L[L.length - 1]; return !!r && r.type === 'pool' && /\(settles in \d+h\)/.test(String(r.text)); }
+ /** The cash a hire, a level, an upgrade or a client just cost: the ledger row the engine wrote one line before its event (0 when there is none, or it is not this step's). */
+@@ -34,6 +50,7 @@ export function eventCalls(ev, st = newWireState(), hooks = {}) {
+   if (!ev || typeof ev !== 'object') return [];
+   const now = hooks.now ? hooks.now() : 0, pan = (k, id) => (hooks.pan ? hooks.pan(k, id) : undefined), away = (z) => awayFrom(z, hooks);
+   const num = (v) => (Number.isFinite(+v) ? +v : 0);
++  const soft = (id, opts) => calls(['request', ...softened(id, opts, !!(hooks.quiet && hooks.quiet()))]); // the Classroom rule's softer voice for a loud reward or alert
+   switch (ev.type) {
+     case 'pitch': {
+       const price = num(ev.price), gain = Number.isFinite(+ev.gain) ? +ev.gain : 0, where = pan('zone', ev.zone);
+@@ -81,11 +98,11 @@ export function eventCalls(ev, st = newWireState(), hooks = {}) {
+     case 'client': { const amt = hooks.cost ? hooks.cost('client', ev.tier) : 0, z = sizeFor(amt, hooks); return calls(['request', 'crew.client', { variant: ev.tier === 'smb' ? 'smb' : 'ent', cause: 'money', with: amt && (z === 'l' || z === 'xl') ? [['cash.out', { size: 'l', gainDb: -4 }]] : [] }]); }
+     case 'audit': return calls(['request', 'audit.result', { variant: ev.ok ? 'pass' : 'fail', noCoin: !ev.ok && now - st.fineWaivedAt < 50 }]);
+     case 'zone': { const tier = hooks.zoneTier ? hooks.zoneTier(ev.id) : (ZONES[ev.id]?.tier || 1); return calls(['request', 'zone.open', { variant: tier >= 3 ? 't4' : 't1', params: { t: Math.min(4, Math.max(1, tier)) }, pan: pan('zone', ev.id), meta: { tier } }]); }
+-    case 'milestone': { const n = Math.min(3, Math.max(1, num(ev.n))); return calls(['request', 'milestone', { variant: 'm' + n }]); }
+-    case 'shock': return ['tiktok', 'fed', 'tariff', 'viral', 'glut', 'scare'].includes(ev.kind) ? calls(['request', 'alert.shock', { variant: ev.kind }]) : [];
++    case 'milestone': { const n = Math.min(3, Math.max(1, num(ev.n))); return soft('milestone', { variant: 'm' + n }); }
++    case 'shock': return ['tiktok', 'fed', 'tariff', 'viral', 'glut', 'scare'].includes(ev.kind) ? soft('alert.shock', { variant: ev.kind }) : [];
+     case 'p2p': return ev.npc ? calls(['play', 'ui.ok', {}]) : []; // otherwise silent: swap.done plays from the completion note
+     case 'skill': return calls(['request', 'skill.up', {}]);
+-    case 'level': return calls(['request', 'level.up', { meta: { level: num(ev.level) } }]);
++    case 'level': return soft('level.up', { meta: { level: num(ev.level) } });
+     case 'day': return calls(['request', 'day.turn', { clock: true }]);
+     case 'margin-call': return calls(['request', 'alert.margin-call', {}]);
+     case 'insolvent': return calls(['request', 'alert.insolvent', {}]);
+@@ -258,9 +275,32 @@ export function controlFor(c) {
+   return ['play', 'ui.tick', { variant: c.big ? 'full' : 'light' }];
+ }
+ 
+-// ---- the Classroom rule (7.1): a student who joins a room and has never touched a sound setting gets Classroom, with one toast; the earlier values come back when they leave
++// ---- the Classroom rule (7.1): a student who joins a room and has never chosen a sound setting gets Classroom, with one toast; the earlier values come back when they leave
+ export const BEFORE_ROOM = 'audioBeforeRoom';
++/** kv key: which rule the remembered values are the way out of ('quiet', or 'off' for the instructor's Sound: Off link; sixth round, UX3). */
++export const ROOM_RULE = 'audioRoomRule';
+ export const ROOM_TOAST = 'Sound is set to Classroom (quieter) in this room. Press M to mute, or change it under Display and sound.'; // the title, the Draft and the game all have a Display and sound button; M works everywhere
++export const ROOM_OFF_TOAST = 'Sound is off in this room, as your instructor chose. Press M to turn it on (Classroom, quieter); your own sound comes back when you leave.';
++/**
++ * What an address asked of the sound (`?sound=quiet|off`), or '' (sixth round, UX2): a student who has sound settings of their own is told what stays, and what the instructor's link had asked for.
++ * `search` is for a test; the page reads its own address.
++ */
++export function linkSound(search) {
++  try { const v = (new URLSearchParams(search ?? (typeof location !== 'undefined' ? location.search : '')).get('sound') || '').toLowerCase(); return v === 'off' ? 'off' : v === 'quiet' || v === 'classroom' ? 'quiet' : ''; } catch { return ''; }
++}
++/**
++ * At boot, remember the room rule an address applied before the first save (settings.js `addressRule`), so that a student who opens an instructor's link and never joins is not left muted or in
++ * Classroom for good: the first screen that is not the room's finds the remembered values and gives them back (`applyRoomRule`). Never over a rule already remembered. Returns the rule or null.
++ */
++export function rememberLinkRule(kv, settings, search) {
++  try {
++    if (!kv || kv.get(BEFORE_ROOM)) return null;
++    const r = addressRule(settings, search);
++    if (!r) return null;
++    kv.set(BEFORE_ROOM, r.before); kv.set(ROOM_RULE, r.rule);
++    return r.rule;
++  } catch { return null; }
++}
+ /**
+  * d: { settings, save(), toast(msg, level), kv }. inRoom: the student is in a room now. Idempotent: it acts only on the way in (nothing remembered yet) and on the way out (something remembered).
+  * Returns 'joined', 'left' or null.
+@@ -270,19 +310,20 @@ export function applyRoomRule(d, inRoom) {
+   if (!a || !d.kv) return null;
+   const before = d.kv.get(BEFORE_ROOM);
+   if (inRoom && !before) {
+-    const j = joinRoom(a); if (!j) return null; // touched by hand, or already quiet: the player's choice stands
+-    d.kv.set(BEFORE_ROOM, j.before);
++    const j = joinRoom(a); if (!j) return null; // chosen by hand, or already quiet: the player's choice stands
++    d.kv.set(BEFORE_ROOM, j.before); d.kv.set(ROOM_RULE, j.rule);
+     d.settings.audio = { ...j.next };
+     d.save?.();
+-    d.toast?.(ROOM_TOAST, 'info');
++    d.toast?.(j.rule === 'off' ? ROOM_OFF_TOAST : ROOM_TOAST, 'info');
+     return 'joined';
+   }
+   if (!inRoom && before) {
+-    const next = leaveRoom(a, before); // what the room changed goes back, what the student did stays (settings.js)
+-    d.kv.del(BEFORE_ROOM); // the remembered values have been used
++    const rule = d.kv.get(ROOM_RULE) === 'off' ? 'off' : 'quiet';
++    const next = leaveRoom(a, before, rule); // what the room changed goes back, what the student did stays (settings.js)
++    d.kv.del(BEFORE_ROOM); d.kv.del(ROOM_RULE); // the remembered values have been used
+     if (next !== a) {
+       d.settings.audio = { ...next }; d.save?.();
+-      if (a.quiet && !next.quiet && !next.mute) d.toast?.(leftRoomText(next), 'info'); // one note, only when the rule was released and a sound can be heard: the earlier values used to vanish without a word (fifth round, U1)
++      if (a.quiet && !next.quiet && !next.mute) d.toast?.(leftRoomText(next, rule), 'info'); // one note, only when the rule was released and a sound can be heard: the earlier values used to vanish without a word (fifth round, U1)
+     }
+     return 'left';
+   }
+@@ -294,8 +335,9 @@ export const TOLD_ROOM = 'audioToldRoom';
+  * A pending join counts as "in a room" for sound (docs/AUDIO.md 7.1, third round). `S.joinRoom` runs when Begin is pressed, after the Draft, but a whole class presses Begin on the instructor's
+  * word and the Draft's `draft.begin` is a loud sound: with the rule applied only when the game mounts, thirty laptops played a fanfare at full volume. So the rule applies from the moment the
+  * Draft opens with a room code: `room` is the pending join ({ code }) and a falsy value lets it go (Back to the title, or any way out of the Draft that is not a join). It is the same rule as a
+- * room's and idempotent: a player who has touched a sound setting keeps their own, and the earlier values come back when the player leaves (a Back out of the Draft included). A player who is
+- * already in Classroom (the link said `?sound=quiet`, or they chose it) is told once per room, so a quiet game is never an unexplained one. `d` is the page's deps (`initAudio` sets them).
++ * room's and idempotent: a player who has chosen a sound setting keeps their own, and the earlier values come back when the player leaves (a Back out of the Draft included). A player who is
++ * already under the rule (the link said `?sound=quiet` or `off`, or they chose Classroom) is told once per room, so a quiet game is never an unexplained one; a player who keeps a mix of their own is told
++ * that too, once per room, and how to get quieter (sixth round, UX2). `d` is the page's deps (`initAudio` sets them).
+  * Returns 'joined', 'left', 'told' or null.
+  */
+ export function pendingRoom(room, d = deps) {
+@@ -305,7 +347,12 @@ export function pendingRoom(room, d = deps) {
+   if (!code) return r;
+   if (r === 'joined') { try { d.kv?.set(TOLD_ROOM, code); } catch { /* no storage */ } return r; }
+   const a = d.settings && d.settings.audio;
+-  if (r === null && a && a.quiet === true && !a.mute && d.kv && d.kv.get(TOLD_ROOM) !== code) { d.kv.set(TOLD_ROOM, code); d.toast?.(ROOM_TOAST, 'info'); return 'told'; }
++  if (r === null && a && d.kv && d.kv.get(TOLD_ROOM) !== code) {
++    const say = (text) => { d.kv.set(TOLD_ROOM, code); d.toast?.(text, 'info'); return 'told'; };
++    if (a.quiet === true && a.mute && !a.touched) return say(ROOM_OFF_TOAST); // the link's Off, applied at boot
++    if (a.quiet === true && !a.mute) return say(ROOM_TOAST);
++    if (a.touched && !a.quiet && audible(a)) return say(ownSoundText(a, linkSound())); // their own mix stays: nobody else will tell them (and the instructor cannot see them)
++  }
+   return r;
+ }
+ 
+@@ -320,6 +367,8 @@ const roomAsked = () => {
+   try { return !!(document.getElementById('jc')?.value || '').trim(); } catch { return false; }
+ };
+ const pageState = { repayF: null, bids: 0 };
++/** The trusted inputs that create or resume the context (sixth round, UX1): a press, a touch, a key, and a bare click (assistive technology's default action sends only that). */
++export const UNLOCK_EVENTS = ['pointerdown', 'pointerup', 'touchend', 'keydown', 'click'];
+ /** A dialog that closes within this long of a press that played a sound of its own is closed by that press: the press is the voice (fourth round, W-4). Escape and a click on the backdrop play no press sound, so they still get the close. */
+ const PRESS_CLOSES_MS = 250;
+ /** Leaving a game stops its voices, except one that began in the last 150 ms: the press that left (Open debrief, Leave) has its own tick, and a 40 ms fade cut it to a blip (fourth round, W-4). */
+@@ -343,6 +392,8 @@ export function initAudio(d = {}) {
+   // 1. the first activating input creates or resumes the context; that same press plays its tick as soon as it can
+   const unlock = guard((e) => {
+     if (e.isTrusted === false) return; // a script-made pointerdown or click is no gesture: Chrome refuses the context it would make and logs a warning for each (lab automation); a real press follows
++    // A click with no pointer or key event before it is how a screen reader's or a switch device's default action reaches a page (sixth round, UX1): `click` and `pointerup` unlock too, or the whole game
++    // stays silent for the people who most need the repair dial tone. A mouse press is still unlocked by its pointerdown, first; the later events find the context running and only resume it.
+     if (e.type === 'keydown' && (e.key === 'Escape' || /^(Shift|Control|Alt|Meta|CapsLock)$/.test(e.key))) return;
+     audio.touch(); if (audio.state !== 'running') audio.unlock();
+     // The first minute (7.4): the title and the Draft play sounds from the first click with no speaker button on the page, so the one-time note is made here when no game is mounted yet
+@@ -352,7 +403,7 @@ export function initAudio(d = {}) {
+     const a = deps.settings?.audio, joining = inJoinPanel(e.target) || roomAsked(), idle = e.type === 'keydown' && e.key !== 'Enter' && e.key !== ' ';
+     if (!gamesWired && a && !a.hinted && !a.mute && !a.quiet && !joining && !idle && audio.supported && deps.toast) { deps.settings.audio = { ...a, hinted: true }; deps.save?.(); deps.toast(HINT_PAGE_TEXT, 'info'); }
+   });
+-  for (const t of ['pointerdown', 'touchend', 'keydown']) document.addEventListener(t, unlock, opts);
++  for (const t of UNLOCK_EVENTS) document.addEventListener(t, unlock, opts);
+   // 2. visibility: hidden stops every voice and suspends; visible resumes after the shell's own tick has run
+   document.addEventListener('visibilitychange', guard(() => audio.setHidden(document.hidden)));
+   addEventListener('pagehide', guard((e) => { if (!e.persisted) audio.close(); }));
+@@ -471,6 +522,7 @@ export function wireGame(ctx) {
+     pan: (kind, id) => { try { const wv = ctx.world?.(), r = wv?.rectOf ? wv.rectOf(kind, id) : wv?.world?.rectOf?.(kind, id); if (!r) return 0; const w = innerWidth || 1; return Math.max(-0.6, Math.min(0.6, ((r.x + r.w / 2 - w / 2) / (w / 2)) * 0.6)); } catch { return 0; } }, // a thing whose place is unknown is centred (a sound is as loud there as anywhere)
+     cost: (kind) => lastSpend(g()?.s, kind),
+     poolDelayed: () => poolDelayed(g()?.s),
++    quiet: () => !!(deps && deps.settings && deps.settings.audio && deps.settings.audio.quiet === true), // the Classroom rule: loud rewards and alerts play their softer voice (`softened`)
+   };
+   let alive = true, lastAmb = 0, ambSig = '';
+   const lag = () => { // how many real milliseconds of game the engine still has to replay (0 while paused)
+diff --git a/js/ui/common.js b/js/ui/common.js
+index ea1009a..3b8eb07 100644
+--- a/js/ui/common.js
++++ b/js/ui/common.js
+@@ -1,6 +1,6 @@
+ // Shared UI plumbing: DOM helpers, focus-safe rendering, announcements, dialogs, settings, sound and pixel fx.
+ import { kv } from '../session.js';
+-import { audio, bindSettings, initAudio, legacySfx, migrateAudio, mirrorFlat, audioSettingsHTML, bindAudioSettings } from '../audio/index.js';
++import { audio, bindSettings, initAudio, legacySfx, migrateAudio, mirrorFlat, audioSettingsHTML, bindAudioSettings, rememberLinkRule } from '../audio/index.js';
+ export { fmtMoney as money, fmtPct as pct, fmtX as xfmt } from '../market.js';
+ 
+ export const $ = (s, r = document) => r.querySelector(s);
+@@ -11,7 +11,9 @@ export const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ESC[c]);
+ // ---- settings (contrast, motion, text size, sound). Stored locally only. `settings.audio` holds the sound settings (js/audio/settings.js, docs/AUDIO.md 7.1); `sound`, `vol`, `sfxUi`, `sfxGame`
+ // and `ambient` mirror it, and an older save that only knows `sound` is migrated (a player who turned sound off stays silent). `?sound=off|quiet|full` is read before the first save.
+ export const settings = Object.assign({ contrast: 'normal', motion: 'auto', size: 'm', sound: true }, kv.get('settings') || {});
+-settings.audio = migrateAudio(settings, typeof location !== 'undefined' ? location.search : '');
++const AT = typeof location !== 'undefined' ? location.search : '';
++rememberLinkRule(kv, settings, AT); // a room rule the link applies (quiet, or off) is remembered before the first save and before `settings.audio` is replaced, so a student who never joins is given their own sound back
++settings.audio = migrateAudio(settings, AT);
+ mirrorFlat(settings);
+ bindSettings(settings);
+ export function applySettings() {
+diff --git a/js/ui/shell.js b/js/ui/shell.js
+index ca23867..ec999b9 100644
+--- a/js/ui/shell.js
++++ b/js/ui/shell.js
+@@ -17,7 +17,7 @@ import { hudHTML, trackerHTML, tickerHTML } from './hud.js';
+ import { DRAWERS } from './drawers/index.js';
+ import { openDeal } from './deal.js';
+ import { createWorldView } from './worldview.js';
+-import { audio, wireAudio, toggleMute } from '../audio/index.js';
++import { audio, wireAudio, toggleMute, softened } from '../audio/index.js';
+ import { createCues } from './audiocues.js';
+ import { Progress } from '../meta/progress.js';
+ import { fmtMoney as money, fmtPct as pct } from '../market.js';
+@@ -290,7 +290,7 @@ export function mountGame(root, S, hooks) {
+         const msg = kind === 'quest' ? `Quest complete: ${def.title}` : kind === 'achievement' ? `Achievement: ${def.title}` : `Daily bounty done: ${def.title}`;
+         toast(msg, 'good', undefined, { own: true }); sfx.level(); burst({ power: kind === 'achievement' && def.rarity === 'epic' ? 1.6 : 1 }); announce(msg);
+         // the reward is one more request in the burst that caused it (a sale, a level): the collector (docs/AUDIO.md 3.4.2) picks what is heard
+-        if (kind === 'quest') audio.request('quest.complete'); else if (kind === 'achievement') audio.request('achievement', { variant: ['common', 'rare', 'epic'].includes(def.rarity) ? def.rarity : 'common', meta: { rarity: def.rarity } }); else audio.request('daily.done');
++        if (kind === 'quest') audio.request('quest.complete'); else if (kind === 'achievement') audio.request(...softened('achievement', { variant: ['common', 'rare', 'epic'].includes(def.rarity) ? def.rarity : 'common', meta: { rarity: def.rarity } }, settings.audio?.quiet === true)); else audio.request('daily.done');
+       },
+       onCodex(entry) { toast(`Codex unlocked: ${entry.title}`, 'info', undefined, { own: true }); sfx.blip(); audio.request('codex.unlock'); },
+     });

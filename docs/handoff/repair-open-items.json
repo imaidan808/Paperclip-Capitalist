@@ -1,0 +1,29 @@
+[
+ {
+  "id": "PB-1",
+  "severity": "major",
+  "area": "Academy coach card placement vs the open drawer's header",
+  "problem": "With a drawer open, the lesson card is placed over the drawer's header, and a real tap at the centre of the drawer's X (Close) button lands on the card instead; the drawer stays open. The architecture note says the card keeps off the drawer's buttons.",
+  "evidence": "Demonstrated with a real tap at 768x1024 lesson 1 step 4 (Market open): Close Market box 704,390,38,38, elementFromPoint = div.ac-coach-in 'First Swap - Step 4 of 4...', after the tap the drawer is still open (demo-t768-m01.png, shots/m01-768x10242-sweep_drawer_Market-1.png). Same hit-test result in: 768x1024 lessons 1, 3, 4, 8, 10; 360x640 lessons 1 (Close Stock), 5 (Close Quests, shots/m05-360x6403-sweep_drawer_after_tabs_Quests-1.png: card over title and X), 7, 8, 9 (Close Stock/Travel), 10; 640x360 lessons 2 (Close Market, shots/m02-640x3602-sweep_drawer_after_tabs_Market_lots-10.png), 7 (Close Bank), 9 (Close Travel, hit p.ac-hint), 10 (shots/m10-640x3602-sweep_drawer_Market_lots__antiques_-2.png, hit div.ac-btns 'Show me Skip lesson Restart'). At 360x640 lesson 5 the X was clear right after opening Quests and became covered after a Tab sweep, so the placement depends on drawer scroll/focus.",
+  "fix": "Add the drawer header's Close button (and the drawer's own tab buttons, see PB-2) to the card's keepClear controls with the same weight as the dock, and rank placements that cover it below those that cover only text; on tablet portrait and phone portrait place the card below the header band. Re-run a sweep of [data-act=drawer-close] for every lesson step with a drawer open at 768x1024, 360x640 and 640x360.",
+  "reviewer": "browser"
+ },
+ {
+  "id": "PB-3",
+  "severity": "major",
+  "area": "Academy card shapes: hint and step words drawn at 0x0",
+  "problem": "With a drawer open the card falls into the compact or slim shape, which draw the step's words and, in the 'compact min' and 'slim' shapes, the 20-second hint at 0x0. A player who is stuck at that step never sees the words or the hint; the only visible controls are Show me and Skip lesson.",
+  "evidence": "Measured on lesson 10 step 1 with the Market drawer open (probe6.mjs). 640x360: no hint, shape 'compact', .ac-say 0x0; after the hint is due, shape 'compact min', .ac-say 0x0 and .ac-hint 0x0, card 624x69 at 8,117 showing only 'DEAL DAY - STEP 1 OF 5' + Show me + Skip lesson (probe6-p640-m10-hint.png). 844x390 with the hint due: shape 'slim', .ac-hint 0x0 (the words 311x92 stay). The same measure on lesson 2 at 640x360 shows the hint at 598x31, so it depends on what the card has to avoid.",
+  "fix": "When the hint is due, keep a shape that can draw it (compact with hint) or fold the card to the tab (.ac-grab, labelled 'Hint') in drawers as it does in a Deal Room, so the hint can be opened by a tap; in the min shape at least show the step's one-line instruction.",
+  "reviewer": "browser"
+ },
+ {
+  "id": "S1",
+  "severity": "major",
+  "area": "Classroom, same-browser room (js/session.js Founder ID, js/ui/instructor.js student link and header hint, js/main.js title copy)",
+  "problem": "The zero-server classroom path that the site and docs advertise does not work as the dashboard tells the instructor to use it. The dashboard says 'this browser only (open other tabs with ?room=CODE)', its 'Copy student link' button produces origin+pathname+'?room=CODE' with no slot, the title screen says 'Students on the same browser can join as extra tabs', and docs/FACULTY_KIT.md:12 says rooms work between tabs of one browser. A student tab opened that way reuses the instructor's Founder ID, so the instructor ignores the student's messages and counts nobody. Only a tab opened with an extra &slot=name works, and the in-app text never mentions slot.",
+  "evidence": "Run against the staged tree on the mimic, driven from /scratchpad/vr-site-2/exp.mjs (log run-exp.log). Instructor tab: pid PC-PM77, room XHDA. Student tab opened at ?room=XHDA, joined, drafted, in the game: its pid is also PC-PM77, and the student sees itself as the only student. After 25 s the instructor shows peers [] and students [], and the banner reads '0 students online'. js/session.js:132 reads the pid from localStorage pc.pid.<slot> (slot defaults to 'main') and js/session.js:304 drops any message whose sender equals the receiver's own pid. A second student tab opened at ?room=XHDA&slot=s2 got pid PC-Y0K1; the instructor then listed it and the banner read '1 student online'. The only mention of slot is README.md:76, which says '?slot=name to keep saves apart'. This was reproduced twice, once on the mimic and once at the https://imaidan808.github.io/Paperclip-Capitalist/ origin mapped through the mimic, with no console output either time. The screenshot of the second run is /scratchpad/vr-site-2/instructor-with-student.png, which shows 0 students.",
+  "fix": "For a local (BroadcastChannel) room, make the dashboard's 'Copy student link' and its header hint add a slot (for example &slot=student), and say that each student tab needs its own slot. A sturdier fix is to give a student who joins a local room a per-tab Founder ID (sessionStorage) instead of the shared localStorage one. Update the title-screen copy, FACULTY_KIT.md:12 and README.md:76 to match.",
+  "reviewer": "site"
+ }
+]

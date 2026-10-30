@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://imaidan808.github.io/Paperclip-Capitalist/sitemap.xml

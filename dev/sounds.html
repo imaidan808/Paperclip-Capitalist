@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Audio audition</title>
+<style>
+  :root { color-scheme: dark; } body { font: 15px/1.4 system-ui, sans-serif; margin: 0; padding: 16px; background: #0d1117; color: #e6edf3; max-width: 1100px; margin-inline: auto; }
+  h1 { font-size: 1.2rem; } h2 { font-size: 1rem; margin: 1.4rem 0 .4rem; } .row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  button { font: inherit; padding: 6px 10px; border: 1px solid #3d4757; background: #161b22; color: inherit; border-radius: 6px; cursor: pointer; min-height: 32px; }
+  button[aria-pressed=true] { background: #1d3a52; border-color: #5cd6ff; box-shadow: inset 0 0 0 1px #5cd6ff; } button[aria-pressed=true]::before { content: "on \00b7 "; color: #5cd6ff; }
+  #toc { display: flex; flex-wrap: wrap; gap: 4px 12px; margin: 8px 0; font-size: .85rem; } #toc a { color: #9ecbff; } #toc:empty { display: none; }
+  .blind { border: 1px solid #30363d; border-radius: 6px; padding: 10px; background: #11161d; } .blind .big { font-size: 1.05rem; } .blind table { border-collapse: collapse; margin-top: 8px; } .blind td, .blind th { border: 1px solid #30363d; padding: 2px 8px; text-align: left; } .blind .bad { color: #ff9b9b; } .blind .good { color: #7ee2a8; }
+  button:hover { background: #21262d; } button:focus-visible, input:focus-visible { outline: 3px solid #ffc247; outline-offset: 2px; }
+  button[data-tier=loud] { border-color: #ffc247; } button[data-tier=medium] { border-color: #5cd6ff; }
+  .grp p { margin: .2rem 0 .6rem; max-width: 80ch; } .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 8px; margin-top: 8px; }
+  .card { border: 1px solid #30363d; border-radius: 6px; padding: 8px; background: #11161d; display: flex; flex-direction: column; gap: 4px; } .card button { text-align: left; font-weight: 600; }
+  .chip { align-self: flex-start; font-size: .75rem; padding: 1px 8px; border-radius: 999px; border: 1px solid #3d4757; } .chip.loud { border-color: #ffc247; color: #ffc247; } .chip.medium { border-color: #5cd6ff; color: #5cd6ff; } .chip.tiny { color: #9aa7b4; }
+  .meaning { color: #e6edf3; } .trig summary { cursor: pointer; color: #9aa7b4; font-size: .85rem; } .trig p { font-size: .85rem; color: #9aa7b4; margin: 4px 0 0; }
+  button.all { background: #1f2a1f; } button.pair { text-align: left; }
+  .card.silent, button.silent { border-color: #ff6b6b; } .why { margin: 0; color: #ff9b9b; font-size: .85rem; } .why:empty { display: none; }
+  label { display: inline-flex; gap: 8px; align-items: center; margin-right: 16px; } .mute { color: #9aa7b4; }
+  #bar { position: sticky; top: 0; background: #0d1117; padding: 8px 0; border-bottom: 1px solid #30363d; z-index: 2; max-height: 45vh; overflow-y: auto; }
+  /* A contents link, a heading's own anchor and a focused control all land BELOW the sticky bar: the offset is the bar's real height, which sounds.js writes into --bar-h and keeps (a ResizeObserver: the options fold,
+     a long status line wraps, the window narrows). It is never a number here: at 1366x768 the bar was 160px and at 390px wide 302px, and with a number every heading landed under it. */
+  html { scroll-padding-top: calc(var(--bar-h, 0px) + 8px); }
+  #opts[hidden] { display: none; } /* (.row sets display:flex, which would beat the attribute) */
+  #opts-toggle[aria-expanded=true]::before { content: "\25BE\00a0"; } #opts-toggle[aria-expanded=false]::before { content: "\25B8\00a0"; }
+  a#to-toc { display: inline-flex; align-items: center; box-sizing: border-box; min-height: 32px; padding: 6px 10px; border: 1px solid #3d4757; border-radius: 6px; color: #9ecbff; background: #161b22; text-decoration: none; }
+  a#to-toc:hover { background: #21262d; } a:focus-visible { outline: 3px solid #ffc247; outline-offset: 2px; }
+  #state { flex: 1 1 100%; font-size: .85rem; overflow-wrap: anywhere; } #state:empty { display: none; }
+  #meter { width: 220px; height: 14px; background: #161b22; border: 1px solid #3d4757; border-radius: 3px; position: relative; overflow: hidden; }
+  #meter i { position: absolute; inset: 0 auto 0 0; width: 0; background: #46e38e; } #meter b { position: absolute; top: 0; bottom: 0; width: 2px; background: #ff6b6b; left: 85.5%; } #db { font-variant-numeric: tabular-nums; width: 8ch; }
+</style></head><body>
+<h1>Audio audition</h1>
+<p class="mute">Every sound of docs/AUDIO.md, played through the real engine (buses, glue compressor, soft clip at -3 dBFS). Each sound shows its tier as a word (loud, medium or tiny) as well as by its border, its meaning, and when it plays. Nothing plays until you press a button. This page is for the author's ears; it is not part of the staged site. <a href="/">The game</a></p>
+<div id="bar">
+  <div class="row">
+    <a id="to-toc" href="#toc">Contents</a>
+    <label>Volume <input id="vol" type="range" min="0" max="100" step="5" value="70" aria-label="Master volume"></label>
+    <label><input id="mute" type="checkbox"> Mute</label>
+    <button id="stop" type="button">Stop everything</button>
+    <button id="reset" type="button">Reset to Full</button>
+    <button id="opts-toggle" type="button" aria-expanded="true" aria-controls="opts">Options</button>
+  </div>
+  <div class="row" id="opts">
+    <label><input id="ui" type="checkbox" checked> Interface</label>
+    <label><input id="game" type="checkbox" checked> Game</label>
+    <label><input id="world" type="checkbox" checked> World ticks</label>
+    <label><input id="amb" type="checkbox"> Ambient</label>
+    <label>Ambient level <input id="ambvol" type="range" min="0" max="100" step="5" value="70" aria-label="Ambient level"></label>
+    <label><input id="quiet" type="checkbox"> Classroom rule</label>
+    <label><input id="mono" type="checkbox"> Mono (fold to one channel)</label>
+    <label><input id="lap" type="checkbox"> Laptop speaker (nothing under 220 Hz, rolled off above 9 kHz)</label>
+  </div>
+  <div class="row"><span>Level</span><div id="meter" role="meter" aria-label="Output level" aria-valuemin="-60" aria-valuemax="0"><i></i><b title="-3 dBFS"></b></div><span id="db">-inf dB</span></div>
+  <div class="row"><span id="state" class="mute" role="status"></span></div>
+</div>
+<nav id="toc" aria-label="Contents"></nav>
+<div id="app"></div>
+<script type="module" src="./sounds.js"></script>
+</body></html>

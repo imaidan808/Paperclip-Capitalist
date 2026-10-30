@@ -1,0 +1,72 @@
+/* ui-market: the Market drawer. Buyers as characters, lots as booths, the classmate Exchange. Text colours come from the tokens in styles.css. */
+.mkt-zones { display: flex; flex-wrap: wrap; gap: .3rem; }
+.mkt-z { appearance: none; display: inline-flex; align-items: center; justify-content: center; gap: .25rem; min-width: 2.7rem; min-height: 2.3rem; padding: .1rem .5rem; background: var(--panel2); border: var(--bw) solid var(--line); border-radius: 2px; color: var(--ink); font: inherit; cursor: pointer; }
+.mkt-z:hover { border-color: var(--gold); }
+.mkt-z b { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: .78rem; }
+.mkt-z[aria-pressed="true"] { background: var(--gold); border-color: var(--gold); color: var(--on-gold); }
+.mkt-z[aria-pressed="true"] b { text-decoration: underline; }
+.mkt-next { margin: 0; }
+
+/* the district banner */
+.mkt-banner { display: grid; gap: .4rem; padding: .7rem .8rem; background: var(--panel2); background: color-mix(in srgb, var(--zg, var(--line)) 16%, var(--panel2)); border: 1px solid var(--line); border-left: 6px solid var(--za, var(--gold)); }
+:root[data-contrast="high"] .mkt-banner { background: var(--panel2); }
+.mkt-banner p { margin: 0; }
+.mkt-bhead { display: flex; align-items: center; gap: .65rem; }
+.mkt-bhead > div { display: grid; }
+.mkt-bic { font-size: 2.2rem; line-height: 1; }
+.mkt-bname { font-size: 1.05rem; }
+.mkt-blurb { font-size: .9rem; }
+.mkt-rule { font-size: .9rem; }
+.mkt-teach { font-size: .85rem; }
+.mkt-more summary { cursor: pointer; font-size: .82rem; color: var(--cyan); }
+.mkt-more ul { margin: .3rem 0 0; padding-left: 1.1rem; font-size: .82rem; }
+.mkt-stats { gap: .4rem; }
+
+/* tabs and the lists under them */
+.dtabs .mkt-n { display: inline-block; min-width: 1.2rem; padding: 0 .3rem; background: var(--bg); color: var(--ink); border-radius: 1rem; font-size: .7rem; text-align: center; }
+.mkt-panel { display: grid; gap: .7rem; align-content: start; }
+.mkt-list { list-style: none; margin: 0; padding: 0; display: grid; gap: .7rem; }
+.mkt-use { display: flex; flex-wrap: wrap; align-items: center; gap: .3rem; }
+.mkt-use .btn { text-transform: none; letter-spacing: 0; }
+.mkt-use .btn[aria-pressed="true"] { background: var(--gold); border-color: var(--gold); color: var(--on-gold); }
+
+/* a buyer, as a character */
+.mkt-lead { display: grid; gap: .45rem; padding: .7rem .8rem; background: var(--panel2); border: 1px solid var(--line); min-width: 0; }
+.mkt-lead p { margin: 0; }
+.mkt-lead.is-urgent { border-color: var(--gold); border-left: 6px solid var(--gold); }
+.mkt-lead.is-fraud { border-color: var(--red); border-style: dashed; }
+.mkt-who { display: flex; align-items: flex-start; gap: .65rem; }
+.mkt-av { flex: none; display: grid; place-items: center; width: 3.4rem; height: 3.4rem; font-size: 2.2rem; line-height: 1; background: var(--bg); border: 2px solid var(--line); border-radius: 50%; }
+.mkt-id { min-width: 0; }
+.mkt-name { overflow-wrap: anywhere; }
+.mkt-say { margin: .3rem 0 0; padding: .35rem .55rem; font-style: italic; background: var(--bg); border: 1px solid var(--line); border-radius: 2px; }
+.mkt-meta { display: flex; flex-wrap: wrap; align-items: baseline; margin: 0; font-size: .85rem; }
+.mkt-meta dt { color: var(--mute); }
+.mkt-meta dd { margin: 0 1rem 0 .35rem; }
+.mkt-chips { gap: .3rem; }
+.mkt-nosell { color: var(--ink); }
+.mkt-lead .btn { justify-self: start; }
+
+/* a lot, as a booth */
+.mkt-lot, .mkt-rrow { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: .2rem .7rem; padding: .7rem .8rem; background: var(--panel2); border: 1px solid var(--line); min-width: 0; }
+.mkt-lot.is-auction { border-left: 6px solid var(--violet); }
+.mkt-ic { font-size: 2rem; line-height: 1; }
+.mkt-body { min-width: 0; display: grid; gap: .35rem; }
+.mkt-body p { margin: 0; }
+.mkt-head { display: flex; flex-wrap: wrap; align-items: center; gap: .3rem .5rem; }
+.mkt-price .mono { font-size: 1.15rem; }
+.mkt-rname { overflow-wrap: anywhere; }
+.mkt-qual { margin: 0; }
+.mkt-warnline { border-left: 3px solid var(--gold); padding-left: .5rem; }
+
+/* the classmate Exchange */
+.mkt-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr)); gap: .5rem; }
+.mkt-f { margin: 0; }
+.mkt-f select, .mkt-f input { width: 100%; }
+.mkt-want { display: grid; grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr)); gap: .4rem; }
+.mkt-wcrate { text-align: left; text-transform: none; letter-spacing: 0; }
+.mkt-wcrate[aria-pressed="true"] { border-color: var(--gold); background: var(--warn-bg); }
+.mkt-wcrate[aria-pressed="true"]::before { content: "✓ "; color: var(--gold); font-weight: 800; }
+.mkt-matrix { font-size: .8rem; }
+
+@media (max-width: 760px) { .mkt-blurb { display: none; } }

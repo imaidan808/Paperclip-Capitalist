@@ -7,8 +7,14 @@
   "scripts": {
     "start": "node server/static.mjs",
     "test": "node --test tests/*.test.mjs",
+    "audio": "node scripts/audio-check.mjs",
     "calibrate": "node tests/calibrate.mjs",
-    "relay": "node server/relay.mjs"
+    "relay": "node server/relay.mjs",
+    "balance": "node tests/balance.mjs",
+    "tune": "node tests/tune.mjs",
+    "preload": "node scripts/preload.mjs",
+    "stage": "node scripts/stage.mjs",
+    "preview": "node scripts/stage.mjs --serve"
   },
   "license": "MIT"
 }

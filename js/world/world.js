@@ -1,44 +1,95 @@
-// The 2.5D world: an isometric island that mirrors the live game. Canvas 2D only; no assets, no dependencies.
+// The 2.5D world: an isometric island of sixteen districts that mirrors the live game. Canvas 2D only; no assets, no dependencies.
+// This file is the ENGINE (owner: T5 RASTER QUALITY, docs/RENDER_PLAN.md): the camera, input, hit testing, the sync with the game, the frame loop, the quality governor and the order
+// the frame is drawn in (draw(): the layer stack of stack.js). What each layer looks like lives in its owner's module, mixed into World.prototype at the foot of this file.
 //   - every game object is something you can see: buyers walk in, lots and stock are crates, pipelines are buildings, freight is trucks
-//   - the virtual hour sets the light, macro shocks set the weather
+//   - the virtual hour sets the light, macro shocks set the weather, a locked district lies under fog until its gate opens
 //   - clicking a thing performs the real action through api.activate()
-import { ASSETS, BUYERS, PIPE, PIPE_RULES, ZONES, PROFILES, TOTAL_HOURS } from '../config.js';
-import { P, sx, sy, HW, toGrid, box, quad, shadow, ellipse, cyl, person, tone, shade, mix, clamp, lerp, ease, roundRect, diamond, windows, facePoint, h2, strHash } from './iso.js';
-import { LAND, ELEV, DIST, SPOTS, PLOTS, DOORS, LANE, SCENERY, BUILD, zAt, zoneAt, isAvenue, isStreet, isRoad, groundColor, stashPos, inLand } from './layout.js';
-import { drawProp } from './props.js';
+//   - only what is on screen is drawn (districts, props and ground are culled; far away they fall back to plain blocks)
+// The presentation layer beside this file: lighting.js (grade, light pools), fx.js (particle pool, dust, rain), labels.js (crisp label sprites), gfx.js (offscreen helpers), lod.js (zoom bands),
+// palette.js, solids.js and shadow.js (the art direction's colours, rounded solids and soft shadows).
+import { ASSETS, BUYERS, PIPE, ZONES } from '../config.js';
+import { P, sx, sy, HW, HH, toGrid, box, shadow, person, clamp, lerp, ease, h2, strHash } from './iso.js';
+import { LAYOUT, DIST, SPOTS, PLOTS, SCENERY, BW, BD, zAt, zoneAt } from './layout.js';
+import { Fx } from './fx.js';
+import { Lighting, dayTargets } from './lighting.js';
+import { Labels } from './labels.js';
+import { surface, softwareRaster, releaseAll, ledger, LEDGER_LIMIT_MB } from './gfx.js';
+import { snapTranslation } from './chunks.js';
+import { SLOW_MS, FAST_MS, GOV_WAIT, GOV_DOWN, judge } from './governor.js';
+import { clearSprites, setSpriteBudget, trimSprites } from './sprites.js';
+import { FAR_ZOOM, FOG_DIM, money } from './common.js';
+import { runLayer } from './stack.js';
+import { releaseShadows } from './shadow.js';
+import { lodOf, farMix } from './lod.js';
+import { lookOf, CARS } from './ents-actors.js';
+import { seaMethods } from './sea.js';
+import { groundMethods } from './ground.js';
+import { coastMethods } from './coast.js';
+import { terrainMethods } from './terrain.js';
+import { roadMethods } from './roads.js';
+import { decalMethods } from './decals.js';
+import { groundCacheMethods } from './groundcache.js';
+import { cloudMethods, shrinkClouds } from './clouds.js';
+import { atmosMethods } from './atmos.js';
+import { staticMethods } from './statics.js';
+import { plotMethods } from './ents-plots.js';
+import { actorMethods } from './ents-actors.js';
+import { stockMethods } from './ents-stock.js';
+import { overlayMethods } from './overlay.js';
+import { mapMethods } from './mapmode.js';
+export { FAR_ZOOM };                                                                  // below this zoom the world draws plain blocks and dots (common.js)
+import { ZoomInput } from './camera-input.js';
 
-const TAG_COLOR = { tool: '#a0a6ad', office: '#d9d2c0', prestige: '#7a5fb0', paper: '#e8e2cc', retro: '#b07a3a', electronics: '#4a8fb0', vehicle: '#b0493a', consumer: '#c45f7a', trend: '#ff3da8', scrap: '#6b5a4a', industrial: '#8a7a62', training: '#46a06a', digital: '#7be3ff', b2b: '#5a6fb0', franchise: '#e8cd6a', infra: '#6a5fa0' };
-const classColor = (cls) => TAG_COLOR[ASSETS[cls].tags[0]] || '#a07a45';
-const SHIRTS = ['#c0392b', '#2f80ed', '#27ae60', '#9b51e0', '#f2994a', '#16a085', '#d35400', '#8e44ad', '#2980b9', '#c0762b'];
-const HAIR = ['#2b1b10', '#7a3b12', '#c9a26a', '#555555', '#111111'];
-const lookOf = (id) => { const h = strHash(String(id)); return { shirt: SHIRTS[h % SHIRTS.length], hair: HAIR[(h >> 4) % HAIR.length], skin: ['#f1c27d', '#e0ac69', '#c68642', '#8d5524'][(h >> 8) % 4], pants: ['#27324a', '#3b3b3b', '#4a3b2c'][(h >> 12) % 3] }; };
-const compact = (v) => (v >= 1e6 ? (v / 1e6).toFixed(1) + 'M' : v >= 1e4 ? Math.round(v / 1e3) + 'k' : v >= 1e3 ? (v / 1e3).toFixed(1) + 'k' : v >= 100 ? String(Math.round(v)) : v.toFixed(v < 10 ? 2 : 0));
-const money = (v) => '$' + compact(v);
+export { SLOW_MS, FAST_MS };               // quality governor (governor.js): a smoothed frame cost over SLOW_MS steps quality down, under FAST_MS steps it back up
+const SOFT_DPR = 1.5;                      // the most pixel density a CPU-drawn canvas gets: every full-window layer is a pass over all its pixels, and 1.5 has 44% fewer of them than 2
+const BY_KEY = (a, b) => a.key - b.key;
+const NOFX = Object.freeze({ dim: 0, fog: 0, lights: 0 });
+const REVEAL_MS = 2600;
+const HOT = new Map(SCENERY.filter((p) => p.hot).map((p) => [p.hot, p]));
+const ENT_KINDS = new Set(['lead', 'lot', 'asset', 'pipe', 'plot', 'truck']); // the entity types that are layers of their own (stack.js)
 
 export class World {
-  /** @param {{session, ui, activate:(hit)=>void, hover?:(hit,ev)=>void}} api */
+  /** @param {{session, ui, activate:(hit)=>void, hover?:(hit,ev)=>void, reveal?:(zone)=>void}} api */
   constructor(api) {
     this.api = api;
     this.cv = document.createElement('canvas');
     this.cv.className = 'worldcv'; this.cv.tabIndex = 0;
     this.cv.setAttribute('role', 'application');
-    this.cv.setAttribute('aria-label', 'Isometric world. Drag to look around, Ctrl and scroll to zoom, arrow keys to pan. Every object here is also in the list below the map.');
+    this.cv.setAttribute('aria-label', 'Isometric world of sixteen districts. Drag to look around, scroll or pinch to zoom, plus and minus also zoom, 0 shows the whole island, arrow keys to pan. Every object here is also in the list below the map.');
     this.ctx = this.cv.getContext('2d', { alpha: false });
     this.mini = document.createElement('canvas'); this.mini.width = 150; this.mini.height = 96; this.mini.className = 'worldmini'; this.mini.setAttribute('aria-hidden', 'true'); this.mctx = this.mini.getContext('2d');
     this.cam = { x: 0, y: 0, z: 0.9 }; this.camTo = null;
+    this.zin = new ZoomInput({ zoom: () => this.cam.z, apply: (z, px, py) => this.zoomAbout(z, px, py), range: () => this.zoomRange(), size: () => [this.W, this.H], instant: () => this.reduced() || !this.running, touching: () => this.pointers.size > 1, gliding: () => !!this.camTo }); // wheel, trackpad and Safari-gesture zoom (camera-input.js); two fingers down are zoomed by the pointer events already, a glide of the camera's own is not broken by a scroll's momentum
     this.mode = 'world';
     this.W = 800; this.H = 500; this.dpr = 1;
-    this.ents = new Map(); this.parts = []; this.lights = []; this.hits = []; this.overlay = [];
-    this.hover = null; this.focusKey = null; this.t = 0; this.vt = 0; this.last = 0; this.night = 0; this.fps = 30; this.slow = 0; this.warm = 0; this.lite = false; this.tileCols = new Map(); this.tileSig = '';
-    this.player = { x: 8.8, y: 46.2, path: [], zone: 1, moving: false, dir: 1 };
-    this.env = { t: 0, night: 0, wind: 1, dim: 0, surge: false, crunch: false, tariff: false };
-    this.running = false; this.dirty = true; this.pointers = new Map(); this.drag = null; this.rain = null; this.labelFor = {};
+    this.inset = { l: 0, r: 0 };                                                                // px of the window's left and right edges that the camera buttons stand over: the island is fitted to what they leave
+    this.ents = new Map(); this.lights = []; this.hits = []; this.overlay = [];
+    this.hover = null; this.focusKey = null; this.t = 0; this.vt = 0; this.last = 0; this.night = 0; this.dusk = 0; this.fps = 30; this.slow = 0; this.warm = 0; this.lite = false;
+    // presentation layer: particles, lighting, label sprites, and the draw loop's reusable scratch (nothing here is game state)
+    this.fx = new Fx(); this.light = new Lighting(); this.light.perFrame = 1; this.labels = new Labels(); this.rainOn = false;
+    this.gov = { cost: 0, bad: 0, good: 0, wait: GOV_WAIT, upAt: -1e9, prev: 0 };            // the quality governor's smoothed state
+    this.waterGr = null; this.seaStrip = undefined; this.seaKey = -1;                          // the sea: its colours for the light step, and the one strip it is painted into (made on first use)
+    this.gc = null; this.gcKey = new Float64Array(9); this.gcSeen = 0; this.gcValid = false; // the ground cache: an offscreen copy of the terrain for a still camera
+    this.items = []; this.itemPool = []; this.vz = new Set(); this.carList = Array.from({ length: CARS }, () => ({ gx: 0, gy: 0, i: 0, key: 0, horiz: true, fade: 1 }));
+    this.vis = true; this.dprDown = false; this.mm = null; this.mmFn = null; this.ledLast = undefined; this.tod = { night: 0, dusk: 0 }; this.unlockHash = 0; this.itemN = 0;                                                         // is the canvas on screen; the last ledger entry the world has seen
+    this.lod = lodOf(0.9); this.gnd = { zoom: 1, far: false, mode: 0, see: null };                // the zoom's level-of-detail record (lod.js) and the ground pass's record for its layers (stack.js), both reused every frame
+    this.decals = new Map();                                                                      // per district: its animated decals (water, pulses) drawn live over the cached ground
+    this.player = { x: 0, y: 0, path: [], zone: 1, moving: false, dir: 1, speed: 16, placed: false };
+    this.zpip = new Uint8Array(3 * (Math.max(...LAYOUT.ids) + 1));                                // per district: pipelines running, paused, starved (for the whole-island pips)
+    this.env = { t: 0, night: 0, wind: 1, dim: 0, tier: 0, farMix: 1, surge: false, crunch: false, tariff: false, far: false, lite: false, locked: false, zoff: 0, lights: this.lights };
+    this.reveal = {}; this.far = false;
+    this.running = false; this.dirty = true; this.pointers = new Map(); this.drag = null; this.hitsLabel = {};
     this.bindInput();
     this.fit(false);
   }
-
   get g() { return this.api.session.game; }
-  reduced() { return document.documentElement.dataset.motion === 'reduce' || (typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches); }
+  /** Is motion reduced (the page's own setting, or the system's)? Called many times a frame, so the media query is made once and read live (`matches` follows the system). */
+  reduced() {
+    if (document.documentElement.dataset.motion === 'reduce') return true;
+    if (typeof matchMedia !== 'function') return false;
+    if (this.mmFn !== matchMedia) { this.mmFn = matchMedia; this.mm = matchMedia('(prefers-reduced-motion: reduce)'); } // a new matchMedia (a test's stand-in) is asked afresh
+    return !!this.mm?.matches;
+  }
 
   // ------------------------------------------------------------------ lifecycle
   attach(host) {
@@ -46,51 +97,118 @@ export class World {
     this.host = host;
     if (!this.ro) { this.ro = new ResizeObserver(() => this.resize()); }
     this.ro.disconnect(); this.ro.observe(host);
+    // a canvas that is not on screen (a hidden panel, a covered tab) is not drawn: the loop keeps its place and costs nothing until it is seen again
+    if (typeof IntersectionObserver === 'function') {
+      if (!this.io) this.io = new IntersectionObserver((es) => { const v = es[es.length - 1].isIntersecting; if (v && !this.vis) { this.dirty = true; this.warm = Math.max(this.warm, 4); } this.vis = v; });
+      this.io.disconnect(); this.io.observe(this.cv);
+    }
     this.resize();
     this.start();
   }
-  detach() { this.stop(); this.ro?.disconnect(); }
+  detach() { this.stop(); this.ro?.disconnect(); this.io?.disconnect(); this.vis = true; this.release(); }
+  /**
+   * Give back every bitmap the world holds for its size: the ground cache, the sea, the light layers, the label sprites and the scenery sprites. Called when the screen goes
+   * away (the world and its stage can stay reachable from a handler that outlives the screen, and the bitmaps are tens of megabytes at 2x); a world that is attached again
+   * makes what it needs again on demand, exactly as after a resize.
+   */
+  release() {
+    this.releaseGround(); this.waterGr = null; this.seaStrip = undefined; this.seaKey = -1;
+    this.light.release(); this.labels.release(); clearSprites(); releaseShadows(); releaseAll(); this.ledgerSync(); // (releaseAll: every holder a module registered through gfx.js's registerReleaser)
+  }
+  /**
+   * Tell the pixel ledger (gfx.js) what the world holds that no module registers for itself: the canvas, the light layers and the label sprites (the sprites, the ground chunks and the sea register their own). Called when the
+   * size changes and every couple of seconds; cheap (a sum over a few dozen surfaces).
+   */
+  ledgerSync() {
+    const px = (c) => (c ? ((c.c || c).width * (c.c || c).height) || 0 : 0), L = this.light;
+    ledger.register('canvas.main', this.cv.width * this.cv.height * 4);
+    ledger.register('light', 4 * (L ? [...Object.values(L.big || {}), ...Object.values(L.src || {})].reduce((a, c) => a + px(c), 0) : 0));
+    ledger.register('labels', 4 * [...(this.labels.cache.m?.values() || [])].reduce((a, c) => a + (c && c.c ? c.c.width * c.c.height : 0), 0));
+  }
+  /**
+   * The pixel ledger is over its ceiling (docs/RENDER_PLAN.md section 6: 160 MB at density 2): give some back, cheapest to rebuild first. Sprites go to 70% of their budget (overlays first), then chunks that are not in view
+   * or are stale down to what the window touches, then the label sprites. Answers whether the ledger is within the ceiling afterwards. The picture does not change: what was dropped is made again on demand.
+   */
+  squeeze() {
+    if (ledger.within()) return true;
+    trimSprites(0.7); this.ledgerSync();
+    if (!ledger.within() && this.gc && typeof this.gc.shrink === 'function') { const win = this.gcCells; this.gc.shrink(Math.max(8, Math.ceil(this.gc.size * 0.6)), win, this.renderScale()); this.ledgerSync(); }
+    if (!ledger.within() && shrinkClouds(this)) this.ledgerSync();
+    if (!ledger.within()) { this.labels.cache.clear(); this.ledgerSync(); }
+    return ledger.within();
+  }
   start() { if (this.running) return; this.running = true; this.last = performance.now(); this.raf = requestAnimationFrame((t) => this.frame(t)); }
-  stop() { this.running = false; cancelAnimationFrame(this.raf); }
-  targetDpr() { return Math.max(1, Math.min(2, window.devicePixelRatio || 1) * (this.slow > 3 ? 0.75 : 1)); }
+  stop() { this.running = false; cancelAnimationFrame(this.raf); this.raf = 0; this.zin.cancel(); }
+  /**
+   * The pixel density the canvas is drawn at. The screen's own, to 2; at most SOFT_DPR where the canvas is drawn on the CPU. The quality governor takes a quarter off at
+   * its fourth tier, and puts it back only below its second: a picture that tips between two tiers must not reallocate the canvas (and every layer made for it) each time.
+   */
+  targetDpr() {
+    const native = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+    const top = native > SOFT_DPR && softwareRaster() ? SOFT_DPR : native;
+    if (this.slow > 3) this.dprDown = true; else if (this.slow <= 1) this.dprDown = false;
+    return Math.max(1, top * (this.dprDown ? 0.75 : 1));
+  }
   resize() {
     const r = this.host.getBoundingClientRect(); if (!r.width) return;
     this.W = Math.max(1, Math.floor(r.width)); this.H = Math.max(1, Math.floor(r.height));
     this.dpr = this.targetDpr(); this.warm = 30;
+    this.refreshInset(); setSpriteBudget(this.dpr);
     this.cv.width = Math.floor(this.W * this.dpr); this.cv.height = Math.floor(this.H * this.dpr);
-    this.cv.style.width = this.W + 'px'; this.cv.style.height = this.H + 'px';
+    this.cv.style.width = this.W + 'px'; this.cv.style.height = this.H + 'px'; this.ledgerSync();
+    this.gcValid = false; this.labels.setDpr(this.dpr); // what was made for the old size is made again on demand: the ground's chunks are the same at any window size (they are cut by scale, not by window), and a new density is a new scale the sweep tells from the old
     this.dirty = true;
     if (this.g && this.unlocked) this.draw(); // a resized canvas is blank until redrawn: never show that gap
   }
 
   // ------------------------------------------------------------------ camera
-  bounds() { return { x0: sx(LAND.x0, LAND.y1) - 40, x1: sx(LAND.x1, LAND.y0) + 40, y0: sy(LAND.x0, LAND.y0, ELEV[3]) - 230, y1: sy(LAND.x1, LAND.y1) + 60 }; }
-  fitZoom() { const b = this.bounds(); return Math.min(this.W / (b.x1 - b.x0), this.H / (b.y1 - b.y0)) * 0.98; }
+  bounds() { return LAYOUT.bounds; }
+  /**
+   * The camera buttons stand over one edge of the window (the left in the wide layouts, the right in a phone's bottom-sheet layout), so the whole island is fitted to the
+   * part they leave free. The page says how much they cover (`api.insets`, measured from the real buttons) when the window changes size and before a fit; the maths here never
+   * touches the page. With nothing covered everything below is exactly the plain fit.
+   */
+  refreshInset() { const i = this.api.insets?.() || null, I = this.inset; I.l = i ? Math.max(0, Math.round(i.l) || 0) : 0; I.r = i ? Math.max(0, Math.round(i.r) || 0) : 0; if (I.l + I.r > this.W * 0.4) I.l = I.r = 0; /* a nonsense reading is no reading */ }
+  fitZoom() { const b = this.bounds(), I = this.inset; return Math.min((this.W - I.l - I.r) / (b.x1 - b.x0), this.H / (b.y1 - b.y0)) * 0.98; }
   zoomRange() { return this.mode === 'map' ? [this.fitZoom() * 0.9, 1.4] : [Math.min(0.5, this.fitZoom()), 2.4]; }
-  fit(animate = true) {
-    const b = this.bounds(); this.goTo((b.x0 + b.x1) / 2, (b.y0 + b.y1) / 2, this.fitZoom(), animate);
-  }
+  fit(animate = true) { this.refreshInset(); const b = this.bounds(), z = this.fitZoom(), I = this.inset; this.goTo((b.x0 + b.x1) / 2 - (I.l - I.r) / 2 / z, (b.y0 + b.y1) / 2, z, animate); } // the island's middle at the middle of the free part
+  /** Frame one district: its whole block fills the view. */
   focusZone(z, animate = true) {
-    const d = DIST[z], zoom = clamp(this.W / 1150, 0.62, 1.3);
-    this.goTo(sx(d.cx, d.cy), sy(d.cx, d.cy, zAt(d.cy)) - 30, zoom, animate);
+    const d = DIST[z]; if (!d) return;
+    const zoom = clamp(Math.min(this.W / 1330, this.H / 830), 0.4, 1.25);
+    this.goTo(sx(d.cx, d.cy), sy(d.cx, d.cy, d.z) - 20, zoom, animate);
   }
   goTo(x, y, z, animate = true) {
+    this.zin.cancel(); // a move of the camera's own ends any wheel ease
     if (!animate || this.reduced()) { this.cam = { x, y, z }; this.camTo = null; this.clampCam(); } else this.camTo = { x, y, z, t0: this.t, from: { ...this.cam }, dur: 650 };
     this.dirty = true;
   }
   clampCam() {
     const b = this.bounds(), [lo, hi] = this.zoomRange(); this.cam.z = clamp(this.cam.z, lo, hi);
-    const hw = this.W / 2 / this.cam.z, hh = this.H / 2 / this.cam.z;
-    this.cam.x = clamp(this.cam.x, b.x0 + Math.min(hw, (b.x1 - b.x0) / 2), b.x1 - Math.min(hw, (b.x1 - b.x0) / 2));
-    this.cam.y = clamp(this.cam.y, b.y0 + Math.min(hh, (b.y1 - b.y0) / 2), b.y1 - Math.min(hh, (b.y1 - b.y0) / 2));
+    // the camera is clamped by the middle of the free part of the window (the whole window when no button stands over it): `ox` is how far that middle is right of the canvas's
+    const z = this.cam.z, I = this.inset, ox = (I.l - I.r) / 2, hw = (this.W - I.l - I.r) / 2 / z, hh = this.H / 2 / z, mx = Math.min(hw, (b.x1 - b.x0) / 2), my = Math.min(hh, (b.y1 - b.y0) / 2);
+    this.cam.x = clamp(this.cam.x + ox / z, b.x0 + mx, b.x1 - mx) - ox / z;
+    this.cam.y = clamp(this.cam.y, b.y0 + my, b.y1 - my);
   }
-  zoomBy(f, px = this.W / 2, py = this.H / 2) {
-    const before = this.s2w(px, py); this.cam.z *= f; this.clampCam();
-    const after = this.s2w(px, py); this.cam.x += before[0] - after[0]; this.cam.y += before[1] - after[1]; this.clampCam(); this.camTo = null; this.dirty = true;
+  /** Zoom by a factor about a screen point (the camera buttons, the keyboard, a two-finger touch pinch): at once. It ends a wheel ease, and steps on from where that ease was going. */
+  zoomBy(f, px = this.W / 2, py = this.H / 2) { this.zoomAbout((this.zin.settle() ?? this.cam.z) * f, px, py); }
+  /** Set the zoom, keeping the world point under a screen point where it is: the one place the camera is zoomed (the wheel, a trackpad pinch, Safari's gestures and the ease all come through here). */
+  zoomAbout(z, px = this.W / 2, py = this.H / 2) {
+    // The anchor is worked out from the camera's own numbers, never from origin(): the picture is drawn from a translation rounded to whole device pixels, and an anchor taken from the rounded one would add that rounding twice (before and after)
+    const cam = this.cam, hw = this.W / 2, hh = this.H / 2, bx = (px - hw) / cam.z + cam.x, by = (py - hh) / cam.z + cam.y;
+    cam.z = z; this.clampCam();
+    cam.x += bx - ((px - hw) / cam.z + cam.x); cam.y += by - ((py - hh) / cam.z + cam.y); this.clampCam(); this.camTo = null; this.dirty = true; this.rebaseDrag();
   }
-  w2s(x, y) { return [(x - this.cam.x) * this.cam.z + this.W / 2, (y - this.cam.y) * this.cam.z + this.H / 2]; }
-  s2w(x, y) { return [(x - this.W / 2) / this.cam.z + this.cam.x, (y - this.H / 2) / this.cam.z + this.cam.y]; }
-  setMode(m) { if (m === this.mode) return; this.mode = m; if (m === 'map') this.fit(true); else this.focusZone(this.api.ui.zone, true); this.dirty = true; }
+  /** One pointer is panning and the zoom changed under it: take hold of the ground where it is now, or the next move would work the camera out from where the drag began and the ground would slide off. */
+  rebaseDrag() { const d = this.drag; if (!d || this.pointers.size !== 1) return; const [p] = [...this.pointers.values()]; if (d.moved) { d.x = p.x; d.y = p.y; } d.cx = this.cam.x; d.cy = this.cam.y; }
+  /**
+   * Where the world's origin is on the screen, in css pixels: the camera's translation rounded to whole DEVICE pixels, divided by the density. The picture is drawn from this (toWorld), so everything that is placed by it
+   * (labels, tags, map cards, hit testing) lands where the ground and the sprites do: a pan moves them all by the same whole pixels. `out` is reused ([x, y]).
+   */
+  origin(out = this._o || (this._o = [0, 0])) { const a = this.renderScale(), s = this._os || (this._os = [0, 0]); snapTranslation(this.W, this.H, this.dpr, this.cam.x, this.cam.y, a, s); out[0] = s[0] / this.dpr; out[1] = s[1] / this.dpr; return out; }
+  w2s(x, y) { const o = this.origin(), k = this.renderScale() / this.dpr; return [x * k + o[0], y * k + o[1]]; }
+  s2w(x, y) { const o = this.origin(), k = this.renderScale() / this.dpr; return [(x - o[0]) / k, (y - o[1]) / k]; }
+  setMode(m) { if (m === this.mode) return; this.mode = m; this.hover = null; if (m === 'map') this.fit(true); else this.focusZone(this.api.ui.zone, true); this.dirty = true; }
 
   // ------------------------------------------------------------------ input
   bindInput() {
@@ -102,12 +220,13 @@ export class World {
     });
     cv.addEventListener('pointermove', (e) => {
       const p = this.pointers.get(e.pointerId);
+      this.zin.seen(e.offsetX, e.offsetY, e.pointerType !== 'touch'); // where the pointer is, drag or no drag: a zoom under it looks again from here
       if (p) { p.x = e.offsetX; p.y = e.offsetY; }
       if (this.pointers.size > 1 && this.drag) { const d = this.pinchDist(); if (this.drag.pinch) { const mid = this.pinchMid(); if (this.drag.mid) { this.cam.x -= (mid[0] - this.drag.mid[0]) / this.cam.z; this.cam.y -= (mid[1] - this.drag.mid[1]) / this.cam.z; this.clampCam(); } this.zoomBy(d / this.drag.pinch, mid[0], mid[1]); this.drag.pinch = d; this.drag.mid = mid; this.drag.moved = true; } return; }
       if (this.drag && p) {
         const dx = e.offsetX - this.drag.x, dy = e.offsetY - this.drag.y;
         if (!this.drag.moved && Math.hypot(dx, dy) > 6) { this.drag.moved = true; cv.style.cursor = 'grabbing'; }
-        if (this.drag.moved) { this.cam.x = this.drag.cx - dx / this.cam.z; this.cam.y = this.drag.cy - dy / this.cam.z; this.clampCam(); this.camTo = null; this.dirty = true; }
+        if (this.drag.moved) { this.cam.x = this.drag.cx - dx / this.cam.z; this.cam.y = this.drag.cy - dy / this.cam.z; this.clampCam(); this.camTo = null; this.zin.cancel(); this.dirty = true; }
         return;
       }
       this.pointerAt(e.offsetX, e.offsetY, e);
@@ -123,24 +242,39 @@ export class World {
       }
     };
     cv.addEventListener('pointerup', up); cv.addEventListener('pointercancel', up);
-    cv.addEventListener('pointerleave', () => { if (!this.drag) { this.hover = null; this.api.hover?.(null); this.dirty = true; } });
-    cv.addEventListener('wheel', (e) => { if (!(e.ctrlKey || e.metaKey || e.altKey)) return; e.preventDefault(); this.zoomBy(Math.exp(-e.deltaY * 0.0022), e.offsetX, e.offsetY); }, { passive: false });
+    cv.addEventListener('pointerleave', () => { this.zin.left(); if (!this.drag) { this.hover = null; this.api.hover?.(null); this.dirty = true; } });
+    // Zoom: the wheel (a mouse notch, a trackpad's two-finger scroll, a trackpad pinch in Chrome, Edge and Firefox) and Safari's pinch gestures. Only events aimed at the canvas get here:
+    // the listeners are on the canvas, which has no children, so the HUD, the drawers and dialogs (siblings above it) never reach them and keep their own wheel. `mine` is a second lock
+    // for the day the canvas has children. None of them may scroll, zoom or navigate the page, so every one is cancelled (these listeners are not passive). tests/camera-input.test.mjs
+    // holds the structure in a real browser.
+    const mine = (e) => !e.target || e.target === cv;
+    cv.addEventListener('wheel', (e) => { if (!mine(e)) return; e.preventDefault(); this.zin.wheel(e); }, { passive: false });
+    cv.addEventListener('gesturestart', (e) => { if (!mine(e)) return; e.preventDefault(); this.zin.gestureStart(e, cv.getBoundingClientRect()); }, { passive: false });
+    cv.addEventListener('gesturechange', (e) => { if (!mine(e)) return; e.preventDefault(); this.zin.gestureChange(e, cv.getBoundingClientRect()); }, { passive: false });
+    cv.addEventListener('gestureend', (e) => { if (!mine(e)) return; e.preventDefault(); this.zin.gestureEnd(); }, { passive: false });
     cv.addEventListener('keydown', (e) => {
       if (e.ctrlKey || e.metaKey || e.altKey) return; // never swallow the browser's own zoom and navigation shortcuts
       if (e.key === '0') { e.preventDefault(); this.fit(true); return; }
       const step = 60 / this.cam.z; let h = true;
       if (e.key === 'ArrowLeft') this.cam.x -= step; else if (e.key === 'ArrowRight') this.cam.x += step; else if (e.key === 'ArrowUp') this.cam.y -= step; else if (e.key === 'ArrowDown') this.cam.y += step;
       else if (e.key === '+' || e.key === '=') this.zoomBy(1.2); else if (e.key === '-') this.zoomBy(1 / 1.2); else h = false;
-      if (h) { e.preventDefault(); this.clampCam(); this.camTo = null; this.dirty = true; }
+      if (h) { e.preventDefault(); this.clampCam(); this.camTo = null; this.zin.cancel(); this.dirty = true; }
     });
     cv.style.cursor = 'grab';
     this.mini.addEventListener('pointerdown', (e) => { const r = this.mini.getBoundingClientRect(), b = this.bounds(); this.goTo(b.x0 + (e.clientX - r.left) / r.width * (b.x1 - b.x0), b.y0 + (e.clientY - r.top) / r.height * (b.y1 - b.y0), this.cam.z, true); });
   }
   pinchDist() { const [a, b] = [...this.pointers.values()]; return Math.hypot(a.x - b.x, a.y - b.y) || 1; }
   pinchMid() { const [a, b] = [...this.pointers.values()]; return [(a.x + b.x) / 2, (a.y + b.y) / 2]; }
-  groundAt(px, py) { const [wx, wy] = this.s2w(px, py); const [gx, gy] = toGrid(wx, wy, zAt(Math.max(0, toGrid(wx, wy)[1]))); return { gx, gy }; }
+  /** The grid point under a world-pixel point, taking the height of the ground there into account. */
+  unproject(wx, wy) { let g = toGrid(wx, wy, 0); for (let i = 0; i < 4; i++) g = toGrid(wx, wy, zAt(g[0], g[1])); return g; }
+  groundAt(px, py) { const [wx, wy] = this.s2w(px, py), [gx, gy] = this.unproject(wx, wy); return { gx, gy, zone: zoneAt(gx, gy) }; }
+  /** Which district's ground (block or its pad) is under a world point (used by the map). */
+  zoneUnder(wx, wy) { const [gx, gy] = this.unproject(wx, wy); return LAYOUT.footAt(gx, gy); }
   pick(px, py) {
-    if (this.mode === 'map' && this.hitsLabel) for (const z of [3, 2, 1]) { const r = this.hitsLabel[z]; if (r && px >= r[0] && px <= r[0] + r[2] && py >= r[1] && py <= r[1] + r[3]) return { kind: 'zone', id: z, label: ZONES[z].name, polys: [] }; }
+    if (this.mode === 'map') {
+      for (const id of LAYOUT.ids) { const r = this.hitsLabel[id]; if (r && px >= r[0] && px <= r[0] + r[2] && py >= r[1] && py <= r[1] + r[3]) return this.zoneHit(id); }
+      const z = this.zoneUnder(...this.s2w(px, py)); return z ? this.zoneHit(z) : null;
+    }
     const [wx, wy] = this.s2w(px, py);
     for (let i = this.hits.length - 1; i >= 0; i--) {
       const h = this.hits[i];
@@ -148,6 +282,14 @@ export class World {
       else for (const poly of h.polys) if (inPoly(poly, wx, wy)) return h;
     }
     return null;
+  }
+  zoneHit(id) { const D = DIST[id], open = this.unlocked?.has(id) ?? true; return { kind: 'zone', id, eid: 'zone:' + id, zone: id, label: D.name + (open ? '' : ` (locked: opens at ${money(D.gate)} net worth)`), locked: !open, quick: true, gate: D.gate, polys: [blockPoly(D)] }; }
+  /** The camera moved (a zoom, a key, a glide, a drag that has ended) under a mouse that did not: what is under it is not what was, so look again, once a drawn frame, and never while it is panning. */
+  repickHover() {
+    const c = this.cam, s = this.camSeen;
+    if (this.drag || (s && s[0] === c.x && s[1] === c.y && s[2] === c.z)) return;
+    this.camSeen = [c.x, c.y, c.z];
+    const p = this.zin.resting(); if (p) this.pointerAt(p[0], p[1], { offsetX: p[0], offsetY: p[1] });
   }
   pointerAt(px, py, ev) {
     const h = this.pick(px, py), key = h ? h.kind + ':' + h.id : null;
@@ -159,53 +301,56 @@ export class World {
   sync() {
     const g = this.g; if (!g) return;
     const s = g.s, unlocked = new Set(s.zones), hf = this.hourF();
-    this.unlocked = unlocked;
+    if (this.unlocked) for (const z of unlocked) if (!this.unlocked.has(z)) this.startReveal(z);
+    this.unlocked = unlocked; this.unlockHash = strHash([...unlocked].join()) + 1; // part of the ground cache's key: a district opening redraws the ground
     const seen = new Set();
     const upsert = (id, make) => { seen.add(id); let e = this.ents.get(id); if (!e) { e = make(); e.id = id; e.born = this.t; this.ents.set(id, e); } e.gone = false; return e; };
-    // buyers
+    // buyers, lots
     for (const z of s.zones) {
+      const SP = SPOTS[z], D = DIST[z]; if (!SP) continue;
       const live = new Set(s.leads[z].map((l) => 'lead:' + l.id));
       const used = new Set([...this.ents.values()].filter((e) => e.type === 'lead' && e.zone === z && !e.leaving && live.has(e.id)).map((e) => e.slot));
       for (const l of s.leads[z]) {
         const id = 'lead:' + l.id;
-        const e = upsert(id, () => { let slot = SPOTS[z].leads.findIndex((_, i) => !used.has(i)); if (slot < 0) slot = 0; used.add(slot); const en = this.entry(z); return { type: 'lead', zone: z, slot, x: en[0] + (h2(strHash(l.id), 1) - 0.5) * 1.6, y: en[1] - h2(strHash(l.id), 2) * 1.4, seg: l.seg, look: lookOf(l.id + l.seg) }; });
-        e.lead = l; e.leaving = false; const sp = SPOTS[z].leads[e.slot]; e.tx = sp[0]; e.ty = sp[1];
+        const e = upsert(id, () => { let slot = SP.leads.findIndex((_, i) => !used.has(i)); if (slot < 0) slot = 0; used.add(slot); const en = D.entry; return { type: 'lead', zone: z, slot, x: en[0] + (h2(strHash(l.id), 1) - 0.5) * 1.2, y: en[1] + (h2(strHash(l.id), 2) - 0.5) * 0.8, seg: l.seg, look: lookOf(l.id + l.seg) }; });
+        e.lead = l; e.leaving = false; const sp = SP.leads[e.slot]; e.tx = sp[0]; e.ty = sp[1];
       }
-      s.lots[z].forEach((l, i) => { const e = upsert('lot:' + l.id, () => ({ type: 'lot', zone: z, slot: 0, drop: 46 })); e.lot = l; });
-      // reassign lot slots stably
-      const lotEnts = [...this.ents.values()].filter((e) => e.type === 'lot' && e.zone === z && s.lots[z].some((l) => l.id === e.lot.id));
-      const taken = new Set(); for (const e of lotEnts) if (e.slot >= 1 && e.slot <= 6 && !taken.has(e.slot)) taken.add(e.slot); else e.slot = 0;
-      for (const e of lotEnts) if (!e.slot) { for (let k = 1; k <= 6; k++) if (!taken.has(k)) { e.slot = k; taken.add(k); break; } }
+      const lotEnts = s.lots[z].map((l) => { const e = upsert('lot:' + l.id, () => ({ type: 'lot', zone: z, slot: -1, drop: 46 })); e.lot = l; return e; });
+      const taken = new Set(); for (const e of lotEnts) if (e.slot >= 0 && e.slot < SP.lots.length && !taken.has(e.slot)) taken.add(e.slot); else e.slot = -1;
+      for (const e of lotEnts) if (e.slot < 0) { let k = 0; while (taken.has(k) && k < SP.lots.length - 1) k++; e.slot = k; taken.add(k); }
     }
-    // stock crates: everything the player holds, wherever it is (a crate that changed zone is a new arrival)
+    // stock crates: everything the player holds, wherever it is (a crate that changed district is a new arrival)
     const byZone = {};
     for (const a of s.assets) (byZone[a.zone] ||= []).push(a);
     for (const [zs, list] of Object.entries(byZone)) {
       const z = +zs, ids = new Set(list.map((a) => 'asset:' + a.id));
+      if (!DIST[z]) continue;
       for (const a of list) { const old = this.ents.get('asset:' + a.id); if (old && old.zone !== z) this.ents.delete('asset:' + a.id); }
       const usedA = new Set([...this.ents.values()].filter((e) => e.type === 'asset' && e.zone === z && !e.gone && ids.has(e.id)).map((e) => e.slot));
       for (const a of list) { const e = upsert('asset:' + a.id, () => { let slot = 0; while (usedA.has(slot)) slot++; usedA.add(slot); return { type: 'asset', zone: z, slot, drop: 36 }; }); e.asset = a; }
     }
     // pipelines: a building keeps its plot for life; empty plots are the ones nobody holds (a fading building still holds its)
-    for (const z of [2, 3]) {
+    for (const z of LAYOUT.ids) {
+      const n = ZONES[z].plots; if (!n) continue;
       const ps = s.pipes.filter((p) => p.zone === z);
       const held = new Set([...this.ents.values()].filter((e) => e.type === 'pipe' && e.zone === z).map((e) => e.plot));
       for (const p of ps) {
-        const e = upsert('pipe:' + p.id, () => { let i = 0; while (held.has(i)) i++; held.add(i); return { type: 'pipe', zone: z, drop: 60, cycles: p.cycles, plot: i }; });
+        const e = upsert('pipe:' + p.id, () => { let i = 0; while (held.has(i) && i < n - 1) i++; held.add(i); return { type: 'pipe', zone: z, drop: 60, cycles: p.cycles, plot: i }; });
         e.pipe = p; if (p.cycles > e.cycles) { e.cycles = p.cycles; this.cyclePop(e, z, e.plot); }
       }
       const taken = new Set([...this.ents.values()].filter((e) => e.type === 'pipe' && e.zone === z).map((e) => e.plot));
-      for (let i = 0; i < PIPE_RULES.max[z]; i++) if (!taken.has(i)) { const e = upsert(`plot:${z}:${i}`, () => ({ type: 'plot', zone: z, plot: i })); e.locked = !unlocked.has(z) || g.autoLocked(); }
+      for (let i = 0; i < n; i++) if (!taken.has(i)) { const e = upsert(`plot:${z}:${i}`, () => ({ type: 'plot', zone: z, plot: i })); e.zoneLocked = !unlocked.has(z); e.locked = e.zoneLocked || g.autoLocked(); }
     }
     // freight
-    for (const f of s.freight) { const e = upsert('truck:' + f.id, () => ({ type: 'truck', from: f.items[0].zone ?? 1 })); e.f = f; }
+    for (const f of s.freight) { const e = upsert('truck:' + f.id, () => ({ type: 'truck', from: f.from ?? f.items[0]?.zone ?? 1 })); e.f = f; }
     // leavers: anything not seen this sync
     for (const [id, e] of this.ents) {
       if (seen.has(id)) continue;
-      if (e.type === 'lead' && !e.leaving) { e.leaving = true; e.leaveAt = this.t; const en = this.entry(e.zone); e.tx = en[0]; e.ty = en[1]; }
+      if (e.type === 'lead' && !e.leaving) { e.leaving = true; e.leaveAt = this.t; const en = DIST[e.zone].entry; e.tx = en[0]; e.ty = en[1]; }
       else if (e.type === 'lead') continue;
       else if (!e.gone) { e.gone = true; e.goneAt = this.t; this.hits = this.hits.filter((h) => h.eid !== id); }
     }
+    this.observeSales(g);
     // environment
     const m = g.mods();
     this.env.surge = m.demand.some((d) => d.tags?.includes('trend') && d.mult > 1);
@@ -217,434 +362,281 @@ export class World {
     this.syncPlayer();
     this.dirty = true;
   }
+  /** A district just opened: its fog lifts and its lights come on (instantly under reduced motion). */
+  startReveal(z) { if (!this.reduced()) { this.reveal[z] = { t0: this.t, dur: REVEAL_MS }; this.revealBurst(z); } this.api.reveal?.(z); this.dirty = true; }
+  /** The opening of a district, as light: two rings open out along its ground and sparks rise from it. Under reduced motion there is no reveal, so none of this runs. */
+  revealBurst(z) {
+    const D = DIST[z], F = D?.fp; if (!F) return;
+    const [x, y] = P(F[0] + F[2] / 2, F[1] + F[3] / 2, D.z), r = (F[2] + F[3]) * 12;
+    this.fx.ring(x, y, 24, r * 0.62, 1.2); this.fx.ring(x, y, 12, r * 0.9, 1.9); this.fx.sparks(x, y - 10, 28, z * 31 + 7, r * 0.5, 70);
+  }
+  /**
+   * Celebrate what the ledger has just recorded. Read-only: it looks at the entries after the last one it saw, the way a person reads the news, and
+   * never touches the game. A sale throws coins (sparks only when it lost money) from the buyer who just walked off; a ledger it cannot place is not celebrated.
+   */
+  observeSales(g) {
+    const L = g.s.ledger, n = L.length; if (!n) { this.ledLast = null; return; } // null: it was empty when last looked at, so whatever appears next is new
+    const last = L[n - 1]; if (last === this.ledLast) return;
+    let first = n; // undefined (never looked), or a ledger it cannot place (a new game, a trimmed one): nothing in it is news
+    if (this.ledLast === null) first = 0;
+    else if (this.ledLast !== undefined) { let i = n - 1; const stop = Math.max(0, n - 60); while (i >= stop && L[i] !== this.ledLast) i--; if (i >= stop) first = i + 1; }
+    this.ledLast = last;
+    if (first >= n || this.reduced() || !this.unlocked) return;
+    const now = g.s.hour; let shown = 0;
+    for (let k = n - 1; k >= first && shown < 3; k--) {
+      const ev = L[k], sale = ev.type === 'pitch' && ev.recv != null, pool = ev.type === 'pool' && ev.amt > 0;
+      if ((!sale && !pool) || ev.h < now - 3) continue;
+      let who = null; if (sale) for (const e of this.ents.values()) if (e.type === 'lead' && e.leaving && e.zone === ev.z && e.seg === ev.seg && e.leaveAt === this.t) { who = e; break; }
+      const pl = this.player, at = who || pl, [px, py] = P(at.x, at.y, zAt(at.x, at.y));
+      if (ev.amt > 0) this.fx.coins(px, py - 26, 9, k); this.fx.sparks(px, py - 26, ev.amt > 0 ? 10 : 4, k, 12, 44); this.fx.ring(px, py, 6, 30, 0.7); shown++;
+    }
+  }
+  fxOf(z) {
+    const open = this.unlocked ? this.unlocked.has(z) : true, r = this.reveal[z];
+    if (open && !r) return NOFX;
+    if (!open) return { dim: FOG_DIM, fog: 1, lights: 0 };
+    const p = clamp((this.t - r.t0) / r.dur, 0, 1);
+    if (p >= 1) { delete this.reveal[z]; return NOFX; }
+    const e = ease(p); return { dim: FOG_DIM * (1 - e), fog: 1 - e, lights: Math.sin(p * Math.PI) * 0.9 };
+  }
   hourF() { const S = this.api.session, g = this.g; if (!g) return 0; const live = S.clock.now(), fr = S.clock.paused || g.s.over ? 0 : clamp(live - g.s.hour, 0, 1); return g.s.hour + fr; }
-  entry(z) { return z === 1 ? [17.8, 47.4] : z === 2 ? [17.8, 31.5] : [17.8, 15.5]; }
-  placePlayer() { const z = this.unlocked?.has(this.api.ui.zone) ? this.api.ui.zone : Math.max(...(this.g?.s.zones || [1])); const h = SPOTS[z].home; Object.assign(this.player, { x: h[0], y: h[1], zone: z, path: [] }); }
+  homeZone() { return this.unlocked?.has(this.api.ui.zone) ? this.api.ui.zone : Math.max(...(this.g?.s.zones || [1])); }
+  placePlayer() { const z = this.homeZone(), h = SPOTS[z].home; Object.assign(this.player, { x: h[0], y: h[1], zone: z, path: [], placed: true }); }
   syncPlayer() {
     const z = this.unlocked?.has(this.api.ui.zone) ? this.api.ui.zone : this.player.zone, pl = this.player;
+    if (!pl.placed) { this.placePlayer(); return; }
     if (pl.zone !== z) {
-      pl.zone = z;
-      const home = SPOTS[z].home, lane = LANE.north + 0.3;
-      pl.path = [[lane, pl.y], [lane, this.entry(z)[1] - 1], home];
+      const from = pl.zone; pl.zone = z;
+      const path = LAYOUT.playerRoute(from, z, this.unlocked); if (!path) { this.placePlayer(); return; }
+      let len = 0, [px, py] = [pl.x, pl.y]; for (const [x, y] of path) { len += Math.hypot(x - px, y - py); px = x; py = y; }
+      pl.path = path; pl.speed = Math.max(14, len / 5); // the walk is real, along the roads; a very long one still takes only about five seconds (quickTravel skips it)
     } else if (!pl.path.length && !pl.moving && Math.hypot(pl.x - SPOTS[z].home[0], pl.y - SPOTS[z].home[1]) > 40) { pl.x = SPOTS[z].home[0]; pl.y = SPOTS[z].home[1]; }
   }
-  walkPlayerTo(gx, gy) { const pl = this.player; if (pl.zone !== zoneAt(gy)) return; pl.path = [[gx, gy]]; }
+  /** Skip the walk: stand at the home spot of an open district and frame it. Returns false if the district is locked. */
+  quickTravel(z) {
+    if (!DIST[z] || (this.unlocked && !this.unlocked.has(z))) return false;
+    const pl = this.player, h = SPOTS[z].home; Object.assign(pl, { x: h[0], y: h[1], zone: z, path: [], placed: true, moving: false });
+    if (this.mode === 'world') this.focusZone(z, true); this.dirty = true; return true;
+  }
+  walkPlayerTo(gx, gy) { const pl = this.player; if (zoneAt(gx, gy) !== pl.zone) return; pl.speed = 16; pl.path = [[gx, gy]]; }
   cyclePop(e, z, i) {
-    const pl = PLOTS[z][i], p = e.pipe, g = this.g;
+    const pl = PLOTS[z][i], p = e.pipe, g = this.g, D = DIST[z];
     const last = [...g.s.ledger].reverse().find((l) => l.type === 'pipe' && l.pid === p.id);
     const amt = last ? last.amt : 0;
-    this.pop((amt >= 0 ? '+' : '-') + money(Math.abs(amt)), pl[0] + 1.5, pl[1] + 1.5, ELEV[z] + 60 + p.level * 12, amt >= 0 ? '#ffd36e' : '#ff7d75');
-    if (!this.reduced()) for (let k = 0; k < 8; k++) this.parts.push({ k: 'coin', gx: pl[0] + 1.5, gy: pl[1] + 1.5, z: ELEV[z] + 40 + p.level * 12, vx: (Math.random() - 0.5) * 40, up: 50 + Math.random() * 50, life: 1.1 + Math.random() * 0.4, age: 0 });
+    this.pop((amt >= 0 ? '+' : '-') + money(Math.abs(amt)), pl[0] + 1.5, pl[1] + 1.5, D.z + 60 + p.level * 12, amt >= 0 ? '#ffd36e' : '#ff7d75');
+    if (!this.reduced()) { const x = sx(pl[0] + 1.5, pl[1] + 1.5), y = sy(pl[0] + 1.5, pl[1] + 1.5, D.z + 40 + p.level * 12); this.fx.coins(x, y, 8, e.cycles); if (amt > 0) this.fx.sparks(x, y, 6, e.cycles, 16, 40); }
   }
-  pop(text, gx, gy, z, color = '#ffd36e') { this.parts.push({ k: 'text', gx, gy, z, text, color, life: 1.8, age: 0 }); }
+  pop(text, gx, gy, z, color = '#ffd36e') { this.fx.pop(text, sx(gx, gy), sy(gx, gy, z), color); }
 
   // ------------------------------------------------------------------ frame loop
   frame(ts) {
     if (!this.running) return;
+    this.raf = 0;
+    if (document.hidden) { this.raf = requestAnimationFrame((t) => this.frame(t)); return; } // a hidden tab costs nothing (its callbacks do not run); one stays pending so the loop is alive when it is shown
+    if (!this.vis) return;                       // a canvas that is not on screen costs nothing: the observer that sees it again marks it dirty, which wakes the loop
+    const calm = this.reduced(), G = this.gov;
+    const animating = !calm || this.camTo || this.zin.pending || this.player.path.length || this.fx.active || this.revealing();
+    if (!animating && !this.dirty) { G.prev = 0; return; } // nothing moves and nothing changed: no frame is asked for at all (a still picture), and the pause is never judged as a slow frame; the setter of `dirty` wakes the loop
     this.raf = requestAnimationFrame((t) => this.frame(t));
-    if (document.hidden) return;
     const dt = Math.min(0.1, (ts - this.last) / 1000);
     if (ts - this.last < 1000 / this.fps - 1) return;
-    const t0 = performance.now();
+    const t0 = performance.now(), gap = animating && G.prev && ts - G.prev < 250 ? ts - G.prev : 0; // the gap between two CONTINUOUS drawn frames (0 after a pause, and 0 for a frame drawn on demand: the redraws of a still picture are a quarter second apart and are not late)
     this.last = ts; this.t = ts;
-    const calm = this.reduced();
-    const animating = !calm || this.camTo || this.player.path.length || this.parts.length;
-    if (!animating && !this.dirty) return;
     this.update(dt);
     this.draw();
-    this.dirty = false;
-    const cost = performance.now() - t0;
-    if (this.warm > 0) this.warm--; else this.slow = clamp(this.slow + (cost > 22 ? 1 : cost < 16 ? -1 : 0), 0, 6);
-    this.fps = this.slow > 4 ? 15 : this.slow > 2 ? 20 : 30;
+    this.dirty = false; G.prev = animating ? ts : 0; this.repickHover();
+    this.govern(performance.now() - t0, gap);
+    if ((this.ledgerN = (this.ledgerN | 0) + 1) % 20 === 0) { this.ledgerSync(); if (!ledger.within(LEDGER_LIMIT_MB)) this.squeeze(); } // every few seconds: the pixel ledger against its ceiling
+    this.fps = this.slow > 4 ? 15 : this.slow > 2 ? 20 : 30; if (this.moving && this.slow < 3) this.fps = 60; // the 30 fps cap is for a still camera's idle motion: a camera that moves draws every refresh while the machine keeps up (docs/RENDER_PLAN.md section 5, DIAGNOSIS P4)
     this.lite = this.slow > 2;
     if (Math.abs(this.targetDpr() - this.dpr) > 0.01) this.resize();
   }
-
+  /** Is the picture out of date? Setting it asks the loop for a frame when the loop has gone idle (a still picture asks for none), so every `this.dirty = true` in this file and its mixins is also a wake-up. */
+  get dirty() { return this._dirty; }
+  set dirty(v) { this._dirty = v; if (v && this.running && !this.raf) this.raf = requestAnimationFrame((t) => this.frame(t)); }
+  /** Is any district still opening? One that has finished is swept here (fxOf only sweeps the districts in view, and a reveal nobody looks at must not hold the ground cache off). */
+  revealing() { let on = false; for (const k in this.reveal) { const r = this.reveal[k]; if (this.t - r.t0 >= r.dur) delete this.reveal[k]; else on = true; } return on; }
+  /**
+   * The quality governor. `slow` (0 to 6) is the tier. It steps down after a few frames of smoothed cost over SLOW_MS and back up only after a longer
+   * spell under FAST_MS, so a single hitch changes nothing. If the picture tips over again soon after a step up, the wait for the next step up doubles
+   * (to forty times at most): a machine on the edge settles on the lower tier instead of flickering between two looks. A frame that arrives more than
+   * two intervals late counts as slow however cheap its drawing was (the raster or the GPU is behind, which the drawing's own time cannot show).
+   * The first frames after a resize are never judged (`warm`): a cold canvas and a fresh surface cost more than the steady state.
+   */
+  govern(cost, gap) {
+    const G = this.gov;
+    if (this.warm > 0) { this.warm--; return; }
+    G.cost += (judge(cost, gap, this.fps) - G.cost) * 0.2; // (the second signal: a frame that arrives late for the loop's own target counts as slow however cheap its drawing was; governor.js)
+    if (G.cost > SLOW_MS) {
+      G.good = 0;
+      if (++G.bad >= GOV_DOWN && this.slow < 6) { G.bad = 0; this.slow++; if (this.t - G.upAt < 6000) G.wait = Math.min(G.wait * 2, GOV_WAIT * 40); }
+    } else if (G.cost < FAST_MS) {
+      G.bad = 0;
+      if (this.slow > 0 && ++G.good >= G.wait) { G.good = 0; this.slow--; G.upAt = this.t; }
+      if (this.slow === 0) G.wait = GOV_WAIT;
+    } else { G.bad = 0; G.good = 0; }
+  }
   update(dt) {
-    const calm = this.reduced(), speed = this.api.session.clock.speed;
-    // camera tween
+    const calm = this.reduced(), speed = this.api.session.clock.speed, env = this.env;
+    // camera tween, and a mouse notch's zoom ease
+    this.zin.tick(dt);
     if (this.camTo) { const c = this.camTo, k = clamp((this.t - c.t0) / c.dur, 0, 1), e = ease(k); this.cam.x = lerp(c.from.x, c.x, e); this.cam.y = lerp(c.from.y, c.y, e); this.cam.z = lerp(c.from.z, c.z, e); if (k >= 1) this.camTo = null; this.clampCam(); }
-    // light: rate-limited so fast clocks never strobe (WCAG 2.3.1)
-    const h = ((this.env.hour ?? 0) + 8) % 24; // the run starts at 08:00 so the first view is daylight
-    let target = h >= 7 && h < 17 ? 0 : h >= 17 && h < 20 ? (h - 17) / 3 : h >= 4 && h < 7 ? 1 - (h - 4) / 3 : 1;
-    if (calm) target = 0; else if (speed >= 16) target = 0.3;
-    this.night += clamp(target - this.night, -dt * 0.35, dt * 0.35);
+    // light: rate-limited so fast clocks never strobe (WCAG 2.3.1); the golden hour follows the same limit
+    const T = dayTargets(env.hour, speed, calm, this.tod), step = dt * 0.35;
+    this.night += clamp(T.night - this.night, -step, step); this.dusk += clamp(T.dusk - this.dusk, -step, step);
     this.vt = calm ? 0 : this.t;
-    Object.assign(this.env, { t: this.vt, night: this.night, wind: calm ? 0 : 1, dim: 0 });
-    // entities walk
-    const sp = 2.4;
+    env.t = this.vt; env.night = this.night; env.wind = calm ? 0 : 1; env.dim = 0;
+    // entities walk (a buyer or the player who is moving kicks up a little dust; a crate or a building that lands raises a puff)
+    const sp = 2.4, dust = !calm && !this.far && !!this.view;
     for (const [id, e] of this.ents) {
       if (e.type === 'lead') {
         const dx = e.tx - e.x, dy = e.ty - e.y, d = Math.hypot(dx, dy);
         e.moving = d > 0.06;
-        if (e.moving) { const stp = Math.min(d, (calm ? 40 : sp) * dt); e.x += dx / d * stp; e.y += dy / d * stp; if (Math.abs(dx) > 0.01) e.dir = dx > 0 ? 1 : -1; }
+        if (e.moving) { const stp = Math.min(d, (calm ? 40 : sp) * dt); e.x += dx / d * stp; e.y += dy / d * stp; if (Math.abs(dx) > 0.01) e.dir = dx > 0 ? 1 : -1; if (dust) this.footstep(e, dt); }
         if (e.leaving && (!e.moving || this.t - e.leaveAt > 4500)) this.ents.delete(id);
       } else if (e.gone && this.t - e.goneAt > 600) this.ents.delete(id);
-      if (e.drop) e.drop = Math.max(0, e.drop - (calm ? 999 : 180) * dt);
+      if (e.drop) { e.drop = Math.max(0, e.drop - (calm ? 999 : 180) * dt); if (!e.drop && dust) this.landed(e); }
     }
     // player walks
     const pl = this.player;
-    if (pl.path.length) { const [tx, ty] = pl.path[0], dx = tx - pl.x, dy = ty - pl.y, d = Math.hypot(dx, dy), v = pl.path.length > 1 ? 16 : 5; if (d < 0.1) pl.path.shift(); else { const st = Math.min(d, (calm ? 80 : v) * dt); pl.x += dx / d * st; pl.y += dy / d * st; if (Math.abs(dx) > 0.01) pl.dir = dx > 0 ? 1 : -1; } pl.moving = true; } else pl.moving = false;
-    // particles
-    for (const p of this.parts) p.age += dt;
-    this.parts = this.parts.filter((p) => p.age < p.life);
-    if (this.env.crunch && !calm) { if (!this.rain) this.rain = Array.from({ length: 90 }, () => [Math.random(), Math.random(), 0.6 + Math.random() * 0.6]); for (const r of this.rain) { r[1] += dt * r[2] * 1.6; r[0] -= dt * 0.25 * r[2]; if (r[1] > 1.05) { r[1] = -0.05; r[0] = Math.random() * 1.2; } if (r[0] < -0.05) r[0] += 1.1; } } else this.rain = null;
+    if (pl.path.length) { const [tx, ty] = pl.path[0], dx = tx - pl.x, dy = ty - pl.y, d = Math.hypot(dx, dy), v = pl.path.length > 1 ? pl.speed : Math.min(pl.speed, 5); if (d < 0.1) pl.path.shift(); else { const st = Math.min(d, (calm ? 4000 : v) * dt); pl.x += dx / d * st; pl.y += dy / d * st; if (Math.abs(dx) > 0.01) pl.dir = dx > 0 ? 1 : -1; } pl.moving = true; if (dust) this.footstep(pl, dt); } else pl.moving = false;
+    // particles and weather (the pool is fixed: nothing is allocated here)
+    this.fx.update(dt, calm);
+    this.rainOn = !!(env.crunch && !calm);
+    if (this.rainOn) this.fx.rainStep(dt);
+  }
+  /** A footstep puff behind something that walks, every quarter of a second while it is in view. */
+  footstep(e, dt) {
+    e.stepT = (e.stepT ?? 0) - dt; if (e.stepT > 0) return; e.stepT = 0.26;
+    if (!this.onView(e.x, e.y, 30)) return;
+    const [x, y] = P(e.x, e.y, zAt(e.x, e.y)); this.fx.puff(x - (e.dir || 1) * 4, y - 1, 4);
+  }
+  /** A crate or a building has just finished falling into place: dust and a small ring on the ground. */
+  landed(e) {
+    let gx, gy, z;
+    if (e.type === 'lot' || e.type === 'asset') { [gx, gy] = this.posOf(e); z = zAt(gx, gy); } else if (e.type === 'pipe') { const pl = PLOTS[e.zone][e.plot % PLOTS[e.zone].length]; gx = pl[0] + 1.5; gy = pl[1] + 1.5; z = DIST[e.zone].z; } else return;
+    if (!this.onView(gx, gy, 60)) return;
+    const [x, y] = P(gx, gy, z), big = e.type === 'pipe'; for (let k = 0; k < (big ? 5 : 3); k++) this.fx.puff(x + (k - 1) * (big ? 14 : 8), y, big ? 9 : 6);
+    this.fx.ring(x, y, 4, big ? 54 : 26, 0.6);
   }
 
   // ------------------------------------------------------------------ drawing
   draw() {
-    const ctx = this.ctx, { W, H, dpr } = this, g = this.g;
-    this.hits = []; this.overlay = []; this.lights = [];
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    this.drawWater(ctx);
-    ctx.setTransform(dpr * this.cam.z, 0, 0, dpr * this.cam.z, dpr * (W / 2 - this.cam.x * this.cam.z), dpr * (H / 2 - this.cam.y * this.cam.z));
-    const view = { x0: this.cam.x - W / 2 / this.cam.z - 80, x1: this.cam.x + W / 2 / this.cam.z + 80, y0: this.cam.y - H / 2 / this.cam.z - 260, y1: this.cam.y + H / 2 / this.cam.z + 80 };
-    this.view = view;
-    this.drawGround(ctx, view);
-    const items = [];
-    const vis = (gx, gy, w = 1, d = 1, h = 60) => { const x = sx(gx + w / 2, gy + d / 2), y = sy(gx + w / 2, gy + d / 2, zAt(gy)); return x > view.x0 - 80 && x < view.x1 + 80 && y > view.y0 - h && y < view.y1 + 60; };
-    for (const p of SCENERY) if (vis(p.gx, p.gy, p.w, p.d, p.h)) items.push({ key: p.key, k: 's', p });
-    const lowZoom = this.cam.z < 0.42;
+    const ctx = this.ctx, { W, H } = this, cam = this.cam, map = this.mode === 'map';
+    this.hits.length = 0; this.overlay.length = 0; this.lights.length = 0; this.env.lights = this.lights;
+    this.far = cam.z < FAR_ZOOM; this.env.far = this.far; this.env.lite = this.lite; this.env.tier = this.slow; this.env.lod = lodOf(cam.z, this.lod); this.env.farMix = farMix(cam.z, FAR_ZOOM); // (farMix: the far blocks fade into the full props over the zoom either side of FAR_ZOOM: no pop)
+    const view = this.view || (this.view = { x0: 0, x1: 0, y0: 0, y1: 0 });
+    view.x0 = cam.x - W / 2 / cam.z - 80; view.x1 = cam.x + W / 2 / cam.z + 80; view.y0 = cam.y - H / 2 / cam.z - 260; view.y1 = cam.y + H / 2 / cam.z + 80;
+    runLayer('sea', this, ctx, view); this.toWorld(ctx);
+    this.groundPass(ctx, view);
+    // what stands on the ground: scenery, entities, the player and the traffic, depth-sorted back to front. The list and its records are reused every frame.
+    const vz = this.vz; vz.clear(); this.itemN = 0;
+    const seeBox = (b) => b[2] > view.x0 && b[0] < view.x1 && b[3] > view.y0 && b[1] < view.y1;
+    for (const id of LAYOUT.ids) {
+      const D = DIST[id]; if (!seeBox(D.bb)) continue; vz.add(id);
+      for (const p of D.props) { if (p.sm && (this.env.farMix <= 0.001 || this.lite && cam.z < 0.6)) continue; if (p.bb[2] > view.x0 && p.bb[0] < view.x1 && p.bb[3] > view.y0 && p.bb[1] < view.y1) this.push(p.key, 's', p); }
+    }
     for (const e of this.ents.values()) {
-      if (e.type === 'truck' || e.type === 'plot' || e.type === 'pipe') items.push({ key: this.keyOf(e), k: 'e', e });
-      else { const [gx, gy] = this.posOf(e); if (vis(gx, gy, 1, 1, 80)) items.push({ key: gx + gy + 0.5, k: 'e', e }); }
+      if (e.type === 'truck') { const [gx, gy] = this.truckPos(e), x = sx(gx, gy), y = sy(gx, gy, zAt(gx, gy)); if (x > view.x0 && x < view.x1 && y > view.y0 && y < view.y1 + 60) this.push(gx + gy + 0.8, 'e', e); }
+      else if (!vz.has(e.zone)) continue;
+      else if (e.type === 'plot' || e.type === 'pipe') this.push(this.keyOf(e), 'e', e);
+      else { const [gx, gy] = this.posOf(e); if (this.onView(gx, gy, 80)) this.push(gx + gy + 0.5, 'e', e); }
     }
-    items.push({ key: this.player.x + this.player.y + 0.5, k: 'p' });
-    if (!this.reduced()) for (const c of this.cars()) items.push({ key: c.key, k: 'c', c });
-    items.sort((a, b) => a.key - b.key);
-    for (const it of items) {
+    if (this.onView(this.player.x, this.player.y, 80)) this.push(this.player.x + this.player.y + 0.5, 'p', null);
+    if (!this.reduced()) for (const c of this.cars()) if (this.onView(c.gx, c.gy, 40)) this.push(c.key, 'c', c);
+    const items = this.items; items.length = this.itemN; items.sort(BY_KEY);
+    for (let n = 0; n < items.length; n++) {
+      const it = items[n];
       try {
-        if (it.k === 's') this.drawStatic(ctx, it.p);
-        else if (it.k === 'e') this.drawEnt(ctx, it.e);
-        else if (it.k === 'p') this.drawPlayer(ctx);
-        else this.drawCar(ctx, it.c);
-      } catch (err) { ctx.restore?.(); ctx.globalAlpha = 1; this.fault(err, it.k + ':' + (it.p?.t || it.e?.type || it.c?.i)); }
+        if (it.k === 's') runLayer('static', this, ctx, view, it.a);
+        else if (it.k === 'e') this.drawEnt(ctx, it.a);
+        else if (it.k === 'p') runLayer('player', this, ctx, view);
+        else runLayer('car', this, ctx, view, it.a);
+      } catch (err) { ctx.restore?.(); ctx.globalAlpha = 1; this.fault(err, it.k + ':' + (it.a?.t || it.a?.type || it.a?.i)); }
     }
+    if (!map && this.cam.z < 0.4) for (const id of vz) { const D = DIST[id], open = this.unlocked?.has(id) ?? true; this.hits.push({ kind: 'zone', id, eid: 'tag:' + id, zone: id, label: open ? `Travel to ${D.name}` : `${D.name} (locked: opens at ${money(D.gate)} net worth)`, locked: !open, quick: true, gate: D.gate, circle: [sx(D.cx, D.cy), sy(D.cx, D.cy, D.z) - 70, 44 / this.cam.z] }); }
+    try { runLayer('clouds', this, ctx, view, vz); } catch (err) { ctx.restore?.(); this.fault(err, 'fog'); }
     if (this.hover) { const k = this.hover.kind + ':' + this.hover.id, fresh = this.hits.find((h) => h.kind + ':' + h.id === k); if (fresh) this.hover = fresh; this.drawHover(ctx); }
-    // screen-space passes
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    for (const pass of [() => this.drawLight(ctx), () => this.drawOverlay(ctx), () => this.drawWeather(ctx), () => this.mode === 'map' && this.drawMapLabels(ctx), () => this.drawMini()]) { try { pass(); } catch (err) { ctx.restore?.(); this.fault(err, 'pass'); } }
+    // screen-space passes, back to front: the grade (tint, light pools, atmosphere), the map's routes, weather, floating dust, the labels, then particles
+    this.toScreen(ctx);
+    this.safeLayer('grade', 'drawGrade', ctx); if (map) this.safe('drawMapRoute', ctx); this.safeLayer('weather', 'drawWeather', ctx); this.safeLayer('field', 'drawField', ctx); this.safe('drawOverlay', ctx); this.safeLayer('particles', 'drawParticles', ctx);
+    if (map) this.safe('drawMapLabels', ctx); this.safe('drawMini', ctx);
   }
-
+  /** Run one screen-space pass; a pass that throws is logged once and never blanks the frame. */
+  safe(name, ctx) { try { this[name](ctx); } catch (err) { ctx.restore?.(); this.fault(err, name); } }
+  /** Run one layer of the stack in a screen-space pass; a layer that throws is logged once (under the method's old name) and never blanks the frame. */
+  safeLayer(id, name, ctx) { try { runLayer(id, this, ctx, this.view); } catch (err) { ctx.restore?.(); this.fault(err, name); } }
+  /**
+   * The camera transform: world pixels (a grid point's sx, sy) to device pixels. The one place it is written. The scale is the frame's render scale (dpr x zoom to 1e-5, `renderScale`) and the translation is rounded to
+   * WHOLE device pixels (docs/RENDER_PLAN.md section 5): the ground chunks, the cached sprites and the live art share one raster phase, a pan moves them all by whole pixels together so no edge crawls against another, and
+   * every cached blit lands 1:1. Hit testing (w2s, s2w) keeps the exact camera: the difference is at most half a device pixel.
+   */
+  toWorld(ctx) { const a = this.renderScale(), s = this.snap || (this.snap = [0, 0]); snapTranslation(this.W, this.H, this.dpr, this.cam.x, this.cam.y, a, s); ctx.setTransform(a, 0, 0, a, s[0], s[1]); }
+  /** The screen transform: css pixels of the window to device pixels. */
+  toScreen(ctx) { const dpr = this.dpr; ctx.setTransform(dpr, 0, 0, dpr, 0, 0); }
+  /** Add one thing to this frame's depth-sorted list (reusing the record). */
+  push(key, k, a) { const n = this.itemN++; let it = this.itemPool[n]; if (!it) it = this.itemPool[n] = { key: 0, k: '', a: null }; it.key = key; it.k = k; it.a = a; this.items[n] = it; }
+  onView(gx, gy, m = 60) { const x = sx(gx, gy), y = sy(gx, gy, zAt(gx, gy)), v = this.view; return x > v.x0 - m && x < v.x1 + m && y > v.y0 - m && y < v.y1 + m; }
   /** One broken object must never blank the world: log it once and keep drawing the rest. */
   fault(err, where) { this.faults = this.faults || new Set(); const k = where + err.message; if (!this.faults.has(k)) { this.faults.add(k); console.error('world: could not draw', where, err); } }
-
-  drawWater(ctx) {
-    const { W, H } = this, night = this.night;
-    const gr = ctx.createLinearGradient(0, 0, 0, H);
-    gr.addColorStop(0, mix('#1b3b5c', '#08111f', night * 0.8)); gr.addColorStop(1, mix('#235a7a', '#0b1a2c', night * 0.8));
-    ctx.fillStyle = gr; ctx.fillRect(0, 0, W, H);
-    ctx.strokeStyle = `rgba(190,230,255,${0.1 + 0.05 * (1 - night)})`; ctx.lineWidth = 1;
-    const calm = this.reduced();
-    for (let i = 0; i < 26; i++) {
-      const y = (i / 26) * H + 8, ph = calm ? 0 : this.vt / 1400 + i, x0 = ((i * 137) % W);
-      ctx.beginPath(); for (let x = -20; x < 90; x += 6) { const px = (x0 + x * 2.2) % (W + 60) - 30, py = y + Math.sin(ph + x * 0.1) * 1.6; x === -20 ? ctx.moveTo(px, py) : ctx.lineTo(px, py); } ctx.stroke();
-    }
-    // island shadow on the water
-    const a = this.w2s(sx(LAND.x0, LAND.y1) + 30, sy(LAND.x0, LAND.y1) + 50), b = this.w2s(sx(LAND.x1, LAND.y1) + 30, sy(LAND.x1, LAND.y1) + 50), c = this.w2s(sx(LAND.x1, LAND.y0) + 30, sy(LAND.x1, LAND.y0) + 50);
-    quad(ctx, [a, b, c, [c[0], c[1] - 10], [a[0], a[1] - 10]], 'rgba(5,10,20,.35)');
-  }
-
-  drawGround(ctx, view) {
-    const g0 = toGrid(view.x0, view.y0 + 20), g1 = toGrid(view.x1, view.y1), g2 = toGrid(view.x0, view.y1), g3 = toGrid(view.x1, view.y0 + 20);
-    const x0 = Math.max(LAND.x0, Math.floor(Math.min(g0[0], g1[0], g2[0], g3[0])) - 1), x1 = Math.min(LAND.x1 - 1, Math.ceil(Math.max(g0[0], g1[0], g2[0], g3[0])) + 1);
-    const y0 = Math.max(LAND.y0, Math.floor(Math.min(g0[1], g1[1], g2[1], g3[1])) - 1), y1 = Math.min(LAND.y1 - 1, Math.ceil(Math.max(g0[1], g1[1], g2[1], g3[1])) + 1);
-    const dimZ = (z) => (this.unlocked && !this.unlocked.has(z) ? 0.5 : 0);
-    const sig = this.unlocked ? [...this.unlocked].join() : ''; if (sig !== this.tileSig) { this.tileSig = sig; this.tileCols.clear(); }
-    for (let gy = y0; gy <= y1; gy++) {
-      const za = zAt(gy), zb = zAt(gy + 1), slope = (za - zb) / 8;
-      const rx0 = Math.max(x0, Math.floor(view.x0 / HW + gy) - 1), rx1 = Math.min(x1, Math.ceil(view.x1 / HW + gy) + 1);
-      for (let gx = rx0; gx <= rx1; gx++) {
-        const ck = gy * 64 + gx; let col = this.tileCols.get(ck);
-        if (col === undefined) { col = groundColor(gx, gy) || null; if (col) { const dz = dimZ(zoneAt(gy)); if (dz) col = mix(col, '#10151f', dz); if (slope) col = shade(col, 1 + slope * 0.12); } this.tileCols.set(ck, col); }
-        if (!col) continue;
-        const pts = [P(gx, gy, za), P(gx + 1, gy, za), P(gx + 1, gy + 1, zb), P(gx, gy + 1, zb)];
-        quad(ctx, pts, col, !this.lite && zoneAt(gy) > 1 && !isRoad(gx, gy) ? 'rgba(0,0,0,.14)' : null, 0.8);
-        if (gy === LAND.y1 - 1) this.wall(ctx, P(gx, gy + 1, zb), zb, P(gx + 1, gy + 1, zb), zb, 0);
-        if (gx === LAND.x1 - 1) this.wall(ctx, P(gx + 1, gy + 1, zb), zb, P(gx + 1, gy, za), za, 1);
-      }
-    }
-    // road markings, crosswalks and decals
-    ctx.lineWidth = 2;
-    for (let gy = y0; gy <= y1; gy += 1) {
-      if (gy % 2 === 0) { const z = zAt(gy), a = P(18, gy, z), b = P(18, gy + 0.55, zAt(gy + 0.55)); ctx.strokeStyle = 'rgba(255,211,110,.75)'; ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke(); }
-    }
-    for (const r of [7, 24, 40]) { if (r < y0 - 1 || r > y1) continue; for (let gx = 5; gx < 31; gx += 2) { if (gx >= 16 && gx < 20) continue; const z = zAt(r), a = P(gx, r + 0.5, z), b = P(gx + 0.6, r + 0.5, z); ctx.strokeStyle = 'rgba(255,255,255,.4)'; ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke(); } for (let k = 0; k < 5; k++) { const z = zAt(r), a = P(16.9, r + 0.1 + k * 0.2, z), b = P(18.9 + 0, r + 0.1 + k * 0.2, z); ctx.strokeStyle = 'rgba(255,255,255,.5)'; ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke(); } }
-    // Scrap Yard puddles and oil
-    if (!this.lite) for (let i = 0; i < 16; i++) { const gx = 5 + h2(3, i) * 26, gy = 35 + h2(4, i) * 12; if (isRoad(gx, gy) || gy < y0 || gy > y1 + 1) continue; const [x, y] = P(gx, gy, 0); ellipse(ctx, x, y, 14 + h2(5, i) * 12, 6 + h2(6, i) * 4, i % 3 ? 'rgba(20,16,12,.28)' : 'rgba(110,150,190,.35)'); }
-  }
-  wall(ctx, a, za, b, zb, side) {
-    const col = this.night > 0.5 ? '#2c3040' : '#4a5060', c = side ? shade(col, 0.72) : col;
-    quad(ctx, [a, b, [b[0], b[1] + zb + 34], [a[0], a[1] + za + 34]], c);
-    ctx.strokeStyle = 'rgba(0,0,0,.22)'; ctx.lineWidth = 1;
-    for (let k = 1; k < 4; k++) { ctx.beginPath(); ctx.moveTo(a[0], a[1] + (za + 34) * k / 4); ctx.lineTo(b[0], b[1] + (zb + 34) * k / 4); ctx.stroke(); }
-  }
-
   posOf(e) {
     if (e.type === 'lead') return [e.x, e.y];
-    if (e.type === 'lot') return SPOTS[e.zone].lots[Math.max(0, e.slot - 1)];
-    if (e.type === 'asset') return stashPos(e.zone, e.slot);
+    if (e.type === 'lot') return SPOTS[e.zone].lots[Math.max(0, e.slot)];
+    if (e.type === 'asset') return LAYOUT.stashPos(e.zone, e.slot);
     return [0, 0];
   }
   keyOf(e) {
     if (e.type === 'truck') { const [x, y] = this.truckPos(e); return x + y + 0.8; }
-    const pl = PLOTS[e.zone][e.plot]; return pl[0] + 1.5 + pl[1] + 1.5;
+    const pl = PLOTS[e.zone][e.plot % PLOTS[e.zone].length]; return pl[0] + 1.5 + pl[1] + 1.5;
   }
-
-  drawStatic(ctx, p) {
-    const z = p.z, locked = this.unlocked && !this.unlocked.has(zoneAt(p.gy));
-    ctx.save(); ctx.translate(0, -z);
-    this.env.dim = locked ? 0.55 : 0; this.env.locked = p.t === 'bank' && this.g && !this.g.s.mil.m1;
-    this.env.lights = this.lights;
-    if (p.t === 'lamp') this.lights.push({ wx: sx(p.gx, p.gy), wy: sy(p.gx, p.gy, z + 28), r: 46, c: '255,222,140', a: 0.55 * this.night });
-    if (p.t === 'board') this.env.boardText = this.boardText(p);
-    const polys = drawProp(ctx, p, this.env);
-    ctx.restore();
-    if (p.t === 'bank' && this.env.locked) this.drawBarrier(ctx, p, z);
-    if (p.hot && polys) this.hits.push({ kind: 'static', id: p.hot, label: p.label, zone: zoneAt(p.gy), polys: polys.map((q) => q.map(([x, y]) => [x, y - z])), p });
-    if (p.t === 'depot' && this.env.tariff) this.drawTariff(ctx, p, z);
-  }
-  boardText(p) {
-    const g = this.g, z = zoneAt(p.gy); if (!g) return p.text;
-    const n = (g.s.leads[z] || []).length;
-    return this.env.surge && z < 3 ? 'TREND SURGE' : this.env.crunch ? 'CREDIT CRUNCH' : this.env.tariff ? 'TARIFF LOCK' : `${n} BUYERS`;
-  }
-  drawBarrier(ctx, p, z) {
-    const [x, y] = P(p.gx + p.w / 2, p.gy + p.d + 0.3, z);
-    ctx.fillStyle = '#ffd36e'; ctx.fillRect(x - 40, y - 12, 80, 8); ctx.fillStyle = '#10141c'; for (let i = 0; i < 8; i++) { ctx.beginPath(); ctx.moveTo(x - 40 + i * 10, y - 12); ctx.lineTo(x - 34 + i * 10, y - 12); ctx.lineTo(x - 40 + 6 + i * 10 - 6, y - 4); ctx.lineTo(x - 46 + i * 10 + 6, y - 4); ctx.fill(); }
-    this.overlay.push({ wx: x, wy: y - 34, draw: (g, px, py) => this.chip(g, px, py, 'Opens at $1,000', '#ffd36e') });
-  }
-  drawTariff(ctx, p, z) {
-    ctx.save(); ctx.translate(0, -z);
-    const [x, y] = P(p.gx - 0.3, p.gy + p.d / 2); ctx.fillStyle = '#ff5a4d'; ctx.fillRect(x - 4, y - 22, 8, 22); ctx.fillStyle = '#fff'; ctx.fillRect(x - 4, y - 16, 8, 3);
-    ctx.restore();
-  }
-
   drawEnt(ctx, e) {
     const nh = this.hits.length, no = this.overlay.length;
     const alpha = e.gone ? clamp(1 - (this.t - e.goneAt) / 600, 0, 1) : 1;
     ctx.globalAlpha = alpha;
-    if (e.type === 'lead') this.drawLead(ctx, e); else if (e.type === 'lot') this.drawLot(ctx, e); else if (e.type === 'asset') this.drawAsset(ctx, e);
-    else if (e.type === 'pipe') this.drawPipe(ctx, e); else if (e.type === 'plot') this.drawPlot(ctx, e); else if (e.type === 'truck') this.drawTruck(ctx, e);
+    if (ENT_KINDS.has(e.type)) runLayer(e.type, this, ctx, this.view, e); // lead, lot, asset, pipe, plot, truck: each a layer of stack.js
     ctx.globalAlpha = 1;
     if (e.gone) { this.hits.length = nh; this.overlay.length = no; } // a fading object takes no clicks and keeps no label
   }
-
-  drawLead(ctx, e) {
-    const z = zAt(e.y), [x, y] = P(e.x, e.y, z), B = BUYERS[e.seg], l = e.lead, calm = this.reduced();
-    const hov = this.hover?.eid === e.id;
-    if (e.leaving) ctx.globalAlpha = clamp(1 - (this.t - e.leaveAt) / 4200, 0.2, 1);
-    if (l?.need && !e.leaving) { const k = 0.5 + 0.5 * Math.sin(this.vt / 300); ellipse(ctx, x, y + 1, 15 + 3 * k, 7 + 1.5 * k, `rgba(255,211,110,${0.28 + 0.2 * k})`); }
-    person(ctx, x, y, hov ? 1.15 : 1, e.look, this.vt, e.moving, e.dir || 1);
-    ctx.globalAlpha = 1;
-    if (!e.leaving && l) {
-      this.hits.push({ eid: e.id, kind: 'lead', id: e.id.slice(5), zone: e.zone, label: `${B.name}${l.need ? ', urgent' : ''}`, circle: [x, y - 16, 20], lead: l });
-      if (this.cam.z > 0.5 || hov) this.overlay.push({ wx: x, wy: y - 40, draw: (g, px, py, s) => this.leadBubble(g, px, py, s, B, l, hov) });
-    }
-  }
-  drawLot(ctx, e) {
-    const [gx, gy] = this.posOf(e), z = zAt(gy), l = e.lot, [x, y0] = P(gx, gy, z), y = y0 - e.drop;
-    const col = classColor(l.cls), hov = this.hover?.eid === e.id;
-    ellipse(ctx, x, y0 + 2, 17, 8, 'rgba(8,10,20,.3)');
-    ctx.save(); ctx.translate(0, -z - e.drop);
-    box(ctx, gx - 0.4, gy - 0.4, 0.8, 0.8, 4, tone('#8a6a45'));
-    const f = box(ctx, gx - 0.34, gy - 0.34, 0.68, 0.68, 15, tone(l.cond === 'broken' ? shade(col, 0.7) : col), { z: 4, line: hov ? '#ffffff' : 'rgba(0,0,0,.25)' });
-    if (l.cond === 'broken') { ctx.strokeStyle = 'rgba(0,0,0,.55)'; ctx.lineWidth = 1.4; const a = facePoint(f.left, 0.2, 0.9), b = facePoint(f.left, 0.55, 0.25), c = facePoint(f.left, 0.8, 0.6); ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.lineTo(c[0], c[1]); ctx.stroke(); }
-    ctx.restore();
-    this.hits.push({ eid: e.id, kind: 'lot', id: e.id.slice(4), zone: e.zone, label: `${ASSETS[l.cls].name}${l.cond === 'broken' ? ' (broken)' : ''} for sale`, polys: [[[x - 18, y - 26], [x + 18, y - 26], [x + 18, y + 4], [x - 18, y + 4]]], lot: l });
-    if (this.cam.z > 0.5) this.overlay.push({ wx: x, wy: y - 32, draw: (g, px, py, s) => this.tag(g, px, py, s, ASSETS[l.cls].icon, money(l.price), '#46e38e', hov) });
-  }
-  drawAsset(ctx, e) {
-    const [gx, gy] = this.posOf(e), z = zAt(gy), a = e.asset, [x, y0] = P(gx, gy, z), y = y0 - e.drop;
-    const sel = this.api.ui.sel.has(a.id), col = classColor(a.cls), hov = this.hover?.eid === e.id, bob = sel && !this.reduced() ? Math.sin(this.vt / 220) * 2 : 0;
-    ellipse(ctx, x, y0 + 2, 15, 7, 'rgba(8,10,20,.3)');
-    if (sel) { const k = 0.5 + 0.5 * Math.sin(this.vt / 250); ellipse(ctx, x, y0 + 1, 22 + 2 * k, 11 + k, `rgba(255,211,110,${0.5})`, '#ffd36e', 2); }
-    ctx.save(); ctx.translate(0, -z - e.drop - bob);
-    const wear = clamp(a.wear, 0.4, 1), c = a.cond === 'broken' ? shade(col, 0.65) : mix('#6a6f7c', col, wear);
-    const f = box(ctx, gx - 0.36, gy - 0.36, 0.72, 0.72, 17, tone(c), { line: hov ? '#fff' : 'rgba(0,0,0,.3)' });
-    if (a.cond === 'broken') { ctx.strokeStyle = 'rgba(0,0,0,.6)'; ctx.lineWidth = 1.4; const p1 = facePoint(f.left, 0.15, 0.85), p2 = facePoint(f.left, 0.5, 0.3), p3 = facePoint(f.left, 0.85, 0.7); ctx.beginPath(); ctx.moveTo(p1[0], p1[1]); ctx.lineTo(p2[0], p2[1]); ctx.lineTo(p3[0], p3[1]); ctx.stroke(); if (!this.reduced()) { const [sx0, sy0] = P(gx, gy, 18); for (let i = 0; i < 2; i++) { const k = ((this.vt / 900) + i / 2) % 1; ctx.fillStyle = `rgba(200,200,210,${0.4 * (1 - k)})`; ctx.beginPath(); ctx.arc(sx0 + k * 6, sy0 - k * 16, 2 + k * 4, 0, 7); ctx.fill(); } } }
-    ctx.restore();
-    this.hits.push({ eid: e.id, kind: 'asset', id: a.id, zone: e.zone, label: `${ASSETS[a.cls].name}${a.cond === 'broken' ? ' (broken)' : ''}, in your stock`, polys: [[[x - 16, y - 32 - bob], [x + 16, y - 32 - bob], [x + 16, y + 4], [x - 16, y + 4]]], asset: a });
-    if (this.cam.z > 0.6 || sel || hov) this.overlay.push({ wx: x, wy: y - 36 - bob, draw: (g, px, py, s) => this.icon(g, px, py, s, ASSETS[a.cls].icon, sel) });
-  }
-  drawPlot(ctx, e) {
-    const pl = PLOTS[e.zone][e.plot], z = ELEV[e.zone], hov = this.hover?.eid === e.id;
-    ctx.save(); ctx.translate(0, -z);
-    diamond(ctx, pl[0], pl[1], 3, 3, e.locked ? '#2a2e38' : '#6a5a40', hov ? '#fff' : 'rgba(0,0,0,.35)', 0, hov ? 2 : 1);
-    ctx.strokeStyle = e.locked ? '#7a7f88' : '#ffd36e'; ctx.lineWidth = 2; ctx.setLineDash([6, 5]); const [a, b, c, d] = [P(pl[0] + 0.2, pl[1] + 0.2), P(pl[0] + 2.8, pl[1] + 0.2), P(pl[0] + 2.8, pl[1] + 2.8), P(pl[0] + 0.2, pl[1] + 2.8)]; ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.lineTo(c[0], c[1]); ctx.lineTo(d[0], d[1]); ctx.closePath(); ctx.stroke(); ctx.setLineDash([]);
-    for (const [cx, cy] of [[pl[0] + 0.3, pl[1] + 2.6], [pl[0] + 2.6, pl[1] + 2.6]]) { const [x, y] = P(cx, cy); quad(ctx, [[x - 4, y], [x + 4, y], [x, y - 14]], '#ff8a2b'); ctx.fillStyle = '#fff'; ctx.fillRect(x - 2, y - 7, 4, 2); }
-    ctx.restore();
-    const [x, y] = P(pl[0] + 1.5, pl[1] + 1.5, z);
-    this.hits.push({ eid: e.id, kind: 'plot', id: `${e.zone}:${e.plot}`, zone: e.zone, label: e.locked ? 'Building plot (locked)' : 'Empty plot: hire a manager here', polys: [[P(pl[0], pl[1], z), P(pl[0] + 3, pl[1], z), P(pl[0] + 3, pl[1] + 3, z), P(pl[0], pl[1] + 3, z)]], locked: e.locked });
-    this.overlay.push({ wx: x, wy: y - 20, draw: (g, px, py, s) => this.chip(g, px, py, e.locked ? 'Locked' : '+ Hire', e.locked ? '#a3b3c9' : '#ffd36e', s) });
-  }
-  drawPipe(ctx, e) {
-    const p = e.pipe, pl = PLOTS[e.zone][e.plot], z = ELEV[e.zone], K = PIPE[p.kind], hov = this.hover?.eid === e.id;
-    const floors = p.level, h = 26 + floors * 13, running = p.status === 'running', off = p.status === 'paused' || p.status === 'audit';
-    const col = off ? '#6a707c' : { student: '#46a06a', broker: '#c9a227', logistics: '#4a8fb0' }[p.kind];
-    ctx.save(); ctx.translate(0, -z - e.drop);
-    diamond(ctx, pl[0], pl[1], 3, 3, '#59606e', null, 0);
-    shadow(ctx, pl[0] + 0.3, pl[1] + 0.3, 2.4, 2.4, h);
-    const f = box(ctx, pl[0] + 0.3, pl[1] + 0.3, 2.4, 2.4, h, tone(col), { z: 1, line: hov ? '#fff' : undefined });
-    windows(ctx, f.left, 3, floors + 1, '#16264a', running ? 0.8 + 0.2 * this.night : this.night * 0.5, 0.08); windows(ctx, f.right, 3, floors + 1, '#10203f', running ? 0.8 : this.night * 0.5, 0.08);
-    box(ctx, pl[0] + 0.1, pl[1] + 0.1, 2.8, 2.8, 4, tone(shade(col, 0.8)), { z: h + 1 });
-    const [rx, ry] = P(pl[0] + 1.5, pl[1] + 1.5, h + 5);
-    ctx.fillStyle = '#e8eef6'; ctx.font = '800 11px ui-monospace, Menlo, monospace'; ctx.textAlign = 'center'; const sp = facePoint(f.left, 0.5, 0.04); ctx.fillText(K.icon, sp[0], sp[1] - 2);
-    if (running && !this.reduced()) { cyl(ctx, pl[0] + 2.2, pl[1] + 0.8, 0.22, 16, tone('#6a6f78'), h + 5); const [cx, cy] = P(pl[0] + 2.2, pl[1] + 0.8, h + 21); for (let i = 0; i < 4; i++) { const k = ((this.vt / 1700) + i / 4) % 1; ctx.fillStyle = `rgba(235,240,250,${0.38 * (1 - k)})`; ctx.beginPath(); ctx.arc(cx + k * 10, cy - k * 38, 3 + k * 8, 0, 7); ctx.fill(); } }
-    ctx.restore();
-    const [x, y] = P(pl[0] + 1.5, pl[1] + 1.5, z);
-    this.hits.push({ eid: e.id, kind: 'pipe', id: p.id, zone: e.zone, label: `${K.name}, level ${p.level}`, polys: [f.left, f.right, f.top].map((q) => q.map(([a, b]) => [a, b - z - e.drop])), pipe: p });
-    const frac = p.inflight ? clamp((p.prog + (this.hourF() - this.g.s.hour)) / Math.max(1, p.len), 0, 1) : 0;
-    this.overlay.push({ wx: x, wy: y - h - 14 - e.drop, draw: (g, px, py, s) => this.progress(g, px, py, s, frac, p, off) });
-  }
-  truckPos(e) {
-    const f = e.f, from = e.from, to = f.to, p = clamp((this.hourF() - (f.arrive - 6)) / 6, 0, 1);
-    const a = DOORS[from], b = DOORS[to], north = to > from, lane = north ? LANE.north : LANE.south;
-    const pts = [a, [lane, a[1]], [lane, b[1]], b];
-    const seg = [Math.abs(pts[1][0] - pts[0][0]), Math.abs(pts[2][1] - pts[1][1]), Math.abs(pts[3][0] - pts[2][0])], tot = seg[0] + seg[1] + seg[2];
-    let d = p * tot, i = 0; while (i < 2 && d > seg[i]) { d -= seg[i]; i++; }
-    const A = pts[i], B = pts[i + 1], k = seg[i] ? d / seg[i] : 1;
-    e.dirY = i === 1; e.north = north; e.hd = Math.sign(i === 1 ? B[1] - A[1] : B[0] - A[0]) || 1;
-    return [lerp(A[0], B[0], k), lerp(A[1], B[1], k)];
-  }
-  drawTruck(ctx, e) {
-    const [gx, gy] = this.truckPos(e), z = zAt(gy), [x, y] = P(gx, gy, z), alongY = e.dirY;
-    const blocked = this.env.tariff;
-    ctx.save(); ctx.translate(0, -z);
-    const w = alongY ? 0.8 : 1.7, d = alongY ? 1.7 : 0.8;
-    shadow(ctx, gx - w / 2, gy - d / 2, w, d, 16, 0.25);
-    box(ctx, gx - w / 2, gy - d / 2, w, d, 16, tone('#e8eef6'), { z: 3 });
-    const lead = e.hd < 0 ? -0.85 : 0.35;
-    const cab = alongY ? [gx - 0.4, gy + lead, 0.8, 0.5] : [gx + lead, gy - 0.4, 0.5, 0.8];
-    box(ctx, cab[0], cab[1], cab[2], cab[3], 12, tone('#2f80ed'), { z: 3 });
-    for (const [ox, oy] of [[-0.25, -0.6], [0.25, 0.6], [-0.25, 0.6], [0.25, -0.6]]) { const [wx, wy] = P(gx + (alongY ? ox : oy), gy + (alongY ? oy : ox), 0); ellipse(ctx, wx, wy - 2, 3.4, 3.4, '#10141c'); }
-    ctx.restore();
-    if (!this.reduced() && !blocked) for (let i = 0; i < 2; i++) { const k = ((this.vt / 500) + i / 2) % 1; ctx.fillStyle = `rgba(210,215,225,${0.3 * (1 - k)})`; ctx.beginPath(); ctx.arc(x + (alongY ? e.hd : -e.hd) * (8 + k * 14), y - 6 - k * 6, 2 + k * 3, 0, 7); ctx.fill(); }
-    this.hits.push({ eid: e.id, kind: 'truck', id: e.f.id, zone: 0, label: `Freight run to ${ZONES[e.f.to].short}`, circle: [x, y - 12, 20] });
-    this.overlay.push({ wx: x, wy: y - 40, draw: (g, px, py, s) => this.chip(g, px, py, `${e.f.items.length} crate${e.f.items.length > 1 ? 's' : ''} to ${ZONES[e.f.to].short}`, '#ffd36e', s) });
-  }
-  cars() {
-    const out = [];
-    for (let i = 0; i < 6; i++) {
-      const north = i % 2 === 0, speed = 0.0014 + i * 0.0002, ph = ((this.t * speed + i * 0.19) % 1), gy = north ? 47 - ph * 46 : 2 + ph * 46, gx = north ? LANE.north - 0.05 : LANE.south + 0.05;
-      out.push({ gx, gy, north, i, key: gx + gy + 0.4 });
-    }
-    return out;
-  }
-  drawCar(ctx, c) {
-    const z = zAt(c.gy); ctx.save(); ctx.translate(0, -z);
-    const cols = ['#c0392b', '#2f80ed', '#f2c94c', '#9b51e0', '#27ae60', '#e8eef6'];
-    box(ctx, c.gx - 0.28, c.gy - 0.55, 0.56, 1.1, 8, tone(cols[c.i % 6]), { z: 2 });
-    box(ctx, c.gx - 0.22, c.gy - 0.3, 0.44, 0.6, 7, tone(shade(cols[c.i % 6], 0.9)), { z: 10 });
-    if (this.night > 0.3) { const [x, y] = P(c.gx, c.gy + (c.north ? -0.6 : 0.6), 6); this.lights.push({ wx: x, wy: y - z, r: 26, c: '255,240,190', a: 0.5 * this.night }); }
-    ctx.restore();
-  }
-  drawPlayer(ctx) {
-    const pl = this.player, z = zAt(pl.y), [x, y] = P(pl.x, pl.y, z), prof = this.g?.s.profile;
-    const look = { shirt: { bootstrapper: '#c0392b', venture: '#1d2b53', midtier: '#16a085' }[prof] || '#c0392b', hair: '#222', skin: '#f1c27d', pants: '#27324a' };
-    const k = 0.5 + 0.5 * Math.sin(this.vt / 400);
-    ellipse(ctx, x, y + 1, 16, 7.5, `rgba(255,211,110,${0.3 + 0.15 * k})`, '#ffd36e', 1.5);
-    person(ctx, x, y, 1.3, look, this.vt, pl.moving, pl.dir);
-    this.overlay.push({ wx: x, wy: y - 48, draw: (g, px, py, s) => this.chip(g, px, py, 'You', '#ffd36e', s) });
-  }
+  /** The highlight under the pointer: a soft amber halo under a crisp white rule (two strokes of one path; no shadow blur, which is slow). Crates also get a ring on the ground. */
   drawHover(ctx) {
-    const h = this.hover; ctx.save(); ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 2 / this.cam.z; ctx.shadowColor = '#ffd36e'; ctx.shadowBlur = 10;
-    if (h.circle) { ctx.beginPath(); ctx.ellipse(h.circle[0], h.circle[1] + 14, 18, 8, 0, 0, 7); ctx.stroke(); } else if (h.kind === 'static' || h.kind === 'plot') for (const poly of h.polys) { ctx.beginPath(); poly.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y))); ctx.closePath(); ctx.stroke(); }
+    const h = this.hover, z = this.cam.z; ctx.save(); ctx.lineJoin = 'round'; ctx.beginPath();
+    if (h.circle) ctx.ellipse(h.circle[0], h.circle[1] + 14, 18, 8, 0, 0, 7);
+    else if (h.kind === 'static' || h.kind === 'plot' || h.kind === 'zone') for (const poly of h.polys) { poly.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y))); ctx.closePath(); }
+    else if ((h.kind === 'lot' || h.kind === 'asset') && h.polys) { const q = h.polys[0]; ctx.ellipse((q[0][0] + q[1][0]) / 2, q[2][1] - 3, 21, 9.5, 0, 0, 7); }
+    ctx.strokeStyle = 'rgba(255,211,110,.34)'; ctx.lineWidth = 6 / z; ctx.stroke();
+    ctx.strokeStyle = '#ffffff'; ctx.lineWidth = Math.max(1, 2 / z); ctx.stroke();
     ctx.restore();
   }
 
-  // ------------------------------------------------------------------ screen-space passes
-  drawLight(ctx) {
-    if (this.night < 0.04) return;
-    ctx.save(); ctx.globalCompositeOperation = 'multiply';
-    ctx.fillStyle = `rgb(${255 - 150 * this.night}, ${255 - 130 * this.night}, ${255 - 70 * this.night})`; ctx.fillRect(0, 0, this.W, this.H);
-    ctx.globalCompositeOperation = 'lighter';
-    for (const l of this.lights) { const [x, y] = this.w2s(l.wx, l.wy), r = l.r * this.cam.z, g = ctx.createRadialGradient(x, y, 1, x, y, r); g.addColorStop(0, `rgba(${l.c},${l.a})`); g.addColorStop(1, `rgba(${l.c},0)`); ctx.fillStyle = g; ctx.fillRect(x - r, y - r, r * 2, r * 2); }
-    ctx.restore();
-  }
-  drawWeather(ctx) {
-    const { W, H } = this;
-    if (this.env.crunch) { ctx.fillStyle = 'rgba(60,66,80,.3)'; ctx.fillRect(0, 0, W, H); if (this.rain) { ctx.strokeStyle = 'rgba(190,210,235,.4)'; ctx.lineWidth = 1; ctx.beginPath(); for (const r of this.rain) { const x = r[0] * W, y = r[1] * H; ctx.moveTo(x, y); ctx.lineTo(x - 4, y + 11); } ctx.stroke(); } }
-    if (this.env.surge && !this.reduced()) { const k = this.vt / 1000; for (let i = 0; i < 26; i++) { const x = (i * 97 + Math.sin(k + i) * 24) % W, y = ((k * 40 + i * 53) % (H + 20)) - 10; ctx.fillStyle = ['#ff3da8', '#7be3ff', '#ffd36e'][i % 3]; ctx.globalAlpha = 0.55; ctx.fillRect(x, y, 5, 5); } ctx.globalAlpha = 1; }
-    if (this.env.surge) { ctx.fillStyle = 'rgba(255,61,168,.07)'; ctx.fillRect(0, 0, W, H); }
-    if (this.env.tariff) { ctx.fillStyle = 'rgba(255,80,60,.05)'; ctx.fillRect(0, 0, W, H); }
-  }
-  drawOverlay(ctx) {
-    const s = clamp(this.cam.z, 0.75, 1.25);
-    for (const o of this.overlay) { const [x, y] = this.w2s(o.wx, o.wy); if (x < -80 || x > this.W + 80 || y < -40 || y > this.H + 40) continue; o.draw(ctx, x, y, s); }
-    for (const p of this.parts) {
-      const [x, y] = this.w2s(sx(p.gx, p.gy), sy(p.gx, p.gy, p.z + (p.k === 'text' && !this.reduced() ? p.age * 26 : 0)));
-      const a = clamp(1 - p.age / p.life, 0, 1);
-      if (p.k === 'text') { ctx.globalAlpha = a; ctx.font = `800 ${Math.round(15 * s)}px ui-monospace, Menlo, monospace`; ctx.textAlign = 'center'; ctx.lineWidth = 4; ctx.strokeStyle = 'rgba(8,10,20,.85)'; ctx.strokeText(p.text, x, y); ctx.fillStyle = p.color; ctx.fillText(p.text, x, y); ctx.globalAlpha = 1; }
-      else { const rise = this.reduced() ? 0 : (p.up * p.age - 80 * p.age * p.age) * this.cam.z; ctx.globalAlpha = a; ctx.fillStyle = '#ffd36e'; ctx.fillRect(x + p.vx * p.age * this.cam.z, y - rise, 5, 5); ctx.fillStyle = '#b8860b'; ctx.fillRect(x + p.vx * p.age * this.cam.z + 1, y - rise + 1, 3, 3); ctx.globalAlpha = 1; }
+  // ------------------------------------------------------------------ tutorial anchors
+  /** World-space box [x0, y0, x1, y1] of an entity, or null when there is no such thing. */
+  boxOf(kind, id) {
+    id = String(id);
+    const around = (x, y, l, t, r, b) => [x - l, y - t, x + r, y + b];
+    if (kind === 'lead') { const e = this.ents.get('lead:' + id); if (!e) return null; const [x, y] = P(e.x, e.y, zAt(e.x, e.y)); return around(x, y, 14, 40, 14, 4); }
+    if (kind === 'lot') { const e = this.ents.get('lot:' + id); if (!e || e.gone) return null; const [gx, gy] = this.posOf(e), [x, y] = P(gx, gy, zAt(gx, gy)); return around(x, y, 18, 28, 18, 6); }
+    if (kind === 'asset') { const e = this.ents.get('asset:' + id); if (!e || e.gone) return null; const [gx, gy] = this.posOf(e), [x, y] = P(gx, gy, zAt(gx, gy)); return around(x, y, 16, 34, 16, 6); }
+    if (kind === 'pipe') { const e = this.ents.get('pipe:' + id); if (!e) return null; const pl = PLOTS[e.zone][e.plot % PLOTS[e.zone].length], z = DIST[e.zone].z; return footBox(pl[0], pl[1], 3, 3, z, 26 + e.pipe.level * 13); }
+    if (kind === 'plot') {
+      let zs = id.includes(':') ? id.split(':').map(Number) : [this.api.ui.zone, +id];
+      const pl = PLOTS[zs[0]]?.[zs[1]]; if (!pl) return null; return footBox(pl[0], pl[1], 3, 3, DIST[zs[0]].z, 4);
     }
+    if (kind === 'static') { const p = HOT.get(id); return p ? footBox(p.gx, p.gy, p.w, p.d, p.z, p.h + 6) : null; }
+    if (kind === 'zone') { const D = DIST[+id]; return D ? footBox(D.fp[0], D.fp[1], D.fp[2], D.fp[3], D.z, 4) : null; }
+    if (kind === 'truck') { const e = this.ents.get('truck:' + id); if (!e) return null; const [gx, gy] = this.truckPos(e), [x, y] = P(gx, gy, zAt(gx, gy)); return around(x, y, 24, 28, 24, 6); }
+    return null;
   }
-  chip(g, x, y, text, color = '#ffd36e', s = 1) {
-    g.font = `700 ${Math.round(11 * s)}px ui-monospace, Menlo, monospace`; const w = g.measureText(text).width + 14 * s, h = 18 * s;
-    roundRect(g, x - w / 2, y - h / 2, w, h, 5 * s); g.fillStyle = 'rgba(16,20,28,.9)'; g.fill(); g.strokeStyle = color; g.lineWidth = 1.5; g.stroke();
-    g.fillStyle = color; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(text, x, y + 0.5); g.textBaseline = 'alphabetic';
+  /**
+   * The current on-screen rectangle {x, y, w, h} (CSS pixels, relative to the canvas) of a thing in the world, for coach marks.
+   * kind: 'lead' | 'lot' | 'asset' | 'pipe' | 'plot' ("zone:n" or n in the current district) | 'static' (hot id such as 'hq:5', 'bank', 'board:3') | 'zone' | 'truck'.
+   * Returns null when there is no such thing or none of it is on screen. The rectangle is not clipped: a partly visible thing keeps its full size.
+   */
+  rectOf(kind, id) {
+    const b = this.boxOf(kind, id); if (!b) return null;
+    const [x0, y0] = this.w2s(b[0], b[1]), [x1, y1] = this.w2s(b[2], b[3]);
+    if (x1 < 0 || y1 < 0 || x0 > this.W || y0 > this.H) return null;
+    return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
   }
-  icon(g, x, y, s, icon, sel) {
-    const r = 12 * s; g.beginPath(); g.arc(x, y, r, 0, 7); g.fillStyle = sel ? '#ffd36e' : 'rgba(16,20,28,.9)'; g.fill(); g.strokeStyle = sel ? '#ffffff' : '#5b6b85'; g.lineWidth = 1.5; g.stroke();
-    g.font = `${Math.round(14 * s)}px system-ui, sans-serif`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillStyle = '#fff'; g.fillText(icon, x, y + 1); g.textBaseline = 'alphabetic';
-  }
-  tag(g, x, y, s, icon, text, color, hov) {
-    g.font = `800 ${Math.round(11 * s)}px ui-monospace, Menlo, monospace`; const w = g.measureText(text).width + 30 * s, h = 20 * s;
-    roundRect(g, x - w / 2, y - h / 2, w, h, 6 * s); g.fillStyle = 'rgba(16,20,28,.92)'; g.fill(); g.strokeStyle = hov ? '#ffffff' : color; g.lineWidth = 1.5; g.stroke();
-    g.font = `${Math.round(13 * s)}px system-ui, sans-serif`; g.textAlign = 'left'; g.textBaseline = 'middle'; g.fillStyle = '#fff'; g.fillText(icon, x - w / 2 + 5 * s, y + 1);
-    g.font = `800 ${Math.round(11 * s)}px ui-monospace, Menlo, monospace`; g.fillStyle = color; g.fillText(text, x - w / 2 + 22 * s, y + 1); g.textBaseline = 'alphabetic';
-  }
-  leadBubble(g, x, y, s, B, l, hov) {
-    const text = money(l.budget), urgent = !!l.need;
-    g.font = `800 ${Math.round(11 * s)}px ui-monospace, Menlo, monospace`; const w = g.measureText(text).width + 32 * s, h = 22 * s;
-    const bob = this.reduced() ? 0 : Math.sin(this.vt / 500 + l.born) * 1.5;
-    roundRect(g, x - w / 2, y - h + bob, w, h, 7 * s); g.fillStyle = 'rgba(16,20,28,.94)'; g.fill(); g.strokeStyle = urgent ? '#ffd36e' : hov ? '#ffffff' : '#5b6b85'; g.lineWidth = urgent ? 2 : 1.5; g.stroke();
-    g.beginPath(); g.moveTo(x - 4 * s, y + bob); g.lineTo(x + 4 * s, y + bob); g.lineTo(x, y + 6 * s + bob); g.fill();
-    g.font = `${Math.round(14 * s)}px system-ui, sans-serif`; g.textAlign = 'left'; g.textBaseline = 'middle'; g.fillStyle = '#fff'; g.fillText(B.icon, x - w / 2 + 5 * s, y - h / 2 + 1 + bob);
-    g.font = `800 ${Math.round(11 * s)}px ui-monospace, Menlo, monospace`; g.fillStyle = urgent ? '#ffd36e' : '#e8eef6'; g.fillText(text, x - w / 2 + 23 * s, y - h / 2 + 1 + bob);
-    if (urgent) { g.fillStyle = '#ffd36e'; g.beginPath(); g.arc(x + w / 2 - 2, y - h + 2 + bob, 7 * s, 0, 7); g.fill(); g.fillStyle = '#1a1303'; g.font = `900 ${Math.round(11 * s)}px ui-monospace, Menlo, monospace`; g.textAlign = 'center'; g.fillText('!', x + w / 2 - 2, y - h + 3 + bob); }
-    g.textBaseline = 'alphabetic';
-  }
-  progress(g, x, y, s, frac, p, off) {
-    const w = 54 * s, h = 7 * s;
-    g.fillStyle = 'rgba(16,20,28,.92)'; roundRect(g, x - w / 2 - 2, y - h / 2 - 2, w + 4, h + 4, 3); g.fill();
-    g.fillStyle = off ? '#7a7f88' : p.starved ? '#ff7d75' : '#ffc247'; g.fillRect(x - w / 2, y - h / 2, w * frac, h);
-    g.font = `${Math.round(12 * s)}px system-ui, sans-serif`; g.textAlign = 'center'; g.fillStyle = '#fff'; g.fillText(p.status === 'audit' ? '📋' : p.status === 'paused' ? '⏸' : p.starved ? '❗' : '', x, y - 8 * s);
-  }
-  drawMapLabels(ctx) {
-    const g = this.g; if (!g) return; const s = g.s, compact = this.W < 620;
-    this.hitsLabel = {};
-    for (const z of [3, 2, 1]) {
-      const d = DIST[z], open = this.unlocked.has(z), left = z === 3;
-      // anchor in the open water beside the district: Corporate Valley to the left, the other two to the right
-      const [ax, ay] = this.w2s(left ? sx(LAND.x0, d.cy) - 20 : sx(LAND.x1, d.cy) + 20, (left ? sy(LAND.x0, d.cy, ELEV[z]) : sy(LAND.x1, d.cy, ELEV[z])));
-      const stock = s.assets.filter((a) => a.zone === z).length, pipes = s.pipes.filter((p) => p.zone === z).length, leads = (s.leads[z] || []).length;
-      const lines = compact
-        ? [(open ? '' : 'LOCKED ') + ZONES[z].short, open ? `${leads} buyers${z > 1 ? ', ' + pipes + ' mgr' : ''}` : (z === 2 ? '$1,000' : '$250,000')]
-        : [(open ? '' : 'LOCKED  ') + ZONES[z].name, open ? `${leads} buyers  ${stock} crates${z > 1 ? '  ' + pipes + ' managers' : ''}` : (z === 2 ? 'Unlocks at $1,000 net worth' : 'Unlocks at $250,000 net worth'), `tax ${(ZONES[z].tax * 100).toFixed(1)}%  speed ${ZONES[z].speed}x  pool ${money(ZONES[z].pool)}`];
-      ctx.font = `800 ${compact ? 11 : 13}px ui-monospace, Menlo, monospace`; const w = Math.max(...lines.map((l) => ctx.measureText(l).width)) + 22, h = lines.length * (compact ? 15 : 17) + 12;
-      let x = left ? ax - w : ax, y = ay - h / 2; x = clamp(x, 6, this.W - w - 6); y = clamp(y, 6, this.H - h - 6);
-      roundRect(ctx, x, y, w, h, 8); ctx.fillStyle = 'rgba(16,20,28,.94)'; ctx.fill(); ctx.strokeStyle = z === this.api.ui.zone ? '#ffd36e' : '#7f95b5'; ctx.lineWidth = 2; ctx.stroke();
-      ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
-      lines.forEach((l, i) => { ctx.font = `${i === 0 ? 800 : 600} ${i === 0 ? (compact ? 11 : 13) : (compact ? 10 : 11)}px ui-monospace, Menlo, monospace`; ctx.fillStyle = i === 0 ? (open ? '#ffd36e' : '#a3b3c9') : i === 1 ? '#e8eef6' : '#a3b3c9'; ctx.fillText(l, x + 11, y + 12 + i * (compact ? 15 : 17) + 2); });
-      ctx.textBaseline = 'alphabetic';
-      // leader line from the label to the district
-      const [tx, ty] = this.w2s(sx(d.cx, d.cy), sy(d.cx, d.cy, ELEV[z]) - 10);
-      ctx.strokeStyle = 'rgba(255,211,110,.55)'; ctx.lineWidth = 1.5; ctx.setLineDash([4, 4]); ctx.beginPath(); ctx.moveTo(left ? x + w : x, y + h / 2); ctx.lineTo(tx, ty); ctx.stroke(); ctx.setLineDash([]);
-      ctx.fillStyle = '#ffd36e'; ctx.beginPath(); ctx.arc(tx, ty, 4, 0, 7); ctx.fill();
-      this.hitsLabel[z] = [x, y, w, h];
-    }
-  }
-  drawMini() {
-    const m = this.mini, c = this.mctx, W = 150, H = 96, b = this.bounds();
-    if (m.offsetParent === null) return; // hidden on phones: do not paint it
-    c.clearRect(0, 0, W, H); c.fillStyle = 'rgba(16,24,40,.85)'; c.fillRect(0, 0, W, H);
-    const px = (x) => (x - b.x0) / (b.x1 - b.x0) * W, py = (y) => (y - b.y0) / (b.y1 - b.y0) * H;
-    for (const z of [1, 2, 3]) { const d = DIST[z]; const pts = [[LAND.x0, d.gy0], [LAND.x1, d.gy0], [LAND.x1, d.gy1], [LAND.x0, d.gy1]].map(([gx, gy]) => [px(sx(gx, gy)), py(sy(gx, gy, ELEV[z]))]); c.beginPath(); pts.forEach(([x, y], i) => (i ? c.lineTo(x, y) : c.moveTo(x, y))); c.closePath(); c.fillStyle = this.unlocked?.has(z) ? ['#705f45', '#4d586c', '#3d4c70'][z - 1] : '#1e2430'; c.fill(); if (z === this.api.ui.zone) { c.strokeStyle = '#ffd36e'; c.lineWidth = 1.5; c.stroke(); } }
-    for (const e of this.ents.values()) { if (e.type === 'lead' && !e.leaving) { c.fillStyle = e.lead?.need ? '#ffd36e' : '#e8eef6'; c.fillRect(px(sx(e.x, e.y)) - 1, py(sy(e.x, e.y, zAt(e.y))) - 1, 2, 2); } else if (e.type === 'pipe') { const pl = PLOTS[e.zone][e.plot]; c.fillStyle = '#46e38e'; c.fillRect(px(sx(pl[0] + 1.5, pl[1] + 1.5)) - 2, py(sy(pl[0] + 1.5, pl[1] + 1.5, ELEV[e.zone])) - 2, 4, 4); } }
-    const v = this.view; if (v) { c.strokeStyle = '#ffffff'; c.lineWidth = 1; c.strokeRect(px(this.cam.x - this.W / 2 / this.cam.z), py(this.cam.y - this.H / 2 / this.cam.z), (this.W / this.cam.z) / (b.x1 - b.x0) * W, (this.H / this.cam.z) / (b.y1 - b.y0) * H); }
-  }
-
   /** Everything clickable right now, for the keyboard-accessible list view. */
   hotspots() {
     const g = this.g, out = [];
@@ -652,15 +644,22 @@ export class World {
     for (const e of this.ents.values()) {
       if (e.gone || e.leaving) continue;
       if (e.type === 'lead') out.push({ kind: 'lead', id: e.id.slice(5), zone: e.zone, label: `${BUYERS[e.lead.seg].name} wants a deal${e.lead.need ? ', urgent' : ''}: pays up to ${money(e.lead.budget)}` });
-      else if (e.type === 'lot') out.push({ kind: 'lot', id: e.id.slice(4), zone: e.zone, label: `Buy ${ASSETS[e.lot.cls].name}${e.lot.cond === 'broken' ? ' (broken)' : ''} for ${money(e.lot.price)}` });
+      else if (e.type === 'lot') out.push({ kind: 'lot', id: e.id.slice(4), zone: e.zone, label: `Buy ${ASSETS[e.lot.cls].name}${e.lot.cond === 'broken' ? ' (broken)' : ''} for ${money(e.lot.price)}${e.lot.mode === 'auction' ? ' at auction' : ''}` });
       else if (e.type === 'asset') out.push({ kind: 'asset', id: e.asset.id, zone: e.zone, label: `${this.api.ui.sel.has(e.asset.id) ? 'Deselect' : 'Select'} ${ASSETS[e.asset.cls].name} (${money(g.val(e.asset))})` });
       else if (e.type === 'pipe') out.push({ kind: 'pipe', id: e.pipe.id, zone: e.zone, label: `Edit ${PIPE[e.pipe.kind].name}, level ${e.pipe.level}, ${e.pipe.status}` });
       else if (e.type === 'plot' && !e.locked) out.push({ kind: 'plot', id: `${e.zone}:${e.plot}`, zone: e.zone, label: `Hire a manager on plot ${e.plot + 1}` });
     }
-    for (const p of SCENERY) if (p.hot) out.push({ kind: 'static', id: p.hot, zone: zoneAt(p.gy), label: p.label });
+    for (const p of SCENERY) if (p.hot) out.push({ kind: 'static', id: p.hot, zone: p.zone, label: p.label, locked: this.unlocked ? !this.unlocked.has(p.zone) : false });
     return out;
   }
 }
+
+// The layers' legacy drawers live in their owners' modules and are mixed in here, unchanged: a method in a module is a method of the World (this is the world).
+Object.assign(World.prototype, seaMethods, groundMethods, coastMethods, terrainMethods, roadMethods, decalMethods, groundCacheMethods, cloudMethods, atmosMethods, staticMethods, plotMethods, actorMethods, stockMethods, overlayMethods, mapMethods);
+
+
+const footBox = (gx, gy, w, d, z, h) => [(gx - gy - d) * HW - 6, (gx + gy) * HH - z - h - 6, (gx + w - gy) * HW + 6, (gx + w + gy + d) * HH - z + 4];
+const blockPoly = (D) => [P(D.ox, D.oy, D.z), P(D.ox + BW, D.oy, D.z), P(D.ox + BW, D.oy + BD, D.z), P(D.ox, D.oy + BD, D.z)];
 
 function inPoly(poly, x, y) {
   let c = false;

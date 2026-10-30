@@ -4,125 +4,105 @@ export const HOURS_PER_DAY = 24;
 export const TOTAL_HOURS = TOTAL_DAYS * HOURS_PER_DAY;
 export const SEC_PER_HOUR = 7; // at 1x: 6 virtual hours = 42 real seconds (spec: freight run)
 
+// Milestones are the gates of the districts that open a feature: managers and the Bank (district 5), audits (9), enterprise, M&A and IPO (13).
 export const MIL = { m1: 1000, m2: 25000, m3: 250000 };
+export const MIL_ZONE = { m1: 5, m2: 9, m3: 13 };
 export const CM = { min: 0.4, max: 3.14, ref: 1.68, beta: 0.4, pitchBase: 0.6 };
 export const FEES = { base: 0.025, crunch: 0.12, digitalRouting: 0.12, exitBrokerage: 0.12 };
+// Economy tuning knobs (docs/BALANCE.md, "Economy knobs"). Mutable on purpose: tests/tune.mjs sweeps them against the pacing targets of docs/V2_DESIGN.md section 11.
+// What they are for. Repairing a broken lot is the Quick bot's money machine (a restored crate is worth about 3 times what the broken one is, at every stake), so the price of a broken lot is the
+// lever on the late game of hand play, and the early game is paid back through the urgent buyers and the supply of buyers and lots:
+//   lotDiscHi / lotDiscLo   a sound lot is posted at lotDiscHi of its fair value at Ops 1, 2.5 points less per Ops level, never under lotDiscLo (the Codex's worked examples are written for 97%).
+//   brokenLo / brokenSlope  a broken lot is posted at max(brokenLo, 1 - brokenSlope x (Ops - 1)) of its as-is value (the broken crate's own price, 30% of a working one). A NEGATIVE slope is meant:
+//                           sellers of wrecks ask for the repair upside, so the better your Ops, the more a wreck costs: x1.00 at Ops 1, x1.42 at Ops 3, x1.63 at Ops 4, x2.05 at Ops 6 (the Tradesperson
+//                           then pays 20% less). A restored crate sells at about x3.3 of the as-is price at Ops 5 and above, so a flip returns about +80% at Ops 4 and +35% at Ops 8 before repair, friction and fees.
+//                           Before, a wreck cost 0.985 down to 0.9 of its as-is value and a flip returned +200%; the same bot with managers forbidden then ended 5.4 times richer than with them at a decision every 4 hours (27 times on commit 816e7c4).
+//   brokenTop / brokenFrom  from the district after brokenFrom (13, Corporate Valley) a wreck costs brokenTop more for each district further out, on top of the price above: x1.10 in district 13, x1.20 in 14,
+//                           x1.30 in 15 and x1.40 in 16. Wrecks there are worth tens or hundreds of thousands, and their sellers know what a repaired crate fetches. Without it a bot that decides every two hours and
+//                           never hires a manager flipped one wreck after another in districts 15 and 16 (+60% to +100% each, five a day) and ended 4.7 times richer than the same bot with managers (72% of its runs in
+//                           district 16, a net worth 10.8 times apart from its 10th to its 90th percentile); with it 0.70 times, 2% and 2.3 (docs/BALANCE.md, Managers and hand play). Nothing below district 13 changes.
+//   lotSlots / lotEvery     lots open at once in a district, and how much slower than a district's own lotEvery they come (1.1 = every 1.1 x lotEvery hours). leadEvery is the same for buyers.
+//   urgentK / urgentFade    an urgent buyer's budget = fair value x (1 + (0.4 to 2.6) x urgentK x (1 - urgentFade x how far past district 4, over eight districts)): need pays well in the first
+//                           districts and nothing at all from district 12 (urgentFade 1). This is what carries the first two weeks now that wrecks are dearer.
+//   cycleBase               a manager's cycle in hours at speed 1 (60 hours in Metro Hub at 132). pitchK: buyers pay pitchK of the base pitch price (0.92). margin: see PIPE_RULES.marginBase.
+//   pointXp / warnMiss      what a skill point is worth in XP once every skill is at mastery; the share of counterfeits the Second-Chance street sense misses.
+export const ECON = {
+  lotDiscHi: 0.97, lotDiscLo: 0.84, lotSlots: 4, lotEvery: 1.1, leadEvery: 0.8, cycleBase: 132, pitchK: 0.92, margin: 1,
+  brokenLo: 1, brokenSlope: -0.21, brokenTop: 0.1, brokenFrom: 12,
+  urgentK: 3, urgentFade: 1,
+  pointXp: 120, warnMiss: 0.1,
+}; // retuned on 2026-10-28 against commit 816e7c4 (docs/BALANCE.md has the table); change one knob at a time and run tests/balance.mjs at a decision every 2, 4 and 8 hours
 export const FMV_BAND = 0.4; // peer-to-peer guardrail: +/-40%
+// What a completed swap with a real classmate pays the run. It was a flat 120 XP and a counted swap for any swap at all, so two tabs trading paperclips back and forth maxed every skill in minutes.
+// A swap counts (swap total, trade total, experience, quests and the gradebook's engagement) only when it moves at least `minValue` of real value, at most `perDay` a day, once per partner a day;
+// its experience is `xpBase` + `xpScale` x log10(1 + the value that came in), at most `xpMax`. The snapshot door (cohort.js) holds a classmate's reported swaps to the same daily bound.
+// `appraisal`: what a swap refused on a crate's hidden worth costs, as a share of the value it was refused at (engine _appraisal).
+export const SWAPS = { perDay: 3, minValue: 0.5, xpBase: 10, xpScale: 30, xpMax: 120, appraisal: 0.03 };
+// A delivered reply is credited as the proposer described it and no better; crates and cash that together are worth less than this share of the description cannot have come through both ends' +/-40% guardrails (1 / 1.4^2 = 0.51).
+export const DELIVERY_FLOOR = 0.45;
 export const EEI_FLOOR_DEFAULT = 1000; // = Milestone 1. See docs/BALANCE.md: a $0.05 start would otherwise score ~1,000,000x the others
 export const BASE_RATE = 0.025; // monthly index; +600 bps in the credit crunch
 export const DEBT = { maxDE: 3.0, callDE: 4.5, fireSale: 0.35 };
 
-export const ZONES = {
-  1: { id: 1, name: 'The Scrap Yard', short: 'Scrap Yard', tax: 0, pool: 5000, friction: 0.10, speed: 1.0, auto: false, store: 10, leadEvery: 3, lotEvery: 4, urgent: 0.45, tagline: 'Manual hustle. Zero tax. Thin liquidity.' },
-  2: { id: 2, name: 'The Metro Hub', short: 'Metro Hub', tax: 0.075, pool: 100000, friction: 0.125, speed: 2.5, auto: true, store: 18, leadEvery: 3, lotEvery: 4, urgent: 0.12, tagline: 'Regional retail, staffing and the Commercial Bank.' },
-  3: { id: 3, name: 'Corporate Valley', short: 'Corporate Valley', tax: 0.15, pool: 2500000, friction: 0.15, speed: 5.0, auto: true, store: 30, leadEvery: 4, lotEvery: 5, urgent: 0.08, tagline: 'Enterprise B2B, deep credit, exits. Governance drag.' },
-};
+// Sixteen districts, the asset classes and the buyers live in js/data (docs/V2_DESIGN.md); they are re-exported here so the rest of the code keeps one import.
+import { ASSETS } from './data/index.js';
+export { ZONES, ASSETS, BUYERS, ZONE_IDS, ZONE_COUNT } from './data/index.js';
+export { PERKS, PERK_IDS, perkMods } from './data/perks.js';
 
+// Levels: level = floor(sqrt(xp / LEVEL_XP)) + 1, so level L starts at xpForLevel(L). Each level earns one skill point.
+export const LEVEL_XP = 150;
+export const xpForLevel = (l) => (l - 1) ** 2 * LEVEL_XP;
 export const SKILLS = {
-  ops: { id: 'ops', name: 'Operational Engineering', short: 'Ops', blurb: 'Cheaper repairs, better restorations, lower sourcing prices and pipeline friction.' },
+  ops: { id: 'ops', name: 'Operational Engineering', short: 'Ops', blurb: 'Cheaper repairs, better restorations, lower prices on working lots (wrecks ask more as your Ops rises) and less pipeline overhead.' },
   growth: { id: 'growth', name: 'Customer Acquisition Velocity', short: 'Growth', blurb: 'More buyer leads, faster pipeline cycles, cheaper client acquisition, higher pitch prices.' },
   fintech: { id: 'fintech', name: 'Capital Sourcing', short: 'Fintech', blurb: 'Cheaper institutional debt, lower fees, and earlier warnings of macro shocks.' },
 };
 export const SKILL_MAX = 8;
-export const trainCost = (lvl) => 50 * Math.pow(3, lvl - 1);
 
-export const PROFILES = {
-  bootstrapper: {
-    id: 'bootstrapper', name: 'The Bootstrapper', icon: '📎', cash: 0.05, startCapital: 0.05, startZone: 1, zones: [1],
-    assets: [{ cls: 'paperclip' }], valueMult: 1.25, feeFree: true,
-    perk: 'The Hustle Multiplier: +25% efficiency on asset valuation and zero barter-network fees, forever.',
-    flaw: 'Severe capital constraints and exposure to early market volatility.',
-    start: '$0.05 and one paperclip in the Scrap Yard.',
-  },
-  venture: {
-    id: 'venture', name: 'The Venture-Backed', icon: '🏢', cash: 50000, startCapital: 50000, startZone: 3, zones: [1, 2, 3], assets: [],
-    overheadMult: 1.3, liqDelay: 48, creditMult: 2,
-    perk: 'Late-stage automation pipelines and deep credit reserves from day one.',
-    flaw: 'The Bureaucracy Drag: +30% overhead on automated pipelines and every liquidation settles 2 virtual days late.',
-    start: '$50,000 in Corporate Valley.',
-  },
-  midtier: {
-    id: 'midtier', name: 'The Mid-Tier Commercial', icon: '🏬', cash: 5000, startCapital: 5000, startZone: 2, zones: [1, 2], assets: [],
-    cacMult: 0.75, taxAdd: 0.02, b2bLockNW: 100000,
-    perk: 'Regional retail channels and 25% lower customer acquisition cost.',
-    flaw: 'Moderate corporate tax (+2 points) and no heavy B2B enterprise clients until net worth reaches $100,000.',
-    start: '$5,000 in the Metro Hub.',
-  },
-};
-
-// Asset classes. dem = local demand 0-10 in zones [1,2,3]. 0 means no market there.
-// Utility = scarcity x demand - depreciation. repair = base repair cost when broken (Ops level 1).
-export const ASSETS = {
-  paperclip: { name: 'Rusty Paperclip', icon: '📎', base: 0.05, sc: 2, dem: [4, 1, 0], dep: 1, tags: ['tool', 'office'] },
-  pen: { name: 'Vintage Fountain Pen', icon: '🖋️', base: 9, sc: 9, dem: [10, 8, 5], dep: 1, tags: ['prestige', 'office'] },
-  radio: { name: 'Vintage Radio', icon: '📻', base: 60, sc: 7, dem: [7, 5, 2], dep: 2, tags: ['retro', 'electronics'], repair: 25 },
-  bike: { name: 'Road Bike', icon: '🚲', base: 240, sc: 5, dem: [8, 6, 2], dep: 3, tags: ['vehicle', 'consumer'], repair: 90 },
-  scrap: { name: 'Scrap Metal Lot', icon: '🔩', base: 150, sc: 3, dem: [9, 5, 1], dep: 1, tags: ['scrap', 'industrial'] },
-  sneakers: { name: 'Limited Sneaker Lot', icon: '👟', base: 420, sc: 6, dem: [6, 9, 5], dep: 5, tags: ['trend', 'consumer'] },
-  textbooks: { name: 'Pallet: Unused Textbooks', icon: '📚', base: 640, sc: 4, dem: [5, 8, 6], dep: 2, tags: ['paper', 'training'] },
-  gadgets: { name: 'Viral Gadget Pallet', icon: '🔮', base: 900, sc: 6, dem: [6, 9, 5], dep: 6, tags: ['trend', 'electronics'], repair: 150 },
-  electronics: { name: 'Pallet: Electronics', icon: '🔌', base: 3800, sc: 6, dem: [3, 8, 7], dep: 3, tags: ['electronics', 'b2b'], repair: 600 },
-  domain: { name: 'Premier E-Commerce Domain', icon: '🌐', base: 3900, sc: 8, dem: [1, 7, 9], dep: 1, tags: ['digital', 'b2b'] },
-  van: { name: 'Fleet Van Contract', icon: '🚐', base: 5000, sc: 5, dem: [2, 8, 8], dep: 3, tags: ['vehicle', 'b2b'], repair: 1200 },
-  saas: { name: 'SaaS Subscription Book', icon: '💾', base: 26000, sc: 7, dem: [0, 5, 9], dep: 2, tags: ['digital', 'b2b'] },
-  fleet: { name: 'Delivery Fleet (10 vans)', icon: '🚚', base: 62000, sc: 6, dem: [0, 6, 9], dep: 3, tags: ['vehicle', 'b2b'], repair: 9000 },
-  franchise: { name: 'Franchise License', icon: '🏷️', base: 150000, sc: 8, dem: [0, 3, 9], dep: 1, tags: ['b2b', 'franchise'] },
-  datacenter: { name: 'Server Rack Colocation', icon: '🗄️', base: 420000, sc: 7, dem: [0, 0, 9], dep: 2, tags: ['digital', 'b2b', 'infra'], repair: 40000 },
-};
+// A broken asset sells for this fraction of a working one. Asset classes: base price, sc (scarcity), dem (sparse demand by district), dep (depreciation), tags, repair cost.
 export const BROKEN_FACTOR = 0.3; // as-is value of a broken asset relative to working
-
-// Buyers. like = tag -> affinity 0..1. pop = how many players find them first (drives the "obvious channel").
-// holds = goods a Scrap Yard buyer can barter with. budget = [low, high] willingness to pay.
-export const BUYERS = {
-  student: { zone: 1, name: 'Stressed Student', icon: '🎒', pop: 0.9, like: { tool: 1, office: 0.7, paper: 0.7, prestige: 0.55 }, budget: [1, 80], holds: [{ cls: 'paperclip' }, { cls: 'pen' }, { cls: 'radio' }] },
-  barista: { zone: 1, name: 'Cafe Barista', icon: '☕', pop: 0.5, like: { office: 0.5, consumer: 0.35, paper: 0.3, prestige: 0.2 }, budget: [1, 40], holds: [{ cls: 'paperclip' }, { cls: 'pen' }] },
-  mechanic: { zone: 1, name: 'Yard Mechanic', icon: '🔧', pop: 0.7, like: { vehicle: 0.9, industrial: 0.85, scrap: 0.9, tool: 0.2, electronics: 0.3 }, budget: [10, 1200], holds: [{ cls: 'bike', cond: 'broken' }, { cls: 'scrap' }, { cls: 'radio', cond: 'broken' }] },
-  collector: { zone: 1, name: 'Flea-Market Collector', icon: '🧐', pop: 0.6, like: { retro: 1, prestige: 0.85, electronics: 0.4, consumer: 0.2 }, budget: [20, 2500], holds: [{ cls: 'radio' }, { cls: 'pen' }, { cls: 'bike' }, { cls: 'sneakers' }] },
-  scrapper: { zone: 1, name: 'Scrap Broker', icon: '🏗️', pop: 0.8, like: { scrap: 1, industrial: 0.8, vehicle: 0.4 }, budget: [30, 6000], holds: [{ cls: 'scrap' }, { cls: 'electronics', cond: 'broken' }, { cls: 'gadgets' }, { cls: 'textbooks' }] },
-  cyclist: { zone: 1, name: 'Bike Hobbyist', icon: '🚴', pop: 0.4, like: { vehicle: 0.8, consumer: 0.6, trend: 0.3 }, budget: [30, 1500], holds: [{ cls: 'bike' }, { cls: 'sneakers' }, { cls: 'radio' }] },
-  bookstore: { zone: 2, name: 'Campus Bookstore', icon: '📖', pop: 0.95, like: { paper: 1, training: 0.5, office: 0.3 }, budget: [200, 6000] },
-  trainer: { zone: 2, name: 'Corporate Training Provider', icon: '🎓', pop: 0.25, like: { training: 1, paper: 0.8, b2b: 0.5, office: 0.4 }, budget: [300, 20000] },
-  boutique: { zone: 2, name: 'Trend Boutique', icon: '🛍️', pop: 0.8, like: { trend: 1, consumer: 0.85, prestige: 0.5 }, budget: [200, 15000] },
-  smelog: { zone: 2, name: 'SME Logistics Co.', icon: '📦', pop: 0.5, like: { vehicle: 1, b2b: 0.7, industrial: 0.5 }, budget: [500, 40000] },
-  etailer: { zone: 2, name: 'E-Tailer', icon: '🛒', pop: 0.85, like: { electronics: 1, trend: 0.6, digital: 0.5 }, budget: [500, 50000] },
-  recruiter: { zone: 2, name: 'Corporate Recruiter', icon: '👔', pop: 0.7, like: { prestige: 1, office: 0.6 }, budget: [100, 8000] },
-  freelancer: { zone: 2, name: 'Tech Freelancer', icon: '💻', pop: 0.45, like: { electronics: 0.9, digital: 0.7, tool: 0.2 }, budget: [100, 12000] },
-  entIT: { zone: 3, name: 'Enterprise IT Dept.', icon: '🖥️', pop: 0.9, like: { digital: 1, electronics: 0.8, b2b: 0.8, infra: 1 }, budget: [5000, 900000] },
-  holdco: { zone: 3, name: 'Holding Company', icon: '🏦', pop: 0.6, like: { b2b: 1, vehicle: 0.6, franchise: 1, infra: 0.5 }, budget: [10000, 2500000] },
-  vcstart: { zone: 3, name: 'VC-Backed Startup', icon: '🚀', pop: 0.4, like: { digital: 1, training: 0.4, electronics: 0.5 }, budget: [3000, 400000] },
-  franchisor: { zone: 3, name: 'Franchise Group', icon: '🍔', pop: 0.35, like: { franchise: 1, b2b: 0.7, vehicle: 0.5 }, budget: [20000, 2500000] },
-};
 
 export const PIPE = {
   student: { name: 'Supply-Chain Student', icon: '🎓', hire: 120, royalty: 0.03, margin: 0.052, cycle: 1.3, overhead: 2, cap: 450, blurb: 'Cheap and eager. Slower cycles, learns with experience (+margin).' },
   broker: { name: 'Asset Broker', icon: '🤝', hire: 600, royalty: 0.10, margin: 0.068, cycle: 1.0, overhead: 6, cap: 1000, blurb: 'The classic flipper. Takes a 10% trade royalty.' },
   logistics: { name: 'Logistics Agent', icon: '🚛', hire: 420, royalty: 0.06, margin: 0.055, cycle: 0.8, overhead: 5, cap: 700, blurb: 'Fastest cycles. Also cuts freight cost 20% and damage risk in half.' },
 };
-export const PIPE_RULES = { zoneScale: { 2: 1, 3: 14 }, zoneMargin: { 2: 1, 3: 0.5 }, overheadScale: { 2: 1, 3: 9 }, max: { 2: 4, 3: 6 }, cycleBase: 48, maxLevel: 8, hireGrowth: 1.7, levelGrowth: 2.5 };
+// Pipelines scale with a district's gate: a manager in district 13 handles about 31x the money of one in district 5.
+// A cycle's gross is allocation x kind margin x ECON.margin x pipeMargin x (Cm / 1.68) x lane. With marginBase 1.15 a balanced niche (Cm 1.68) pays 6.0% (student), 7.8% (broker) or 6.3% (logistics) before costs,
+// an empty one (Cm 1.09, nobody else selling) 5.1% to a broker, and the best lane of every district 5 to 16 clears the 2.5% fee, tax, royalty and overhead (tests/audit-engine-core.test.mjs walks them all).
+// One number for every district: cycles are shorter and stakes larger further out, but the return per cycle is meant to be the same everywhere (docs/V2_DESIGN.md section 4, tests/audit-engine-core.test.mjs holds
+// marginSlope at 0). That makes a manager's return per DAY grow with the district (a cycle is 2.5 times shorter in the Global Exchange than in Metro Hub), on stakes 20 to 130 times larger, so ECON.cycleBase is the
+// lever on it: 132 is a cycle 65% longer than the 80 it was, with the return per cycle unchanged. What decides how many runs reach district 16 and how far apart the net worths end is hand play, not the managers:
+// see ECON.brokenLo and ECON.brokenTop above (hand play at the top, where a wreck is worth tens of thousands). scaleExp and overheadExp were swept (0.4 to 1.0 and 0 to 0.6) with no effect on the day-90 net worth beyond noise, so they stay.
+export const PIPE_RULES = { cycleBase: 48, maxLevel: 8, hireGrowth: 1.7, levelGrowth: 2.5, scaleExp: 0.62, overheadExp: 0.5, marginBase: 1.15, marginSlope: 0 };
+export const pipeScale = (zone) => Math.max(1, Math.pow(zone.gate / 1000, PIPE_RULES.scaleExp));
+export const pipeMargin = (zone) => Math.max(0.5, PIPE_RULES.marginBase + PIPE_RULES.marginSlope * (zone.id - 5));
+export const pipeOverhead = (zone) => Math.max(1, Math.pow(zone.gate / 1000, PIPE_RULES.overheadExp));
 
 export const UPGRADES = {
-  jit: { name: 'Just-In-Time (JIT) Inventory', cost: 2500, zone: 2, blurb: 'Pipeline cycles 20% shorter, 50% slower inventory decay, 10% lower overhead. Less capital sits idle.' },
-  seo: { name: 'SEO Pipeline Adjustments', cost: 1800, zone: 2, blurb: '+50% buyer lead flow, +8% pipeline margin, 15% cheaper client acquisition.' },
-  freight: { name: 'Bulk Freight Discounts', cost: 1200, zone: 2, blurb: 'Freight runs cost 40% less.' },
-  research: { name: 'Market Research Suite', cost: 4000, zone: 2, blurb: 'Macro warnings arrive one tier earlier and the Niche Radar shows every underserved market at once.' },
+  jit: { name: 'Just-In-Time (JIT) Inventory', cost: 2500, zone: 5, blurb: 'Pipeline cycles 20% shorter, 50% slower inventory decay, 10% lower overhead. Less capital sits idle.' },
+  seo: { name: 'SEO Pipeline Adjustments', cost: 1800, zone: 5, blurb: '+50% buyer lead flow, +8% pipeline margin, 15% cheaper client acquisition.' },
+  freight: { name: 'Bulk Freight Discounts', cost: 1200, zone: 5, blurb: 'Freight runs cost 40% less.' },
+  research: { name: 'Market Research Suite', cost: 4000, zone: 5, blurb: 'Macro warnings arrive one tier earlier and the Niche Radar shows every underserved market at once.' },
 };
 
 export const CLIENTS = {
-  smb: { name: 'SMB Account', icon: '🏪', zone: 2, cac: 450, perDay: 55, days: 30, minRunning: 1, max: 6, blurb: 'Local businesses. Light SLA.' },
-  corp: { name: 'Corporate Account', icon: '🏢', zone: 2, cac: 4000, perDay: 380, days: 45, minRunning: 2, max: 4, needs: 'm2', b2b: true, blurb: 'Strict SLA: two pipelines must be running every day.' },
-  ent: { name: 'Enterprise Account', icon: '🏛️', zone: 3, cac: 40000, perDay: 3200, days: 60, minRunning: 3, max: 3, needs: 'm3', b2b: true, blurb: 'Zone 3 contracts. Three pipelines must stay live.' },
+  smb: { name: 'SMB Account', icon: '🏪', zone: 5, cac: 450, perDay: 55, days: 30, minRunning: 1, max: 6, blurb: 'Local businesses. Light SLA.' },
+  corp: { name: 'Corporate Account', icon: '🏢', zone: 5, cac: 4000, perDay: 380, days: 45, minRunning: 2, max: 4, needs: 'm2', b2b: true, blurb: 'Strict SLA: two pipelines must be running every day.' },
+  ent: { name: 'Enterprise Account', icon: '🏛️', zone: 13, cac: 40000, perDay: 3200, days: 60, minRunning: 3, max: 3, needs: 'm3', b2b: true, blurb: 'Corporate Valley contracts. Three pipelines must stay live.' },
 };
 
 export const LOANS = {
   micro: { name: 'Micro-Business Line', limit: 2500, fee: 0.03, every: 24, spread: 0.095, note: 'Daily compounding, 3% upfront fee. Up to $2,500.' },
   pipeline: { name: 'Automated Pipeline Capital Loan', limitPct: 0.5, fee: 0.05, every: 168, spread: 0.045, note: 'Weekly compounding, 5% origination. Up to 50% of verified asset value.' },
-  enterprise: { name: 'Enterprise Revolving Credit', limit: 100000, fee: 0, every: 720, spread: 0.025, commit: 0.015, zone: 3, note: 'Monthly compounding, 1.5% monthly commitment fee on the undrawn part. Needs Zone 3. Up to $100,000.' },
+  circle: { name: 'Community Circle', limitPct: 0.15, fee: 0, every: 720, spread: 0, hidden: true, note: 'Zero interest, from people who trust you. Up to 15% of your net worth.' },
+  enterprise: { name: 'Enterprise Revolving Credit', limit: 100000, fee: 0, every: 720, spread: 0.025, commit: 0.015, zone: 13, note: 'Monthly compounding, 1.5% monthly commitment fee on the undrawn part. Needs Corporate Valley. Up to $100,000.' },
 };
 
 export const AUDIT_THEMES = [
   { title: 'Corporate Transparency Review', text: 'A regulator asks for your beneficial-ownership filing and supplier list.' },
-  { title: 'Sales-Tax Nexus Inquiry', text: 'Two states want to know why your Metro Hub sales were not collected at the register.' },
-  { title: 'Worker Classification Check', text: 'Your logistics contractors look suspiciously like employees to the labour board.' },
+  { title: 'Sales-Tax Nexus Inquiry', text: 'Two states want to know why your city sales were not collected at the register.' },
+  { title: 'Worker Classification Check', text: 'Your logistics contractors look suspiciously like employees to the labor board.' },
   { title: 'Inventory Provenance Audit', text: 'A customs agent wants paperwork proving where your pallets came from.' },
   { title: 'Related-Party Transactions Sweep', text: 'Auditors flag swaps with classmates who share your cap table.' },
   { title: 'Data Privacy Assessment', text: 'A privacy officer asks how your e-commerce domain stores customer records.' },
@@ -134,11 +114,11 @@ export const EVENTS = {
   tiktok: {
     id: 'tiktok', name: 'The TikTok Arbitrage Surge', day: 15, level: 1, short: 'Demand shock',
     alert: { code: 'MKT-DEM-SRG-15', readout: 'Viral demand is sweeping the consumer-trend sector. A 48-hour hyper-demand window opens at 00:00.',
-      vars: ['Local demand for trend goods in Zones 1 and 2 spikes +400%.', 'Matching pipeline cycles run 60% faster.', 'After 48 hours market fatigue sets in: trend inventory loses 50% of its value for 72 hours.'],
+      vars: ['Local demand for trend goods spikes +400% in every district.', 'Matching pipeline cycles run 60% faster.', 'After 48 hours market fatigue sets in: trend inventory loses 50% of its value for 72 hours.'],
       enforcement: 'No intervention. Sell into the window, then get out before fatigue.' },
     phases: [
-      { from: 0, to: 48, eff: { demand: { tags: ['trend'], mult: 5, zones: [1, 2] }, speed: { tags: ['trend'], mult: 1.6, zones: [1, 2] } } },
-      { from: 48, to: 120, eff: { price: { tags: ['trend'], mult: 0.5, zones: [1, 2] } } },
+      { from: 0, to: 48, eff: { demand: { tags: ['trend'], mult: 5 }, speed: { tags: ['trend'], mult: 1.6 } } },
+      { from: 48, to: 120, eff: { price: { tags: ['trend'], mult: 0.5 } } },
     ],
   },
   fed: {
@@ -154,14 +134,14 @@ export const EVENTS = {
   tariff: {
     id: 'tariff', name: 'The Cross-Border Tariff Lock', day: 75, level: 2, short: 'Supply shock',
     alert: { code: 'TRD-TAR-LCK-75', readout: 'Customs duties lock global freight and international dropshipping channels from Day 75.',
-      vars: ['International pipeline cycles slow by 4 virtual days.', 'Asset rehabilitation costs outside the Scrap Yard rise 45%.', 'Domestic channels and Scrap Yard recycling are unaffected.'],
+      vars: ['International pipeline cycles slow by 4 virtual days.', 'Asset rehabilitation costs outside the four starter districts rise 45%.', 'Domestic channels and the starter districts are unaffected.'],
       enforcement: 'Move international lanes to domestic channels, or ride out the slow cycles.' },
     phases: [{ from: 0, to: 360, eff: { intlSlow: 96, repair: 1.45 } }],
   },
 };
 export const ALGO_EVENTS = {
-  viral: { name: 'Viral Product Mention', mk: (cls) => ({ name: 'Viral mention: ' + ASSETS[cls].name, phases: [{ from: 0, to: 36, eff: { demand: { cls, mult: 2.5, zones: [1, 2, 3] } } }] }) },
-  glut: { name: 'Supply Glut', mk: (cls) => ({ name: 'Supply glut: ' + ASSETS[cls].name, phases: [{ from: 0, to: 72, eff: { demand: { cls, mult: 0.55, zones: [1, 2, 3] } } }] }) },
+  viral: { name: 'Viral Product Mention', mk: (cls) => ({ name: 'Viral mention: ' + ASSETS[cls].name, phases: [{ from: 0, to: 36, eff: { demand: { cls, mult: 2.5, } } }] }) },
+  glut: { name: 'Supply Glut', mk: (cls) => ({ name: 'Supply glut: ' + ASSETS[cls].name, phases: [{ from: 0, to: 72, eff: { demand: { cls, mult: 0.55, } } }] }) },
   scare: { name: 'Regulatory Scare', mk: () => ({ name: 'Regulatory scare: fees up for 48h', phases: [{ from: 0, to: 48, eff: { fee: 0.03 } }] }) },
 };
 export const WARN_LEAD = { novice: 12, mid: 72, adv: 168 };
