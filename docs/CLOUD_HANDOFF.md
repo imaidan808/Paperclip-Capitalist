@@ -59,3 +59,7 @@ Second-Chance Hustler is still the weakest Background (0.66 of the median pair a
 - The author's rules (see `docs/V2_DESIGN.md`): equal start (one paperclip), skill-based trades, a game that teaches; the art direction is a bright toy diorama, not a flat vector ad.
 - The data behind this file (the 40 audit findings with their repros, the six judge reports, the two Workflow scripts that made them) and the commands to regenerate the pictures and sweeps are in `docs/handoff/` (start at its `README.md`); `docs/handoff/NEXT_SESSION_PROMPT.md` is the prompt that starts the next session. The old patches there are superseded: do not apply them.
 - What cost the most: about ten Workflow agents for two hours used the credit; read a workflow's reports before starting another. Browser tests that time out under load must be run alone before they are believed.
+
+## Update: the art pass of 2026-10-30 (branch `v2/art-pass`, its own pull request)
+
+The cloud bank has a warm key light, a shadow that can be seen and windows that let the district show through; 791 cliff-wall segments that were never painted are painted; a lamp's light no longer clips to a white disc. A second judge pass scored the island from far 6.5 quality and 7 edges, the coast and sea 7.5 and 6.5, the player's district 7 and 6: **still under 8**. The open list and the judges' fixes are in `docs/handoff/art-judge-round2.md`, the as-built in `docs/RENDER_PLAN.md` section 15.
