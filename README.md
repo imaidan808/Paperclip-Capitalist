@@ -121,4 +121,8 @@ docs/             FACULTY_KIT.md, ARCHITECTURE.md, COMPLIANCE.md, BALANCE.md, V2
 - **No third parties.** No analytics script, no font or script from another host, no tracking pixel; the staged page is checked to make no request outside itself.
 - **The gradebook** is a CSV of Founder IDs and aliases that the instructor downloads. Map it to a roster in your LMS.
 
-[docs/COMPLIANCE.md](docs/COMPLIANCE.md) says exactly what is and is not implemented. MIT licensed.
+[docs/COMPLIANCE.md](docs/COMPLIANCE.md) says exactly what is and is not implemented.
+
+## License
+
+Copyright (c) 2026 Aidan H. Naylor. All rights reserved. The source is published so that it can be read, and [LICENSE](LICENSE) grants no right to copy, modify, host or redistribute it without the author's written permission. The steps above for running, testing and hosting the game are for the author and for anyone the author has given that permission.
