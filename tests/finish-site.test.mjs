@@ -512,7 +512,16 @@ test('index.html: icons. The inline favicon stays, the file icons are the same m
   assert.equal(read('404.html').match(/<link rel="icon" href="(data:[^"]+)"/)[1], inline, 'the 404 page wears the same icon, inline');
 });
 
-test('index.html: JSON-LD is valid, describes a free educational web application, and says what the code says', () => {
+test('the public copy does not advertise the game as free for everyone: it is sold to universities, and free only for the students and classes of one that has it', () => {
+  // index.html (meta, Open Graph, Twitter, JSON-LD, the page a crawler reads), 404.html, README.md and llms.txt are what a stranger reads first
+  for (const f of ['index.html', '404.html', 'README.md', 'llms.txt']) {
+    const text = read(f);
+    assert.doesNotMatch(text, /\bfree\b/i, `${f} calls the game free`);
+    assert.doesNotMatch(text, /isAccessibleForFree|"price"\s*:/, `${f} states a price`);
+  }
+});
+
+test('index.html: JSON-LD is valid, describes an educational web application (and does not offer it for free), and says what the code says', () => {
   const html = read('index.html');
   const blocks = [...html.matchAll(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/g)];
   assert.equal(blocks.length, 1);
@@ -520,8 +529,8 @@ test('index.html: JSON-LD is valid, describes a free educational web application
   assert.equal(ld['@context'], 'https://schema.org'); assert.equal(ld['@type'], 'WebApplication');
   assert.equal(ld.name, 'Paperclip Capitalist'); assert.equal(ld.url, SITE_URL); assert.equal(ld['@id'], SITE_URL + '#app');
   assert.equal(ld.applicationCategory, 'EducationalApplication');
-  assert.ok(ld.operatingSystem && ld.browserRequirements && ld.inLanguage === 'en-US' && ld.isAccessibleForFree === true);
-  assert.deepEqual(ld.offers, { '@type': 'Offer', price: '0', priceCurrency: 'USD' });
+  assert.ok(ld.operatingSystem && ld.browserRequirements && ld.inLanguage === 'en-US');
+  assert.ok(!('isAccessibleForFree' in ld) && !('offers' in ld), 'the page does not say what it costs: it is sold to universities, and free only for the students and classes of one that has it');
   assert.equal(ld.audience['@type'], 'EducationalAudience'); assert.ok(ld.audience.educationalRole && ld.audience.audienceType);
   assert.equal(ld.image, SITE_URL + 'assets/share.png');
   assert.equal(ld.description.length > 80, true);
