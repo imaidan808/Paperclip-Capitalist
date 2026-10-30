@@ -28,7 +28,7 @@ export async function browser() {
   return shared;
 }
 
-export const until = async (p, expr, what, ms = 45000) => { const end = Date.now() + ms; let last; while (Date.now() < end) { try { last = await p.eval(expr); if (last) return last; } catch { /* between screens */ } await p.sleep(100); } assert.fail(`timed out waiting for ${what} (last: ${JSON.stringify(last)})`); };
+export const until = async (p, expr, what, ms = 45000) => { const end = Date.now() + ms; let last, err; while (Date.now() < end) { try { last = await p.eval(expr); if (last) return last; } catch (e) { err = e.message; if (/DevTools socket/.test(err)) assert.fail(`waiting for ${what}: ${err}`); /* else: between screens */ } await p.sleep(100); } assert.fail(`timed out waiting for ${what} (last: ${JSON.stringify(last)}${err ? '; last error: ' + err.slice(0, 200) : ''})`); };
 const IDS = ['m01', 'm02', 'm03', 'm04', 'm05', 'm06', 'm07', 'm08', 'm09', 'm10'];
 export async function lessonPage(b, lesson, { w, h, dsf, mobile, touch }) {
   const slot = `rr${lesson}${Date.now() % 1e6}`, p = await b.open(b.chrome, `${b.base}/?slot=${slot}`, { w, h, dsf, mobile });

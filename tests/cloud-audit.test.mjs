@@ -431,3 +431,31 @@ test('M2: a Chrome that dies at once is reported with its exit code and what it 
   const quiet = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 4000)'], { stdio: ['ignore', 'ignore', 'pipe'] });
   try { await assert.rejects(() => chromeReady(quiet, 9, 3), /still running after/); } finally { quiet.kill('SIGKILL'); }
 });
+
+test('M3: a page whose DevTools socket does not open, or closes under a request, is an error with a reason and not a wait for ever (a test sat 15 minutes at 0% CPU with nothing said)', { skip: SKIP }, async () => {
+  const { open } = await import('../scripts/cdp.mjs');
+  const { createServer } = await import('node:http'), { createServer: tcp } = await import('node:net');
+  const { WebSocketServer } = await import('../server/node_modules/ws/wrapper.mjs');
+  const free = () => new Promise((res) => { const s = tcp(); s.listen(0, '127.0.0.1', () => { const p = s.address().port; s.close(() => res(p)); }); });
+  const within = (ms, what, p) => Promise.race([p, new Promise((_, no) => setTimeout(() => no(new Error(`${what}: still waiting after ${ms} ms`)), ms))]);
+  // a DevTools endpoint that is not a Chrome: /json/new hands out a page whose socket is at `wsUrl()`, and a socket server that answers every request but Runtime.evaluate, on which it closes the connection
+  const wss = new WebSocketServer({ port: await free(), host: '127.0.0.1' }), asked = [];
+  wss.on('connection', (c) => c.on('message', (d) => { const m = JSON.parse(d); asked.push(m.method); if (m.method === 'Runtime.evaluate') c.close(); else c.send(JSON.stringify({ id: m.id, result: {} })); }));
+  let wsUrl = () => `ws://127.0.0.1:${wss.address().port}/devtools/page/x`, news = 0, closed = [];
+  const dev = createServer((req, res) => { if (req.url.startsWith('/json/new')) { news++; res.end(JSON.stringify({ id: 'p' + news, webSocketDebuggerUrl: wsUrl() })); } else if (req.url.startsWith('/json/close/')) { closed.push(req.url.slice(12)); res.end('Target is closing'); } else res.end('{}'); });
+  await new Promise((ok) => dev.listen(0, '127.0.0.1', ok)); const b = { port: dev.address().port };
+  try {
+    // 1. the socket address nothing listens at: Chrome refused the connection. The page is given up on after a few tries, each on a page of its own, the failed ones closed, and the error says which socket
+    const dead = `ws://127.0.0.1:${await free()}/devtools/page/gone`; wsUrl = () => dead;
+    await assert.rejects(() => within(12000, 'open on a refused socket', open(b, 'http://127.0.0.1:1/', { w: 400, h: 300 })), (e) => { assert.match(e.message, /DevTools socket/); assert.match(e.message, /gone/); return true; });
+    assert.ok(news >= 2, `a page whose socket would not open is tried again on a fresh page (${news} pages made)`); assert.equal(closed.length, news, 'and every page that was given up on is closed');
+    // 2. one refusal and then a good socket: the second page is the one that is used
+    news = 0; closed = []; let calls = 0; const good = () => `ws://127.0.0.1:${wss.address().port}/devtools/page/x`; wsUrl = () => (++calls === 1 ? dead : good());
+    const p = await within(12000, 'open after one refusal', open(b, 'http://127.0.0.1:1/', { w: 400, h: 300 }));
+    assert.equal(news, 2, 'a second page was made after the first one would not open'); assert.deepEqual(closed, ['p1'], 'and the first one was closed');
+    // 3. the socket closes while a request is waiting: the request fails, saying why
+    await assert.rejects(() => within(8000, 'a request on a socket that closes', p.eval('1 + 1')), /DevTools socket.*closed|closed.*DevTools socket/i);
+    await assert.rejects(() => within(3000, 'a request on a closed socket', p.eval('2 + 2')), /closed/i);
+    assert.ok(asked.includes('Page.navigate'), 'the page was driven as before (navigate was sent)');
+  } finally { for (const c of wss.clients) c.terminate(); await new Promise((ok) => wss.close(ok)); await new Promise((ok) => dev.close(ok)); }
+});

@@ -227,12 +227,54 @@ test('browser, lesson 7: after Borrow the toasts give way to the card, at 844x39
       await tapAt(p, '[data-anchor="dock-bank"]'); await atStep(p, 2);
       await p.eval(`(()=>{const i=document.querySelector('[data-anchor="drawer"] input[type=range]'); i.scrollIntoView({block:'center'}); i.focus();})()`);
       for (let k = 0; k < 3; k++) await p.key('ArrowRight', { wait: 120 });
-      await tapAt(p, '[data-act="bank-draw"]'); await until(p, `document.querySelectorAll('#toasts .toast').length >= 2`, 'the two toasts');
-      for (const t of [0, 400, 800]) {
-        await sleep(t ? 400 : 150);
-        const toasts = await p.eval(`(()=>{ const c=document.querySelector('.ac-coach').getBoundingClientRect(); return [...document.querySelectorAll('#toasts .toast')].map(t=>{ const q=t.getBoundingClientRect(), ox=Math.max(0,Math.min(c.right,q.right)-Math.max(c.left,q.left)), oy=Math.max(0,Math.min(c.bottom,q.bottom)-Math.max(c.top,q.top)); return { text:t.textContent.slice(0,16), bad:t.classList.contains('bad'), opacity:+getComputedStyle(t).opacity, over: q.width*q.height ? ox*oy/(q.width*q.height) : 0 } }) })()`);
-        for (const x of toasts) if (!x.bad) assert.ok(x.over < 0.01 || x.opacity < 0.05, `${sz.name}: "${x.text}" stands ${Math.round(x.over * 100)}% over the card at full strength (opacity ${x.opacity}): its words and its buttons cannot be read`);
-      }
+      // The toasts are watched from inside the page, every 50 ms, and kept in a log. A toast is up for four seconds and a runner under load can be slower than that between two looks from outside: the test used to
+      // wait for "two toasts" and timed out on the runner having missed them (it passed alone). A toast is read from the age of 500 ms: it slides in for 250 ms (animation: slidein, which outranks the card's
+      // opacity: 0 while it runs) and fades for 200 (transition), and the old test could not look sooner either, since a tap ends 350 ms after the click.
+      await p.eval(`(()=>{ const first = new Map(), log = (window.__toastLog = []); window.__toastWatch = setInterval(() => { const c = document.querySelector('.ac-coach'); if (!c) return; const r = c.getBoundingClientRect(), now = Date.now();
+        for (const t of document.querySelectorAll('#toasts .toast')) { if (!first.has(t)) first.set(t, now); const q = t.getBoundingClientRect(), ox = Math.max(0, Math.min(r.right, q.right) - Math.max(r.left, q.left)), oy = Math.max(0, Math.min(r.bottom, q.bottom) - Math.max(r.top, q.top));
+          log.push({ text: t.textContent.slice(0, 16), bad: t.classList.contains('bad'), age: now - first.get(t), opacity: +getComputedStyle(t).opacity, over: q.width * q.height ? ox * oy / (q.width * q.height) : 0 }); } }, 50); })()`);
+      await tapAt(p, '[data-act="bank-draw"]');
+      await until(p, `window.__toastLog.some((x) => !x.bad && x.age >= 1300)`, 'a toast of the Borrow that has been up for 1.3 s', 20000);
+      const seen = await p.eval(`(clearInterval(window.__toastWatch), window.__toastLog.filter((x) => x.age >= 500 && !x.bad))`);
+      assert.ok(seen.length > 0, `${sz.name}: a toast was looked at after it had settled`);
+      for (const x of seen) assert.ok(x.over < 0.01 || x.opacity < 0.05, `${sz.name}: "${x.text}" stands ${Math.round(x.over * 100)}% over the card at full strength (opacity ${x.opacity}, ${x.age} ms old): its words and its buttons cannot be read`);
+      // After a Borrow the layout no longer meets the two (the card is a one-line bar at the foot, the toasts stand above it: with the rule taken out this test used to pass all the same), so the rule is tried where
+      // they do meet: the stack is put over the card, as a small window or a big text size leaves it. A toast the card stands over is let go dim, a toast that says an action failed never is, and the dim one is seen again when the card is off it.
+      const meet = await p.eval(`(async () => {
+        const box = document.getElementById('toasts'), saved = box.getAttribute('style') || '', wait = (ms) => new Promise((r) => setTimeout(r, ms)), read = (t) => ({ under: t.classList.contains('ac-under'), opacity: +getComputedStyle(t).opacity });
+        const over = async (cls, text) => { const c = document.querySelector('.ac-coach').getBoundingClientRect(); box.textContent = '';
+          box.style.cssText = saved + ';left:' + Math.round(c.left) + 'px;right:auto;top:' + Math.round(c.top + 4) + 'px;bottom:auto;width:' + Math.round(c.width) + 'px';
+          const t = document.createElement('div'); t.className = 'toast ' + cls; t.textContent = text; box.appendChild(t); await wait(900); return t; };
+        const warn = await over('warn', 'Over the card'), a = read(warn);
+        box.setAttribute('style', saved); box.appendChild(Object.assign(document.createElement('div'), { className: 'toast info', textContent: 'A toast comes' })); await wait(900); // the card looks again at a toast that comes
+        const back = read(warn), bad = await over('bad', 'Refused over the card'), b = read(bad);
+        box.setAttribute('style', saved); box.textContent = '';
+        return { a, back, b };
+      })()`);
+      assert.equal(meet.a.under, true, `${sz.name}: a toast the card stands over is let go dim`); assert.ok(meet.a.opacity < 0.05, `${sz.name}: and it cannot be seen (opacity ${meet.a.opacity})`);
+      assert.equal(meet.back.under, false, `${sz.name}: and it is seen again when the card is off it`); assert.ok(meet.back.opacity > 0.9, `${sz.name}: at full strength (opacity ${meet.back.opacity})`);
+      assert.equal(meet.b.under, false, `${sz.name}: a toast that says an action failed is never dimmed, whoever stands over it`); assert.ok(meet.b.opacity > 0.9, `${sz.name}: it is seen (opacity ${meet.b.opacity})`);
+    } finally { await closePage(p); }
+  }
+});
+
+// PF: the Borrow tap the runner lost. The player slides the amount (the drawer is not redrawn while the slider has the keyboard, common.js setHTML) and presses Borrow, which moves the keyboard off the slider:
+// the shell's next redraw (every 230 ms, the sandbox's tick) then wrote everything it had held back, 22 ms into the press, and the button under the finger was a new one. The release landed on it, the
+// click went to neither, and nothing was borrowed: 3 taps in 6 at 844x390. A press held for 700 ms crosses three redraws, so it fails every time on the fault (tests/press-in-flight.test.mjs has the rule).
+test('browser, lesson 7: a press held while the clock redraws the drawer still clicks the button it began on (Borrow, after the amount was slid), at 844x390 and 360x640', SUITE, async () => {
+  const br = await getBrowser();
+  for (const sz of [SIZES[0], SIZES[1]]) {
+    const p = await lessonPage(br, 'm07', sz);
+    try {
+      await tapAt(p, '[data-anchor="dock-bank"]'); await atStep(p, 2);
+      await p.eval(`(()=>{const i=document.querySelector('[data-anchor="drawer"] input[type=range]'); i.scrollIntoView({block:'center'}); i.focus();})()`);
+      for (let k = 0; k < 3; k++) await p.key('ArrowRight', { wait: 120 });
+      await p.eval(`window.__clicks = []; addEventListener('click', (e) => { const a = e.target.closest && e.target.closest('[data-act]'); window.__clicks.push(a ? a.dataset.act : e.target.tagName); }, true)`);
+      const tap = await tapAt(p, '[data-act="bank-draw"]', '.', { gap: 700 });
+      assert.equal(tap.during.lands, true, `${sz.name}: 0.7 s into the press the button under the finger is still the one that was pressed (it was drawn again under it: ${tap.during.hit})`);
+      const clicks = await p.eval(`window.__clicks`);
+      assert.ok(clicks.includes('bank-draw'), `${sz.name}: the press on Borrow made its click (clicks: ${JSON.stringify(clicks)})`);
+      await until(p, `document.querySelectorAll('#toasts .toast').length >= 1`, 'the Borrow\'s toast', 12000);
     } finally { await closePage(p); }
   }
 });

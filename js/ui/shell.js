@@ -12,7 +12,7 @@
 // shut, and keeps the render path cheap (attributes written only when they change, bars listed once per render and painted only when they move, no work for a hidden tab).
 import { ZONES, TOTAL_HOURS, CLIENTS, DEFAULT_RELAY } from '../config.js';
 import { $, $$, esc, setHTML, delegate, dlg, toast, announce, sfx, burst, reduced, settingsDialog, settings, applySettings, relayOf } from './common.js';
-import { fitStuck } from './common.js'; // its own line: the shell's other helpers are imported above
+import { fitStuck, watchPress } from './common.js'; // its own line: the shell's other helpers are imported above
 import { kv } from '../session.js';
 import { hudHTML, trackerHTML, tickerHTML } from './hud.js';
 import { DRAWERS } from './drawers/index.js';
@@ -92,7 +92,7 @@ export function mountGame(root, S, hooks) {
   function render() {
     if (dead || !g()) return;
     if (U.drawer && !visibleIds().has(U.drawer)) U.drawer = null;
-    const changed = [setHTML(el.hud, hudHTML(ctx)), setHTML(el.tracker, trackerHTML(ctx)), setHTML(el.ticker, tickerHTML(ctx)), setHTML(el.dock, dockHTML())].some(Boolean);
+    const changed = [setHTML(el.hud, hudHTML(ctx), HOLD), setHTML(el.tracker, trackerHTML(ctx), HOLD), setHTML(el.ticker, tickerHTML(ctx), HOLD), setHTML(el.dock, dockHTML(), HOLD)].some(Boolean);
     let redrawn = changed; // did any part of the page get new markup (and so new bar elements)?
     // Attributes are written only when they change: a tick that changes nothing must cost the page nothing (no style recalculation, no mutation records).
     const open = !!U.drawer, key = U.drawer || '', label = drawerOf(U.drawer)?.label || 'Panel';
@@ -102,7 +102,7 @@ export function mountGame(root, S, hooks) {
     const html = drawerHTML();
     if (el.drawer._html !== html) { // scrollTop is a layout read: take it only when the markup is really about to be replaced, and keep a refresh from throwing the reader back to the top
       const was = el.drawer.dataset.d === U.drawer ? el.drawer.querySelector('.db') : null, top = was ? was.scrollTop : 0;
-      if (setHTML(el.drawer, html)) { redrawn = true; if (top) { const db = el.drawer.querySelector('.db'); if (db) db.scrollTop = top; } }
+      if (setHTML(el.drawer, html, HOLD)) { redrawn = true; if (top) { const db = el.drawer.querySelector('.db'); if (db) db.scrollTop = top; } }
     }
     if (el.drawer.dataset.d !== key) el.drawer.dataset.d = key;
     wv?.update();
@@ -316,6 +316,9 @@ export function mountGame(root, S, hooks) {
   cues = createCues(ctx, { settings, save: applySettings, announce, toast, supported: () => audio.supported });
   unwire = wireAudio(ctx, { settings, save: applySettings, announce, toast }); // the sound layer (js/audio/wire.js): the engine's events, the session's notes and this shell's `ui` events become sounds
 
+  // The panels are not redrawn under a press (common.js, watchPress; HOLD asks setHTML for it); what was held back is drawn when the press is over, whether or not a tick comes (the clock may be stopped).
+  const HOLD = { press: true }, unwatchPress = watchPress(document, window, () => { if (!dead) render(); });
+
   // ---- session events
   const off = S.on((type, data) => {
     if (type === 'tick' || type === 'change' || type === 'refresh') { if (type !== 'tick' || performance.now() - U.last > 230) { U.last = performance.now(); render(); } }
@@ -337,7 +340,7 @@ export function mountGame(root, S, hooks) {
   }, 1500);
 
   function destroy() {
-    dead = true; off(); clearInterval(over); clearTimeout(barT); sizer?.disconnect();
+    dead = true; off(); unwatchPress(); clearInterval(over); clearTimeout(barT); sizer?.disconnect();
     try { unwire?.(); } catch { /* the sound layer is already gone */ } unwire = null; cues?.destroy(); cues = null;
     document.removeEventListener('keydown', keydown); document.removeEventListener('visibilitychange', wake);
     for (const k in anchors) docEl.style.removeProperty('--' + k); // the next screen falls back to the stylesheet's values
