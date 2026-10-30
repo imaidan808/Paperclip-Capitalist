@@ -29,6 +29,13 @@ test('the colours of the hour: three tiers that recede (the back paler and bluer
   { const [r1, , b1] = rgb(eve.tiers[2].cols[SHADES].belly), [r0, , b0] = rgb(day.tiers[2].cols[SHADES].belly); assert.ok(r1 - b1 > r0 - b0, 'and the belly goes rose'); }
 });
 
+test('the key light: the sun stands upper left and is warm, so the tops of the day cloud are cream and not blue-white, its underside is a lilac shade a clear step darker, and the evening\'s tops are peach over an indigo belly (judge round 1: "cold, no visible key light")', () => {
+  const day = bankTones(0, 0), eve = bankTones(1, 0), warm = (c) => { const [r, , b] = rgb(c); return r - b; }, cool = (c) => { const [r, , b] = rgb(c); return b - r; };
+  for (const row of [1, 2]) assert.ok(warm(day.tiers[row].cols[0].lit) >= 8, `tier ${row}: the lit top of the day cloud is warm (${day.tiers[row].cols[0].lit})`);
+  for (const row of [0, 1, 2]) { const foot = day.tiers[row].cols[SHADES]; assert.ok(cool(foot.belly) >= 55, `tier ${row}: the belly is lilac-blue (${foot.belly})`); assert.ok(luma(foot.belly) <= 0.69, `tier ${row}: a clear step darker than the top: belly ${luma(foot.belly).toFixed(2)}`); }
+  for (const row of [0, 1, 2]) { const top = eve.tiers[row].cols[0], foot = eve.tiers[row].cols[SHADES]; assert.ok(warm(top.lit) >= 25, `tier ${row}: the evening's top is peach (${top.lit})`); assert.ok(luma(foot.belly) <= 0.62 && cool(foot.belly) >= 50, `tier ${row}: over an indigo belly (${foot.belly}, luma ${luma(foot.belly).toFixed(2)})`); }
+});
+
 test('F5: at night the cloud is a quiet blue-grey after the grade\'s multiply: lower in saturation than the day cloud, darker than it, with a moonlit rim that is lighter than the body and a deep belly (form by value, not by hue)', () => {
   const day = bankTones(0, 0), night = bankTones(0, 1), tint = '#' + GRADE.night.slice(1);
   for (let row = 0; row < 3; row++) {

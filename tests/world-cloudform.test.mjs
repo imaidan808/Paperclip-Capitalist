@@ -5,7 +5,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { DIST, LAYOUT } from '../js/world/layout.js';
 import { LIFT } from '../js/world/cloudpaint.js';
-import { formOf, windowsOf, windowCount, insideOf, coverAt, coverOf, paintedCover, touchOf, touches, lightCover, skyFormOf, castsShadow, FORM, REACH, TOUCH, SHADOW } from '../js/world/cloudform.js';
+import { formOf, windowsOf, windowCount, insideOf, coverAt, coverOf, paintedCover, touchOf, touches, lightCover, skyFormOf, castsShadow, sweepDebris, FORM, REACH, TOUCH, SHADOW } from '../js/world/cloudform.js';
 import { shadowLength } from '../js/world/shadow.js';
 import { structure, bankPuffs, puffRadius } from '../js/world/cloudbank.js';
 import { bankOf } from '../js/world/cloudpaint.js';
@@ -50,21 +50,36 @@ test('F2: the district shows through: two or three windows on the fine bank, the
   assert.ok(sum / IDS.length < 0.85, `on average the painted bank covers ${(100 * sum / IDS.length).toFixed(0)}% of a footprint (the old blanket: 96 to 99%)`);
 });
 
-test('windows keep to the interior: never the heart (the padlock floats there on solid cloud), apart from each other, and fewer on the coarser banks', () => {
+test('windows keep to the interior: never the heart (the padlock floats there on solid cloud), apart from each other, and a fourth on the coarse bank', () => {
   for (const id of IDS) {
     const D = DIST[id], f = formOf(D, 1), [gx, gy, w, d] = D.fp, cx = (gx + w / 2 - (gy + d / 2)) * 32, cy = (gx + w / 2 + gy + d / 2) * 16 - D.z;
     for (const win of f.windows) assert.ok(Math.hypot(win.x - cx, (win.y - cy) * 2) > 0.1 * ((w + d) * 32), `district ${id}: a window at the heart`);
     for (let i = 0; i < f.windows.length; i++) for (let j = i + 1; j < f.windows.length; j++) { const a = f.windows[i], b = f.windows[j]; assert.ok(Math.hypot((a.x - b.x) / (1.9 * a.rx), (a.y - b.y) / (1.9 * a.rx * FORM.window.ratio)) > 0.99, `district ${id}: two windows overlap`); }
     assert.equal(coverAt(f, cx, cy), 1, `district ${id}: the heart is under cloud`);
   }
-  assert.deepEqual([1, 1.6, 2.6].map(windowCount), [3, 3, 2]); assert.equal(formOf(DIST[3], 1.6).windows.length, 3); assert.equal(formOf(DIST[3], 2.6).windows.length, 2);
+  assert.deepEqual([1, 1.6, 2.6].map(windowCount), [3, 4, 3]); assert.ok(formOf(DIST[3], 1.6).windows.length >= 3 && formOf(DIST[3], 1.6).windows.length <= 4); assert.ok(formOf(DIST[3], 2.6).windows.length >= 2 && formOf(DIST[3], 2.6).windows.length <= 3);
+  for (const scale of [1.6, 2.6]) for (const id of IDS) { const ws = formOf(DIST[id], scale).windows; for (let i = 0; i < ws.length; i++) for (let j = i + 1; j < ws.length; j++) assert.ok(Math.hypot((ws[i].x - ws[j].x) / (1.9 * ws[i].rx), (ws[i].y - ws[j].y) / (1.9 * ws[i].rx * FORM.window.ratio)) > 0.99, `district ${id}, scale ${scale}: two windows overlap`); } // (a district with no room for another has one fewer, never an overlapping one)
   const D = DIST[3], w = windowsOf(D, 1); assert.deepEqual(w, windowsOf(D, 1)); assert.equal(windowsOf(D, 1, 1).length, 1); assert.ok(insideOf(w[0], w[0].x, w[0].y) === 0 && Math.abs(insideOf(w[0], w[0].x + w[0].rx, w[0].y) - 1) < 1e-12);
 });
 
-test('the bank is still ONE connected mass at every scale (no island of lobes, a window never cuts it in two), with the shared rules of the lattice: every lobe overlaps another', () => {
+test('the fine bank is ONE connected mass (a window never cuts it in two); the coarser banks, whose windows are bigger, may fall into two cumulus with the ground between, but never into debris: every mass has at least 10 lobes, and every lobe overlaps another', () => {
   for (const scale of [1, 1.6, 2.6]) for (const id of IDS) {
-    const f = formOf(DIST[id], scale), s = structure(f.lobes, 1e-6); assert.equal(s.components, 1, `district ${id}, scale ${scale}: ${s.components} separate masses`); assert.ok(s.fewest >= 1, `district ${id}, scale ${scale}: a lone lobe`);
+    const f = formOf(DIST[id], scale), s = structure(f.lobes, 1e-6);
+    if (scale === 1) assert.equal(s.components, 1, `district ${id}, scale ${scale}: ${s.components} separate masses`);
+    else { assert.ok(s.components <= 2, `district ${id}, scale ${scale}: ${s.components} separate masses`); assert.ok(s.smallest >= 10, `district ${id}, scale ${scale}: a mass of ${s.smallest} lobes is debris`); }
+    assert.ok(s.fewest >= 1, `district ${id}, scale ${scale}: a lone lobe`);
   }
+});
+
+test('the coarse and far banks are opened up so the district shows through (the whole-island view was a white-out: the painted bank covered 85% of a footprint at the coarse scale and 89% at the far one): bigger windows, more of them at the coarse scale, and a mass cut off by a window is swept away', () => {
+  const mean = (scale) => IDS.reduce((s, id) => s + paintedCover(formOf(DIST[id], scale)), 0) / IDS.length;
+  assert.ok(mean(1.6) < 0.8, `the coarse bank covers ${(100 * mean(1.6)).toFixed(0)}% of a footprint on average`); assert.ok(mean(2.6) < 0.8, `the far bank covers ${(100 * mean(2.6)).toFixed(0)}%`);
+  assert.ok(mean(1) > 0.78 && mean(1) < 0.85, 'the fine bank, the one of the working zoom, is as it was');
+  for (const id of IDS.filter((i) => i !== 1)) { const w = (s) => formOf(DIST[id], s).windows; assert.ok(w(1.6)[0].rx > w(1)[0].rx * 1.15, `district ${id}: the coarse windows are bigger than the fine ones`); assert.ok(w(2.6)[0].rx > w(1.6)[0].rx, `district ${id}: and the far ones bigger still`); }
+  const row = (k, r) => ({ x: k * 10, y: 0, r });
+  const kept = sweepDebris([row(0, 20), row(1, 20), row(2, 20), row(3, 20), row(4, 20), row(40, 20), row(41, 20), row(80, 20)], 5);
+  assert.deepEqual(kept.map((l) => l.x), [0, 10, 20, 30, 40], 'a mass of five stays, in its order; a mass of two and a lone lobe go'); assert.equal(sweepDebris([], 5).length, 0);
+  for (const id of IDS) assert.ok(formOf(DIST[id], 1).lobes.length === sweepDebris(formOf(DIST[id], 1).lobes, FORM.debris).length, `district ${id}: the fine bank has no debris to sweep`);
 });
 
 test('a lobe on the outline is marked `edge` (the painter gives it the full shade) and one in the middle of the mass is not; every rim lobe and window ring lobe is an edge', () => {
@@ -96,6 +111,11 @@ test('a small sky cloud\'s box holds all of its paint: every body (lifted toward
       assert.ok(l.x - lx - l.r - cw >= f.box.x0 && l.x + l.r + cw <= f.box.x1 && l.y + l.r + cw <= f.box.y1, `cloud ${k}: the sides and the foot too`);
     }
   }
+});
+
+test('the shadow of a bank falls far enough to be seen: at the whole-island view (zoom 0.13) the push of the light must be more than a few pixels, and the chunk reach holds it', () => {
+  assert.ok(SHADOW.sxMin >= 70 && SHADOW.sxMax >= 170, `the push is ${SHADOW.sxMin} to ${SHADOW.sxMax} world px across (it was 36 to 87: nine screen pixels at the island view, and mostly under the bank)`);
+  assert.ok(SHADOW.syMin >= 35 && SHADOW.syMax >= 85); assert.ok(REACH.x >= SHADOW.sxMax + 150 && REACH.y >= SHADOW.syMax + 90, 'the reach is the longest push and the soft stamps\' own radii');
 });
 
 test('light under a cloud: a point in a lobe is covered, a point in a window or outside the bank is not, and a light is covered by the share of five points of its reach that are', () => {

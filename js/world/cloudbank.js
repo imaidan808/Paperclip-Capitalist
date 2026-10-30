@@ -103,7 +103,8 @@ export function structure(puffs, min = BANK.overlapMin) {
     parent[find(i)] = find(j);
     if (o >= min * Math.min(puffs[i].r, puffs[j].r)) { near[i]++; near[j]++; }
   }
-  return { fewest: n ? Math.min(...near) : 0, components: new Set(puffs.map((_, i) => find(i))).size, isolated: near.filter((c) => c < 2).length };
+  const size = new Map(); for (let i = 0; i < n; i++) { const r = find(i); size.set(r, (size.get(r) || 0) + 1); }
+  return { fewest: n ? Math.min(...near) : 0, components: size.size, smallest: size.size ? Math.min(...size.values()) : 0, isolated: near.filter((c) => c < 2).length }; // `smallest`: how many puffs the smallest connected mass has
 }
 
 /**

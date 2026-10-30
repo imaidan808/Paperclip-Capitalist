@@ -17,22 +17,23 @@ export const FORM = Object.freeze({
   rim: Object.freeze({ min: 0.5, max: 0.85, odds: 0.5, lump: 0.2 }),     // rim lobes: radius share, the chance an exposed direction gets one, and the chance a rim lobe carries a lump of its own
   window: Object.freeze({ share: 0.112, maxShare: 0.17, ratio: 0.52, hole: 0.72, ring: 0.8, heart: 0.19 }), // a window's half width as a share of the footprint's span, its limit, the squash of a ground circle, how much of it is cleared of every lobe that would reach into it, the ring lobes' radius in radii, the distance from the heart (in footprint widths) inside which no window stands
   cell: 24,                             // the side of the cover grid, world px
+  debris: 5,                            // a mass of fewer lobes than this, cut off from the bank by a window, is dropped
 });
 /** How far the shadow of a bank reaches past its box to the right and down, world px (cloudpaint.js paintCloudShadow: the light's push, at the longest, and the soft stamps' own radii). */
-export const REACH = Object.freeze({ x: 230, y: 140 });
+export const REACH = Object.freeze({ x: 360, y: 210 });
 /** How many windows a bank has at a scale: three on the fine and the coarse bank, two on a far one (a bank of lobes of 2.6 times the radius cannot hold three without falling in two; the bank of the whole-island view is the coarse one). */
-export const windowCount = (scale) => (scale > 2 ? 2 : 3);
+export const windowCount = (scale) => (scale > 2 ? 3 : scale > 1.2 ? 4 : 3);
 
 /** The window ellipses of a district: [{ x, y, rx, ry }] in world px. The first stands a quarter of the way from the gate to the heart; the rest at hashed places of the interior, apart from each other and from the heart. */
 export function windowsOf(D, scale = 1, n = windowCount(scale)) {
-  const fp = D.fp, z = D.z, [gx, gy, w, d] = fp, span = spanOf(fp), seed = ((gx * 131 + gy * 17) | 0) + 5, W = FORM.window, rx = clamp(W.share * span, 0, W.maxShare * span), cx = gx + w / 2, cy = gy + d / 2;
+  const fp = D.fp, z = D.z, [gx, gy, w, d] = fp, span = spanOf(fp), seed = ((gx * 131 + gy * 17) | 0) + 5, W = FORM.window, grow = scale > 2 ? 1.55 : scale > 1.2 ? 1.3 : 1, rx = clamp(W.share * span * grow, 0, W.maxShare * span * grow), cx = gx + w / 2, cy = gy + d / 2;
   const out = [], put = (u, v) => { const [x, y] = P(gx + u * w, gy + v * d, z); out.push({ x, y, rx, ry: rx * W.ratio }); };
   const g = D.gateAt || { x: cx, y: cy }; // the gate's grid point, drawn a quarter of the way towards the heart: the road in shows
   let gu = clamp(((g.x + (cx - g.x) * 0.3) - gx) / w, 0.2, 0.8), gv = clamp(((g.y + (cy - g.y) * 0.3) - gy) / d, 0.2, 0.8);
   const dh = Math.hypot(gu - 0.5, gv - 0.5); if (dh < W.heart) { const k = dh > 1e-6 ? W.heart / dh : 0; gu = 0.5 + (gu - 0.5) * k + (dh > 1e-6 ? 0 : W.heart); gv = 0.5 + (gv - 0.5) * k; } // never the heart: the padlock floats there on solid cloud
   if (n >= 1) put(gu, gv);
   for (let tries = 0; out.length < n && tries < 240; tries++) {
-    const sep = tries < 60 ? 1.9 : tries < 140 ? 1.6 : 1.35, u = 0.26 + 0.48 * h2(seed, 40 + tries * 2), v = 0.26 + 0.48 * h2(seed, 41 + tries * 2);
+    const sep = scale > 1.2 || tries < 60 ? 1.9 : tries < 140 ? 1.6 : 1.35, u = 0.26 + 0.48 * h2(seed, 40 + tries * 2), v = 0.26 + 0.48 * h2(seed, 41 + tries * 2);
     if (Math.hypot(u - 0.5, v - 0.5) < W.heart) continue;
     const [x, y] = P(gx + u * w, gy + v * d, z); if (out.every((o) => Math.hypot((o.x - x) / (sep * rx), (o.y - y) / (sep * rx * W.ratio)) > 1)) put(u, v); // and clear of the others
   }
@@ -88,12 +89,13 @@ export function formOf(D, scale = 1) {
   }
   // ---- the windows' rims: a ring of small lobes round each clearing, so a window has an edge of its own, lumpy and lit like the bank's
   wins.forEach((wn, wi) => {
-    const rk = r0 * W.ring, per = TAU * Math.sqrt((wn.rx * wn.rx + wn.ry * wn.ry) / 2), m = Math.max(7, Math.round(per / (rk * 1.55)));
+    const rk = Math.min(r0, wn.rx * 0.62) * W.ring, per = TAU * Math.sqrt((wn.rx * wn.rx + wn.ry * wn.ry) / 2), m = Math.max(7, Math.round(per / (rk * 1.55)));
     for (let q = 0; q < m; q++) {
       const a = ((q + 0.5 * h2(seed + 331 + wi, q)) / m) * TAU, k = h2(seed + 332 + wi, q), r = rk * (0.8 + 0.5 * k), x = wn.x + Math.cos(a) * (wn.rx + 0.55 * r), y = wn.y + Math.sin(a) * (wn.ry + 0.55 * r);
       lobes.push({ x, y, r, row: clamp(Math.floor((3 * (y - top)) / Math.max(1, bot - top)), 0, 2), k, kind: 3, edge: 1 });
     }
   });
+  const swept = sweepDebris(lobes, F.debris); lobes.length = 0; lobes.push(...swept);
   lobes.sort((a, b) => a.row - b.row || a.y - b.y);
   // ---- the box: every lobe, with a margin for the contour and the shadow's soft edge
   let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
@@ -103,6 +105,13 @@ export function formOf(D, scale = 1) {
   return { lobes, windows: wins, box, reach, cx: (left + right) / 2, cy: (top + bot) / 2, r0, outline: o, puffs, cover: coverOf(lobes, box), touch: touchOf(lobes, box) };
 }
 
+/** The lobes of the masses of at least `least` lobes, in their order: a window can cut a few lobes off the edge of a bank, and a mass of two or three lobes standing by itself reads as debris, not as a cloud. Lobes are joined when they overlap. */
+export function sweepDebris(lobes, least) {
+  const n = lobes.length, parent = Array.from({ length: n }, (_, i) => i), find = (i) => { while (parent[i] !== i) i = parent[i] = parent[parent[i]]; return i; };
+  for (let i = 0; i < n; i++) for (let j = i + 1; j < n; j++) { const a = lobes[i], b = lobes[j], r = a.r + b.r; if ((a.x - b.x) ** 2 + (a.y - b.y) ** 2 < r * r) parent[find(i)] = find(j); }
+  const size = new Map(); for (let i = 0; i < n; i++) { const r = find(i); size.set(r, (size.get(r) || 0) + 1); }
+  return lobes.filter((_, i) => size.get(find(i)) >= least);
+}
 /** The union of the lobes on a grid: { x0, y0, nx, ny, bits (Uint8Array, 1 where a cell's middle is inside some lobe) }. */
 export function coverOf(lobes, box) {
   const c = FORM.cell, nx = Math.max(1, Math.ceil((box.x1 - box.x0) / c)), ny = Math.max(1, Math.ceil((box.y1 - box.y0) / c)), bits = new Uint8Array(nx * ny);
@@ -117,7 +126,7 @@ export function coverOf(lobes, box) {
  * width and 0.36 of its height, centred at 0.62 of its height) and a soft one under each lobe that `castsShadow` (radii 1.55 and 0.8 of the lobe's, centred half a radius down), all pushed by the light: `sx` 72 and
  * `sy` 36 world px a unit of shadowLength, which runs 0.5 by moonlight to 1.2 in the golden hours (so the push is 36 to 87 across and 18 to 44 down). `visible` is how far out a stamp's soft sprite is more than a trace.
  */
-export const SHADOW = Object.freeze({ lobeRx: 1.55, lobeRy: 0.8, lobeDown: 0.5, broadRx: 0.5, broadRy: 0.36, broadAt: 0.62, sx: 72, sy: 36, sxMin: 36, sxMax: 87, syMin: 18, syMax: 44, visible: 0.8 });
+export const SHADOW = Object.freeze({ lobeRx: 1.55, lobeRy: 0.8, lobeDown: 0.5, broadRx: 0.5, broadRy: 0.36, broadAt: 0.62, sx: 150, sy: 76, sxMin: 75, sxMax: 180, syMin: 38, syMax: 92, visible: 0.8 });
 /** Does a lobe throw a shadow of its own? The lobes of the middle and front tiers that are mass or towers, and a share of them (by their hash) so the foot of the bank is soft and not a row of discs. */
 export const castsShadow = (l) => l.row >= 1 && l.kind <= 1 && l.k <= 0.6;
 /**
