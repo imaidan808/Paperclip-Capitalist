@@ -28,8 +28,8 @@ jobs:
       - name: Run the tests
         shell: bash
         env:
-          TEST_FILES: ${{ inputs.files || 'tests/finish-repair.test.mjs tests/world-raster-dom.test.mjs' }} # TEMPORARY: the two tests being looked at; the whole suite is 'tests/*.test.mjs'
-          TEST_PATTERN: ${{ inputs.pattern || 'A3, A4, A7|pan, settle' }} # TEMPORARY
+          TEST_FILES: ${{ inputs.files || 'tests/*.test.mjs' }}
+          TEST_PATTERN: ${{ inputs.pattern }}
         run: |
           set -o pipefail
           if [ -n "$TEST_PATTERN" ]; then node --test --test-name-pattern="$TEST_PATTERN" $TEST_FILES 2>&1 | tee test.log; else node --test $TEST_FILES 2>&1 | tee test.log; fi
