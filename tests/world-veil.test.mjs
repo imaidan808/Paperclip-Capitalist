@@ -24,7 +24,7 @@ async function attached({ motion = false, rig = false } = {}) {
   w.attach(host); w.draw = () => {}; // (the frames below are about the veil: what they draw is not)
   return { w, cv: w.cv };
 }
-let ts = performance.now() + 1000; const tick = (w, ms) => { ts += ms; w.frame(ts); };
+let ts = Math.ceil(performance.now()) + 1000; const tick = (w, ms) => { ts += ms; w.frame(ts); }; // (whole milliseconds: the veil's ages are compared with 2500 and 5000, and with a fraction in the base "first + 4900 + 100 - first" can come out one ulp short of 5000: one run in three failed)
 
 test('veilAt: the cells are made exact while the canvas is held, coarse once the first 2.5 s are over, and the veil goes when the ground is whole, when it is covered after 2.5 s, or after 5 s whatever', () => {
   assert.equal(VEIL_MS, 2500); assert.equal(VEIL_FADE_MS, 250); assert.equal(VEIL_MAX_MS, 5000);
