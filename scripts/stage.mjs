@@ -4,6 +4,7 @@
 //   index.html     the source page with one <link rel="modulepreload"> per module added to its head (scripts/preload.mjs); the source page is not touched
 //   404.html, robots.txt, sitemap.xml, llms.txt
 //   assets/        the share image and the icons (assets/src/, the scene the share image is drawn from, stays out)
+//   js/build.js, assets/build.json   the build stamp, written here: the commit and the time of this deploy (js/build.js says "dev" in the source tree; see js/build.js)
 //   css/           the sheets index.html links, and nothing else
 //   js/            the modules the app imports from js/main.js (statically, or with import()), and nothing else
 //
@@ -11,6 +12,7 @@
 // --verify re-reads a staged folder and checks it hangs together (every reference resolves, no module is missing or left over, no source map).
 // --serve stages and serves the folder the way GitHub Pages does (under /Paperclip-Capitalist/, 404.html for a path that is not a file, gzip, a ten-minute cache),
 // so a path that only works at the root of a server fails here before it fails online. --latency adds a round trip to every answer, to feel what the host would.
+import { execFileSync } from 'node:child_process';
 import { createServer } from 'node:http';
 import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -105,8 +107,22 @@ function listFiles(dir, base = dir) {
   return out;
 }
 
-/** Stage the site. Returns { out, files: [relative path], graph, preload }. */
-export function stage({ root = ROOT, out = DEFAULT_OUT, lastmod } = {}) {
+/** The line of js/build.js that is the stamp, as the source tree has it and as the stage writes it. */
+const BUILD_LINE = /^export const BUILD = Object\.freeze\(\{ sha: '[^']*', at: '[^']*' \}\);$/m;
+/**
+ * The stamp of a build: the commit (seven characters) and the time, to the second, in UTC. `given` is { sha, at } (the tests); otherwise the commit the workflow is running
+ * (GITHUB_SHA), else the one checked out here, else "dev" with no time (a copy that is not a git checkout says so rather than guess).
+ */
+export function buildStamp(given, root = ROOT) {
+  if (given) return { sha: String(given.sha).slice(0, 7), at: given.at };
+  let sha = process.env.GITHUB_SHA || '';
+  if (!sha) { try { sha = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim(); } catch { sha = ''; } }
+  if (!/^[0-9a-f]{7,40}$/.test(sha)) return { sha: 'dev', at: '' };
+  return { sha: sha.slice(0, 7), at: new Date().toISOString().replace(/\.\d+Z$/, 'Z') };
+}
+
+/** Stage the site. Returns { out, files: [relative path], graph, preload }. `build` is the stamp ({ sha, at }) when the caller knows it; see buildStamp. */
+export function stage({ root = ROOT, out = DEFAULT_OUT, lastmod, build } = {}) {
   out = resolve(out); root = resolve(root);
   // out is emptied first, so it must be nothing but a folder this script made (or a new one): never the project, a folder of it, a folder that holds it, or somebody's other files
   const inside = relative(root, out);
@@ -148,6 +164,12 @@ export function stage({ root = ROOT, out = DEFAULT_OUT, lastmod } = {}) {
     if (/@import/.test(read(root, s).replace(/\/\*[\s\S]*?\*\//g, ''))) throw new Error(`${s} uses @import, which is fetched only after the sheet that holds it: link the sheet in index.html instead`);
   }
   for (const m of graph.modules) copy(m);
+  if (graph.modules.includes('js/build.js')) { // the stamp: the module the page runs, and the file that says what is live (the page compares the two)
+    const b = buildStamp(build, root), src = read(root, 'js/build.js');
+    if (!BUILD_LINE.test(src)) throw new Error("js/build.js has lost its BUILD line (export const BUILD = Object.freeze({ sha: 'dev', at: '' });): scripts/stage.mjs writes the stamp there");
+    put('js/build.js', src.replace(BUILD_LINE, `export const BUILD = Object.freeze({ sha: '${b.sha}', at: '${b.at}' });`));
+    put('assets/build.json', JSON.stringify(b) + '\n');
+  }
   if (existsSync(join(root, 'assets'))) {
     for (const f of listFiles(join(root, 'assets'))) {
       if (f.startsWith('src/') || f.split('/').some((seg) => seg.startsWith('.')) || f.endsWith('.map')) continue; // the scene the share image is drawn from is a source, not a page
@@ -213,6 +235,14 @@ export function verify(out) {
     const sheets = stylesheetsOf(readFileSync(join(out, 'index.html'), 'utf8'));
     for (const f of files.filter((f) => f.startsWith('css/'))) if (!sheets.includes(f)) bad.push(`${f}: staged but index.html does not link it`);
     for (const s of sheets) if (!files.includes(s)) bad.push(`${s}: linked but not staged`);
+  }
+  // the stamp is written twice (the module the page runs, the file that says what is live) and the two must say the same
+  {
+    const mod = files.includes('js/build.js') ? readFileSync(join(out, 'js/build.js'), 'utf8').match(/^export const BUILD = Object\.freeze\(\{ sha: '([^']*)', at: '([^']*)' \}\);$/m) : null;
+    let json = null; if (files.includes('assets/build.json')) { try { json = JSON.parse(readFileSync(join(out, 'assets/build.json'), 'utf8')); } catch { bad.push('assets/build.json is not JSON'); } }
+    if (mod && !files.includes('assets/build.json')) bad.push('assets/build.json is missing: the page has nothing to compare its own stamp with');
+    if (json && !mod) bad.push('assets/build.json is there but js/build.js has no stamp line');
+    if (mod && json && (json.sha !== mod[1] || json.at !== mod[2])) bad.push(`js/build.js and assets/build.json do not agree on the build (${mod[1]} ${mod[2]} against ${json.sha} ${json.at})`);
   }
   const share = join(out, 'assets/share.png');
   if (existsSync(share)) { const sz = pngSize(readFileSync(share)); if (!sz || sz.w !== 1200 || sz.h !== 630) bad.push('assets/share.png is not a 1200 x 630 PNG'); }

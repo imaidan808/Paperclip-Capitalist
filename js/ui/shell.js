@@ -14,6 +14,7 @@ import { ZONES, TOTAL_HOURS, CLIENTS, DEFAULT_RELAY } from '../config.js';
 import { $, $$, esc, setHTML, delegate, dlg, toast, announce, sfx, burst, reduced, settingsDialog, settings, applySettings, relayOf } from './common.js';
 import { fitStuck, watchPress } from './common.js'; // its own line: the shell's other helpers are imported above
 import { kv } from '../session.js';
+import { stamp } from '../build.js';
 import { hudHTML, trackerHTML, tickerHTML } from './hud.js';
 import { DRAWERS } from './drawers/index.js';
 import { openDeal } from './deal.js';
@@ -233,7 +234,9 @@ export function mountGame(root, S, hooks) {
       <div class="card"><h3>Classroom room</h3>${inRoom ? `<p class="small">In room <b class="mono">${esc(S.roomInfo.code)}</b> via ${S.room.kind === 'relay' ? 'relay server' : 'this browser (other tabs)'}. The instructor's clock is in charge.</p><button class="btn sm ghost" data-act="leave">Leave room</button>`
         : `<p class="small mute">Joining restarts your run on the instructor's shared clock.</p><label for="m-code">Room code</label><input id="m-code" maxlength="8" style="text-transform:uppercase" autocomplete="off"><label for="m-relay" class="gap">Relay server URL (optional)</label><input id="m-relay" placeholder="wss://your-relay.example" value="${esc(kv.get('relay') || DEFAULT_RELAY)}"><button class="btn sm gap" data-act="joinroom">Join</button>`}</div>
       <div class="card"><h3>This run</h3><div class="grid"><button class="btn sm" data-act="debrief">Open debrief and reflection</button><button class="btn sm ghost" data-act="academy">Academy: replay a lesson</button><button class="btn sm ghost" data-act="settings">Display and sound</button><button class="btn sm ghost" data-act="savefile">Download my save</button><button class="btn sm danger" data-act="reset">Start over</button></div></div></div>
-      <p class="small mute gap">Privacy: your save lives only in this browser. Rooms share a pseudonymous Founder ID, your chosen alias and game numbers, never names or emails.</p>`, { label: 'Menu' });
+      <p class="small mute gap">Privacy: your save lives only in this browser. Rooms share a pseudonymous Founder ID, your chosen alias and game numbers, never names or emails.</p>
+      <p class="tiny mute" id="m-build" aria-live="polite"></p>`, { label: 'Menu' });
+    stamp($('#m-build', dlg.el)); // which build this browser runs, and whether a later one is live (js/build.js)
   }
 
   // ---- base actions (drawers add their own, see the header comment)
