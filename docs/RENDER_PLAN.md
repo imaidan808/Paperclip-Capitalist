@@ -229,12 +229,13 @@ What follows from them, and what the tracks may and may not do. **(Superseded by
 
 **Allocation, in words.** The sea and shore cost 3.5 ms where they were 2.0 (sea row of the first plan: optimistic by half; the legacy gradient strip alone is 1.9): the base fills 1.0, the bands 0.8, the motifs 0.75, the foam and swash in `livedecals` (which therefore is 0.8 where it was 0.1) and the sheen and haze 0.4. At the coast scene the clouds are 0.4 ms (the first plan gave 1.5: the nearest bank is a few puffs at the window's edge, which the model counts); at the Campus 8.7 (the first plan gave 5.0, and the legacy fog is 15.6), at 0.3 the thirteen banks in view are the dearest cell of the table (15.0 by the model, 12.3 measured) and the cell with least slack (3.1 ms, 11%): T2 may drop the crescents of a puff there before it drops a puff. The slack at the coast scene is 1.1 ms (9%): sea, ground and props must not grow.
 
-**Memory** (MB of canvas pixels at dsf 2, the worst case: a GPU Mac draws at 2; one ledger in `gfx.js`, T5, into which every cache registers its pixels). The ground is chunks of 384 device pixels, 0.59 MB each, so its memory does not depend on the zoom (a window touches 54 at most; 40 MB at the peak of a zoom); the sprite budget is stated at the density it is judged at, 12 million pixels at dsf 2 (`SPRITE_BUDGET`, 22 million at density 1 today, becomes 8 million so that `setSpriteBudget`'s own growth of 1.5 lands on 12 million; the earlier text said 12 million at density 1, which is 72 MB at dsf 2 and 172 MB in all); the sea has no bitmap; the clouds are drawn live. `tests/world-ledger.test.mjs` sums the block and holds it under 155 MB.
+**Memory** (MB of canvas pixels at dsf 2, the worst case: a GPU Mac draws at 2; one ledger in `gfx.js`, T5, into which every cache registers its pixels). The ground is chunks of 384 device pixels, 0.59 MB each, so its memory does not depend on the zoom (a window touches 54 at most; 40 MB at the peak of a zoom), and under them the overview of the whole island, six chunks (3.5 MB), that the cap and the squeeze never take (groundcache.js); the sprite budget is stated at the density it is judged at, 12 million pixels at dsf 2 (`SPRITE_BUDGET`, 22 million at density 1 today, becomes 8 million so that `setSpriteBudget`'s own growth of 1.5 lands on 12 million; the earlier text said 12 million at density 1, which is 72 MB at dsf 2 and 172 MB in all); the sea has no bitmap; the clouds are drawn live. `tests/world-ledger.test.mjs` sums the block and holds it under 155 MB.
 
 | holder | MB | owner |
 |---|---|---|
 | main canvas (2880 x 1800) | 20.7 | T5 |
 | ground chunks (54 x 0.59 at rest, a quarter more at the peak of a zoom) | 39.8 | T5 (content T1) |
+| ground overview (the island's whole box at 0.0625 of a device pixel to the world pixel: 6 chunks of 0.59; kept apart from the cap, never squeezed) | 3.5 | T5 (content T1) |
 | light layers (`air` full size 20.7 and its quarter-size sources 2.3: measured at dsf 2) | 23 | T2 |
 | sprites and overlays (12 million pixels at dsf 2, overlays included) | 48 | T5 budget, T3 + T4 content |
 | sea contour paths (24 levels as `Path2D`) | 2 | T1 |
@@ -242,17 +243,18 @@ What follows from them, and what the tracks may and may not do. **(Superseded by
 | cloud chunks (`cloud.chunks`: the banks and their shadows baked into chunks of the ground's own grid; baked at the frame's own scale (a window wholly under cloud is 54 chunks, 32 MB) when the ledger has the room, else at 0.75 (35 chunks) or 0.5 (24 chunks with the cap, 14.2 MB, the row below): `ratioFor`, `clouds.js`) | 14.2 | T2 |
 | labels | 5 | T5 |
 | shadow stamps | 0.5 | T2 |
-| **total** | **154.8** (limit 160, headroom 5.2) | |
+| **total** | **158.3** (limit 160, headroom 1.7) | |
 
 `World.release()` and `detach()` give every holder back (`releaseAll()`). With no `OffscreenCanvas` (the Node tests) every layer draws direct, as today.
 
 <!-- render-memory -->
 ```json
 {
-  "window": [1440, 900], "dsf": 2, "limitMb": 160, "headroomMb": 5,
+  "window": [1440, 900], "dsf": 2, "limitMb": 160, "headroomMb": 1.5,
   "holders": [
     { "id": "canvas", "owner": "T5", "mb": "canvas" },
     { "id": "ground chunks (peak)", "owner": "T5", "mb": "ground.peak" },
+    { "id": "ground overview (6 chunks of the island's box, apart from the cap)", "owner": "T5", "mb": 3.5 },
     { "id": "light layers (the air, stretched once, and its small sources)", "owner": "T2", "mb": 23 },
     { "id": "sprites and overlays", "owner": "T5", "mb": "sprites" },
     { "id": "sea contour paths", "owner": "T1", "mb": 2 },
