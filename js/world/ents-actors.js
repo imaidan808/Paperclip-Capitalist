@@ -3,7 +3,7 @@
 import { BUYERS, ZONES } from '../config.js';
 import { leadAlpha, bubbleAlpha } from './common.js';
 import { P, box, shadow, ellipse, person, tone, shade, clamp, strHash } from './iso.js';
-import { LAYOUT, DIST, EDGES, zAt, polyAt, polyInfo } from './layout.js';
+import { LAYOUT, DIST, EDGES, zAt, polyAt, polyInfo, offsetPoly } from './layout.js';
 import './vehicles.js'; // the V2 drawers of the truck and car layers register themselves too
 import './characters.js'; // the V2 drawers of the lead and player layers register themselves (stack.js registerLayer) and are used while those flags are v2
 
@@ -11,7 +11,12 @@ const SHIRTS = ['#c0392b', '#2f80ed', '#27ae60', '#9b51e0', '#f2994a', '#16a085'
 const HAIR = ['#2b1b10', '#7a3b12', '#c9a26a', '#555555', '#111111'];
 export const lookOf = (id) => { const h = strHash(String(id)); return { shirt: SHIRTS[h % SHIRTS.length], hair: HAIR[(h >> 4) % HAIR.length], skin: ['#f1c27d', '#e0ac69', '#c68642', '#8d5524'][(h >> 8) % 4], pants: ['#27324a', '#3b3b3b', '#4a3b2c'][(h >> 12) % 3] }; };
 export const CARS = 18;
+/** Tiles a second a car travels, on every road (it was a share of the road's length a second: 8 tiles on the longest road, a crawl on the shortest), and how far from the middle of the road its lane is. */
+export const CAR_SPEED = 2.6, LANE = 0.5;
 const CAR_EDGES = EDGES.filter((e) => !e.path && !e.ferry);
+const LANES = new WeakMap();
+/** The two lanes of a road: its middle line (the corners are arcs: roadshape.js) offset to the right of each direction of travel, so the cars of both directions keep the same hand and a bend is a curve, not a corner. */
+const lanesOf = (e) => { let L = LANES.get(e); if (!L) LANES.set(e, L = { fwd: polyInfo(offsetPoly(e.pts, LANE)), back: polyInfo(offsetPoly([...e.pts].reverse(), LANE)) }); return L; };
 export const actorMethods = {
   drawLead(ctx, e) {
     const z = zAt(e.x, e.y), [x, y] = P(e.x, e.y, z), B = BUYERS[e.seg], l = e.lead, calm = this.reduced();
@@ -67,14 +72,13 @@ export const actorMethods = {
     this.overlay.push({ k: 'chip', n: 16, wx: x, wy: y - 40, draw: (g, px, py, s) => this.chip(g, px, py, `${e.f.items.length} crate${e.f.items.length > 1 ? 's' : ''} to ${ZONES[e.f.to].short}`, '#ffd36e', s) });
   },
 
-  /** Traffic on the open roads between districts: cars shuttle along them in both lanes and fade in and out at the ends. */
+  /** Traffic on the open roads between districts: one car to a road, in its lane, at a steady speed, facing the way it goes (`ang`, from +gx towards +gy), fading in and out over the first and last six tiles of the lane (a quarter of it on a short road). */
   cars() {
     const out = this.carOut || (this.carOut = []); let n = 0;
     for (let i = 0; i < CARS; i++) {
       const e = CAR_EDGES[(i * 7) % CAR_EDGES.length]; if (this.unlocked && !this.unlocked.has(e.gate)) continue;
-      const fwd = i % 2 === 0, u = (i * 0.137 + this.t * (0.00008 + (i % 5) * 0.00001)) % 1, s = fwd ? u * e.len : (1 - u) * e.len, a = polyAt(e, s), k = (fwd ? 0.5 : -0.5);
-      const x = a.x - a.dy * k, y = a.y + a.dx * k, c = this.carList[n]; // the records are reused every frame
-      c.gx = x; c.gy = y; c.i = i; c.key = x + y + 0.4; c.horiz = Math.abs(a.dx) > Math.abs(a.dy); c.fade = clamp(Math.min(s, e.len - s) / 6, 0, 1); out[n++] = c;
+      const lane = i % 2 === 0 ? lanesOf(e).fwd : lanesOf(e).back, len = lane.len, v = CAR_SPEED * (0.9 + (i % 5) * 0.05), s = (((i * 0.137) % 1) * len + this.t * 0.001 * v) % len, a = polyAt(lane, s), c = this.carList[n]; // the records are reused every frame
+      c.gx = a.x; c.gy = a.y; c.i = i; c.key = a.x + a.y + 0.4; c.ang = Math.atan2(a.dy, a.dx); c.horiz = Math.abs(a.dx) > Math.abs(a.dy); c.fade = clamp(Math.min(s, len - s) / Math.min(6, len * 0.25), 0, 1); out[n++] = c; // (six tiles, or a quarter of a short road: a car on an 11 tile road never reached its full colour)
     }
     out.length = n; return out;
   },

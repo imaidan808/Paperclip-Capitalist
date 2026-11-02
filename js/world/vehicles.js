@@ -7,10 +7,11 @@ import { registerLayer } from './stack.js';
 import { ZONES } from '../config.js';
 import { zAt } from './layout.js';
 import { P, clamp } from './iso.js';
-import { TOY, GLASS, METAL } from './palette.js';
+import { TOY, GLASS, METAL, faceTone } from './palette.js';
+import { orientedBox } from './orient.js';
 import { roundedBox } from './solids.js';
 import { blit } from './atlas.js';
-import { mix, shade, hi, shd, disc, rr, stand, stampSoft, castShadow, fq, facePoint, fade } from './toys.js';
+import { mix, shade, hi, shd, disc, rr, stand, stampSoft, castShadow, fq, fade } from './toys.js';
 
 const PLUM = '#4b4770', GLASSC = GLASS.mid;
 function wheel(g, x, y, r) { disc(g, x, y, r, r, '#34315a'); disc(g, x - r * 0.1, y - r * 0.1, r * 0.82, r * 0.82, PLUM); disc(g, x, y, r * 0.42, r * 0.42, METAL.steelLight); }
@@ -36,19 +37,29 @@ registerLayer('truck', drawTruckV2, 'inherit');
 
 // ---------------------------------------------------------------- the traffic
 const CARS = [TOY.red, TOY.blue, TOY.yellow, TOY.violet, TOY.green, '#fffaf0'];
-function carSprite(g, c, horiz) {
-  const w = horiz ? 1.1 : 0.56, d = horiz ? 0.56 : 1.1;
+/** A car has sixteen pictures a colour, one for each sixteenth of a turn of its heading (`ang`, radians from +gx towards +gy): it faces the way it goes on a bend and on a diagonal road, as a box turned to that heading (orient.js). */
+export const HEADINGS = 16;
+export const headingBucket = (ang) => { const t = ((ang % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI); return Math.round((t / (2 * Math.PI)) * HEADINGS) % HEADINGS; };
+/** The rectangle a car's picture covers, in world pixels from its anchor (the sprite atlas keeps one for it). */
+export const CAR_RECT = [-30, -30, 34, 14];
+/**
+ * One car for one heading bucket: four flat wheels, a body and a glass cabin as boxes turned to the heading, each face one matte tone (the faces that face the sun lit, the others in shade), a headlight on the front when the
+ * front is seen and a tail light on the back when the back is. No gradient, no rim, no outline: the silhouette is the picture.
+ */
+export function carSprite(g, c, bucket) {
+  const ang = (bucket / HEADINGS) * 2 * Math.PI, L = 1.1, W = 0.56, cs = Math.cos(ang), sn = Math.sin(ang), at = (u, v) => [u * L * cs - v * W * sn, u * L * sn + v * W * cs];
   stampSoft(g, 4, 3, 24, 8, 0.2); stand(g, 0, 2, 19, 7.4);
-  for (const [ox, oy] of [[-0.32, -0.22], [0.32, 0.22], [-0.32, 0.22], [0.32, -0.22]]) { const [wx, wy] = P(horiz ? ox * w * 1.7 : oy * w, horiz ? oy * d : ox * d * 1.7, 0); wheel(g, wx, wy - 2.6, 3.2); }
-  const B = roundedBox(g, -w / 2, -d / 2, w, d, 5, c, { z: 2.6, r: 3 }), K = roundedBox(g, -w * 0.24, -d * 0.24, w * 0.48, d * 0.48, 4.8, shade(c, 0.95), { z: 7.6, r: 2.8, edge: false });
-  fq(g, K.left, 0.08, 0.92, 0.24, 0.88, GLASSC); fq(g, K.right, 0.08, 0.92, 0.24, 0.88, shade(GLASSC, 0.72)); { const alpha0 = fade(g, 0.55); fq(g, K.left, 0.12, 0.3, 0.32, 0.84, '#ffffff'); g.globalAlpha = alpha0; }
-  const [hx, hy] = facePoint(B.left, 0.04, 0.5); disc(g, hx, hy, 1.5, 1.5, '#fff3c4');
+  for (const [u, v] of [[0.33, -0.5], [0.33, 0.5], [-0.33, 0.5], [-0.33, -0.5]]) { const [gx, gy] = at(u, v), [wx, wy] = P(gx, gy, 0); wheel(g, wx, wy - 2.6, 3.2); }
+  orientedBox(g, 0, 0, L, W, 5, ang, faceTone(c), 2.6);
+  const [cx, cy] = at(-0.06, 0), roof = shade(c, 0.95);
+  orientedBox(g, cx, cy, L * 0.5, W * 0.86, 4.4, ang, (sd) => (sd.top ? roof : mix(shade(GLASSC, 0.72), GLASSC, sd.shade)), 7.6);
+  const front = Math.cos(ang) + Math.sin(ang), [fx, fy] = at(0.5, 0), [rx, ry] = at(-0.5, 0);
+  if (front > 0.05) { const [x, y] = P(fx, fy, 5.2); disc(g, x, y, 1.5, 1.5, '#fff3c4'); } else if (front < -0.05) { const [x, y] = P(rx, ry, 5.2); disc(g, x, y, 1.3, 1.3, '#d04a4a'); }
 }
-const RECT = [-30, -30, 34, 14];
 function drawCarV2(ctx, view, env, w, c) {
-  const z = zAt(c.gx, c.gy), [x, y] = P(c.gx, c.gy, 0), col = CARS[c.i % 6];
+  const z = zAt(c.gx, c.gy), [x, y] = P(c.gx, c.gy, 0), col = CARS[c.i % 6], b = headingBucket(c.ang || 0);
   ctx.save(); ctx.translate(0, -z); ctx.globalAlpha = c.fade;
-  blit(ctx, `car|${col}|${c.horiz ? 1 : 0}`, RECT, (g) => carSprite(g, col, c.horiz), x, y);
+  blit(ctx, `car|${col}|${b}`, CAR_RECT, (g) => carSprite(g, col, b), x, y);
   if (env.night > 0.3 && !env.far && env.lights) { const [lx, ly] = P(c.gx, c.gy, 6); env.lights.push({ wx: lx, wy: ly - z, r: 26, c: '255,240,190', a: 0.5 * env.night }); }
   ctx.restore(); ctx.globalAlpha = 1;
 }

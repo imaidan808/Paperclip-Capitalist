@@ -6,6 +6,10 @@ import { ZONES } from '../data/index.js';
 import { h2, lerp, clamp, mix, shade, luma } from './iso.js';
 import { KITS, FILL } from './kits.js';
 import { GW, GH, BW, BD, ANCHORS, REGIONS, BLOBS, CARVES, ROADS, VIEWPOINTS } from './island.js';
+import { tidy, fillet, gradeRoads } from './roadshape.js';
+
+/** The radius, in tiles, of the arc every corner of a road is rounded with (a footpath turns tighter): the cars follow it and the painted dashes bend with it (roadshape.js). */
+export const ROAD_RADIUS = 1.6, PATH_RADIUS = 1.2;
 
 export { GW, GH, BW, BD, REGIONS };
 export const LAND = { x0: 0, x1: GW, y0: 0, y1: GH };
@@ -154,9 +158,9 @@ export function buildLayout(zones = ZONES) {
     for (const v of r.via || []) pts.push(v.slice());
     if (ob) pts.push([B[0] + ob[0] * 3, B[1] + ob[1] * 3]);
     pts.push(B.slice());
-    edges.push({ ...r, ...polyInfo(pts), w: r.path ? 1 : 2, n: edges.length });
+    edges.push({ ...r, ...polyInfo(r.ferry ? pts : fillet(tidy(pts), r.path ? PATH_RADIUS : ROAD_RADIUS)), plan: pts, w: r.path ? 1 : 2, n: edges.length }); // (`plan`: the corners as drawn; the land and the scenery keep off those)
   }
-  const roadSegs = []; for (const e of edges) if (!e.ferry) for (let i = 0; i + 1 < e.pts.length; i++) roadSegs.push([e.pts[i][0], e.pts[i][1], e.pts[i + 1][0], e.pts[i + 1][1], e.w / 2]);
+  const roadSegs = []; for (const e of edges) if (!e.ferry) for (let i = 0; i + 1 < e.plan.length; i++) roadSegs.push([e.plan[i][0], e.plan[i][1], e.plan[i + 1][0], e.plan[i + 1][1], e.w / 2]);
   const districts = {}; for (const id of ids) districts[id] = buildDistrict(zones, id, roadSegs);
   const ds = ids.map((id) => districts[id]);
   // ---- the land: districts and roads give it body, blobs add peninsulas and islets, water is carved out of it, noise roughens the coast
@@ -180,6 +184,7 @@ export function buildLayout(zones = ZONES) {
     for (const D of ds) { const d = rectDist(i, j, D.fp); if (d < SKIRT) zz = lerp(D.z, zz, sstep(d / SKIRT)); }
     ZV[j * VW + i] = v > 0 ? Math.max(0.5, zz) : 0;
   }
+  gradeRoads(ZV, FV, VW, GH + 1, edges); // the ground under every road is graded: a smooth profile that follows the land's large shape and none of its steps (roadshape.js)
   const land = new Uint8Array(GW * GH);
   for (let j = 0; j < GH; j++) for (let i = 0; i < GW; i++) land[j * GW + i] = (FV[j * VW + i] + FV[j * VW + i + 1] + FV[(j + 1) * VW + i] + FV[(j + 1) * VW + i + 1]) / 4 > 0 ? 1 : 0;
   const isLand = (tx, ty) => tx >= 0 && ty >= 0 && tx < GW && ty < GH && land[ty * GW + tx] === 1;
@@ -220,7 +225,9 @@ export function buildLayout(zones = ZONES) {
     for (let s = 0; s <= e.len + 0.01; s += 0.5) { const p = polyAt(e, s), wet = !isLand(Math.floor(p.x), Math.floor(p.y)); if (wet && !run) run = { s0: Math.max(0, s - 0.5), edge: e }; if (!wet && run) { run.s1 = s; bridges.push(run); run = null; } }
     if (run) { run.s1 = e.len; bridges.push(run); }
   }
-  for (const b of bridges) { const a = polyAt(b.edge, Math.max(0, b.s0 - 1)), c = polyAt(b.edge, Math.min(b.edge.len, b.s1 + 1)); b.z0 = Math.max(0.6, bilin(a.x, a.y)); b.z1 = Math.max(0.6, bilin(c.x, c.y)); b.pts = []; for (let s = b.s0; s <= b.s1 + 0.01; s += 1) { const p = polyAt(b.edge, Math.min(s, b.s1)); b.pts.push([p.x, p.y]); } b.info = polyInfo(b.pts); b.gate = b.edge.gate; }
+  /** The height of a road's surface at arc length s (the graded profile of roadshape.js); NaN for an edge with none (the ferry). Over a bridge the deck's own height is `zAt`. */
+  const roadZ = (e, s) => { const q = e.zprof; if (!q) return NaN; const k = clamp(s / q.step, 0, q.z.length - 1), i = Math.min(Math.floor(k), q.z.length - 2), f = k - i; return q.z[i] * (1 - f) + q.z[i + 1] * f; };
+  for (const b of bridges) { b.z0 = Math.max(0.6, roadZ(b.edge, Math.max(0, b.s0 - 1))); b.z1 = Math.max(0.6, roadZ(b.edge, Math.min(b.edge.len, b.s1 + 1))); b.pts = []; for (let s = b.s0; s <= b.s1 + 0.01; s += 1) { const p = polyAt(b.edge, Math.min(s, b.s1)); b.pts.push([p.x, p.y]); } b.info = polyInfo(b.pts); b.gate = b.edge.gate; }
   const deck = (b, t) => lerp(b.z0, b.z1, t) + 7 * Math.sin(clamp(t, 0, 1) * Math.PI);
   const bridgeZ = (gx, gy) => { for (const b of bridges) { const pi = b.info; for (let i = 0; i + 1 < pi.pts.length; i++) { const a = pi.pts[i], c = pi.pts[i + 1]; if (Math.abs(gx - a[0]) > 3 || Math.abs(gy - a[1]) > 3) continue; if (segDist(gx, gy, a[0], a[1], c[0], c[1]) < 1.4) return deck(b, (pi.lens[i] + Math.hypot(gx - a[0], gy - a[1])) / (pi.len || 1)); } } return null; };
   const zAt = (gx, gy) => { const b = bridges.length ? bridgeZ(gx, gy) : null; return b !== null ? b : bilin(gx, gy); };
@@ -256,7 +263,7 @@ export function buildLayout(zones = ZONES) {
   }
   const props = ids.flatMap((id) => districts[id].props).sort((a, b) => a.key - b.key);
   return {
-    districts, ids, edges, bridges, nodes, land, isLand, lands, ZV, VW, FV, tcol, owner, core, cliffs, props, maxZ, roadSegs, zAt, zoneAt, footAt, route, deck, bounds,
+    districts, ids, edges, bridges, nodes, land, isLand, lands, ZV, VW, FV, tcol, owner, core, cliffs, props, maxZ, roadSegs, zAt, roadZ, zoneAt, footAt, route, deck, bounds,
     spots: Object.fromEntries(ids.map((id) => [id, districts[id].spots])),
     plots: Object.fromEntries(ids.map((id) => [id, districts[id].plots])),
     doors: Object.fromEntries(ids.map((id) => [id, districts[id].door])),
@@ -281,7 +288,7 @@ export function buildLayout(zones = ZONES) {
 export const LAYOUT = buildLayout(ZONES);
 export const DIST = LAYOUT.districts, SPOTS = LAYOUT.spots, PLOTS = LAYOUT.plots, DOORS = LAYOUT.doors, SCENERY = LAYOUT.props, EDGES = LAYOUT.edges;
 export const stashPos = (z, i) => LAYOUT.stashPos(z, i);
-export const zAt = LAYOUT.zAt, zoneAt = LAYOUT.zoneAt, footAt = LAYOUT.footAt;
+export const zAt = LAYOUT.zAt, roadZ = LAYOUT.roadZ, zoneAt = LAYOUT.zoneAt, footAt = LAYOUT.footAt;
 export const inLand = (gx, gy) => LAYOUT.isLand(Math.floor(gx), Math.floor(gy));
 /** Is (gx, gy) on a road or sidewalk of a block, or on one of the roads between districts? */
 export function isRoad(gx, gy) {

@@ -3,7 +3,7 @@
 // Owner: T1 TERRAIN, COAST AND WATER (docs/RENDER_PLAN.md). Each is a layer of stack.js (`shore`, `terrain`, `roads`, `blocks`), registered here and drawn into a ground chunk (groundchunks.js) by the ground pass: they draw only
 // from their arguments and the world's state, never from the camera, and every mark is a filled shape (nothing is stroked thinner than 1.5 world pixels).
 import { registerLayer } from './stack.js';
-import { LAYOUT, DIST, EDGES, zAt, isRoad, BW, BD, GW, GH } from './layout.js';
+import { LAYOUT, DIST, EDGES, zAt, roadZ, isRoad, BW, BD, GW, GH } from './layout.js';
 import { ROAD, PAVE, SAND, WOOD, LIGHT, SEA, TOY, GRASS, BLOOM, ROCK, ROCKHI, groundSet } from './palette.js';
 import { mix, clamp } from './iso.js';
 import { smooth as smoothstep, vnoise, LATTICE, hz } from './noise.js';
@@ -151,7 +151,7 @@ const DENSE = new WeakMap();
 /** A road's polyline resampled every 0.6 tile or less, with the mitred normal, the ground's height and the arc length at each sample: [gx, gy, nx, ny, z, s] a sample. */
 function denseOf(e) {
   let d = DENSE.get(e); if (d) return d;
-  const pts = e.pts, out = []; let s = 0;
+  const pts = e.pts, out = [], br = LAYOUT.bridges.filter((b) => b.edge === e); let s = 0;
   for (let i = 0; i + 1 < pts.length; i++) {
     const ax = pts[i][0], ay = pts[i][1], bx = pts[i + 1][0], by = pts[i + 1][1], l = Math.hypot(bx - ax, by - ay) || 1, n = Math.max(1, Math.ceil(l / 0.6));
     for (let k = 0; k < n; k++) out.push([ax + (bx - ax) * k / n, ay + (by - ay) * k / n, 0, 0, 0, s + l * k / n]);
@@ -160,7 +160,9 @@ function denseOf(e) {
   out.push([pts[pts.length - 1][0], pts[pts.length - 1][1], 0, 0, 0, s]);
   for (let i = 0; i < out.length; i++) {
     const a = out[Math.max(0, i - 1)], b = out[Math.min(out.length - 1, i + 1)], tx = b[0] - a[0], ty = b[1] - a[1], tl = Math.hypot(tx, ty) || 1;
-    out[i][2] = -ty / tl; out[i][3] = tx / tl; out[i][4] = zAt(out[i][0], out[i][1]) + 0.4;
+    out[i][2] = -ty / tl; out[i][3] = tx / tl;
+    const deck = br.some((b) => out[i][5] >= b.s0 - 0.01 && out[i][5] <= b.s1 + 0.01); // over a bridge the ground is the deck; elsewhere the road's own graded height (the ground at a bank dips to the water, and a road must not)
+    out[i][4] = (deck || !e.zprof ? zAt(out[i][0], out[i][1]) : roadZ(e, out[i][5])) + 0.4;
   }
   DENSE.set(e, out); return out;
 }
