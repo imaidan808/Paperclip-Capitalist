@@ -3,13 +3,13 @@
 import { BUYERS, ZONES } from '../config.js';
 import { leadAlpha, bubbleAlpha } from './common.js';
 import { P, box, shadow, ellipse, person, tone, shade, clamp, strHash } from './iso.js';
+import { personLook } from './palette.js';
 import { LAYOUT, DIST, EDGES, zAt, polyAt, polyInfo } from './layout.js';
 import './vehicles.js'; // the V2 drawers of the truck and car layers register themselves too
 import './characters.js'; // the V2 drawers of the lead and player layers register themselves (stack.js registerLayer) and are used while those flags are v2
 
-const SHIRTS = ['#c0392b', '#2f80ed', '#27ae60', '#9b51e0', '#f2994a', '#16a085', '#d35400', '#8e44ad', '#2980b9', '#c0762b'];
-const HAIR = ['#2b1b10', '#7a3b12', '#c9a26a', '#555555', '#111111'];
-export const lookOf = (id) => { const h = strHash(String(id)); return { shirt: SHIRTS[h % SHIRTS.length], hair: HAIR[(h >> 4) % HAIR.length], skin: ['#f1c27d', '#e0ac69', '#c68642', '#8d5524'][(h >> 8) % 4], pants: ['#27324a', '#3b3b3b', '#4a3b2c'][(h >> 12) % 3] }; };
+/** A buyer's look for the legacy drawer (the fallback path): the same vibrant palette and the same hash as the V2 figures' own (palette.js personLook), so both paths dress a person alike. */
+export const lookOf = (id) => personLook(strHash(String(id)));
 export const CARS = 18;
 const CAR_EDGES = EDGES.filter((e) => !e.path && !e.ferry);
 export const actorMethods = {
