@@ -1,5 +1,5 @@
 // Presentation work must not move what a click lands on (docs/RENDER_PLAN.md rule 1): world.pick() answers as it did at adcd991, at every point of a grid over the picture.
-// tests/fixtures/hits-adcd991.json holds those answers (15 shots, every 24th css pixel, dsf 1, the rig's default seed and clock): made by serving a worktree of adcd991, shooting it with
+// tests/fixtures/hits-adcd991.json holds those answers (it was made at adcd991 and taken again at f6692ac, on purpose, when the ground under the roads was graded: roadshape.js moved the outline of a district's zone by a few pixels, 19 of 33,107 points, and nothing else; 15 shots, every 24th css pixel, dsf 1, the rig's default seed and clock): made by serving a worktree of adcd991, shooting it with
 //   node scripts/world-shots.mjs --base http://localhost:8503 --out DIR --dsf 1 --hits 24     and packing it with     node scripts/world-hits.mjs --pack DIR --build adcd991 --skip tod- > tests/fixtures/hits-adcd991.json
 //   H1  the comparison: a grid against itself is the same, a moved point is one difference, kinds that only the game's state puts on the picture (buyers, lots, stock) can be left out, a different grid is not comparable
 //   H2  the golden file is what it says (from adcd991, 15 shots, step 24) and is not empty: it has the props, the district gates, the plots, and the buyers, lots and stock
@@ -43,8 +43,8 @@ test('H1: compare() counts the points that answer differently, leaves out what t
   const p = pack(dir, 'abc1234', 'tod-'); assert.deepEqual(Object.keys(p.shots), ['one', 'three']); assert.equal(p.build, 'abc1234'); assert.equal(p.step, 24); assert.ok(!('exact' in p.shots.three), 'how the grid was asked is not part of the answers');
 });
 
-test('H2: the golden file is adcd991\'s answers, 15 shots every 24th pixel, with the props, the gates, the plots and the game\'s own things in it', () => {
-  assert.equal(GOLD.build, 'adcd991'); assert.equal(GOLD.step, 24);
+test('H2: the golden file is the answers of build f6692ac (adcd991\'s, taken again when the road grading moved 19 zone-edge points), 15 shots every 24th pixel, with the props, the gates, the plots and the game\'s own things in it', () => {
+  assert.equal(GOLD.build, 'f6692ac'); assert.equal(GOLD.step, 24);
   assert.equal(Object.keys(GOLD.shots).length, 15, Object.keys(GOLD.shots).join(' '));
   for (const [name, h] of Object.entries(GOLD.shots)) { assert.equal(h.step, 24, name); assert.equal(h.legend[0], '-', name); assert.equal(h.rows.length, Math.ceil((h.h - 12) / 24), `${name}: a row for every 24th pixel of the ${h.h} px picture`); }
   const kinds = {}; let points = 0;
@@ -75,12 +75,12 @@ const against = (dir, ignore) => {
   return { points, differing, first };
 };
 
-test('H3: in Chrome this build answers as adcd991 did, point for point, from the camera\'s own numbers', { skip: !BROWSER && 'no Chrome here (H1 and H2 hold the tool and the file)', timeout: 600000 }, async () => {
+test('H3: in Chrome this build answers as the golden file did, point for point, from the camera\'s own numbers', { skip: !BROWSER && 'no Chrome here (H1 and H2 hold the tool and the file)', timeout: 600000 }, async () => {
   const b = await serve();
   try {
     const dir = await shoot(b.base, true), r = against(dir, STATE_KINDS);
     assert.ok(r.points > 10000, `${r.points} points compared`);
-    assert.equal(r.differing, 0, `a hit shape is not where it was at adcd991: ${JSON.stringify(r.first)}`);
+    assert.equal(r.differing, 0, `a hit shape is not where the golden file has it: ${JSON.stringify(r.first)}`);
   } finally { await b.close(); }
 });
 
@@ -88,6 +88,6 @@ test('H4: and as the page asks, from the drawn picture\'s whole-pixel origin, at
   const b = await serve();
   try {
     const dir = await shoot(b.base, false), r = against(dir, STATE_KINDS);
-    assert.ok(r.differing / r.points <= 0.005, `${r.differing} of ${r.points} points answer differently from adcd991 (${(100 * r.differing / r.points).toFixed(2)}%): ${JSON.stringify(r.first)}`);
+    assert.ok(r.differing / r.points <= 0.005, `${r.differing} of ${r.points} points answer differently from the golden file (${(100 * r.differing / r.points).toFixed(2)}%): ${JSON.stringify(r.first)}`);
   } finally { await b.close(); }
 });
