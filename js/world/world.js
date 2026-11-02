@@ -72,7 +72,7 @@ export class World {
     this.waterGr = null; this.seaStrip = undefined; this.seaKey = -1;                          // the sea: its colours for the light step, and the one strip it is painted into (made on first use)
     this.gc = null; this.gcKey = new Float64Array(9); this.gcSeen = 0; this.gcValid = false; this.gcHoles = 0; this.gcMore = false; // the ground cache: an offscreen copy of the terrain for a still camera; the pieces of the window nothing covers (the sea shows); the ground wants another frame
     this.veil = null; this.veilHold = false;                                                  // the canvas held clear while its first ground is made (veil.js)
-    this.items = []; this.itemPool = []; this.vz = new Set(); this.carList = Array.from({ length: CARS }, () => ({ gx: 0, gy: 0, i: 0, key: 0, horiz: true, fade: 1 }));
+    this.items = []; this.itemPool = []; this.vz = new Set(); this.carList = Array.from({ length: CARS }, () => ({ gx: 0, gy: 0, i: 0, key: 0, horiz: true, ang: 0, fade: 1 }));
     this.vis = true; this.dprDown = false; this.mm = null; this.mmFn = null; this.ledLast = undefined; this.tod = { night: 0, dusk: 0 }; this.unlockHash = 0; this.itemN = 0;                                                         // is the canvas on screen; the last ledger entry the world has seen
     this.lod = lodOf(0.9); this.gnd = { zoom: 1, far: false, mode: 0, see: null };                // the zoom's level-of-detail record (lod.js) and the ground pass's record for its layers (stack.js), both reused every frame
     this.decals = new Map();                                                                      // per district: its animated decals (water, pulses) drawn live over the cached ground
@@ -526,7 +526,17 @@ export class World {
     }
     // player walks
     const pl = this.player;
-    if (pl.path.length) { const [tx, ty] = pl.path[0], dx = tx - pl.x, dy = ty - pl.y, d = Math.hypot(dx, dy), v = pl.path.length > 1 ? pl.speed : Math.min(pl.speed, 5); if (d < 0.1) pl.path.shift(); else { const st = Math.min(d, (calm ? 4000 : v) * dt); pl.x += dx / d * st; pl.y += dy / d * st; if (Math.abs(dx) > 0.01) pl.dir = dx > 0 ? 1 : -1; } pl.moving = true; if (dust) this.footstep(pl, dt); } else pl.moving = false;
+    if (pl.path.length) {
+      // (the step is a distance, and it is spent along as many waypoints as it reaches: the roads bend in arcs of a dozen points and a step that stopped at every waypoint made a curve a stile)
+      let left = (calm ? 4000 : pl.path.length > 1 ? pl.speed : Math.min(pl.speed, 5)) * dt, guard = 64;
+      while (pl.path.length && left > 1e-6 && guard-- > 0) {
+        const [tx, ty] = pl.path[0], dx = tx - pl.x, dy = ty - pl.y, d = Math.hypot(dx, dy);
+        if (d < 0.1) { pl.path.shift(); if (pl.path.length === 1 && !calm) left = Math.min(left, Math.min(pl.speed, 5) * dt); continue; } // (the last stretch is walked slowly, as it was)
+        const st = Math.min(d, left); pl.x += dx / d * st; pl.y += dy / d * st; left -= st; if (Math.abs(dx) > 0.01) pl.dir = dx > 0 ? 1 : -1;
+        if (st >= d - 1e-9) pl.path.shift();
+      }
+      pl.moving = true; if (dust) this.footstep(pl, dt);
+    } else pl.moving = false;
     // particles and weather (the pool is fixed: nothing is allocated here)
     this.fx.update(dt, calm);
     this.rainOn = !!(env.crunch && !calm);

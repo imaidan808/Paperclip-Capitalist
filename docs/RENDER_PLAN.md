@@ -275,7 +275,7 @@ One owner per file. T5 owns the engine and the frozen foundations; the four art 
 
 | track | scope | files (all in `js/world/` unless a path is given) |
 |---|---|---|
-| **T1** terrain, coast and water | the sea, the shaped coast, beach, cliffs, foam, terrain colour field and dressing, roads, bridges, ferry, ground decals, district ground colours | `sea.js` `coast.js` `terrain.js` `roads.js` `decals.js` `ground.js`; `layout.js` (colour derivations `cols`, `tcol`, and the land colour field only: the geometry, `land`, `ZV`, `zAt`, hit data are frozen); `island.js` (`REGIONS` tints only) |
+| **T1** terrain, coast and water | the sea, the shaped coast, beach, cliffs, foam, terrain colour field and dressing, roads, bridges, ferry, ground decals, district ground colours | `sea.js` `coast.js` `terrain.js` `roads.js` `roadshape.js` `decals.js` `ground.js`; `layout.js` (colour derivations `cols`, `tcol`, and the land colour field only: the geometry, `land`, `ZV`, `zAt`, hit data are frozen); `island.js` (`REGIONS` tints only) |
 | **T2** atmosphere | clouds replacing the fog, the grade and time of day, cast shadow rules, light shafts, vignette, sky haze, far-zoom aerial perspective, weather and particles; the palette | `clouds.js` `cloudbank.js` `atmos.js` `lighting.js` `fx.js` `palette.js` `shadow.js` |
 | **T3** buildings | building bodies, roofs, windows, awnings, signs, per-theme styling, plots and pipelines, district kits' colours and parameters | `props-buildings.js` `ents-plots.js` `kits.js` (colours and style parameters only; footprints and placement are frozen) `solids.js` |
 | **T4** props, nature and characters | crates and lot items, barrels, lamps, benches, fences, flags and signs, gates, vehicles, trees, bushes, flowers, rocks, the crane and industrial props, buyers and the player, micro-props | `props-street.js` `props-nature.js` `props-actors.js` `ents-actors.js` `ents-stock.js`; new: `figures.js` (the doll, faces, accessories, noticing) |
@@ -291,6 +291,7 @@ Why the splits fall where they do. `kits.js` is T3's because it names the buildi
     "coast.js",
     "terrain.js",
     "roads.js",
+    "roadshape.js",
     "decals.js",
     "ground.js",
     "layout.js",
@@ -349,6 +350,7 @@ Why the splits fall where they do. `kits.js` is T3's because it names the buildi
     "yard.js",
     "industry.js",
     "vehicles.js",
+    "orient.js",
     "life.js"
   ],
   "T5": [
