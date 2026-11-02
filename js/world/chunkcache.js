@@ -19,7 +19,7 @@ const READ = { willReadFrequently: true };
 export class ChunkCache {
   /** `name` is the ledger holder; `make` is the surface factory (tests hand in a stand-in). */
   constructor(name = 'ground.chunks', make = makeSurface) {
-    this.name = name; this.make = make; this.map = new Map(); this.ver = NaN; this.bytes = 0; this.tick = 0;
+    this.name = name; this.make = make; this.map = new Map(); this.ov = new Map(); this.ver = NaN; this.bytes = 0; this.tick = 0; // (`ov`: the overview, below: kept apart from the chunks of the frame's scales, so their counts, cap and sweep are what they were)
     this.work = null; this.fin = null; this.cell = null; this.scratch = null; this.scratchN = 0; this.list = []; this.soft = []; this.parts = []; this.fno = 0; this.now = 0; this.made = 0;
     this.stats = { baked: 0, sealed: 0, dropped: 0, ms: 0, lastMs: 0, direct: 0, stale: 0, hits: 0, faded: 0 };
   }
@@ -27,7 +27,7 @@ export class ChunkCache {
   /** What the picture depends on besides the camera's scale (the districts that are open, the V2 layers' keys): a different value drops every chunk. */
   setVer(ver) { if (ver !== this.ver) { this.clear(); this.ver = ver; return true; } return false; }
   /** The same, for a ground that is dear to bake (the V2 ground): nothing is dropped, every chunk is marked stale. A stale chunk is still stamped until its replacement is baked over it, so a district opening never blanks the ground for the frames the new chunks take. */
-  markStale(ver) { if (ver === this.ver) return false; for (const c of this.map.values()) c.stale = true; this.ver = ver; return true; }
+  markStale(ver) { if (ver === this.ver) return false; for (const c of this.map.values()) c.stale = true; for (const c of this.ov.values()) c.stale = true; this.ver = ver; return true; }
   get(sk, i, j) { const c = this.map.get(chunkKey(sk, i, j)); if (c) c.last = ++this.tick; return c; }
   has(sk, i, j) { return this.map.has(chunkKey(sk, i, j)); }
   /** A frame begins: what it draws (`use`) is what is on show, and the cap will not take that while anything else can go. */
@@ -111,32 +111,37 @@ export class ChunkCache {
    */
   soften(ctx, parts, a, e, f) {
     let draws = 0;
-    for (const c of this.soft) {
-      if (!parts.length) break;
-      const s0 = CHUNK_PX / c.a, x0 = c.i * s0, y0 = c.j * s0, x1 = x0 + s0, y1 = y0 + s0;
-      let hit = false; for (let p = 0; p < parts.length; p += 4) if (x0 < parts[p + 2] - 1e-3 && x1 > parts[p] + 1e-3 && y0 < parts[p + 3] - 1e-3 && y1 > parts[p + 1] + 1e-3) { hit = true; break; }
-      if (!hit) continue;
-      if (!c.empty && c.img) {
-        ctx.save(); ctx.beginPath();
-        for (let p = 0; p < parts.length; p += 4) {
-          const qx0 = Math.max(x0, parts[p]), qy0 = Math.max(y0, parts[p + 1]), qx1 = Math.min(x1, parts[p + 2]), qy1 = Math.min(y1, parts[p + 3]);
-          if (qx1 - qx0 > 1e-3 && qy1 - qy0 > 1e-3) ctx.rect(qx0 * a + e, qy0 * a + f, (qx1 - qx0) * a, (qy1 - qy0) * a);
-        }
-        ctx.clip(); const k = a / c.a, sz = CHUNK_PX * k; ctx.imageSmoothingEnabled = true;
-        ctx.drawImage(c.img, c.i * CHUNK_PX * k + e - k * 0.5, c.j * CHUNK_PX * k + f - k * 0.5, sz + k, sz + k); ctx.restore(); draws++;
-      }
-      this.use(c); cutParts(parts, x0, y0, x1, y1);
-    }
+    for (const c of this.soft) { if (!parts.length) break; draws += this.paintSoft(ctx, c, parts, a, e, f); }
+    if (parts.length && this.ov.size) for (const c of this.ov.values()) { if (!parts.length) break; draws += this.paintSoft(ctx, c, parts, a, e, f); } // (and what even those leave is what the overview, the very coarse picture of the whole island, holds; what it does not hold is open sea)
     return draws;
+  }
+  /** One chunk drawn into the pieces `parts` it overlaps, scaled to this frame's scale, and cut from them. Answers 1 when it drew (a cell of open sea has nothing to draw: it still covers). */
+  paintSoft(ctx, c, parts, a, e, f) {
+    const s0 = CHUNK_PX / c.a, x0 = c.i * s0, y0 = c.j * s0, x1 = x0 + s0, y1 = y0 + s0;
+    let hit = false; for (let p = 0; p < parts.length; p += 4) if (x0 < parts[p + 2] - 1e-3 && x1 > parts[p] + 1e-3 && y0 < parts[p + 3] - 1e-3 && y1 > parts[p + 1] + 1e-3) { hit = true; break; }
+    if (!hit) return 0;
+    let drew = 0;
+    if (!c.empty && c.img) {
+      ctx.save(); ctx.beginPath();
+      for (let p = 0; p < parts.length; p += 4) {
+        const qx0 = Math.max(x0, parts[p]), qy0 = Math.max(y0, parts[p + 1]), qx1 = Math.min(x1, parts[p + 2]), qy1 = Math.min(y1, parts[p + 3]);
+        if (qx1 - qx0 > 1e-3 && qy1 - qy0 > 1e-3) ctx.rect(qx0 * a + e, qy0 * a + f, (qx1 - qx0) * a, (qy1 - qy0) * a);
+      }
+      ctx.clip(); const k = a / c.a, sz = CHUNK_PX * k; ctx.imageSmoothingEnabled = true;
+      if (c.pin && 'imageSmoothingQuality' in ctx) ctx.imageSmoothingQuality = 'high'; // (the overview is magnified 16 to 64 times: a bicubic read turns the stairs of its coast into a curve; the state goes back with the restore)
+      ctx.drawImage(c.img, c.i * CHUNK_PX * k + e - k * 0.5, c.j * CHUNK_PX * k + f - k * 0.5, sz + k, sz + k); ctx.restore(); drew = 1;
+    }
+    this.use(c); cutParts(parts, x0, y0, x1, y1);
+    return drew;
   }
 
   /**
    * Bake the chunk (i, j) of render scale `a` at canvas density `dpr`. `draw(g, view)` paints the still ground for the world rectangle `view` into `g`, whose transform is already set for the chunk. Answers the chunk, or
    * null when there is no surface to bake into (no OffscreenCanvas: the caller draws directly). The cost is added to stats.ms.
    */
-  bake(draw, a, i, j, dpr, coarse = false) {
+  bake(draw, a, i, j, dpr, coarse = false, pin = false) {
     const t0 = typeof performance !== 'undefined' ? performance.now() : 0, ss = superSample(dpr), S = CHUNK_FULL * ss, sk = scaleKey(a);
-    const key = chunkKey(sk, i, j), old = this.map.get(key); if (old && !old.stale) return old;
+    const key = chunkKey(sk, i, j), into = pin ? this.ov : this.map, old = into.get(key); if (old && !old.stale) return old; // (`pin`: a chunk of the overview, which has a store of its own)
     let work = null;
     if (ss > 1) { if (!this.work || this.work.c.width !== S) { this.work = this.make(S, S, READ); this.sync(); } work = this.work; }
     let fin = this.fin; if (!fin) { fin = this.make(CHUNK_FULL, CHUNK_FULL, READ); this.fin = fin; this.sync(); }
@@ -145,8 +150,8 @@ export class ChunkCache {
     g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, S, S);
     g.setTransform(k, 0, 0, k, -(i * CHUNK_PX - BLEED) * ss, -(j * CHUNK_PX - BLEED) * ss);
     const view = { x0: (i * CHUNK_PX - BLEED) / a, x1: ((i + 1) * CHUNK_PX + BLEED) / a, y0: (j * CHUNK_PX - BLEED) / a, y1: ((j + 1) * CHUNK_PX + BLEED) / a };
-    const info = this.info || (this.info = { k: 0, ss: 1, n: 0 }); info.k = k; info.ss = ss; info.n = S;
-    draw(g, view, info); // (`info`: the scale and side of the pixels being painted, for a layer that paints pixels itself: the V2 ground's base)
+    const info = this.info || (this.info = { k: 0, ss: 1, n: 0, zoom: 0 }); info.k = k; info.ss = ss; info.n = S; info.zoom = pin ? a / Math.max(dpr, 1e-3) : 0;
+    draw(g, view, info); // (`info`: the scale and side of the pixels being painted, for a layer that paints pixels itself: the V2 ground's base; `zoom` the camera zoom this chunk stands for, 0 for the camera's own: the overview is drawn as the far view it is)
     g.setTransform(1, 0, 0, 1, 0, 0);
     if (ss > 1) { const f = fin.g; f.setTransform(1, 0, 0, 1, 0, 0); f.clearRect(0, 0, CHUNK_FULL, CHUNK_FULL); f.imageSmoothingEnabled = true; if ('imageSmoothingQuality' in f) f.imageSmoothingQuality = 'high'; f.drawImage(work.c, 0, 0, S, S, 0, 0, CHUNK_FULL, CHUNK_FULL); }
     let sealed = false, empty = false;
@@ -171,15 +176,15 @@ export class ChunkCache {
         const own = this.make(CHUNK_PX, CHUNK_PX); if (own) { own.g.drawImage(fin.c, BLEED, BLEED, CHUNK_PX, CHUNK_PX, 0, 0, CHUNK_PX, CHUNK_PX); img = own.c; }
       }
     }
-    const c = { fadeEnd: 0, coarse, sk, a, i, j, img, empty, bytes: empty ? 0 : CHUNK_PX * CHUNK_PX * 4, last: ++this.tick, sealed };
+    const c = { fadeEnd: 0, coarse, sk, a, i, j, img, empty, bytes: empty ? 0 : CHUNK_PX * CHUNK_PX * 4, last: ++this.tick, sealed, pin };
     if (old) this.drop(old); // (a stale chunk of the same cell: replaced)
-    this.map.set(key, c); this.sync();
+    into.set(key, c); this.sync();
     const ms = (typeof performance !== 'undefined' ? performance.now() : 0) - t0; this.stats.baked++; builds.n++; if (sealed) this.stats.sealed++; this.stats.ms += ms; this.stats.lastMs = ms;
     return c;
   }
 
   /** Give one chunk back. */
-  drop(c) { if (this.map.delete(chunkKey(c.sk, c.i, c.j))) { try { if (c.img && typeof c.img.close === 'function') c.img.close(); } catch { /* already gone */ } this.stats.dropped++; this.sync(); } }
+  drop(c) { if ((c.pin ? this.ov : this.map).delete(chunkKey(c.sk, c.i, c.j))) { try { if (c.img && typeof c.img.close === 'function') c.img.close(); } catch { /* already gone */ } this.stats.dropped++; this.sync(); } }
   /**
    * End of a frame: free what is no longer wanted. A chunk of another scale goes when it is off the view's cells by more than a ring, or when the exact chunks cover the whole of it that the window can show, and have
    * finished fading in (a stand-in taken from under a fade lets the sea show through it); a scale too far from the frame's to stand in is kept (`soft`) until then, a last resort and not a reason to drop. Over `cap`,
@@ -213,11 +218,11 @@ export class ChunkCache {
   }
   /** Tell the ledger what the store holds (chunks, the working surfaces). */
   sync() {
-    let b = 0; for (const c of this.map.values()) b += c.bytes;
+    let b = 0; for (const c of this.map.values()) b += c.bytes; for (const c of this.ov.values()) b += c.bytes;
     this.bytes = b; const extra = (this.work ? this.work.c.width * this.work.c.height * 4 : 0) + (this.fin ? CHUNK_FULL * CHUNK_FULL * 4 : 0) + (this.cell ? CHUNK_PX * CHUNK_PX * 4 : 0);
     ledger.register(this.name, b + extra);
   }
-  clear() { for (const c of [...this.map.values()]) this.drop(c); this.map.clear(); this.sync(); }
+  clear() { for (const c of [...this.map.values(), ...this.ov.values()]) this.drop(c); this.map.clear(); this.ov.clear(); this.sync(); }
   /** Give everything back, the working surfaces too (the screen is leaving). */
   release() { this.clear(); this.work = null; this.fin = null; this.cell = null; this.scratch = null; this.scratchN = 0; this.ver = NaN; ledger.release(this.name); }
 }

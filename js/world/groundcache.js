@@ -16,10 +16,16 @@
 //   - the exact chunk, stamped 1:1; else the stand-ins of the nearer scales (the store keeps them for as long as the picture needs them: chunkcache.js); else the chunk of ANY scale that has the area, soft (`soften`);
 //   - what no chunk has is made COARSE first: a chunk baked at about half the scale covers four cells, so a soft whole picture exists in a quarter of the frames, and the exact chunks follow and fade in over it;
 //   - while the canvas is held back (the veil, world.js: nobody sees the ground being made) the cells are made exact at once, as they were: coarse chunks would only be work thrown away.
-// `gcHoles` counts the pieces of the window that nothing at all covers after all of that (the sea shows there), and `gcMore` says the ground wants another frame.
+//   - and under all of that the OVERVIEW: the whole island's ground at a very coarse scale (chunks.js OVERVIEW_A: a handful of chunks), made a chunk a frame once the window's ground is whole and the camera still, kept apart
+//     from the chunks of the frame's scales (chunkcache.js `ov`), and drawn, soft, into whatever nothing else covers. A camera that jumps, or a zoom out that reveals ground nobody has made, never shows the bare sea (a
+//     recording of the live site had hard-edged flat rectangles at the coast for about a second at every zoom or glide, and 10 to 14 frames a second: the first chunk of every frame was baked whatever it cost). With the
+//     overview made, a frame in which the camera moves does not start a chunk that costs more than its budget (`calmMove`: the stand-ins and the overview are the picture, and the exact chunks follow when the camera rests).
+// `gcHoles` counts the pieces of the window that nothing at all covers after all of that (the sea shows there; the open sea beyond the island's box is not a hole), and `gcMore` says the ground wants another frame.
 import { groundKey, slotFor } from './stack.js';
-import { CHUNK_PX, scaleKey, chunkKey, cellsFor, chunkCap, snapTranslation } from './chunks.js';
+import { CHUNK_PX, scaleKey, chunkKey, cellsFor, chunkCap, snapTranslation, OVERVIEW_A, overviewCells } from './chunks.js';
 import { ChunkCache } from './chunkcache.js';
+import { ledger, LEDGER_LIMIT_MB } from './gfx.js';
+import { lodOf } from './lod.js';
 export { CHUNK_PX, chunkWorld, chunkBytes, chunksTouched, groundBytes, chunksFor } from './chunks.js'; // the chunk cache's arithmetic (tests/world-ledger.test.mjs holds the memory ledger to it)
 
 /** Milliseconds a frame may spend baking chunks: with the camera still (the picture is settling, nothing else to do) and while it moves (a pan must stay cheap). The first bake of a frame always goes ahead. */
@@ -61,6 +67,10 @@ export const groundCacheMethods = {
     const win = this.gcWin || (this.gcWin = { x0: 0, x1: 0, y0: 0, y1: 0 }); win.x0 = -e / a; win.x1 = (cw - e) / a; win.y0 = -f / a; win.y1 = (ch - f) / a;
     const cells = cellsFor(win, a, this.gcCells || (this.gcCells = {}));
     const draw = this.gcDraw || (this.gcDraw = (g, v, info) => this.drawGround(g, v, 1, info));
+    const bnd = typeof this.bounds === 'function' ? this.bounds() : null; // the box the island and its coast fill: what lies outside it is open sea (no hole, no overview)
+    let winB = win; if (bnd) { winB = this.gcWinB || (this.gcWinB = { x0: 0, x1: 0, y0: 0, y1: 0 }); winB.x0 = Math.max(win.x0, bnd.x0); winB.x1 = Math.min(win.x1, bnd.x1); winB.y0 = Math.max(win.y0, bnd.y0); winB.y1 = Math.min(win.y1, bnd.y1); }
+    let ov = null; if (v2 && bnd) { ov = this.gcOv && this.gcOv.b === bnd ? this.gcOv : (this.gcOv = { b: bnd, c: overviewCells(bnd), n: 0 }); ov.n = (ov.c.i1 - ov.c.i0 + 1) * (ov.c.j1 - ov.c.j0 + 1); }
+    const ovReady = !!ov && store.ov.size >= ov.n, calmMove = moved && ovReady; // the overview is made and under everything, and the camera moves
     const fadeMs = this.reduced() ? 0 : (this.gcFade ?? GROUND_FADE_MS);
     // ---- which cells are baked, and which are not (the nearest to the middle of the window are baked first)
     const miss = this.gcMiss || (this.gcMiss = []); miss.length = 0; let have = 0;
@@ -75,16 +85,17 @@ export const groundCacheMethods = {
       const ab = Math.round(Math.pow(2, Math.round(Math.log2(a) * 4) / 4 - (this.gcUp ? 0.9 : 0)) * 1e5) / 1e5, sb = CHUNK_PX / ab; // the quarter-octave bucket, a zoom IN bakes at 0.54 of the scale it is at (a chunk of 3.4 times the world area, so a third of the chunks cover the window, and the per-pixel base costs a third; magnified 1.9 to 3.2 times while the zoom lasts), a zoom OUT at the scale it is at (shrunk to a half); the frames of one stretch of a zoom share their chunks
       if (v2) {
         // ---- COVER FIRST: a cell that no stand-in covers is made coarse (about half the scale: four cells to a chunk) before any exact chunk, unless the canvas is held back or the budget is the whole window's (a test)
-        const whole = budget >= 1e6, cover = !all && !whole && !this.veilHold; let bareLeft = false; // (held back: nobody sees the cells being made, and a canvas that is just attached is a scale that "just changed")
+        const whole = budget >= 1e6, cover = !all && !whole && !this.veilHold && !calmMove; let bareLeft = false; // (held back: nobody sees the cells being made, and a canvas that is just attached is a scale that "just changed"; the overview is the cover while the camera moves)
         if (cover) {
           const ac = Math.round(Math.pow(2, Math.round(Math.log2(a) * 4) / 4 - 0.9) * 1e5) / 1e5;
-          bareLeft = store.cover(pts, s, win, sk, a, now, ac, (ci, cj) => { const c = store.bake(draw, ac, ci, cj, dpr, true); if (c) baked++; return c; }, (made) => baked === 0 || performance.now() - t0 < budget); // (the first bake of a frame always goes ahead)
+          bareLeft = store.cover(pts, s, winB, sk, a, now, ac, (ci, cj) => { const c = store.bake(draw, ac, ci, cj, dpr, true); if (c) baked++; return c; }, (made) => baked === 0 || performance.now() - t0 < budget); // (the first bake of a frame always goes ahead)
         }
         // ---- then the exact chunks, the nearest to the middle first (not while the scale changes: it is gone in the next frame); one made over a stand-in that covers all of its cell fades in over it
+        const cost = calmMove ? store.stats.lastMs || 0 : 0; // (while the camera moves over the overview a chunk is not started when it would not fit the budget: the first of a frame is no longer made whatever it costs)
         for (const [i, j] of pts) {
-          if (!zooming && !bareLeft && (all || baked === 0 || performance.now() - t0 < budget)) {
+          if (!zooming && !bareLeft && (all || (calmMove ? performance.now() - t0 + cost <= budget : baked === 0 || performance.now() - t0 < budget))) {
             const c = store.bake(draw, a, i, j, dpr);
-            if (c) { baked++; bare.length = 0; if (fadeMs > 0 && !c.empty && store.list.length && !store.bareOf(i, j, s, bare, win)) c.fadeEnd = performance.now() + fadeMs; continue; } // (no fade over a stand-in that leaves part of the cell bare: the fade would run over the sea)
+            if (c) { baked++; bare.length = 0; if (fadeMs > 0 && !c.empty && (ovReady || (store.list.length && !store.bareOf(i, j, s, bare, winB)))) c.fadeEnd = performance.now() + fadeMs; continue; } // (no fade over a stand-in that leaves part of the cell bare: the fade would run over the sea; over the overview it is a fade over a soft picture)
           }
           miss.push(i, j);
         }
@@ -109,7 +120,7 @@ export const groundCacheMethods = {
     if (miss.length || fading) {
       const L = store.standIns(a, sk, tNow), direct = this.gcDirect || (this.gcDirect = []); direct.length = 0;
       if (v2) { // the pieces of the window that no stand-in covers, in the cells with no finished chunk of their own: the chunk of any other scale that has the area is drawn into them, soft; what is left is the sea
-        bare.length = 0; for (let j = cells.j0; j <= cells.j1; j++) for (let i = cells.i0; i <= cells.i1; i++) { const ex = store.map.get(chunkKey(sk, i, j)); if (!ex || ex.fadeEnd > tNow) store.bareOf(i, j, s, bare, win); }
+        bare.length = 0; for (let j = cells.j0; j <= cells.j1; j++) for (let i = cells.i0; i <= cells.i1; i++) { const ex = store.map.get(chunkKey(sk, i, j)); if (!ex || ex.fadeEnd > tNow) store.bareOf(i, j, s, bare, winB); }
         if (bare.length) { store.soften(ctx, bare, a, e, f); holes = bare.length >> 2; }
       }
       if (L.length) {
@@ -142,7 +153,11 @@ export const groundCacheMethods = {
     ctx.restore(); if (fading) this.dirty = true; // (a fade is a few frames of its own: the loop keeps drawing until it is over)
     // ---- the V2 ground: with the window complete, one chunk of the ring beyond it is baked a frame, the one the camera is heading for (still: the next that is missing), so a pan finds its ground made
     const de = e - (this.gcE ?? e), df = f - (this.gcF ?? f); this.gcE = e; this.gcF = f;
-    if (v2 && !miss.length && !zooming && !rig && store.size < chunkCap(W, H, dpr)) {
+    // ---- the overview first (a chunk a frame, the nearest to the middle of the window first, in a frame that made no chunk of the window's own), not while the canvas is held back (the first seconds are the exact ground's) and not for
+    // the shot rig. A chunk that does not exist yet is made whatever the ledger says (the largest windows sit at its ceiling, and the squeeze gives back sprites, clouds and exact chunks, never this); a stale one is made again when there is room.
+    const ovMade = !!ov && !baked && !miss.length && !zooming && !rig && !this.veilHold && (store.ov.size < ov.n || ledger.within(LEDGER_LIMIT_MB)) && this.overviewStep(store, draw, dpr, ov, cx, cy);
+    if (ovMade) baked++;
+    if (v2 && !miss.length && !zooming && !rig && !ovMade && store.size < chunkCap(W, H, dpr)) {
       let bi = 0, bj = 0, bs = -1e9;
       for (let j = cells.j0 - 1; j <= cells.j1 + 1; j++) for (let i = cells.i0 - 1; i <= cells.i1 + 1; i++) {
         if ((i >= cells.i0 && i <= cells.i1 && j >= cells.j0 && j <= cells.j1) || store.has(sk, i, j)) continue;
@@ -154,6 +169,21 @@ export const groundCacheMethods = {
     this.gcValid = miss.length === 0; this.gcHoles = holes; this.gcMore = v2 && miss.length > 0; // (gcMore: a ground that is not whole asks for the next frame, or a loop that sleeps under reduced motion stops on a half-made one)
     if (baked || miss.length === 0 || moved) { const cap = chunkCap(W, H, dpr); store.sweep(cells, a, cap, performance.now(), Math.ceil(cap * 1.25), v2 && !miss.length && !zooming && !fading); } // (a stand-in on show is kept past the cap, up to a fifth more: a hole is worse than a few chunks)
     this.drawGround(ctx, view, 2); // what moves on the ground, live over the chunks (the caller's world transform is back)
+  },
+
+  /**
+   * Make the next chunk of the overview: the cell of the island's box (ov.c) that has none, or a stale one (a district opened since), the nearest to the world point (cx, cy) first. It is baked as the far view it is (the
+   * level of detail of its own scale, not the camera's). Answers whether a chunk was made.
+   */
+  overviewStep(store, draw, dpr, ov, cx, cy) {
+    const c = ov.c, s = c.s, sk = scaleKey(OVERVIEW_A); let bi = 0, bj = 0, bd = Infinity;
+    for (let j = c.j0; j <= c.j1; j++) for (let i = c.i0; i <= c.i1; i++) {
+      const have = store.ov.get(chunkKey(sk, i, j)); if (have && !have.stale) continue;
+      const d = Math.hypot((i + 0.5) * s - cx, (j + 0.5) * s - cy); if (d < bd) { bd = d; bi = i; bj = j; }
+    }
+    if (bd === Infinity) return false;
+    const env = this.env, keep = env && env.lod; if (env) env.lod = lodOf(OVERVIEW_A / Math.max(dpr, 1e-3), this.gcOvLod || (this.gcOvLod = {}));
+    try { return !!store.bake(draw, OVERVIEW_A, bi, bj, dpr, false, true); } finally { if (env) env.lod = keep; }
   },
 
   /** Give the ground cache's bitmaps back (World.release). */

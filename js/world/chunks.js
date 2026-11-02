@@ -87,3 +87,16 @@ export const COARSE_UP = 3.2, COARSE_DOWN = 0.5;
 export const staleRatio = (a0, a, coarse = false) => { const k = a / a0; return (coarse ? k <= COARSE_UP && k >= COARSE_DOWN : k <= STALE_UP && k >= STALE_DOWN) ? k : 0; };
 /** How many chunks the cache may hold: what the window touches, plus a third for the stale ones that stand in while a zoom settles and the cells a zoom out reveals, plus two. The memory table of docs/RENDER_PLAN.md is this number x 0.59 MB (the window touches at most 54 at dsf 2; a real window is 40 to 48). */
 export const chunkCap = (w, h, dpr) => Math.ceil(chunksTouched(w, h, dpr) * 1.35) + 2;
+
+// ---------------------------------------------------------------- the overview: the whole island's ground at a very coarse scale, always under the rest
+/**
+ * The scale of the overview, device pixels to the world pixel: one pixel of it is 16 world pixels (half a tile), so a chunk of it covers 6,144 world pixels on a side and the whole box the camera can reach is a handful of
+ * chunks (6 for the island today, 3.5 MB). It is what shows, soft, wherever the exact chunks and the stand-ins do not reach yet (groundcache.js): a camera that jumps, or a zoom out that reveals ground nobody has made, never
+ * shows the bare sea. Far too coarse to be a stand-in by the ratio rule (chunks.js staleRatio), so the store keeps it apart from the chunks of the frame's scales (chunkcache.js `ov`).
+ */
+export const OVERVIEW_A = 0.0625;
+/** The cells of the overview's grid that cover a world box { x0, x1, y0, y1 }: { i0, i1, j0, j1, s } inclusive, the cell (i, j) covering world x from i s. */
+export function overviewCells(b, out = {}) {
+  const s = CHUNK_PX / OVERVIEW_A;
+  out.i0 = Math.floor(b.x0 / s); out.i1 = Math.floor((b.x1 - 1e-6) / s); out.j0 = Math.floor(b.y0 / s); out.j1 = Math.floor((b.y1 - 1e-6) / s); out.s = s; return out;
+}

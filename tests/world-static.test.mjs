@@ -30,10 +30,10 @@ function rec(a = 1, log = { n: 0, calls: [], depth: 0 }) {
 const env = (o = {}) => ({ t: 1234, night: 0, wind: 1, dim: 0, far: false, lite: false, lights: [], zoff: 0, ...o });
 
 // ---------------------------------------------------------------- positions never change
-test('the scenery list is exactly the baseline: scenery art never moves, resizes or re-heights anything', () => {
+test('the scenery list is exactly the baseline: scenery art never moves, resizes or re-heights anything (the baseline was taken again when the ground under the roads was graded: roadshape.js, the heights near a road changed and nothing else)', () => {
   const rows = SCENERY.map((p) => [p.t, p.gx, p.gy, p.w, p.d, p.h, p.z, p.zone, p.hot || '', p.key].join(','));
   const g = LAYOUT, extra = [g.edges.length, g.cliffs.length, g.bounds.x0, g.bounds.y1, g.props.length, Object.keys(g.districts).length].join(',');
-  assert.equal(createHash('sha1').update(rows.join('\n') + extra).digest('hex'), '87933c744452f3b2217fb4b7659fe19abf70e606');
+  assert.equal(createHash('sha1').update(rows.join('\n') + extra).digest('hex'), 'f8389aa4222d6a3b5e731fca86587570e055513c');
   assert.equal(rows.length, 714);
 });
 
