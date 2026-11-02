@@ -12,7 +12,7 @@ export const groundMethods = {
   /** Ground: coast cliffs, the terrain (drawn coarser the further out you are), roads and bridges between districts, each block's flat patches and decals. */
   drawGround(ctx, view, mode = 0, info = null) { // mode 0: everything; 1: what stands still (for the ground cache); 2: only what moves (water, pulses), over the cached ground. `info`: the chunk cache's record of the surface being baked (the V2 base is painted per pixel into it)
     if (mode === 2) { runLayer('livedecals', this, ctx, view); return; }
-    const G = this.gnd, zoom = this.cam.z, far = zoom < FAR_ZOOM, see = (x0, y0, x1, y1) => x1 > view.x0 && x0 < view.x1 && y1 > view.y0 && y0 < view.y1;
+    const G = this.gnd, zoom = info && info.zoom > 0 ? info.zoom : this.cam.z, far = zoom < FAR_ZOOM, see = (x0, y0, x1, y1) => x1 > view.x0 && x0 < view.x1 && y1 > view.y0 && y0 < view.y1; // (a chunk that stands for another zoom, the overview, is drawn at that one)
     G.zoom = zoom; G.far = far; G.see = see; G.mode = mode; G.chunk = info && slotFor('shore').impl === 'v2' ? chunkDescriptor(this, view, info) : null;
     runLayer('shore', this, ctx, view, G);
     runLayer('terrain', this, ctx, view, G);
