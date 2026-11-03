@@ -19,7 +19,9 @@ const num = (x) => typeof x === 'number' && Number.isFinite(x);
 export const STYLES = ['hard', 'friendly', 'impulsive', 'analytical'];
 export const ANCHORS = { high: 1.4, fair: 1, low: 0.7 }; // seller frame, times fair
 export const STEPS = { small: 0.04, medium: 0.09, large: 0.16 }; // times fair
-const RECIP = { small: 1, medium: 0.5, large: 0.2 }; // how much of a concession a friendly counterparty returns
+export const RECIP = { small: 1, medium: 0.5, large: 0.2 }; // how much of a concession a friendly counterparty returns
+/** What their stance says, to follow "They are": the Close stage prints it and the Assist advice says it in the same words. */
+export const TELLS = { far: 'far from your number', reach: 'getting closer', near: 'very close' };
 // tau0/grow/cap: the share of their limit they accept now / change per round / never exceed. open: first bid (share of limit).
 // gap: how far under their accept line they bid. speed: how fast the bid chases it. slack: extra they allow for a split.
 const P = {
@@ -208,7 +210,8 @@ function advise(s) { // the textbook move and the reason, from public informatio
   else {
     concept = s.style === 'friendly' ? 'reciprocity' : 'zopa';
     const to = $(Math.max(LO, p.ask - STEPS[a.size]));
-    text = `${sell ? 'Lower your ask' : 'Raise your offer'} by a ${a.size} step (${money(STEPS[a.size] * fair)}, to ${to}). ${s.style === 'friendly' ? (a.size === 'small' ? 'Friendly counterparties answer small steps in kind.' : 'That closes the gap fast, but friendly counterparties only match small steps.') : s.style === 'impulsive' ? `Impulsive ${sell ? 'buyers' : 'sellers'} cool off: close while they are keen.` : `They look ${p.tell || 'close'}: step toward the zone, not past it.`}`;
+    const pc = (x) => `${Math.round(x * 100)}%`;
+    text = `${sell ? 'Lower your ask' : 'Raise your offer'} by a ${a.size} step (${money(STEPS[a.size] * fair)}, to ${to}). ${s.style === 'friendly' ? (a.size === 'small' ? 'A friendly counterparty answers a small step in kind.' : `That closes the gap fast, but a friendly counterparty returns only ${pc(RECIP.medium)} of a medium step and ${pc(RECIP.large)} of a large one.`) : s.style === 'impulsive' ? `Impulsive ${sell ? 'buyers' : 'sellers'} cool off: close while they are keen.` : `They are ${TELLS[p.tell] || 'close'}: step toward the zone, not past it.`}`;
   }
   return { action: toReal(s, a), text, concept };
 }
@@ -245,7 +248,7 @@ export function result(s) {
   const share = Math.round(100 * clamp((s.price - LO) / Math.max(0.05, s.R - LO), 0, 1));
   // The model lives in the seller's frame; the words are the player's own. For a buyer the aggressive opening (frame 'high') is a LOW offer.
   const sell = s.role === 'sell', said = flip(s.role, s.anchor);
-  const why = s.flag === 'mad' ? (sell ? 'Opening far past their limit soured the talk.' : 'Opening far under their lowest price soured the talk.') : s.flag === 'sus' ? 'A low-ball made them suspicious and capped what they would pay.' : s.anchor === 'high' && share >= 70 ? `Your ${said} opening set the frame.` : share < 50 ? 'You gave ground faster than they did.' : 'You read where the zone ended.';
+  const why = s.flag === 'mad' ? (sell ? 'Opening far past their limit soured the talk.' : 'Opening far under their lowest price soured the talk.') : s.flag === 'sus' ? 'A lowball made them suspicious and capped what they would pay.' : s.anchor === 'high' && share >= 70 ? `Your ${said} opening set the frame.` : share < 50 ? 'You gave ground faster than they did.' : 'You read where the zone ended.';
   return { ...base, deal: true, price, mult, score, reveal: { reserve: real(s, s.R) }, lesson: { concept: s.flag ? 'anchoring' : 'zopa', text: `Closed at ${mult.toFixed(2)} times fair, ${share}% of the way to their limit (${money(real(s, s.R))}). ${why}` } };
 }
 

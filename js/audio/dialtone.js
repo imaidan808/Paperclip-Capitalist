@@ -10,7 +10,7 @@ export const DIAL_NAME = 'Repair dial tone';
 const DIAL_SWITCH = 'Dial tone switch next to Sound';
 /** How many of a run's dials say where the tone's switch is while it is off: the first (the long line) and the second (the short line with the switch). */
 export const DIAL_SWITCH_DIALS = 2;
-const CAREFUL = 'Prefer not to time it? Choose Careful: pay more, no timing.';
+const CAREFUL = 'Careful needs no timing.'; // the button says the rest ("Careful: pay more, no timing"), and the room's opening announcement says it again aloud
 
 /**
  * What the room needs to know about the tone, from `settings.audio`: `setting` (the box is ticked), `quiet` (Classroom holds it off), `on` (it will run), `heard` (it will run and be heard) and, when
@@ -30,7 +30,7 @@ export function dialEarText(i) {
   if (info.quiet) return `Repair dial tone is off in Classroom. ${CAREFUL}`;
   if (info.on && info.heard) return `Repair dial tone is on: low on the left, high on the right, and brighter inside the green zone. ${CAREFUL}`;
   if (info.on) return `Repair dial tone is on, but you will not hear it because ${info.why}. ${CAREFUL}`;
-  return `Prefer to listen? Turn on Repair dial tone with the Dial tone switch next to Sound, or in Display and sound. ${CAREFUL}`; // "next to Sound", not "at the top of this window": at a large text size the header is not on the screen (fifth round, U5)
+  return `To follow the marker by ear, turn on Dial tone next to Sound or in Display and sound. ${CAREFUL}`; // "next to Sound", not "at the top of this window": at a large text size the header is not on the screen (fifth round, U5)
 }
 
 /**
