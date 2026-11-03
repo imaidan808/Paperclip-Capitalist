@@ -23,7 +23,7 @@ const kb = (n) => n / 1024;
 /** Limits, in the units of docs/ARCHITECTURE.md ("What was measured"): requests, and KB gzipped (1 KB is 1,024 bytes). */
 export const BUDGET = {
   firstRequests: 45,   // the page, the 12 stylesheets and the static modules
-  firstKB: 300,        // all of it gzipped: the page, the sheets, the modules
+  firstKB: 320,        // all of it gzipped: the page, the sheets, the modules; 300 until 2026-11-03: raised to 320 at the author's word, for the items catalog, the event plan and the wardrobe's hooks (docs/ARCHITECTURE.md, "The first screen, and the rest")
   totalRequests: 165,  // everything the site ever fetches
   totalKB: 1111,       // 1000 until 2026-11-03: raised to 1111 at the author's word for the packages after the ground's worker (docs/ARCHITECTURE.md, "The first screen, and the rest")
 };
