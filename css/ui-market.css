@@ -15,11 +15,8 @@
 .mkt-bhead > div { display: grid; }
 .mkt-bic { font-size: 2.2rem; line-height: 1; }
 .mkt-bname { font-size: 1.05rem; }
-.mkt-blurb { font-size: .9rem; }
 .mkt-rule { font-size: .9rem; }
-.mkt-teach { font-size: .85rem; }
-.mkt-more summary { cursor: pointer; font-size: .82rem; color: var(--cyan); }
-.mkt-more ul { margin: .3rem 0 0; padding-left: 1.1rem; font-size: .82rem; }
+.mkt-banner ul { margin-block: .3rem; padding-left: 1.1rem; font-size: .85rem; }
 .mkt-stats { gap: .4rem; }
 
 /* tabs and the lists under them */
@@ -69,4 +66,3 @@
 .mkt-wcrate[aria-pressed="true"]::before { content: "✓ "; color: var(--gold); font-weight: 800; }
 .mkt-matrix { font-size: .8rem; }
 
-@media (max-width: 760px) { .mkt-blurb { display: none; } }

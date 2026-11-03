@@ -301,7 +301,7 @@ test('quest and achievement words that quote a rate or a rule are the rate and t
   assert.match(quest('q07a').desc, /6 in 10 lots here are broken/);
   const auto = lotShares(7, 8000);
   assert.ok(auto.broken / auto.n > 0.56 && auto.broken / auto.n < 0.64, `Auto Row: ${pct(auto.broken / auto.n)} of all lots are broken`);
-  assert.match(quest('q06a').desc, /About half/);
+  assert.match(quest('q06a').desc, /about half/);
   assert.match(quest('q08b').desc, /2% fee/);
   assert.ok(text('js/engine.js').includes('(f.book || 0) * 0.02'), 'customs charge 2% of the crates\' value');
 });

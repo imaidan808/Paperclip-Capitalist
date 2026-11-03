@@ -162,7 +162,7 @@ test('bank: the audit offers three paths in plain words and each one works', () 
     assert.deepEqual(checkHTML(html, 'audit'), []); wired(html, acts, 'audit');
     assert.match(html, /Respond within/); assert.match(html, /Hire a consultant for \$/); assert.match(html, /Pull a manager off the line/); assert.match(html, /Skip the filing and hope/);
     assert.match(html, new RegExp(`${Math.round(AUDIT.passChance * 100)}% chance nobody notices`)); assert.match(html, /stops for 5 days/);
-    assert.match(html, /Who does the paperwork\?/);
+    assert.match(html, /Manager for the paperwork/);
     const pipe = s.pipes[1], cash = s.cash, passed = s.auditPass;
     if (choice === 'B') acts['bank-apipe'](el({}, pipe.id));
     acts['bank-audit'](el({ c: choice }));

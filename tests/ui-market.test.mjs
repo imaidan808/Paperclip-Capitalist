@@ -75,33 +75,56 @@ test('ruleText turns every district\'s rules into short plain sentences', () => 
     }
     assert.ok(teachName(ZONES[id].teaches) && !/-/.test(teachName(ZONES[id].teaches)), `${label} has a readable lesson name`);
   }
-  assert.match(ruleText(2)[0], /haggled/);
+  assert.match(ruleText(2)[0], /one round longer/);
   assert.match(ruleText(3)[0], /28-day wave/);
   assert.match(ruleText(4)[0], /counterfeit/);
   assert.match(ruleText(6)[0], /auctions/);
   assert.match(ruleText(7)[0], /broken/);
   assert.match(ruleText(8)[0], /inspected/);
   assert.match(ruleText(10)[0], /twice as fast/);
-  assert.match(ruleText(11)[0], /spoils/);
+  assert.match(ruleText(11)[0], /spoil/);
   assert.match(ruleText(12)[0], /every day/);
-  assert.match(ruleText(16)[0], /Price gaps/);
-  assert.match(ruleText(1)[0], /barter/i);
-  assert.ok(ruleText(14).some((l) => /Leverage/.test(l)), 'the credit district is explained though its rules are empty');
-  assert.ok(ruleText(8).some((l) => /freight is 30% cheaper/.test(l)), 'the unlock bonus is explained');
+  assert.match(ruleText(16)[0], /inspected/, 'the Global Exchange leads with the customs its freight meets');
+  assert.match(ruleText(1)[0], /Urgent buyers pay for need/); assert.match(ruleText(1).join(' '), /barter/i);
+  assert.ok(bonusText(8).some((l) => /Freight costs 30% less everywhere/.test(l)), 'the unlock bonus is explained');
+  assert.ok(ruleText(8).every((l) => !/Freight costs/.test(l)), 'and said once: a rule is not a reward');
   assert.deepEqual(bonusText(1), []);
   assert.deepEqual(ruleText(99), []);
   assert.match(satWords(0, 0), /Nobody/); assert.match(satWords(0.9, 30), /Packed/);
 });
 
-test('the banner names the district, its blurb, what it teaches, its tax and its pool', () => {
-  const ctx = fakeCtx({ days: 25, perks: PAIRS[0] }), g = ctx.g();
+test('the banner leads with the rule, its tax and its pool; the other rules, what opening it gave and the lesson are one fold, and its hover; the blurb is not repeated', () => {
+  const ctx = fakeCtx({ days: 25, perks: PAIRS[0] }), g = ctx.g(), esc = (t) => t.replace(/&/g, '&amp;').replace(/'/g, '&#39;');
   for (const z of g.s.zones) {
-    ctx.U.zone = z;
-    const html = market.html(ctx), Z = ZONES[z];
-    assert.ok(html.includes(Z.name) && html.includes(Z.blurb.replace(/&/g, '&amp;').replace(/'/g, '&#39;')), `${Z.name}: name and blurb`);
-    assert.ok(html.includes(ctx.esc(teachName(Z.teaches))), `${Z.name}: what it teaches`);
+    ctx.U.zone = z; ctx.U.fold = {};
+    let html = market.html(ctx);
+    const Z = ZONES[z], rest = ruleText(Z).slice(1), gave = bonusText(Z).join(' '), tip = [...rest, gave && `Opening it gave you: ${gave}`, `Teaches ${teachName(Z.teaches)}.`].filter(Boolean).join(' ');
+    assert.ok(html.includes(Z.name) && html.includes(ctx.esc(ruleText(Z)[0])), `${Z.name}: name and rule`);
     assert.ok(html.includes(`Pool ${ctx.money(g.s.pool[z])} of ${ctx.money(Z.pool)}`), `${Z.name}: pool depth`);
+    assert.match(html, /<details class="cx-more"><summary data-act="market-fold" data-k="about"[^>]*>About this district<\/summary><\/details>/, `${Z.name}: a shut fold draws only its line`);
+    assert.ok(html.includes(`title="${ctx.esc(tip)}"`), `${Z.name}: its hover is what opens`);
+    ctx.U.fold = { 'market.about': true }; html = market.html(ctx);
+    const page = html.replace(/<[^>]*>/g, ' ');
+    assert.ok(!html.includes(esc(Z.blurb)), `${Z.name}: the blurb says the rule again; it is the news line\'s, not the banner\'s`);
+    assert.ok(page.includes(esc(teachName(Z.teaches))), `${Z.name}: what it teaches`);
+    for (const t of rest) assert.ok(page.includes(ctx.esc(t)), `${Z.name}: the other rules open`);
+    for (const t of bonusText(Z)) assert.ok(page.includes(ctx.esc(t)), `${Z.name}: what opening it gave opens`);
   }
+});
+
+test('the fold is the reader\'s: the shell redraws the drawer, and what was opened stays open', () => {
+  const ctx = fakeCtx({ days: 25, perks: PAIRS[0] }), acts = market.acts(ctx);
+  acts['market-fold']({ dataset: { k: 'about' } });
+  assert.equal(ctx.U.fold['market.about'], true); assert.equal(ctx.calls.at(-1), 'render');
+  assert.match(market.html(ctx), /<details class="cx-more" open>/); assert.match(market.html(ctx), /<details class="cx-more" open>/, 'a second draw keeps it open');
+  acts['market-fold']({ dataset: { k: 'about' } }); assert.doesNotMatch(market.html(ctx), /<details class="cx-more" open>/);
+});
+
+test('a gray market tells the Second-Chance Hustler its discount and nobody else', () => {
+  const gray = fakeCtx({ days: 25, perks: ['second', 'trades'] }), plain = fakeCtx({ days: 25, perks: ['trades', 'pro'] });
+  for (const ctx of [gray, plain]) { ctx.U.zone = 4; ctx.U.fold = { 'market.about': true }; }
+  assert.match(market.html(gray), new RegExp(`Gray market: lots cost ${Math.round(gray.g().P.lotDiscountGray * 100)}% less for you\\.`));
+  assert.doesNotMatch(market.html(plain), /Gray market/);
 });
 
 test('the district switcher lists the open districts and switching changes the focused one', () => {
@@ -144,11 +167,11 @@ test('a buyer card shows the fit and the Creativity band for the crate that woul
   const card = cardOf(market.html(ctx), `lead:${lead.id}`);
   assert.match(card, /(Perfect|Good|Weak) fit/);
   assert.match(card, /(Linear herd trap|Crowded|Open|Balanced|Pioneer vector) \d\.\d\dx/);
-  assert.match(card, /Best of yours: <b>[^<]*Radio/);
+  assert.match(card, /title="Best of yours: [^"]*Radio"/, 'the crate that would be sold is the Sell button\'s hover: the button names it');
   assert.match(card, /recent|Nobody has sold|Almost nobody|classmates|popular|Crowded|Packed/i, 'the saturation in words');
   // choosing a crate by hand changes the label
   acts_use(ctx, crate.id);
-  assert.match(cardOf(market.html(ctx), `lead:${lead.id}`), /Your pick: <b>/);
+  assert.match(cardOf(market.html(ctx), `lead:${lead.id}`), /title="Your pick: /);
 });
 const acts_use = (ctx, id) => market.acts(ctx)['market-use']({ dataset: { id } });
 
@@ -178,13 +201,13 @@ test('Sell opens the Deal Room with the crate and the buyer', () => {
   assert.ok(ctx.toasts.some(([m]) => /has left/.test(m)) && ctx.toasts.some(([m]) => /crate is gone/.test(m)));
 });
 
-test('with nothing to sell here the button says why and points at the Lots', () => {
+test('with nothing to sell here the page says so once, and no card repeats it', () => {
   const ctx = fakeCtx({ days: 10, perks: PAIRS[0] }), g = ctx.g(), acts = market.acts(ctx);
   g.s.assets = [];
   ctx.U.zone = 2;
   const html = market.html(ctx);
   assert.match(html, /You hold nothing to sell in Flea Market/);
-  assert.match(html, /Nothing to sell here: see the lots/);
+  assert.doesNotMatch(html, /Nothing to sell here|see the lots|Find something in the lots/, 'the Lots tab is beside the list');
   assert.ok(!/data-act="market-sell"/.test(html));
   acts['market-tab']({ dataset: { t: 'lots' } });
   assert.equal(ctx.U.marketTab, 'lots');
@@ -265,9 +288,9 @@ test('lots are booths: the price, Working or Broken, the district\'s quality lin
     assert.match(card, /Look it over/); assert.match(card, /Quick buy/);
     assert.match(card, /Not inspected yet/);
   }
-  assert.match(html, /Things here are rarely what they seem/);
+  assert.match(html, /Lots are worth 70% to 115% of how they are described\./, 'the range the lot generator draws (85% to 115% in districts 1 and 2)');
   ctx.U.zone = 1;
-  assert.match(market.html(ctx), /close to how they are described/);
+  assert.match(market.html(ctx), /Lots are worth 85% to 115% of how they are described\./);
 });
 
 test('the free counterfeit warning and the player\'s own read are shown, nothing else about authenticity is', () => {

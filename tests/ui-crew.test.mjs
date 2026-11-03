@@ -85,8 +85,8 @@ test('crew: every manager card shows lane, status, level, per cycle and per day,
 test('crew: things that cannot be done say why, in the page', () => {
   const { ctx, g, s } = rich(25);
   s.cash = 1; const html = crew.html(ctx);
-  assert.match(html, /Upgrade:<\/b> Short by/);
-  assert.match(html, /Release:<\/b> opens when this cycle ends/);
+  assert.match(html, /<p class="cr-why small">Short by \$[\d,.]+\.<\/p>/, 'the upgrade says what it lacks, once');
+  assert.match(html, /aria-disabled="true" title="Opens when this cycle ends, in \d+ h\."/, 'a release that must wait says when it opens, on the button');
   // an audit that has not been answered locks hiring and upgrading
   s.mil.m2 = true; s.auditFirst = false; s.auditPending = null;
   assert.ok(g.autoLocked());

@@ -7,9 +7,19 @@
 // never the pool's exact offer; the toast after the sale tells the real number.
 import { ASSETS, ZONES } from '../../config.js';
 import { FAKE_VALUE } from '../../market.js';
+import { esc } from '../common.js';
 import { benchQuote } from '../../deal.js';
 
 const UP = '▲', DOWN = '▼', FLAT = '▬';
+
+// ---- the fold every drawer uses: the Codex's pattern (css/styles.css), closed until asked. The shell redraws a drawer whenever its text changes, and that would shut a bare <details> the
+// reader had opened, so the choice lives in ctx.U.fold and the summary is the control (data-act="<drawer>-fold"). A closed fold draws only its summary; `tip` is the same words as a hover.
+export function fold(ctx, drawer, key, label, body, tip = '') {
+  const open = !!ctx.U.fold?.[`${drawer}.${key}`];
+  return `<details class="cx-more"${open ? ' open' : ''}><summary data-act="${drawer}-fold" data-k="${key}" data-fid="${drawer}-fd-${key}"${tip ? ` title="${esc(tip)}"` : ''}>${label}</summary>${open ? body : ''}</details>`;
+}
+/** The act behind a fold's summary. */
+export function flip(ctx, drawer, key) { const f = (ctx.U.fold ||= {}), k = `${drawer}.${key}`; f[k] = !f[k]; ctx.render(); }
 
 // ---- small helpers, shared with market.js
 export const plural = (n, one, many = one + 's') => `${n} ${n === 1 ? one : many}`;
@@ -21,12 +31,9 @@ export function focusZone(ctx) {
   const open = ctx.g().s.zones, z = ctx.U.zone;
   return open.includes(z) ? z : Math.max(...open);
 }
-/** Crates in a district the way the engine counts storage: on the shelf, on the road to it, and in escrow there. */
+/** The places taken in a district, counted by the engine itself (roomIn): crates on the shelf, on a truck to it, and in an open swap, whether they are leaving or the swap asks for crates that would land here. */
 export function heldIn(g, zone) {
-  const s = g.s;
-  return s.assets.filter((a) => a.zone === zone).length
-    + s.freight.reduce((n, f) => n + (f.to === zone ? f.items.length : 0), 0)
-    + s.escrow.reduce((n, e) => n + e.assets.filter((a) => a.zone === zone).length, 0);
+  return g.storeCap(zone) - g.roomIn(zone);
 }
 /** "Your read" for an inspected crate or lot: { quality, fakeProb, confidence } -> one plain sentence, or null when it was never inspected. */
 export function beliefLine(ctx, b) {
@@ -50,7 +57,7 @@ function stripHTML(ctx, z) {
     <div class="row stk-strip-top"><b><span aria-hidden="true">${Z.icon}</span> ${ctx.esc(Z.short)}</b>
       <span class="grow"></span><span class="stk-storetext">Storage ${held} of ${cap}${full ? ' <span class="badge red">Full</span>' : ''}</span></div>
     ${bar(full ? 'red' : 'gold', held, cap, `Storage used in ${ctx.esc(Z.short)}`, pctOf(held, cap).toFixed(0))}
-    <p class="small stk-worth">${s.assets.length ? `Your stock is worth <b class="mono">${m(inv)}</b>${nw > 0.005 ? `, about <b>${Math.round(share * 100)}%</b> of your net worth of <span class="mono">${m(nw)}</span>` : ''}. ${plural(s.assets.length, 'crate')} in all.` : 'Nothing on your shelves right now.'}</p>
+    ${s.assets.length ? `<p class="small stk-worth">Stock worth <b class="mono">${m(inv)}</b>${nw > 0.005 ? `, <b>${Math.round(share * 100)}%</b> of net worth` : ''}. ${plural(s.assets.length, 'crate')}.</p>` : ''}
   </section>`;
 }
 
@@ -68,16 +75,16 @@ function crateHTML(ctx, a, sel) {
   const badge = fake ? '<span class="badge red">Counterfeit</span>' : broken ? '<span class="badge red">Broken</span>' : '<span class="badge cyan">Working</span>';
   const bel = !fake && !a.known ? beliefLine(ctx, a.belief) : null;
   let read;
-  if (fake) read = '<p class="stk-read stk-fake"><span aria-hidden="true">⚠</span> <b>Worth almost nothing.</b> A buyer spotted a fake. The pool will still take it.</p>';
-  else if (a.known) read = '<p class="stk-read"><span aria-hidden="true">✓</span> Checked: this one is genuine.</p>';
+  if (fake) read = '<p class="stk-read stk-fake"><span aria-hidden="true">⚠</span> <b>Worth almost nothing.</b> The pool still takes it.</p>';
+  else if (a.known) read = '<p class="stk-read"><span aria-hidden="true">✓</span> Checked: genuine.</p>';
   else if (bel) read = `<p class="stk-read${bel.fake ? ' stk-warnline' : ''}">${bel.fake ? '<span aria-hidden="true">⚠</span> ' : ''}${e(bel.text)}</p>`;
-  else read = '<p class="stk-read mute">Not inspected: fine on the label, unchecked inside.</p>';
+  else read = '<p class="stk-read mute">Not inspected.</p>';
   // small facts: quality, wear, and what the district's rule does to it
   const chips = [];
   if (Math.abs((a.quality ?? 1) - 1) > 0.004) chips.push(`<span class="chip ${a.quality < 1 ? 'warn' : 'good'}">Quality ${Math.round(a.quality * 100)}%</span>`);
   if (a.wear < 0.97) chips.push(`<span class="chip ${a.wear < 0.7 ? 'warn' : ''}">Condition ${Math.round(a.wear * 100)}%</span>`);
-  if (def.perish) chips.push(`<span class="chip warn">Spoils: about ${(((0.8 / def.perish) + def.dep * 0.002) * 100).toFixed(0)}% a day</span>`);
-  if (def.yield) chips.push(`<span class="chip good">Pays about ${m(val * def.yield)} a day</span>`);
+  if (def.perish) { const jit = s.upg.jit ? 0.5 : 1; chips.push(`<span class="chip warn">Spoils: about ${((1 - (1 - def.dep * 0.002 * jit) * (1 - 0.8 / def.perish * jit)) * 100).toFixed(0)}% a day</span>`); } // engine _age: depreciation and spoilage at midnight, Just-In-Time stock at half
+  if (def.yield) chips.push(`<span class="chip good">Pays about ${m(val * def.yield * (def.tags.includes('realty') || Z.rules.rent ? g.B.rentMult : 1))} a day</span>`); // engine _dayTick
   if (Z.rules.fads && def.tags.includes('digital')) chips.push('<span class="chip warn">Fad risk: loses value twice as fast here</span>');
   let fix = '';
   if (broken) {
@@ -86,10 +93,10 @@ function crateHTML(ctx, a, sel) {
     const bq = benchQuote(g, a.id);
     if (bq.ok) {
       const net = bq.after - bq.before - bq.cost, why = bq.affordable ? '' : `<p class="stk-fixwhy small" id="st-fixwhy-${a.id}"><span aria-hidden="true">⚠</span> ${e(bq.blocker)} ${e(NEED_CASH)}</p>`;
-      fix = `<p class="stk-fix small">Repair costs about <b class="mono">${m(bq.cost)}</b>, up to <b class="mono">${m(bq.most)}</b> if the marker slips, and restores it to about ${Math.round(bq.quality * 100)}% quality, worth <span class="mono">${m(bq.after)}</span> afterwards (now <span class="mono">${m(bq.before)}</span>). ${net >= 0 ? `<b class="green"><span aria-hidden="true">${UP}</span> Worth it: +${m(net)}</b>` : `<b class="red"><span aria-hidden="true">${DOWN}</span> Loses ${m(-net)}</b>`}</p>
+      fix = `<p class="stk-fix small">Repair costs about <b class="mono">${m(bq.cost)}</b>, up to <b class="mono">${m(bq.most)}</b> if the marker slips, and restores ${Math.round(bq.quality * 100)}% quality: worth <span class="mono">${m(bq.after)}</span>, now <span class="mono">${m(bq.before)}</span>. ${net >= 0 ? `<b class="green"><span aria-hidden="true">${UP}</span> Worth it: +${m(net)}</b>` : `<b class="red"><span aria-hidden="true">${DOWN}</span> Loses ${m(-net)}</b>`}</p>
         ${why}
         <button class="btn sm" data-act="stock-repair" data-id="${a.id}" data-fid="st-fix-${a.id}"${bq.affordable ? '' : ` aria-disabled="true" aria-describedby="st-fixwhy-${a.id}"`}>Repair ${e(def.name)}</button>`;
-    } else fix = '<p class="stk-fix small mute">This cannot be repaired. Sell it to a buyer who works with scrap and spares.</p>';
+    } else fix = '<p class="stk-fix small mute">This cannot be repaired. Scrap and spares buyers take it.</p>';
   }
   return `<li class="stk-crate ${fake ? 'is-fake' : broken ? 'is-broken' : 'is-ok'}${sel ? ' is-sel' : ''}">
     <span class="stk-ic" aria-hidden="true">${def.icon}</span>
@@ -107,7 +114,7 @@ function awayHTML(ctx) {
   const g = ctx.g(), s = g.s, e = ctx.esc;
   const road = s.freight.map((f) => `<li class="stk-away"><div class="row"><b>On the road to ${e(ZONES[f.to].short)}</b><span class="grow"></span><span class="small">arrives in ${dur(f.arrive - s.hour)}</span></div>
       <div class="bar" aria-hidden="true"><i data-bar="freight:${f.id}"></i></div><p class="small mute">${f.items.map((a) => e(nameOf(a.cls, a.cond))).join(', ')}</p></li>`);
-  const held = s.escrow.filter((x) => x.assets.length).map((x) => `<li class="stk-away"><b>Offered to a classmate</b><p class="small mute">${x.assets.map((a) => e(nameOf(a.cls, a.cond))).join(', ')} wait in escrow until they answer. Check the Exchange in the Market.</p></li>`);
+  const held = s.escrow.filter((x) => x.assets.length).map((x) => `<li class="stk-away"><b>Offered to a classmate</b><p class="small mute">${x.assets.map((a) => e(nameOf(a.cls, a.cond))).join(', ')} wait in escrow until they answer. Withdraw from the Market's Exchange.</p></li>`);
   if (!road.length && !held.length) return '';
   return `<section class="sect"><h3>Away from the shelf</h3><ul class="stk-list">${road.join('')}${held.join('')}</ul></section>`;
 }
@@ -115,7 +122,7 @@ function awayHTML(ctx) {
 // ---- the actions for whatever is ticked
 function selBarHTML(ctx, sel) {
   const g = ctx.g(), s = g.s, m = ctx.money, e = ctx.esc;
-  if (!sel.length) return '<p class="small mute stk-hint">Tick crates to sell, repair, ship or trade them. A buyer in the Market usually pays more than the pool.</p>';
+  if (!sel.length) return '<p class="small mute stk-hint">Tick crates to sell, repair, ship or offer them.</p>';
   const ids = sel.map((a) => a.id), oneDistrict = new Set(sel.map((a) => a.zone)).size === 1;
   const worth = sel.reduce((x, a) => x + g.val(a), 0), paid = sel.reduce((x, a) => x + (a.basis || 0), 0);
   const pq = oneDistrict ? g.poolQuote(ids) : null; // used for "can it be done" and the delay only: its total is truth-weighted
@@ -148,7 +155,7 @@ function emptyHTML() {
   return `<section class="stk-empty" aria-label="Nothing in stock">
     <span class="stk-empty-ic" aria-hidden="true">📦</span>
     <h3>Your shelves are empty</h3>
-    <p>Nothing to sell yet. Buy your first lot in the Market, and it will show up here as a crate you can sell, repair or ship.</p>
+    <p>A lot you buy in the Market arrives here as a crate.</p>
     <button class="btn big" data-act="stock-gomarket" data-fid="st-go">Buy your first lot</button>
   </section>`;
 }
@@ -172,7 +179,7 @@ function poolConfirm(ctx, ids, route) {
     <dl class="kv"><dt>Worth as described</dt><dd>${m(q.per.reduce((x, p) => x + g.val(p.a, q.zone), 0))}</dd><dt>${route ? 'Routing fee' : 'Pool fees and friction'}</dt><dd>-${Math.round(q.fric * 1000) / 10}%</dd><dt>You get about</dt><dd class="gold">${m(described)}</dd>${inspected ? `<dt>Going by your own read</dt><dd>${m(read)}</dd>` : ''}</dl>
     ${unknown ? '<p class="small">The pool checks what it buys: a worn or fake crate fetches less than shown.</p>' : ''}
     ${q.delay ? `<p class="small">The money arrives after <b>${q.delay} virtual hours</b>.</p>` : ''}
-    ${described > q.room ? `<p class="callout warn small">The pool only has ${m(q.room)} left. It refills 35% a day, so a smaller batch may be needed.</p>` : `<p class="small mute">The pool has ${m(q.room)} left. A buyer in the Market usually pays more.</p>`}`;
+    ${described > q.room ? `<p class="callout warn small">The pool has only ${m(q.room)} left. It refills 35% of its depth a day.</p>` : `<p class="small mute">The pool has ${m(q.room)} left. A buyer in the Market usually pays more.</p>`}`;
   ctx.confirmBox(route ? 'Route to the pool?' : 'Sell to the pool?', body, 'Sell', () => {
     const r = g.sellPool(ids, route);
     for (const id of ids) U.sel.delete(id);
