@@ -600,7 +600,7 @@ How to read a row. **Trigger** is the exact event or interaction. **Recipe** is 
 
 ### 4.2 Notes, session events, progress, the shell and the Deal Room
 
-The engine's `note(level, text, extra)` reaches the shell as the session event `note`. Today a note carries `level`, `text` and a few flags (`milestone`, `zone`, `level`, `alert`, `audit`, `final`). Sounds that depend on **what a note is about** need one more field, `kind` (8.5, a one-word additive change to twelve call sites in `js/engine.js` and two in `js/session.js`). The wiring falls back on matching the text when `kind` is missing, and a test pins the texts so a copy edit cannot silently mute a sound.
+The engine's `note(level, text, extra)` reaches the shell as the session event `note`. Today a note carries `level`, `text` and a few flags (`milestone`, `zone`, `level`, `alert`, `audit`, `final`). Sounds that depend on **what a note is about** need one more field, `kind` (8.5, a one-word additive change to twelve call sites in `js/engine.js` and two in `js/session.js`). The engine and the session write that `kind` (and `amt`, `z`, `exit` where a sound needs them), and `tests/copy2-messages.test.mjs` drives each one through the real engine and checks that its sound does not read its words, so a copy edit cannot mute a sound; the wiring still matches the text of a note that has no `kind` (a hand-made one).
 
 | Source | Condition | Plays | Notes |
 |---|---|---|---|
@@ -616,7 +616,7 @@ The engine's `note(level, text, extra)` reaches the shell as the session event `
 | note | `kind: insolvent` (added with the `insolvent` event: "Your net worth has fallen to zero or below.") | handled with the `insolvent` event | not played twice |
 | note | `kind: swap` (the two "Swap completed" notes in `js/session.js`) | `swap.done` | |
 | note | `audit: true` | `audit.notice` | |
-| note | `alert` with `level` 1 to 3 and `start` in the future | `alert.advance` at that level | the dialog opens with it; the queue's own `sound: 'alarm'` is suppressed |
+| note | `kind: advance`: an `alert` with `level` 1 to 3 and `start` in the future | `alert.advance` at that level | the dialog opens with it; the queue's own `sound: 'alarm'` is suppressed |
 | note | `level: bad` with no `kind` and nothing of the game bus within 400 ms | `ui.refuse`, **only for a refusal reported through `ctx.say`** | the toast fallback (3.4.6); an SLA penalty or "Cash is negative" is a state, not a refusal |
 | note | `final: true` without an exit | `run.end` (horizon) | with "The simulation is complete" |
 | note | `final: true` with an exit | `run.end` (done) | |

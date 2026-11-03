@@ -245,6 +245,22 @@ test('M2: a failed audit names the fine and the speed it costs, as the Bank show
   assert.equal(D1.msg, 'Caught.'); assert.equal(ev2.find((e) => e.type === 'audit').ok, false, 'the event still reads "Caught" as a failed audit');
 });
 
+test('M2: market fatigue says what the craze\'s phases do: half their value, for 72 hours, from hour 48', () => {
+  const fade = C.EVENTS.tiktok.phases.find((p) => p.eff.price), g = mk(), ns = noted(g); g.advanceTo(C.EVENTS.tiktok.day * 24 - 24 + fade.from);
+  const text = ns.find((n) => n.kind === 'fatigue').text;
+  assert.equal(fade.eff.price.mult, 0.5); assert.deepEqual(fade.eff.price.tags, ['trend']); assert.equal(fade.to - fade.from, 72);
+  assert.equal(text, 'Market fatigue: trend goods lose half their value for 72 hours.');
+});
+
+test('M2: a contract that cannot pay back before the bell says how many paying days are left and how many it needs', () => {
+  const g = mk(); g.s.cash = 1e6; g.s.zones.push(13); g.s.mil.m3 = true; g.s.hour = 80 * 24;
+  for (let i = 0; i < 3; i++) g.s.pipes.push({ id: 'P' + i, kind: 'broker', zone: 5, level: 1, status: 'running', basis: 0, inflight: 0 });
+  const q = g.clientQuote('ent'), r = g.acquireClient('ent');
+  assert.equal(r.ok, false); assert.equal(r.msg, `This contract could not earn back its ${usd(q.cac)} before day 90: ${q.payDays} paying days left, and it needs ${Math.ceil(q.payback)}.`);
+  assert.ok(Math.ceil(q.payback) > q.payDays, 'and the numbers say why');
+  const lean = mk(); lean.s.zones.push(13); lean.s.mil.m3 = true; assert.equal(lean.acquireClient('ent').msg, `This account needs at least ${CLIENTS.ent.minRunning} managers. Hire more first.`);
+});
+
 test('M2: the overdraft note names its rate, and the engine charges it', () => {
   const g = mk(), ns = noted(g); g.s.cash = -12.5; g.advanceTo(24 * 3 + 1);
   const row = g.s.ledger.find((r) => r.type === 'overdraft'), rate = Math.abs(row.amt) / 12.5, text = ns.find((n) => n.kind === 'overdraft').text;
@@ -258,6 +274,19 @@ test('M2: a loan: the rate in the message is the engine\'s, per 30 days, and the
   assert.equal(r.msg, `Drew $1,000 at ${(rate * 100).toFixed(1)}% a month. Fee ${usd(fee)}.`);
   const h = mk(); h.s.cash = 5000; h.s.loans.push({ id: 'D1', prod: 'pipeline', principal: 1000, accr: 0, last: 0, next: 168, drawn: 0 }); h.advanceTo(24);
   near(h.s.loans[0].accr, 1000 * h.loanRate('pipeline') / 30, 1e-9); // a day accrues a thirtieth of the rate the message quotes
+});
+
+test('M2: a refusal for want of cash says what it takes and what there is, the same way each time', () => {
+  const g = mk(); g.s.cash = 1; g.advanceTo(g.s.hour + 1);
+  const cash = g.s.cash, best = g.radar(5, 1)[0], lane = { cls: best.cls, buyer: best.seg };
+  const say = (r, cost, thing) => { assert.equal(r.ok, false); assert.equal(r.msg, `Need ${usd(cost)} for ${thing}; you have ${usd(cash)}.`); };
+  g.s.cash = cash; const lot = g.s.lots[1][0]; say(g.buyLot(1, lot.id), lot.price, 'the lot');
+  g.s.zones.push(5); g.s.mil.m1 = true;
+  say(g.hirePipeline('student', 5, lane), g.pipeCost('student', 5), 'hiring');
+  g.s.pipes.push({ id: 'P1', kind: 'student', zone: 5, level: 1, status: 'idle', basis: 10, inflight: 0 }); say(g.upgradePipeline('P1'), g.pipeUpCost(g.s.pipes[0]), 'the upgrade');
+  say(g.buyUpgrade('freight'), C.UPGRADES.freight.cost, 'this upgrade');
+  say(g.acquireClient('smb'), g.clientQuote('smb').cac, 'the account');
+  g.s.mil.m2 = true; g.s.auditPending = { id: 'x', title: 't', due: 99, at: 0 }; const fee = AUDIT.fee * Math.max(0.7, 1 - 0.03 * (g.lvl('fintech') - 1)); say(g.resolveAudit('A'), fee, 'the consultant');
 });
 
 test('M2: storage counts trucks and open swaps, as the refusal says', () => {

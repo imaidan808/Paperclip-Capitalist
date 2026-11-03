@@ -18,6 +18,7 @@ const fin = (x, d) => (typeof x === 'number' && !Number.isNaN(x) ? x : d); // +-
 const own = (o, k) => typeof k === 'string' && Object.prototype.hasOwnProperty.call(o, k); // ids come from the UI and the network: never index a plain object by them unchecked
 const DE_CAP = 999; // a debt-to-equity figure that is logged or shown is finite: nothing left to divide by reads as 999, not Infinity (JSON writes Infinity as null)
 const money = (x) => (x < 0 && Math.abs(x) >= 0.005 ? '-' : '') + (Math.abs(x) < 100 ? '$' + Math.abs(x).toFixed(2) : '$' + Math.round(Math.abs(x)).toLocaleString('en-US')); // -$12.50, as the rest of the product writes it, not $-12.50
+const lack = (cost, have, thing) => fail(`Need ${money(cost)} for ${thing}; you have ${money(have)}.`); // a refusal for cash: what it takes and what there is
 const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`; // "1 day", "2 days"
 const uniq = (ids) => [...new Set(ids)]; // an id list from outside may repeat an id: one crate is one crate
 const isNum = (x) => typeof x === 'number' && Number.isFinite(x); // a real number: not NaN, not +-Infinity, not a string (JSON turns Infinity into null)
@@ -724,7 +725,7 @@ export class Game {
     let cost = Math.max(0.01, Math.round(lead.budget * 0.01 * 100) / 100);
     // A founder down to the last crate with nothing to pay for the check is vouched for: a fraud taking that crate would leave $0, nothing to sell and no way back.
     if (s.cash < cost && s.assets.length <= 1 && !s.pipes.length) cost = 0;
-    if (s.cash < cost) return fail(`Verification costs ${money(cost)}.`);
+    if (s.cash < cost) return lack(cost, s.cash, 'verification');
     s.cash -= cost; lead.verified = true;
     this.led('verify', 'Checked a buyer\'s credentials', cost ? -cost : 0);
     return ok(lead.scam ? 'Fraud confirmed. Skip this buyer.' : 'Verified: this buyer is genuine.', { scam: !!lead.scam, cost });
@@ -835,7 +836,7 @@ export class Game {
     const s = this.s, q = this.buyQuote(zone, lotId, deal);
     if (!q.ok) return q;
     const lot = q.lot, price = q.price;
-    if (s.cash < price) return fail(`Need ${money(price)}; you have ${money(s.cash)}.`);
+    if (s.cash < price) return lack(price, s.cash, 'the lot');
     const held = s.assets.filter((a) => a.zone === zone).length + s.freight.reduce((n, f) => n + (f.to === zone ? f.items.length : 0), 0) + s.escrow.reduce((n, e) => n + e.assets.filter((a) => a.zone === zone).length, 0);
     if (held >= this.storeCap(zone)) return fail(FULL);
     s.cash -= price;
@@ -869,7 +870,7 @@ export class Game {
   repair(assetId, deal) {
     const q = this.repairQuote(assetId, deal);
     if (!q.ok) return q;
-    if (this.s.cash < q.cost) return fail(`Repair costs ${money(q.cost)}.`);
+    if (this.s.cash < q.cost) return lack(q.cost, this.s.cash, 'the repair');
     this.s.cash -= q.cost;
     q.asset.cond = 'ok'; q.asset.quality = q.quality; q.asset.basis += q.cost;
     this.xp(20);
@@ -907,7 +908,7 @@ export class Game {
     if (q.delay) s.settle.push({ amt: q.total - this._garnishTake(profit, q.total), at: s.hour + q.delay, note: 'Liquidation settlement' }); // the garnishment comes out of the proceeds when they land
     else { s.cash += q.total; this.garnish(profit); }
     s.pivot++;
-    this.led('pool', `Sold ${q.per.length} asset(s) to the ${ZONES[q.zone].short} liquidity pool${q.delay ? ' (settles in ' + q.delay + 'h)' : ''}`, q.total, { z: q.zone });
+    this.led('pool', `Sold ${plural(q.per.length, 'crate')} to the ${ZONES[q.zone].short} liquidity pool${q.delay ? ' (settles in ' + q.delay + 'h)' : ''}`, q.total, { z: q.zone });
     this.emit('sell-pool', { zone: q.zone, total: q.total, count: q.per.length });
     return ok(q.delay ? `Proceeds of ${money(q.total)} settle in ${q.delay} virtual hours.` : `Sold for ${money(q.total)}.`, q);
   }
@@ -942,12 +943,12 @@ export class Game {
     if (!q.ok) return q;
     const s = this.s;
     if (q.items.length > q.room) return fail(`${ZONES[q.to].short} does not have room for all of that.`);
-    if (s.cash < q.cost) return fail(`Freight costs ${money(q.cost)}.`);
+    if (s.cash < q.cost) return lack(q.cost, s.cash, 'freight');
     s.cash -= q.cost;
     const going = new Set(q.items.map((a) => a.id));
     s.assets = s.assets.filter((a) => !going.has(a.id));
     s.freight.push({ id: 'F' + s.nid++, items: q.items, to, sent: s.hour, arrive: s.hour + q.hours, risk: q.risk, book: q.book, from: q.from });
-    this.led('freight', `Shipped ${q.items.length} asset(s) to ${ZONES[to].short}`, -q.cost, { z: to });
+    this.led('freight', `Shipped ${plural(q.items.length, 'crate')} to ${ZONES[to].short}`, -q.cost, { z: to });
     this.emit('ship', { from: q.from, to, count: q.items.length });
     return ok(`In transit for ${q.hours} virtual hours.`, q);
   }
@@ -1055,7 +1056,7 @@ export class Game {
     const lane = this.validLane(zone, cfg.cls, cfg.buyer);
     if (!lane.ok) return lane;
     const cost = this.pipeCost(kind, zone);
-    if (s.cash < cost) return fail(`Hiring costs ${money(cost)}.`);
+    if (s.cash < cost) return lack(cost, s.cash, 'hiring');
     s.cash -= cost;
     const p = { id: 'P' + s.nid++, kind, zone, level: 1, cls: cfg.cls, buyer: cfg.buyer, channel: cfg.channel === 'intl' ? 'intl' : 'dom', alloc: 0, prog: 0, len: 0, inflight: 0, cycles: 0, profit: 0, basis: cost, status: 'idle', pausedUntil: 0, starved: false };
     p.alloc = clamp(isNum(cfg.alloc) ? cfg.alloc : this.pipeCap(p), 0, this.pipeCap(p)); // a negative, NaN or text allocation is the cap, not a manager that pays you to run
@@ -1085,7 +1086,7 @@ export class Game {
     if (this.autoLocked()) return fail(AUTO_LOCKED);
     if (p.level >= PIPE_RULES.maxLevel) return fail('Maximum level.');
     const c = this.pipeUpCost(p);
-    if (s.cash < c) return fail(`Upgrading costs ${money(c)}.`);
+    if (s.cash < c) return lack(c, s.cash, 'the upgrade');
     s.cash -= c; p.level++; p.basis += c;
     if (this._firstPlay('upgrade', `${p.kind}@${p.zone}#${s.pipes.filter((x) => x.zone === p.zone).indexOf(p)}@${p.level}`)) this.xp(80); // once for each level of each plot
     this.led('hire', `Upgraded ${PIPE[p.kind].name} to level ${p.level}`, -c, { z: p.zone });
@@ -1114,7 +1115,7 @@ export class Game {
     if (!U) return fail('Unknown upgrade.');
     if (s.upg[id]) return fail('Already installed.');
     if (!s.zones.includes(U.zone)) return fail('Unlocks at Metro Hub.');
-    if (s.cash < U.cost) return fail(`Costs ${money(U.cost)}.`);
+    if (s.cash < U.cost) return lack(U.cost, s.cash, 'this upgrade');
     s.cash -= U.cost; s.upg[id] = true; this.xp(100);
     this.led('upgrade', `Installed ${U.name}`, -U.cost);
     this.emit('upgrade', { id });
@@ -1176,7 +1177,7 @@ export class Game {
     if (s.pipes.length < C.minRunning) return fail(`This account needs at least ${plural(C.minRunning, 'manager')}. Hire more first.`);
     const q = this.clientQuote(tier);
     if (!q.worthwhile && !opts.force) return fail(`This contract could not earn back its ${money(q.cac)} before day 90: ${plural(q.payDays, 'paying day')} left, and it needs ${Math.ceil(q.payback)}.`, q);
-    if (s.cash < q.cac) return fail(`Acquisition costs ${money(q.cac)}.`);
+    if (s.cash < q.cac) return lack(q.cac, s.cash, 'the account');
     s.cash -= q.cac;
     s.clients.push({ id: 'C' + s.nid++, tier, cac: q.cac, until: this._contract(C).until, earned: 0, breaches: 0 });
     this.xp(90);
@@ -1406,7 +1407,7 @@ export class Game {
     let msg = '';
     if (choice === 'A') {
       const fee = AUDIT.fee * Math.max(0.7, 1 - 0.03 * (this.lvl('fintech') - 1));
-      if (s.cash < fee) return fail(`The consultant costs ${money(fee)}.`);
+      if (s.cash < fee) return lack(fee, s.cash, 'the consultant');
       s.cash -= fee; s.auditPass++;
       this.led('audit', 'Filed with a compliance consultant', -fee);
       msg = `Consultant hired for ${money(fee)}. Your managers keep running.`;
