@@ -13,7 +13,7 @@
 export const zones = {
   13: {
     id: 13, name: 'Corporate Valley', short: 'Corp. Valley', icon: '🏢',
-    blurb: 'Glass towers, buying committees and big tickets. Enterprise clients pay richly under long contracts: learn to sell to a room, not a person.',
+    blurb: 'Enterprise clients and your exit, by trade sale or IPO, open here.',
     teaches: 'enterprise-sales', theme: 'corporate', tier: 4,
     gate: 250000, scale: 90000, tax: 0.126, friction: 0.148, pool: 2500000, speed: 4.6, store: 30,
     leadEvery: 3, lotEvery: 4, urgent: 0.076, auto: true, plots: 4,
@@ -23,7 +23,7 @@ export const zones = {
   },
   14: {
     id: 14, name: 'Financial District', short: 'Finance', icon: '💹',
-    blurb: 'Banks, funds and treasurers buy paper, not products. Loan spreads fall here, and leverage becomes your sharpest weapon and your biggest risk.',
+    blurb: 'Banks and funds buy paper, not products, and loans get cheaper.',
     teaches: 'leverage-risk', theme: 'finance', tier: 4,
     gate: 500000, scale: 180000, tax: 0.1355, friction: 0.152, pool: 5000000, speed: 4.9, store: 32,
     leadEvery: 3, lotEvery: 4, urgent: 0.071, auto: true, plots: 4,
@@ -35,7 +35,7 @@ export const zones = {
   },
   15: {
     id: 15, name: 'Real Estate Row', short: 'Real Estate', icon: '🏘️',
-    blurb: 'Property pays rent every day you hold it. Tickets are big, a quarter of the lots are foreclosure auctions, and patience is the whole strategy.',
+    blurb: 'Property pays rent every day, and a quarter of the lots are foreclosure auctions.',
     teaches: 'asset-cash-flow', theme: 'realty', tier: 4,
     gate: 1000000, scale: 400000, tax: 0.145, friction: 0.156, pool: 10000000, speed: 5.2, store: 34,
     // Foreclosure sales are the appraisal dispute in game form: a quarter of lots are auctions. Fewer lots refresh (5) and
@@ -47,7 +47,7 @@ export const zones = {
   },
   16: {
     id: 16, name: 'Global Exchange', short: 'Exchange', icon: '🌐',
-    blurb: 'Gems, art and cargo trade on every continent at different prices. Spot the gap, pay the friction, and exit big.',
+    blurb: 'Gems, art and cargo sell at very different prices from district to district.',
     teaches: 'arbitrage-at-scale', theme: 'exchange', tier: 4,
     gate: 2500000, scale: 1000000, tax: 0.1545, friction: 0.16, pool: 25000000, speed: 5.5, store: 36,
     // Gray-market luxury is arbitrage by another name (parallel imports), so gray is on and counterfeits are common: a tenth of
@@ -152,13 +152,13 @@ export const buyers = {
     zone: 13, name: 'Halvorsen Holding Co.', icon: '🏦', pop: 0.55,
     like: { b2b: 1, franchise: 1, industrial: 0.6, infra: 0.5 }, budget: [25000, 420000],
     style: 'hard', patience: 6, bias: 'utility',
-    hello: 'Forty years of holding good companies. Convince me yours belongs in the family.',
+    hello: 'Forty years of holding good companies. Convince me yours belongs.',
   },
   franchisor: {
     zone: 13, name: 'Brightside Franchise Group', icon: '🍔', pop: 0.35,
     like: { franchise: 1, vehicle: 0.5, realty: 0.4, b2b: 0.3 }, budget: [18000, 300000],
     style: 'friendly', patience: 5, bias: 'prestige',
-    hello: 'Four hundred units, nine states, and a board hungry for a new territory. Pitch me.',
+    hello: 'Four hundred units, nine states, and a board hungry for territory.',
   },
   lakeshoreHealth: {
     zone: 13, name: 'Evergreen Health Network', icon: '🏥', pop: 0.65,
@@ -176,19 +176,19 @@ export const buyers = {
     zone: 13, name: 'Altitude Systems Integrators', icon: '🖥️', pop: 0.75,
     like: { digital: 1, electronics: 0.5, b2b: 0.4 }, budget: [12000, 220000],
     style: 'impulsive', patience: 3, bias: 'scarcity',
-    hello: 'My client needs this live by quarter-end. What is your best number today?',
+    hello: 'My client needs this live by quarter-end. Best number today?',
   },
   pinecrestChain: {
     zone: 13, name: 'Pinecrest Pharmacy Group', icon: '💊', pop: 0.5,
     like: { medical: 0.9, consumer: 0.6, franchise: 0.5, b2b: 0.4 }, budget: [15000, 240000],
     style: 'friendly', patience: 6, bias: 'utility',
-    hello: 'Sixty stores, one purchasing desk. Make it easy for my buyers to say yes.',
+    hello: 'Sixty stores, one purchasing desk. Make it easy to say yes.',
   },
   ironbridgeMfg: {
     zone: 13, name: 'Ironbridge Manufacturing Group', icon: '⚙️', pop: 0.4,
     like: { industrial: 1, b2b: 0.4, vehicle: 0.4 }, budget: [40000, 380000],
     style: 'hard', patience: 5, bias: 'price',
-    hello: "Third-generation plant owners. We buy the divisions the big groups can't stomach.",
+    hello: "Third-generation plant owners. We buy what big groups can't stomach.",
   },
 
   // ------------------------------------------------------------------ 14 Financial District: sharp, analytical, fast
@@ -196,13 +196,13 @@ export const buyers = {
     zone: 14, name: 'Harbor Trust Commercial Bank', icon: '🏛️', pop: 0.8,
     like: { finance: 0.8, b2b: 0.6, consumer: 0.5, infra: 0.4 }, budget: [60000, 750000],
     style: 'analytical', patience: 6, bias: 'price',
-    hello: 'Credit committee approves in rounds. Show me collateral and a clean paper trail.',
+    hello: 'The committee decides in rounds. Show me collateral and clean paper.',
   },
   kestrelFund: {
     zone: 14, name: 'Kestrel Credit Partners', icon: '🦅', pop: 0.5,
     like: { finance: 0.9, ip: 0.5, media: 0.4, b2b: 0.3 }, budget: [40000, 650000],
     style: 'impulsive', patience: 3, bias: 'scarcity',
-    hello: "Speed is a yield. Give me one number and I'll answer inside a minute.",
+    hello: 'Speed is a yield. One number, answered inside a minute.',
   },
   countyTreasurer: {
     zone: 14, name: 'Ana Ortiz, County Treasurer', icon: '🧮', pop: 0.4,
@@ -214,19 +214,19 @@ export const buyers = {
     zone: 14, name: 'Granite State Mutual', icon: '☂️', pop: 0.6,
     like: { home: 1, infra: 0.6, realty: 0.5, finance: 0.45 }, budget: [80000, 900000],
     style: 'analytical', patience: 6, bias: 'prestige',
-    hello: "We price risk for a living. Show us the loss ratios, then we'll talk price.",
+    hello: 'We price risk for a living. Show us the loss ratios.',
   },
   tillmanFactor: {
     zone: 14, name: 'Tillman Factoring Co.', icon: '🤝', pop: 0.85,
     like: { b2b: 1, consumer: 0.5, finance: 0.4 }, budget: [20000, 260000],
     style: 'hard', patience: 5, bias: 'story',
-    hello: "I buy invoices from people who can't wait sixty days. Fair, never generous.",
+    hello: "I buy invoices from people who can't wait. Fair, never generous.",
   },
   echoRights: {
     zone: 14, name: 'Echo Rights Capital', icon: '🎧', pop: 0.25,
     like: { media: 1, ip: 0.9, finance: 0.4, collectible: 0.3 }, budget: [25000, 320000],
     style: 'friendly', patience: 5, bias: 'scarcity',
-    hello: "We fund the songs people hum in the shower. Tell me this catalog's story.",
+    hello: 'We fund songs people hum in the shower. Tell me its story.',
   },
 
   // ------------------------------------------------------------------ 15 Real Estate Row: appraisal-minded, patient
@@ -234,19 +234,19 @@ export const buyers = {
     zone: 15, name: 'Cobalt Industrial REIT', icon: '🏙️', pop: 0.8,
     like: { industrial: 1, realty: 0.7, infra: 0.6, b2b: 0.4 }, budget: [100000, 1700000],
     style: 'hard', patience: 6, bias: 'price',
-    hello: 'We underwrite on cap rate and nothing else. What is the net operating income?',
+    hello: 'Cap rate or nothing. What is the net operating income?',
   },
   okaforLandlord: {
     zone: 15, name: 'Mrs. Adeyemi, 40 Doors', icon: '🔑', pop: 0.7,
     like: { home: 1, realty: 0.45, consumer: 0.3 }, budget: [60000, 700000],
     style: 'friendly', patience: 7, bias: 'story',
-    hello: "Thirty years collecting rent on the first of the month. Don't rush me, dear.",
+    hello: "Thirty years collecting rent on the first. Don't rush me, dear.",
   },
   tidewaterDev: {
     zone: 15, name: 'Tidewater Development Group', icon: '🏗️', pop: 0.5,
     like: { realty: 0.9, prestige: 0.6, home: 0.4, b2b: 0.4 }, budget: [150000, 1900000],
     style: 'impulsive', patience: 3, bias: 'scarcity',
-    hello: "Land is the one thing they aren't making more of. I'll take the good ones.",
+    hello: "They aren't making more land. I'll take the good parcels.",
   },
   nimbusCloud: {
     zone: 15, name: 'Stratus Cloud Site Team', icon: '☁️', pop: 0.3,
@@ -264,7 +264,7 @@ export const buyers = {
     zone: 15, name: 'Aldrin Family Office', icon: '🪙', pop: 0.35,
     like: { prestige: 0.8, home: 0.6, luxury: 0.6, finance: 0.5, realty: 0.4 }, budget: [120000, 1600000],
     style: 'friendly', patience: 7, bias: 'prestige',
-    hello: 'We think in generations, not quarters. Will this still be standing in 2090?',
+    hello: 'We think in generations, not quarters. Will it stand in 2090?',
   },
 
   // ------------------------------------------------------------------ 16 Global Exchange: six desks, six ways to value the same thing
@@ -272,13 +272,13 @@ export const buyers = {
     zone: 16, name: 'Rochat & Fils, Geneva', icon: '🏔️', pop: 0.6,
     like: { luxury: 1, gem: 0.5, finance: 0.6, collectible: 0.5 }, budget: [150000, 3800000],
     style: 'analytical', patience: 6, bias: 'prestige',
-    hello: 'Discretion is part of the price. Your paperwork first, then your number.',
+    hello: 'Discretion is part of the price. Papers first, then your number.',
   },
   sanghviMumbai: {
     zone: 16, name: 'Sanghvi Jewelers, Mumbai', icon: '💍', pop: 0.65,
     like: { gem: 1, luxury: 0.6, collectible: 0.3 }, budget: [100000, 2000000],
     style: 'friendly', patience: 7, bias: 'story',
-    hello: 'Sit, have chai. We will haggle properly, yes? It is only polite.',
+    hello: 'Sit, have chai. We will haggle properly. It is only polite.',
   },
   laiwingHK: {
     zone: 16, name: 'Lai Wing Trading, Hong Kong', icon: '🏮', pop: 0.55,
@@ -290,13 +290,13 @@ export const buyers = {
     zone: 16, name: 'Al-Mansoori Trading House, Dubai', icon: '👑', pop: 0.5,
     like: { luxury: 0.9, gem: 0.9, collectible: 0.5, bulk: 0.5 }, budget: [150000, 3600000],
     style: 'impulsive', patience: 3, bias: 'scarcity',
-    hello: 'The best pieces never reach the shop window. What did you bring me?',
+    hello: 'The best pieces never reach the window. What did you bring?',
   },
   norlandFund: {
     zone: 16, name: 'Norland Sovereign Fund', icon: '🧭', pop: 0.3,
     like: { finance: 1, infra: 0.8, energy: 0.6, realty: 0.5 }, budget: [300000, 4500000],
     style: 'hard', patience: 7, bias: 'utility',
-    hello: 'We hold for decades and read every page of the file. Take your time.',
+    hello: 'We hold for decades and read every page. Take your time.',
   },
   whitcombeMuseum: {
     zone: 16, name: 'Whitcombe Foundation', icon: '🎨', pop: 0.25,

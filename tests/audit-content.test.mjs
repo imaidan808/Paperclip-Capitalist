@@ -278,7 +278,7 @@ test('district blurbs promise only what the rules do', () => {
   assert.match(ZONES[4].blurb, /a third of the stock goes to auction/);
   assert.ok(Math.abs(estate.auction / estate.n - 0.5) < 0.08, 'Estate Sales: about half at auction');
   assert.ok(Math.abs(auto.broken / auto.n - 0.6) < 0.04, `Auto Row: ${pct(auto.broken / auto.n)} of all lots arrive broken (the rule is 60%)`);
-  assert.match(ZONES[7].blurb, /Six in ten cars/);
+  assert.match(ZONES[7].blurb, /Six in ten lots/); // lots, not cars: the 60% is a share of every lot on the shelf (engine.js `brokenLots`), the tool chest's included
   assert.ok(Math.abs(row.auction / row.n - 0.25) < 0.05, 'Real Estate Row: a quarter of the lots are foreclosure auctions');
   assert.match(ZONES[15].blurb, /a quarter of the lots are foreclosure auctions/);
   // Flea Market Row: a sealed box is no wilder than any other lot there, so the blurb says gamble on condition, not "junk to treasure"
