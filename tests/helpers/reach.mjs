@@ -5,7 +5,7 @@
  * nothing: the picture under it must).
  */
 export function reach(main, cw, ch, { step = 16, skip = () => false, only = () => true } = {}) {
-  const nx = Math.ceil(cw / step), ny = Math.ceil(ch / step), got = new Uint8Array(nx * ny); let clips = [], path = []; const stack = [];
+  const nx = Math.ceil(cw / step), ny = Math.ceil(ch / step), got = new Uint8Array(nx * ny), cnt = new Uint8Array(nx * ny); let clips = [], path = []; const stack = []; /* (`cnt`: how many blits reached each sample point: a translucent layer that two blits reach shows twice as dark there) */
   const inside = (cl, x, y) => { let n = 0; for (const [rx, ry, rw, rh] of cl.rects) if (x >= rx && x < rx + rw && y >= ry && y < ry + rh) n++; return cl.eo ? n % 2 === 1 : n > 0; };
   for (const [name, ...a] of main.log.calls) {
     if (name === 'save') stack.push(clips.slice()); else if (name === 'restore') clips = stack.pop() || [];
@@ -14,10 +14,10 @@ export function reach(main, cw, ch, { step = 16, skip = () => false, only = () =
       const [img, x, y, w, h] = a; const dw = a.length >= 5 ? w : img.width, dh = a.length >= 5 ? h : img.height; if (skip(x, y, a.length) || !only(img)) continue;
       for (let j = Math.max(0, Math.floor(y / step)); j < ny && j * step < y + dh; j++) for (let i = Math.max(0, Math.floor(x / step)); i < nx && i * step < x + dw; i++) {
         const px = i * step + step / 2, py = j * step + step / 2; if (px < x || px >= x + dw || py < y || py >= y + dh) continue;
-        if (clips.every((cl) => inside(cl, px, py))) got[j * nx + i] = 1;
+        if (clips.every((cl) => inside(cl, px, py))) { got[j * nx + i] = 1; if (cnt[j * nx + i] < 255) cnt[j * nx + i]++; }
       }
     }
   }
   const bare = (x0 = 0, y0 = 0, x1 = cw, y1 = ch) => { let n = 0; for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) { const px = i * step + step / 2, py = j * step + step / 2; if (px >= x0 && px < x1 && py >= y0 && py < y1 && !got[j * nx + i]) n++; } return n; };
-  return { bare, got, nx, ny };
+  return { bare, got, cnt, nx, ny };
 }

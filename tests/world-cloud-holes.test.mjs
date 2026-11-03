@@ -73,3 +73,12 @@ test('a district that opens re-bakes the cells under its own bank in that frame 
   for (let n = 0; n < 40; n++) { const R = seen(draw(A), A); assert.equal(missing(T, R).all, 0, `frame ${n + 2}: nothing that stays under cloud is bare`); }
   assert.equal([...store.map.values()].filter((c) => c.stale).length, 0, 'every stale chunk was replaced, a few a frame');
 }));
+
+test('a translucent bank is stamped once wherever it is: two stand-ins of different scales that partly overlap each other (a stale chunk and a coarse one) doubled the shadow and veil in the overlap, the faint dark rectangles over a cliff that a recording of the live site showed at every zoom', () => withSurfaces(() => {
+  let twice = 0, frames = 0; const worst = [];
+  for (const z of [0.7, 0.75, 0.8, 1.0, 1.1]) { // (zoom steps whose old chunks still stand in by the ratio window, so the cover chunks made for what the zoom reveals overlap them)
+    const A = stubWorld({ reduced() { return true; } }); draw(A); draw(A); A.gcBudget = [1e-6, 1e-6]; A.cam.z = z;
+    for (let n = 0; n < 16; n++) { const R = seen(draw(A), A); let m = 0, k = 0; for (let i = 0; i < R.cnt.length; i++) { if (R.cnt[i] > m) m = R.cnt[i]; if (R.cnt[i] > 1) k++; } worst.push(m); twice += k; frames++; }
+  }
+  assert.equal(twice, 0, `no sample point of the clouds is reached by two chunk blits in any of ${frames} frames (most blits on a point, per frame: ${JSON.stringify(worst)})`);
+}));

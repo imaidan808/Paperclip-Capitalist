@@ -469,9 +469,9 @@ export class World {
     this.draw();
     if (this.veil && this.veil.on) this.stepVeil(ts);
     this.dirty = false; G.prev = animating ? ts : 0; this.repickHover();
-    this.govern(performance.now() - t0, gap, builds.n !== b0); // (a frame that filled a cache is not judged: governor.js BUILD_GRACE)
+    this.govern(performance.now() - t0, gap, builds.n !== b0 || this.settling()); // (a frame that filled a cache or settles is not judged: governor.js BUILD_GRACE)
     if ((this.ledgerN = (this.ledgerN | 0) + 1) % 20 === 0) { this.ledgerSync(); if (!ledger.within(LEDGER_LIMIT_MB)) this.squeeze(); } // every few seconds: the pixel ledger against its ceiling
-    this.fps = this.slow > 4 ? 15 : this.slow > 2 ? 20 : 30; if (this.moving && this.slow < 3) this.fps = 60; // the 30 fps cap is for a still camera's idle motion: a camera that moves draws every refresh while the machine keeps up (docs/RENDER_PLAN.md section 5, DIAGNOSIS P4)
+    this.fps = this.slow > 4 ? 15 : this.slow > 2 ? 20 : 30; if ((this.moving || this.gcMore) && this.slow < 3) this.fps = 60; // the 30 fps cap is for a still camera's idle motion: a camera that moves, or a ground that is being made, draws every refresh while the machine keeps up (docs/RENDER_PLAN.md section 5)
     this.lite = this.slow > 2;
     if (Math.abs(this.targetDpr() - this.dpr) > 0.01) this.resize();
   }
@@ -480,6 +480,8 @@ export class World {
   set dirty(v) { this._dirty = v; if (v && this.running && !this.raf) this.raf = requestAnimationFrame((t) => this.frame(t)); }
   /** Is any district still opening? One that has finished is swept here (fxOf only sweeps the districts in view, and a reveal nobody looks at must not hold the ground cache off). */
   revealing() { let on = false; for (const k in this.reveal) { const r = this.reveal[k]; if (this.t - r.t0 >= r.dur) delete this.reveal[k]; else on = true; } return on; }
+  /** Is the picture settling (camera moving, ground not whole or wanting a frame)? Its frames are not judged by the governor: a zoom out at 4x took the tier to 4, which makes all of the ground again. */
+  settling() { return this.cacheOK() && !!(this.moving || this.gcMore || !this.gcValid); }
   /**
    * The quality governor. `slow` (0 to 6) is the tier. It steps down after a few frames of smoothed cost over SLOW_MS and back up only after a longer
    * spell under FAST_MS, so a single hitch changes nothing. If the picture tips over again soon after a step up, the wait for the next step up doubles

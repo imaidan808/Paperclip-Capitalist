@@ -826,6 +826,9 @@ test('the staged site, served as Pages serves it, boots in Chrome: no console er
     await until(p, `document.title === 'The world | Paperclip Capitalist' && !!document.querySelector('canvas') && document.querySelector('[data-anchor="dock-stock"]')`, 'the world and its dock', 30000);
     await p.sleep(1500);
     assert.equal(await p.eval(`document.querySelectorAll('[data-anchor^="dock-"]').length > 0`), true);
+    // 3a. the ground's base is painted by a worker (js/world/basework.js): a script path that breaks falls back to the main thread without a word and the ground only gets slower, so the staged site must really have run it
+    const wk = await until(p, `(() => { const c = window.pc && pc.world && pc.world.gcWorker; return c && c.live && c.stats.got > 0 ? JSON.stringify({ posted: c.stats.posted, got: c.stats.got }) : ''; })()`, 'the base worker\'s first chunk', 20000);
+    assert.ok(JSON.parse(wk).got > 0, 'the base worker painted: ' + wk);
     // 3b. the instructor's side: a new room shows its recovery code once (32 characters in groups of four, as the faculty kit says), then the dashboard with the controls the kit names
     const pi = await open(b, base + '?slot=run3', { w: 1280, h: 800 });
     await until(pi, `!!document.querySelector('#app h1')`, 'the title screen for the instructor');
