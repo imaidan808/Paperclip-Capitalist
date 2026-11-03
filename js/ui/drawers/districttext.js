@@ -1,7 +1,7 @@
 // A district's words, said once. The Travel and Market drawers both describe a district: its rule, what opening it gives, the lesson it teaches. Both read it from here, from the
 // district's own data (js/data) and the Codex (js/meta/codex.js), so the two cannot disagree. They had three sets of titles for the sixteen lessons (four of them differed) and two
-// restatements of every rule, and the district's blurb said it a third time. The blurb is prose for the news line that says a district has opened (engine _unlock); these drawers
-// print the rule from the data, with its exact figures, and never the blurb (the Market banner used to print both).
+// restatements of every rule, and the district's blurb said it a third time. These drawers print the rule from the data, with its exact figures, and never the blurb
+// (the Market banner used to print both; the engine's news line for an opened district is the engine's, _unlock).
 //
 // What is claimed here is checked against the engine by tests/copy2-drawers.test.mjs (the shares by playing the lot generator out, the bonuses by reading what the engine does with them).
 // A rule key that only marks a district and does nothing in the engine has no phrase: `bulk`, `bank` (it opens with `managers`), `gray` (it only touches one Background's prices, see

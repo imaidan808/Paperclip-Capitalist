@@ -64,7 +64,7 @@ function bannerHTML(ctx, z) {
   const poolNow = s.pool[z] ?? 0, tax = g.zoneTax(z), gave = rewardPhrases(Z).join(' '), gray = grayBreak(Z, g.P.lotDiscountGray);
   const lines = [...more, gray].filter(Boolean), lesson = lessonTitle(Z.teaches), gist = lessonGist(Z.teaches);
   // the rule that matters first is on the banner; the other rules, what opening the district gave and its lesson are one fold, opened on request (and the same words are its hover).
-  // The district's blurb is not here: it says the rule again, and it is the news line's (engine _unlock).
+  // The district's blurb is not here: it says the rule again (districttext.js).
   const body = `${lines.length ? `<ul>${lines.map((t) => `<li>${e(t)}</li>`).join('')}</ul>` : ''}${gave ? `<p>Opening it gave you: ${e(gave)}</p>` : ''}<p>Teaches <b>${e(lesson)}</b>${gist ? `: ${e(gist)}` : ''}</p>`;
   const tip = [...lines, gave && `Opening it gave you: ${gave}`, `Teaches ${lesson}.`].filter(Boolean).join(' ');
   return `<section class="mkt-banner" style="--zg:${e(Z.palette?.[0] || '#34445c')};--za:${e(Z.palette?.[1] || '#ffc247')}" aria-label="About ${e(Z.name)}">
