@@ -224,7 +224,7 @@ export function resultHTML(m) {
   const better = n.better === 'low' ? Math.min : Math.max;
   const vals = [n.quick, n.expert, n.you].filter((x) => x != null && x > 0), top = Math.max(1e-9, ...vals.map(Math.abs)), best = vals.length ? better(...vals) : null;
   const tied = [n.quick, n.expert, n.you].filter((x) => x != null && x === best).length; // a three-way tie has no best row to mark
-  const row = (label, x, cls, say = f) => `<div class="vs ${cls}${x != null && x === best && tied < 3 ? ' best' : ''}"><dt>${label}</dt><dd${x == null ? '' : ` data-count="${x}" data-fmt="money"`}>${say(x)}</dd><span class="vbar" aria-hidden="true"><i style="width:${x == null ? 0 : Math.max(2, (Math.abs(x) / top) * 100).toFixed(1)}%"></i></span></div>`;
+  const row = (label, x, cls, say = f, tip = '') => `<div class="vs ${cls}${x != null && x === best && tied < 3 ? ' best' : ''}"${tip ? ` title="${tip}"` : ''}><dt>${label}</dt><dd${x == null ? '' : ` data-count="${x}" data-fmt="money"`}>${say(x)}</dd><span class="vbar" aria-hidden="true"><i style="width:${x == null ? 0 : Math.max(2, (Math.abs(x) / top) * 100).toFixed(1)}%"></i></span></div>`;
   const net = m.plan.kind === 'buy' && n.net != null && !kept ? `<p class="small mute">Against what it was really worth: Quick ${money(n.quickNet)}, expert ${money(n.expertNet)}${n.net !== undefined && s.reveal ? `, you ${money(n.net)}` : ''}.</p>` : '';
   const rev = s.reveal ? `<div class="reveal"><h4>What the lot really was</h4><p><b>${esc(s.reveal.truth)}.</b> ${s.reveal.total ? `You found ${s.reveal.found} of its ${s.reveal.total} flaw${s.reveal.total === 1 ? '' : 's'}${s.reveal.defects.length ? `: ${esc(s.reveal.defects.join(', '))}` : ''}.` : 'It had no flaws to find.'} <span class="mute">Your read: ${esc(s.reveal.estimate)}.</span></p></div>` : '';
   const why = s.reasons.length ? `<div class="why"><h4>Why</h4><ul>${s.reasons.map((r) => `<li><b>${esc(r.label)}.</b> ${esc(r.text)}</li>`).join('')}</ul></div>` : '';
@@ -236,11 +236,12 @@ export function resultHTML(m) {
     <h3 id="ds-title" class="rtitle" tabindex="-1" data-stage-head>${esc(s.title)}</h3><p class="rhead">${esc(s.headline)}</p>
     ${s.lines.length ? `<ul class="rlines">${s.lines.map((l) => `<li>${esc(l)}</li>`).join('')}</ul>` : ''}
     <div class="vsbox" role="group" aria-label="How you compare"><h4>${esc(cap(n.unit))}: Quick, expert, you</h4>${verdict}
-      <dl>${row('Quick', n.quick, 'quick', g)}${row('Expert', n.expert, 'expert', g)}${row('You', n.you, 'you')}</dl>
-      ${kept ? `<p class="small kept" role="note">Quick's and the expert's figures are kept back until you have sat at the table: they would be this table's answers, and you can still sit at it.</p>` : ''}<p class="small mute">Quick plays every stage for you at average skill. Expert plays the same deal, with the same luck, at full skill${n.expertVia ? ` (here by selling to ${esc(n.expertVia)})` : ''}. ${n.better === 'low' ? 'Lower is better.' : 'Higher is better.'}</p>${net}</div>
-    ${why}${rev}
+      <dl>${row('Quick', n.quick, 'quick', g, 'Every stage played for you at average skill')}${row('Expert', n.expert, 'expert', g, 'The same deal at full skill, with the same luck')}${row('You', n.you, 'you')}</dl>
+      ${kept ? `<p class="small kept" role="note">Quick's and the expert's figures are kept back until you have sat at the table: they would be this table's answers, and you can still sit at it.</p>` : ''}<p class="small mute">${n.better === 'low' ? 'Lower is better.' : 'Higher is better.'}</p>${net}</div>
+    ${rev}
     <p class="xp"><b data-count="${num(s.xp)}" data-fmt="int" data-pre="+" data-post=" XP">+${s.xp} XP</b>${m.plan.kind === 'sell' ? ` · deal streak ${s.streak}` : ''}</p>
-    <blockquote class="lesson"><b>${esc(labels[s.lesson.concept] || 'Lesson')}.</b> ${esc(s.lesson.text)}</blockquote>
+    <details class="deal-more"><summary>Why this result</summary><p class="small mute">Quick plays every stage for you at average skill. Expert plays the same deal, with the same luck, at full skill${n.expertVia ? ` (here by selling to ${esc(n.expertVia)})` : ''}.</p>${why}
+    <blockquote class="lesson"><b>${esc(labels[s.lesson.concept] || 'Lesson')}.</b> ${esc(s.lesson.text)}</blockquote></details>
     <div class="row"><button class="btn big" data-close data-snd data-fid="done" autofocus>Continue</button></div></section>`;
 }
 const cap = (s) => String(s).charAt(0).toUpperCase() + String(s).slice(1);

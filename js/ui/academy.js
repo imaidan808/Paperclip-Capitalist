@@ -463,8 +463,8 @@ export function mountAcademy(root, S, { onDone, onSkip, only, missions, store = 
     // ---- feeding the resolver
     // A step done is felt before it is read: a tick pops on the card's corner (css `.ac-check`, one beat; `reduced()` leaves it out, and the card's own words and sound say the same).
     let tickT = 0;
-    function tick() {
-      if (!cardEl || reduced()) return;
+    function tick(on = true) {
+      if (!on || !cardEl || reduced()) return;
       cardEl.classList.remove('ac-tick'); void cardEl.offsetWidth; cardEl.classList.add('ac-tick');
       clearTimeout(tickT); tickT = setTimeout(() => cardEl?.classList.remove('ac-tick'), 1000);
     }
@@ -473,7 +473,7 @@ export function mountAcademy(root, S, { onDone, onSkip, only, missions, store = 
       const r = feedRun(m, run, evt);
       run = r.run;
       if (r.pause) { try { sb.setPaused(true); } catch { /* clock fixed */ } } // a step that says `pause`: the clock stops at the moment the step is done (m07's glut), before the next card is drawn
-      if (r.advanced) { stepChanged(); if (!r.won) { hear('step', { i: run.i }); tick(); } } // the goal has its own sound and its own burst (win)
+      if (r.advanced) { stepChanged(); if (!r.won) hear('step', { i: run.i }); tick(!r.won); } // the goal has its own sound and its own burst (win)
       if (r.won) win();
     }
     off.push(ctx.on(feed));
