@@ -7,75 +7,19 @@
 // fit and the Creativity band come from public data and the Deal Room shows the real price.
 import { ASSETS, BUYERS, ZONES, ZONE_IDS, FMV_BAND } from '../../config.js';
 import { fitOf, fitMult, fitLabel } from '../../market.js';
-import { plural, dur, nameOf, knownFake, focusZone, heldIn, beliefLine } from './stock.js';
+import { dur, nameOf, knownFake, focusZone, heldIn, beliefLine, fold, flip } from './stock.js';
+import { lessonTitle, lessonGist, rulePhrases, rewardPhrases, grayBreak } from './districttext.js';
 
 const UP = '▲', DOWN = '▼';
 const TABS = ['buyers', 'lots', 'radar', 'exchange'];
 
-// ---- what each district's rules mean, in plain words
-const TEACH_NAMES = {
-  'utility-fit': 'Utility and fit', negotiation: 'Negotiation', 'saturation-herd': 'Saturation and the herd', 'information-asymmetry': 'Information asymmetry',
-  'working-capital': 'Working capital', 'winners-curse': "The winner's curse", 'repair-roi': 'Repair and return', 'supply-chain': 'Supply chains',
-  'scale-compliance': 'Scale and compliance', obsolescence: 'Obsolescence', 'inventory-risk': 'Inventory risk', 'recurring-revenue': 'Recurring revenue',
-  'enterprise-sales': 'Enterprise sales', 'leverage-risk': 'Leverage and risk', 'asset-cash-flow': 'Assets that pay', 'arbitrage-at-scale': 'Arbitrage at scale',
-};
-export const teachName = (id) => TEACH_NAMES[id] || String(id || '').replace(/-/g, ' ');
-// the rule that is each district's headline, so ruleText leads with it
-const HEADLINE = { 'information-asymmetry': 'fakes', 'winners-curse': 'auction', 'repair-roi': 'repair', 'supply-chain': 'customs', 'scale-compliance': 'audits', obsolescence: 'fads',
-  'inventory-risk': 'perish', 'recurring-revenue': 'yield', 'asset-cash-flow': 'rent', 'arbitrage-at-scale': 'arbitrage', negotiation: 'haggle', 'saturation-herd': 'season',
-  'working-capital': 'managers', 'enterprise-sales': 'enterprise' };
-const ORDER = ['haggle', 'season', 'fakes', 'auction', 'repair', 'customs', 'fads', 'perish', 'yield', 'rent', 'arbitrage', 'audits', 'bulk', 'managers', 'bank', 'enterprise', 'gray'];
+// ---- a district's words: the rule, the reward and the lesson are districttext.js (the Travel drawer reads the same)
+export const teachName = lessonTitle;
+/** A district's rules as plain sentences, the headline first. Accepts a district id or a district object; [] for a district that does not exist. */
+export const ruleText = rulePhrases;
+/** What opening a district gives for good, one sentence each. */
+export const bonusText = rewardPhrases;
 const pc = (x) => `${Math.round(x * 100)}%`;
-const list = (a) => (a.length < 2 ? a.join('') : `${a.slice(0, -1).join(', ')} and ${a[a.length - 1]}`);
-
-/** A district's `rules` as short plain sentences, its headline rule first. Accepts a district id or a district object. */
-export function ruleText(zone) {
-  const Z = zone && typeof zone === 'object' ? zone : ZONES[zone];
-  if (!Z) return [];
-  const r = Z.rules || {}, out = [], line = {
-    haggle: () => 'Every deal can be haggled. Open with a price, and know when to walk away.',
-    season: () => `Demand for ${list(r.season.tags)} goods swings by up to ${pc(r.season.amp)} on a ${r.season.period}-day wave. Buy in the dip, sell at the crest.`,
-    fakes: () => (r.fakes >= 0.15 ? `Up to ${pc(r.fakes)} of lots may be counterfeit. Things here are rarely what they seem, so look closely before you pay.` : `Up to ${pc(r.fakes)} of lots may be counterfeit. Look over the dear ones before you pay.`),
-    auction: () => `${pc(r.auction)} of the lots are auctions. Bid above the true value and you win by losing.`,
-    gray: () => 'A gray market: few questions asked, and audit fines are not softened here.',
-    repair: () => `Many lots here are broken, and repairs cost ${pc(r.repair)} less. Fixing things is the margin.`,
-    customs: () => `Freight arriving here is inspected about ${pc(r.customs)} of the time: a 12-hour delay and a 2% fee.`,
-    bulk: () => 'Deals come in bulk, with service levels you have to keep.',
-    fads: () => 'Digital goods lose value twice as fast. First movers win and latecomers hold the loss.',
-    perish: () => 'Stock spoils. Sell it fresh, because every day on the shelf costs you.',
-    yield: () => 'Some goods pay you every day while you hold them.',
-    rent: () => 'Property pays rent. Cycles are long, and appraisals can be disputed.',
-    arbitrage: () => 'Price gaps between districts are your edge: buy cheap, sell dear.',
-    audits: () => 'Regulatory audits begin once you get here. Keep your paperwork clean.',
-    managers: () => 'Managers open here, so your money can work while you are away.',
-    bank: () => 'The Bank opens here. Borrowing is a tool, and a risk.',
-    enterprise: () => 'Enterprise clients, mergers and IPO preparation open here.',
-  };
-  if (Z.id === 1) out.push('A barter ladder: some buyers swap goods for yours, so you can climb from one paperclip.', 'An urgent buyer pays for what they need, not for what it cost you.');
-  const first = HEADLINE[Z.teaches];
-  const keys = [...(first ? [first] : []), ...ORDER.filter((k) => k !== first)].filter((k) => r[k] && line[k]);
-  for (const k of keys) out.push(line[k]());
-  if (Z.id === 14) out.push('Credit markets: loans are cheap here. Leverage is both the weapon and the risk.');
-  out.push(...bonusText(Z));
-  return out;
-}
-/** What unlocking a district gives you for good. */
-export function bonusText(zone) {
-  const Z = zone && typeof zone === 'object' ? zone : ZONES[zone], b = Z?.bonus || {}, out = [];
-  const less = (m) => pc(1 - m), more = (m) => pc(m - 1);
-  if (b.freightMult) out.push(`Unlock bonus: freight is ${less(b.freightMult)} cheaper everywhere.`);
-  if (b.capMult) out.push(`Unlock bonus: manager capacity is ${more(b.capMult)} bigger.`);
-  if (b.leadMult) out.push(`Unlock bonus: buyers arrive ${more(b.leadMult)} faster.`);
-  if (b.spreadMult) out.push(`Unlock bonus: loan spreads are ${less(b.spreadMult)} lower.`);
-  if (b.storeBonus) out.push(`Unlock bonus: ${plural(b.storeBonus, 'extra storage space')} in every district.`);
-  if (b.lotSlots) out.push(`Unlock bonus: ${plural(b.lotSlots, 'extra lot')} on every shelf.`);
-  if (b.repairMult) out.push(`Unlock bonus: repairs are ${less(b.repairMult)} cheaper everywhere.`);
-  if (b.rentMult) out.push(`Unlock bonus: rent income is ${more(b.rentMult)} higher.`);
-  if (b.exitMult) out.push(`Unlock bonus: exit prices are ${more(b.exitMult)} higher.`);
-  if (b.creditLimitMult) out.push(`Unlock bonus: credit lines are ${more(b.creditLimitMult)} bigger.`);
-  if (b.feeMult) out.push(`Unlock bonus: fees are ${less(b.feeMult)} lower.`);
-  return out;
-}
 /** How crowded a niche is, in words (S = the share of recent sales of this good that went to this buyer). */
 export function satWords(S, vT) {
   if (!(vT >= 1)) return 'Nobody has sold this here lately.';
@@ -102,29 +46,31 @@ function canSell(g, a, lead) {
   return { ok: true, fit };
 }
 const WHY = {
-  nofit: 'None of the crates you chose fit this buyer.', broken: 'This buyer will not take a broken crate. Repair it first, or find a scrap buyer.',
+  nofit: 'None of the crates you chose fit this buyer.', broken: 'This buyer will not take a broken crate: repair it, or find a scrap buyer.',
   fake: 'The only crate you chose is a known fake. Sell it to the pool.', nodemand: 'Nobody here wants what you chose.',
 };
 
 // ---- the district strip and banner
 function switcherHTML(ctx, z) {
-  const g = ctx.g(), s = g.s, e = ctx.esc, m = ctx.money, nw = g.netWorth();
+  const g = ctx.g(), s = g.s, e = ctx.esc, m = ctx.money;
   const next = ZONE_IDS.find((id) => !s.zones.includes(id));
   return `<nav class="mkt-zones" aria-label="Districts you can trade in">${[...s.zones].sort((a, b) => a - b).map((id) => {
     const Z = ZONES[id];
     return `<button class="mkt-z" data-act="market-zone" data-z="${id}" data-fid="mk-z-${id}" aria-pressed="${id === z}" aria-label="${e(Z.name)}, district ${id}" title="${e(Z.name)}"><span aria-hidden="true">${Z.icon}</span><b>${id}</b></button>`;
-  }).join('')}</nav>${next ? `<p class="tiny mute mkt-next">Next district: ${e(ZONES[next].name)}, at ${m(ZONES[next].gate)} net worth. You are at ${m(nw)}.</p>` : ''}`;
+  }).join('')}</nav>${next ? `<p class="tiny mute mkt-next">Next district: ${e(ZONES[next].name)}, at ${m(ZONES[next].gate)} net worth.</p>` : ''}`;
 }
 function bannerHTML(ctx, z) {
-  const g = ctx.g(), s = g.s, e = ctx.esc, m = ctx.money, Z = ZONES[z], rules = ruleText(Z);
-  const poolNow = s.pool[z] ?? 0, tax = g.zoneTax(z);
-  const [head, ...more] = rules;
+  const g = ctx.g(), s = g.s, e = ctx.esc, m = ctx.money, Z = ZONES[z], [head, ...more] = rulePhrases(Z);
+  const poolNow = s.pool[z] ?? 0, tax = g.zoneTax(z), gave = rewardPhrases(Z).join(' '), gray = grayBreak(Z, g.P.lotDiscountGray);
+  const lines = [...more, gray].filter(Boolean), lesson = lessonTitle(Z.teaches), gist = lessonGist(Z.teaches);
+  // the rule that matters first is on the banner; the other rules, what opening the district gave and its lesson are one fold, opened on request (and the same words are its hover).
+  // The district's blurb is not here: it says the rule again, and it is the news line's (engine _unlock).
+  const body = `${lines.length ? `<ul>${lines.map((t) => `<li>${e(t)}</li>`).join('')}</ul>` : ''}${gave ? `<p>Opening it gave you: ${e(gave)}</p>` : ''}<p>Teaches <b>${e(lesson)}</b>${gist ? `: ${e(gist)}` : ''}</p>`;
+  const tip = [...lines, gave && `Opening it gave you: ${gave}`, `Teaches ${lesson}.`].filter(Boolean).join(' ');
   return `<section class="mkt-banner" style="--zg:${e(Z.palette?.[0] || '#34445c')};--za:${e(Z.palette?.[1] || '#ffc247')}" aria-label="About ${e(Z.name)}">
     <div class="mkt-bhead"><span class="mkt-bic" aria-hidden="true">${Z.icon}</span><div><b class="mkt-bname">${e(Z.name)}</b><span class="tiny mute">District ${z} of ${ZONE_IDS.length}, tier ${Z.tier}</span></div></div>
-    <p class="mkt-blurb">${e(Z.blurb)}</p>
     ${head ? `<p class="mkt-rule"><b>The rule here:</b> ${e(head)}</p>` : ''}
-    <p class="mkt-teach"><span class="badge cyan">You will learn</span> ${e(teachName(Z.teaches))}</p>
-    ${more.length ? `<details class="mkt-more"><summary>More about trading here</summary><ul>${more.map((t) => `<li>${e(t)}</li>`).join('')}</ul></details>` : ''}
+    ${fold(ctx, 'market', 'about', 'About this district', body, tip)}
     <div class="row mkt-stats"><span class="chip" title="Tax on each sale in this district">Tax ${Math.round(tax * 1000) / 10}%</span>
       <span class="chip" title="The liquidity pool buys what nobody else wants">Pool ${m(poolNow)} of ${m(Z.pool)}</span></div>
     <div class="bar green" role="progressbar" aria-label="Liquidity pool depth" aria-valuemin="0" aria-valuemax="${Math.round(Z.pool)}" aria-valuenow="${Math.round(poolNow)}"><i style="width:${Math.max(0, Math.min(100, (poolNow / Z.pool) * 100)).toFixed(0)}%"></i></div>
@@ -141,7 +87,7 @@ function buyersHTML(ctx, z) {
   const use = here.length > 1 ? `<div class="mkt-use" role="group" aria-label="Which crate to sell"><span class="small mute">Selling with</span>
       <button class="btn sm ghost" data-act="market-use" data-id="" data-fid="mk-use-best" aria-pressed="${!picks.length}">Best of mine</button>
       ${here.slice(0, 12).map((a) => `<button class="btn sm ghost" data-act="market-use" data-id="${a.id}" data-fid="mk-use-${a.id}" aria-pressed="${U.sel.has(a.id)}"><span aria-hidden="true">${ASSETS[a.cls].icon}</span> ${e(nameOf(a.cls, a.cond))} <span class="mono">${m(g.val(a))}</span></button>`).join('')}</div>` : '';
-  const scamNote = g.P.scamRate ? `<p class="callout warn small"><b>Scam magnet.</b> About ${Math.round(g.P.scamRate * 100)}% of the buyers who find you are fraudulent. Verify a buyer before you sell: a fake takes the goods and never pays.</p>` : '';
+  const scamNote = g.P.scamRate ? `<p class="callout warn small"><b>Scam magnet.</b> About ${Math.round(g.P.scamRate * 100)}% of buyers are frauds. Verify a buyer before you sell.</p>` : '';
   const card = (l) => {
     const B = BUYERS[l.seg], fraud = !!l.verified && !!l.scam;
     let best = null; const why = new Set();
@@ -153,40 +99,34 @@ function buyersHTML(ctx, z) {
     }
     const urgent = l.need ? `<span class="badge">Urgent</span> <span class="small">needs ${an(l.need)} ${e(l.need)} item</span>` : '';
     const verified = l.verified && !l.scam ? '<span class="chip good"><span aria-hidden="true">✓</span> Verified</span>' : '';
-    const fraudLine = fraud ? '<p class="callout bad small"><b>Fraud.</b> This buyer is not real. Selling to them would cost you the goods.</p>' : '';
+    const fraudLine = fraud ? '<p class="callout bad small"><b>Fraud.</b> This buyer is not real: a sale would cost you the goods.</p>' : '';
     const vcost = Math.max(0.01, Math.round(l.budget * 0.01 * 100) / 100);
-    const verify = g.P.scamRate && !l.verified ? `<button class="btn sm ghost" data-act="market-verify" data-lead="${l.id}" data-fid="mk-v-${l.id}">Verify this buyer (${m(vcost)})<span class="sr">: ${e(B.name)}</span></button>` : '';
+    const verify = g.P.scamRate && !l.verified ? `<button class="btn sm ghost" data-act="market-verify" data-lead="${l.id}" data-fid="mk-v-${l.id}" title="A fraud takes the goods, pays nothing and costs 10 reputation.">Verify this buyer (${m(vcost)})<span class="sr">: ${e(B.name)}</span></button>` : '';
     let sell = '', fitRow = '', sat = '';
     if (best && !fraud) {
       const label = picks.length ? (picks.length > 1 ? 'Best of your picks' : 'Your pick') : 'Best of yours';
-      fitRow = `<div class="row mkt-chips"><span class="chip ${fitTone(best.fit)}">${fitLabel(best.fit)}${l.need && best.fit === 1 ? ': they need it now' : ''}</span>${cmChip(best.ci)}</div>
-        <p class="tiny mute">${label}: <b>${e(nameOf(best.a.cls, best.a.cond))}</b></p>`;
+      fitRow = `<div class="row mkt-chips"><span class="chip ${fitTone(best.fit)}">${fitLabel(best.fit)}${l.need && best.fit === 1 ? ': they need it now' : ''}</span>${cmChip(best.ci)}</div>`;
       sat = `<p class="tiny mute">${e(satWords(best.ci.S, best.ci.vT))}${exact && best.ci.vT >= 1 ? ` (about ${best.ci.vN.toFixed(0)} of ${best.ci.vT.toFixed(0)} recent sales, ${pc(best.ci.S)})` : ''}</p>`;
-      sell = `<button class="btn" data-act="market-sell" data-asset="${best.a.id}" data-lead="${l.id}" data-fid="mk-sell-${l.id}">Sell ${e(ASSETS[best.a.cls].name)}<span class="sr"> to ${e(B.name)}</span></button>`;
+      sell = `<button class="btn" data-act="market-sell" data-asset="${best.a.id}" data-lead="${l.id}" data-fid="mk-sell-${l.id}" title="${label}: ${e(nameOf(best.a.cls, best.a.cond))}">Sell ${e(ASSETS[best.a.cls].name)}<span class="sr"> to ${e(B.name)}</span></button>`;
     } else if (!fraud) {
       const first = ['nofit', 'broken', 'fake', 'nodemand'].find((k) => why.has(k));
-      sell = here.length === 0
-        ? `<button class="btn ghost" data-act="market-tab" data-t="lots" data-fid="mk-go-${l.id}">Nothing to sell here: see the lots<span class="sr"> (${e(B.name)})</span></button>`
-        : `<p class="small mkt-nosell">${e(WHY[first] || 'Nothing you hold works for this buyer.')}</p><button class="btn ghost" data-act="market-tab" data-t="lots" data-fid="mk-go-${l.id}">Find something in the lots<span class="sr"> (${e(B.name)})</span></button>`;
+      sell = here.length === 0 ? '' : `<p class="small mkt-nosell">${e(WHY[first] || 'Nothing you hold works for this buyer.')}</p>`;
     }
     return `<li class="mkt-lead${l.need ? ' is-urgent' : ''}${fraud ? ' is-fraud' : ''}">
       <div class="mkt-who"><span class="mkt-av" aria-hidden="true">${B.icon}</span>
-        <div class="mkt-id"><b class="mkt-name">${e(B.name)}</b> ${urgent} ${verified}<p class="mkt-say">“${e(B.hello)}”</p></div></div>
+        <div class="mkt-id"><b class="mkt-name" title="“${e(B.hello)}”">${e(B.name)}</b> ${urgent} ${verified}</div></div>
       <dl class="mkt-meta"><dt>Pays up to</dt><dd class="mono gold">${m(l.budget)}</dd><dt>Leaves in</dt><dd>${dur(l.exp - s.hour)}</dd></dl>
       <div class="bar ${l.need ? 'gold' : ''}" aria-hidden="true"><i data-bar="lead:${l.id}"></i></div>
       ${fraudLine}${fitRow}${sat}${verify}${sell}</li>`;
   };
-  const empty = here.length === 0 && leads.length ? `<p class="callout small">You hold nothing to sell in ${e(ZONES[z].short)}. ${s.assets.length ? 'Ship stock in from another district, or ' : ''}${s.assets.length ? 'buy' : 'Buy'} a lot here, then come back.</p>` : '';
-  return `${scamNote}${empty}${use}<ul class="mkt-list">${leads.map(card).join('') || '<li class="k-empty"><span class="k-empty-ic" aria-hidden="true">🕰️</span><p>No buyers right now. New ones arrive every few hours.</p></li>'}</ul>`;
+  const empty = here.length === 0 && leads.length ? `<p class="callout small">You hold nothing to sell in ${e(ZONES[z].short)}. ${s.assets.length ? 'Ship stock in from another district, or buy' : 'Buy'} a lot here.</p>` : '';
+  return `${scamNote}${empty}${use}<ul class="mkt-list">${leads.map(card).join('') || '<li class="k-empty"><span class="k-empty-ic" aria-hidden="true">🕰️</span><p>No buyers right now.</p></li>'}</ul>`;
 }
 
 // ---- lots
+/** What the engine draws for a lot's condition (_spawnLot: a multiplier of 0.85 to 1.15 in districts 1 and 2, 0.7 to 1.15 after them); a fake is worth about 8% (the district's counterfeit share is its rule). */
 function qualityLine(Z) {
-  const f = Z.rules?.fakes || 0;
-  if (f >= 0.15) return 'Things here are rarely what they seem. Look a lot over before you pay.';
-  if (f > 0) return `A few lots here are fakes (up to ${pc(f)}). Look over the dear ones before you pay.`;
-  if (Z.id <= 2) return 'Lots here are usually close to how they are described.';
-  return 'A lot can be worse than its label. Look it over to find out.';
+  return `Lots are worth ${Z.id <= 2 ? 85 : 70}% to 115% of how they are described.`;
 }
 function lotsHTML(ctx, z) {
   const g = ctx.g(), s = g.s, e = ctx.esc, m = ctx.money, Z = ZONES[z];
@@ -198,14 +138,14 @@ function lotsHTML(ctx, z) {
     let worth;
     if (broken) {
       const rq = g.repairQuoteFor(l.cls, z), net = rq.after - l.price - rq.cost;
-      worth = `<p class="small">Repair costs about <b class="mono">${m(rq.cost)}</b>. Fixed up it is worth about <span class="mono">${m(rq.after)}</span>: ${net >= 0 ? `<b class="green"><span aria-hidden="true">${UP}</span> +${m(net)}</b>` : `<b class="red"><span aria-hidden="true">${DOWN}</span> -${m(-net)}</b>`} after the price and repair.</p>`;
+      worth = `<p class="small">Repair costs about <b class="mono">${m(rq.cost)}</b>. Repaired, it is worth about <span class="mono">${m(rq.after)}</span>: ${net >= 0 ? `<b class="green"><span aria-hidden="true">${UP}</span> +${m(net)}</b>` : `<b class="red"><span aria-hidden="true">${DOWN}</span> -${m(-net)}</b>`} after the price and repair.</p>`;
     } else {
       const gap = described - l.price;
-      worth = `<p class="small">Worth about <span class="mono">${m(described)}</span> if it is as described: ${gap >= 0 ? `<b class="green"><span aria-hidden="true">${UP}</span> +${m(gap)}</b>` : `<b class="red"><span aria-hidden="true">${DOWN}</span> -${m(-gap)}</b>`} against the price.</p>`;
+      worth = `<p class="small">Worth about <span class="mono">${m(described)}</span> as described: ${gap >= 0 ? `<b class="green"><span aria-hidden="true">${UP}</span> +${m(gap)}</b>` : `<b class="red"><span aria-hidden="true">${DOWN}</span> -${m(-gap)}</b>`} against the price.</p>`;
     }
     const bel = beliefLine(ctx, l.belief);
     const read = bel ? `<p class="small${bel.fake ? ' mkt-warnline' : ''}">${bel.fake ? '<span aria-hidden="true">⚠</span> ' : ''}${e(bel.text)}</p>` : (l.probed && l.probed.length ? `<p class="small mute">Looked over with ${l.probed.length} check${l.probed.length === 1 ? '' : 's'}, no conclusion yet.</p>` : '<p class="small mute">Not inspected yet.</p>');
-    const warn = l.warn ? '<p class="callout bad small"><b><span aria-hidden="true">⚠</span> Counterfeit warning.</b> Your street sense says this one is a fake. Walk away.</p>' : '';
+    const warn = l.warn ? '<p class="callout bad small"><b><span aria-hidden="true">⚠</span> Counterfeit warning.</b> Your street sense flags this one as a fake.</p>' : '';
     const short = s.cash < l.price, noRoom = full;
     const reason = noRoom ? 'Storage is full here.' : short ? `You need ${m(l.price - s.cash)} more.` : '';
     return `<li class="mkt-lot${auction ? ' is-auction' : ''}">
@@ -214,32 +154,32 @@ function lotsHTML(ctx, z) {
         <div class="mkt-head"><b>${e(def.name)}</b> ${broken ? '<span class="badge red">Broken</span>' : '<span class="badge cyan">Working</span>'} ${auction ? '<span class="badge">Auction</span>' : ''}</div>
         <p class="mkt-price"><span class="mono gold">${m(l.price)}</span> <span class="small mute">${auction ? 'guide price' : 'asking price'}</span></p>
         ${warn}${read}${worth}
-        ${auction ? '<p class="tiny mute">Rival bidders will push the price. Quick buy bids for you at average skill, and a rival may outbid you.</p>' : ''}
-        <p class="tiny mute">The seller moves it in ${dur(l.exp - s.hour)}.</p>
+        ${auction ? '<p class="tiny mute">Rivals bid against you.</p>' : ''}
+        <p class="tiny mute">Leaves in ${dur(l.exp - s.hour)}.</p>
         <div class="row">
           <button class="btn" data-act="market-look" data-lot="${l.id}" data-fid="mk-look-${l.id}">Look it over<span class="sr">: ${e(def.name)}</span></button>
-          <button class="btn ghost" data-act="market-buy" data-lot="${l.id}" data-fid="mk-buy-${l.id}"${reason ? ' aria-disabled="true"' : ''}>Quick buy about ${m(l.price)}<span class="sr">: ${e(def.name)}</span></button>
+          <button class="btn ghost" data-act="market-buy" data-lot="${l.id}" data-fid="mk-buy-${l.id}"${reason ? ' aria-disabled="true"' : ''}${auction ? ' title="Quick buy bids for you at average skill, and a rival may outbid you."' : ''}>Quick buy about ${m(l.price)}<span class="sr">: ${e(def.name)}</span></button>
         </div>
         ${reason ? `<p class="tiny red">${e(reason)}</p>` : ''}
       </div></li>`;
   };
   return `<p class="small mkt-qual"><span aria-hidden="true">🔎</span> ${e(qualityLine(Z))}</p>
-    <p class="tiny mute">Storage here: ${held} of ${cap}${full ? ' <span class="badge red">Full</span>' : ''}. Cash: <span class="mono">${m(s.cash)}</span>.</p>
-    <ul class="mkt-list">${lots.map(card).join('') || '<li class="k-empty"><span class="k-empty-ic" aria-hidden="true">🧺</span><p>No lots right now. Sellers bring new ones every few hours.</p></li>'}</ul>`;
+    <p class="tiny mute">Storage here: ${held} of ${cap}${full ? ' <span class="badge red">Full</span>' : ''}</p>
+    <ul class="mkt-list">${lots.map(card).join('') || '<li class="k-empty"><span class="k-empty-ic" aria-hidden="true">🧺</span><p>No lots right now.</p></li>'}</ul>`;
 }
 
 // ---- radar
 function radarHTML(ctx, z) {
   const g = ctx.g(), s = g.s, e = ctx.esc;
   const rows = g.radar(z, 8);
-  return `<p class="small">The best gaps first: goods many buyers want that few classmates sell to them. Aim at the stars.</p>
+  return `<p class="small">Best gaps first: goods buyers want that few classmates sell to them.</p>
     <ul class="mkt-list">${rows.map((r) => {
     const held = s.assets.some((a) => a.cls === r.cls && a.zone === z);
     return `<li class="mkt-rrow"><span class="mkt-ic" aria-hidden="true">${ASSETS[r.cls].icon}</span><div class="mkt-body">
         <p class="mkt-rname"><b>${e(ASSETS[r.cls].name)}</b> to <b><span aria-hidden="true">${BUYERS[r.seg].icon}</span> ${e(BUYERS[r.seg].name)}</b></p>
         <div class="row mkt-chips"><span class="chip ${fitTone(r.fit)}">${fitLabel(r.fit)}</span>${cmChip(r)}${held ? '<span class="chip good">You hold one</span>' : ''}</div>
         <p class="tiny mute">${e(satWords(r.S, r.vT))} (about ${r.vN.toFixed(0)} of ${r.vT.toFixed(0)} recent sales, ${pc(r.S)})</p></div></li>`;
-  }).join('') || '<li class="mute">No clear gaps right now. Check again in a few hours.</li>'}</ul>`;
+  }).join('') || '<li class="mute">No clear gaps right now.</li>'}</ul>`;
 }
 
 // ---- exchange (classmates)
@@ -260,11 +200,11 @@ export function matrixHTML(ctx) {
   const myP = o.want.assets.reduce((a, w) => a + g.projected(w), 0), theirP = o.give.assets.reduce((a, w) => a + g.projected(w, x.partner.skills), 0);
   const side = (arr, cash) => `${arr.map((a) => `${ASSETS[a.cls].icon} ${e(nameOf(a.cls, a.cond))}`).join('<br>') || '<span class="mute">no crates</span>'}${cash ? `<br>${m(cash)} cash` : ''}`;
   return `<table class="tbl mkt-matrix"><caption class="sr">Your proposed swap</caption><thead><tr><th scope="col">Part of the deal</th><th scope="col">You give</th><th scope="col">${e(x.partner.handle)} gives</th></tr></thead><tbody>
-    <tr><th scope="row">Crates and cash</th><td>${side(o.give.assets, o.give.cash)}${o.give.royalty ? `<br>${m(o.give.royalty.perDay)} a day for ${o.give.royalty.days} days<br><span class="small mute">Counted at no more than a tenth of what you are worth. A promise is a debt: what you cannot pay stays owed.</span>` : ''}</td><td>${side(o.want.assets, o.want.cash)}</td></tr>
+    <tr><th scope="row">Crates and cash</th><td>${side(o.give.assets, o.give.cash)}${o.give.royalty ? `<br>${m(o.give.royalty.perDay)} a day for ${o.give.royalty.days} days<br><span class="small mute">Counted at no more than a tenth of your net worth. What you cannot pay stays owed.</span>` : ''}</td><td>${side(o.want.assets, o.want.cash)}</td></tr>
     <tr><th scope="row">Fair value</th><td class="mono">${m(chk.va)}</td><td class="mono">${m(chk.vb)}</td></tr>
     <tr><th scope="row">Worth in the new owner's hands</th><td class="mono">${m(myP)} <span class="tiny mute">to you</span></td><td class="mono">${m(theirP)} <span class="tiny mute">to them</span></td></tr>
     <tr><th scope="row">Fair-value check</th><td colspan="2"><span class="chip ${chk.ok ? 'good' : 'bad'}"><span aria-hidden="true">${chk.ok ? '✓' : '✕'}</span> ${(chk.variance * 100).toFixed(1)}% apart, ${chk.ok ? 'inside' : 'outside'} the safe limit of ${FMV_BAND * 100}%</span>
-      ${chk.ok ? '' : chk.flagged ? '<p class="small red"><b>Extreme Asymmetric Premium Warning:</b> a deal this lopsided is blocked and flagged to your instructor. Balance it with cash or another crate.</p>' : '<p class="small red"><b>Cannot be sent:</b> a crate you ask for sits in a district you have not opened, so it would not be worth to you what its owner values it at. Ask for something else.</p>'}</td></tr></tbody></table>`;
+      ${chk.ok ? '' : chk.flagged ? '<p class="small red"><b>Extreme Asymmetric Premium Warning:</b> a deal this lopsided is blocked and flagged to your instructor. Balance it with cash or another crate.</p>' : '<p class="small red"><b>Cannot be sent:</b> a crate you ask for sits in a district you have not opened, so it is worth less to you than to its owner. Ask for something else.</p>'}</td></tr></tbody></table>`;
 }
 function exchangeHTML(ctx) {
   const g = ctx.g(), S = ctx.S, U = ctx.U, e = ctx.esc, m = ctx.money, x = exState(ctx);
@@ -276,7 +216,7 @@ function exchangeHTML(ctx) {
   }).join('');
   const sent = S.sent ? [...S.sent.values()] : (S.outgoing || []);
   const outgoing = sent.map(({ offer: o }) => `<li class="card small">Waiting on ${e(o.to)}: your ${o.give.assets.map((a) => e(nameOf(a.cls, a.cond))).join(', ') || 'cash'} sits in escrow. <button class="btn sm ghost" data-act="market-withdraw" data-id="${e(o.id)}" data-fid="mx-wd-${e(o.id)}">Withdraw</button></li>`).join('');
-  const practice = x.roster.some((r) => r.npc) ? '<div class="callout small"><b>Practice partner.</b> The Practice Partner accepts fair deals (within 30% of fair value). Join a room from the menu to trade with classmates.</div>' : '';
+  const practice = x.roster.some((r) => r.npc) ? '<div class="callout small"><b>Practice partner.</b> It accepts deals within 30% of fair value. Join a room from the menu to trade with classmates.</div>' : '';
   const give = g.s.assets.filter((a) => U.sel.has(a.id));
   const form = x.partner ? `<h3 class="gap">New proposal</h3>
     <div class="mkt-form">
@@ -287,12 +227,12 @@ function exchangeHTML(ctx) {
       <label class="mkt-f">for how many days<input inputmode="numeric" data-input="market-xfield" data-k="royDays" data-fid="mx-rd" value="${e(x.royDays)}"></label>
     </div>
     <p class="small gap">You give: ${give.length ? give.map((a) => `<b>${e(nameOf(a.cls, a.cond))}</b>`).join(', ') : '<span class="mute">no crates yet.</span>'} <button class="btn sm ghost" data-act="market-gostock" data-fid="mx-gostock">Pick crates in Stock</button></p>
-    <p class="small mute">Choose what you want from ${e(x.partner.handle)}:</p>
+    <p class="small mute">Choose what you want from ${e(x.partner.handle)}.</p>
     <div class="mkt-want" role="group" aria-label="Crates ${e(x.partner.handle)} holds">${(x.partner.inventory || []).map((a) => `<button class="btn ghost mkt-wcrate" data-act="market-want" data-id="${e(a.id)}" data-fid="mx-w-${e(a.id)}" aria-pressed="${x.want.has(a.id)}"><span aria-hidden="true">${ASSETS[a.cls].icon}</span> ${e(nameOf(a.cls, a.cond))}<span class="mono small"> ${m(a.fmv)}</span><span class="tiny mute"> ${e(ZONES[a.zone]?.short || '')}</span></button>`).join('') || '<p class="mute small">They have nothing listed.</p>'}</div>
     <div class="gap" data-matrix>${matrixHTML(ctx)}</div>
     <div class="row gap"><button class="btn" data-act="market-send" data-fid="mx-send">Send proposal</button><span class="small mute">Your side waits in escrow until they answer.</span></div>`
-    : '<p class="mute">Nobody is online to trade with yet. Classmates appear here when they join your room.</p>';
-  return `<p class="small">Swap crates and cash with classmates. Every deal is checked against fair value, so nobody gets fleeced and you learn what things are worth.</p>${practice}
+    : '<p class="mute">Nobody is online to trade with yet. Classmates appear when they join your room.</p>';
+  return `<p class="small">Swap crates and cash with classmates. Each swap must stay within ${FMV_BAND * 100}% of fair value.</p>${practice}
     ${incoming ? `<h3>Invitations</h3><ul class="mkt-list">${incoming}</ul>` : ''}${outgoing ? `<h3 class="gap">Sent</h3><ul class="mkt-list">${outgoing}</ul>` : ''}${form}`;
 }
 
@@ -335,6 +275,7 @@ export default {
     return {
       'market-zone'(el) { const z = +el.dataset.z; if (g().s.zones.includes(z)) { U.zone = z; ctx.render(); } },
       'market-tab'(el) { U.marketTab = el.dataset.t; ctx.render(); },
+      'market-fold'(el) { flip(ctx, 'market', el.dataset.k); },
       'market-use'(el) {
         const z = focusZone(ctx), id = el.dataset.id;
         if (!id) { for (const a of g().s.assets) if (a.zone === z) U.sel.delete(a.id); } else if (U.sel.has(id)) U.sel.delete(id); else U.sel.add(id);
