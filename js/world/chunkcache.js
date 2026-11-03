@@ -20,8 +20,8 @@ export class ChunkCache {
   /** `name` is the ledger holder; `make` is the surface factory (tests hand in a stand-in). */
   constructor(name = 'ground.chunks', make = makeSurface) {
     this.name = name; this.make = make; this.map = new Map(); this.ov = new Map(); this.ver = NaN; this.bytes = 0; this.tick = 0; // (`ov`: the overview, below: kept apart from the chunks of the frame's scales, so their counts, cap and sweep are what they were)
-    this.base = null; this.job = { key: '', sk: 0, N: 0, S: 0, ox: 0, oy: 0 }; // `base(job)`: where the V2 base is painted off the main thread (baseclient.js), the pixels of the job or null while they are being painted; a chunk is made when they are there (groundcache.js sets it)
-    this.opaque = false; // a ground whose chunks are opaque by construction (the V2 base paints every pixel, the sea included): no gap between shapes to close and no cell of open sea, so a chunk is not read back to be sealed (groundcache.js sets it)
+    this.base = null; this.job = { key: '', sk: 0, N: 0, S: 0, ox: 0, oy: 0 }; // `base(job)`: the V2 base's pixels from a worker, or null while it paints them (baseclient.js; groundcache.js sets it)
+    this.opaque = false; // chunks opaque by construction (the V2 base paints every pixel): nothing to seal, never a cell of open sea (groundcache.js sets it)
     this.work = null; this.fin = null; this.cell = null; this.scratch = null; this.scratchN = 0; this.list = []; this.soft = []; this.parts = []; this.fno = 0; this.now = 0; this.made = 0;
     this.stats = { baked: 0, sealed: 0, dropped: 0, ms: 0, lastMs: 0, direct: 0, stale: 0, hits: 0, faded: 0 };
   }
@@ -59,7 +59,7 @@ export class ChunkCache {
   }
   /**
    * Is a stand-in wholly hidden behind exact chunks (scale key `sk`, cell size `s` world pixels) and stand-ins that are nearer in scale than it? Its area is cut by every one of them; when nothing of it is left it need
-   * not be drawn at all, which saves the blit (a scaled one is 0.3 ms on a CPU-drawn canvas) wherever the sets of two scales overlap. When it answers false, `this.parts` holds the pieces of the chunk's cell (world rectangles, flat quadruples) that nothing nearer covers: an opaque layer draws the whole chunk, a translucent one (the clouds) clips to them, or two stand-ins that overlap draw their shadow twice there. A chunk that is still fading in hides nothing. (This looked at five points of the
+   * not be drawn at all, which saves the blit (a scaled one is 0.3 ms on a CPU-drawn canvas) wherever the sets of two scales overlap. When it answers false, `this.parts` holds the pieces of the cell that nothing nearer covers (a translucent layer clips to them: two stand-ins that overlap draw their shadow twice). A chunk that is still fading in hides nothing. (This looked at five points of the
    * area and hid a chunk that exact chunks covered at those five: the rest of it was the sea.)
    */
   hidden(c, sk, s) {
@@ -144,10 +144,10 @@ export class ChunkCache {
   bake(draw, a, i, j, dpr, coarse = false, pin = false) {
     const t0 = typeof performance !== 'undefined' ? performance.now() : 0, ss = superSample(dpr), S = CHUNK_FULL * ss, sk = scaleKey(a);
     const key = chunkKey(sk, i, j), into = pin ? this.ov : this.map, old = into.get(key); if (old && !old.stale) return old; // (`pin`: a chunk of the overview, which has a store of its own)
-    let px = null; // the base's pixels, when a worker paints it: the chunk is made when they are there (and costs the main thread the layers over them, a third of what it cost), and is not made, nor a surface taken for it, before
+    let px = null; // the worker's pixels of the base, when it paints it: no chunk, nor a surface for it, before they are there
     if (this.base) { const J = this.job; J.key = key + '|' + S; J.sk = sk; J.N = S; J.S = a * ss; J.ox = (i * CHUNK_PX - BLEED) / a; J.oy = (j * CHUNK_PX - BLEED) / a; px = this.base(J); if (!px) return null; }
     let work = null;
-    // (the surfaces stay CPU-backed, `willReadFrequently`, although an opaque ground is never read back: a GPU canvas anti-aliases a path with 4 samples (5 coverage levels where the CPU's analytic edge has 256), and the road dashes and cliff edges of a chunk showed stair-steps. Measured: 13 ms a chunk less on the main thread, and not worth it)
+    // (CPU-backed although never read back: a GPU canvas anti-aliases a path with 4 samples, the CPU with 256 levels)
     if (ss > 1) { if (!this.work || this.work.c.width !== S) { this.work = this.make(S, S, READ); this.sync(); } work = this.work; }
     let fin = this.fin; if (!fin) { fin = this.make(CHUNK_FULL, CHUNK_FULL, READ); this.fin = fin; this.sync(); }
     if (!fin || (ss > 1 && !work)) return null;
@@ -160,7 +160,7 @@ export class ChunkCache {
     g.setTransform(1, 0, 0, 1, 0, 0);
     if (ss > 1) { const f = fin.g; f.setTransform(1, 0, 0, 1, 0, 0); f.clearRect(0, 0, CHUNK_FULL, CHUNK_FULL); f.imageSmoothingEnabled = true; if ('imageSmoothingQuality' in f) f.imageSmoothingQuality = 'high'; f.drawImage(work.c, 0, 0, S, S, 0, 0, CHUNK_FULL, CHUNK_FULL); }
     let sealed = false, empty = false;
-    if (!this.opaque && typeof fin.g.getImageData === 'function' && typeof fin.g.putImageData === 'function') { // (an opaque ground skips this: nothing to seal. The readback was also the first thing to flush the chunk's canvas, so the raster it waited for is paid by the next blit instead: what is saved is the sealing pass)
+    if (!this.opaque && typeof fin.g.getImageData === 'function' && typeof fin.g.putImageData === 'function') { // (an opaque ground has nothing to seal)
       try {
         const id = fin.g.getImageData(0, 0, CHUNK_FULL, CHUNK_FULL), n = CHUNK_FULL * CHUNK_FULL, d = id.data;
         if (this.scratchN !== n) { this.scratch = { a: new Uint8Array(n), b: new Uint8Array(n) }; this.scratchN = n; }

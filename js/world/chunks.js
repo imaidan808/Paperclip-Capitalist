@@ -84,11 +84,7 @@ export const chunkKey = (sk, i, j) => (sk * 4096 + (i + 2048)) * 4096 + (j + 204
 export const STALE_UP = 1.5, STALE_DOWN = 0.7;
 /** A chunk baked for a zoom in motion (coarse: baked at about half the scale of the zoom when the zoom goes in, so a third of the chunks cover a window) stands in over a wider window, up to 3.2 times magnified and down to 0.5: soft for the moment the zoom lasts, and the exact scale is baked the moment it rests. */
 export const COARSE_UP = 3.2, COARSE_DOWN = 0.5;
-/**
- * A stand-in magnified by this much or more is drawn without smoothing while the scale moves, ON A CANVAS THE CPU DRAWS (a smoothed, scaled blit costs 3.2 ms a megapixel there, a plain one about a third of it):
- * the exact scale replaces it as soon as the zoom rests. Where the GPU draws (every Mac with a screen) a smoothed blit is nearly free, and the plain one was the blocky stair-steps on cliff edges that a recording of the
- * live site showed at every zoom (a coarse stand-in is magnified up to 3.2 times).
- */
+/** A stand-in magnified this much or more is drawn plain while the scale moves, on a CPU-drawn canvas only (a smoothed scaled blit costs 3 times a plain one there; a GPU canvas smooths for free). */
 export const NEAREST_ABOVE = 1.6;
 export const standInSmooth = (k, zooming, soft) => !(soft && zooming && k >= NEAREST_ABOVE);
 export const staleRatio = (a0, a, coarse = false) => { const k = a / a0; return (coarse ? k <= COARSE_UP && k >= COARSE_DOWN : k <= STALE_UP && k >= STALE_DOWN) ? k : 0; };

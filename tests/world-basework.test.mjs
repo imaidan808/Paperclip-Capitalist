@@ -51,7 +51,7 @@ test('the client sends a scene once and a bake once, answers nothing while the w
   const px = c.ask('a', JOBN, 'k1', scene, 3); assert.ok(px instanceof Uint8ClampedArray); assert.equal(px.length, JOBN.N * JOBN.N * 4);
   assert.equal(c.pending, 1, 'the pixels were taken: what is still out is the other job'); assert.equal(c.done.size, 0);
   c.ask('c', JOBN, 'k2', scene, 4); assert.equal(w.posted.filter((m) => m.t === 'scene').map((m) => m.key).join(), 'k1,k2', 'a new set of locked districts sends its own scene');
-  c.dispose(); assert.equal(w.terminated, true);
+  c.fail(); assert.equal(w.terminated, true);
 });
 
 test('the client keeps at most so many jobs out and waiting, and drops pixels nobody took', () => {
