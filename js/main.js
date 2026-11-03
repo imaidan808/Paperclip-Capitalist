@@ -109,19 +109,19 @@ const screens = {
         </div>
         <div class="choices">
           <section class="panel" data-room-panel><h2>Join a classroom</h2><label for="jc">Room code from your instructor</label><input id="jc" maxlength="8" autocomplete="off" style="text-transform:uppercase" value="${esc(room)}">
-            <details class="gap"><summary class="small">Relay server (only if your instructor gave you one)</summary><label for="jr" class="gap">Relay URL</label><input id="jr" placeholder="wss://relay.example.edu" value="${esc(relay)}"></details>
+            <details class="gap"><summary class="small">Relay (only if your instructor gave one)</summary><label for="jr" class="gap">Relay URL</label><input id="jr" placeholder="wss://relay.example.edu" value="${esc(relay)}"></details>
             <button class="btn gap" data-act="join">Join</button></section>
-          <section class="panel"><h2>Instructor</h2><p class="small mute">Create a room, set the pace, deploy shocks and export grades. With no relay, students join from other tabs of this browser (each tab is its own founder); students on other devices need a relay.</p>
-            <label for="ir">Relay URL (optional)</label><input id="ir" placeholder="wss://relay.example.edu" value="${esc(relay)}">
+          <section class="panel"><h2>Instructor</h2><p class="small mute">Set the pace, deploy shocks and export grades.</p>
+            <label for="ir" title="Without a relay, students join from other tabs of this browser, each tab its own founder.">Relay URL (needed for other devices)</label><input id="ir" placeholder="wss://relay.example.edu" value="${esc(relay)}">
             <div class="row gap"><button class="btn" data-act="instr">Create a room</button>${instr ? `<button class="btn ghost" data-act="instr-resume">Reopen room ${esc(instr.code)}</button>` : ''}</div>
             ${instrKey ? `<details class="gap"><summary class="small">Recovery code for room ${esc(instr.code)}</summary><p class="small mute">Keep it somewhere safe. With the room code it lets you run this room from another device, or after this browser has forgotten it.</p><p class="mono" id="ik-show" tabindex="0">${esc(instrKey)}</p></details>` : ''}
-            <details class="gap" id="ires"><summary class="small">Resume as instructor: take back a room (another device, or this browser forgot it)</summary>
-              <p class="small mute">A room runs from the browser that made it. To run it from here, enter its room code and the recovery code you saved. The Relay URL above must be the one your students joined with. This dashboard waits about ${RECOVER_WAIT_SECONDS} seconds to hear the class's clock, and starts paused if nobody answers.</p>
+            <details class="gap" id="ires"><summary class="small">Resume as instructor: take back a room</summary>
+              <p class="small mute">A room runs from the browser that made it. To run it from another device, or after this browser forgot it, enter its room code and the recovery code you saved. The Relay URL above must be the one your students joined with. This dashboard waits about ${RECOVER_WAIT_SECONDS} seconds to hear the class's clock, and starts paused if nobody answers.</p>
               <label for="ic" class="gap">Room code</label><input id="ic" maxlength="8" autocomplete="off" style="text-transform:uppercase" value="${esc(instr?.code || '')}">
               <label for="ik" class="gap">Recovery code</label><input id="ik" autocomplete="off" spellcheck="false" placeholder="xxxx-xxxx-xxxx-xxxx-xxxx-xxxx-xxxx-xxxx">
               <button class="btn ghost gap" data-act="instr-recover">Take the room back</button>
               <p class="tiny mute" id="ires-note">${esc(FOLLOW_NOTE)}</p></details></section>
-          <section class="panel"><h2>Accessible by design</h2><p class="small mute">Keyboard-only play, screen-reader announcements, high contrast, reduced motion and adjustable text. No account, no tracking, no personal data.</p><button class="btn ghost" data-act="a11y">Display and sound settings</button></section>
+          <section class="panel"><h2>Accessible by design</h2><p class="small mute">Keyboard and screen-reader play, high contrast, reduced motion, adjustable text. No account, no tracking.</p><button class="btn ghost" data-act="a11y">Display and sound settings</button></section>
         </div>
         <p class="tiny mute" id="build-note" aria-live="polite"></p>
       </div>`;
