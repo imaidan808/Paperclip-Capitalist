@@ -270,7 +270,7 @@ function prefetchRest() {
   const idle = (f) => (window.requestIdleCallback ? window.requestIdleCallback(f, { timeout: 2000 }) : setTimeout(f, 300));
   // The island's static scene (the layout, then the coast and the opening ground's colours) is built once everything is on its way, while the title and the draft are on screen. It was about half a second of the world's
   // first frame on a Mac and four times that on a slower laptop, and nothing in it depends on the player. A player who presses Begin before it has run waits for the same work as before.
-  const warmWorld = () => { import('./world/scene.js').catch(() => {}); };
+  const warmWorld = () => { import('./world/scene.js').catch(() => {}); import('./world/baseclient.js').then((m) => m.warmBaseClient()).catch(() => {}); }; // (and the workers that make the ground's chunks boot, 0.4 s each: the world's first ground is not made after them)
   const pump = () => {
     for (const href of list.splice(0, 8)) { const l = document.createElement('link'); l.rel = 'modulepreload'; l.href = href; l.setAttribute('fetchpriority', 'low'); document.head.append(l); }
     if (list.length) idle(pump); else idle(warmWorld);

@@ -54,8 +54,12 @@ export class BaseClient {
   prune(now, keep = null) { this.now = now; for (const [k, d] of this.done) if (now - d.t > BASE_KEEP_MS || (keep && !keep(d.sk))) { this.done.delete(k); try { d.bmp.close(); } catch { /* none */ } } }
 }
 
-/** A client that spawns the real workers (up to three, and two cores fewer than the machine has), or null where there are none to spawn (no Worker, or a single core). */
+let SPARE = null;
+/** Boot the pool now, while the title and the draft are on screen (js/main.js, with the island's scene): the workers take 0.4 s to load the ground's code, and the world takes the pool when it begins. */
+export function warmBaseClient() { if (!SPARE) { SPARE = makeBaseClient(); if (SPARE) { SPARE.now = typeof performance !== 'undefined' ? performance.now() : 0; SPARE.start(); } } }
+/** A client that spawns the real workers (up to three, and two cores fewer than the machine has), or the one that was warmed, or null where there are none to spawn (no Worker, or a single core). */
 export function makeBaseClient() {
+  if (SPARE) { const c = SPARE; SPARE = null; return c; }
   if (typeof Worker !== 'function' || typeof URL !== 'function') return null;
   const hc = typeof navigator !== 'undefined' ? navigator.hardwareConcurrency : 0; if (hc < 2) return null;
   return new BaseClient(() => new Worker(new URL('./basework.js', import.meta.url), { type: 'module' }), Math.max(1, Math.min(BASE_POOL, (hc || 4) - 2))); // (two cores are left to the frames, the compositor and the GPU)
