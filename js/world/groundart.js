@@ -34,7 +34,6 @@ const V = (c, k) => (k ? warmVeil(c, k * VEIL) : c);
 /** `shore`: paint the chunk's whole buffer (sea, walls, land) and put it into the chunk. With no chunk (a direct draw: the Node tests) nothing is painted here. */
 function drawShore(ctx, view, env, w, a) {
   const ch = a && a.chunk; if (!ch) return;
-  if (ch.base) { ctx.putImageData(new ImageData(ch.base, ch.N, ch.N), 0, 0); return; } // (painted off the main thread: basework.js)
   bakeBase(ch.buf, ch.N, ch.N, ch.S, ch.ox, ch.oy, ch.scene, view);
   if (ch.img) ctx.putImageData(ch.img, 0, 0);
 }

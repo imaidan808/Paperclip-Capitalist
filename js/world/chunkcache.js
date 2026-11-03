@@ -15,13 +15,15 @@ import { surface as makeSurface, ledger, builds } from './gfx.js';
 import { closeAlpha } from './seal.js';
 
 const READ = { willReadFrequently: true };
+/** The name a worker's chunk goes by on its way (baseclient.js): the chunk's key, the density it is made at and which store it is for (the overview's `o`, a coarse cover's `c`). */
+export const jobKey = (sk, i, j, dpr, pin = false, coarse = false) => chunkKey(sk, i, j) + '|' + dpr + (pin ? 'o' : coarse ? 'c' : '');
 
 export class ChunkCache {
   /** `name` is the ledger holder; `make` is the surface factory (tests hand in a stand-in). */
   constructor(name = 'ground.chunks', make = makeSurface) {
     this.name = name; this.make = make; this.map = new Map(); this.ov = new Map(); this.ver = NaN; this.bytes = 0; this.tick = 0; // (`ov`: the overview, below: kept apart from the chunks of the frame's scales, so their counts, cap and sweep are what they were)
-    this.base = null; this.job = { key: '', sk: 0, N: 0, S: 0, ox: 0, oy: 0 }; // `base(job)`: the V2 base's pixels from a worker, or null while it paints them (baseclient.js; groundcache.js sets it)
-    this.opaque = false; // chunks opaque by construction (the V2 base paints every pixel): nothing to seal, never a cell of open sea (groundcache.js sets it)
+    this.whole = null; this.job = { key: '', sk: 0, a: 0, i: 0, j: 0, dpr: 1, coarse: false, pin: false, zoom: 0 }; // `whole(job)`: the chunk's bitmap from a worker (it makes the whole chunk), or null while it makes it (baseclient.js; groundcache.js sets it)
+    this.opaque = false; // chunks opaque by construction (the V2 base paints every pixel): nothing to seal, never a cell of open sea (groundcache.js and the chunk worker set it)
     this.work = null; this.fin = null; this.cell = null; this.scratch = null; this.scratchN = 0; this.list = []; this.soft = []; this.parts = []; this.fno = 0; this.now = 0; this.made = 0;
     this.stats = { baked: 0, sealed: 0, dropped: 0, ms: 0, lastMs: 0, direct: 0, stale: 0, hits: 0, faded: 0 };
   }
@@ -144,8 +146,11 @@ export class ChunkCache {
   bake(draw, a, i, j, dpr, coarse = false, pin = false) {
     const t0 = typeof performance !== 'undefined' ? performance.now() : 0, ss = superSample(dpr), S = CHUNK_FULL * ss, sk = scaleKey(a);
     const key = chunkKey(sk, i, j), into = pin ? this.ov : this.map, old = into.get(key); if (old && !old.stale) return old; // (`pin`: a chunk of the overview, which has a store of its own)
-    let px = null; // the worker's pixels of the base, when it paints it: no chunk, nor a surface for it, before they are there
-    if (this.base) { const J = this.job; J.key = key + '|' + S; J.sk = sk; J.N = S; J.S = a * ss; J.ox = (i * CHUNK_PX - BLEED) / a; J.oy = (j * CHUNK_PX - BLEED) / a; px = this.base(J); if (!px) return null; }
+    if (this.whole) { // a worker makes the whole chunk: no surface here, and no chunk before its bitmap is back
+      const J = this.job; J.key = jobKey(sk, i, j, dpr, pin, coarse); J.sk = sk; J.a = a; J.i = i; J.j = j; J.dpr = dpr; J.coarse = coarse; J.pin = pin;
+      const img = this.whole(J); if (!img) return null;
+      return this.keep({ fadeEnd: 0, coarse, sk, a, i, j, img, empty: false, bytes: CHUNK_PX * CHUNK_PX * 4, last: ++this.tick, sealed: false, pin }, old, into, key, t0);
+    }
     let work = null;
     // (CPU-backed although never read back: a GPU canvas anti-aliases a path with 4 samples, the CPU with 256 levels)
     if (ss > 1) { if (!this.work || this.work.c.width !== S) { this.work = this.make(S, S, READ); this.sync(); } work = this.work; }
@@ -156,7 +161,7 @@ export class ChunkCache {
     g.setTransform(k, 0, 0, k, -(i * CHUNK_PX - BLEED) * ss, -(j * CHUNK_PX - BLEED) * ss);
     const view = { x0: (i * CHUNK_PX - BLEED) / a, x1: ((i + 1) * CHUNK_PX + BLEED) / a, y0: (j * CHUNK_PX - BLEED) / a, y1: ((j + 1) * CHUNK_PX + BLEED) / a };
     const info = this.info || (this.info = { k: 0, ss: 1, n: 0, zoom: 0 }); info.k = k; info.ss = ss; info.n = S; info.zoom = pin ? a / Math.max(dpr, 1e-3) : 0;
-    info.base = px; draw(g, view, info); info.base = null; // (`info`: the scale and side of the pixels being painted, for a layer that paints pixels itself: the V2 ground's base; `zoom` the camera zoom this chunk stands for, 0 for the camera's own: the overview is drawn as the far view it is)
+    draw(g, view, info); // (`info`: the scale and side of the pixels being painted, for a layer that paints pixels itself: the V2 ground's base; `zoom` the camera zoom this chunk stands for, 0 for the camera's own: the overview is drawn as the far view it is)
     g.setTransform(1, 0, 0, 1, 0, 0);
     if (ss > 1) { const f = fin.g; f.setTransform(1, 0, 0, 1, 0, 0); f.clearRect(0, 0, CHUNK_FULL, CHUNK_FULL); f.imageSmoothingEnabled = true; if ('imageSmoothingQuality' in f) f.imageSmoothingQuality = 'high'; f.drawImage(work.c, 0, 0, S, S, 0, 0, CHUNK_FULL, CHUNK_FULL); }
     let sealed = false, empty = false;
@@ -181,10 +186,13 @@ export class ChunkCache {
         const own = this.make(CHUNK_PX, CHUNK_PX); if (own) { own.g.drawImage(fin.c, BLEED, BLEED, CHUNK_PX, CHUNK_PX, 0, 0, CHUNK_PX, CHUNK_PX); img = own.c; }
       }
     }
-    const c = { fadeEnd: 0, coarse, sk, a, i, j, img, empty, bytes: empty ? 0 : CHUNK_PX * CHUNK_PX * 4, last: ++this.tick, sealed, pin };
+    return this.keep({ fadeEnd: 0, coarse, sk, a, i, j, img, empty, bytes: empty ? 0 : CHUNK_PX * CHUNK_PX * 4, last: ++this.tick, sealed, pin }, old, into, key, t0);
+  }
+  /** Put a baked chunk into its store (replacing a stale one of the same cell) and count the bake. */
+  keep(c, old, into, key, t0) {
     if (old) this.drop(old); // (a stale chunk of the same cell: replaced)
     into.set(key, c); this.sync();
-    const ms = (typeof performance !== 'undefined' ? performance.now() : 0) - t0; this.stats.baked++; builds.n++; if (sealed) this.stats.sealed++; this.stats.ms += ms; this.stats.lastMs = ms;
+    const ms = (typeof performance !== 'undefined' ? performance.now() : 0) - t0; this.stats.baked++; builds.n++; if (c.sealed) this.stats.sealed++; this.stats.ms += ms; this.stats.lastMs = ms;
     return c;
   }
 

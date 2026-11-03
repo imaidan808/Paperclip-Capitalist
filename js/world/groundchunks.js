@@ -8,16 +8,16 @@ import { registerReleaser } from './gfx.js';
 
 const BUFS = new Map(); // one pixel buffer (and its ImageData) per bake size: the base is painted into it and put into the chunk's surface
 const bufFor = (n) => { let b = BUFS.get(n); if (!b) { const buf = new Uint8ClampedArray(n * n * 4); b = { buf, img: typeof ImageData === 'function' ? new ImageData(buf, n, n) : null }; BUFS.set(n, b); } return b; };
-const DESC = { S: 1, ox: 0, oy: 0, N: 0, bleed: 1, base: null, buf: null, img: null, scene: null };
+const DESC = { S: 1, ox: 0, oy: 0, N: 0, bleed: 1, buf: null, img: null, scene: null };
 
 /**
  * The descriptor of the chunk being baked. `view` is the chunk's world rectangle (with its bleed), `info` what the cache knows of the surface: `k` the scale of its pixels (device pixels a world pixel,
  * the supersampling included), `n` its side in pixels and `ss` its supersampling. One record, reused: a layer reads it during its own call and never keeps it.
  */
 export function chunkDescriptor(w, view, info) {
-  const d = DESC, b = info.base ? null : bufFor(info.n); // (a base painted by the worker comes in `info.base`: no buffer to paint into)
+  const d = DESC, b = bufFor(info.n);
   view.maxZ = LAYOUT.maxZ; // the base reads the island's highest ground to know which tiles can reach into the rectangle (T1's view always carried it)
-  d.S = info.k; d.ox = view.x0; d.oy = view.y0; d.N = info.n; d.bleed = info.ss; d.base = info.base || null; d.buf = b ? b.buf : null; d.img = b ? b.img : null; d.scene = sceneOf(lockedOf(w.unlocked)); // (the scene stays: the layers over the base read it too)
+  d.S = info.k; d.ox = view.x0; d.oy = view.y0; d.N = info.n; d.bleed = info.ss; d.buf = b.buf; d.img = b.img; d.scene = sceneOf(lockedOf(w.unlocked)); // (the layers over the base read the scene too)
   return d;
 }
 /** Let go of the pixel buffers (a world that gives its memory back, a test). */
