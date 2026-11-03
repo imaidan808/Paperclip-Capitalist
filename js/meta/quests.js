@@ -32,9 +32,9 @@ const quest = (id, zone, title, icon, desc, goal, xp, points, after) => ({
 /** Two quests per district: an arrival quest (get there, do its first thing) and a mastery quest (the district's signature rule). */
 export const QUESTS = [
   // ---------------------------------------------------------------- Tier 1: the streets
-  quest('q01a', 1, 'First Swap', '🔁', 'Trade your paperclip to a buyer in The Scrap Yard. Any buyer who bites counts.',
+  quest('q01a', 1, 'First Swap', '🔁', 'Sell your paperclip to a buyer in The Scrap Yard. Any buyer counts.',
     { event: 'pitch', match: { zone: 1, outcome: SOLD() }, count: 1 }, 50),
-  quest('q01b', 1, 'Need Beats Cost', '🎯', 'Close 3 trades in The Scrap Yard with buyers who really need what you hold (fit 70% or better). Urgent buyers pay for need, not for what you paid.',
+  quest('q01b', 1, 'Need Beats Cost', '🎯', 'Close 3 trades in The Scrap Yard with buyers who need what you hold (fit 70% or better). Urgent buyers pay for need, not cost.',
     { event: 'pitch', match: { zone: 1, outcome: SOLD(), fit: { gte: 0.7 } }, count: 3 }, 100, 0, 'q01a'),
   quest('q02a', 2, 'Stall Crawler', '🧺', 'Buy 2 lots from the stalls at Flea Market Row.',
     { event: 'buy', match: { zone: 2 }, count: 2 }, 80, 0, 'q01b'),
@@ -42,11 +42,11 @@ export const QUESTS = [
     { event: 'pitch', match: { zone: 2, outcome: SOLD(), gain: { gte: 0.1 } }, count: 3 }, 160, 0, 'q02a'),
   quest('q03a', 3, 'Syllabus Week', '📚', 'Sell 2 goods on Campus Quad.',
     { event: 'pitch', match: { zone: 3, outcome: SOLD() }, count: 2 }, 110, 0, 'q02b'),
-  quest('q03b', 3, 'Ride the Wave', '🌊', 'Sell 3 goods on Campus Quad at a profit into an uncrowded niche (Creativity Multiplier 1.3 or better). Ride the semester wave, skip the herd.',
+  quest('q03b', 3, 'Ride the Wave', '🌊', 'Sell 3 goods on Campus Quad at a profit into an uncrowded niche (Creativity Multiplier 1.3 or better).',
     { event: 'pitch', match: { zone: 3, outcome: PROFIT(), cm: { gte: 1.3 } }, count: 3 }, 220, 0, 'q03a'),
   quest('q04a', 4, 'Window Shopping', '🪟', 'Buy 2 lots in the Pawn District. About 1 in 5 of them is a fake, so look closely.',
     { event: 'buy', match: { zone: 4 }, count: 2 }, 150, 0, 'q03b'),
-  quest('q04b', 4, 'Spot the Fake', '🕵️', 'Catch a counterfeit: probe a lot until the fake gives itself away. Serial numbers and paperwork are your friends.',
+  quest('q04b', 4, 'Spot the Fake', '🕵️', 'Catch a counterfeit: probe a lot until the fake shows. Serial numbers and paperwork are the best probes.',
     { event: 'inspect', match: { fake: true, caught: true }, count: 1 }, 300, 1, 'q04a'),
 
   // ---------------------------------------------------------------- Tier 2: the town
@@ -92,11 +92,11 @@ export const QUESTS = [
     { event: 'client', match: { tier: { in: ['ent', 'enterprise'] } }, count: 1 }, 1800, 0, 'q13a'),
   quest('q14a', 14, 'Open an Account', '🏦', 'Buy 2 lots in the Financial District.',
     { event: 'buy', match: { zone: 14 }, count: 2 }, 1300, 0, 'q13b'),
-  quest('q14b', 14, 'Leverage With a Leash', '⚖️', 'Repay $50,000 of loans. Borrow to grow, then pay it back before the interest pays you a visit.',
+  quest('q14b', 14, 'Leverage With a Leash', '⚖️', 'Repay $50,000 of loans. Borrow to grow, then pay it back before interest eats the gain.',
     { event: 'repay', count: 50000, sum: 'amount' }, 2200, 1, 'q14a'),
   quest('q15a', 15, 'Key in Hand', '🔑', 'Sell 2 goods on Real Estate Row.',
     { event: 'pitch', match: { zone: 15, outcome: SOLD() }, count: 2 }, 1600, 0, 'q14b'),
-  quest('q15b', 15, 'Landlord Life', '🏠', 'Collect $25,000 in cycle income on Real Estate Row. Rent pays every day you hold property, so buy early and be patient.',
+  quest('q15b', 15, 'Landlord Life', '🏠', 'Collect $25,000 in cycle income on Real Estate Row. Rent pays every day you hold property, so buy early.',
     { event: 'cycle', match: { zone: 15, net: { gt: 0 } }, count: 25000, sum: 'net' }, 2600, 0, 'q15a'),
   quest('q16a', 16, 'Opening Bell', '🔔', 'Sell 2 goods at Global Exchange.',
     { event: 'pitch', match: { zone: 16, outcome: SOLD() }, count: 2 }, 2000, 0, 'q15b'),
@@ -122,9 +122,9 @@ export const ACHIEVEMENTS = [
     { event: 'haggle', match: { role: 'sell', deal: true, mult: { gte: 1.2 } }, count: 5 }, 250),
   ach('a-bargain-hunter', 'rare', 'Bargain Hunter', '🏷️', 'Buy 5 goods through a haggle at 5% or more below the asking price.',
     { event: 'haggle', match: { role: 'buy', deal: true, mult: { lte: 0.95 } }, count: 5 }, 250),
-  ach('a-bg-pro', 'rare', 'Old School Charm', '🎩', 'Seasoned Pro: close 5 sales through a haggle with a score of 80% or better and a price 10% or more above fair. Steady hands win.',
+  ach('a-bg-pro', 'rare', 'Old School Charm', '🎩', 'Seasoned Pro: close 5 sales through a haggle with a score of 80% or better and a price 10% or more above fair.',
     { event: 'haggle', match: { role: 'sell', deal: true, score: { gte: 0.8 }, mult: { gte: 1.1 } }, count: 5 }, 230, { bg: 'pro' }),
-  ach('a-poker-face', 'epic', 'Poker Face', '🃏', 'Close 10 sales through a haggle with a score of 95% or better and a price 10% or more above fair. Anchor well, never blink.',
+  ach('a-poker-face', 'epic', 'Poker Face', '🃏', 'Close 10 sales through a haggle with a score of 95% or better and a price 10% or more above fair.',
     { event: 'haggle', match: { role: 'sell', deal: true, score: { gte: 0.95 }, mult: { gte: 1.1 } }, count: 10 }, 700),
 
   // ---------------------------------------------------------------- inspect
@@ -156,7 +156,7 @@ export const ACHIEVEMENTS = [
     { event: 'auction', match: { won: true, surplus: { gt: 0 } }, count: 5 }, 280),
   ach('a-auction-shark', 'epic', 'Auction Shark', '🦈', 'Pocket $5,000 in total auction surplus: the value you won beyond what you paid.',
     { event: 'auction', match: { won: true, surplus: { gt: 0 } }, count: 5000, sum: 'surplus' }, 750),
-  ach('a-winners-curse', 'common', "The Winner's Curse", '🤦', 'Win an auction and pay more than the lot was worth. It happens to everyone once. Now you know why.',
+  ach('a-winners-curse', 'common', "The Winner's Curse", '🤦', 'Win an auction and pay more than the lot was worth: the winner\'s curse.',
     { event: 'auction', match: { won: true, surplus: { lt: 0 } }, count: 1 }, 70, { hidden: true }),
 
   // ---------------------------------------------------------------- streaks
@@ -170,7 +170,7 @@ export const ACHIEVEMENTS = [
   // ---------------------------------------------------------------- risk survived
   ach('a-called-not-cooked', 'rare', 'Called, Not Cooked', '📉', 'Take a margin call and keep your business running.',
     { event: 'margin-call', count: 1 }, 250),
-  ach('a-rock-bottom', 'common', 'Rock Bottom', '🧱', 'Go insolvent. Every founder has a story like this; the lesson is to size your debt to your cash flow.',
+  ach('a-rock-bottom', 'common', 'Rock Bottom', '🧱', 'Go insolvent. Size your debt to your cash flow.',
     { event: 'insolvent', count: 1 }, 60, { hidden: true }),
   ach('a-credit-crunch', 'rare', 'Crunch Survivor', '🥶', 'Live through a credit crunch.',
     { event: 'shock', match: { kind: { in: ['fed', 'credit', 'credit-crunch'] } }, count: 1 }, 230),
@@ -178,7 +178,7 @@ export const ACHIEVEMENTS = [
     { event: 'shock', match: { kind: { in: ['tariff', 'tariffs'] } }, count: 1 }, 100),
   ach('a-demand-surge', 'common', 'Riding the Surge', '📈', 'Live through a demand shock.',
     { event: 'shock', match: { kind: { in: ['tiktok', 'demand', 'demand-shock'] } }, count: 1 }, 100),
-  ach('a-bg-veteran', 'rare', 'Steady in the Storm', '⛈️', 'Veteran: weather 3 macro shocks of any kind. Discipline holds when markets do not.',
+  ach('a-bg-veteran', 'rare', 'Steady in the Storm', '⛈️', 'Veteran: weather 3 macro shocks of any kind.',
     { event: 'shock', count: 3 }, 250, { bg: 'veteran' }),
 
   // ---------------------------------------------------------------- the Creativity Engine
@@ -196,7 +196,7 @@ export const ACHIEVEMENTS = [
     { event: 'pitch', match: { outcome: SOLD(), fit: { gte: 0.9 } }, count: 10 }, 220),
   ach('a-jackpot', 'rare', 'Jackpot', '🎰', 'Sell something for double its fair value.',
     { event: 'pitch', match: { outcome: SOLD(), gain: { gte: 1 } }, count: 1 }, 300, { hidden: true }),
-  ach('a-herd-mentality', 'common', 'Follow the Leader', '🐑', 'Sell into a crowded herd 3 times. Everyone else is doing it, which is exactly the problem.',
+  ach('a-herd-mentality', 'common', 'Follow the Leader', '🐑', 'Sell into a crowded herd 3 times. A crowd cuts your price.',
     { event: 'pitch', match: { outcome: 'herd' }, count: 3 }, 70, { hidden: true }),
   ach('a-clip', 'rare', 'Paperclip Maximizer', '📎', 'Sell 10 paperclips. It is in the name, after all.',
     { event: 'pitch', match: { cls: 'paperclip', outcome: SOLD() }, count: 10 }, 200, { hidden: true }),
@@ -204,15 +204,15 @@ export const ACHIEVEMENTS = [
   // ---------------------------------------------------------------- the twelve Backgrounds
   ach('a-bg-connected', 'rare', 'Rolodex', '📇', 'Well-Connected: sign 3 clients. Your dad did know a guy.',
     { event: 'client', count: 3 }, 220, { bg: 'connected' }),
-  ach('a-bg-grad', 'rare', 'Textbook Case', '📖', 'Business-School Grad: close 5 sales into niches under 25% saturated at 10% or more above fair price. Theory pays.',
+  ach('a-bg-grad', 'rare', 'Textbook Case', '📖', 'Business-School Grad: close 5 sales into niches under 25% saturated at 10% or more above fair price.',
     { event: 'pitch', match: { outcome: SOLD(), S: { lte: 0.25 }, gain: { gte: 0.1 } }, count: 5 }, 260, { bg: 'grad' }),
   ach('a-bg-immigrant', 'rare', 'Diaspora Express', '✈️', 'Immigrant Hustler: ship 25 crates between districts. Your network moves goods.',
     { event: 'ship', count: 25, sum: 'count' }, 250, { bg: 'immigrant' }),
   ach('a-bg-heir', 'rare', 'Family Safety Net', '🪂', 'Legacy Heir: take a margin call and let the family catch you. Only the Heir has this safety net.',
     { event: 'perk', match: { id: 'heir', effect: 'bailout' }, count: 1 }, 250, { bg: 'heir', hidden: true }),
-  ach('a-bg-creator', 'rare', 'Gone Viral', '📱', 'Creator: close 3 pitches at 30% or more above fair price. The audience shows up.',
+  ach('a-bg-creator', 'rare', 'Gone Viral', '📱', 'Creator: close 3 pitches at 30% or more above fair price.',
     { event: 'pitch', match: { outcome: SOLD(), gain: { gte: 0.3 } }, count: 3 }, 250, { bg: 'creator' }),
-  ach('a-bg-gigger', 'common', 'Hustle Season', '🛵', 'Side-Hustler: complete 20 cycles, manager runs or paid days of rent and royalties. Always something running.',
+  ach('a-bg-gigger', 'common', 'Hustle Season', '🛵', 'Side-Hustler: complete 20 cycles, manager runs or paid days of rent and royalties.',
     { event: 'cycle', count: 20 }, 120, { bg: 'gigger' }),
   ach('a-bg-roots', 'common', 'Hometown Favorite', '🏡', 'Small-Town Roots: close 12 sales in your first two districts. Locals remember.',
     { event: 'pitch', match: { zone: { lte: 2 }, outcome: SOLD() }, count: 12 }, 110, { bg: 'roots' }),
@@ -236,9 +236,9 @@ export const ACHIEVEMENTS = [
   // ---------------------------------------------------------------- audits
   ach('a-clean-books', 'rare', 'Clean Books', '📒', 'Pass 3 audits.',
     { event: 'audit', match: { ok: true }, count: 3 }, 260),
-  ach('a-audit-proof', 'epic', 'Audit-Proof', '🛡️', 'Pass 5 audits. Your paperwork could be framed. Audits come every 15 days once Industrial Park is open, so open it by about day 30.',
+  ach('a-audit-proof', 'epic', 'Audit-Proof', '🛡️', 'Pass 5 audits. They come every 15 days once Industrial Park is open, so open it by about day 30.',
     { event: 'audit', match: { ok: true }, count: 5 }, 700),
-  ach('a-lucky-bypass', 'rare', 'Not Today, Auditor', '🎲', 'Skip the paperwork and still pass an audit. Do not make a habit of it.',
+  ach('a-lucky-bypass', 'rare', 'Not Today, Auditor', '🎲', 'Skip the paperwork and still pass an audit (a 15% chance).',
     { event: 'audit', match: { choice: 'C', ok: true }, count: 1 }, 250, { hidden: true }),
 
   // ---------------------------------------------------------------- peers

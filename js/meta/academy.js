@@ -471,7 +471,7 @@ export const ACADEMY = [
       events: [{ kind: 'tiktok', atHour: 24 }],
     },
     steps: [
-      { id: 'stock', say: "Open Stock. Two pallets ride one viral trend and the textbooks do not. If trend demand moves, only the gadgets care. That is diversification.", anchor: 'dock-stock', wait: { type: 'ui', ui: 'open-drawer', id: 'stock' }, hint: "Click the Stock icon in the dock." },
+      { id: 'stock', say: "Open Stock. Two pallets ride the same viral trend and the textbooks do not. If trend demand moves, only the gadgets care. That is diversification.", anchor: 'dock-stock', wait: { type: 'ui', ui: 'open-drawer', id: 'stock' }, hint: "Click the Stock icon in the dock." },
       { id: 'travel', say: "Open Travel to see the map. The craze hits every district, so shipping would not save the pallets. Only owning something else, or selling in time, will.", anchor: 'dock-travel', wait: { type: 'ui', ui: 'open-drawer', id: 'travel' }, hint: "Click the Travel icon in the dock." },
       { id: 'clock', say: "Press the clock. At 16x the ticker warns you in about 5 seconds and the craze lands in about 10, lasting about 20. Leave the speed alone and do not pause yet.", anchor: 'hud-clock', wait: { type: 'click', anchor: 'hud-clock' }, hint: "Tap the clock in the top bar to let time run." },
       { id: 'shock', say: "Watch the ticker: first the warning, then the headline that the craze is now in effect. When it is live, pause the clock and think about your gadgets.", anchor: 'ticker', wait: { type: 'event', event: 'shock', match: { kind: 'tiktok' } }, hint: "Wait for the second headline, then press the clock to pause and sell. If you paused too soon, press the clock again and keep watching." },

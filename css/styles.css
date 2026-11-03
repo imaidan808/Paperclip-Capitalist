@@ -185,3 +185,11 @@ label.pick input { float: right; }
 .asset .ic { grid-row: span 3; } .asset > .bar { grid-column: 1 / -1; margin-top: .3rem; }
 @media (max-width: 1100px) { .hub .stat.row { justify-content: flex-start; } }
 
+/* a fold: a summary that opens the detail (the Academy's result, a Codex page, the Deal Room's result) */
+:is(.ac-more, .cx-more, .deal-more) { border: 1px solid var(--line); background: var(--panel2); margin: .4rem 0; }
+:is(.ac-more, .cx-more, .deal-more) > summary { cursor: pointer; padding: .5rem .75rem; font-weight: 700; list-style: none; display: flex; align-items: center; gap: .5rem; }
+:is(.ac-more, .cx-more, .deal-more) > summary::-webkit-details-marker { display: none; }
+:is(.ac-more, .cx-more, .deal-more) > summary::before { content: "+"; display: inline-grid; place-items: center; flex: none; width: 1.1rem; height: 1.1rem; border: 1px solid var(--cyan); color: var(--cyan); font: 700 .8rem/1 ui-monospace, Menlo, monospace; }
+:is(.ac-more, .cx-more, .deal-more)[open] > summary::before { content: "\2212"; }
+:is(.ac-more, .cx-more, .deal-more) > :not(summary) { margin-inline: .75rem; }
+:is(.ac-more, .cx-more, .deal-more)[open] { padding-bottom: .55rem; }

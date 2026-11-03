@@ -253,7 +253,7 @@ export function mountGame(root, S, hooks) {
       render();
     },
     speed(b) { S.setSpeed(+b.value); },
-    help() { dlg.open(`<button class="btn ghost sm x" data-close>Close</button><h2 tabindex="-1" autofocus>How to play</h2><ol class="small"><li>Click a <b>buyer</b> to sell, or a <b>booth</b> to buy. Play each deal (Read, Pitch, Close) or press <b>Quick</b>.</li><li>The <b>Goal</b> card says what to do next. The <b>Codex</b> says why it works.</li><li>Net worth opens districts. Each has a rule of its own.</li><li><b>1</b> to <b>7</b> open the panels, <b>Esc</b> closes them, <b>M</b> mutes.</li></ol>`, { label: 'Help' }); },
+    help() { dlg.open(`<button class="btn ghost sm x" data-close>Close</button><h2 tabindex="-1" autofocus>How to play</h2><ol class="small"><li>Click a <b>buyer</b> to sell, or a <b>booth</b> to buy. Play each deal (Read, Pitch, Close) or press <b>Quick</b>.</li><li>The <b>Goal</b> card says what to do next. The <b>Codex</b> says why it works.</li><li>Net worth opens districts. Each has a rule of its own.</li><li>Press <b>1</b> to <b>7</b> to open the panels, <b>Esc</b> to close them, <b>M</b> to mute.</li></ol>`, { label: 'Help' }); },
     settings() { settingsDialog(() => render()); },
     menu,
     breakdown(b) { breakdown(b.dataset.k); },
