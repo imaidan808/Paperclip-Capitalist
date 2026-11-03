@@ -356,5 +356,5 @@ export function mountGame(root, S, hooks) {
 }
 
 export function alertHTML(a) {
-  return `<button class="btn ghost sm x" data-close>Close</button><h2 tabindex="-1" autofocus>${esc(a.name)}</h2><p class="mono small gold">${esc(a.code || '')}</p><p>${esc(a.readout || '')}</p>${(a.vars || []).length ? `<ul class="small">${a.vars.map((v) => `<li>${esc(v)}</li>`).join('')}</ul>` : ''}<p class="small mute">${esc(a.enforcement || '')}</p>`;
+  return `<button class="btn ghost sm x" data-close>Close</button><h2 tabindex="-1" autofocus>${esc(a.name)}</h2><p>${esc(a.readout || '')}</p>${(a.vars || []).length ? `<ul class="small">${a.vars.map((v) => `<li>${esc(v)}</li>`).join('')}</ul>` : ''}<p class="small mute">${esc(a.enforcement || '')}</p>`;
 }

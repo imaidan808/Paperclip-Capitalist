@@ -113,9 +113,9 @@ export const AUDIT = { fee: 1200, fine: 5000, passChance: 0.15, velocityHit: 0.8
 export const EVENTS = {
   tiktok: {
     id: 'tiktok', name: 'The TikTok Arbitrage Surge', day: 15, level: 1, short: 'Demand shock',
-    alert: { code: 'MKT-DEM-SRG-15', readout: 'Viral demand is sweeping the consumer-trend sector. A 48-hour hyper-demand window opens at 00:00.',
-      vars: ['Local demand for trend goods spikes +400% in every district.', 'Matching pipeline cycles run 60% faster.', 'After 48 hours market fatigue sets in: trend inventory loses 50% of its value for 72 hours.'],
-      enforcement: 'No intervention. Sell into the window, then get out before fatigue.' },
+    alert: { code: 'MKT-DEM-SRG-15', readout: 'A viral craze for trend goods starts at 00:00 and lasts 48 hours.',
+      vars: ['Demand for trend goods rises 400% in every district.', 'Pipeline cycles on trend goods run 60% faster.', 'After 48 hours fatigue sets in: trend goods lose 50% of their value for 72 hours.'],
+      enforcement: 'Sell into the craze, then get out before fatigue.' },
     phases: [
       { from: 0, to: 48, eff: { demand: { tags: ['trend'], mult: 5 }, speed: { tags: ['trend'], mult: 1.6 } } },
       { from: 48, to: 120, eff: { price: { tags: ['trend'], mult: 0.5 } } },
@@ -123,9 +123,9 @@ export const EVENTS = {
   },
   fed: {
     id: 'fed', name: 'The Fed Taper and Credit Crunch', day: 45, level: 3, short: 'Liquidity shock',
-    alert: { code: 'CB-MON-REG-UPD-45', readout: 'Liquidity Crunch Imminent. Restrictive monetary policy adjustments take effect on Virtual Day 45 at 00:00.',
-      vars: ['Base corporate borrowing rate spikes from 2.5% to 8.5% (+600 bps).', 'Institutional transaction tax rises from 2.5% to 12.0%.', 'Automated pipeline overhead rises 20% from floating-rate facility drag.'],
-      enforcement: 'Credit Action Override Activated. No new commercial bank loans may be drawn until Day 55. Open lines re-amortize at the new index rate within 24 virtual hours.' },
+    alert: { code: 'CB-MON-REG-UPD-45', readout: 'The central bank tightens credit on Day 45 at 00:00.',
+      vars: ['The base monthly rate rises from 2.5% to 8.5% (+600 bps) for 15 days.', 'The base fee on sales rises from 2.5% to 12.0%.', 'Manager overhead rises 20%.'],
+      enforcement: 'No new bank loans until Day 55. Open loans re-rate within 24 hours.' },
     phases: [
       { from: 0, to: 360, eff: { rateBps: 600, fee: 0.095, overhead: 1.2 } },
       { from: 0, to: 240, eff: { freeze: true } },
@@ -133,9 +133,9 @@ export const EVENTS = {
   },
   tariff: {
     id: 'tariff', name: 'The Cross-Border Tariff Lock', day: 75, level: 2, short: 'Supply shock',
-    alert: { code: 'TRD-TAR-LCK-75', readout: 'Customs duties lock global freight and international dropshipping channels from Day 75.',
-      vars: ['International pipeline cycles slow by 4 virtual days.', 'Asset rehabilitation costs outside the four starter districts rise 45%.', 'Domestic channels and the starter districts are unaffected.'],
-      enforcement: 'Move international lanes to domestic channels, or ride out the slow cycles.' },
+    alert: { code: 'TRD-TAR-LCK-75', readout: 'Customs duties lock international freight and dropshipping from Day 75.',
+      vars: ['Managers on international lanes run 4 days slower.', 'Repairs outside the four starter districts cost 45% more.', 'Domestic lanes and the starter districts are unaffected.'],
+      enforcement: 'Move international lanes to domestic ones, or ride out the slow cycles.' },
     phases: [{ from: 0, to: 360, eff: { intlSlow: 96, repair: 1.45 } }],
   },
 };
