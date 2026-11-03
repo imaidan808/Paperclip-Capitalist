@@ -116,7 +116,7 @@ export function eventCalls(ev, st = newWireState(), hooks = {}) {
   }
 }
 
-/** A note's meaning when the engine did not tag it with a `kind`: the texts are pinned by a test, so a copy edit cannot silently mute a sound. */
+/** A note's meaning: its `kind`, which the engine and the session write for every note a sound depends on (tests/copy2-messages.test.mjs), else its words. */
 export function noteKind(n) {
   if (n.kind) return n.kind;
   const t = String(n.text || '');
@@ -154,7 +154,7 @@ export function noteCalls(n, st = newWireState(), hooks = {}) {
   if (k === 'scam') { st.scamAt = now; return []; }
   if (k === 'counterfeit') { st.counterfeitAt = now; return []; }
   if (k === 'settle') return calls(['request', 'cash.in', { variant: 'settle', clock: true, meta: { amount: amt } }]);
-  const zoneOf = () => { const t = String(n.text), id = Object.keys(ZONES).find((z) => t.includes(' in ' + ZONES[z].short + '.') || t.includes(' in ' + ZONES[z].short + ':')); return id ? Number(id) : undefined; }; // "Freight arrived in Harbor.": pan from that district
+  const zoneOf = () => { if (Number.isInteger(n.z)) return n.z; const t = String(n.text), id = Object.keys(ZONES).find((z) => t.includes(' in ' + ZONES[z].short + '.') || t.includes(' in ' + ZONES[z].short + ':')); return id ? Number(id) : undefined; }; // `z` is the engine's; a hand-made note says "Freight arrived in Harbor."
   const where = () => { const z = zoneOf(), p = z != null && hooks.pan ? hooks.pan('zone', z) : undefined; return p === undefined ? {} : { pan: p }; };
   if (k === 'freight-arrive') return calls(['request', 'ship.arrive', { clock: true, ...where(), ...awayFrom(zoneOf(), hooks) }]);
   if (k === 'customs' || k === 'damage') return calls(['request', 'ship.trouble', { variant: k, state: 'trouble-' + k, ...(k === 'customs' ? { ...where(), ...awayFrom(zoneOf(), hooks) } : {}) }]);
@@ -166,7 +166,7 @@ export function noteCalls(n, st = newWireState(), hooks = {}) {
   if (k === 'swap') return calls(['request', 'swap.done', {}]);
   if (k === 'insolvent') return [];
   if (n.audit) return calls(['request', 'audit.notice', {}]);
-  if (n.alert && Number(n.alert.level) >= 1 && /effective in/.test(String(n.text))) return calls(['request', 'alert.advance', { variant: 'l' + Math.min(3, Math.max(1, Math.round(n.alert.level))) }]);
+  if (n.alert && Number(n.alert.level) >= 1 && (k === 'advance' || /effective in/.test(String(n.text)))) return calls(['request', 'alert.advance', { variant: 'l' + Math.min(3, Math.max(1, Math.round(n.alert.level))) }]);
   if (n.final) return calls(['request', 'run.end', { variant: n.exit || /^Exit complete/.test(String(n.text)) ? 'done' : 'horizon' }]);
   return [];
 }

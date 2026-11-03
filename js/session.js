@@ -263,7 +263,7 @@ export class Session {
   /** The words for a room the relay refused (its close code 1008, which the transport does not retry), or null while it has not. The one thing a player can do is a room that nobody has bound their Founder ID in first. */
   roomRefusal() {
     if (this.room?.state !== 'refused' || !this.roomInfo) return null;
-    return `Room ${this.roomInfo.code} would not take this device: its Founder ID is already in use there by another connection. Ask your instructor to open a new room, and join that one.`;
+    return `Room ${this.roomInfo.code} would not take this device: its Founder ID is already in use there. Ask your instructor to open a new room, and join that one.`;
   }
   _closeRoom() {
     if (this.room) this.room.close();
@@ -602,7 +602,7 @@ export class Session {
     for (const [id, d] of this.delivering) { // committed, and no word yet that the proposer took the delivery: say it again (the proposer answers a repeat the same way), quickly at first and then every half minute
       const age = wall - d.at, due = d.tries < DELIVER_TRIES ? age >= DELIVER_RETRY_MS * d.tries * d.tries : wall - (d.last ?? d.at) >= DELIVER_SLOW_MS;
       if (!due) continue;
-      if (age > DELIVER_HOLD_MS) { this.delivering.delete(id); g.note('warn', `${d.name} has not said the swap arrived. If it did not, ask them to check the offer: what you gave is already with them.`); continue; }
+      if (age > DELIVER_HOLD_MS) { this.delivering.delete(id); g.note('warn', `${d.name} has not said the swap arrived. What you gave is already with them, so ask them to check the offer.`); continue; }
       d.tries++; d.last = wall; this._tell(d.to, 'deliver', d.payload);
     }
     if (this.mode === 'student') this._persistCkpt();
@@ -758,16 +758,16 @@ export class Session {
     const g = this.game, i = this.incoming.find((x) => x.offer.id === offerId);
     if (!i) return { ok: false, msg: 'That offer expired.' };
     const offer = { ...i.offer, want: { ...i.offer.want, assets: this._ownWant(i.offer) } };
-    if (!offer.want.assets) return { ok: false, msg: 'You no longer hold the asset they asked for.' };
+    if (!offer.want.assets) return { ok: false, msg: 'You no longer hold the crate they asked for.' };
     const chk = g.checkOffer(offer);
-    if (!chk.ok) return { ok: false, msg: `Blocked: ${(chk.variance * 100).toFixed(0)}% off fair market value.`, chk };
+    if (!chk.ok) return { ok: false, msg: `Blocked: ${(chk.variance * 100).toFixed(0)}% from fair value.`, chk };
     if (offer.want.cash > g.s.cash) return { ok: false, msg: 'You do not have the cash they asked for.' };
     const name = i.handle || i.offer.from;
     this.accepting.set(offerId, { offer, from: i.offer.from, name, at: Date.now() });
     this.incoming = this.incoming.filter((x) => x !== i);
     this._tell(i.offer.from, 'accept', { offerId, handle: this.handle });
     this.emit('change');
-    return { ok: true, msg: `Accepted. Waiting for ${name} to confirm; nothing changes hands until they do.` };
+    return { ok: true, msg: `Accepted. Nothing changes hands until ${name} confirms.` };
   }
   /** Step one, received by the proposer: it must still hold the escrow. If so it is held for this classmate (it cannot be withdrawn or expire under them) and they are told to go ahead. */
   _onAccept(m, from) {
@@ -813,7 +813,7 @@ export class Session {
     const g = this.game, id = cleanId(m.offerId), e = id && g?.s.escrow.find((x) => x.offerId === id);
     if (!e || m.to !== this.pid || e.lockedBy !== from || !e.recalling) return;
     delete e.recalling; e.lockedAt = Date.now() + RENEW_MS - LOCK_MS; e.holds = (e.holds || 0) + 1; // (the next lapse is RENEW_MS from now)
-    g.note('info', `${this.peers.get(from)?.handle || 'Your counterparty'} has already sent their side. It is on its way, so your offer stays held.`);
+    g.note('info', `${this.peers.get(from)?.handle || 'Your counterparty'} has already sent their side. Your offer stays held while it arrives.`);
     this.emit('change');
   }
   /** Received by the proposer, in answer to a recall: they never committed, so nothing of theirs is on its way. The hold is let go and the offer is open again (the owner may withdraw it). */
@@ -838,7 +838,7 @@ export class Session {
       return;
     }
     const held = this._ownWant(p.offer), offer = held && { ...p.offer, want: { ...p.offer.want, assets: held } };
-    const r = offer ? g.acceptOffer(offer) : { ok: false, msg: 'You no longer hold the asset they asked for.' };
+    const r = offer ? g.acceptOffer(offer) : { ok: false, msg: 'You no longer hold the crate they asked for.' };
     if (!r.ok) {
       this._tell(from, 'abort', { offerId: id });
       g.note('bad', `${p.name}: ${r.msg} Nothing changed hands.`);
@@ -846,7 +846,7 @@ export class Session {
       const payload = { offerId: id, deliver: { cash: r.deliver.cash, assets: r.deliver.assets.map((a) => cleanAsset(a, { fold: true })).filter(Boolean) }, handle: this.handle };
       this._tell(from, 'deliver', payload);
       this.delivering.set(id, { to: from, payload, at: Date.now(), last: Date.now(), tries: 1, name: p.name });
-      g.note('good', `Swap completed with ${p.name}.`);
+      g.note('good', `Swap completed with ${p.name}.`, { kind: 'swap' });
     }
     this.emit('change');
   }
@@ -869,7 +869,7 @@ export class Session {
       this._tell(from, 'ack', { offerId: id });
     } else { delete e.lockedBy; delete e.lockedAt; delete e.lockLapsed; delete e.recalling; } // a reply that is not that swap changes nothing: the offer is open again, and the hold is let go
     const short = assets.length < want.assets.length || cash < want.cash - 0.005;
-    g.note(r.ok ? (short ? 'warn' : 'good') : 'bad', r.ok ? (short ? `${name} delivered less than the swap said. What arrived was added.` : `${name} accepted. Swap completed.`) : r.msg);
+    g.note(r.ok ? (short ? 'warn' : 'good') : 'bad', r.ok ? (short ? `${name} delivered less than the swap said. What arrived was added.` : `${name} accepted. Swap completed.`) : r.msg, r.ok && !short ? { kind: 'swap' } : undefined);
     this.emit('change');
   }
   _onAbort(m, from) {
@@ -928,7 +928,7 @@ export class Session {
   /** A room taken back with its recovery code does not know the class's hour until it has heard it (`recovering`): its clock reads hour 0, paused, and a rewind or a shock measured from it would go to the whole
    *  class at a made-up hour (a rewind to day 1). The dashboard holds those controls, and the session refuses them too, so no other caller can send one. Null when the action may go. */
   _holdWhileRecovering(what) {
-    return this.recovering ? { ok: false, msg: `This room is still waiting to hear the class's clock, so it does not know the class's hour yet. Try ${what} again in a few seconds.` } : null;
+    return this.recovering ? { ok: false, msg: `This room is still waiting to hear the class's clock. Try ${what} again in a few seconds.` } : null;
   }
   inject(kind, { when = 'now', replace = false, cls } = {}) {
     if (this.mode !== 'instructor') return;

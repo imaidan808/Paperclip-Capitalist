@@ -144,7 +144,7 @@ export function announce(msg, assertive = false) {
 /** The relay address a form holds, cleaned (net.js cleanRelay): '' when none was typed, or null, after saying so, when what was typed is not an address (a room that quietly fell back to this browser's tabs would look joined and be alone). */
 export function relayOf(raw) {
   const typed = String(raw || '').trim(), relay = cleanRelay(typed);
-  if (typed && !relay) { toast('That does not look like a relay address. Paste the address your instructor gave you (it starts with wss:// or https://), or leave it empty.', 'warn', 7000); return null; }
+  if (typed && !relay) { toast('That is not a relay URL. Paste the one your instructor gave you (it starts with wss:// or https://), or leave the field empty.', 'warn', 7000); return null; }
   return relay;
 }
 export function toast(msg, level = 'info', ms = 4200, o = {}) { // o.refusal: the toast answers an action the engine refused (say(r)); the sound layer plays its "no" for those and for no other bad toast. o.own: its sound is requested by the code that raised it (a reward: the resolver may keep it quiet), so the toast's fallback "ok" stays out
@@ -336,14 +336,12 @@ export function settingsDialog(onChange) {
   const d = dlg.open(`
     <button class="btn ghost sm x" data-close>Close</button>
     <h2 tabindex="-1" autofocus>Display and sound</h2>
-    <p class="mute small">This game targets WCAG 2.2 AA. Everything works with a keyboard: Tab to move, Enter or Space to press, Escape to close windows.</p>
     <div class="grid g2">
       <div><label for="s-contrast">Contrast</label><select id="s-contrast" data-k="contrast"><option value="normal">Standard dark</option><option value="high">High contrast</option></select></div>
       <div><label for="s-motion">Motion</label><select id="s-motion" data-k="motion"><option value="auto">Follow my system</option><option value="reduce">Reduce motion</option></select></div>
       <div><label for="s-size">Text size</label><select id="s-size" data-k="size"><option value="s">Small</option><option value="m">Medium</option><option value="l">Large</option><option value="xl">Extra large</option></select></div>
     </div>
-    ${audioSettingsHTML(settings.audio, audio.state)}
-    <p class="small mute gap">Settings are stored only in this browser. No account, no personal data.</p>`, { label: 'Settings' });
+    ${audioSettingsHTML(settings.audio, audio.state)}`, { label: 'Settings' });
   for (const sel of d.querySelectorAll('select[data-k]')) {
     const k = sel.dataset.k;
     sel.value = settings[k];

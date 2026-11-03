@@ -390,7 +390,7 @@ S('alert.shock', { bus: 'game', tier: 'loud', cd: 3000, pan: 'center',
 
 S('alert.margin-call', { bus: 'game', tier: 'loud', cd: 5000, pan: 'center',
   trigger: '`margin-call` event (debt-to-equity passed 4.5: the bank liquidates)',
-  meaning: 'The most serious sound in the game', recipe: 'siren pair A3 D4 three times (saw, lowpassed 1.4 kHz) + a vault slam thump + a low horn blast, D3 over D2', visual: 'The "Margin Liquidation Protocol" dialog, bad toast, assets sold off',
+  meaning: 'The most serious sound in the game', recipe: 'siren pair A3 D4 three times (saw, lowpassed 1.4 kHz) + a vault slam thump + a low horn blast, D3 over D2', visual: 'The "Margin call" dialog, bad toast, assets sold off',
   variants: { m: {} }, dur: 2.0, build: () => [...Array.from({ length: 3 }, (_, i) => [{ k: 'tone', f: 'A3', type: 'sawtooth', t: i * 0.45, a: 0.02, h: 0.14, d: 0.1, g: 0.4, lp: [1400, 0.8] }, { k: 'tone', f: 'D4', type: 'sawtooth', t: i * 0.45 + 0.2, a: 0.02, h: 0.14, d: 0.1, g: 0.4, lp: [1400, 0.8] }]).flat(), thump('D3', 'D2', 0, 0.3, 0.25), ...horn('D4', 'D3', 0.05, 0.5, 0.6, 0.6), ...body(0.05, 1.1, 'A4', 0.5, null, 0.35)] });
 
 S('alert.insolvent', { bus: 'game', tier: 'loud', cd: 5000, pan: 'center', jitter: 0.2, // a descending glide over a low chord: its unisons overlap longest and it moved 3.4 dB from one play to the next at 7 cents, 2.6 at 2.8

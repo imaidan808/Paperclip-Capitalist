@@ -21,20 +21,20 @@ export function createWorldView(ctx) {
       const l = h.lead, B = BUYERS[l.seg], sel = pickIn(h.zone);
       let q = '';
       if (sel) { const r = game.quotePitch(sel.id, l.id, undefined, { blind: true }); q = r.ok ? (r.rejected ? ` They would reject your ${ASSETS[sel.cls].name}.` : ` Pitching your ${ASSETS[sel.cls].name}: ${fitLabel(r.fit)}, about ${money(r.received)}.`) : ' ' + r.msg; }
-      return `${B.name}${l.need ? ` (urgent: needs ${/^[aeiou]/.test(l.need) ? 'an' : 'a'} ${l.need})` : ''}. Pays up to ${money(l.budget)}, leaves in ${Math.max(0, l.exp - s.hour)} h.${q || ' Click to sell them something.'}`;
+      return `${B.name}${l.need ? ` (urgent: needs ${/^[aeiou]/.test(l.need) ? 'an' : 'a'} ${l.need})` : ''}. Pays up to ${money(l.budget)}, leaves in ${Math.max(0, l.exp - s.hour)} h.${q}`;
     }
-    if (h.kind === 'lot') return `${ASSETS[h.lot.cls].name}${h.lot.cond === 'broken' ? ' (broken)' : ''}${h.lot.mode === 'auction' ? ' (auction)' : ''}, listed at ${money(h.lot.price)}. Click to look it over and buy.`;
-    if (h.kind === 'asset') return `${ASSETS[h.asset.cls].name}${h.asset.cond === 'broken' ? ' (broken)' : ''}, worth ${money(game.val(h.asset))}. Click to open your stock.`;
-    if (h.kind === 'pipe') { const f = game.forecast(h.pipe); return `${PIPE[h.pipe.kind].name}, level ${h.pipe.level}, ${h.pipe.status}. ${money(f.net)} per cycle. Click to manage.`; }
-    if (h.kind === 'plot') return h.locked ? 'Building plot. ' + (game.autoLocked() ? 'Resolve your audit to expand.' : 'Not open yet.') : 'Empty plot. Click to hire a manager and put idle cash to work.';
-    if (h.kind === 'zone') return unlocked(h.id) ? `${ZONES[h.id].name}. Click to go there.` : `${ZONES[h.id].name} is locked. ${gate(h.id)}`;
+    if (h.kind === 'lot') return `${ASSETS[h.lot.cls].name}${h.lot.cond === 'broken' ? ' (broken)' : ''}${h.lot.mode === 'auction' ? ' (auction)' : ''}, listed at ${money(h.lot.price)}.`;
+    if (h.kind === 'asset') return `${ASSETS[h.asset.cls].name}${h.asset.cond === 'broken' ? ' (broken)' : ''}, worth ${money(game.val(h.asset))}.`;
+    if (h.kind === 'pipe') { const f = game.forecast(h.pipe); return `${PIPE[h.pipe.kind].name}, level ${h.pipe.level}, ${h.pipe.status}. ${money(f.net)} per cycle.`; }
+    if (h.kind === 'plot') return h.locked ? 'Building plot. ' + (game.autoLocked() ? 'Answer your audit to expand.' : 'Not open yet.') : 'Empty plot: hire a manager here.';
+    if (h.kind === 'zone') return unlocked(h.id) ? ZONES[h.id].name : gate(h.id);
     if (h.kind === 'static') {
       const id = h.id;
-      if (id === 'bank') return s.mil.m1 ? 'Commercial Bank: loans and your debt-to-equity ratio. Click to open.' : 'The Commercial Bank opens in Metro Hub.';
-      if (id === 'audit') return s.mil.m2 ? 'Regulatory office. ' + (s.auditPending ? 'An audit is waiting. Click to respond.' : 'No audit pending.') : 'Audits begin in Industrial Park.';
-      if (id === 'ipo') return 'M&A and IPO tower. Click to open.';
-      if (id.startsWith('hq')) return 'Your headquarters: skills, quests and the Codex. Click to open.';
-      if (id.startsWith('depot')) return 'Freight depot. Click to ship crates to another district.';
+      if (id === 'bank') return s.mil.m1 ? 'Commercial Bank: loans and your debt-to-equity ratio.' : 'The Commercial Bank opens in Metro Hub.';
+      if (id === 'audit') return s.mil.m2 ? 'Regulatory office. ' + (s.auditPending ? 'An audit is waiting.' : 'No audit pending.') : 'Audits begin in Industrial Park.';
+      if (id === 'ipo') return 'M&A and IPO tower.';
+      if (id.startsWith('hq')) return 'Your headquarters: skills, quests and the Codex.';
+      if (id.startsWith('depot')) return 'Freight depot: ship crates to another district.';
       if (id.startsWith('board')) return 'Market board: everything for sale and everyone buying here.';
     }
     return h.label || '';
@@ -45,22 +45,22 @@ export function createWorldView(ctx) {
     if (!h) { if (ground && unlocked(U.zone)) { world.walkPlayerTo(ground.gx, ground.gy); sound?.ground(); } return; }
     if (h.kind !== 'asset') sound?.clicked(h); // a click on a buyer, a lot or a truck is a tick; the outcome (the Deal Room, a drawer, a shut door) has the sound that says what happened
     if (h.kind === 'zone') { if (!unlocked(h.id)) { sound?.locked(h); toast(gate(h.id), 'warn'); return; } U.zone = h.id; if (h.quick) world.quickTravel?.(h.id); ctx.render(); return; }
-    if (h.zone && h.zone > 0 && !unlocked(h.zone)) { sound?.locked(h); toast(`${ZONES[h.zone].name} is locked. ${gate(h.zone)}`, 'warn'); return; }
+    if (h.zone && h.zone > 0 && !unlocked(h.zone)) { sound?.locked(h); toast(gate(h.zone), 'warn'); return; }
     if (h.zone && h.zone > 0 && h.zone !== U.zone) U.zone = h.zone;
     if (h.kind === 'lead') {
       const here = s.assets.filter((a) => a.zone === h.zone);
       let sel = pickIn(h.zone);
       if (!sel) {
         if (here.length === 1) { U.sel.add(here[0].id); sel = here[0]; }
-        else { toast(here.length ? 'Pick one of your crates first, then click the buyer.' : 'You have nothing to sell here. Buy a lot from a booth first.', 'warn'); ctx.openDrawer('stock', { quiet: true }); return; } // the toast's nudge says what happened; the drawer sliding open is not a second sound
+        else { toast(here.length ? 'Pick one of your crates first, then click the buyer.' : 'You have nothing to sell here. Buy a lot first.', 'warn'); ctx.openDrawer('stock', { quiet: true }); return; } // the toast's nudge says what happened; the drawer sliding open is not a second sound
       }
       ctx.deal({ kind: 'sell', assetId: sel.id, leadId: h.id }); return;
     }
     if (h.kind === 'lot') { ctx.deal({ kind: 'buy', zone: h.zone, lotId: h.id }); return; }
     if (h.kind === 'asset') { U.sel.has(h.id) ? U.sel.delete(h.id) : U.sel.add(h.id); sound?.clicked(h, { ticked: U.sel.size }); ctx.openDrawer('stock', { quiet: true }); return; }
     if (h.kind === 'pipe') { U.focusPipe = h.id; ctx.openDrawer('crew'); return; }
-    if (h.kind === 'plot') { if (h.locked) { sound?.locked(h); toast(game.autoLocked() ? 'Resolve your Regulatory Audit before expanding.' : 'Not open yet.', 'warn'); return; } U.hireAt = h.zone; ctx.openDrawer('crew'); return; }
-    if (h.kind === 'truck') { toast('That freight run is on its way.', 'info'); return; }
+    if (h.kind === 'plot') { if (h.locked) { sound?.locked(h); toast(game.autoLocked() ? 'Answer your Regulatory Audit before expanding.' : 'Not open yet.', 'warn'); return; } U.hireAt = h.zone; ctx.openDrawer('crew'); return; }
+    if (h.kind === 'truck') { toast('That freight is on its way.', 'info'); return; }
     if (h.kind === 'static') {
       const id = h.id;
       if (id === 'bank' || id === 'audit' || id === 'ipo') { if (id === 'bank' && !s.mil.m1) { sound?.locked(h); toast('The Commercial Bank opens in Metro Hub.', 'warn'); return; } if (id === 'audit' && !s.mil.m2) { sound?.locked(h); toast('Audits begin in Industrial Park.', 'warn'); return; } ctx.openDrawer(id === 'ipo' ? 'crew' : 'bank'); return; }

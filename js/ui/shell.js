@@ -10,7 +10,7 @@
 // Layout is css/shell.css (its header draws the layers, the anchors and the layouts). This file's part of it: it measures the HUD, the dock, the ticker and the goal tracker and
 // publishes their heights as --hud-h, --dock-h, --tick-h and --trk-b on <html> (so everything anchored to them follows when they wrap), lets a phone's bottom sheet be dragged
 // shut, and keeps the render path cheap (attributes written only when they change, bars listed once per render and painted only when they move, no work for a hidden tab).
-import { ZONES, TOTAL_HOURS, CLIENTS, DEFAULT_RELAY } from '../config.js';
+import { ZONES, TOTAL_HOURS, CLIENTS, DEFAULT_RELAY, SEC_PER_HOUR } from '../config.js';
 import { $, $$, esc, setHTML, delegate, dlg, toast, announce, sfx, burst, reduced, settingsDialog, settings, applySettings, relayOf } from './common.js';
 import { fitStuck, watchPress } from './common.js'; // its own line: the shell's other helpers are imported above
 import { kv } from '../session.js';
@@ -216,23 +216,21 @@ export function mountGame(root, S, hooks) {
   function say(r, good = 'good') { if (r.msg) toast(r.msg, r.ok ? good : 'bad', undefined, r.ok ? undefined : { refusal: true }); if (!r.ok && !r.msg) audio.play('ui.refuse'); return r; } // a refusal with words is heard as its bad toast (js/audio/wire.js); one with none has no toast to be heard through
 
   function breakdown(k) {
-    const game = g(), s = game.s, row = (a, b, c = '') => `<dt>${a}</dt><dd class="${c}">${b}</dd>`;
+    const game = g(), s = game.s, row = (a, b, c = '', tip = '') => `<dt${tip ? ` title="${esc(tip)}"` : ''}>${a}</dt><dd class="${c}">${b}</dd>`;
     let body = '';
     if (k === 'cash' || k === 'nw') {
-      const inv = game.invValue(), pip = s.pipes.reduce((a, p) => a + p.basis, 0), fly = s.pipes.reduce((a, p) => a + (p.inflight || 0), 0), set = s.settle.reduce((a, x) => a + x.amt, 0);
-      const esc2 = s.escrow.reduce((a, e) => a + (e.cash || 0) + e.assets.reduce((x, y) => x + game.val(y), 0), 0), tr = s.freight.reduce((a, f) => a + game.inTransit(f), 0); // the engine counts a crate on a truck at the lower of where it left and where it is going, so the dialog's rows add up to the net worth beside them
-      body = `<dl class="kv">${row('Cash on hand', money(s.cash))}${row('Inventory at fair value', money(inv))}${row('Assets in transit', money(tr))}${row('Manager capital (book)', money(pip))}${row('Capital in running cycles', money(fly))}${row('Settling sales', money(set))}${row('Held in escrow', money(esc2))}${row('Debt', '-' + money(game.debt()), 'red')}<div class="sep"></div>${row('Net worth', money(game.netWorth()), 'gold')}${row('Net worth peak', money(s.peak))}</dl><p class="small mute">Districts open as net worth passes their gate. Stock decays; running cycles earn.</p>`;
+      body = `<dl class="kv">${worthLines(game).map(([a, v, tip]) => row(a, money(v), v < 0 ? 'red' : '', tip)).join('')}<div class="sep"></div>${row('Net worth', money(game.netWorth()), 'gold')}${row('Net worth peak', money(s.peak))}</dl>${k === 'nw' ? '<p class="small mute">Districts open as net worth passes their gates.</p>' : ''}`;
     } else if (k === 'day') {
       const ev = s.events.filter((e) => e.warned);
-      body = `<dl class="kv">${row('Virtual day', `${game.day} of 90`)}${row('Virtual hour', s.hour + ' / ' + TOTAL_HOURS)}${row('Real time per virtual day', `${(168 / S.clock.speed).toFixed(0)} seconds at ${S.clock.speed}x`)}</dl><h3 class="gap">Known macro events</h3>${ev.length ? ev.map((e) => `<p class="small"><b>${esc(e.name)}</b>: ${e.start > s.hour ? 'in ' + Math.round((e.start - s.hour) / 24 * 10) / 10 + ' days' : 'started day ' + (Math.floor(e.start / 24) + 1)}</p>`).join('') : '<p class="small mute">No warnings yet. Capital Sourcing and the Market Research Suite buy earlier notice.</p>'}`;
+      body = `<dl class="kv">${row('Virtual day', `${game.day} of 90`)}${row('Virtual hour', s.hour + ' / ' + TOTAL_HOURS)}${row('Real time per virtual day', `${(24 * SEC_PER_HOUR / S.clock.speed).toFixed(0)} seconds at ${S.clock.speed}x`)}</dl><h3 class="gap">Known macro events</h3>${ev.length ? ev.map((e) => `<p class="small"><b>${esc(e.name)}</b>: ${e.start > s.hour ? 'in ' + Math.round((e.start - s.hour) / 24 * 10) / 10 + ' days' : 'started day ' + (Math.floor(e.start / 24) + 1)}</p>`).join('') : '<p class="small mute">No warnings yet. Capital Sourcing and the Market Research Suite give earlier notice.</p>'}`;
     }
     dlg.open(`<button class="btn ghost sm x" data-close>Close</button><h2 tabindex="-1" autofocus>${{ cash: 'Cash', nw: 'Net worth', day: 'Clock' }[k] || 'Numbers'}</h2>${body}`, { label: 'Breakdown' });
   }
   function menu() {
     const inRoom = !!S.roomInfo;
     dlg.open(`<button class="btn ghost sm x" data-close>Close</button><h2 tabindex="-1" autofocus>Menu</h2><div class="grid g2">
-      <div class="card"><h3>Classroom room</h3>${inRoom ? `<p class="small">In room <b class="mono">${esc(S.roomInfo.code)}</b> via ${S.room.kind === 'relay' ? 'relay server' : 'this browser (other tabs)'}. The instructor's clock is in charge.</p><button class="btn sm ghost" data-act="leave">Leave room</button>`
-        : `<p class="small mute">Joining restarts your run on the instructor's shared clock.</p><label for="m-code">Room code</label><input id="m-code" maxlength="8" style="text-transform:uppercase" autocomplete="off"><label for="m-relay" class="gap">Relay server URL (optional)</label><input id="m-relay" placeholder="wss://your-relay.example" value="${esc(kv.get('relay') || DEFAULT_RELAY)}"><button class="btn sm gap" data-act="joinroom">Join</button>`}</div>
+      <div class="card"><h3>Classroom</h3>${inRoom ? `<p class="small">In room <b class="mono">${esc(S.roomInfo.code)}</b> via ${S.room.kind === 'relay' ? 'the relay' : 'this browser (other tabs)'}. The instructor's clock is in charge.</p><button class="btn sm ghost" data-act="leave">Leave room</button>`
+        : `<p class="small mute">Joining restarts your run on the instructor's shared clock.</p><label for="m-code">Room code</label><input id="m-code" maxlength="8" style="text-transform:uppercase" autocomplete="off"><details class="gap"><summary class="small">Relay (only if your instructor gave one)</summary><label for="m-relay" class="gap">Relay URL</label><input id="m-relay" placeholder="wss://relay.example.edu" value="${esc(kv.get('relay') || DEFAULT_RELAY)}"></details><button class="btn sm gap" data-act="joinroom">Join</button>`}</div>
       <div class="card"><h3>This run</h3><div class="grid"><button class="btn sm" data-act="debrief">Debrief</button><button class="btn sm ghost" data-act="academy">Replay a lesson</button><button class="btn sm ghost" data-act="settings">Display and sound</button><button class="btn sm ghost" data-act="savefile">Download my save</button><button class="btn sm danger" data-act="reset">Start over</button></div></div></div>
       <p class="small mute gap">Privacy: your save lives only in this browser. Rooms share a pseudonymous Founder ID, your chosen alias and game numbers, never names or emails.</p>
       <p class="tiny mute" id="m-build" aria-live="polite"></p>`, { label: 'Menu' });
@@ -265,7 +263,7 @@ export function mountGame(root, S, hooks) {
     joinroom() {
       const code = ($('#m-code', dlg.el).value || '').toUpperCase().replace(/[^A-Z0-9]/g, ''), relay = relayOf($('#m-relay', dlg.el).value);
       if (code.length < 3) { toast('Enter the room code from your instructor.', 'warn'); return; }
-      if (relay === null) return;
+      if (relay === null) { const f = $('#m-relay', dlg.el).closest('details'); if (f) f.open = true; return; } // the field the toast names is shown
       kv.set('relay', relay); dlg.close(); hooks.onJoin({ code, relay });
     },
     savefile() { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([JSON.stringify(g().s)], { type: 'application/json' })); a.download = `paperclip-save-${g().s.pid}.json`; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000); },
@@ -339,7 +337,7 @@ export function mountGame(root, S, hooks) {
   const refusal = S.roomRefusal?.(); if (refusal) toast(refusal, 'bad', 9000); // the room was refused while the player was still on the draft: the note went by before this screen was here
   const over = setInterval(() => {
     const s = S.game?.s;
-    if (s?.over && !U.overShown) { U.overShown = true; queue(`<h2 tabindex="-1" autofocus>Day 90: the run is complete</h2><p>Your Economic Efficiency Index is <b class="gold">${S.game.eei().toFixed(2)}</b>. The debrief reviews your decisions.</p><div class="row"><button class="btn big" data-act="debrief" autofocus>Open the debrief</button><button class="btn ghost" data-close>Stay in the world</button></div>`, { label: 'Complete', sound: 'level' }); }
+    if (s?.over && !U.overShown) { U.overShown = true; queue(`<h2 tabindex="-1" autofocus>Day 90: the run is complete</h2><p>Your Economic Efficiency Index is <b class="gold">${S.game.eei().toFixed(2)}</b>.</p><div class="row"><button class="btn big" data-act="debrief" autofocus>Open the debrief</button><button class="btn ghost" data-close>Stay in the world</button></div>`, { label: 'Complete', sound: 'level' }); }
   }, 1500);
 
   function destroy() {
@@ -354,6 +352,25 @@ export function mountGame(root, S, hooks) {
   cues.hint(); // the one-time "sound is on" note (docs/AUDIO.md 7.4)
   return { render, destroy, ctx };
 }
+
+/** What Game.netWorth() adds up, one line each: [label, value, what it is]. */
+export function worthRows(game) {
+  const s = game.s, sum = (a, f) => a.reduce((t, x) => t + f(x), 0);
+  return [
+    ['Cash on hand', s.cash],
+    ['Inventory at fair value', game.invValue()],
+    ['Assets in transit', sum(s.freight, (f) => game.inTransit(f)), 'Crates on trucks, at the lower of where they left and where they are going.'],
+    ['Manager capital (book)', sum(s.pipes, (p) => p.basis), 'What you paid for your managers, upgrades included.'],
+    ['Capital in running cycles', sum(s.pipes, (p) => p.inflight || 0), 'Cash your managers have out on a cycle. It returns with the profit.'],
+    ['Settling sales', sum(s.settle, (x) => x.amt), 'Sales whose cash has not landed yet.'],
+    ['Held in escrow', sum(s.escrow, (e) => (e.cash || 0) + sum(e.assets, (a) => game.val(a))), 'Cash and crates held for a swap you proposed.'],
+    ['Debt', -game.debt()],
+    ['Royalties owed', -game.royaltyOwed(), 'Royalty streams you promised to pay, counted as a debt.'],
+  ];
+}
+
+/** The lines the Cash and Net worth windows show: all of them while they are not zero, and the first two always. */
+export const worthLines = (game) => worthRows(game).filter(([, v], i) => i < 2 || Math.abs(v) >= 0.005);
 
 export function alertHTML(a) {
   return `<button class="btn ghost sm x" data-close>Close</button><h2 tabindex="-1" autofocus>${esc(a.name)}</h2><p>${esc(a.readout || '')}</p>${(a.vars || []).length ? `<ul class="small">${a.vars.map((v) => `<li>${esc(v)}</li>`).join('')}</ul>` : ''}<p class="small mute">${esc(a.enforcement || '')}</p>`;
