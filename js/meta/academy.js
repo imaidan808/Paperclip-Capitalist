@@ -513,7 +513,7 @@ export const ACADEMY = [
   // ------------------------------------------------------------------------------------------------------------------ 10
   {
     id: 'm10', title: 'Deal Day', icon: '🎓', zone: 6, concept: 'eei-score', minutes: 2.5,
-    intro: "Graduation day at the Estate Sales. A family is clearing three broken antiques at auction. Read one, bid, fix, pitch and haggle it. Quick is fine for any stage you have mastered.",
+    intro: "Graduation day at the Estate Sales. A family is clearing three broken antiques at auction, priced low to sell fast. Read, bid, fix, pitch and haggle one. Quick is fine for stages you know.",
     setup: {
       clock: 'paused', cash: 1000, assets: [],
       leads: [{ id: 'antique-dealer', seg: 'antiqueDealer', budget: 1500 }],

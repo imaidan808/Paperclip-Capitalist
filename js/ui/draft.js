@@ -150,21 +150,23 @@ export function statusText(state) {
 }
 
 // ---------------------------------------------------------------- HTML (pure)
-const lineHTML = (kind, text) => `<span class="dr-line dr-${kind === '+' ? 'plus' : 'minus'}"><b aria-hidden="true">${kind}</b><span class="dr-t"><span class="sr">${kind === '+' ? 'Strength' : 'Cost'}: </span>${esc(text)}</span></span>`;
+/** One line of a Background: `text` is the exact claim; with `brief` the line shows the headline and keeps the claim for a screen reader (the card's hover and focus panel shows it to the eye). */
+const lineHTML = (kind, text, brief) => `<span class="dr-line dr-${kind === '+' ? 'plus' : 'minus'}"><b aria-hidden="true">${kind}</b><span class="dr-t"><span class="sr">${kind === '+' ? 'Strength' : 'Cost'}: </span>${esc(brief || text)}${brief ? `<span class="sr">. ${esc(text)}</span>` : ''}</span></span>`;
 
 export function cardHTML(id, st) {
   const p = PERKS[id], on = st.picks.includes(id);
   return `<label class="dr-card" for="dr-in-${id}" data-id="${id}" data-on="${on ? 1 : 0}">
     <input type="checkbox" class="dr-in" id="dr-in-${id}" name="perk" value="${id}" data-change="pick" data-fid="pk-${id}" aria-labelledby="dr-nm-${id}" aria-describedby="dr-ds-${id}"${on ? ' checked' : ''}>
     <span class="dr-top"><span class="dr-ic" aria-hidden="true">${p.icon}</span><b class="dr-nm" id="dr-nm-${id}">${esc(p.name)}</b><span class="dr-box" aria-hidden="true"></span></span>
-    <span class="dr-body" id="dr-ds-${id}"><em class="dr-basis">${esc(p.basis)}</em>${lineHTML('+', p.strength)}${lineHTML('-', p.cost)}</span>
+    <span class="dr-body" id="dr-ds-${id}"><em class="dr-basis">${esc(p.basis)}</em>${lineHTML('+', p.strength, p.gain)}${lineHTML('-', p.cost, p.loss)}</span>
+    <span class="dr-tip" aria-hidden="true"><span><b>+</b> ${esc(p.strength)}</span><span><b>-</b> ${esc(p.cost)}</span></span>
   </label>`;
 }
 
 export function trayHTML(st) {
   const slots = [0, 1].map((i) => {
     const id = st.picks[i];
-    if (!id) return `<li class="dr-slot dr-empty"><span class="dr-slotn" aria-hidden="true">${i + 1}</span><span class="dr-slotb"><b>Open slot</b><span class="small mute">Pick a Background from the cards.</span></span></li>`;
+    if (!id) return `<li class="dr-slot dr-empty"><span class="dr-slotn" aria-hidden="true">${i + 1}</span><span class="dr-slotb"><b>Open slot</b><span class="small mute">Pick a card.</span></span></li>`;
     const p = PERKS[id];
     return `<li class="dr-slot dr-full${st.added === id ? ' popin' : ''}"><span class="dr-ic" aria-hidden="true">${p.icon}</span><span class="dr-slotb"><b>${esc(p.name)}</b>${lineHTML('+', p.strength)}${lineHTML('-', p.cost)}</span><button type="button" class="btn ghost sm" data-act="drop" data-id="${id}" data-fid="drop-${id}" aria-label="Remove ${esc(p.name)} from your build">Remove</button></li>`;
   }).join('');
@@ -173,14 +175,14 @@ export function trayHTML(st) {
     <ol class="dr-slots" role="list" aria-labelledby="dr-tray-h">${slots}</ol>
     <p class="dr-sum"><b class="gold">${done ? 'In short' : st.picks.length ? 'So far' : 'In short'}</b> ${esc(sum.text)}</p>
     <div class="row"><button type="button" class="btn ghost sm" data-act="reroll" data-fid="dr-reroll">Reroll suggestion</button>${st.picks.length ? '<button type="button" class="btn ghost sm" data-act="clear" data-fid="dr-clear">Clear</button>' : ''}</div>
-    <p class="small mute dr-why">${st.suggested ? 'Suggested for balance: one Background makes up for a weak spot of the other. Keep it or swap either card.' : 'Not sure? A suggestion is a balanced pair, picked from your alias, not at random.'}</p>`;
+    <p class="small mute dr-why">${st.suggested ? 'Suggested for balance: one Background covers the other\'s weak spot. Keep it or swap a card.' : 'Not sure? Reroll for a balanced pair.'}</p>`;
 }
 
 export function specHTML(st) {
   const off = noSpecialty(st.picks), who = st.picks.map((id) => PERKS[id]).find((p) => p.mods.noSpecialty);
   const why = off && who
-    ? `${esc(who.name)} has no specialty (${esc(who.cost.split(':')[0].toLowerCase())}), so all three skills start at level 1. Your choice is kept in case you swap that Background out.`
-    : 'One skill starts at level 3 and the other two at level 1. Every level you earn gives a skill point to raise any of them.';
+    ? `${esc(who.name)} has no specialty: all three skills start at level 1. Your pick is kept if you swap it out.`
+    : 'One skill starts at level 3, the others at 1. Each level you earn gives a point for any skill.';
   const cards = Object.values(SKILLS).map((k) => `<label class="card pick dr-skill"><input type="radio" name="spec" value="${k.id}" data-change="spec" data-fid="sp-${k.id}"${st.specialty === k.id && !off ? ' checked' : ''}${off ? ' disabled' : ''}> <b>${esc(k.name)}</b><span class="small mute dr-sd">${esc(k.blurb)}</span></label>`).join('');
   return `<fieldset class="dr-spec"${off ? ' disabled' : ''} aria-describedby="dr-spec-why"><legend>Specialty</legend><p class="small mute" id="dr-spec-why">${why}</p><div class="dr-skills">${cards}</div></fieldset>`;
 }
@@ -217,7 +219,7 @@ export function draftHTML(st) {
   return `<form class="panel dr" id="sf" novalidate aria-labelledby="dr-h" data-snd>
     <header class="dr-head">
       <h1 id="dr-h" tabindex="-1">Draft your build</h1>
-      <p class="dr-lede"><b class="gold">Everyone starts the same: one paperclip and $0.</b> The only difference between you and any other founder is the build you choose here, so draft the two Backgrounds that fit how you want to play. Each one has a real-world basis, a real strength and a real cost.</p>
+      <p class="dr-lede"><b class="gold">Everyone starts the same: one paperclip and $0.</b> Your build is the difference. Choose two Backgrounds: each has a real strength and a real cost.</p>
       ${st.room ? `<div class="callout">Joining room <b class="mono">${esc(st.room.code)}</b>. Your run starts on the instructor's clock.</div>` : ''}
       <p class="dr-tools"><button class="btn ghost sm" type="button" data-act="settings" data-fid="dr-sound">Display and sound</button></p>
     </header>

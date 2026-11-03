@@ -53,8 +53,8 @@ export { PERKS, PERK_IDS, perkMods } from './data/perks.js';
 export const LEVEL_XP = 150;
 export const xpForLevel = (l) => (l - 1) ** 2 * LEVEL_XP;
 export const SKILLS = {
-  ops: { id: 'ops', name: 'Operational Engineering', short: 'Ops', blurb: 'Cheaper repairs, better restorations, lower prices on working lots (wrecks ask more as your Ops rises) and less pipeline overhead.' },
-  growth: { id: 'growth', name: 'Customer Acquisition Velocity', short: 'Growth', blurb: 'More buyer leads, faster pipeline cycles, cheaper client acquisition, higher pitch prices.' },
+  ops: { id: 'ops', name: 'Operational Engineering', short: 'Ops', blurb: 'Cheaper, better repairs and cheaper working lots, but wrecks ask more as Ops rises. Less pipeline overhead.' },
+  growth: { id: 'growth', name: 'Customer Acquisition Velocity', short: 'Growth', blurb: 'More leads, faster cycles, cheaper clients, higher pitch prices.' },
   fintech: { id: 'fintech', name: 'Capital Sourcing', short: 'Fintech', blurb: 'Cheaper institutional debt, lower fees, and earlier warnings of macro shocks.' },
 };
 export const SKILL_MAX = 8;
