@@ -6,7 +6,7 @@
 // scripts/stage.mjs puts these lines into the STAGED index.html, never the source one, so `npm start` and the tests see the plain page.
 //
 // No bundler and no parser dependency: a small scanner reads the code the way JavaScript does (comments, strings, templates and regular expressions are skipped),
-// and finds `import ... from 'x'`, `import 'x'`, `export ... from 'x'` and `import('x')`. A dynamic import whose argument is a template with a hole, such as
+// and finds `import ... from 'x'`, `import 'x'`, `export ... from 'x'` and `import('x')`, and the script a Worker is made from, `new URL('./x.js', import.meta.url)` (a dynamic one: only a screen that makes the worker needs it). A dynamic import whose argument is a template with a hole, such as
 // import(`./play/${name}.js`), is read as a pattern (`./play/*.js`) and every file in that folder that fits it is part of the graph, because any of them may be asked for.
 // An import that cannot be resolved to a file, or a dynamic import the scanner cannot read, is an error: a staged site must never miss a module.
 import { readFileSync, readdirSync, existsSync, statSync } from 'node:fs';

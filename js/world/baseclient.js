@@ -4,7 +4,7 @@
 export const BASE_TIMEOUT_MS = 6000, BASE_KEEP_MS = 4000, BASE_PER = 2, BASE_POOL = 3;
 
 export class BaseClient {
-  constructor(spawn, size = 1) { this.spawn = spawn; this.size = size; this.ws = []; this.dead = false; this.cap = size * BASE_PER * 2; this.now = 0; this.t0 = 0; this.n = 0; this.out = new Map(); this.byId = new Map(); this.done = new Map(); this.stats = { posted: 0, got: 0 }; }
+  constructor(spawn, size = 1) { this.spawn = spawn; this.size = size; this.ws = []; this.dead = false; this.cap = size * BASE_PER * 2; this.now = 0; this.t0 = 0; this.n = 0; this.takes = Infinity; this.out = new Map(); this.byId = new Map(); this.done = new Map(); this.stats = { posted: 0, got: 0 }; }
   get live() { return !this.dead; }
   get pending() { return this.out.size; }
   start() {
@@ -30,7 +30,7 @@ export class BaseClient {
   /** The bitmap of chunk `key` if it is made (handed over once), else asks for it (`want`) and answers null. */
   ask(key, job, world, unlocked, now) {
     this.now = now; if (this.dead) return null;
-    const d = this.done.get(key); if (d) { this.done.delete(key); return d.bmp; }
+    const d = this.done.get(key); if (d) { if (this.takes <= 0) return null; this.takes--; this.done.delete(key); return d.bmp; } // (`takes`: how many the frame may take, set by the pass: a bitmap's first draw is an upload to the GPU)
     this.want(key, job, world, unlocked, now); return null;
   }
   /** Send chunk `key` to the worker with the most room unless it is made or on its way, taking nothing: the camera is going where it will be asked for. At most `cap` chunks are out and waiting. */
@@ -54,9 +54,9 @@ export class BaseClient {
   prune(now, keep = null) { this.now = now; for (const [k, d] of this.done) if (now - d.t > BASE_KEEP_MS || (keep && !keep(d.sk))) { this.done.delete(k); try { d.bmp.close(); } catch { /* none */ } } }
 }
 
-/** A client that spawns the real workers, or null where there are none to spawn (no Worker, or a single core). */
+/** A client that spawns the real workers (up to three, and two cores fewer than the machine has), or null where there are none to spawn (no Worker, or a single core). */
 export function makeBaseClient() {
   if (typeof Worker !== 'function' || typeof URL !== 'function') return null;
   const hc = typeof navigator !== 'undefined' ? navigator.hardwareConcurrency : 0; if (hc < 2) return null;
-  return new BaseClient(() => new Worker(new URL('./basework.js', import.meta.url), { type: 'module' }), Math.max(1, Math.min(BASE_POOL, (hc || 4) - 1)));
+  return new BaseClient(() => new Worker(new URL('./basework.js', import.meta.url), { type: 'module' }), Math.max(1, Math.min(BASE_POOL, (hc || 4) - 2))); // (two cores are left to the frames, the compositor and the GPU)
 }

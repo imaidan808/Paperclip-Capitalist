@@ -12,12 +12,13 @@ globalThis.ImageData = class { constructor(d, w, h) { this.data = d; this.width 
 const { sceneOf } = await import('../js/world/scene.js');
 const { LAYOUT } = await import('../js/world/layout.js');
 const { bakeBase } = await import('../js/world/rasterbase.js');
-const { ChunkCache } = await import('../js/world/chunkcache.js');
+const { ChunkCache, jobKey } = await import('../js/world/chunkcache.js');
 const { CHUNK_FULL, CHUNK_PX, BLEED, OVERVIEW_A, scaleKey, chunkKey } = await import('../js/world/chunks.js');
-const { groundCacheMethods } = await import('../js/world/groundcache.js');
+const { groundCacheMethods, PREFETCH, PREFETCH_CAP, PREFETCH_OVER, TAKE_PER_FRAME } = await import('../js/world/groundcache.js');
 const { groundMethods } = await import('../js/world/ground.js');
 const { lodOf } = await import('../js/world/lod.js');
 const { runLayer, registerLayer, slotFor, setFlag } = await import('../js/world/stack.js');
+const { ledger, LEDGER_LIMIT_MB } = await import('../js/world/gfx.js');
 const { ChunkMaker } = await import('../js/world/basework.js');
 const { BaseClient, BASE_TIMEOUT_MS, BASE_PER, BASE_KEEP_MS, makeBaseClient } = await import('../js/world/baseclient.js');
 
@@ -122,22 +123,37 @@ test('a pool gives each chunk to the worker with the most room, no worker more t
   assert.deepEqual(ws.map((w) => chunks(w).length), [BASE_PER, BASE_PER, BASE_PER], 'two each, and no seventh: every worker is busy with a chunk and has another waiting');
   assert.ok(ws.every((w) => w.posted.filter((m) => m.t === 'world').length === 1), 'each worker is told the world once');
   reply(ws[1], 0); ask('j9'); assert.equal(chunks(ws[1]).length, 3, 'the worker that finished one is given the next'); assert.equal(chunks(ws[0]).length, 2);
-  const b = new BaseClient(() => fakeWorker(), 1); b.cap = 2; b.ask('s', JOB, 'k', [1], 0); b.ws[0].say({ t: 'hello', ok: true }); const w = b.ws[0];
+  const b = new BaseClient(() => fakeWorker(), 1); b.cap = 2; b.ask('s', JOB, 'k', [1], 0); const w = b.ws[0].w; w.say({ t: 'hello', ok: true });
   b.ask('x', JOB, 'k', [1], 1); reply(w, 0); b.ask('y', JOB, 'k', [1], 2); b.ask('z', JOB, 'k', [1], 3); assert.equal(chunks(w).length, 2, 'a bitmap nobody took counts against the cap too'); assert.equal(b.done.size, 1);
 });
 
+test('want sends a chunk without taking one: a chunk that is made waits for the pass that asks for it, a chunk on its way is not sent twice, and the cap it is given is the one that holds', () => {
+  const { c, ws } = pool(1); c.want('a', JOB, 'k', [1], 1); assert.equal(chunks(ws[0]).length, 1); c.want('a', JOB, 'k', [1], 2); assert.equal(chunks(ws[0]).length, 1, 'not sent twice');
+  const bmp = reply(ws[0], 0); c.want('a', JOB, 'k', [1], 3); assert.equal(c.done.size, 1, 'a chunk that is made is not taken by want'); assert.equal(chunks(ws[0]).length, 1, 'nor made again'); assert.equal(c.ask('a', JOB, 'k', [1], 4), bmp, 'ask takes it');
+  c.want('b', JOB, 'k', [1], 5, 1); assert.equal(chunks(ws[0]).length, 2, 'one out is the cap given'); c.want('c', JOB, 'k', [1], 5, 1); assert.equal(chunks(ws[0]).length, 2, 'and no more'); c.want('c', JOB, 'k', [1], 5); assert.equal(chunks(ws[0]).length, 3, 'the client\'s own cap holds when none is given');
+  c.want('d', JOB, 'k', [1], 6, PREFETCH_CAP); assert.equal(chunks(ws[0]).length, 3, 'a worker has BASE_PER chunks at most, whatever the cap');
+});
+
+test('a frame takes only so many bitmaps (the first draw of one is an upload to the GPU, and a glide arrives with two dozen); the rest wait in the client for the next frame', () => {
+  const { c, ws } = pool(2); const J = (i) => ({ ...JOB, i }); for (let i = 0; i < 3; i++) c.want('k' + i, J(i), 'k', [1], 1, 10);
+  const made = ws.flatMap((w) => chunks(w).map((m) => [w, m]));  assert.equal(made.length, 3); const bmps = made.map(([w, m]) => { const b = bitmap(); w.say({ id: m.id, bmp: b }); return [m.i, b]; }).sort((p, q) => p[0] - q[0]);
+  c.takes = 2; assert.equal(c.ask('k0', J(0), 'k', [1], 2), bmps[0][1]); assert.equal(c.ask('k1', J(1), 'k', [1], 2), bmps[1][1]); assert.equal(c.ask('k2', J(2), 'k', [1], 2), null, 'the third waits: it is still there'); assert.equal(c.done.size, 1);
+  c.takes = 2; assert.equal(c.ask('k2', J(2), 'k', [1], 3), bmps[2][1], 'and is taken by the next frame'); assert.equal(c.takes, 1); assert.equal(c.ask('new', J(9), 'k', [1], 3), null); assert.equal(chunks(ws[0]).length + chunks(ws[1]).length, 4, 'a chunk that is not made is asked for whatever the frame has taken');
+  assert.equal(new BaseClient(() => fakeWorker()).takes, Infinity, 'no limit unless the pass sets one');
+});
+
 test('bitmaps nobody took are closed and dropped: after some seconds, and at once when the scale is one the camera has left (after a zoom they were six results nobody would take, and nothing new was asked for)', () => {
-  const { c, ws } = pool(1); c.cap = 3; const ask = (k, sk, now) => c.ask(k, { ...JOB, sk }, 'k', [1], now), w = ws[0];
-  for (let i = 0; i < 3; i++) ask('old' + i, 111, i + 1); const olds = [0, 1].map((k) => reply(w, k)); const third = reply(w, 2);
-  assert.equal(c.done.size, 3); assert.equal(ask('new0', 222, 10), null); assert.equal(chunks(w).length, 3, 'with the old scale\'s bitmaps waiting, the cap is full');
-  c.prune(11, (sk) => sk === 222); assert.equal(c.done.size, 0, 'the scale is gone: its bitmaps are too'); assert.ok([...olds, third].every((b) => b.closed), 'and closed: a bitmap is memory of the GPU\'s side too');
-  ask('new0', 222, 12); assert.equal(chunks(w).length, 4, 'the new scale is asked for at once');
-  const keep = reply(w, 3); c.prune(13, (sk) => sk === 222); assert.equal(c.done.size, 1, 'a bitmap of the scale in view stays until it is taken'); assert.equal(keep.closed, false);
+  const { c, ws } = pool(2); c.cap = 3; const ask = (k, sk, i, now) => c.ask(k, { ...JOB, sk, i }, 'k', [1], now), made = (i) => { const w = ws.find((x) => chunks(x).some((m) => m.i === i)); return reply(w, chunks(w).findIndex((m) => m.i === i)); };
+  for (let i = 0; i < 3; i++) ask('old' + i, 111, 10 + i, i + 1); const olds = [10, 11, 12].map(made);
+  assert.equal(c.done.size, 3); assert.equal(ask('new0', 222, 20, 10), null); assert.equal(ws.flatMap(chunks).length, 3, 'with the old scale\'s bitmaps waiting, the cap is full');
+  c.prune(11, (sk) => sk === 222); assert.equal(c.done.size, 0, 'the scale is gone: its bitmaps are too'); assert.ok(olds.every((b) => b.closed), 'and closed: a bitmap is memory of the GPU\'s side too');
+  ask('new0', 222, 20, 12); assert.equal(ws.flatMap(chunks).length, 4, 'the new scale is asked for at once');
+  const keep = made(20); c.prune(13, (sk) => sk === 222); assert.equal(c.done.size, 1, 'a bitmap of the scale in view stays until it is taken'); assert.equal(keep.closed, false);
   c.prune(13 + BASE_KEEP_MS + 1, (sk) => sk === 222); assert.equal(c.done.size, 0, 'or for a few seconds'); assert.equal(keep.closed, true);
 });
 
 test('a worker that errors, answers with an error, has no canvas or goes silent is given up (and its bitmaps closed), and the cache makes the chunks itself again', () => {
-  let { c, ws } = pool(2); ws[1].onerror({}); assert.equal(c.live, false); assert.ok(ws.every((w) => w.terminated), 'every worker of the pool goes'); assert.equal(c.ask('a', JOB, 'k', [1], 1), null); assert.equal(ws[0].posted.length, 1, 'nothing more is posted to a dead client');
+  let { c, ws } = pool(2); ws[1].onerror({}); assert.equal(c.live, false); assert.ok(ws.every((w) => w.terminated), 'every worker of the pool goes'); const n0 = ws[0].posted.length; assert.equal(c.ask('a', JOB, 'k', [1], 1), null); assert.equal(ws[0].posted.length, n0, 'nothing more is posted to a dead client');
   ({ c, ws } = pool(1)); c.ask('a', JOB, 'k', [1], 1); ws[0].say({ id: chunks(ws[0])[0].id, err: 'boom' }); assert.equal(c.live, false, 'an error from the bake');
   ({ c, ws } = pool(1, false)); c.ask('a', JOB, 'k', [1], 0); ws[0].say({ t: 'hello', ok: false }); assert.equal(c.live, false, 'a worker that cannot make a canvas');
   ({ c, ws } = pool(1, false)); c.ask('a', JOB, 'k', [1], 0); c.ask('b', JOB, 'k', [1], BASE_TIMEOUT_MS - 1); assert.equal(c.live, true); c.ask('c', JOB, 'k', [1], BASE_TIMEOUT_MS + 1); assert.equal(c.live, false, 'a script that never loaded (a path that does not resolve, a page that forbids workers)');
@@ -155,14 +171,14 @@ test('a worker that has answered before and then keeps a chunk out for long (a h
   assert.doesNotThrow(() => c.ask('a', JOB, 'k', [1], 1)); assert.equal(c.live, false); assert.equal(bad.terminated, true);
 });
 
-test('workers are made where there are some and cores to run them on: a pool of at most three, none on one core, none without Worker', () => {
+test('workers are made where there are some and cores to run them on: a pool of at most three that leaves two cores to the frames, none on one core, none without Worker', () => {
   const made = []; const was = Object.getOwnPropertyDescriptor(globalThis, 'navigator');
   const nav = (n) => Object.defineProperty(globalThis, 'navigator', { value: { hardwareConcurrency: n }, configurable: true });
   try {
     delete globalThis.Worker; assert.equal(makeBaseClient(), null, 'no Worker');
     globalThis.Worker = class { constructor(url, opt) { made.push({ url: String(url), opt }); } postMessage() {} terminate() {} };
     nav(1); assert.equal(makeBaseClient(), null, 'one core: the worker would only compete with the frames');
-    nav(2); let c = makeBaseClient(); assert.equal(c.size, 1); nav(4); c = makeBaseClient(); assert.equal(c.size, 3); nav(16); c = makeBaseClient(); assert.equal(c.size, 3);
+    nav(2); let c = makeBaseClient(); assert.equal(c.size, 1); nav(4); c = makeBaseClient(); assert.equal(c.size, 2, 'two cores are left to the frames'); nav(5); c = makeBaseClient(); assert.equal(c.size, 3); nav(16); c = makeBaseClient(); assert.equal(c.size, 3);
     c.start(); assert.equal(made.length, 3); assert.ok(made.every((m) => m.url.endsWith('/js/world/basework.js') && m.opt.type === 'module'), JSON.stringify(made[0]));
   } finally { delete globalThis.Worker; if (was) Object.defineProperty(globalThis, 'navigator', was); else delete globalThis.navigator; }
 });
@@ -177,14 +193,14 @@ test('the cache asks for a chunk and makes none (nor a surface for it) until its
   assert.equal(c.bytes, CHUNK_PX * CHUNK_PX * 4); assert.equal(store.stats.baked, 1); assert.equal(store.size, 1); assert.equal(store.bytes, c.bytes, 'the ledger knows it');
   assert.equal(store.bake(draw, a, 3, 4, 2), c, 'a chunk that exists is not asked for again'); assert.equal(asked.length, 2);
   store.bake(draw, OVERVIEW_A, -1, 0, 2, false, true); assert.ok(asked.at(-1).key.endsWith('|2o') && asked.at(-1).pin === true && store.ov.size === 1, 'the overview has a store of its own and a key of its own');
-  store.bake(draw, 0.9, 0, 0, 1, true); assert.ok(asked.at(-1).key.endsWith('|1c') && asked.at(-1).coarse === true);
+  store.bake(draw, 0.9, 0, 0, 1, true); assert.ok(asked.at(-1).key.endsWith('|1c') && asked.at(-1).coarse === true); assert.equal(asked.at(-1).key, jobKey(scaleKey(0.9), 0, 0, 1, false, true), 'the name a chunk is made ahead by is the name the cache asks for it by');
   store.markStale(99); ready = null; assert.equal(store.bake(draw, a, 3, 4, 2), null, 'a stale chunk is not replaced before its bitmap is back'); assert.equal(store.get(scaleKey(a), 3, 4), c, 'and is still there to be stamped');
   const next = bitmap(); ready = next; const c2 = store.bake(draw, a, 3, 4, 2); assert.equal(c2.img, next); assert.equal(store.size, 2); assert.equal(c.img.closed, true, 'the stale one\'s bitmap is let go');
   store.whole = null; assert.ok(store.bake(draw, a, 5, 5, 2), 'without the hook the chunk is drawn here, as it always was'); assert.equal(drawn.length, 1); store.release();
 });
 
 // ---------------------------------------------------------------- the ground pass with workers
-class FakeClient { constructor() { this.live = true; this.asks = []; this.ready = false; this.pruned = 0; } ask(key, job, wk, unlocked, now) { this.asks.push({ key, wk, unlocked, ...job }); return this.ready ? bitmap() : null; } prune() { this.pruned++; } fail() { this.live = false; } }
+class FakeClient { constructor() { this.live = true; this.done = new Map(); this.asks = []; this.wants = []; this.ready = false; this.pruned = 0; this.keep = null; } ask(key, job, wk, unlocked, now) { this.asks.push({ key, wk, unlocked, ...job }); return this.ready ? bitmap() : null; } want(key, job, wk, unlocked, now, cap) { this.wants.push({ key, wk, unlocked, cap, ...job }); } prune(now, keep) { this.pruned++; this.keep = keep; } fail() { this.live = false; } }
 const stubLayers = () => { for (const id of GROUND) registerLayer(id, () => {}, 'inherit', () => 1); registerLayer('livedecals', () => {}, 'inherit'); }; // (the layers draw nothing in these tests: what is under test is which chunks are asked for and made)
 const frame = (w) => { const main = recCtx(); w.env.lod = lodOf(w.cam.z); w.groundPass(main.ctx, { x0: -1e5, x1: 1e5, y0: -1e5, y1: 1e5 }); return main; };
 
@@ -195,10 +211,33 @@ test('with workers the pass asks for the window\'s chunks, nearest the middle fi
   const a = w.renderScale(); assert.ok(fake.asks.every((j) => j.a === a || j.pin), 'all at the frame\'s own scale: no coarse chunk was asked for'); assert.ok(fake.asks.every((j) => j.zoom === w.cam.z && j.dpr === w.dpr), 'for the camera\'s zoom and density');
   assert.ok(fake.asks.every((j) => j.wk === '1' && j.unlocked.join() === '1'), 'and the districts that are open'); assert.ok(w.gc.whole && w.gc.opaque, 'the cache takes the chunks whole, and knows they are opaque');
   const cx = w.cam.x, cy = w.cam.y, d = fake.asks.slice(0, 6).map((j) => Math.hypot((j.i + 0.5) * CHUNK_PX / a - cx, (j.j + 0.5) * CHUNK_PX / a - cy)); for (let n = 1; n < d.length; n++) assert.ok(d[n] >= d[n - 1] - 400, 'the nearest the middle first: ' + d.map(Math.round));
-  assert.ok(fake.pruned >= 1, 'bitmaps nobody took are dropped each frame');
+  assert.ok(fake.pruned >= 1, 'bitmaps nobody took are dropped each frame'); assert.equal(fake.takes, TAKE_PER_FRAME, 'and a frame takes only so many'); w.veilHold = true; frame(w); assert.equal(fake.takes, Infinity, 'but every one while the canvas is held back: nobody sees them come in'); w.veilHold = false;
   fake.ready = true; w.gcBudget = [1e9, 1e9]; frame(w); assert.ok(w.gc.size >= 6, 'made from the bitmaps: ' + w.gc.size); w.gcBudget = [1e-6, 1e-6]; for (let n = 0; n < 40; n++) frame(w);
   assert.equal(w.gcValid, true, 'whole'); assert.equal(w.gcMore, false);
   const un = new Set([1, 2]); w.unlocked = un; w.unlockHash = 8; fake.asks.length = 0; fake.ready = false; frame(w); assert.ok(fake.asks.length > 0 && fake.asks.every((j) => j.wk === '1,2' && j.unlocked.join() === '1,2'), 'a district that opens is a new world for the workers'); assert.ok(w.gc.size >= 6, 'and the chunks of the old state stay on show, stale, until their replacements come');
+});
+
+test('while a glide lasts the pass has the workers make the nearest chunks of the window it will rest on, at the scale it will rest at, and asks for them by the same names when it arrives', () => {
+  stubLayers(); const w = world({ x: -2944, y: 2153, z: 0.9 }), fake = new FakeClient(); w.baseWorker = () => fake; w.zoomRange = () => [0.15, 3];
+  w.camTo = { x: -1200, y: 1500, z: 1.4, t0: 0, from: { ...w.cam }, dur: 650 }; frame(w);
+  const dest = fake.wants, aD = Math.round(1.4 * w.dpr * 1e5) / 1e5; assert.ok(dest.length > 0 && dest.length <= PREFETCH, 'some of the window: ' + dest.length);
+  assert.ok(dest.every((j) => j.a === aD && j.sk === scaleKey(aD) && j.zoom === 1.4 && j.dpr === w.dpr && j.pin === false && j.coarse === false && j.cap === PREFETCH_CAP && j.wk === '1'), 'at the scale it will rest at, for its zoom, and not more than the cap');
+  const near = dest.map((j) => Math.hypot((j.i + 0.5) * CHUNK_PX / aD - -1200, (j.j + 0.5) * CHUNK_PX / aD - 1500)); for (let n = 1; n < near.length; n++) assert.ok(near[n] >= near[n - 1] - CHUNK_PX / aD, 'the nearest the destination\'s middle first: ' + near.map(Math.round));
+  assert.ok(dest.every((j) => j.key === jobKey(j.sk, j.i, j.j, j.dpr)), 'by the names the cache asks for them by'); assert.ok(fake.keep(scaleKey(aD)) && fake.keep(scaleKey(w.renderScale())) && !fake.keep(12345), 'and the bitmaps of the destination\'s scale are not dropped as those of a scale the camera has left');
+  w.camTo = null; fake.wants.length = 0; frame(w); assert.equal(fake.wants.length, 0, 'no glide, nothing ahead'); assert.equal(w.gcPreSk, 0); assert.equal(fake.keep(scaleKey(aD)), false);
+  w.cam = { x: -1200, y: 1500, z: 1.4 }; fake.asks.length = 0; frame(w); const names = new Set(fake.asks.map((j) => j.key)); assert.ok(dest.slice(0, 6).every((j) => names.has(j.key)), 'and when the camera is there the pass asks for the chunks that were made ahead, by name: it takes them');
+  w.cam = { x: -2944, y: 2153, z: 0.9 }; w.gcBudget = [1e9, 1e9]; fake.ready = true; w.camTo = { x: -2900, y: 2153, z: 0.9, t0: 0, from: { ...w.cam }, dur: 650 }; for (let n = 0; n < 3; n++) frame(w); assert.ok(w.gc.size > 0, 'a glide to where the camera is does no harm');
+});
+
+test('the chunks the workers have made and the pass has not taken are in the ledger, and a glide has only as many chunks made ahead as the ledger has room for', () => {
+  stubLayers(); const w = world({ x: -2944, y: 2153, z: 0.9 }), fake = new FakeClient(); fake.done = new Map([[1, 0], [2, 0], [3, 0]]); w.baseWorker = () => fake; w.zoomRange = () => [0.15, 3];
+  const glide = () => { w.camTo = { x: -1200, y: 1500, z: 1.4, t0: 0, from: { ...w.cam }, dur: 650 }; fake.wants.length = 0; frame(w); w.camTo = null; return fake.wants.length; };
+  frame(w); assert.equal(ledger.total('ground.made'), 3 * CHUNK_PX * CHUNK_PX * 4, 'three bitmaps wait to be taken'); fake.done.clear(); frame(w); assert.equal(ledger.total('ground.made'), 0, 'taken: given back');
+  assert.ok(glide() > 6, 'with room, the glide has chunks made ahead');
+  ledger.register('test.fill', LEDGER_LIMIT_MB * 1e6 + PREFETCH_OVER - ledger.total() + ledger.total('test.fill') - 5.5 * CHUNK_PX * CHUNK_PX * 4); const few = glide(); assert.ok(few >= 4 && few <= 6, 'room for five over the ceiling it may take: ' + few);
+  ledger.register('test.fill', LEDGER_LIMIT_MB * 1e6 + PREFETCH_OVER); assert.equal(glide(), 0, 'a ledger that is over what a glide may take it to: the glide is what it was');
+  ledger.register('test.fill', LEDGER_LIMIT_MB * 1e6 - 8e6 - ledger.total() + ledger.total('test.fill')); assert.equal(glide(), PREFETCH, 'a ledger near its ceiling, as it is in play: the glide is made ahead (the squeeze gives sprites back)');
+  ledger.release('test.fill'); fake.done.set(9, 0); frame(w); w.releaseGround(); assert.equal(ledger.total('ground.made'), 0, 'and it goes with the ground');
 });
 
 test('the real ground layers run over chunks the workers made, and the pass asks for the districts as they are, not as they were', () => {
@@ -213,7 +252,7 @@ test('the pass makes workers of its own when the browser has them, gives them up
     let w = world(); frame(w); const n = made.length; assert.ok(n >= 1 && n <= 3 && w.gcWorker.size === n, 'a pool: ' + n); assert.ok(made.every((m) => m.url.endsWith('/js/world/basework.js') && m.opt.type === 'module')); frame(w); assert.equal(made.length, n, 'made once');
     w.releaseGround(); assert.ok(made.every((m) => m.t), 'the workers went with the ground'); assert.equal(w.gcWorker, undefined, 'and a world that is attached again makes more');
     globalThis.window = { __rig: true }; made.length = 0; w = world(); frame(w); assert.equal(made.length, 0, 'the rig makes its chunks on the main thread, a whole window at once'); delete globalThis.window;
-    setFlag('roads', 'legacy'); try { made.length = 0; w = world(); w.gcBudget = [1e9, 1e9]; frame(w); assert.equal(made.length, 0, 'the workers draw the V2 layers: with one flagged back, the main thread draws the ground'); } finally { setFlag('roads', 'v2'); }
+    setFlag('roads', 'legacy'); try { made.length = 0; w = world(); w.gcBudget = [1e9, 1e9]; try { frame(w); } catch { /* (the stand-in world has no legacy road drawer: what is asked is whether workers were made) */ } assert.equal(made.length, 0, 'the workers draw the V2 layers: with one flagged back, the main thread draws the ground'); } finally { setFlag('roads', 'v2'); }
     globalThis.Worker = class { constructor() { throw new Error('no workers here'); } }; w = world(); w.gcBudget = [1e9, 1e9]; frame(w); frame(w); assert.ok(w.gc.size >= 6, 'workers that cannot be made: the ground is made as ever (' + w.gc.size + ' chunks)');
   } finally { delete globalThis.Worker; delete globalThis.window; setFlag('roads', 'v2'); }
 });

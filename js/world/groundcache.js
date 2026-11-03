@@ -20,10 +20,11 @@
 //     from the chunks of the frame's scales (chunkcache.js `ov`), and drawn, soft, into whatever nothing else covers. A camera that jumps, or a zoom out that reveals ground nobody has made, never shows the bare sea (a
 //     recording of the live site had hard-edged flat rectangles at the coast for about a second at every zoom or glide, and 10 to 14 frames a second: the first chunk of every frame was baked whatever it cost). With the
 //     overview made, a frame in which the camera moves does not start a chunk that costs more than its budget (`calmMove`: the stand-ins and the overview are the picture, and the exact chunks follow when the camera rests).
-// The V2 base is painted by a WORKER where there is one (basework.js): the pass asks for chunks, nearest the middle first, and makes each when its pixels are back (no coarse cover then); else it paints here.
+// The V2 chunk is made by WORKERS where there are some (basework.js: up to three, each with a chunk store of its own and the ground layers; the base, the layers' paths and the raster of them are theirs): the pass asks for the window's
+// chunks, nearest the middle first, and takes each when its bitmap is back (no coarse cover then); while a glide lasts the workers make the chunks of the window it will rest on (prefetchGround), which they would otherwise idle through.
 // `gcHoles` counts the pieces of the window that nothing at all covers after all of that (the sea shows there; the open sea beyond the island's box is not a hole), and `gcMore` says the ground wants another frame.
 import { groundKey, slotFor } from './stack.js';
-import { CHUNK_PX, scaleKey, chunkKey, cellsFor, chunkCap, snapTranslation, OVERVIEW_A, overviewCells, standInSmooth } from './chunks.js';
+import { CHUNK_PX, scaleKey, chunkKey, cellsFor, chunkCap, chunkBytes, snapTranslation, OVERVIEW_A, overviewCells, standInSmooth } from './chunks.js';
 import { ChunkCache, jobKey } from './chunkcache.js';
 import { ledger, LEDGER_LIMIT_MB, softwareRaster } from './gfx.js';
 import { lodOf } from './lod.js';
@@ -31,8 +32,13 @@ import { makeBaseClient } from './baseclient.js';
 export { CHUNK_PX, chunkWorld, chunkBytes, chunksTouched, groundBytes, chunksFor } from './chunks.js'; // the chunk cache's arithmetic (tests/world-ledger.test.mjs holds the memory ledger to it)
 
 const GROUND_LAYERS = ['shore', 'terrain', 'roads', 'blocks'];
-/** A glide that knows where it is going has the workers make this many of the nearest chunks of the window it will rest on (a window is 45 to 60), and no more than PREFETCH_CAP chunks are out and waiting (0.6 MB each). */
-export const PREFETCH = 28, PREFETCH_CAP = 40;
+/**
+ * A glide that knows where it is going has the workers make this many of the nearest chunks of the window it will rest on (a window is 45 to 60; the heavy ones are the first 20 or so), and no more than PREFETCH_CAP chunks are
+ * out and waiting (0.6 MB each). The ledger sits near its ceiling in play (the sprite caches fill what is free), so they may take it PREFETCH_OVER bytes over it for the length of the glide: the squeeze (World.squeeze) gives sprites back if it stays there.
+ */
+export const PREFETCH = 28, PREFETCH_CAP = 40, PREFETCH_OVER = 12e6;
+/** A bitmap's first draw uploads it to the GPU, and the 24 or so of a glide's arrival in one frame held the next two frames up for 70 ms: the pass takes this many a frame (all of them while the canvas is held back). */
+export const TAKE_PER_FRAME = 8;
 /** Milliseconds a frame may spend baking chunks: with the camera still (the picture is settling, nothing else to do) and while it moves (a pan must stay cheap). The first bake of a frame always goes ahead. */
 export const BAKE_MS_STILL = 10, BAKE_MS_MOVING = 3.5;
 /** The V2 ground's chunks are dearer to bake (a base painted per pixel, 3 to 13 ms each in Node), so a frame may spend more on them: still, moving. A chunk that nothing stands in for is baked whatever the budget, one a frame at the least. */
@@ -63,7 +69,9 @@ export const groundCacheMethods = {
     store.opaque = v2;
     const client = v2 && !rig && GROUND_LAYERS.every((id) => slotFor(id).impl === 'v2') ? this.baseWorker() : null; // (a layer flagged back to legacy is not the one the workers draw)
     store.whole = client ? this.wholeHook(client, performance.now()) : null;
+    if (client) client.takes = this.veilHold ? Infinity : TAKE_PER_FRAME;
     if (client && this.camTo) this.prefetchGround(client, performance.now(), dpr, store); else this.gcPreSk = 0; // (a glide: the workers make its destination while the camera is on the way)
+    if (client) ledger.register('ground.made', client.done.size * chunkBytes()); // (the chunks the workers have made and the pass has not taken yet are pixels like any other)
     const ver = (Math.imul(this.unlockHash | 0, 31) + gk) | 0;
     if (v2 ? store.markStale(ver) : store.setVer(ver)) this.gcValid = false;
     store.begin();
@@ -219,10 +227,11 @@ export const groundCacheMethods = {
     for (let j = c.j0; j <= c.j1; j++) for (let i = c.i0; i <= c.i1; i++) { const have = store.map.get(chunkKey(sk, i, j)); if (!have || have.stale) list.push([i, j, Math.hypot((i + 0.5) * c.s - mx, (j + 0.5) * c.s - my)]); }
     list.sort((p, q) => p[2] - q[2]);
     const J = this.gcPreJob || (this.gcPreJob = { sk: 0, a: 0, i: 0, j: 0, dpr: 1, coarse: false, pin: false, zoom: 0 });
-    for (let n = 0, m = Math.min(list.length, PREFETCH); n < m; n++) { J.sk = sk; J.a = a; J.i = list[n][0]; J.j = list[n][1]; J.dpr = dpr; J.zoom = z; client.want(jobKey(sk, J.i, J.j, dpr), J, this.gcWorld, this.gcUnlocked, now, PREFETCH_CAP); }
+    const room = Math.floor((LEDGER_LIMIT_MB * 1e6 + PREFETCH_OVER - ledger.total()) / chunkBytes()); // (as many as the ledger has room for, and that much over: a ledger already over has none, and the glide is then what it was)
+    for (let n = 0, m = Math.min(list.length, PREFETCH, room); n < m; n++) { J.sk = sk; J.a = a; J.i = list[n][0]; J.j = list[n][1]; J.dpr = dpr; J.zoom = z; client.want(jobKey(sk, J.i, J.j, dpr), J, this.gcWorld, this.gcUnlocked, now, PREFETCH_CAP); }
   },
   /** Give the ground cache's bitmaps back (World.release). */
-  releaseGround() { if (this.gc && typeof this.gc.release === 'function') this.gc.release(); this.gc = null; if (this.gcWorker) this.gcWorker.fail(); this.gcWorker = undefined; this.gcPreSk = 0; this.gcValid = false; this.gcHoles = 0; this.gcMore = false; this.gcSeen = 0; },
+  releaseGround() { if (this.gc && typeof this.gc.release === 'function') this.gc.release(); this.gc = null; if (this.gcWorker) this.gcWorker.fail(); this.gcWorker = undefined; this.gcPreSk = 0; ledger.release('ground.made'); this.gcValid = false; this.gcHoles = 0; this.gcMore = false; this.gcSeen = 0; },
 
   cacheOK() { return typeof OffscreenCanvas === 'function' && this.cv.width > 0; },
 };
