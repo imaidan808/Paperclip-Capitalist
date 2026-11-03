@@ -20,7 +20,7 @@ const { lodOf } = await import('../js/world/lod.js');
 const { runLayer, registerLayer, slotFor, setFlag } = await import('../js/world/stack.js');
 const { ledger, LEDGER_LIMIT_MB } = await import('../js/world/gfx.js');
 const { ChunkMaker } = await import('../js/world/basework.js');
-const { BaseClient, BASE_TIMEOUT_MS, BASE_PER, BASE_KEEP_MS, makeBaseClient, warmBaseClient } = await import('../js/world/baseclient.js');
+const { BaseClient, BASE_TIMEOUT_MS, BASE_PER, BASE_KEEP_MS, makeBaseClient, bootBaseClient, BASE_SPARE_MS } = await import('../js/world/baseclient.js');
 
 const GROUND = ['shore', 'terrain', 'roads', 'blocks'];
 const world = (cam = { x: -2944, y: 2153, z: 1 }, dpr = 1.5, W = 1440, H = 900, unlocked = [1]) => ({
@@ -183,15 +183,19 @@ test('workers are made where there are some and cores to run them on: a pool of 
   } finally { delete globalThis.Worker; if (was) Object.defineProperty(globalThis, 'navigator', was); else delete globalThis.navigator; }
 });
 
-test('the pool can be booted while the title is on screen, and the world takes that pool when it begins (once)', () => {
-  const made = []; const was = Object.getOwnPropertyDescriptor(globalThis, 'navigator'); Object.defineProperty(globalThis, 'navigator', { value: { hardwareConcurrency: 8 }, configurable: true });
+test('the pool is booted when the game screen is asked for and the world takes that pool (once); one nobody takes is given back, and a world after it makes its own', () => {
+  const made = [], timers = []; const was = Object.getOwnPropertyDescriptor(globalThis, 'navigator'), st = globalThis.setTimeout; Object.defineProperty(globalThis, 'navigator', { value: { hardwareConcurrency: 8 }, configurable: true });
+  globalThis.setTimeout = (fn, ms) => { timers.push([fn, ms]); return { unref() {} }; };
   globalThis.Worker = class { constructor(url, opt) { made.push(this); this.posted = []; } postMessage(m) { this.posted.push(m); } terminate() { this.t = true; } };
   try {
-    warmBaseClient(); assert.equal(made.length, 3, 'booted at once'); warmBaseClient(); assert.equal(made.length, 3, 'once');
+    bootBaseClient(); assert.equal(made.length, 3, 'booted at once'); bootBaseClient(); assert.equal(made.length, 3, 'once');
     const c = makeBaseClient(); assert.equal(c.ws.length, 3, 'the world gets the pool that was booted'); assert.equal(made.length, 3, 'and boots none of its own'); assert.equal(c.ws[0].w, made[0]);
+    timers.at(-1)[0](); assert.ok(made.every((w) => !w.t), 'the pool a world took is not given back when the time is up');
     const d = makeBaseClient(); assert.notEqual(d, c, 'a second world gets a pool of its own'); d.start(); assert.equal(made.length, 6);
-    delete globalThis.Worker; warmBaseClient(); assert.equal(made.length, 6, 'no workers here: nothing to boot');
-  } finally { delete globalThis.Worker; if (was) Object.defineProperty(globalThis, 'navigator', was); else delete globalThis.navigator; }
+    bootBaseClient(); assert.equal(made.length, 9); assert.equal(timers.at(-1)[1], BASE_SPARE_MS, 'a pool nobody takes is given back after a while'); timers.at(-1)[0]();
+    assert.ok(made.slice(6).every((w) => w.t), 'a game that opened without its world holds no workers'); const e = makeBaseClient(); e.start(); assert.equal(made.length, 12, 'and a world after it makes its own');
+    delete globalThis.Worker; bootBaseClient(); assert.equal(made.length, 12, 'no workers here: nothing to boot');
+  } finally { delete globalThis.Worker; globalThis.setTimeout = st; if (was) Object.defineProperty(globalThis, 'navigator', was); else delete globalThis.navigator; }
 });
 
 // ---------------------------------------------------------------- the cache: a chunk comes from the workers
