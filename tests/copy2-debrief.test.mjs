@@ -9,6 +9,7 @@
 //   D7  what the rewind, the stalled list and the room line say is what the engine and the relay do
 //   D8  the voice: what these screens show at first has no question, no filler and no dash, is a fraction of what it was, and what was folded is folded
 //   D9  the title's classroom panels and the kit: the names the screens use, the numbers the engine has
+//   D10 the figures' hovers and labels (efficiency index, percentile, pivots, the band of a swap, the sliders) are what the engine does
 // Run: node --test tests/copy2-debrief.test.mjs
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -22,9 +23,10 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const read = (rel) => readFileSync(join(ROOT, rel), 'utf8');
 
 const { Game } = await import('../js/engine.js');
-const { ASSETS, BUYERS, PERKS, EVENTS, CM, FEES, BASE_RATE, FMV_BAND, WARN_LEAD, SWAPS } = await import('../js/config.js');
+const { ASSETS, BUYERS, PERKS, EVENTS, CM, FEES, BASE_RATE, FMV_BAND, WARN_LEAD, SWAPS, TOTAL_DAYS } = await import('../js/config.js');
 const { creativityBand, creativity, fmtMoney: money } = await import('../js/market.js');
 const { CODEX } = await import('../js/meta/codex.js');
+const { hash01 } = await import('../js/rng.js');
 const { Session, Clock } = await import('../js/session.js');
 const C = await import('../js/cohort.js');
 const D = await import('../js/ui/debrief.js');
@@ -185,6 +187,11 @@ test('D3: a swap\'s gain is the same figure at both ends; the old "you / them" p
   assert.ok(titles(none).includes('Swaps with classmates also count toward Peer Market Engagement (10% of the grade). The Practice Partner earns no credit.'));
   const npc = mk(3, 'NPC');
   assert.equal(npc._swapDone('PARTNER', 10, 0.1, true), false); assert.equal(npc.s.p2p, 0, 'and it pays the grade nothing');
+  assert.equal(npc.s.pivot, 0, 'nor is it a pivot');
+  assert.ok(A.s.p2p === 1 && B.s.p2p === 1 && A.s.pivot === 1 && B.s.pivot === 1, 'a counted swap is a swap and a pivot, at both ends');
+  // the band in the variance hover is the guardrail: 39% apart passes, 41% does not (js/engine.js `checkOffer`)
+  const at = (cash) => A.checkOffer({ from: 'AAA', give: { assets: [A.pub(pen)], cash: 0 }, want: { assets: [], cash } }, 'offerer');
+  assert.equal(at(worth.pen * (1 + FMV_BAND - 0.01)).ok, true); assert.equal(at(worth.pen * (1 + FMV_BAND + 0.01)).ok, false);
 });
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -425,4 +432,69 @@ test('D9: the title\'s classroom panels say less, and the kit names what the scr
   assert.ok(/One box at the end holds their analysis/.test(kit) && !/Beside each prompt is a box/.test(kit));
   assert.ok(kit.includes(`${SWAPS.perDay} a day`) && kit.includes(`${FMV_BAND * 100}%`));
   assert.ok(!/\bprofile\b|all three|Zone \d/i.test(kit));
+});
+
+// ---------------------------------------------------------------------------------------------------------------------
+test('D10: the figures\' hovers and labels are what the engine does: the index, the percentile, the pivots, the sliders, the herd and the algorithmic events', () => {
+  // the index: net worth over the floor, times one plus the share of the days left (js/market.js `eei`); the floor in the hover is the room's
+  const S = REAL(late), floor = S.difficulty.eeiFloor;
+  assert.ok(Math.abs(late.eei() - late.netWorth() / floor * (1 + late.daysRemaining() / TOTAL_DAYS)) < 1e-9);
+  const eeiTip = (x) => titles(D.debriefHTML(x)).find((t) => t.startsWith('Net worth divided by the'));
+  assert.equal(eeiTip(S), `Net worth divided by the ${money(floor)} starting-capital floor, times 1 plus the share of the ${TOTAL_DAYS} days left.`);
+  S.difficulty.eeiFloor = 5000; assert.ok(eeiTip(S).includes('$5,000'), 'an instructor who moves the floor moves the hover');
+  // the percentile: the share of the others whose index is lower (the same rule as the gradebook's Economic column)
+  const lb = [1, 2, 3, 4, 5].map((eei, i) => ({ eei, rank: 5 - i }));
+  assert.equal(D.standing(lb, lb[2]).percentile, 2 / 4 * 100);
+  assert.ok(titles(D.debriefHTML(REAL(late))).includes('The share of the other players whose efficiency index is lower than yours.'));
+  const gb = instructorWith([['A', { nw: 500 }], ['B', { nw: 300 }], ['C', { nw: 100 }]], 100).gradebook();
+  assert.deepEqual(gb.map((r) => r.econ), [100, 50, 0], 'the dashboard\'s Economic column is the same percentile');
+  // who is in "of N players": a solo run has eleven simulated classmates (js/session.js `startGame`), a student in a room has none
+  const solo = new Session(); solo.startGame({ perks: ['trades', 'pro'], specialty: 'ops', handle: 'Solo' });
+  assert.equal(solo.synth.length, 11);
+  assert.ok(D.debriefHTML(solo).includes('of 12 players, 11 simulated'));
+  const stu = new Session(); stu.mode = 'student'; stu.startGame({ perks: ['trades', 'pro'], specialty: 'ops', handle: 'Stu' });
+  assert.ok(D.debriefHTML(stu).includes('of 1 player</div>') && !/simulated/.test(visible(D.debriefHTML(stu))));
+  // the hero says final only when the run is closed (js/engine.js `closedNetWorth`), and a manager is a manager
+  assert.ok(D.debriefHTML(REAL(fresh)).includes('>Net worth now<'));
+  const over = makeGame(['trades', 'pro'], 'ops', 3); over.advanceTo(2160); assert.ok(over.s.over);
+  assert.ok(D.debriefHTML(REAL(over)).includes('>Final net worth<') && D.reflectionMD(REAL(over), '').includes('Final net worth:'));
+  const crunch = makeGame(['connected', 'grad'], 'ops', 5); crunch.env.algo = false; crunch.advanceTo(24 * 50);
+  assert.ok(D.debriefHTML(REAL(crunch)).includes('<dt>Managers</dt>') && !/Pipelines/.test(D.debriefHTML(REAL(crunch))));
+
+  // what is a pivot: a pool sale, a loan repayment, a change of a manager's lane, a pause or a release; hiring, upgrading and a new allocation are not (js/engine.js `s.pivot`)
+  const g = makeGame(['trades', 'pro'], 'ops', 3); g.env.algo = false; g.s.mil.m1 = true; g.s.cash = 3000; // (under the second milestone, whose audit locks hiring)
+  for (const z of [2, 3, 4, 5]) g._openZone(z);
+  g.advanceTo(g.s.hour + 1);
+  const lanes = g.radar(5, 12).filter((x) => x.fit >= 0.3), one = lanes[0], two = lanes.find((x) => x.cls !== one.cls || x.seg !== one.seg);
+  const moves = (what, f, by) => { const before = g.s.pivot; const r = f(); assert.ok(r?.ok !== false, `${what}: ${r?.msg}`); assert.equal(g.s.pivot - before, by, what); };
+  let mgr; moves('hiring a manager', () => { const r = g.hirePipeline('broker', 5, { cls: one.cls, buyer: one.seg }); mgr = r.pipe; return r; }, 0);
+  moves('a new allocation', () => g.configure(mgr.id, { alloc: 10 }), 0);
+  moves('a new lane', () => g.configure(mgr.id, { cls: two.cls, buyer: two.seg }), 1);
+  moves('pausing a manager', () => g.pausePipeline(mgr.id, true), 1);
+  moves('resuming it', () => g.pausePipeline(mgr.id, false), 1);
+  moves('releasing it', () => g.releasePipeline(mgr.id), 1);
+  moves('drawing a loan', () => g.draw('micro', 100), 0);
+  moves('repaying it', () => g.repay(g.s.loans[0].id, 10), 1);
+  const crate = g._mk(g.s, 'bike', { zone: 1, basis: 1 }); g.s.assets.push(crate);
+  moves('a sale to the liquidity pool', () => g.sellPool([crate.id]), 1);
+  assert.ok(titles(D.debriefHTML(REAL(crunch))).includes('Pool sales, loan repayments, manager lane changes, pauses and releases, and counted swaps in the five days after.'), 'and the hover says exactly these, with the counted swap of D3');
+
+  // the sliders: taxes and fees scale with friction; the kit's ranges are the sliders'; ghosts shape the market and are not rows; the algorithmic events come from the room code
+  const f = makeGame([], 'ops', 3), tax = f.zoneTax(5), fee = f.instFee('pitch');
+  f.env.difficulty.friction = 2; assert.ok(Math.abs(f.zoneTax(5) - 2 * tax) < 1e-12 && Math.abs(f.instFee('pitch') - 2 * fee) < 1e-12, 'friction scales the tax and the fee');
+  const c1 = I.instructorParts(instructorWith([], 24 * 5), {}).c1, kit = read('docs/FACULTY_KIT.md');
+  const range = (id) => { const m = new RegExp(`<input id="${id}" type="range" min="([\\d.]+)" max="([\\d.]+)"`).exec(c1); return [+m[1], +m[2]]; };
+  assert.deepEqual(range('fr'), [0.5, 3]); assert.deepEqual(range('au'), [0.5, 3]); assert.deepEqual(range('gh'), [0, 80]); assert.deepEqual(range('dm'), [0, 24]);
+  for (const t of ['**Transaction friction** (0.5x to 3x)', '**Compliance audit frequency** (0.5x to 3x)', '**Synthetic classmates filling the market** (0 to 80)', '**Demo students on this dashboard** (0 to 24)']) assert.ok(kit.includes(t), t);
+  const T = instructorWith([], 24 * 20), cls = Object.keys(ASSETS).find((c) => (ASSETS[c].dem?.[5] ?? 0) > 0);
+  T.setGhosts(0); const quiet = T.cohort.counts(24 * 20, 5, cls).total, rows = T.gradebook().length;
+  T.setGhosts(60); assert.ok(T.cohort.counts(24 * 20, 5, cls).total > quiet, 'the herd is in the market');
+  assert.equal(T.gradebook().length, rows, 'and not in the roster');
+  // the algorithmic events are drawn from the room code and the day (js/engine.js `_algoEvent`): the days the rule picks are the days the game has them, and another code picks others
+  const picked = (code) => { const out = []; for (let d = 4; d <= 86; d++) if (![15, 45, 75].some((x) => Math.abs(x - d) < 3) && hash01(code + 'algo' + d) <= 0.14) out.push('algo-' + d); return out; };
+  const had = (code) => { const x = new Game({ perks: [], seed: 1, handle: 'T', pid: 'T-1', worldSeed: code }); x.advanceTo(24 * 87); return x.s.events.filter((e) => e.id.startsWith('algo-')).map((e) => e.id); };
+  const codes = []; for (const a of 'ABCDEFGH') for (const b of 'ABCDEFGH') if (picked(`R${a}${b}Z`).length >= 2 && codes.length < 2) codes.push(`R${a}${b}Z`);
+  assert.equal(codes.length, 2);
+  assert.deepEqual(had(codes[0]), picked(codes[0])); assert.deepEqual(had(codes[1]), picked(codes[1]));
+  assert.notDeepEqual(picked(codes[0]), picked(codes[1]), 'the same room code gives the same events, another room others');
 });
