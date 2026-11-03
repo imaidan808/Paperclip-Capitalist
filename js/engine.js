@@ -101,10 +101,12 @@ export class Game {
     return { id: extra.id || `${kind}@${start}`, kind, name: d.name, start, phases: d.phases, level: d.level, alert: d.alert, short: d.short, warned: false, started: false, ...extra };
   }
 
-  /** An event's alert with the days of this start: the config says "Day 45 at 00:00", and an instructor can deploy the shock on any day and hour. */
+  /** An event's alert with the days of this start: the config says "Day 45" (a shock that starts at midnight), and an instructor can deploy it on any day and hour, so the days move with the start and a start after midnight says its hour. */
   _alert(ev) {
-    const a = ev.alert || {}, d = EVENTS[ev.kind]?.day, h = ev.start % 24, mv = (t) => (d && typeof t === 'string' ? t.replace(/Day (\d+)/g, (m, n) => 'Day ' + (+n + Math.floor(ev.start / 24) + 1 - d)).replace('at 00:00', `at ${h < 10 ? '0' : ''}${h}:00`) : t);
-    return { ...a, name: ev.name, level: ev.level, start: ev.start, readout: mv(a.readout), vars: (a.vars || []).map(mv), enforcement: mv(a.enforcement) };
+    const a = ev.alert || {}, d = EVENTS[ev.kind]?.day, h = ev.start % 24, ok = (t) => d && typeof t === 'string';
+    const mv = (t) => (ok(t) ? t.replace(/Day (\d+)/g, (m, n) => 'Day ' + (+n + Math.floor(ev.start / 24) + 1 - d)) : t);
+    const hr = (t) => (ok(t) && h ? t.replace(/Day \d+/, (m) => `${m} at ${h < 10 ? '0' : ''}${h}:00`) : t);
+    return { ...a, name: ev.name, level: ev.level, start: ev.start, readout: hr(mv(a.readout)), vars: (a.vars || []).map(mv), enforcement: mv(a.enforcement) };
   }
 
   // ------------------------------------------------------------------ small helpers

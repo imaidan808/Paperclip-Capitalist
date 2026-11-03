@@ -255,7 +255,10 @@ test('M2: a macro alert names the days of the shock it announces, scheduled or d
   assert.equal(freezeAt(h, at + freeze.to - 1), true); assert.equal(freezeAt(h, at + freeze.to), false);
   // a shock with no warning (the instructor's "now"): the tariff's day is the day it starts
   const t = mk(), tn = noted(t); t.advanceTo(100); t.injectEvent('tariff', 101, { id: 'inj-tariff' }); t.advanceTo(101);
-  const live = tn.find((n) => /no warning/.test(n.text)); assert.match(live.alert.readout, new RegExp(`from Day ${dayOf(101)}\\.$`));
+  const live = tn.find((n) => /no warning/.test(n.text)); assert.match(live.alert.readout, new RegExp(`from Day ${dayOf(101)} at 05:00, for 15 days\\.$`), 'the day it starts and the hour (hour 101 is 05:00 of day 5)');
+  // a shock that starts at midnight, scheduled or deployed, says no hour
+  const m = mk(), mn = noted(m); m.advanceTo(47); m.injectEvent('tariff', 48, { id: 'inj-tariff-2' }); m.advanceTo(48);
+  assert.equal(mn.find((n) => /no warning/.test(n.text)).alert.readout, `Customs duties slow international lanes from Day ${dayOf(48)}, for 15 days.`);
   // an algorithmic shock has no date to move
   const a = mk(), an = noted(a); a.injectEvent('glut', 30, { id: 'algo-1', cls: 'sneakers' }); a.advanceTo(30);
   assert.ok(an.find((n) => n.alert)); assert.deepEqual(an.find((n) => n.alert).alert.vars, []);
