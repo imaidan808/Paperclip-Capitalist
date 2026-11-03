@@ -7,6 +7,7 @@
 //   D5  Crew: the upgrades, the international lane, the royalty, the SLA
 //   D6  the quests, the badges and the Goal card: one sentence, and the numbers they quote
 //   D7  the voice: no question in what a player reads, and the drawers stay short
+//   D8  the Market's refusals are the engine's: storage as roomIn counts it, said once; the swap preview's three verdicts; the blocked dialog
 // Run: node --test tests/copy2-drawers.test.mjs
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -32,10 +33,12 @@ const D = await import('../js/deal.js');
 const { create: haggleCreate } = await import('../js/play/haggle.js');
 const T = await import('../js/ui/drawers/districttext.js');
 const travel = (await import('../js/ui/drawers/travel.js')).default;
-const market = (await import('../js/ui/drawers/market.js')).default;
+const marketMod = await import('../js/ui/drawers/market.js');
+const market = marketMod.default, { matrixHTML } = marketMod;
 const crew = (await import('../js/ui/drawers/crew.js')).default;
 const bank = (await import('../js/ui/drawers/bank.js')).default;
-const stock = (await import('../js/ui/drawers/stock.js')).default;
+const stockMod = await import('../js/ui/drawers/stock.js');
+const stock = stockMod.default, { heldIn } = stockMod;
 const quests = (await import('../js/ui/drawers/quests.js')).default;
 const { trackerHTML } = await import('../js/ui/hud.js');
 
@@ -176,7 +179,7 @@ test('D1: each reward line is what opening the district does in the engine', () 
   { const [a, b] = pair(9, [1, 2, 5]); const cap = (g) => g.pipeCap({ kind: 'broker', zone: 5, level: 1 }); assert.ok(said(9).includes(`Manager capacity is ${pct(cap(b) / cap(a) - 1)} higher.`)); }
   { const [a, b] = pair(11); assert.equal(b.storeCap(1) - a.storeCap(1), 4); assert.ok(said(11).includes('4 more storage spaces in every district.')); }
   { const [a, b] = pair(6); const room = (g) => { let n = 0; for (let i = 0; i < 40; i++) { g.s.lots[1] = g.s.lots[1].slice(0, n); g._spawnLot(1); if (g.s.lots[1].length > n) n = g.s.lots[1].length; } return n; }; assert.equal(room(b) - room(a), 1); assert.ok(said(6).includes('1 more lot on offer in every district.')); }
-  { const [a, b] = pair(14, [1, 2, 5]); a.s.mil.m1 = b.s.mil.m1 = true; const rate = (g) => (g.loanRate('pipeline') / g.fintechRate - C.BASE_RATE); void rate;
+  { const [a, b] = pair(14, [1, 2, 5]); a.s.mil.m1 = b.s.mil.m1 = true;
     const base = (g) => C.BASE_RATE + g.mods().rateBps / 10000, spread = (g) => g.loanRate('pipeline') - base(g) * Math.max(0.45, 1 - 0.07 * (g.lvl('fintech') - 1)); // what is left of the rate once the base has been taken out
     assert.ok(Math.abs(spread(b) / spread(a) - 0.8) < 1e-9); assert.ok(said(14).includes(`Loan spreads are ${pct(1 - spread(b) / spread(a))} lower.`)); }
   { const [a, b] = pair(13, [1, 2, 5]); a.s.mil.m1 = b.s.mil.m1 = true; const limit = (g, p) => g.loanRoom(p).limit;
@@ -277,7 +280,7 @@ test('D3: reputation falls 10 for a scam, 3 for a spotted counterfeit and nothin
   const rep = (setup, perks = []) => { const g = fresh(perks, 5); g.s.zones.push(2); g.s.leads[2] ||= []; g.s.rep = 50; const a = g._mk(g.s, 'radio', { zone: 2 }); g.s.assets = [a]; const lead = { id: 'LT1', zone: 2, seg: 'dolores', budget: 1e6, born: 0, exp: 99 }; g.s.leads[2] = [lead]; setup(g, a, lead); g.pitch(a.id, lead.id, { mult: 1.4 }); return g.s.rep - 50; };
   const lost = rep((g, a, lead) => { lead.scam = true; });
   const spotted = rep((g, a) => { a.truth = { q: 1, fake: true, defects: [] }; });
-  const nofit = rep((g, a, lead) => { lead.seg = 'okonkwo'; a.cls = 'dormFridge'; ASSETS.dormFridge && (lead.seg = 'burt'); a.cls = 'oddHardware'; lead.seg = 'burt'; });
+  const nofit = rep((g, a, lead) => { lead.seg = 'burt'; a.cls = 'oddHardware'; }); // a mystery-box gambler has no use for a coffee can of hardware
   const won = rep(() => {});
   const ctx = fakeCtx({ days: 0 }); ctx.progress = new Progress(ctx.g()); const t = shown(quests.html(ctx));
   assert.equal(lost, -10); assert.equal(spotted, -3); assert.equal(nofit, 0); assert.equal(won, 1);
@@ -359,7 +362,7 @@ test('D4: the audit page quotes the engine: the consultant, five days, the odds,
   for (const L of [1, 4, 8]) {
     const ctx = fakeCtx({ days: 25 }), g = ctx.g(); g.s.skills.fintech = L; g.s.auditNext = g.s.hour; g._audits(); assert.ok(g.s.auditPending);
     g.s.cash = 1e6; const t = shown(bank.html(ctx));
-    const fee = (() => { const x = Game.prototype; void x; const cash = g.s.cash; const copy = fakeCtx({ days: 25 }).g(); copy.s.skills.fintech = L; copy.s.auditNext = copy.s.hour; copy._audits(); copy.s.cash = 1e6; copy.resolveAudit('A'); return 1e6 - copy.s.cash + (cash - cash); })();
+    const fee = (() => { const c = fakeCtx({ days: 25 }).g(); c.s.skills.fintech = L; c.s.auditNext = c.s.hour; c._audits(); c.s.cash = 1e6; c.resolveAudit('A'); return 1e6 - c.s.cash; })(); // what the engine takes for the consultant
     assert.ok(t.includes(`Hire a consultant for ${ctx.money(fee)}`) && t.includes(`Costs ${ctx.money(fee)} once.`), `fintech ${L}`);
     assert.ok(t.includes(`stops for ${AUDIT.pauseHours / 24} days`) && t.includes(`${Math.round(AUDIT.passChance * 100)}% chance nobody notices.`));
     assert.ok(t.includes(`a ${ctx.money(g.auditFine())} fine`) && t.includes(`${Math.round((1 - AUDIT.velocityHit) * 100)}% slower for good`));
@@ -523,4 +526,83 @@ test('D7: the drawers stay short', () => {
   const t = fakeCtx({ days: 0 }); t.U.travel = { tab: 'path', sig: '' };
   const rows = travel.html(t).split('<li class="tv-d locked').slice(1).map((r) => shown('<li' + r.split('</li>')[0]));
   assert.ok(rows.length >= 10 && rows.every((r) => words(r) <= 8), rows[0]);
+});
+
+// ---------------------------------------------------------------------------------------------------------------------------------
+// D8. The Market's refusals are the engine's
+test('D8: storage is counted as the engine counts it (crates, trucks and open swaps), a full yard is said once, and the engine refuses the purchase at the same moment', () => {
+  const ctx = fakeCtx({ days: 12 }), g = ctx.g(), z = Math.max(...g.s.zones), other = g.s.zones.find((k) => k !== z);
+  ctx.U.zone = z; ctx.U.marketTab = 'lots'; g.s.cash = 1e7;
+  g.s.lots[z] = []; g._spawnLot(z, false); g._spawnLot(z, false); assert.ok(g.s.lots[z].length >= 2);
+  g.s.assets = g.s.assets.filter((a) => a.zone !== z); g.s.escrow = []; g.s.freight = [];
+  const cap = g.storeCap(z), SAID = 'Storage is full here, counting trucks and open swaps. Sell something or ship it out.';
+  while (g.roomIn(z) > 2) g.s.assets.push(g._mk(g.s, 'paperclip', { zone: z, basis: 1 }));
+  const page = () => market.html(ctx), said = (h) => h.split('Storage is full here').length - 1;
+  assert.equal(heldIn(g, z), cap - 2); assert.match(page(), new RegExp(`Storage here: ${cap - 2} of ${cap}</p>`)); assert.equal(said(page()), 0);
+  // a truck on its way takes a place, and the page counts it
+  const t = g._mk(g.s, 'paperclip', { zone: other, basis: 1 }); g.s.assets.push(t); const sh = g.ship([t.id], z); assert.ok(sh.ok, sh.msg);
+  assert.equal(g.roomIn(z), 1); assert.equal(heldIn(g, z), cap - 1); assert.equal(said(page()), 0, 'one place is left: not full');
+  // an open swap that asks for a crate holds a place for it (roomIn); the count the page used to make did not see it
+  g.s.escrow.push({ offerId: 'T1', assets: [], cash: 5, at: g.s.hour, offer: { want: { assets: [{ zone: z }] } } });
+  const seen = g.s.assets.filter((a) => a.zone === z).length + g.s.freight.reduce((n, f) => n + (f.to === z ? f.items.length : 0), 0) + g.s.escrow.reduce((n, e) => n + e.assets.filter((a) => a.zone === z).length, 0);
+  assert.equal(g.roomIn(z), 0); assert.equal(seen, cap - 1, 'the old count');
+  assert.equal(heldIn(g, z), cap, 'the page counts the promised crate as the engine does');
+  const html = page(), buy = [...html.matchAll(/<button[^>]*data-act="market-buy"[^>]*>/g)].map((m) => m[0]);
+  assert.match(html, new RegExp(`Storage here: ${cap} of ${cap} <span class="badge red">Full</span>`));
+  assert.equal(said(html), 1, 'said once, not under every lot'); assert.ok(html.includes(SAID)); assert.equal((html.match(/id="mk-full"/g) || []).length, 1);
+  assert.ok(buy.length >= 2 && buy.every((b) => /aria-disabled="true"/.test(b) && /aria-describedby="mk-full"/.test(b)), 'every Quick buy is shut and points at the sentence');
+  const lot = g.s.lots[z][0], refused = g.buyLot(z, lot.id);
+  assert.equal(refused.ok, false); assert.match(refused.msg, /^Storage is full here/, 'the engine refuses with the same stem');
+  // the swap is withdrawn: the place is free, the page and the engine agree again
+  g.s.escrow.pop();
+  assert.equal(said(page()), 0); const bought = g.buyLot(z, lot.id); assert.ok(bought.ok, bought.msg);
+  // the refusal for a broken crate is the sentence the buyer's card says
+  assert.ok(read('js/ui/drawers/market.js').includes('This buyer will not take a broken crate. Repair it first, or find a scrap buyer.'));
+});
+
+/** An Exchange with one classmate and a crate of mine ticked, the way tests/ui-market.test.mjs sets it. */
+function exchange() {
+  const ctx = fakeCtx({ days: 25 }), g = ctx.g(), S = ctx.S, acts = market.acts(ctx);
+  const mine = g.s.assets.find((a) => a.cond === 'ok') || g.s.assets[0];
+  const mk = (n, cls, zone, like = {}) => { const a = { id: 'NPC-' + n, cls, cond: 'ok', quality: 1, wear: 1, zone, ...like }; return { ...a, fmv: g.val(a) }; };
+  S.roster = () => [{ pid: 'NPC-1', handle: 'Practice Partner', perks: ['pro'], skills: { ops: 3, growth: 3, fintech: 3 }, npc: true, inventory: [mk(1, mine.cls, mine.zone, { quality: mine.quality, wear: mine.wear }), mk(2, 'bike', 1)], nw: 0 }];
+  S.propose = (args) => g.createOffer(args);
+  ctx.U.marketTab = 'exchange'; ctx.U.sel.add(mine.id);
+  acts['market-want']({ dataset: { id: 'NPC-1' } });
+  return { ctx, g, S, acts, mine };
+}
+test('D8: a swap out of the band both ways is blocked and the instructor is told, as the preview says; the figure is on the chip once', () => {
+  const { ctx, g, acts } = exchange();
+  acts['market-xfield']({ dataset: { k: 'wantCash' }, value: '1000000' });
+  const html = matrixHTML(ctx);
+  assert.match(html, /<b>Blocked\.<\/b> Instructors are told of blocked deals\. Balance it with cash or another crate\./);
+  assert.match(html, /\d+\.\d% from fair value, outside the limit of 40%/); assert.equal((html.match(/% from fair value/g) || []).length, 1, 'the figure is said once');
+  assert.doesNotMatch(html, /Extreme|Asymmetric|safe limit|% apart/);
+  const told = g.out.filter((m) => m.t === 'flag').length; ctx.dlg.open = () => {}; acts['market-send']({ dataset: {} });
+  assert.equal(g.out.filter((m) => m.t === 'flag').length, told + 1, 'and the engine does tell the instructor');
+  assert.equal(C.FMV_BAND, 0.4);
+});
+
+test('D8: a swap that is out of the band only on one reading says which, and tells no one', () => {
+  const { ctx, g } = exchange();
+  const real = g.checkOffer.bind(g), bad = { va: 100, vb: 300, variance: 2, ok: false, flagged: false };
+  g.checkOffer = (o, as, opt) => (opt && opt.landing === false ? { ...bad, ok: true } : as ? real(o, as, opt) : bad); // fair as the crates sit, out of the band where they would land
+  let html = matrixHTML(ctx);
+  assert.match(html, /<b>Blocked:<\/b> priced where you would hold the crates you ask for\. Balance it with cash or another crate\./); assert.doesNotMatch(html, /Instructors are told/);
+  g.checkOffer = (o, as, opt) => (opt && opt.landing === false ? { ...bad } : as ? real(o, as, opt) : bad); // out of the band as the crates sit, fair where they would land: a crate from a district you have not opened
+  html = matrixHTML(ctx);
+  assert.match(html, /<b>Cannot be sent:<\/b> a crate you ask for sits in a district you have not opened, so its owner values it far above what it is worth to you\. Ask for another crate\./); assert.doesNotMatch(html, /Instructors are told/);
+  g.checkOffer = real;
+  assert.doesNotMatch(matrixHTML(ctx), /Blocked|Cannot be sent/, 'a fair swap shows no verdict');
+});
+
+test('D8: the blocked dialog gives the two sides in dollars, and the percentage only when the message has none', () => {
+  const { ctx, S, acts } = exchange(); const opened = []; ctx.dlg.open = (h) => opened.push(h);
+  const chk = { va: 1200, vb: 1800, variance: 0.5 };
+  S.propose = () => ({ ok: false, msg: 'Blocked: this deal is 50% from fair value (limit 40%). Instructors are told of blocked deals. Balance it with cash or another crate.', chk });
+  acts['market-send']({ dataset: {} });
+  assert.match(opened.at(-1), /Your side \$1,200 against theirs \$1,800\./); assert.equal((opened.at(-1).match(/50%/g) || []).length, 1);
+  S.propose = () => ({ ok: false, msg: 'Cannot be sent: a crate you asked for sits in a district you have not opened.', chk });
+  acts['market-send']({ dataset: {} });
+  assert.match(opened.at(-1), /against theirs \$1,800 \(50% from fair value\)\./);
 });

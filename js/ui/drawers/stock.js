@@ -31,12 +31,9 @@ export function focusZone(ctx) {
   const open = ctx.g().s.zones, z = ctx.U.zone;
   return open.includes(z) ? z : Math.max(...open);
 }
-/** Crates in a district the way the engine counts storage: on the shelf, on the road to it, and in escrow there. */
+/** The places taken in a district, counted by the engine itself (roomIn): crates on the shelf, on a truck to it, and in an open swap, whether they are leaving or the swap asks for crates that would land here. */
 export function heldIn(g, zone) {
-  const s = g.s;
-  return s.assets.filter((a) => a.zone === zone).length
-    + s.freight.reduce((n, f) => n + (f.to === zone ? f.items.length : 0), 0)
-    + s.escrow.reduce((n, e) => n + e.assets.filter((a) => a.zone === zone).length, 0);
+  return g.storeCap(zone) - g.roomIn(zone);
 }
 /** "Your read" for an inspected crate or lot: { quality, fakeProb, confidence } -> one plain sentence, or null when it was never inspected. */
 export function beliefLine(ctx, b) {

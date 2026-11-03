@@ -46,7 +46,7 @@ function canSell(g, a, lead) {
   return { ok: true, fit };
 }
 const WHY = {
-  nofit: 'None of the crates you chose fit this buyer.', broken: 'This buyer will not take a broken crate: repair it, or find a scrap buyer.',
+  nofit: 'None of the crates you chose fit this buyer.', broken: 'This buyer will not take a broken crate. Repair it first, or find a scrap buyer.',
   fake: 'The only crate you chose is a known fake. Sell it to the pool.', nodemand: 'Nobody here wants what you chose.',
 };
 
@@ -146,8 +146,7 @@ function lotsHTML(ctx, z) {
     const bel = beliefLine(ctx, l.belief);
     const read = bel ? `<p class="small${bel.fake ? ' mkt-warnline' : ''}">${bel.fake ? '<span aria-hidden="true">⚠</span> ' : ''}${e(bel.text)}</p>` : (l.probed && l.probed.length ? `<p class="small mute">Looked over with ${l.probed.length} check${l.probed.length === 1 ? '' : 's'}, no conclusion yet.</p>` : '<p class="small mute">Not inspected yet.</p>');
     const warn = l.warn ? '<p class="callout bad small"><b><span aria-hidden="true">⚠</span> Counterfeit warning.</b> Your street sense flags this one as a fake.</p>' : '';
-    const short = s.cash < l.price, noRoom = full;
-    const reason = noRoom ? 'Storage is full here.' : short ? `You need ${m(l.price - s.cash)} more.` : '';
+    const short = s.cash < l.price, reason = !full && short ? `You need ${m(l.price - s.cash)} more.` : ''; // a full yard is said once, above the list
     return `<li class="mkt-lot${auction ? ' is-auction' : ''}">
       <span class="mkt-ic" aria-hidden="true">${def.icon}</span>
       <div class="mkt-body">
@@ -158,13 +157,13 @@ function lotsHTML(ctx, z) {
         <p class="tiny mute">Leaves in ${dur(l.exp - s.hour)}.</p>
         <div class="row">
           <button class="btn" data-act="market-look" data-lot="${l.id}" data-fid="mk-look-${l.id}">Look it over<span class="sr">: ${e(def.name)}</span></button>
-          <button class="btn ghost" data-act="market-buy" data-lot="${l.id}" data-fid="mk-buy-${l.id}"${reason ? ' aria-disabled="true"' : ''}${auction ? ' title="Quick buy bids for you at average skill, and a rival may outbid you."' : ''}>Quick buy about ${m(l.price)}<span class="sr">: ${e(def.name)}</span></button>
+          <button class="btn ghost" data-act="market-buy" data-lot="${l.id}" data-fid="mk-buy-${l.id}"${full || short ? ' aria-disabled="true"' : ''}${full ? ' aria-describedby="mk-full"' : ''}${auction ? ' title="Quick buy bids for you at average skill, and a rival may outbid you."' : ''}>Quick buy about ${m(l.price)}<span class="sr">: ${e(def.name)}</span></button>
         </div>
         ${reason ? `<p class="tiny red">${e(reason)}</p>` : ''}
       </div></li>`;
   };
   return `<p class="small mkt-qual"><span aria-hidden="true">🔎</span> ${e(qualityLine(Z))}</p>
-    <p class="tiny mute">Storage here: ${held} of ${cap}${full ? ' <span class="badge red">Full</span>' : ''}</p>
+    <p class="tiny mute">Storage here: ${held} of ${cap}${full ? ' <span class="badge red">Full</span>' : ''}</p>${full ? '\n    <p class="small red" id="mk-full">Storage is full here, counting trucks and open swaps. Sell something or ship it out.</p>' : ''}
     <ul class="mkt-list">${lots.map(card).join('') || '<li class="k-empty"><span class="k-empty-ic" aria-hidden="true">🧺</span><p>No lots right now.</p></li>'}</ul>`;
 }
 
@@ -193,6 +192,13 @@ function offerShape(ctx, x) {
   const want = (x.partner?.inventory || []).filter((a) => x.want.has(a.id));
   return { give: { assets: give, cash: +x.giveCash || 0, royalty: +x.roy > 0 ? { perDay: +x.roy, days: Math.max(1, +x.royDays || 10) } : null }, want: { assets: want, cash: +x.wantCash || 0 } };
 }
+/** Why a swap cannot be sent, in the words of the refusal the engine gives when it is sent (createOffer): out of the band as the crates sit and where they would land (blocked, and the instructor told);
+ *  out of it only as they sit (a crate asked for from a district you have not opened: nobody is told); out of it only where they would land. The figure is the check's, shown on the chip above. */
+function blockedWhy(g, o, chk) {
+  if (chk.flagged) return '<b>Blocked.</b> Instructors are told of blocked deals. Balance it with cash or another crate.';
+  if (g.checkOffer(o, 'offerer', { landing: false }).ok) return '<b>Blocked:</b> priced where you would hold the crates you ask for. Balance it with cash or another crate.';
+  return '<b>Cannot be sent:</b> a crate you ask for sits in a district you have not opened, so its owner values it far above what it is worth to you. Ask for another crate.';
+}
 export function matrixHTML(ctx) {
   const g = ctx.g(), m = ctx.money, e = ctx.esc, x = exState(ctx);
   if (!x.partner) return '';
@@ -203,8 +209,8 @@ export function matrixHTML(ctx) {
     <tr><th scope="row">Crates and cash</th><td>${side(o.give.assets, o.give.cash)}${o.give.royalty ? `<br>${m(o.give.royalty.perDay)} a day for ${o.give.royalty.days} days<br><span class="small mute">Counted at no more than a tenth of your net worth. What you cannot pay stays owed.</span>` : ''}</td><td>${side(o.want.assets, o.want.cash)}</td></tr>
     <tr><th scope="row">Fair value</th><td class="mono">${m(chk.va)}</td><td class="mono">${m(chk.vb)}</td></tr>
     <tr><th scope="row">Worth in the new owner's hands</th><td class="mono">${m(myP)} <span class="tiny mute">to you</span></td><td class="mono">${m(theirP)} <span class="tiny mute">to them</span></td></tr>
-    <tr><th scope="row">Fair-value check</th><td colspan="2"><span class="chip ${chk.ok ? 'good' : 'bad'}"><span aria-hidden="true">${chk.ok ? '✓' : '✕'}</span> ${(chk.variance * 100).toFixed(1)}% apart, ${chk.ok ? 'inside' : 'outside'} the safe limit of ${FMV_BAND * 100}%</span>
-      ${chk.ok ? '' : chk.flagged ? '<p class="small red"><b>Extreme Asymmetric Premium Warning:</b> a deal this lopsided is blocked and flagged to your instructor. Balance it with cash or another crate.</p>' : '<p class="small red"><b>Cannot be sent:</b> a crate you ask for sits in a district you have not opened, so it is worth less to you than to its owner. Ask for something else.</p>'}</td></tr></tbody></table>`;
+    <tr><th scope="row">Fair-value check</th><td colspan="2"><span class="chip ${chk.ok ? 'good' : 'bad'}"><span aria-hidden="true">${chk.ok ? '✓' : '✕'}</span> ${(chk.variance * 100).toFixed(1)}% from fair value, ${chk.ok ? 'inside' : 'outside'} the limit of ${FMV_BAND * 100}%</span>
+      ${chk.ok ? '' : `<p class="small red">${blockedWhy(g, o, chk)}</p>`}</td></tr></tbody></table>`;
 }
 function exchangeHTML(ctx) {
   const g = ctx.g(), S = ctx.S, U = ctx.U, e = ctx.esc, m = ctx.money, x = exState(ctx);
@@ -269,7 +275,7 @@ export default {
     const ensure = () => (U.exch ||= { want: new Set() });
     const blocked = (r) => {
       const c = r.chk;
-      ctx.dlg.open(`<h2 tabindex="-1" autofocus>Proposal blocked</h2><div class="callout bad">${ctx.esc(r.msg)}</div>${c ? `<p class="small mono">Your side ${ctx.money(c.va)} against theirs ${ctx.money(c.vb)} (${(c.variance * 100).toFixed(0)}% apart).</p>` : ''}<button class="btn" data-close autofocus>OK</button>`, { cls: 'alert', label: 'Proposal blocked' });
+      ctx.dlg.open(`<h2 tabindex="-1" autofocus>Proposal blocked</h2><div class="callout bad">${ctx.esc(r.msg)}</div>${c ? `<p class="small mono">Your side ${ctx.money(c.va)} against theirs ${ctx.money(c.vb)}${/\d%/.test(r.msg) ? '' : ` (${(c.variance * 100).toFixed(0)}% from fair value)`}.</p>` : ''}<button class="btn" data-close autofocus>OK</button>`, { cls: 'alert', label: 'Proposal blocked' });
       ctx.sfx?.buzz?.();
     };
     return {
