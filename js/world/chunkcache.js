@@ -59,7 +59,7 @@ export class ChunkCache {
   }
   /**
    * Is a stand-in wholly hidden behind exact chunks (scale key `sk`, cell size `s` world pixels) and stand-ins that are nearer in scale than it? Its area is cut by every one of them; when nothing of it is left it need
-   * not be drawn at all, which saves the blit (a scaled one is 0.3 ms on a CPU-drawn canvas) wherever the sets of two scales overlap. A chunk that is still fading in hides nothing. (This looked at five points of the
+   * not be drawn at all, which saves the blit (a scaled one is 0.3 ms on a CPU-drawn canvas) wherever the sets of two scales overlap. When it answers false, `this.parts` holds the pieces of the chunk's cell (world rectangles, flat quadruples) that nothing nearer covers: an opaque layer draws the whole chunk, a translucent one (the clouds) clips to them, or two stand-ins that overlap draw their shadow twice there. A chunk that is still fading in hides nothing. (This looked at five points of the
    * area and hid a chunk that exact chunks covered at those five: the rest of it was the sea.)
    */
   hidden(c, sk, s) {
@@ -160,7 +160,7 @@ export class ChunkCache {
     g.setTransform(1, 0, 0, 1, 0, 0);
     if (ss > 1) { const f = fin.g; f.setTransform(1, 0, 0, 1, 0, 0); f.clearRect(0, 0, CHUNK_FULL, CHUNK_FULL); f.imageSmoothingEnabled = true; if ('imageSmoothingQuality' in f) f.imageSmoothingQuality = 'high'; f.drawImage(work.c, 0, 0, S, S, 0, 0, CHUNK_FULL, CHUNK_FULL); }
     let sealed = false, empty = false;
-    if (!this.opaque && typeof fin.g.getImageData === 'function' && typeof fin.g.putImageData === 'function') { // (an opaque ground skips this: the readback was a third of a chunk's cost at full speed, and stalled the frame 55 to 125 ms when the canvas had to be flushed first)
+    if (!this.opaque && typeof fin.g.getImageData === 'function' && typeof fin.g.putImageData === 'function') { // (an opaque ground skips this: nothing to seal. The readback was also the first thing to flush the chunk's canvas, so the raster it waited for is paid by the next blit instead: what is saved is the sealing pass)
       try {
         const id = fin.g.getImageData(0, 0, CHUNK_FULL, CHUNK_FULL), n = CHUNK_FULL * CHUNK_FULL, d = id.data;
         if (this.scratchN !== n) { this.scratch = { a: new Uint8Array(n), b: new Uint8Array(n) }; this.scratchN = n; }

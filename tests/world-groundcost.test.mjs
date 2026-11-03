@@ -1,8 +1,8 @@
 // What a chunk of the V2 ground costs to make and how it is stamped while the exact ground is being made (js/world/chunkcache.js, js/world/groundcache.js, js/world/world.js). A profile of the live ground at four times
-// slower than a Mac (scripts/perf-moves.mjs) found three things that made the picture a mosaic for seconds after every move: every chunk was read back from its canvas to be sealed against cracks (a third of a chunk's cost
-// at full speed, and 55 to 125 ms stalls when the canvas had to be flushed first) although the V2 base paints every pixel opaque and has no crack to close; stand-ins magnified past 1.6 were drawn without smoothing (the blocky
-// stair-steps on cliff edges of a recording) on machines where a smoothed blit is nearly free; and the quality governor took a quarter off the canvas density because of frames that were slow only while the ground
-// was being made, which bakes all of it again. These tests pin each of them.
+// slower than a Mac (scripts/perf-moves.mjs) found three things that made the picture a mosaic for seconds after every move: every chunk was read back from its canvas to be sealed against cracks although the V2 base
+// paints every pixel opaque and has no crack to close (skipping it saves the sealing pass; the raster that the readback waited for is paid by the next blit of the chunk's canvas instead); stand-ins magnified past 1.6 were
+// drawn without smoothing (a saving only a CPU-drawn canvas needs); and the quality governor took a quarter off the canvas density because of frames that were slow only while the ground was being made, which bakes all
+// of it again. These tests pin each of them.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { recCtx } from './helpers/recctx.mjs';
@@ -47,7 +47,7 @@ test('a chunk of an opaque ground (the V2 base paints every pixel) is not read b
   assert.ok(L.reads > 0, 'the legacy ground, which has gaps between its shapes, is still sealed');
   const O = counting({ empty: true }), store = new ChunkCache('test.opaque', O.make); store.opaque = true;
   const c = store.bake(() => {}, 1.8, 0, 0, 2);
-  assert.equal(O.reads, 0, 'no getImageData: it stalled the page for 55 to 125 ms while the canvas was flushed, and was a third of a chunk\'s cost');
+  assert.equal(O.reads, 0, 'no getImageData: there is nothing to seal in a chunk that is opaque everywhere');
   assert.equal(c.empty, false, 'an opaque chunk is never a cell of open sea, whatever a readback would say: the sea is painted');
   assert.ok(c.img && c.bytes > 0, 'it is a bitmap like any other');
   assert.equal(c.sealed, false); assert.equal(store.stats.sealed, 0);

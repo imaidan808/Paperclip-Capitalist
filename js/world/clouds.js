@@ -257,7 +257,12 @@ function stampBanks(ctx, w, st, ids, tones, ps) {
       for (const c of L) {
         const k2 = a / c.a, dx = c.i * CHUNK_PX * k2 + e, dy = c.j * CHUNK_PX * k2 + f, sz = CHUNK_PX * k2;
         if (dx + sz + k2 < 0 || dy + sz + k2 < 0 || dx - k2 > cw || dy - k2 > ch) continue;
-        if (c.empty || store.hidden(c, sk, s)) { c.last = ++store.tick; continue; } store.use(c); ctx.drawImage(c.img, dx - k2 * 0.5, dy - k2 * 0.5, sz + k2, sz + k2);
+        if (c.empty || store.hidden(c, sk, s)) { c.last = ++store.tick; continue; } store.use(c);
+        // (a translucent chunk is drawn only where no nearer stand-in and no exact chunk is: its visible parts, from `hidden`, on whole pixels so that neighbours share their edges. Two stand-ins of different scales that
+        // overlapped drew the shadow and the veil twice there: the faint dark rectangles over a cliff)
+        const P = store.parts; ctx.save(); ctx.beginPath();
+        for (let q = 0; q < P.length; q += 4) { const px0 = Math.round(P[q] * a + e), py0 = Math.round(P[q + 1] * a + f), px1 = Math.round(P[q + 2] * a + e), py1 = Math.round(P[q + 3] * a + f); if (px1 > px0 && py1 > py0) ctx.rect(px0, py0, px1 - px0, py1 - py0); }
+        ctx.clip(); ctx.drawImage(c.img, dx - k2 * 0.5, dy - k2 * 0.5, sz + k2, sz + k2); ctx.restore();
       }
       ctx.restore(); store.stats.stale += L.length;
     }
