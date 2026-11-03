@@ -164,7 +164,7 @@ test('D1: what a district opens is a rule of the district, said once: the Bank a
   assert.ok(Object.values(C.UPGRADES).every((u) => u.zone === 5) && C.CLIENTS.smb.zone === 5 && C.CLIENTS.corp.zone === 5);
   { const h = fresh(); h.s.cash = 5000;
     assert.match(h.buyUpgrade('freight').msg, /Unlocks at Metro Hub/); assert.match(h.acquireClient('smb').msg, /Not available in your districts yet/);
-    h.s.cash = MIL.m1 * 2; h._unlock(); assert.match(h.s.news.find((n) => n.milestone === 1).text, /Managers, clients and the Commercial Bank are open/);
+    h.s.cash = MIL.m1 * 2; h._unlock(); assert.match(h.s.news.find((n) => n.milestone === 1).text, /managers, clients and the (?:Commercial )?Bank are open/i); // (the milestone note is the messages branch's to word: either wording says the same three things)
     assert.equal(h.buyUpgrade('freight').ok, true); assert.doesNotMatch(h.acquireClient('smb').msg, /Not available in your districts yet/, 'Metro Hub opens the clients'); }
   assert.ok(C.CLIENTS.ent.zone === 13 && C.CLIENTS.ent.needs === 'm3', 'enterprise clients are Corporate Valley\'s');
   for (const id of [5, 9, 13]) assert.ok(T.rewardPhrases(id).every((t) => !/open|begin|unlock/i.test(t)), 'the reward lists what it gives, not what it opens');
