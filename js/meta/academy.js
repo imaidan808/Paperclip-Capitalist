@@ -214,7 +214,7 @@ export const ACADEMY = [
   // ------------------------------------------------------------------------------------------------------------------ 4
   {
     id: 'm04', title: 'Haggle 101', icon: '🤝', zone: 2, concept: 'anchoring', minutes: 2.5,
-    intro: "Flea Market Row, Saturday. Every price is a first offer. Two radios to sell, three people circling. What is the first number worth?",
+    intro: "Flea Market Row, Saturday. Every price is a first offer. Two radios to sell, three people circling. The first number you name is worth money.",
     setup: {
       clock: 'paused', cash: 0, assets: [{ cls: 'radio' }, { cls: 'radio' }],
       leads: [
@@ -264,7 +264,7 @@ export const ACADEMY = [
   // ------------------------------------------------------------------------------------------------------------------ 5
   {
     id: 'm05', title: 'Fix It', icon: '🔧', zone: 7, concept: 'repair-roi', minutes: 2,
-    intro: "Auto Row, repair bays ringing. A dead-transmission van sits in your yard, worth 30% of a working one. Is the fix worth its price?",
+    intro: "Auto Row, repair bays ringing. A van with a dead transmission sits in your yard, worth 30% of a working one. The fix has a price.",
     setup: {
       clock: 'paused', cash: 600, assets: [{ cls: 'van', cond: 'broken', quality: 1 }],
       leads: [{ id: 'fleet-buyer', seg: 'smelog', budget: 5200 }],
@@ -313,7 +313,7 @@ export const ACADEMY = [
   // ------------------------------------------------------------------------------------------------------------------ 6
   {
     id: 'm06', title: 'Cash Is Not Sleeping', icon: '💰', zone: 5, concept: 'working-capital', minutes: 2,
-    intro: "Metro Hub. You hold $620 in cash: safe, and it earns nothing. A plot is open for your first manager. Can you hire one and keep it fed?",
+    intro: "Metro Hub. You hold $620 in cash: safe, and it earns nothing. A plot is open for your first manager. Hire one and keep it fed.",
     setup: {
       clock: 'paused', cash: 620, assets: [], leads: [], lots: [], zones: [1, 2, 3, 4, 5],
       features: ['stock', 'market', 'codex', 'quests', 'crew'], skills: { ops: 2, growth: 2, fintech: 2 }, cohort: { ghosts: 200 },
@@ -360,7 +360,7 @@ export const ACADEMY = [
   // ------------------------------------------------------------------------------------------------------------------ 7
   {
     id: 'm07', title: "Other People's Money", icon: '🏦', zone: 5, concept: 'leverage-risk', minutes: 2.5,
-    intro: "The Metro Hub bank is open. You have $400 and four sneaker lots priced a third under their value. You can afford one. How much debt is smart?",
+    intro: "The Metro Hub bank is open. You have $400 and four sneaker lots priced a third under their value. You can afford one. The bank will lend more.",
     setup: {
       clock: 'paused', cash: 400, assets: [], leads: [],
       lots: [
@@ -416,7 +416,7 @@ export const ACADEMY = [
   // ------------------------------------------------------------------------------------------------------------------ 8
   {
     id: 'm08', title: "Don't Follow the Herd", icon: '🧭', zone: 5, concept: 'creativity-multiplier', minutes: 2,
-    intro: "Metro Hub, two lots of limited sneakers. Most rivals pitched Loft 9 in the last two days. A pop-up stall around the corner has almost no pitches. Does a crowd help or hurt?",
+    intro: "Metro Hub, two lots of limited sneakers. Most rivals pitched Loft 9 in the last two days. A pop-up stall around the corner has almost no pitches.",
     setup: {
       clock: 'paused', cash: 0, assets: [{ cls: 'sneakers' }, { cls: 'sneakers' }],
       leads: [

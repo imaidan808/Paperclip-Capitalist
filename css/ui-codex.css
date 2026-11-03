@@ -27,6 +27,14 @@ button.cx-card { cursor: pointer; } button.cx-card:hover { border-color: var(--g
 .cx-head h3 { margin: 0; font-size: 1.25rem; text-transform: none; overflow-wrap: anywhere; } #cx-t:focus { outline: none; }
 .cx-meta { margin: .3rem 0 0; display: flex; gap: .3rem; flex-wrap: wrap; }
 .cx-sum { font-size: 1.02rem; border-left: 4px solid var(--cyan); padding-left: .7rem; }
+/* a page opens on its summary; the explanation, the math and the common mistakes fold under it (copy pass: words later, on request) */
+.cx-more { border: 1px solid var(--line); background: var(--panel2); margin: .45rem 0; }
+.cx-more > summary { cursor: pointer; padding: .5rem .75rem; font-weight: 700; font-size: .92rem; list-style: none; display: flex; align-items: center; gap: .5rem; }
+.cx-more > summary::-webkit-details-marker { display: none; }
+.cx-more > summary::before { content: "+"; display: inline-grid; place-items: center; flex: none; width: 1.1rem; height: 1.1rem; border: 1px solid var(--cyan); color: var(--cyan); font: 700 .8rem/1 ui-monospace, Menlo, monospace; }
+.cx-more[open] > summary::before { content: "\2212"; }
+.cx-more > :not(summary) { margin-inline: .75rem; } .cx-more[open] { padding-bottom: .55rem; } .cx-more .cx-ex { margin-inline: .75rem; }
+
 .cx-formula { background: var(--bg); border: 1px solid var(--line); border-left: 4px solid var(--cyan); padding: .55rem .75rem; white-space: pre-wrap; overflow-x: auto; color: var(--cyan); margin: .4rem 0; font-size: .88rem; }
 .cx-sec h4 { margin: .9rem 0 .3rem; text-transform: uppercase; letter-spacing: .06em; font-size: .76rem; color: var(--mute); }
 .cx-sec ul, .cx-sec ol { margin: .25rem 0; padding-left: 1.3rem; } .cx-sec li { margin: .2rem 0; overflow-wrap: anywhere; }

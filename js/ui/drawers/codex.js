@@ -1,5 +1,5 @@
 // Codex drawer (docs/V2_DESIGN.md sections 8 and 12): the concepts the player has unlocked, grouped by category with a search box; locked ones are
-// silhouettes that say how to unlock them. Each opens to its full page (summary, body, formula, worked example, common mistakes, a "Try it" prompt and
+// silhouettes that say how to unlock them. Each opens on its summary, with the explanation, the math (formula and worked example) and the common mistakes folded under it, then a "Try it" prompt and
 // related pages). A second tab lists the ten Academy lessons with a Replay button. Contract: see the header of ../shell.js.
 //
 // UI state on ctx.U: codexTab ('concepts' | 'academy'), codexCat, codexQ, codexOpenId, codexSeen (Set of ids the player has been shown),
@@ -114,10 +114,9 @@ export function entryHTML(ctx, d) {
   return `<div class="cx-page"><button class="btn sm ghost" data-act="codex-back" data-fid="cx-back">&larr; All concepts</button>
     <header class="cx-head"><span class="cx-ic big" aria-hidden="true">${esc(d.icon)}</span><div><h3 id="cx-t" tabindex="-1">${esc(d.title)}</h3><p class="cx-meta"><span class="chip">${esc(d.category)}</span> ${zoneChip(d)}</p></div></header>
     <p class="cx-sum">${esc(d.summary)}</p>
-    ${(d.body || []).map((p) => `<p>${esc(p)}</p>`).join('')}
-    ${d.formula ? `<pre class="cx-formula mono" aria-label="Formula">${esc(d.formula)}</pre>` : ''}
-    ${ex ? `<section class="cx-sec cx-ex" aria-label="Worked example"><h4>Worked example</h4><p>${esc(ex.setup)}</p><ol>${(ex.steps || []).map((s) => `<li>${esc(s)}</li>`).join('')}</ol><p class="cx-result"><b>Result:</b> ${esc(ex.result)}</p></section>` : ''}
-    ${(d.mistakes || []).length ? `<section class="cx-sec"><h4>Common mistakes</h4><ul>${d.mistakes.map((m) => `<li>${esc(m)}</li>`).join('')}</ul></section>` : ''}
+    ${(d.body || []).length ? `<details class="cx-more"><summary>Explanation</summary>${d.body.map((p) => `<p>${esc(p)}</p>`).join('')}</details>` : ''}
+    ${d.formula || ex ? `<details class="cx-more"><summary>The math</summary>${d.formula ? `<pre class="cx-formula mono" aria-label="Formula">${esc(d.formula)}</pre>` : ''}${ex ? `<section class="cx-sec cx-ex" aria-label="Worked example"><h4>Worked example</h4><p>${esc(ex.setup)}</p><ol>${(ex.steps || []).map((s) => `<li>${esc(s)}</li>`).join('')}</ol><p class="cx-result"><b>Result:</b> ${esc(ex.result)}</p></section>` : ''}</details>` : ''}
+    ${(d.mistakes || []).length ? `<details class="cx-more"><summary>Common mistakes</summary><ul>${d.mistakes.map((m) => `<li>${esc(m)}</li>`).join('')}</ul></details>` : ''}
     ${d.tryIt ? `<section class="cx-sec callout cx-try"><h4>Try it</h4><p>${esc(d.tryIt)}</p></section>` : ''}
     ${relatedHTML(ctx, d)}</div>`;
 }
