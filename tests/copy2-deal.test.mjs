@@ -7,6 +7,7 @@
 //   D6  the Fix stage: the bill, the 60% the Assist adds to the zone, the dial tone's offer
 //   D7  the result: one notation for a multiplier, headlines that do not repeat the sheet's title, the reveal's flaw count, the figures and lessons the result prints
 //   D8  the voice: no filler, no question and no exclamation in what the game says (a buyer's own lines are the character's)
+//   D9  the refusals the engine owns (a fraud you verified, a full yard) are said in the engine's words, once
 // Run: node --test tests/copy2-deal.test.mjs
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -513,4 +514,19 @@ test('D8: what the game says (advice, lessons, evidence, the bench, the summarie
   // a buyer's own lines are theirs (they ask, exclaim, say "Let's"), but the stage that frames them asks and exclaims nothing
   const close = UI.closeHTML({ plan: { kind: 'sell' }, view: H.view(H.act(H.create({ role: 'sell', fair: 10, seed: 1 }), { type: 'anchor', level: 'fair' }).state), stageDone: false });
   assert.ok(!/[?!]/.test(visible(close)), 'the Close stage itself asks and exclaims nothing');
+});
+
+// =====================================================================================================================================================
+// D9: the refusals the engine owns
+// =====================================================================================================================================================
+test('D9: a fraud you verified and a full yard are refused in the engine\'s own words, and the room says a refusal once', () => {
+  const FRAUD = 'Fraud confirmed. Skip this buyer.', FULL = 'Storage is full here, counting trucks and open swaps. Sell something or ship it out.';
+  const g = world(['native', 'second']), spec = sellSpec(g); leadOf(g, spec.leadId).scam = true;
+  const run = start(g, spec), checked = run.verify(); assert.ok(checked.ok); assert.equal(checked.msg, FRAUD, 'it is the engine\'s own sentence'); assert.equal(run.plan.blocker, FRAUD);
+  const h = sheet(run); assert.equal(h.split(FRAUD).length - 1, 1, 'the sheet says it once: not by the callout and again by the blocker'); assert.ok(/role="alert">Fraud confirmed\./.test(h), 'and an alert says it to a screen reader');
+  const g2 = world(['grad', 'roots']); g2.storeCap = () => 0;
+  const plan = D.planFor(g2, fixedLot(g2)); assert.equal(plan.blocker, FULL);
+  assert.equal(visible(sheet(start(g2, fixedLot(g2)))).split(FULL).length - 1, 1, 'a full yard is said once');
+  for (const f of ['js/deal.js', 'js/ui/deal.js']) { const src = read(f); assert.ok(src.includes(FRAUD), `${f} says the engine's fraud refusal`); assert.ok(!/Extreme Asymmetric|will not take a broken asset/.test(src), `${f} names no refusal the engine has reworded`); }
+  assert.ok(read('js/deal.js').includes(FULL), 'and the planner says the engine\'s full-yard refusal');
 });

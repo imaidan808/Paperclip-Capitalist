@@ -111,8 +111,9 @@ export function readHTML(m) {
 export function pitchHTML(m) {
   const v = m.view, p = m.plan;
   const head = `<div class="lotcard"><span class="ic" aria-hidden="true">${p.asset.icon}</span><div><b>${esc(p.asset.name)}</b><div class="small mute">${esc(p.quote.fitLabel)} (${pc(p.quote.fit)})</div></div></div>`;
-  const verify = p.canVerify && !p.verified ? `<div class="callout warn"><b>Scam magnet.</b> Some buyers are frauds. <button class="btn sm" data-deal="verify" data-snd data-fid="vf" title="The check costs 1% of their budget.">Verify this buyer (${money(p.verifyCost)})</button></div>` : p.verified ? `<div class="callout ${p.scam ? 'bad' : 'good'}">${p.scam ? 'Fraud confirmed. Skip this buyer.' : 'Verified: this buyer is genuine.'}</div>` : '';
-  if (!v) return panel(m, 'pitch', 'Pitch', `${head}${verify}${m.stageDone ? quickNote(m) : ''}`);
+  const fraud = !!(p.verified && p.scam), pm = fraud ? { ...m, blocker: '' } : m; // a confirmed fraud is said once, by its own callout, and not again by the stage's blocker
+  const verify = p.canVerify && !p.verified ? `<div class="callout warn"><b>Scam magnet.</b> Some buyers are frauds. <button class="btn sm" data-deal="verify" data-snd data-fid="vf" title="The check costs 1% of their budget.">Verify this buyer (${money(p.verifyCost)})</button></div>` : p.verified ? `<div class="callout ${p.scam ? 'bad' : 'good'}"${p.scam ? ' role="alert"' : ''}>${p.scam ? 'Fraud confirmed. Skip this buyer.' : 'Verified: this buyer is genuine.'}</div>` : '';
+  if (!v) return panel(pm, 'pitch', 'Pitch', `${head}${verify}${m.stageDone ? quickNote(m) : ''}`);
   const feat = Object.fromEntries(v.angles.map((a) => [a, 0]));
   for (const f of v.asset.features) feat[f.angle] = Math.max(feat[f.angle], f.strength);
   const hinted = new Set([...(v.likely ? v.likely.angles : [])]), sel = m.pick || [], lock = m.stageDone || !!m.blocker;
@@ -126,7 +127,7 @@ export function pitchHTML(m) {
   const needs = v.buyer.needs.length ? `<p class="small mute">Looking for: ${v.buyer.needs.map((t) => `<span class="chip${t === p.need ? ' warn' : ''}"${t === p.need ? ' title="Needed now: a crate with this tag is a perfect fit, and one without it halves the fit."' : ''}>${esc(t)}</span>`).join(' ')}</p>` : '';
   const out = v.outcome ? `<div class="callout ${v.outcome.fitDelta >= 0.05 ? 'good' : v.outcome.fitDelta <= -0.03 ? 'warn' : ''}" title="Fit stays within 0.30 either way, and keenness between 0.85x and 1.20x."><b>${v.outcome.fitDelta >= 0 ? '+' : ''}${v.outcome.fitDelta.toFixed(2)} fit.</b> The buyer is ${v.outcome.mult.toFixed(2)}x as keen.</div>` : '';
   const go = m.stageDone ? '' : `<div class="row"><button class="btn" data-deal="pitch-go" data-fid="pg" ${sel.length === 2 && !m.blocker ? '' : 'disabled'}>${sel.length === 2 ? `Pitch ${ANGLE[sel[0]][1]} and ${ANGLE[sel[1]][1]}` : `Pick ${2 - sel.length} more angle${sel.length === 1 ? '' : 's'}`}</button></div>`;
-  return panel(m, 'pitch', 'Pitch',
+  return panel(pm, 'pitch', 'Pitch',
     `${head}${verify}${needs}${hints}<div class="angles" role="group" aria-label="Pitch angles, choose two">${btns}</div>${m.stageDone ? '' : advice(m)}${out}${quickNote(m)}${go}`);
 }
 
