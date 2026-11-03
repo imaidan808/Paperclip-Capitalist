@@ -345,7 +345,7 @@ export class Game {
     if (this.s.hour >= TOTAL_HOURS && !this.s.over) this._finish();
     return n;
   }
-  /** The clearing horizon. An exit that has not settled by now settles at the bell (the run must not end with its proceeds parked for ever); otherwise the score is struck here. */
+  /** The bell on day 90. An exit that has not settled by now settles at the bell (the run must not end with its proceeds parked for ever); otherwise the score is struck here. */
   _finish() {
     const s = this.s;
     if (s.exiting) this._finishExit();
@@ -851,7 +851,7 @@ export class Game {
   repairMultFor(zone) { return (1 - (ZONES[zone].rules.repair || 0)) * (zone > 4 ? this.mods().repair : 1) * this.P.repairMult * this.B.repairMult; }
   repairQuote(assetId, deal) {
     const a = this.s.assets.find((x) => x.id === assetId);
-    if (!a) return fail('No such asset.');
+    if (!a) return fail('No such crate.');
     const def = ASSETS[a.cls];
     if (a.cond !== 'broken' || !def.repair) return fail('Nothing to repair.');
     const ops = this.lvl('ops');
@@ -1659,7 +1659,7 @@ export class Game {
       skills: { ...s.skills },
     };
     // Three looks, and only the first may speak in numbers or reach the instructor. (1) The crates as the founder DESCRIBES them, each where it sits: what they could work out for themselves. A deal that is off by
-    // more than the band here is the Extreme Asymmetric Premium Warning and is flagged. (2) The same, with the crates asked for landing where this founder can hold them: a refusal that says so, never a flag
+    // more than the band here is blocked and flagged. (2) The same, with the crates asked for landing where this founder can hold them: a refusal that says so, never a flag
     // (an honest bid for a crate from a district they cannot enter is not misconduct). (3) The hidden truth of the founder's own crates: a counterfeit they have never inspected is refused with no number and no
     // flag, because a refusal that quoted what the crate is really worth would read its truth out to the one who holds it, for free.
     const asked = { ...offer, give: { ...offer.give, assets: assets.map((a) => this._described(a)) } };

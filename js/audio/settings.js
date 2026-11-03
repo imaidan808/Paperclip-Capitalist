@@ -221,12 +221,12 @@ const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '
 export const VERY_QUIET = 25;
 /** What is true about the sound right now, in words: it never says "on" for a state in which nothing can be heard. */
 export function statusText(a, state) {
-  if (state === 'unsupported') return 'This browser cannot play sound; everything in the game still works.';
+  if (state === 'unsupported') return 'This browser cannot play sound. The game works without it.';
   if (a.mute) return 'Sound is off.';
-  if (a.master <= 0) return 'Volume is at 0: you will hear nothing.';
-  if (!a.ui && !a.game) return 'Interface sounds and game sounds are both off: you will hear nothing.';
-  const quiet = a.master < VERY_QUIET ? ` The volume is very quiet (${a.master} percent): raise it if you hear little.` : '';
-  const on = (state === 'running' ? 'Sound is on. Your browser started audio after your first click.' : 'Sound is on. Your browser starts audio after your first click.') + quiet;
+  if (a.master <= 0) return 'Volume is at 0.';
+  if (!a.ui && !a.game) return 'Interface sounds and game sounds are both off.';
+  const quiet = a.master < VERY_QUIET ? ` The volume is very quiet (${a.master} percent).` : '';
+  const on = (state === 'running' ? 'Sound is on.' : 'Sound is on. Your browser starts audio after your first click.') + quiet;
   return a.game ? (a.ui ? on : on + ' Interface sounds are off.') : on + ' Game sounds are off: coins and alerts are silent.';
 }
 /** The helper line beside a row: why it is off, or what it does. */
@@ -235,7 +235,7 @@ function note(key, a) {
   if (key === 'ui' || key === 'game' || key === 'world') return muted + (key === 'world' && a.quiet ? ' Off in Classroom.' : '');
   if (a.quiet) return 'Off in Classroom.';
   if (a.mute) return 'Muted.';
-  return { clock: '', amb: 'Off by default. A quiet bed for each district.', dial: 'Hear where the marker is while you time a repair. Off by default.' }[key] ?? '';
+  return '';
 }
 /** Every control's state, in one place, so the markup and the in-place update below can never disagree. */
 function controls(a, state) {
@@ -262,7 +262,7 @@ export function audioSettingsHTML(a, state = 'locked') {
   const preset = C['s-preset'].value;
   const opt = (v) => `<option value="${v}"${preset === v ? ' selected' : ''}>${PRESET_NAMES[v]}</option>`;
   const hint = (id) => `<span class="small mute" id="${id}-h" data-h="${id}">${esc(noteOf(id, a))}</span>`;
-  const row = (id, key, label) => `<p class="snd-row"><label><input type="checkbox" id="${id}" data-snd="${key}"${chk(id)}${dis(id)} aria-describedby="${id}-h"> ${label}</label> ${hint(id)}</p>`;
+  const row = (id, key, label, tip) => `<p class="snd-row"><label title="${esc(tip)}"><input type="checkbox" id="${id}" data-snd="${key}"${chk(id)}${dis(id)} aria-describedby="${id}-h" title="${esc(tip)}"> ${label}</label> ${hint(id)}</p>`;
   return `<fieldset class="snd gap"><legend class="h3">Sound</legend>
     <div class="grid g2">
       <div><label for="s-preset">Sound preset</label><select id="s-preset" data-snd="preset"${dis('s-preset')}>${['full', 'classroom', 'interface', 'off'].map(opt).join('')}${preset === 'custom' ? '<option value="custom" selected>Custom (your own mix)</option>' : ''}</select></div>
@@ -270,15 +270,15 @@ export function audioSettingsHTML(a, state = 'locked') {
     </div>
     <p class="snd-test"><button type="button" class="btn ghost sm" id="s-sample" data-snd-act="sample"${dis('s-sample')}>Play a test sound</button> <span id="s-status" role="status" class="small mute">${esc(statusText(a, state))}</span></p>
     <p class="snd-row"><label><input type="checkbox" id="s-mute" data-snd="mute"${chk('s-mute')}${dis('s-mute')}> Mute all sound</label></p>
-    ${row('s-ui', 'ui', 'Interface sounds (clicks, panels, dialogs)')}
-    ${row('s-game', 'game', 'Game sounds (sales, coins, alerts, the Deal Room)')}
-    ${row('s-world', 'worldTicks', 'World sounds (hover ticks and footsteps)')}
-    ${row('s-clock', 'clockSounds', "Clock sounds (a buyer arriving, a new day, your managers' coins)")}
-    ${row('s-amb', 'ambient', 'Background ambience')}
+    ${row('s-ui', 'ui', 'Interface sounds', 'Clicks, panels and dialogs.')}
+    ${row('s-game', 'game', 'Game sounds', 'Sales, coins, alerts and the Deal Room.')}
+    ${row('s-world', 'worldTicks', 'World sounds', 'Hover ticks and footsteps.')}
+    ${row('s-clock', 'clockSounds', 'Clock sounds', "A buyer arriving, a new day, your managers' coins.")}
+    ${row('s-amb', 'ambient', 'Background ambience', 'A quiet bed for each district. Off by default.')}
     <p class="snd-row"><label for="s-ambvol">Ambience level</label> <input id="s-ambvol" type="range" min="0" max="100" step="5" value="${a.ambientLevel}" data-snd="ambientLevel" aria-valuetext="${a.ambientLevel} percent"${dis('s-ambvol')}></p>
-    ${row('s-dial', 'dial', 'Repair dial tone')}
+    ${row('s-dial', 'dial', 'Repair dial tone', 'Hear where the marker is while you time a repair. Off by default.')}
     <p class="snd-row"><label><input type="checkbox" id="s-mkey" data-snd="mKey"${chk('s-mkey')}${dis('s-mkey')}> Keyboard shortcut: M mutes and unmutes</label></p>
-    <p class="small mute">Sound is made in your browser. Nothing is downloaded and nothing is recorded. If you hear nothing, check your device's volume and its silent switch: the browser can be on while the device is silent.</p>
+    <details class="cx-more"><summary>About sound</summary><p class="small">Sound is made in your browser. Nothing is downloaded or recorded. If you hear nothing, check your device's volume and its silent switch.</p></details>
   </fieldset>`;
 }
 /** Bring the controls already on the page to the settings, without replacing a single element: the control with the cursor keeps it (replacing the section dropped the cursor to the page). */
