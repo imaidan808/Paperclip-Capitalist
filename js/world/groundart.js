@@ -9,7 +9,7 @@ import { mix, clamp } from './iso.js';
 import { smooth as smoothstep, vnoise, LATTICE, hz } from './noise.js';
 import { bakeBase } from './rasterbase.js';
 import { surface } from './gfx.js';
-import { drawStage, paintFringe, tonesOf, tuft, gridRange, rrect } from './groundmat.js';
+import { drawStage, paintFringe, tonesOf, tuft, TUFT_TONES, gridRange, rrect } from './groundmat.js';
 import { plantTree, bush, rock } from './nature.js';
 import { decalV2, warmVeil } from './decalart.js';
 import { VEIL, liftGround } from './terrainfield.js';
@@ -39,7 +39,7 @@ function drawShore(ctx, view, env, w, a) {
 }
 registerLayer('shore', drawShore, 'inherit', () => 1);
 // ---------------------------------------------------------------- the terrain's dressing: grass, flowers, bushes, rocks and trees
-const TUFT = [GRASS.hi, GRASS.shade, GRASS.deep, GRASS.coolShade];
+const TUFT = TUFT_TONES;
 const zOn = (gx, gy) => { const { ZV, VW } = LAYOUT, x = clamp(gx, 0, GW - 1e-6), y = clamp(gy, 0, GH - 1e-6), i = x | 0, j = y | 0, fx = x - i, fy = y - j; return (ZV[j * VW + i] * (1 - fx) + ZV[j * VW + i + 1] * fx) * (1 - fy) + (ZV[(j + 1) * VW + i] * (1 - fx) + ZV[(j + 1) * VW + i + 1] * fx) * fy; };
 const BUSH_GREENS = [GRASS.mid, GRASS.lawn, GRASS.light, GRASS.lawnShade], ROCK_TONES = [ROCK.light, ROCKHI.light, ROCK.mid];
 /**
@@ -55,7 +55,7 @@ export function dressingOf(i, j, grove) {
 }
 /**
  * `terrain`: the grass laid on the baked ground, near and close: clumps of blades in three greens and the odd cluster of flowers, never on a block, a slope or within a tile and a half of the coast. The bushes, rocks and
- * trees of the meadows are `drawPlants`, below. Baked with the chunk, so a pan draws none of it. At most 1,500 grass marks in a chunk.
+ * trees of the meadows are `drawPlants`, below. Baked with the chunk, so a pan draws none of it. At most 750 blades of grass in a chunk (1,500 units, two a blade).
  */
 function drawTerrain(ctx, view, env, w, a) {
   const ch = a && a.chunk, lod = env.lod ? env.lod.detail : null; if (!ch || !lod || lod[2] < 0.04) return;
@@ -70,7 +70,7 @@ function drawTerrain(ctx, view, env, w, a) {
       if (hh > 0.86 - 0.06 * close) { // a few flowers in a small cluster
         ctx.fillStyle = [BLOOM.white, BLOOM.butter, BLOOM.pink, BLOOM.lilac][(hh * 97 | 0) % 4]; ctx.beginPath(); for (let f = 0; f < 3; f++) { const fx = x + (hz(i, j, 20 + f) - 0.5) * 7, fy = y + (hz(i, j, 30 + f) - 0.5) * 3.5; ctx.moveTo(fx + 1.5, fy); ctx.arc(fx, fy, 1.5, 0, 6.2832); } ctx.fill(); budget -= 3; continue;
       }
-      ctx.fillStyle = TUFT[(hh * 31 | 0) % 4]; ctx.beginPath(); tuft(ctx, x, y, hh); if (hh > 0.4) tuft(ctx, x + 4.2 + hh * 2, y + 1.4, 1 - hh, 4 + hh * 2.5); ctx.fill(); budget -= 6; // a clump: one tuft and, beside it, a smaller one
+      ctx.fillStyle = TUFT[(hh * 31 | 0) % 4]; ctx.beginPath(); let blades = tuft(ctx, x, y, hh); if (hh > 0.4) blades += tuft(ctx, x + 4.2 + hh * 2, y + 1.4, 1 - hh, 4 + hh * 2.5); ctx.fill(); budget -= 2 * blades; // a clump: one tuft and, beside it, a smaller one; two units a blade, as three blades cost six when a tuft was three
     }
     ctx.globalAlpha = 1;
   }

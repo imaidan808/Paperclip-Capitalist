@@ -1,4 +1,4 @@
-// The cloud bank's painting and its layer (js/world/cloudpaint.js, cloudcache.js, clouds.js): a lobe is a lit dome and the bank is its lobes under one thin contour with a cel-shaded underside, the colours of the hour (judge F5:
+// The cloud bank's painting and its layer (js/world/cloudpaint.js, cloudcache.js, clouds.js): a lobe is a flat disc of its tier's pale tone (the big ones with a flat rim) over a cel-shaded underside, no gradient, glint or outline (tests/world-nature-style.test.mjs holds that), the colours of the hour (judge F5:
 // a night cloud is a quiet blue-grey by value, not purple foam), the soft shadow on the land, the dissolve, the padlock, the layer that bakes the banks into chunks and stamps them, and the veil. The geometry the rules hold
 // (coverage, structure, cost) is tests/world-cloudbank.test.mjs; the painted bank's shape (radii, windows, cover) is tests/world-cloudform.test.mjs.
 import test from 'node:test';
@@ -8,7 +8,7 @@ import { DIST, LAYOUT } from '../js/world/layout.js';
 import { fogged, luma, mix, rgb, gray } from '../js/world/iso.js';
 import { veiled, CLOUD, GRADE } from '../js/world/palette.js';
 import { FLAGS, setFlag, slotFor, runLayer } from '../js/world/stack.js';
-import { bankOf, bankTones, paintLobes, paintCloudShadow, lobeLift, dissolveFx, fadeFx, LIFT, DOME, SHADES } from '../js/world/cloudpaint.js';
+import { bankOf, bankTones, paintLobes, paintCloudShadow, lobeLift, dissolveFx, fadeFx, LIFT, RIM, SHADES } from '../js/world/cloudpaint.js';
 import { scaleAt, skyCloudAt, SKY_CELL, paintPadlock, COARSE_SCALE, FINE_SCALE, REVEAL_MS, ratioFor, RATIOS, cloudCap, lockedMask, shrinkClouds, cloudStats } from '../js/world/clouds.js';
 import { CloudCache, MARGIN_PX } from '../js/world/cloudcache.js';
 import { CHUNK_PX, snapTranslation, chunksTouched } from '../js/world/chunks.js';
@@ -43,7 +43,7 @@ test('F5: at night the cloud is a quiet blue-grey after the grade\'s multiply: l
     assert.ok(sat(nb) <= 0.3, `tier ${row}: the night body ${nb} has saturation ${sat(nb).toFixed(2)}`); assert.ok(sat(nb) < sat(db) - 0.05, `tier ${row}: less saturated than the day cloud under the same tint (${sat(db).toFixed(2)})`);
     assert.ok(luma(nb) < luma(d.body) * 0.55 && luma(nb) > 0.25, `tier ${row}: darker than the day cloud, never murky: ${luma(nb).toFixed(2)}`); assert.ok(luma(nl) > luma(nb) * 1.2, `tier ${row}: a moonlit rim: ${luma(nl).toFixed(2)} on ${luma(nb).toFixed(2)}`); assert.ok(luma(nbel) < luma(nb) * 0.75, `tier ${row}: a deep belly: ${luma(nbel).toFixed(2)}`);
   }
-  assert.ok(luma(times(night.tiers[2].cols[3].lit, tint)) < 0.7, 'the rim cannot outshine the tint\'s own colour'); assert.ok(luma(night.glint) < luma(day.glint) + 1e-9);
+  assert.ok(luma(times(night.tiers[2].cols[3].lit, tint)) < 0.7, 'the rim cannot outshine the tint\'s own colour');
   const mid = bankTones(0, 0.5); assert.ok(luma(mid.tiers[2].cols[3].body) < luma(day.tiers[2].cols[3].body) && luma(mid.tiers[2].cols[3].body) > luma(night.tiers[2].cols[3].body), 'the evening is between the two');
 });
 
@@ -51,34 +51,30 @@ test('F5: at night the cloud is a quiet blue-grey after the grade\'s multiply: l
 const run = (lobes, o = {}) => { const r = recCtx(); r.state.globalAlpha = 0.9; const a = o.a ?? 1.5, e = 10, f = 20, n = paintLobes(r.ctx, lobes, { a, e, f, tones: bankTones(0, 0), r0: 60, top: 0, bot: 100, ...o }); return { ...r, n, a, e, f }; };
 const LOBES = [{ x: 0, y: 0, r: 60, row: 0, k: 0.2, kind: 0, edge: 1 }, { x: 70, y: 10, r: 50, row: 1, k: 0.4, kind: 0 }, { x: 30, y: 60, r: 30, row: 2, k: 0.9, kind: 2, edge: 1 }];
 
-test('painting a bank: a contour in one path, two flat steps of shade, then a lit dome a lobe (one gradient fill each), and a soft glint on the big ones; no stroke, no clip, no blur, no filter; the matrix and the alpha come back as they were', () => {
+test('painting a bank: two flat steps of shade, then a flat tone a lobe and a flat rim under each big one; no gradient, no contour, no glint, no stroke, no clip, no blur, no filter; the matrix and the alpha come back as they were', () => {
   const r = run(LOBES), names = r.log.calls.map((c) => c[0]);
   assert.equal(r.n, 3, 'three lobes painted'); near(r.state.globalAlpha, 0.9);
   for (const k of ['stroke', 'clip', 'drawImage', 'fillRect', 'save', 'restore']) assert.ok(!names.includes(k), `no ${k}`);
   assert.equal(r.state.shadowBlur, undefined); assert.equal(r.state.filter, undefined);
   const last = r.log.calls.filter((c) => c[0] === 'setTransform').at(-1); assert.deepEqual(last.slice(1), [r.a, 0, 0, r.a, r.e, r.f], 'the surface\'s own matrix is back');
-  const fills = r.log.fills; assert.equal(fills.length, 1 + 3 * 2 + 3 + 2, `one contour, a belly and a mid step a lobe, a body a lobe, glints on the two big ones (${fills.length})`);
-  assert.equal(new Set(fills.map((f) => f.style).filter((s) => typeof s === 'object')).size, 3 + 1, 'a gradient per tier and height (cached per hour and per context) and one glint, however many lobes');
-  assert.ok(fills.slice(7, 10).every((f) => typeof f.style === 'object'), 'the bodies are gradients'); assert.ok(fills.slice(1, 7).every((f) => typeof f.style === 'string'), 'the shade is flat');
+  const fills = r.log.fills; assert.equal(fills.length, 3 * 2 + 2 * 2 + 1, `a belly and a mid step a lobe, a tone a lobe and a rim on the two big ones (${fills.length})`); assert.ok(fills.every((f) => typeof f.style === 'string'), 'every fill is a flat colour: no gradient, no glint');
 });
 
-test('the dome is scaled to its lobe by the transform: a unit gradient, the centre of its light moved towards the sun (upper left), bright at its core and body-coloured at its edge', () => {
-  assert.ok(DOME.cx < 0 && DOME.cy < 0, 'the light leans to the upper left'); assert.ok(DOME.R > 1, 'the gradient reaches past the lobe\'s edge on the shaded side, so the shade is never a dark rim all round');
-  const r = run([{ ...LOBES[0], k: 0.9 }]), bodies = r.log.calls.filter((c) => c[0] === 'arc' && c[3] === 1); assert.equal(bodies.length, 1, 'one unit arc: the body'); const tr = r.log.calls.filter((c) => c[0] === 'setTransform');
-  assert.ok(tr.some((c) => Math.abs(c[1] - 1.5 * 60) < 1e-9 && Math.abs(c[5] - (1.5 * (0 - LIFT.x * 60) + 10)) < 1e-9 && Math.abs(c[6] - (1.5 * (0 - LIFT.y * 60) + 20)) < 1e-9), 'the body is lifted up and to the left by LIFT, scaled to its radius');
+test('the bodies stand lifted up and to the left by LIFT, and the rim of a big lobe lies down and to the right of its tone', () => {
+  const small = run([{ ...LOBES[0], k: 0.9 }]), arcs = small.log.calls.filter((c) => c[0] === 'arc'); assert.equal(arcs.length, 3, 'two steps of shade and a body'); near(arcs[2][1], 0 - LIFT.x * 60); near(arcs[2][2], 0 - LIFT.y * 60); near(arcs[2][3], 60);
   assert.ok(LIFT.y > LIFT.x && LIFT.y > 0.1, 'the underside is thicker than the right side');
+  const big = run([{ ...LOBES[0], k: 0.2 }]), ba = big.log.calls.filter((c) => c[0] === 'arc').slice(2); assert.equal(ba.length, 2, 'a rim and a tone'); assert.ok(ba[0][1] > ba[1][1] && ba[0][2] > ba[1][2], 'the rim lies lower right of the tone'); assert.ok(RIM.k > 0 && RIM.d > 0.03 && RIM.d < 0.12, 'a light rim');
 });
 
-test('the shade is two flat steps (belly where the lobe stands, mid half way to the sun) so the underside is cel-shaded and not one hard band; the contour is one path round the union', () => {
-  const r = run(LOBES), arcs = r.log.calls.filter((c) => c[0] === 'arc' && c[3] !== 1);
-  assert.equal(arcs.length, 3 * 2 + 3 * 2, 'two discs of the contour a lobe (where it stands and lifted) and two of the shade'); assert.ok(r.log.fills[0].alpha < 0.9, 'the contour is a thin translucent line');
-  const shade = arcs.slice(6), lobeCentres = LOBES.map((l) => l.x); assert.ok(shade.some((c) => Math.abs(c[1] - (LOBES[0].x - LIFT.x * 60 * 0.5)) < 1e-9), 'the mid step stands half way up to the sun'); assert.ok(shade.some((c) => lobeCentres.includes(c[1])), 'the belly step stands where the lobe stands');
+test('the shade is two flat steps (belly where the lobe stands, mid half way to the sun) so the underside is cel-shaded and not one hard band', () => {
+  const r = run(LOBES), arcs = r.log.calls.filter((c) => c[0] === 'arc').slice(0, 6); assert.equal(arcs.length, 6, 'two discs of the shade a lobe');
+  const lobeCentres = LOBES.map((l) => l.x); assert.ok(arcs.some((c) => Math.abs(c[1] - (LOBES[0].x - LIFT.x * 60 * 0.5)) < 1e-9), 'the mid step stands half way up to the sun'); assert.ok(arcs.some((c) => lobeCentres.includes(c[1])), 'the belly step stands where the lobe stands');
 });
 
-test('a quiet tier paints no contour and no glints; a lobe out of view is skipped; a bank at alpha 0.5 scales every fill; a lobe the dissolve has finished with is not painted', () => {
-  const full = run(LOBES), lite = run(LOBES, { lite: true }); assert.ok(lite.log.fills.length < full.log.fills.length && lite.n === full.n, `${lite.log.fills.length} fills against ${full.log.fills.length}`);
-  const off = run(LOBES, { view: { x0: 1e6, x1: 1e6 + 5, y0: 0, y1: 5 } }); assert.equal(off.n, 0); assert.equal(off.log.fills.filter((f) => typeof f.style === 'object').length, 0);
-  const half = run(LOBES, { fx: fadeFx(0.5) }); assert.ok(half.log.fills.slice(1).every((f) => f.alpha <= 0.9 * 0.5 + 1e-9), 'the alpha it was given');
+test('a quiet tier is the same picture now (no fine detail is left to drop); a lobe out of view is skipped; a bank at alpha 0.5 scales every fill; a lobe the dissolve has finished with is not painted', () => {
+  const full = run(LOBES), lite = run(LOBES, { lite: true }); assert.deepEqual(lite.log.fills, full.log.fills); assert.equal(lite.n, full.n);
+  const off = run(LOBES, { view: { x0: 1e6, x1: 1e6 + 5, y0: 0, y1: 5 } }); assert.equal(off.n, 0); assert.equal(off.log.fills.length, 0);
+  const half = run(LOBES, { fx: fadeFx(0.5) }); assert.ok(half.log.fills.every((f) => f.alpha <= 0.9 * 0.5 + 1e-9), 'the alpha it was given');
   const gone = run(LOBES, { fx: (l, out) => { out.a = 0; out.s = 1; out.dx = 0; out.dy = 0; } }); assert.equal(gone.n, 0, 'nothing left to paint');
   const a = JSON.stringify(run(LOBES).log.calls), b = JSON.stringify(run(LOBES).log.calls); assert.equal(a, b, 'a still bank is the same picture every time');
 });
@@ -164,7 +160,7 @@ test('the V2 layer without surfaces (the Node tests): locked districts are paint
   const w = stubWorld({ unlocked: new Set(LAYOUT.ids.filter((id) => id !== 3)) }); try {
     const locked = draw(w); assert.equal(slotFor('clouds').impl, 'v2'); assert.ok(arcs(locked) > 300, `${arcs(locked)} arcs`); assert.ok(locked.log.fills.some((f) => f.style === '#ffd84d'), 'the padlock'); near(locked.state.globalAlpha, 1);
     assert.equal(locked.log.rects.length, 0); assert.equal(locked.log.depth, 0, 'save and restore balance'); assert.equal(w.hits.length, 0, 'nothing is pushed to the hit list');
-    const names = locked.log.calls.map((c) => c[0]), firstShadow = names.indexOf('ellipse'), firstBody = locked.log.calls.findIndex((c) => c[0] === 'arc' && c[3] === 1), lateEllipses = names.slice(firstBody).filter((n) => n === 'ellipse').length; assert.ok(firstShadow >= 0 && firstShadow < firstBody && lateEllipses === 1, 'every shadow before the first bank (the one ellipse after is the padlock\'s own)');
+    const names = locked.log.calls.map((c) => c[0]), firstShadow = names.indexOf('ellipse'), firstBody = locked.log.calls.findIndex((c) => c[0] === 'arc'), lateEllipses = names.slice(firstBody).filter((n) => n === 'ellipse').length; assert.ok(firstShadow >= 0 && firstShadow < firstBody && lateEllipses === 1, 'every shadow before the first bank (the first disc is its shade; the one ellipse after is the padlock\'s own)');
     w.unlocked = new Set(LAYOUT.ids); const open = draw(w); assert.equal(arcs(open), 0, 'a world with every district open has no bank'); assert.equal(open.log.fills.filter((f) => f.style === '#ffd84d').length, 0);
   } finally { setFlag('clouds', 'legacy'); }
 });
