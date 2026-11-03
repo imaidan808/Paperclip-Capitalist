@@ -18,7 +18,7 @@ const fin = (x, d) => (typeof x === 'number' && !Number.isNaN(x) ? x : d); // +-
 const own = (o, k) => typeof k === 'string' && Object.prototype.hasOwnProperty.call(o, k); // ids come from the UI and the network: never index a plain object by them unchecked
 const DE_CAP = 999; // a debt-to-equity figure that is logged or shown is finite: nothing left to divide by reads as 999, not Infinity (JSON writes Infinity as null)
 const money = (x) => (x < 0 && Math.abs(x) >= 0.005 ? '-' : '') + (Math.abs(x) < 100 ? '$' + Math.abs(x).toFixed(2) : '$' + Math.round(Math.abs(x)).toLocaleString('en-US')); // -$12.50, as the rest of the product writes it, not $-12.50
-const lack = (cost, have, thing) => fail(`Need ${money(cost)} for ${thing}; you have ${money(have)}.`); // a refusal for cash: what it takes and what there is
+const lack = (cost, have, thing) => fail(`Need ${money(cost)} for ${thing}; you have ${money(have)}.`);
 const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`; // "1 day", "2 days"
 const uniq = (ids) => [...new Set(ids)]; // an id list from outside may repeat an id: one crate is one crate
 const isNum = (x) => typeof x === 'number' && Number.isFinite(x); // a real number: not NaN, not +-Infinity, not a string (JSON turns Infinity into null)
@@ -99,6 +99,12 @@ export class Game {
   _evInstance(kind, start, extra = {}) {
     const d = EVENTS[kind];
     return { id: extra.id || `${kind}@${start}`, kind, name: d.name, start, phases: d.phases, level: d.level, alert: d.alert, short: d.short, warned: false, started: false, ...extra };
+  }
+
+  /** An event's alert with the days of this start: the config says "Day 45 at 00:00", and an instructor can deploy the shock on any day and hour. */
+  _alert(ev) {
+    const a = ev.alert || {}, d = EVENTS[ev.kind]?.day, h = ev.start % 24, mv = (t) => (d && typeof t === 'string' ? t.replace(/Day (\d+)/g, (m, n) => 'Day ' + (+n + Math.floor(ev.start / 24) + 1 - d)).replace('at 00:00', `at ${h < 10 ? '0' : ''}${h}:00`) : t);
+    return { ...a, name: ev.name, level: ev.level, start: ev.start, readout: mv(a.readout), vars: (a.vars || []).map(mv), enforcement: mv(a.enforcement) };
   }
 
   // ------------------------------------------------------------------ small helpers
@@ -427,11 +433,11 @@ export class Game {
       if (!ev.warned && h < ev.start && h >= ev.start - lead) {
         ev.warned = true; ev.warnedAt = h;
         const hrs = ev.start - h;
-        this.note('warn', `${ev.name}: effective in ${hrs >= 24 ? plural(Math.round(hrs / 24), 'day') : plural(hrs, 'hour')}.`, { kind: 'advance', alert: { ...ev.alert, name: ev.name, level: ev.level, start: ev.start } });
+        this.note('warn', `${ev.name}: effective in ${hrs >= 24 ? plural(Math.round(hrs / 24), 'day') : plural(hrs, 'hour')}.`, { kind: 'advance', alert: this._alert(ev) });
       }
       if (!ev.started && h >= ev.start) {
         ev.started = true;
-        if (!ev.warned) { ev.warned = true; ev.warnedAt = h; this.note('bad', `${ev.name} is now in effect, with no warning.`, { alert: { ...ev.alert, name: ev.name, level: ev.level, start: ev.start } }); }
+        if (!ev.warned) { ev.warned = true; ev.warnedAt = h; this.note('bad', `${ev.name} is now in effect, with no warning.`, { alert: this._alert(ev) }); }
         else this.note('bad', `${ev.name} is now in effect.`);
         this.emit('shock', { kind: ev.kind });
         s.shockLog.push({ id: ev.id, kind: ev.kind, name: ev.name, start: h, nw: this.netWorth(), cash: s.cash, debt: this.debt(), de: Math.min(this.deRatio(), DE_CAP), inv: this.invValue(), pipes: s.pipes.length, intl: s.pipes.filter((p) => p.channel === 'intl').length, pivot0: s.pivot, nwAfter: null, pivots: null, warnedHours: ev.start - (ev.warnedAt ?? ev.start) });

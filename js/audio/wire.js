@@ -116,7 +116,7 @@ export function eventCalls(ev, st = newWireState(), hooks = {}) {
   }
 }
 
-/** A note's meaning. The engine and the session tag every note a sound depends on with a `kind` (tests/copy2-messages.test.mjs), so a copy edit cannot mute one; a note without one is read from its words. */
+/** A note's meaning: its `kind`, which the engine and the session write for every note a sound depends on (tests/copy2-messages.test.mjs), else its words. */
 export function noteKind(n) {
   if (n.kind) return n.kind;
   const t = String(n.text || '');

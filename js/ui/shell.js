@@ -229,8 +229,8 @@ export function mountGame(root, S, hooks) {
   function menu() {
     const inRoom = !!S.roomInfo;
     dlg.open(`<button class="btn ghost sm x" data-close>Close</button><h2 tabindex="-1" autofocus>Menu</h2><div class="grid g2">
-      <div class="card"><h3>Classroom</h3>${inRoom ? `<p class="small">In room <b class="mono">${esc(S.roomInfo.code)}</b> via ${S.room.kind === 'relay' ? 'relay server' : 'this browser (other tabs)'}. The instructor's clock is in charge.</p><button class="btn sm ghost" data-act="leave">Leave room</button>`
-        : `<p class="small mute">Joining restarts your run on the instructor's shared clock.</p><label for="m-code">Room code</label><input id="m-code" maxlength="8" style="text-transform:uppercase" autocomplete="off"><label for="m-relay" class="gap">Relay server URL (optional)</label><input id="m-relay" placeholder="wss://your-relay.example" value="${esc(kv.get('relay') || DEFAULT_RELAY)}"><button class="btn sm gap" data-act="joinroom">Join</button>`}</div>
+      <div class="card"><h3>Classroom</h3>${inRoom ? `<p class="small">In room <b class="mono">${esc(S.roomInfo.code)}</b> via ${S.room.kind === 'relay' ? 'the relay' : 'this browser (other tabs)'}. The instructor's clock is in charge.</p><button class="btn sm ghost" data-act="leave">Leave room</button>`
+        : `<p class="small mute">Joining restarts your run on the instructor's shared clock.</p><label for="m-code">Room code</label><input id="m-code" maxlength="8" style="text-transform:uppercase" autocomplete="off"><details class="gap"><summary class="small">Relay (only if your instructor gave one)</summary><label for="m-relay" class="gap">Relay URL</label><input id="m-relay" placeholder="wss://relay.example.edu" value="${esc(kv.get('relay') || DEFAULT_RELAY)}"></details><button class="btn sm gap" data-act="joinroom">Join</button>`}</div>
       <div class="card"><h3>This run</h3><div class="grid"><button class="btn sm" data-act="debrief">Debrief</button><button class="btn sm ghost" data-act="academy">Replay a lesson</button><button class="btn sm ghost" data-act="settings">Display and sound</button><button class="btn sm ghost" data-act="savefile">Download my save</button><button class="btn sm danger" data-act="reset">Start over</button></div></div></div>
       <p class="small mute gap">Privacy: your save lives only in this browser. Rooms share a pseudonymous Founder ID, your chosen alias and game numbers, never names or emails.</p>
       <p class="tiny mute" id="m-build" aria-live="polite"></p>`, { label: 'Menu' });
@@ -263,7 +263,7 @@ export function mountGame(root, S, hooks) {
     joinroom() {
       const code = ($('#m-code', dlg.el).value || '').toUpperCase().replace(/[^A-Z0-9]/g, ''), relay = relayOf($('#m-relay', dlg.el).value);
       if (code.length < 3) { toast('Enter the room code from your instructor.', 'warn'); return; }
-      if (relay === null) return;
+      if (relay === null) { const f = $('#m-relay', dlg.el).closest('details'); if (f) f.open = true; return; } // the field the toast names is shown
       kv.set('relay', relay); dlg.close(); hooks.onJoin({ code, relay });
     },
     savefile() { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([JSON.stringify(g().s)], { type: 'application/json' })); a.download = `paperclip-save-${g().s.pid}.json`; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000); },

@@ -229,7 +229,7 @@ export function statusText(a, state) {
   const on = (state === 'running' ? 'Sound is on.' : 'Sound is on. Your browser starts audio after your first click.') + quiet;
   return a.game ? (a.ui ? on : on + ' Interface sounds are off.') : on + ' Game sounds are off: coins and alerts are silent.';
 }
-/** The helper line beside a row: why it is off, or what it does. */
+/** The line beside a row: why it is off. */
 function note(key, a) {
   const muted = a.mute ? 'Muted.' : '';
   if (key === 'ui' || key === 'game' || key === 'world') return muted + (key === 'world' && a.quiet ? ' Off in Classroom.' : '');

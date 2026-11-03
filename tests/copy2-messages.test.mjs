@@ -237,6 +237,30 @@ test('M2: the margin call says what the bank does: the largest manager first, th
   assert.deepEqual(wire.noteCalls(call, wire.newWireState(), {}), [], 'and the note is silent: the margin-call event plays the siren');
 });
 
+test('M2: a macro alert names the days of the shock it announces, scheduled or deployed by an instructor on another day and hour', () => {
+  const fed = C.EVENTS.fed, freeze = fed.phases.find((p) => p.eff.freeze), start0 = (fed.day - 1) * 24, dayOf = (hour) => Math.floor(hour / 24) + 1;
+  const freezeAt = (g, hour) => { g.advanceTo(hour); g._m = null; return g.mods().freeze; };
+  // scheduled: the config's own words, and the credit freeze lifts on the day they name
+  const g = mk(), ns = noted(g); g.advanceTo(start0 - g.warnLead());
+  const sched = ns.find((n) => n.kind === 'advance' && n.alert.name === fed.name);
+  assert.equal(sched.alert.readout, fed.alert.readout); assert.deepEqual(sched.alert.vars, fed.alert.vars); assert.equal(sched.alert.enforcement, fed.alert.enforcement);
+  assert.equal(+/until Day (\d+)/.exec(sched.alert.enforcement)[1], dayOf(start0 + freeze.to));
+  assert.equal(freezeAt(g, start0 + freeze.to - 1), true); assert.equal(freezeAt(g, start0 + freeze.to), false, 'the freeze lifts at the hour the day begins');
+  // deployed on day 26 at 13:00: the same words, with that day and that hour
+  const at = 25 * 24 + 13, h = mk(), hn = noted(h); h.advanceTo(at - 13); h.injectEvent('fed', at, { id: 'inj-fed' }); h.advanceTo(at);
+  const dep = hn.find((n) => n.kind === 'advance' && n.alert.name === fed.name).alert;
+  assert.equal(dep.readout, `The central bank tightens credit on Day ${dayOf(at)} at 13:00.`); assert.equal(dep.start, at);
+  assert.equal(dep.enforcement, `No new bank loans until Day ${dayOf(at + freeze.to)}. Open loans re-rate within 24 hours.`);
+  assert.deepEqual(dep.vars, fed.alert.vars, 'what is not a date is not touched');
+  assert.equal(freezeAt(h, at + freeze.to - 1), true); assert.equal(freezeAt(h, at + freeze.to), false);
+  // a shock with no warning (the instructor's "now"): the tariff's day is the day it starts
+  const t = mk(), tn = noted(t); t.advanceTo(100); t.injectEvent('tariff', 101, { id: 'inj-tariff' }); t.advanceTo(101);
+  const live = tn.find((n) => /no warning/.test(n.text)); assert.match(live.alert.readout, new RegExp(`from Day ${dayOf(101)}\\.$`));
+  // an algorithmic shock has no date to move
+  const a = mk(), an = noted(a); a.injectEvent('glut', 30, { id: 'algo-1', cls: 'sneakers' }); a.advanceTo(30);
+  assert.ok(an.find((n) => n.alert)); assert.deepEqual(an.find((n) => n.alert).alert.vars, []);
+});
+
 test('M2: a failed audit names the fine and the speed it costs, as the Bank shows them', () => {
   const g = mk(), ns = noted(g);
   const fine0 = g.auditFine(), v0 = g.s.velPenalty; g._auditFail(true);
