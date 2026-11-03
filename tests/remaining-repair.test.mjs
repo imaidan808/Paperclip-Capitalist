@@ -352,7 +352,7 @@ test('Result card (S15): a sale that paid for the repair says so: what you had i
   assert.equal(sm.ok, true);
   const had = sm.lines.find((l) => /^You had \$/.test(l)); assert.ok(had, 'the card tells what the crate had cost: ' + JSON.stringify(sm.lines));
   assert.match(had, /a profit of \$[\d,]+/); assert.ok(!/no gain/i.test(sm.title) || /loss/.test(had), 'a profitable sale is not "no gain": ' + sm.title);
-  assert.ok(sm.lines.some((l) => /against the crate's value|times the crate's value/.test(l)), 'the comparison with the market stays');
+  assert.ok(sm.lines.some((l) => /the crate's market value/.test(l)), 'the comparison with the market stays');
   // a loss is a loss
   const g2 = Sandbox.makeSandboxSession({ ...m.setup }, { id: 'm05', zone: 7 }).game, v2 = g2.s.assets.find((a) => a.cls === 'van'); v2.basis = 5000;
   const s2 = D.startRun(g2, { kind: 'sell', assetId: v2.id, leadId: 'fleet-buyer' }); s2.quickAll(); const sm2 = s2.finish();

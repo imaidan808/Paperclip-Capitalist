@@ -38,7 +38,8 @@ const SAY = {
   expert: { a: 'The expert takes it to the bench:', b: ['"a wreck, honestly"', '"tired, but serviceable"', '"fair condition for its age"', '"in good shape"', '"excellent, barely touched"'],
     f: ['"It is genuine."', '"I cannot say for certain."', '"It is a fake. Look at these tool marks."'] },
 };
-const OPEN = ['The seller shrugs: "Look all you like, I have nothing to hide."', '"Take your time," says the seller, a little too quickly.', 'The seller leans on the counter: "It is what it is."'];
+// The seller's opening is scenery: it is chosen by the seed and says nothing about the lot, so none of the three carries a tell.
+const OPEN = ['The seller shrugs: "Look all you like."', '"Take your time," says the seller.', 'The seller leans on the counter: "It is what it is."'];
 
 function fresh(s) { // recompute the derived fields after any change
   const t = { ...s, belief: { quality: s.belief.quality, fakeProb: probFrom(s.odds) } };

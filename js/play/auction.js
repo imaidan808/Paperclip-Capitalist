@@ -91,7 +91,7 @@ export function legal(s) {
   return (s.budget == null || nextBid(s) <= s.budget + 1e-9 ? [{ type: 'bid' }] : []).concat([{ type: 'drop' }]);
 }
 
-const LINE = { bid: '%w bids %p.', jump: '%w jumps to %p!', drop: '%w drops out at %p.', wait: 'Someone is watching and says nothing.', sold: 'Sold to %w for %p.', nosale: 'No sale: nobody met the opening price.' };
+const LINE = { bid: '%w bids %p.', jump: '%w jumps to %p.', drop: '%w drops out at %p.', wait: 'Someone is watching and says nothing.', sold: 'Sold to %w for %p.', nosale: 'No sale: nobody met the opening price.' };
 export function act(state, action) {
   if (!state || !action || !legal(state).some((l) => l.type === action.type)) return { state, say: null, done: !!(state && state.done) };
   const s = JSON.parse(JSON.stringify(state)), rng = new RNG(s.rs), mark = s.events.length;

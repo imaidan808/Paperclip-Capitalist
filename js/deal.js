@@ -28,6 +28,7 @@ const fin = (x, d = 0) => (Number.isFinite(x) ? x : d);
 const r2 = (x) => Math.round(fin(x) * 100) / 100;
 const money = (x) => { x = fin(x); const v = Math.abs(x), s = x < 0 ? '-' : ''; return v < 100 ? `${s}$${v.toFixed(2)}` : `${s}$${Math.round(v).toLocaleString('en-US')}`; };
 const pctOf = (x) => `${Math.round(fin(x) * 100)}%`;
+const pts = (n) => `${n} point${n === 1 ? '' : 's'}`;
 const own = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
 
 /** Deterministic from the game seed and the ids, and NOT from the clock: a deal replays exactly however long ago it was opened. The hour used to
@@ -152,7 +153,7 @@ export function dealFrom(kind, res = {}) {
   return { mult: clamp(side && !side.skipped ? fin(side.mult, 1) : pm, 0.6, 1.4) };
 }
 
-const FIX_ADVICE = { text: 'Aim for the middle of the green zone: the nearer the center, the more precise the step. Assist has widened the zone for you.' };
+const FIX_ADVICE = { text: 'Aim for the center of the green zone: precision falls as the marker leaves it. Assist widens the zone by 60%.' }; // 60%: repair.js zoneHalf, 1.6 with assist
 /** The angle/price pair a coach would suggest from what the player is allowed to see (Assist). */
 export function pitchAdvice(view) {
   if (!view || !Array.isArray(view.angles)) return null;
@@ -169,7 +170,7 @@ export function inspectAdvice(view) {
   const can = (id) => view.probes.find((p) => p.id === id && p.affordable), p = view.belief?.fakeProb ?? 0.2;
   const pick = (p > 0.08 && p < 0.92 && can('serial') && 'serial') || (view.doubt > 0.08 && can('power') && 'power') || (can('papers') && 'papers') || (can('look') && 'look') || (can('serial') && 'serial') || (can('power') && 'power') || null;
   const why = { serial: 'The serial check is the best test for a counterfeit.', power: 'Powering it up is the sharpest read on condition.', papers: 'Paperwork is a cheap second opinion on both.', look: 'A look is cheap and catches obvious wear.' };
-  return pick ? { probe: pick, text: why[pick] } : { probe: null, text: 'You have what the budget can buy. Decide.' };
+  return pick ? { probe: pick, text: why[pick] } : { probe: null, text: 'No probe fits the points you have left.' };
 }
 
 /** The slider position (0..1) to a time in ms that the repair dial would show it at: the reduced-motion dial stops at what the player set. */
@@ -207,12 +208,12 @@ function planSell(g, spec) {
   }
   const blocker = q.fit < 0.15 ? `${B.name} has almost no use for ${ASSETS[a.cls].name}. Pick a buyer who needs it.` : lead.verified && lead.scam ? 'Fraud confirmed. Skip this buyer.' : '';
   const stages = [{ key: 'pitch' }];
-  if (GAMES.haggle) stages.push(capped ? { key: 'close', auto: 'Their budget is nearly spent at the fair price, so there is nothing to haggle over.' } : { key: 'close' });
+  if (GAMES.haggle) stages.push(capped ? { key: 'close', auto: 'Their budget is nearly spent at the fair price: nothing to haggle over.' } : { key: 'close' });
   return {
     ok: true, kind: 'sell', seed, zone: lead.zone, zoneFace: zoneFace(lead.zone), stages, blocker, fair, raw, capped, budget: lead.budget, alt: alt || null,
     asset: { id: a.id, cls: a.cls, name: aName(a), icon: ASSETS[a.cls].icon, cond: a.cond, unchecked: !!(a.truth && !a.known) }, // unchecked: bought from a lot and never sold, so its real condition is not in the figures on the screen: the buyer checks it at the sale and the price follows it
     lead: { id: lead.id, seg: lead.seg, budget: lead.budget, need: lead.need || null, verified: !!lead.verified, ...(lead.verified ? { scam: !!lead.scam } : {}), exp: lead.exp },
-    cast: { icon: B.icon, name: B.name, hello: lead.need ? `${B.hello} (Right now they need something ${lead.need}.)` : B.hello, style: B.style, role: 'buyer' },
+    cast: { icon: B.icon, name: B.name, hello: B.hello, style: B.style, role: 'buyer' }, // an urgent need is marked on its chip in the Pitch stage, not said twice
     buyer: { id: lead.seg, name: B.name, style: B.style, patience: B.patience, bias: B.bias },
     quote: { fit: q.fit, fitLabel: fitLabel(q.fit), cm: q.ci.cm, band: { id: q.ci.band.id, label: q.ci.band.label }, S: q.ci.S, fmv: q.fmv },
     verifyCost: Math.max(0.01, r2(lead.budget * 0.01)), canVerify: !lead.verified && !!(g.P.scamRate || 0),
@@ -225,9 +226,9 @@ function planBuy(g, spec) {
   const seed = seedFor(g, spec), def = ASSETS[lot.cls], auction = lot.mode === 'auction' && !!GAMES.auction, name = `${def.name}${lot.cond === 'broken' ? ' (broken)' : ''}`;
   const held = s.assets.filter((x) => x.zone === spec.zone).length + s.freight.reduce((n, f) => n + (f.to === spec.zone ? f.items.length : 0), 0) + s.escrow.reduce((n, e) => n + e.assets.filter((x) => x.zone === spec.zone).length, 0);
   const lowest = r2(lot.price * 0.6);
-  const blocker = s.cash < lowest ? `You need at least ${money(lowest)} to deal for this lot, and you have ${money(s.cash)}.` : held >= g.storeCap(spec.zone) ? 'Storage is full here. Sell something or ship it out first.' : '';
+  const blocker = s.cash < lowest ? `You need at least ${money(lowest)} to deal for this lot, and you have ${money(s.cash)}.` : held >= g.storeCap(spec.zone) ? 'Storage is full here, counting trucks and open swaps. Sell something or ship it out.' : ''; // the engine's own words for this refusal (engine.js FULL): `held` counts the same crates, in the yard, on trucks and held for a swap
   const seller = auction
-    ? { style: 'steady', icon: '🔨', name: 'The auctioneer', patience: 5, hello: `Lot up for bids: the ${name}. Guide price ${money(lot.price)}, opening at ${money(lot.price * 0.6)}.` }
+    ? { style: 'steady', icon: '🔨', name: 'The auctioneer', patience: 5, hello: 'Lot up for bids.' } // the guide price and the opening bid are on the lot card, the scoreboard and the paddle
     : sellerFor(seed, name, lot.price);
   let alt = 0; // another lot of the same kind on the shelf is your alternative
   for (const l of s.lots[spec.zone] || []) if (l.id !== lot.id && l.cls === lot.cls && l.mode !== 'auction') alt = alt ? Math.min(alt, l.price) : l.price;
@@ -264,7 +265,7 @@ function planRepair(g, spec) {
     blocker: b.blocker,
     asset: { id: a.id, cls: a.cls, name: aName(a), icon: ASSETS[a.cls].icon, cond: a.cond },
     quote: { cost: b.cost, most: b.most, before: b.before, after: b.after, quality: b.quality },
-    cast: { icon: '🔧', name: 'The repair bench', hello: 'Three steps: strip, fit, tune. Steady hands pay for themselves; rushed ones cost twice.', style: 'steady', role: 'bench' },
+    cast: { icon: '🔧', name: 'The repair bench', hello: 'Three steps: strip, fit, tune. Steady hands cost less and return more.', style: 'steady', role: 'bench' },
   };
 }
 
@@ -320,7 +321,7 @@ export class DealRun {
     const G = this.gameOf(key);
     if (HIDDEN_STAGES.has(key) && !this.sat && own(this.g.s.tried || {}, this.dkey)) { // sat at before (by an earlier run: what this run played by hand is not played for it again): the talk goes the way an average dealer would take it, however the first sitting went
       this.res[key] = this.tag(key, { ...G.autoplay(this.paramsFor(key), QUICK), quick: true });
-      this.say('You have sat at this table before, and the talk went on without you the way an average dealer would take it.', key);
+      this.say('You have sat at this table before. Quick played it for you.', key);
       return;
     }
     let st = G.create(this.paramsFor(key));
@@ -536,47 +537,47 @@ function summarize(run, { r, deal, noDeal, before, after, cmp, secret }) {
 
   if (kind === 'sell') {
     const hag = res.close && !res.close.skipped ? res.close : null, pk = res.pitch;
-    if (pk && pk.pick) reasons.push({ label: 'Pitch', text: `You led with ${ANGLE_WORD[pk.pick[0]]} and ${ANGLE_WORD[pk.pick[1]]}: ${pk.fitDelta >= 0 ? '+' : ''}${pk.fitDelta.toFixed(2)} fit, so the buyer was x${pk.mult.toFixed(2)} as keen${pk.quick ? ' (played for you at average skill)' : ''}.` });
-    if (hag) reasons.push({ label: 'Haggle', text: hag.deal ? `Closed at x${hag.mult.toFixed(2)} of the fair price${hag.quick ? ' (played for you at average skill)' : ''}.` : 'No deal was struck.' });
+    if (pk && pk.pick) reasons.push({ label: 'Pitch', text: `You led with ${ANGLE_WORD[pk.pick[0]]} and ${ANGLE_WORD[pk.pick[1]]}: ${pk.fitDelta >= 0 ? '+' : ''}${pk.fitDelta.toFixed(2)} fit, so the buyer was ${pk.mult.toFixed(2)}x as keen${pk.quick ? ' (Quick played it)' : ''}.` });
+    if (hag) reasons.push({ label: 'Haggle', text: hag.deal ? `Closed at ${hag.mult.toFixed(2)}x the fair price${hag.quick ? ' (Quick played it)' : ''}.` : 'No deal was struck.' });
     if (res.close && res.close.skipped) reasons.push({ label: 'Haggle', text: res.close.note });
     if (noDeal) {
-      Object.assign(out, { tone: 'info', title: 'No deal', headline: run.walked ? 'You walked away. The buyer is still here until they leave.' : 'The talks ended without a deal. Your crate is still yours.' });
+      Object.assign(out, { tone: 'info', title: 'No deal', headline: run.walked ? 'You walked away. The buyer stays until they leave.' : 'The talks ended without a deal. You keep the crate.' });
       out.numbers = compare(null, 'sale price', 'high');
     } else if (!r || !r.ok) {
       Object.assign(out, { tone: 'warn', title: 'Not done', headline: r ? r.msg : 'The deal could not be completed.' });
     } else {
       const band = r.ci ? r.ci.band : null;
-      reasons.unshift({ label: 'Creativity multiplier', text: r.ci ? `${r.ci.cm.toFixed(2)}x, ${band.label}. ${r.ci.vN.toFixed(0)} of ${r.ci.vT.toFixed(0)} recent pitches went to this exact buyer.` : '' });
+      reasons.unshift({ label: 'Creativity multiplier', text: r.ci ? `${r.ci.cm.toFixed(2)}x, ${band.label}. ${r.ci.vN.toFixed(0)} of ${r.ci.vT.toFixed(0)} pitches in the last 48 hours went to this exact buyer.` : '' });
       reasons.splice(1, 0, { label: 'Buyer fit', text: `${fitLabel(r.fit)} (${pctOf(r.fit)}).` });
       if (r.outcome === 'scam') {
         Object.assign(out, { tone: 'bad', title: 'Scammed', headline: 'The payment bounced and the buyer vanished. The crate is gone.' });
-        out.lesson = { concept: 'due-diligence', text: 'Online buyers can be fraudulent; paying a small fee to verify a buyer before you ship is cheap insurance.' };
+        out.lesson = { concept: 'due-diligence', text: 'Verifying a buyer costs 1% of their budget. A fraud takes the crate and pays nothing.' }; // 1%: engine.js verifyLead
       } else if (r.outcome === 'rejected') {
         const cf = r.reason === 'counterfeit';
         Object.assign(out, { tone: 'bad', title: cf ? 'Counterfeit spotted' : 'No sale', headline: cf ? 'The buyer checked your goods and spotted a counterfeit. It is worth almost nothing now.' : 'The buyer had no use for it.' });
-        if (cf) out.lesson = { concept: 'due-diligence', text: 'A counterfeit you bought without checking is still yours to sell, and every buyer can check it. The time to look is before you pay.' };
+        if (cf) out.lesson = { concept: 'due-diligence', text: 'Every buyer refuses a counterfeit. The time to check is before you pay.' };
       } else {
         const good = r.outcome === 'win' || r.outcome === 'pioneer';
         // The verdict above compares the sale with the crate's market value now (a repaired van is worth the repaired price, which no buyer pays in a crowded niche), which reads "no gain" on a sale that paid for
         // the repair twice over. What the player put into it (the price paid, and every repair) is the other half of the story, so it is told too: the profit or loss on the crate.
         const had = r.asset && Number.isFinite(r.asset.basis) ? r.asset.basis : 0, owed = Number.isFinite(r.profit) && had >= 0.5 ? r.profit : 0;
         Object.assign(out, { tone: good ? 'good' : 'warn', title: { win: 'Sold at a gain', pioneer: 'Pioneer sale', herd: 'Sold into the herd', flat: owed > 0.005 ? 'Sold below market' : 'Sold, no gain' }[r.outcome] || 'Sold',
-          headline: `${plan.asset.name} sold to ${plan.buyer.name} for ${money(r.price)}.` });
+          headline: `Sold for ${money(r.price)}.` }); // (the item and the buyer are in the sheet's title)
         // The Pitch and Close stages quote the crate as it was described; the buyer checks what is sold, and a crate that is not as described is paid for as it is. The price the player agreed and the price paid then differ
         // by exactly the crate's real condition, and the card says so with both numbers (the lot's real condition was told when it was bought; a crate never read tells it here, once it is gone).
         const cond = r.parts && Number.isFinite(r.parts.quality) ? r.parts.quality : 1, said = hag && hag.deal && Number.isFinite(hag.price) ? hag.price : null;
         if (!r.capped && Math.abs(cond - 1) >= 0.005 && said != null && said > 0 && Math.abs(r.price / said - cond) <= 0.03) {
-          lines.push(`The talk closed at ${money(said)}. The buyer then checked the crate and found it at ${pctOf(cond)} of the condition it was described at, so the sale closed at ${money(r.price)}.`);
-          reasons.splice(reasons.findIndex((x) => x.label === 'Haggle') + 1, 0, { label: 'Condition', text: `The crate is really ${pctOf(cond)} of the condition it was described at, so the buyer paid x${cond.toFixed(2)} of the price the talk closed at.` });
+          lines.push(`The talk closed at ${money(said)}. The buyer checked the crate, found it at ${pctOf(cond)} of its described condition, and paid ${money(r.price)}.`); // (this line is the reason too: it is not said twice below)
         } else if (!r.capped && Math.abs(cond - 1) >= 0.005 && said == null) {
-          reasons.push({ label: 'Condition', text: `The crate is really ${pctOf(cond)} of the condition it was described at, so the buyer paid x${cond.toFixed(2)} of the fair price shown.` });
+          reasons.push({ label: 'Condition', text: `The crate is really ${pctOf(cond)} of its described condition, so the buyer paid ${cond.toFixed(2)}x the fair price shown.` });
         }
         lines.push(`You received ${money(r.received)} after tax and fees${r.gotName ? `, including ${r.gotName} in trade` : ''}.`);
         if (r.capped) lines.push('The buyer paid their whole budget.');
-        const worth = Number.isFinite(r.fmv) && r.fmv > 0 ? ` of ${money(r.fmv)}, what the market values it at now` : ''; // the figure Stock shows: the Close stage's "fair" is what THIS buyer pays, which is not that
-        lines.push(r.gain >= 4 ? `${(1 + r.gain).toFixed(0)} times the crate's value${worth}.` : `${r.gain >= 0 ? '+' : ''}${Math.round(r.gain * 100)}% against the crate's value${worth}.`);
+        const worth = Number.isFinite(r.fmv) && r.fmv > 0 ? ` of ${money(r.fmv)}` : ''; // the figure Stock shows: the Close stage's "fair" is what THIS buyer pays, which is not that
+        const pct = Math.round(Math.abs(r.gain) * 100);
+        lines.push(r.gain >= 4 ? `${(1 + r.gain).toFixed(0)} times the crate's market value${worth}.` : pct === 0 ? `In line with the crate's market value${worth}.` : `${pct}% ${r.gain > 0 ? 'above' : 'below'} the crate's market value${worth}.`);
         if (had >= 0.5 && Number.isFinite(r.profit)) lines.push(`You had ${money(had)} in it, the price and any repairs: ${r.profit >= 0 ? `a profit of ${money(r.profit)}` : `a loss of ${money(-r.profit)}`}.`);
-        if (r.outcome === 'herd') out.lesson = { concept: 'saturation-herd', text: `When many players sell the same thing to the same buyer the Creativity multiplier falls to ${r.ci.cm.toFixed(2)}x. A different buyer with a decent fit pays more.` };
+        if (r.outcome === 'herd') out.lesson = { concept: 'saturation-herd', text: `When many players sell the same thing to the same buyer, the Creativity multiplier falls to ${r.ci.cm.toFixed(2)}x. A different buyer with a decent fit pays more.` };
       }
       out.numbers = compare(r.outcome !== 'rejected' && r.outcome !== 'scam' ? r.price : null, 'sale price', 'high');
     }
@@ -585,7 +586,7 @@ function summarize(run, { r, deal, noDeal, before, after, cmp, secret }) {
       // answer: naming the bias and the best pair would solve the pitch for the next sitting. The lesson stays, without them.
       const rev = pitchReveal(run), pf = pk ? pk.score : 1, stays = !!leadOf(run.g, plan.lead.id);
       if (rev && pk && stays) {
-        out.lesson = { concept: 'persona-fit', text: pf < 0.7 ? 'Match your pitch to the person, not to what you like about the goods: every buyer leans toward some angles more than others, and a claim your goods cannot honestly back is worse than silence. Read what they ask for, then pitch to that.'
+        out.lesson = { concept: 'persona-fit', text: pf < 0.7 ? 'Match your pitch to the person, not to what you like about the goods. Every buyer leans toward some angles more than others, and a claim your goods cannot back is worse than silence.'
           : 'You matched this buyer well. A pitch lands when the angle suits the person and your goods can honestly back it up.' };
       } else if (rev && pk && pf < 0.7) {
         out.lesson = { concept: 'persona-fit', text: `This buyer responds most to ${rev.bias}${rev.quirk ? ` and ${rev.quirk}` : ''}; the strongest pair here was ${rev.best.angles[0]} with ${rev.best.angles[1]}. Match your pitch to the person, not to what you like about the goods.` };
@@ -599,11 +600,11 @@ function summarize(run, { r, deal, noDeal, before, after, cmp, secret }) {
     const onShelf = (run.walked || noDeal) && !lostAuction;
     const truth = () => ({ quality: secret.q, fake: !!secret.fake, defects: secret.defects.map((d) => d.label) });
     if (rd) {
-      reasons.push({ label: 'Your read', text: rd.estimate });
-      if (!onShelf) out.reveal = { ...truth(), truth: rd.truth, found: rd.found, total: rd.total, estimate: rd.estimate };
-    } else if (!onShelf) out.reveal = { ...truth(), truth: `${Math.round(secret.q * 100)}% condition, ${secret.fake ? 'counterfeit' : 'genuine'}`, found: 0, total: secret.defects.length, estimate: 'You did not read this lot.' };
-    if (hag) reasons.push({ label: 'Haggle', text: hag.deal ? `Closed at x${hag.mult.toFixed(2)} of the posted price${hag.quick ? ' (played for you at average skill)' : ''}.` : 'No deal was struck.' });
-    if (bid) reasons.push({ label: 'Auction', text: bid.won ? `Won at ${money(bid.price)}, x${(bid.mult || 0).toFixed(2)} of the guide price.` : 'You dropped out.' });
+      if (onShelf) reasons.push({ label: 'Your read', text: rd.estimate }); // once the lot is revealed, the reveal carries your read
+      else out.reveal = { ...truth(), truth: rd.truth, found: rd.found, total: rd.total, estimate: rd.estimate };
+    } else if (!onShelf) out.reveal = { ...truth(), truth: `${Math.round(secret.q * 100)}% condition, ${secret.fake ? 'counterfeit' : 'genuine'}`, found: 0, total: secret.defects.length, estimate: 'none' };
+    if (hag) reasons.push({ label: 'Haggle', text: hag.deal ? `Closed at ${hag.mult.toFixed(2)}x the posted price${hag.quick ? ' (Quick played it)' : ''}.` : 'No deal was struck.' });
+    if (bid) reasons.push({ label: 'Auction', text: bid.won ? `Won at ${money(bid.price)}, ${(bid.mult || 0).toFixed(2)}x the guide price.` : 'You dropped out.' });
     const worth = run.worth(secret);
     if (run.walked || noDeal) {
       Object.assign(out, { tone: 'info', title: lostAuction ? 'You dropped out' : 'No deal', headline: lostAuction ? 'The lot went to another bidder. Dropping costs nothing.' : run.walked ? 'You passed on this lot. It stays on the shelf.' : 'The talks ended without a deal. The lot is still on the shelf.' });
@@ -616,32 +617,32 @@ function summarize(run, { r, deal, noDeal, before, after, cmp, secret }) {
       Object.assign(out, { tone: 'warn', title: 'Not bought', headline: r ? r.msg : 'The deal could not be completed.' });
     } else {
       const price = r.price, net = worth - price;
-      Object.assign(out, { tone: secret.fake ? 'bad' : net >= 0 ? 'good' : 'warn', title: secret.fake ? 'It was a counterfeit' : net >= 0 ? 'Good buy' : 'Paid a little too much', headline: `You bought the ${plan.lot.name} for ${money(price)}.` });
-      lines.push(secret.fake ? `It is a counterfeit, worth about ${money(worth)}.` : `It is really ${Math.round(secret.q * 100)}% of the described condition, worth about ${money(worth)}.`);
+      Object.assign(out, { tone: secret.fake ? 'bad' : net >= 0 ? 'good' : 'warn', title: secret.fake ? 'It was a counterfeit' : net >= 0 ? 'Good buy' : 'Paid too much', headline: `Bought for ${money(price)}.` });
+      lines.push(`Worth about ${money(worth)}.`); // what it really was (the condition, a counterfeit) is the reveal's, once
       out.numbers = compare(price, 'price paid', 'low', { net: r2(net) });
-      if (secret.fake) out.lesson = { concept: 'due-diligence', text: 'Sellers know more than you do (information asymmetry). A cheap check before you pay, like the serial number, is the best money you can spend.' };
+      if (secret.fake) out.lesson = { concept: 'due-diligence', text: `The seller knows more than you do (information asymmetry). A check before you pay, such as the serial number, costs ${pts(inspect.PROBES.serial.cost)} and can save the whole price.` };
       else if (bid && bid.lesson) out.lesson = bid.lesson;
     }
     if (!out.lesson && hag && hag.lesson) out.lesson = keepHidden(hag, lostAuction || !!(r && r.ok));
-    if (!out.lesson && rd && !onShelf) out.lesson = { concept: 'due-diligence', text: `Information has a price: your read ${rd.found >= rd.total ? 'found every flaw' : `found ${rd.found} of ${rd.total} flaws`}, and what you do not check you pay for.` };
-    if (!out.lesson) out.lesson = { concept: 'due-diligence', text: 'Reading a lot before you buy it costs points but saves money: the seller always knows more than you do.' };
+    if (!out.lesson && rd && !onShelf) out.lesson = { concept: 'due-diligence', text: `${rd.total === 0 ? 'The lot had no flaws to find.' : rd.found >= rd.total ? 'Your read found every flaw.' : `Your read found ${rd.found} of ${rd.total} flaws.`} What you do not check, you pay for.` };
+    if (!out.lesson) out.lesson = { concept: 'due-diligence', text: 'A read costs points and can save money: the seller knows more than you do.' };
     if (secret.fake && out.tone !== 'bad' && !(run.walked || noDeal)) out.tone = 'bad';
   } else { // repair
-    const fx = res.fix, q = r && r.ok ? r : null;
+    const fx = res.fix, q = r && r.ok ? r : null, item = ASSETS[plan.asset.cls].name; // (plan.asset.name carries "(broken)", which a repaired crate is not)
     if (run.walked) { // nothing was done and nothing was charged
-      Object.assign(out, { tone: 'info', title: 'Left as it was', headline: `You left the bench. The ${plan.asset.name} is still broken and nothing was spent.` });
+      Object.assign(out, { tone: 'info', title: 'Left as it was', headline: `You left the bench. The ${item} is still broken and nothing was spent.` });
       out.numbers = { unit: 'net gain after the bill', better: 'high', you: null, quick: r2(cmp.quick.net), expert: r2(cmp.expert.net), quickNet: r2(cmp.quick.net), expertNet: r2(cmp.expert.net), expertVia: null };
-      out.lesson = { concept: 'repair-roi', text: 'A repair is an investment: it only pays when the value it adds beats the bill. Leaving a crate as it is costs nothing, and the numbers on the bench are there to be checked first.' };
+      out.lesson = { concept: 'repair-roi', text: 'A repair is an investment: it pays only when the value it adds beats the bill. Leaving a crate as it is costs nothing, so check the numbers first.' };
     } else if (!q) Object.assign(out, { tone: 'warn', title: 'Not repaired', headline: r ? r.msg : !fx ? 'The Fix stage was not finished, so nothing was repaired and nothing was charged.' : 'The repair could not be done.' });
     else {
       const gain = q.after - q.before - q.cost;
-      Object.assign(out, { tone: gain > 0 ? 'good' : 'warn', title: gain > 0 ? 'Repaired, and it pays' : 'Repaired', headline: `${plan.asset.name} is back at ${Math.round(q.quality * 100)}% quality for ${money(q.cost)}.` });
+      Object.assign(out, { tone: gain > 0 ? 'good' : 'warn', title: gain > 0 ? 'Repaired, and it pays' : 'Repaired', headline: `Back at ${Math.round(q.quality * 100)}% quality for ${money(q.cost)}.` });
       lines.push(`Its value goes from ${money(q.before)} to ${money(q.after)}: ${gain >= 0 ? 'a gain' : 'a loss'} of ${money(Math.abs(gain))} after the bill.`);
-      reasons.push({ label: 'Precision', text: `${pctOf(fx.precision)} over three steps${fx.careful ? ' (including steps done carefully)' : ''}: quality x${fx.qualityMult.toFixed(2)}, cost x${fx.costMult.toFixed(2)}.` });
+      reasons.push({ label: 'Precision', text: `${pctOf(fx.precision)} over three steps${fx.careful ? ' (including steps done carefully)' : ''}: quality ${fx.qualityMult.toFixed(2)}x, cost ${fx.costMult.toFixed(2)}x.` });
       out.numbers = { unit: 'net gain after the bill', better: 'high', you: r2(gain), quick: r2(cmp.quick.net), expert: r2(cmp.expert.net), quickNet: r2(cmp.quick.net), expertNet: r2(cmp.expert.net), expertVia: null };
       out.lesson = { concept: 'repair-roi', text: gain > 0
         ? 'Quality control pays twice: better work costs less and returns more, so precision is money. Repair when the value it adds beats the bill.'
-        : 'Repair is an investment: it only pays when the value it adds beats the bill. Check the numbers before you start, and take more care next time.' };
+        : 'A repair is an investment: it pays only when the value it adds beats the bill. Check the numbers before you start, and take more care next time.' };
     }
   }
   out.xp = xp;
@@ -675,11 +676,12 @@ function sanitize(o) { // no NaN, Infinity or undefined may reach the screen
 // ------------------------------------------------------------------ the screen's model: what the player may see, as plain data
 export function modelOf(run, ui = {}) {
   const { g, plan } = run, s = g.s, key = run.key, stage = key === 'result' ? null : run.stages[run.idx];
+  const talk = run.says.filter((x) => x.key !== 'read'); // what was said at the table; a Read's readings are the evidence list's, and are not the seller's words
   const st = run.stages.map((x, i) => ({ key: x.key, label: x.key === 'close' && plan.kind === 'buy' ? 'Close' : STAGE_LABEL[x.key], status: run.over || run.res[x.key] ? (run.res[x.key]?.skipped ? 'skipped' : 'done') : i === run.idx ? 'now' : 'todo' }));
   const done = run.stages.filter((x) => run.res[x.key] && !run.res[x.key].skipped).map((x) => ({ key: x.key, label: STAGE_LABEL[x.key], text: stageNote(run, x.key) }));
   const m = {
     kind: plan.kind, stage: key, steps: st, done, assist: run.assist, assistLocked: (g.P.haggleAssist || 0) > 0 && (key === 'close'), reduced: !!ui.reduced,
-    cash: s.cash, res: safeRes(run.res[key]), zone: plan.zoneFace, cast: plan.cast, say: run.lastSay(), says: run.says.slice(-5).map((x) => x.text), blocker: plan.blocker || '',
+    cash: s.cash, res: safeRes(run.res[key]), zone: plan.zoneFace, cast: plan.cast, say: talk.length ? talk[talk.length - 1].text : '', says: talk.slice(-5).map((x) => x.text), blocker: plan.blocker || '',
     plan: publicPlan(plan), auto: stage && stage.auto ? stage.auto : '',
     first: !run.acted && run.idx === 0 && !run.over && !plan.blocker, canQuick: !run.over && !plan.blocker && !run.res[key], stageDone: !!run.res[key],
     last: run.idx === run.stages.length - 1, view: null, quickRes: null, advice: null, summary: run.summary,
@@ -708,14 +710,14 @@ function publicPlan(p) {
 }
 function stageNote(run, key) {
   const r = run.res[key];
-  if (key === 'read') return `${pctOf(r.estimate.quality)} condition, ${pctOf(r.estimate.fakeProb)} chance it is counterfeit (${r.spent} points spent).`;
-  if (key === 'pitch') return r.pick ? `${ANGLE_WORD[r.pick[0]]} + ${ANGLE_WORD[r.pick[1]]}: price x${r.mult.toFixed(2)}.` : 'No pitch.';
-  if (key === 'close') return r.deal ? `Agreed at ${money(r.price)} (x${fin(r.mult, 1).toFixed(2)}).` : 'No deal.';
+  if (key === 'read') return `${pctOf(r.estimate.quality)} condition, ${pctOf(r.estimate.fakeProb)} chance of counterfeit (${pts(r.spent)} spent).`;
+  if (key === 'pitch') return r.pick ? `${ANGLE_WORD[r.pick[0]]} and ${ANGLE_WORD[r.pick[1]]}: ${r.mult.toFixed(2)}x as keen.` : 'No pitch.';
+  if (key === 'close') return r.deal ? `Agreed at ${money(r.price)} (${fin(r.mult, 1).toFixed(2)}x fair).` : 'No deal.';
   if (key === 'bid') return r.won ? `Won at ${money(r.price)}.` : 'Dropped out.';
-  if (key === 'fix') return `Precision ${pctOf(r.precision)}: quality x${r.qualityMult.toFixed(2)}, cost x${r.costMult.toFixed(2)}.`;
+  if (key === 'fix') return `Precision ${pctOf(r.precision)}: quality ${r.qualityMult.toFixed(2)}x, cost ${r.costMult.toFixed(2)}x.`;
   return '';
 }
 function quickNote(run, key) {
   const r = run.res[key];
-  return { text: `Played at average skill. ${stageNote(run, key)}`, say: run.lastSay(), ok: key === 'close' ? r.deal !== false : key === 'bid' ? r.won !== false : true };
+  return { text: stageNote(run, key), say: run.lastSay(), ok: key === 'close' ? r.deal !== false : key === 'bid' ? r.won !== false : true };
 }

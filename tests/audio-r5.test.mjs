@@ -255,7 +255,7 @@ test('U4: a repair the player cannot afford has no dial, so it does not spend th
     R.ses = UI.openDeal(R.ctx, brokenCrate(R.g)); await Promise.resolve();
     assert.equal(R.ses.longEar, true, 'the first repair that CAN be started is the first one explained');
     assert.match(R.said[0], /Fix\. A marker moves across a bar by itself/); assert.match(R.said[0], /Or turn on Repair dial tone, with the Dial tone button, to follow it by ear\.$/);
-    assert.equal(UI.viewModel(R.ses).dialLong, true); assert.match(UI.fixHTML(UI.viewModel(R.ses)), /id="dial-ear">Prefer to listen\?/);
+    assert.equal(UI.viewModel(R.ses).dialLong, true); assert.match(UI.fixHTML(UI.viewModel(R.ses)), /id="dial-ear">To follow the marker by ear/);
   });
 });
 test('U4: the first two dials of a run say where the tone\'s switch is while it is off; the third is the short line', { skip: !HAS }, async () => {
@@ -277,7 +277,7 @@ test('U4: the first two dials of a run say where the tone\'s switch is while it 
 test('U4: the words, and the count of dials a run has drawn', () => {
   assert.equal(DIAL_SWITCH_DIALS, 2);
   _resetTold(); assert.deepEqual([dialsDrawn('r1'), dialsDrawn('r1'), dialsDrawn('r1')], [1, 2, 3]); assert.equal(dialsDrawn('r2'), 1, 'a new run starts again'); assert.equal(dialsDrawn(undefined), 1); assert.equal(dialsDrawn(null), 2, 'no seed is one run');
-  assert.match(dialEarText(dialInfo({})), /^Prefer to listen\? Turn on Repair dial tone with the Dial tone switch next to Sound, or in Display and sound\. /, 'the copy does not depend on where the header is on the screen');
+  assert.match(dialEarText(dialInfo({})), /^To follow the marker by ear, turn on Dial tone next to Sound or in Display and sound\. /, 'the copy does not depend on where the header is on the screen');
   assert.ok(!/top of this window/.test(dialEarText(dialInfo({}))));
   assert.equal(dialShortText(dialInfo({}), true), 'Dial tone is off: use the Dial tone switch next to Sound to follow it by ear. Careful needs no timing.');
   assert.equal(dialShortText(dialInfo({}), false), 'Dial tone is off. Careful needs no timing.'); assert.equal(dialShortText(dialInfo({})), 'Dial tone is off. Careful needs no timing.', 'no second argument: as before');
