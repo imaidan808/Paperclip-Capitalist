@@ -187,7 +187,7 @@ test('Gate 2: a $25k account cannot expand automation until it files its audit',
   assert.ok(g.s.auditPending, 'audit card exists');
   const l = lane(g, 5);
   const locked = g.hirePipeline('broker', 5, l);
-  assert.equal(locked.ok, false); assert.match(locked.msg, /Gate 2/);
+  assert.equal(locked.ok, false); assert.match(locked.msg, /Hiring and manager upgrades are locked/);
   const r = g.resolveAudit('A');
   assert.ok(r.ok);
   assert.equal(g.autoLocked(), false);
@@ -213,7 +213,7 @@ test('peer-to-peer: extreme premiums are blocked and flagged; fair swaps escrow,
   const pen = A._mk(A.s, 'pen', { zone: 1, basis: 1 }); A.s.assets.push(pen);
   const scrap = B._mk(B.s, 'scrap', { zone: 1, basis: 1 }); B.s.assets.push(scrap);
   const bad = A.createOffer({ to: 'BBB', giveIds: [], giveCash: 1_000_000, want: { assets: [B.pub(scrap)], cash: 0 } });
-  assert.equal(bad.ok, false); assert.match(bad.msg, /Extreme Asymmetric Premium/);
+  assert.equal(bad.ok, false); assert.match(bad.msg, /Blocked: this deal is \d+% from fair value/);
   const flag = A.out.find((m) => m.t === 'flag');
   assert.ok(flag && flag.offer.variance > FMV_BAND, 'flagged for the instructor');
   const nwA = A.netWorth(), nwB = B.netWorth();

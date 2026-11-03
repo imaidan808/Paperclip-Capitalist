@@ -116,8 +116,7 @@ export function eventCalls(ev, st = newWireState(), hooks = {}) {
   }
 }
 
-/** A note's meaning: the engine and the session tag what a sound depends on with a `kind` (scam, counterfeit, settle, freight-arrive, customs, damage, mentor, sla, overdraft, fatigue, burnout, swap, advance), so a copy edit cannot mute one
- *  (tests/copy2-messages.test.mjs drives every one of them through the engine). A note without a kind, one from a save or a hand-made one, is read from its words as before. */
+/** A note's meaning. The engine and the session tag every note a sound depends on with a `kind` (tests/copy2-messages.test.mjs), so a copy edit cannot mute one; a note without one is read from its words. */
 export function noteKind(n) {
   if (n.kind) return n.kind;
   const t = String(n.text || '');
@@ -155,7 +154,7 @@ export function noteCalls(n, st = newWireState(), hooks = {}) {
   if (k === 'scam') { st.scamAt = now; return []; }
   if (k === 'counterfeit') { st.counterfeitAt = now; return []; }
   if (k === 'settle') return calls(['request', 'cash.in', { variant: 'settle', clock: true, meta: { amount: amt } }]);
-  const zoneOf = () => { if (Number.isInteger(n.z)) return n.z; const t = String(n.text), id = Object.keys(ZONES).find((z) => t.includes(' in ' + ZONES[z].short + '.') || t.includes(' in ' + ZONES[z].short + ':')); return id ? Number(id) : undefined; }; // the engine names the district (`z`); a note without one is read as "Freight arrived in Harbor."
+  const zoneOf = () => { if (Number.isInteger(n.z)) return n.z; const t = String(n.text), id = Object.keys(ZONES).find((z) => t.includes(' in ' + ZONES[z].short + '.') || t.includes(' in ' + ZONES[z].short + ':')); return id ? Number(id) : undefined; }; // `z` is the engine's; a hand-made note says "Freight arrived in Harbor."
   const where = () => { const z = zoneOf(), p = z != null && hooks.pan ? hooks.pan('zone', z) : undefined; return p === undefined ? {} : { pan: p }; };
   if (k === 'freight-arrive') return calls(['request', 'ship.arrive', { clock: true, ...where(), ...awayFrom(zoneOf(), hooks) }]);
   if (k === 'customs' || k === 'damage') return calls(['request', 'ship.trouble', { variant: k, state: 'trouble-' + k, ...(k === 'customs' ? { ...where(), ...awayFrom(zoneOf(), hooks) } : {}) }]);

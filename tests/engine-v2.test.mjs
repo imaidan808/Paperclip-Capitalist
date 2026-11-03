@@ -154,7 +154,7 @@ test('features open at their districts: managers and the Bank at 5, audits at 9,
   const g = mk();
   const lane = { cls: 'pen', buyer: 'student' };
   assert.match(g.loanBlock('micro'), /Commercial Bank opens/);
-  assert.match(g.hirePipeline('broker', 5, lane).msg, /access/, 'no managers in a district you cannot enter');
+  assert.match(g.hirePipeline('broker', 5, lane).msg, /not open yet/, 'no managers in a district you cannot enter');
   assert.equal(g.autoLocked(), false); assert.equal(g.s.auditPending, null);
   assert.match(g.exitQuote('trade').msg, /Corporate Valley/);
   assert.match(g.acquireClient('smb').msg, /district|yet/i);
@@ -846,7 +846,7 @@ test('blind quotes show what a player may see: no hidden truth and no undisclose
   // a verified fraud is out of the question for both kinds of quote; a genuine buyer is fine
   g.s.leads[5].push({ id: 'Lv', zone: 5, seg: 'trainer', budget: 500, need: null, born: 0, exp: 999, scam: true });
   assert.equal(g.verifyLead('Lv').scam, true);
-  for (const opts of [undefined, { blind: true }]) { const q = g.quotePitch(flawed.id, 'Lv', undefined, opts); assert.equal(q.ok, false); assert.match(q.msg, /fraud/); }
+  for (const opts of [undefined, { blind: true }]) { const q = g.quotePitch(flawed.id, 'Lv', undefined, opts); assert.equal(q.ok, false); assert.match(q.msg, /Fraud confirmed/); }
   g.s.leads[5].push({ id: 'Lg3', zone: 5, seg: 'trainer', budget: 1e12, need: null, born: 0, exp: 999 });
   assert.equal(blind(flawed, 'Lg3').ok, true);
   // the options argument is optional and ignored when not an object of the right kind
@@ -903,7 +903,7 @@ test('a buyer confirmed as fraudulent cannot then be sold to (verifying used to 
   assert.equal(g.verifyLead('Lscam').scam, true);
   const a = g.s.assets[0], cash = g.s.cash;
   const q = g.quotePitch(a.id, 'Lscam');
-  assert.equal(q.ok, false); assert.match(q.msg, /fraud/);
+  assert.equal(q.ok, false); assert.match(q.msg, /Fraud confirmed/);
   const r = g.pitch(a.id, 'Lscam');
   assert.equal(r.ok, false, 'selling to a confirmed fraudster is refused: ' + r.outcome);
   assert.ok(g.s.assets.some((x) => x.id === a.id), 'the goods stay where they are');
