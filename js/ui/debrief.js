@@ -132,8 +132,8 @@ const stat = (k, v, cls = '', sub = '', hero = false, tip = '') => `<div class="
 const lineHTML = (kind, text) => `<p class="small" style="margin:0"><b class="${kind === '+' ? 'green' : 'red'}" aria-hidden="true">${kind}</b> <span class="sr">${kind === '+' ? 'Strength' : 'Cost'}: </span>${esc(text)}</p>`;
 /** A column head that says what its column is on hover. */
 const th = (label, tip = '') => `<th scope="col"${tip ? ` title="${esc(tip)}"` : ''}>${label}</th>`;
-/** A fold: what a reader opens once stays shut until then. */
-const fold = (summary, body) => `<details class="gap"><summary class="small">${summary}</summary>${body}</details>`;
+/** A fold: what a reader opens once stays shut until then. A printed debrief carries it all (`data-print`: mountDebrief opens these for the print). */
+const fold = (summary, body) => `<details class="gap" data-print><summary class="small">${summary}</summary>${body}</details>`;
 const plural = (n, one, many = one + 's') => `${n} ${n === 1 ? one : many}`;
 
 /**
@@ -230,6 +230,11 @@ export function mountDebrief(root, S, hooks) {
     md() { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([reflectionMD(S, U.notes)], { type: 'text/markdown' })); a.download = `reflection-${s.pid}.md`; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000); toast('Workbook downloaded.', 'good'); },
   };
   delegate(root, acts);
+  // what the folds hold is on the paper: they are opened for the print (the Print button, or the browser's own) and shut again after it
+  const opened = [];
+  const openForPrint = () => { for (const d of root.querySelectorAll('details[data-print]:not([open])')) { d.open = true; opened.push(d); } };
+  const shutAfterPrint = () => { for (const d of opened.splice(0)) d.open = false; };
+  addEventListener('beforeprint', openForPrint); addEventListener('afterprint', shutAfterPrint);
   root.querySelector('h1')?.focus();
-  return { destroy() {} };
+  return { destroy() { removeEventListener('beforeprint', openForPrint); removeEventListener('afterprint', shutAfterPrint); } };
 }

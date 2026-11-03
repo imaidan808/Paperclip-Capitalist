@@ -405,6 +405,9 @@ test('D8: what the debrief and the dashboard show at first is a fraction of what
   // a fold the instructor opened stays open when its panel is drawn again
   assert.ok(I.instructorParts(dashboard(late), { open: { points: true, buyers: true } }).grade.includes('<details class="gap" data-fold="points" open>'));
   assert.ok(!dash.grade.includes('data-fold="points" open'));
+  // a printed debrief carries what the folds hold: every fold but the chart's data table is opened for the print and shut again after it
+  assert.equal((html.match(/<details class="gap" data-print>/g) || []).length, folds(html).length - 1);
+  assert.ok(/addEventListener\('beforeprint', openForPrint\)/.test(read('js/ui/debrief.js')) && /removeEventListener\('afterprint', shutAfterPrint\)/.test(read('js/ui/debrief.js')));
   // the strings that stay, read from the screens' sources
   const d = read('js/ui/debrief.js'), i = read('js/ui/instructor.js');
   for (const t of ['work through prices, speed and limits', 'No Deal Room scores were recorded', 'Family obligations paid', 'Student-loan garnishment']) assert.ok(d.includes(t), t);
