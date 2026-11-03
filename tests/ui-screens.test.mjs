@@ -166,7 +166,8 @@ test('the tray shows both chosen cards and the build summary; Begin says what is
   assert.ok(!t2.includes('Open slot'));
   assert.match(t2, /Strong on .*weak on /);
   assert.match(actionsHTML(two), /aria-disabled="false"/);
-  assert.match(actionsHTML(two), /Ready: .*Veteran.* \+ .*Creator.*\. You start with one paperclip and \$0\./);
+  assert.match(actionsHTML(two), /Ready: .*Veteran.* \+ .*Creator.*\./);
+  assert.doesNotMatch(actionsHTML(two), /paperclip/, 'the bar does not say again what the lede says');
   assert.match(actionsHTML(draftInit()), /Pick 2 more Backgrounds to begin/);
   for (const st of [draftInit(), one, two]) assert.ok(!BAD.test(trayHTML(st) + actionsHTML(st)));
 });

@@ -53,9 +53,9 @@ export { PERKS, PERK_IDS, perkMods } from './data/perks.js';
 export const LEVEL_XP = 150;
 export const xpForLevel = (l) => (l - 1) ** 2 * LEVEL_XP;
 export const SKILLS = {
-  ops: { id: 'ops', name: 'Operational Engineering', short: 'Ops', blurb: 'Cheaper, better repairs and cheaper working lots, but wrecks ask more as Ops rises. Less pipeline overhead.' },
-  growth: { id: 'growth', name: 'Customer Acquisition Velocity', short: 'Growth', blurb: 'More leads, faster cycles, cheaper clients, higher pitch prices.' },
-  fintech: { id: 'fintech', name: 'Capital Sourcing', short: 'Fintech', blurb: 'Cheaper institutional debt, lower fees, and earlier warnings of macro shocks.' },
+  ops: { id: 'ops', name: 'Operational Engineering', short: 'Ops', blurb: 'Cheaper, better repairs and cheaper working lots, but dearer wrecks. Less manager overhead.' },
+  growth: { id: 'growth', name: 'Customer Acquisition Velocity', short: 'Growth', blurb: 'More buyers, faster cycles, cheaper clients, higher pitch prices.' },
+  fintech: { id: 'fintech', name: 'Capital Sourcing', short: 'Fintech', blurb: 'Cheaper loans and fees, earlier warnings of shocks.' },
 };
 export const SKILL_MAX = 8;
 
@@ -63,9 +63,9 @@ export const SKILL_MAX = 8;
 export const BROKEN_FACTOR = 0.3; // as-is value of a broken asset relative to working
 
 export const PIPE = {
-  student: { name: 'Supply-Chain Student', icon: '🎓', hire: 120, royalty: 0.03, margin: 0.052, cycle: 1.3, overhead: 2, cap: 450, blurb: 'Cheap and eager. Slower cycles, learns with experience (+margin).' },
-  broker: { name: 'Asset Broker', icon: '🤝', hire: 600, royalty: 0.10, margin: 0.068, cycle: 1.0, overhead: 6, cap: 1000, blurb: 'The classic flipper. Takes a 10% trade royalty.' },
-  logistics: { name: 'Logistics Agent', icon: '🚛', hire: 420, royalty: 0.06, margin: 0.055, cycle: 0.8, overhead: 5, cap: 700, blurb: 'Fastest cycles. Also cuts freight cost 20% and damage risk in half.' },
+  student: { name: 'Supply-Chain Student', icon: '🎓', hire: 120, royalty: 0.03, margin: 0.052, cycle: 1.3, overhead: 2, cap: 450, blurb: 'Cheapest to hire. Its margin grows with experience.' },
+  broker: { name: 'Asset Broker', icon: '🤝', hire: 600, royalty: 0.10, margin: 0.068, cycle: 1.0, overhead: 6, cap: 1000, blurb: 'The highest base margin.' },
+  logistics: { name: 'Logistics Agent', icon: '🚛', hire: 420, royalty: 0.06, margin: 0.055, cycle: 0.8, overhead: 5, cap: 700, blurb: 'Cuts freight cost 20% and damage risk by half.' },
 };
 // Pipelines scale with a district's gate: a manager in district 13 handles about 31x the money of one in district 5.
 // A cycle's gross is allocation x kind margin x ECON.margin x pipeMargin x (Cm / 1.68) x lane. With marginBase 1.15 a balanced niche (Cm 1.68) pays 6.0% (student), 7.8% (broker) or 6.3% (logistics) before costs,
@@ -80,31 +80,31 @@ export const pipeMargin = (zone) => Math.max(0.5, PIPE_RULES.marginBase + PIPE_R
 export const pipeOverhead = (zone) => Math.max(1, Math.pow(zone.gate / 1000, PIPE_RULES.overheadExp));
 
 export const UPGRADES = {
-  jit: { name: 'Just-In-Time (JIT) Inventory', cost: 2500, zone: 5, blurb: 'Pipeline cycles 20% shorter, 50% slower inventory decay, 10% lower overhead. Less capital sits idle.' },
-  seo: { name: 'SEO Pipeline Adjustments', cost: 1800, zone: 5, blurb: '+50% buyer lead flow, +8% pipeline margin, 15% cheaper client acquisition.' },
-  freight: { name: 'Bulk Freight Discounts', cost: 1200, zone: 5, blurb: 'Freight runs cost 40% less.' },
-  research: { name: 'Market Research Suite', cost: 4000, zone: 5, blurb: 'Macro warnings arrive one tier earlier and the Niche Radar shows every underserved market at once.' },
+  jit: { name: 'Just-In-Time (JIT) Inventory', cost: 2500, zone: 5, blurb: 'Manager cycles 20% shorter, stock decays half as fast, overhead 10% lower.' },
+  seo: { name: 'SEO Pipeline Adjustments', cost: 1800, zone: 5, blurb: '+50% buyer arrivals, +8% manager margin, 15% cheaper clients.' },
+  freight: { name: 'Bulk Freight Discounts', cost: 1200, zone: 5, blurb: 'Freight costs 40% less.' },
+  research: { name: 'Market Research Suite', cost: 4000, zone: 5, blurb: 'Shock warnings come a tier earlier, and a Radar tab lists the best gaps in your district.' },
 };
 
 export const CLIENTS = {
   smb: { name: 'SMB Account', icon: '🏪', zone: 5, cac: 450, perDay: 55, days: 30, minRunning: 1, max: 6, blurb: 'Local businesses. Light SLA.' },
-  corp: { name: 'Corporate Account', icon: '🏢', zone: 5, cac: 4000, perDay: 380, days: 45, minRunning: 2, max: 4, needs: 'm2', b2b: true, blurb: 'Strict SLA: two pipelines must be running every day.' },
-  ent: { name: 'Enterprise Account', icon: '🏛️', zone: 13, cac: 40000, perDay: 3200, days: 60, minRunning: 3, max: 3, needs: 'm3', b2b: true, blurb: 'Corporate Valley contracts. Three pipelines must stay live.' },
+  corp: { name: 'Corporate Account', icon: '🏢', zone: 5, cac: 4000, perDay: 380, days: 45, minRunning: 2, max: 4, needs: 'm2', b2b: true, blurb: 'Mid-size firms. Strict SLA.' },
+  ent: { name: 'Enterprise Account', icon: '🏛️', zone: 13, cac: 40000, perDay: 3200, days: 60, minRunning: 3, max: 3, needs: 'm3', b2b: true, blurb: 'Corporate Valley contracts. The strictest SLA.' },
 };
 
 export const LOANS = {
-  micro: { name: 'Micro-Business Line', limit: 2500, fee: 0.03, every: 24, spread: 0.095, note: 'Daily compounding, 3% upfront fee. Up to $2,500.' },
-  pipeline: { name: 'Automated Pipeline Capital Loan', limitPct: 0.5, fee: 0.05, every: 168, spread: 0.045, note: 'Weekly compounding, 5% origination. Up to 50% of verified asset value.' },
-  circle: { name: 'Community Circle', limitPct: 0.15, fee: 0, every: 720, spread: 0, hidden: true, note: 'Zero interest, from people who trust you. Up to 15% of your net worth.' },
-  enterprise: { name: 'Enterprise Revolving Credit', limit: 100000, fee: 0, every: 720, spread: 0.025, commit: 0.015, zone: 13, note: 'Monthly compounding, 1.5% monthly commitment fee on the undrawn part. Needs Corporate Valley. Up to $100,000.' },
+  micro: { name: 'Micro-Business Line', limit: 2500, fee: 0.03, every: 24, spread: 0.095 },
+  pipeline: { name: 'Automated Pipeline Capital Loan', limitPct: 0.5, fee: 0.05, every: 168, spread: 0.045 },
+  circle: { name: 'Community Circle', limitPct: 0.15, fee: 0, every: 720, spread: 0, hidden: true },
+  enterprise: { name: 'Enterprise Revolving Credit', limit: 100000, fee: 0, every: 720, spread: 0.025, commit: 0.015, zone: 13 },
 };
 
 export const AUDIT_THEMES = [
   { title: 'Corporate Transparency Review', text: 'A regulator asks for your beneficial-ownership filing and supplier list.' },
-  { title: 'Sales-Tax Nexus Inquiry', text: 'Two states want to know why your city sales were not collected at the register.' },
-  { title: 'Worker Classification Check', text: 'Your logistics contractors look suspiciously like employees to the labor board.' },
+  { title: 'Sales-Tax Nexus Inquiry', text: 'Two states ask why you collected no sales tax on sales in their cities.' },
+  { title: 'Worker Classification Check', text: 'The labor board thinks your logistics contractors are really employees.' },
   { title: 'Inventory Provenance Audit', text: 'A customs agent wants paperwork proving where your pallets came from.' },
-  { title: 'Related-Party Transactions Sweep', text: 'Auditors flag swaps with classmates who share your cap table.' },
+  { title: 'Related-Party Transactions Sweep', text: 'Auditors question swaps with classmates who own a stake in your company.' },
   { title: 'Data Privacy Assessment', text: 'A privacy officer asks how your e-commerce domain stores customer records.' },
 ];
 export const AUDIT = { fee: 1200, fine: 5000, passChance: 0.15, velocityHit: 0.85, pauseHours: 120, everyDays: 15, deadlineHours: 72 };
@@ -113,8 +113,8 @@ export const AUDIT = { fee: 1200, fine: 5000, passChance: 0.15, velocityHit: 0.8
 export const EVENTS = {
   tiktok: {
     id: 'tiktok', name: 'The TikTok Arbitrage Surge', day: 15, level: 1, short: 'Demand shock',
-    alert: { code: 'MKT-DEM-SRG-15', readout: 'A viral craze for trend goods starts at 00:00 and lasts 48 hours.',
-      vars: ['Demand for trend goods rises 400% in every district.', 'Pipeline cycles on trend goods run 60% faster.', 'After 48 hours fatigue sets in: trend goods lose 50% of their value for 72 hours.'],
+    alert: { code: 'MKT-DEM-SRG-15', readout: 'A craze for trend goods starts on Day 15 and lasts 48 hours.',
+      vars: ['Demand for trend goods rises 400% in every district.', 'Manager cycles on trend goods run 60% faster.', 'After 48 hours fatigue sets in: trend goods lose 50% of their value for 72 hours.'],
       enforcement: 'Sell into the craze, then get out before fatigue.' },
     phases: [
       { from: 0, to: 48, eff: { demand: { tags: ['trend'], mult: 5 }, speed: { tags: ['trend'], mult: 1.6 } } },
@@ -123,7 +123,7 @@ export const EVENTS = {
   },
   fed: {
     id: 'fed', name: 'The Fed Taper and Credit Crunch', day: 45, level: 3, short: 'Liquidity shock',
-    alert: { code: 'CB-MON-REG-UPD-45', readout: 'The central bank tightens credit on Day 45 at 00:00.',
+    alert: { code: 'CB-MON-REG-UPD-45', readout: 'The central bank tightens credit on Day 45.',
       vars: ['The base monthly rate rises from 2.5% to 8.5% (+600 bps) for 15 days.', 'The base fee on sales rises from 2.5% to 12.0%.', 'Manager overhead rises 20%.'],
       enforcement: 'No new bank loans until Day 55. Open loans re-rate within 24 hours.' },
     phases: [
@@ -133,7 +133,7 @@ export const EVENTS = {
   },
   tariff: {
     id: 'tariff', name: 'The Cross-Border Tariff Lock', day: 75, level: 2, short: 'Supply shock',
-    alert: { code: 'TRD-TAR-LCK-75', readout: 'Customs duties lock international freight and dropshipping from Day 75.',
+    alert: { code: 'TRD-TAR-LCK-75', readout: 'Customs duties slow international lanes from Day 75, for 15 days.',
       vars: ['Managers on international lanes run 4 days slower.', 'Repairs outside the four starter districts cost 45% more.', 'Domestic lanes and the starter districts are unaffected.'],
       enforcement: 'Move international lanes to domestic ones, or ride out the slow cycles.' },
     phases: [{ from: 0, to: 360, eff: { intlSlow: 96, repair: 1.45 } }],
