@@ -2,7 +2,7 @@
 // Contract: see the header of ../shell.js. State that must survive a redraw lives in ctx.U.crew; the HTML is rebuilt from the engine every time.
 // The world opens this drawer with U.hireAt (a district id: open the hire dialog there) or U.focusPipe (a manager id: scroll to it and highlight it);
 // both are read once, in html(), and cleared.
-import { ZONES, ASSETS, BUYERS, PIPE, PIPE_RULES, UPGRADES, CLIENTS, MIL_ZONE } from '../../config.js';
+import { ZONES, ASSETS, BUYERS, PIPE, PIPE_RULES, UPGRADES, CLIENTS, MIL_ZONE, EVENTS } from '../../config.js';
 import { fitOf, fitLabel } from '../../market.js';
 import { esc } from '../common.js';
 import { moneySize } from '../../audio/palette.js';
@@ -22,14 +22,14 @@ const tone = (x) => (x >= 0 ? 'green' : 'red');
 
 /** The Creativity Engine, in words. Glyphs and labels carry the meaning; colour only backs them up. */
 const BANDS = {
-  herd: { glyph: '⚠', tone: 'bad', note: 'The herd trap: too many pitches chase this buyer, so your margin shrinks.' },
-  crowded: { glyph: '◐', tone: 'warn', note: 'Getting crowded: a quieter buyer would pay you more.' },
+  herd: { glyph: '⚠', tone: 'bad', note: 'Too many pitches chase this buyer, so your margin shrinks.' },
+  crowded: { glyph: '◐', tone: 'warn', note: 'Getting crowded: a quieter buyer would pay more.' },
   open: { glyph: '○', tone: 'info', note: 'An ordinary niche: nobody has crowded it.' },
-  balanced: { glyph: '●', tone: 'info', note: 'A healthy niche, with room for you.' },
-  pioneer: { glyph: '★', tone: 'good', note: 'Pioneer lane: few others are here, so your margin is boosted.' },
+  balanced: { glyph: '●', tone: 'info', note: 'A healthy niche with room for you.' },
+  pioneer: { glyph: '★', tone: 'good', note: 'Few others are here, so your margin is boosted.' },
 };
 const bandOf = (ci) => BANDS[ci.band.id] || BANDS.balanced;
-const cmChip = (ci) => `<span class="chip ${bandOf(ci).tone}"><span aria-hidden="true">${bandOf(ci).glyph}</span> ${esc(ci.band.label)} ${ci.cm.toFixed(2)}x</span>`;
+const cmChip = (ci) => `<span class="chip ${bandOf(ci).tone}" title="${esc(bandOf(ci).note)}"><span aria-hidden="true">${bandOf(ci).glyph}</span> ${esc(ci.band.label)} ${ci.cm.toFixed(2)}x</span>`;
 const crowdWords = (ci) => (ci.vT < 2 ? 'Almost nobody else is pitching this niche.' : `${Math.round(ci.vN)} of ${Math.round(ci.vT)} recent pitches use this niche.`);
 const laneName = (cls, seg) => `${esc(ASSETS[cls]?.name || 'No lane yet')} to ${esc(BUYERS[seg]?.name || '?')}`;
 
@@ -52,7 +52,7 @@ function hireBlock(v, zone) {
   const { g, s } = v;
   if (!ZONES[zone]?.auto) return 'Nobody can be hired here. This district is done by hand.';
   if (!s.zones.includes(zone)) return `${ZONES[zone].name} is not open yet.`;
-  if (g.autoLocked()) return 'Hiring is locked until you answer your audit. The Bank has it.';
+  if (g.autoLocked()) return 'Hiring is locked until you answer your audit, in the Bank.';
   if (s.pipes.filter((p) => p.zone === zone).length >= ZONES[zone].plots) return `All ${ZONES[zone].plots} plots in ${ZONES[zone].name} are staffed. Release a manager to make room.`;
   return '';
 }
@@ -77,7 +77,7 @@ function upgradeInfo(v, p) {
   const cost = g.pipeUpCost(p), cap = g.pipeCap(p), nextCap = g.pipeCap({ ...p, level: p.level + 1 });
   const cur = g.forecast({ ...p, alloc: cap }), nxt = g.forecast({ ...p, level: p.level + 1, alloc: nextCap });
   const gain = nxt.perDay - cur.perDay;
-  const why = g.autoLocked() ? 'Locked until you answer your audit. The Bank has it.' : s.cash < cost ? `Short by ${v.m(cost - s.cash)}.` : '';
+  const why = g.autoLocked() ? 'Locked until you answer your audit, in the Bank.' : s.cash < cost ? `Short by ${v.m(cost - s.cash)}.` : '';
   return { cost, cap, nextCap, gain, payback: gain > 0 ? cost / gain : null, why };
 }
 
@@ -92,20 +92,20 @@ function pipeCard(v, p, cache) {
   const { g, s, m, C } = v, K = PIPE[p.kind], Z = ZONES[p.zone], f = g.forecast(p), stt = statusOf(p), cap = f.cap, alloc = f.alloc, up = upgradeInfo(v, p);
   const flash = C.flash === p.id && Date.now() < C.flashUntil;
   let note = '';
-  if (stt.key === 'starved') note = `Needs ${m(alloc)} of free cash to start its next cycle. You have ${m(s.cash)}.`;
-  else if (stt.key === 'paused') note = p.inflight ? `Frozen mid-cycle with ${m(p.inflight)} of your capital inside until you resume.` : 'Paused. Resume it to start earning again.';
+  if (stt.key === 'starved') note = `Needs ${m(alloc)} to start its next cycle; you have ${m(s.cash)}.`;
+  else if (stt.key === 'paused') note = p.inflight ? `Paused mid-cycle with ${m(p.inflight)} of your capital inside.` : '';
   else if (stt.key === 'audit') note = `Back at work in ${dur(p.pausedUntil - s.hour)}.`;
-  else if (stt.key === 'nolane') note = 'Pick a lane so it knows what to sell, and to whom.';
+  else if (stt.key === 'nolane') note = 'Pick a lane: what to sell, and to whom.';
   else if (stt.key === 'idle' && alloc <= 0) note = 'No capital set. Fund it from Edit lane.';
-  const better = betterLane(v, p, f, cache);
-  const cyc = p.inflight ? `Cycle ${Math.min(p.prog, p.len)} of ${p.len} hours, ${m(p.inflight)} at work` : `A cycle takes ${f.len} hours`;
-  const reasons = [];
-  if (up.why && !up.maxed) reasons.push(`<b>Upgrade:</b> ${up.why}`);
-  if (p.inflight) reasons.push(`<b>Release:</b> opens when this cycle ends, in ${Math.max(1, p.len - p.prog)}h.`);
+  // the niche's note (the chip's hover) is a line only where the manager should move: a herd or a crowd, with the quieter lane the radar found
+  const better = betterLane(v, p, f, cache), crowded = f.ci.band.id === 'herd' || f.ci.band.id === 'crowded';
+  const cyc = p.inflight ? `Cycle ${Math.min(p.prog, p.len)} of ${p.len} h${Math.abs(p.inflight - alloc) > 0.5 ? `, ${m(p.inflight)} at work` : ''}` : `A cycle takes ${f.len} h`; // (the capital below is what is set; the amount out is only said when it differs)
   const upBtn = up.maxed
     ? '<span class="chip good"><span aria-hidden="true">★</span> Top level</span>'
     : `<button class="btn" data-act="crew-up" data-id="${p.id}" data-fid="cu-${p.id}" ${up.why ? 'aria-disabled="true"' : ''}>Level ${p.level + 1} for ${m(up.cost)}</button>`;
-  const upLine = up.maxed ? '' : `<p class="cr-up small"><b>Level ${p.level + 1}:</b> capacity ${m(up.cap)} to ${m(up.nextCap)} per cycle${up.gain > 0 ? `, about ${sgn(v, up.gain)} a day when fully funded${up.payback ? `, paid back in about ${Math.max(1, Math.round(up.payback))} days` : ''}` : '. This lane cannot use more capital profitably yet'}.</p>`;
+  // what the next level is worth: its payback is the line, its capacity and daily gain are the hover (capacity doubles with each level, engine pipeCap)
+  const upTip = up.maxed ? '' : `Capacity ${m(up.cap)} to ${m(up.nextCap)} per cycle${up.gain > 0 ? `, about ${sgn(v, up.gain)} a day when fully funded` : ''}.`;
+  const upLine = up.maxed ? '' : `<p class="cr-up small" title="${esc(upTip)}">${up.gain > 0 ? `Level ${p.level + 1} pays back in about ${Math.max(1, Math.round(up.payback))} days.` : `Level ${p.level + 1}: this lane cannot use more capital profitably yet.`}</p>`;
   return `<article class="cr-card${flash ? ' cr-focus' : ''}" data-pipe="${p.id}" data-st="${stt.key}" tabindex="-1" aria-label="${esc(K.name)}, level ${p.level}, ${esc(Z.name)}, ${esc(stt.label)}">
     <header class="cr-top"><span class="cr-ic" aria-hidden="true">${K.icon}</span>
       <div class="cr-id"><h4 class="cr-name">${esc(K.name)} <span class="chip">Lv ${p.level} of ${PIPE_RULES.maxLevel}</span></h4>
@@ -115,26 +115,25 @@ function pipeCard(v, p, cache) {
     <p class="small mute cr-cyc">${cyc}.</p>
     <dl class="cr-nums"><div><dt>Per cycle</dt><dd class="mono ${tone(f.net)}">${sgn(v, f.net)}</dd></div><div><dt>Per day</dt><dd class="mono ${tone(f.perDay)}">${sgn(v, f.perDay)}</dd></div><div><dt>Capital</dt><dd class="mono">${m(alloc)} <span class="mute">of ${m(cap)}</span></dd></div></dl>
     <div class="cr-cm">${cmChip(f.ci)}<span class="small">${crowdWords(f.ci)}</span></div>
-    <p class="small mute">${bandOf(f.ci).note}${better ? ` A quieter lane: <b>${laneName(better.cls, better.seg)}</b> (${better.cm.toFixed(2)}x).` : ''}</p>
+    ${crowded ? `<p class="small mute">${bandOf(f.ci).note}${better ? ` A quieter lane: <b>${laneName(better.cls, better.seg)}</b> (${better.cm.toFixed(2)}x).` : ''}</p>` : ''}
     ${note ? `<p class="cr-note small">${note}</p>` : ''}
     <div class="cr-acts">
       <button class="btn ghost" data-act="crew-edit" data-id="${p.id}" data-fid="ce-${p.id}">Edit lane</button>
       ${upBtn}
       ${alloc < cap - 0.5 ? `<button class="btn ghost" data-act="crew-fill" data-id="${p.id}" data-fid="cf-${p.id}">Fund full ${m(cap)}</button>` : ''}
       <button class="btn ghost" data-act="crew-pause" data-id="${p.id}" data-fid="cp-${p.id}">${p.status === 'paused' ? 'Resume' : 'Pause'}</button>
-      <button class="btn ghost danger-text" data-act="crew-rel" data-id="${p.id}" data-fid="cr-${p.id}" ${p.inflight ? 'aria-disabled="true"' : ''}>Release</button></div>
+      <button class="btn ghost danger-text" data-act="crew-rel" data-id="${p.id}" data-fid="cr-${p.id}" ${p.inflight ? `aria-disabled="true" title="Opens when this cycle ends, in ${Math.max(1, p.len - p.prog)} h."` : ''}>Release</button></div>
     ${upLine}
-    ${reasons.length ? `<p class="cr-why small">${reasons.join(' ')}</p>` : ''}
+    ${up.why && !up.maxed ? `<p class="cr-why small">${up.why}</p>` : ''}
   </article>`;
 }
 
 function hireCard(v, zone) {
   const { g, s, m } = v, Z = ZONES[zone], used = s.pipes.filter((p) => p.zone === zone).length, free = Z.plots - used, block = hireBlock(v, zone);
   const cheapest = Math.min(...Object.keys(PIPE).map((k) => g.pipeCost(k, zone)));
-  const first = used === 0;
   return `<div class="cr-hire${block ? ' off' : ''}"><div class="cr-hire-h"><span class="cr-plus" aria-hidden="true">+</span>
-      <div><b>Hire a manager in ${esc(Z.name)}</b><small>${plural(free, 'free plot')}. Managers start at ${m(cheapest)}.</small></div></div>
-    <p class="small">${first ? '' : 'Another manager is another niche working for you. Spread them out: crowded niches pay less.'}${s.cash < cheapest ? ` You have ${m(s.cash)}, so keep selling first.` : ''}</p>
+      <div><b>Hire a manager in ${esc(Z.name)}</b><small>${plural(free, 'open plot')}. Managers start at ${m(cheapest)}.</small></div></div>
+    ${s.cash < cheapest ? `<p class="small">You have ${m(s.cash)}: sell more first.</p>` : ''}
     <button class="btn" data-act="crew-hire" data-d="${zone}" data-fid="ch-${zone}" ${block ? 'aria-disabled="true"' : ''}>Hire a manager</button>
     ${block ? `<p class="cr-why small">${esc(block)}${g.autoLocked() ? ' <button class="btn sm ghost" data-act="dock" data-d="bank" data-fid="cr-tobank">Open the Bank</button>' : ''}</p>` : ''}</div>`;
 }
@@ -142,7 +141,7 @@ function hireCard(v, zone) {
 function hireRow(v, zone) {
   const { s, m, g } = v, Z = ZONES[zone], free = Z.plots - s.pipes.filter((p) => p.zone === zone).length, block = hireBlock(v, zone);
   const cheapest = Math.min(...Object.keys(PIPE).map((k) => g.pipeCost(k, zone)));
-  return `<div class="cr-hire cr-hire-row${block ? ' off' : ''}"><span class="cr-plus" aria-hidden="true">+</span><span class="grow small"><b>${plural(free, 'free plot')}</b> in ${esc(Z.name)}, from ${m(cheapest)}.</span>
+  return `<div class="cr-hire cr-hire-row${block ? ' off' : ''}"><span class="cr-plus" aria-hidden="true">+</span><span class="grow small"><b>${plural(free, 'open plot')}</b> in ${esc(Z.name)}, from ${m(cheapest)}.</span>
     <button class="btn" data-act="crew-hire" data-d="${zone}" data-fid="ch-${zone}" ${block ? 'aria-disabled="true"' : ''}>Hire a manager</button>${block ? `<span class="cr-why small">${esc(block)}</span>` : ''}</div>`;
 }
 
@@ -152,7 +151,7 @@ function districtBlock(v, zone, cache) {
   return `<section class="cr-dist" aria-label="${esc(Z.name)} managers"><h3 class="cr-dh"><span aria-hidden="true">${Z.icon}</span> ${esc(Z.name)}
       <span class="cr-plots" role="img" aria-label="${used} of ${Z.plots} plots staffed">${dots}</span><span class="small mute">${used} of ${Z.plots} plots</span></h3>
     ${pipes.map((p) => pipeCard(v, p, cache)).join('')}
-    ${free > 0 ? (used ? hireRow(v, zone) : hireCard(v, zone)) : `<p class="small mute">All ${Z.plots} plots staffed. Upgrade a manager to earn more from the same plot.</p>`}</section>`;
+    ${free > 0 ? (used ? hireRow(v, zone) : hireCard(v, zone)) : `<p class="small mute">All ${Z.plots} plots staffed.</p>`}</section>`;
 }
 
 function summary(v) {
@@ -166,14 +165,16 @@ function summary(v) {
 function crewTab(v) {
   const { g, s } = v, zones = autoDistricts(v), cache = {};
   const main = zones.filter((z) => z === v.ctx.U.zone || s.pipes.some((p) => p.zone === z)), rest = zones.filter((z) => !main.includes(z) && ZONES[z].plots > 0);
-  if (!zones.length) return `<div class="callout"><b>Managers start in ${ZONES[5].name}.</b> It opens at ${v.m(ZONES[5].gate)} net worth. Until then every district is done by hand.</div>`;
-  return `${g.autoLocked() ? `<div class="callout warn"><b>Expansion is locked.</b> ${s.auditPending ? 'Answer your audit in the Bank to hire and upgrade again.' : 'Your first audit is being scheduled. Hiring and upgrades pause until you have answered it.'}</div>` : ''}
-    ${s.pipes.length ? summary(v) : '<div class="callout"><b>Your first manager.</b> Cash that sits still earns nothing. A manager puts it to work in a niche and returns it, plus a margin, every cycle.</div>'}
+  if (!zones.length) return `<div class="callout"><b>Managers start in ${ZONES[5].name},</b> at ${v.m(ZONES[5].gate)} net worth.</div>`;
+  return `${g.autoLocked() ? `<div class="callout warn"><b>Expansion is locked.</b> ${s.auditPending ? 'Answer your audit in the Bank to hire and upgrade again.' : 'Hiring and upgrades pause until you answer your first audit.'}</div>` : ''}
+    ${s.pipes.length ? summary(v) : '<div class="callout"><b>Your first manager.</b> A manager lends your cash to a niche for a cycle and returns it with the margin.</div>'}
     ${main.map((z) => districtBlock(v, z, cache)).join('')}
     ${rest.length ? `<section class="cr-dist" aria-label="Open plots in other districts"><h3 class="cr-h3">Open plots elsewhere</h3>${rest.map((z) => hireRow(v, z)).join('')}</section>` : ''}`;
 }
 
 // ---------------------------------------------------------------- upgrades and clients
+// What each upgrade does is its blurb in js/config.js (UPGRADES): cycleLen (x0.8), _age (half), forecast (overhead x0.9, margin x1.08), _spawnLead (x1.5), clientQuote (x0.85),
+// freightQuote (x0.6), warnLead (+2 skill levels) and the Radar. tests/copy2-drawers.test.mjs holds each figure of those lines to the engine.
 function upgradesTab(v) {
   const { s, m } = v;
   const cards = Object.entries(UPGRADES).map(([id, u]) => {
@@ -183,7 +184,7 @@ function upgradesTab(v) {
       <p class="small">${esc(u.blurb)}</p>
       ${have ? '' : `<button class="btn" data-act="crew-upg" data-id="${id}" data-fid="cx-${id}" ${why ? 'aria-disabled="true"' : ''}>Install</button>${why ? `<p class="cr-why small">${esc(why)}</p>` : ''}`}</article>`;
   }).join('');
-  return `<p class="small mute">One-off upgrades for every manager. They never expire: buy the ones that pay back first.</p><div class="cr-grid">${cards}</div>`;
+  return `<p class="small mute">One-time purchases that never expire.</p><div class="cr-grid">${cards}</div>`;
 }
 
 function clientBlock(v, id) {
@@ -201,20 +202,20 @@ function clientCard(v, id) {
   const { g, s, m } = v, C = CLIENTS[id], q = g.clientQuote(id), n = g.liveClients(id).length, block = clientBlock(v, id);
   const run = g.runningPipes(), met = run >= C.minRunning, top = Math.max(q.cac, q.ltv, 1);
   const verdict = q.ratio >= 3 ? { t: 'good', g: '★', w: 'Strong' } : q.ratio >= 1.5 ? { t: 'warn', g: '◐', w: 'Thin' } : { t: 'bad', g: '⚠', w: 'Risky' };
-  return `<article class="cr-client"><div class="row"><span class="cr-ic" aria-hidden="true">${C.icon}</span><div class="grow"><b>${esc(C.name)}</b><p class="small mute">${esc(C.blurb)}</p></div><span class="chip">${n} of ${C.max}</span></div>
+  return `<article class="cr-client"><div class="row"><span class="cr-ic" aria-hidden="true">${C.icon}</span><div class="grow"><b title="${esc(C.blurb)}">${esc(C.name)}</b></div><span class="chip">${n} of ${C.max}</span></div>
     <div class="cr-vs" role="group" aria-label="What it costs to win this client against what they pay you">
       <div class="cr-vsrow"><span class="cr-vsl">You pay to win them (CAC)</span><span class="cr-vsb" aria-hidden="true"><i class="cost" style="width:${(q.cac / top * 100).toFixed(1)}%"></i></span><b class="mono">${m(q.cac)}</b></div>
       <div class="cr-vsrow"><span class="cr-vsl">They pay you ${q.payDays < C.days ? `over the ${plural(q.payDays, 'day')} you have left` : `over ${C.days} days`} (LTV)</span><span class="cr-vsb" aria-hidden="true"><i class="ltv" style="width:${(q.ltv / top * 100).toFixed(1)}%"></i></span><b class="mono">${m(q.ltv)}</b></div></div>
-    <p class="small"><span class="chip ${verdict.t}"><span aria-hidden="true">${verdict.g}</span> ${verdict.w}</span> They pay ${q.ratio.toFixed(1)}x what they cost you to win, and you earn it back in about ${q.payback.toFixed(1)} days${q.worthwhile ? '' : ', which is more than the run has left'}.</p>
-    <p class="small cr-sla"><span class="chip ${met ? 'good' : 'bad'}"><span aria-hidden="true">${met ? '✓' : '✗'}</span> ${met ? 'SLA met' : 'SLA not met'}</span> Needs ${plural(C.minRunning, 'manager')} running every day. You have ${run} running. Miss it on two days and they leave, with ${m(C.perDay * 2)} in penalties each time.</p>
+    <p class="small"><span class="chip ${verdict.t}"><span aria-hidden="true">${verdict.g}</span> ${verdict.w}</span> LTV is ${q.ratio.toFixed(1)}x CAC. Paid back in about ${q.payback.toFixed(1)} days${q.worthwhile ? '' : ', more than the run has left'}.</p>
+    <p class="small cr-sla"><span class="chip ${met ? 'good' : 'bad'}" title="A missed day costs ${m(C.perDay * 2)}."><span aria-hidden="true">${met ? '✓' : '✗'}</span> ${met ? 'SLA met' : 'SLA not met'}</span> Needs ${plural(C.minRunning, 'manager')} running every day; you have ${run}.</p>
     <button class="btn" data-act="crew-client" data-t="${id}" data-fid="cl-${id}" ${block ? 'aria-disabled="true"' : ''}>Sign for ${m(q.cac)}</button>${block ? `<p class="cr-why small">${esc(block)}</p>` : ''}</article>`;
 }
 
 function clientsTab(v) {
   const { s, m, g } = v;
   const live = g.liveClients().map((c) => { const C = CLIENTS[c.tier]; return `<article class="cr-active"><div class="row"><b class="grow">${C.icon} ${esc(C.name)}</b><span class="mono green">${sgn(v, c.earned)} earned</span></div><div class="bar green" aria-hidden="true"><i data-bar="client:${c.id}"></i></div>
-      <p class="small mute">${c.breaches ? `<span class="red">${c.breaches} of 2 SLA breaches.</span> ` : 'No SLA breaches. '}Ends in ${dur(c.until - s.hour)}. You paid ${m(c.cac)} to win them.</p></article>`; }).join('');
-  return `<p class="small mute">Clients pay you every day while enough managers are running. Winning one costs money now (CAC); what they pay over the contract is their lifetime value (LTV). The deal is good when LTV beats CAC and you can keep the promise (the SLA).</p>
+      <p class="small mute">${c.breaches ? `<span class="red">${c.breaches} of 2 SLA breaches.</span> ` : 'No SLA breaches. '}Ends in ${dur(c.until - s.hour)}.</p></article>`; }).join('');
+  return `<p class="small mute">Clients pay every day while enough managers are running. A missed day costs twice the account's daily rate, and a second ends the contract.</p>
     <div class="cr-grid">${Object.keys(CLIENTS).map((id) => clientCard(v, id)).join('')}</div>
     ${live ? `<h3 class="cr-h3">Your accounts</h3><div class="cr-grid">${live}</div>` : ''}`;
 }
@@ -235,12 +236,12 @@ function previewHTML(ctx) {
   const t = tmpPipe(v, H), f = g.forecast(t), c = f.ci, edit = H.edit ? s.pipes.find((p) => p.id === H.edit) : null;
   const cost = edit ? 0 : g.pipeCost(H.kind, H.zone), left = s.cash - cost, row = (k, x, cl = '') => `<dt>${k}</dt><dd class="${cl}">${x}</dd>`;
   const warn = [];
-  if (f.net < 0) warn.push('<div class="callout bad small"><b>This lane loses money.</b> Fees and overhead exceed the margin. Try a quieter buyer or more capital.</div>');
-  if (!edit && left < f.alloc) warn.push(`<div class="callout warn small"><b>It would wait for cash.</b> After paying ${m(cost)} you would have ${m(Math.max(0, left))}, but a cycle needs ${m(f.alloc)} free to start. Lower the capital, or earn a little more first.</div>`);
+  if (f.net < 0) warn.push('<div class="callout bad small"><b>This lane loses money.</b> Costs exceed the margin. Try a quieter buyer or more capital.</div>');
+  if (!edit && left < f.alloc) warn.push(`<div class="callout warn small"><b>It would wait for cash.</b> After the ${m(cost)} hire you would have ${m(Math.max(0, left))}; a cycle needs ${m(f.alloc)} to start. Lower the capital or earn more first.</div>`);
   else if (edit && !edit.inflight && s.cash < f.alloc) warn.push(`<div class="callout warn small"><b>It would wait for cash.</b> You have ${m(s.cash)}; a cycle needs ${m(f.alloc)}.</div>`);
   const pay = !edit && f.perDay > 0 ? ` It earns back its ${m(cost)} hire cost in about ${Math.max(1, Math.round(cost / f.perDay))} days.` : '';
   return `<div class="card cr-prev"><div class="row"><b>Forecast</b>${cmChip(c)}</div>
-    <p class="small"><b>Why this lane:</b> ${crowdWords(c)} ${bandOf(c).note}${t.channel === 'intl' ? ' International lanes pay a bigger margin but slow down when tariffs hit.' : ''}</p>
+    <p class="small"><b>Why this lane:</b> ${crowdWords(c)} ${bandOf(c).note}${t.channel === 'intl' ? ' International lanes earn a bigger margin and slow down in a tariff shock.' : ''}</p>
     <dl class="kv">${row('Margin before costs', m(f.gross))}${row('Institutional fee', '-' + m(f.fee))}${row('District tax', '-' + m(f.tax))}${row('Manager royalty', '-' + m(f.roy))}${row('Overhead', '-' + m(f.overhead))}<div class="sep"></div>${row('Net per cycle', sgn(v, f.net), tone(f.net))}${row('Cycle length', f.len + ' hours')}${row('Net per day', sgn(v, f.perDay), tone(f.perDay))}</dl>
     <p class="small mute">${pay}</p>${warn.join('')}</div>`;
 }
@@ -265,19 +266,19 @@ function hireBody(ctx) {
   const kinds = edit ? `<p class="small"><span class="cr-ic" aria-hidden="true">${PIPE[edit.kind].icon}</span> <b>${esc(PIPE[edit.kind].name)}</b> <span class="chip">Lv ${edit.level} of ${PIPE_RULES.maxLevel}</span></p>`
     : `<h3 class="cr-h3">1. Choose a manager</h3><div class="cr-kinds" role="group" aria-label="Manager type">${Object.entries(PIPE).map(([id, K]) => `<button class="cr-kind" aria-pressed="${H.kind === id}" data-act="crew-hkind" data-k="${id}" data-fid="hk-${id}" data-anchor="hire-${id}">
         <span class="cr-ic" aria-hidden="true">${K.icon}</span><b>${esc(K.name)}</b><span class="small">${esc(K.blurb)}</span>
-        <span class="small mono">${m(g.pipeCost(id, H.zone))} to hire</span><span class="small mute">Up to ${m(startCap(g, id, H.zone))} per cycle. ${K.cycle < 1 ? 'Fast' : K.cycle > 1 ? 'Slow' : 'Steady'} cycles. Takes ${Math.round(K.royalty * 100)}% of profit.</span></button>`).join('')}</div>`;
+        <span class="small mono">${m(g.pipeCost(id, H.zone))} to hire</span><span class="small mute">Up to ${m(startCap(g, id, H.zone))} per cycle. ${K.cycle < 1 ? 'Fast' : K.cycle > 1 ? 'Slow' : 'Steady'} cycles. Royalty ${Math.round(K.royalty * 100)}%.</span></button>`).join('')}</div>`;
   const shown = locked ? rows.filter((r) => r.cls === H.cls && r.seg === H.buyer) : rows, intl = 1.3 + (g.P.intlBonus || 0);
   const why = !edit && s.cash < cost ? `You need ${m(cost - s.cash)} more to hire this manager.` : !H.cls ? 'Pick a lane first.' : '';
   return `${kinds}
     <h3 class="cr-h3">${edit ? 'Lane' : '2. Pick a lane'}</h3>
-    <p class="small mute">Ranked best first: few other pitches, and a buyer who really wants it.</p>
-    ${locked ? '<p class="cr-why small">The lane is locked until the running cycle finishes. You can still change the capital.</p>' : ''}
+    <p class="small mute">Best first: few rival pitches, a strong fit.</p>
+    ${locked ? '<p class="cr-why small">The lane is locked until the running cycle finishes. Capital can still change.</p>' : ''}
     <div class="cr-lanes" role="group" aria-label="Lanes">${shown.map((r) => laneCard(v, r, H, locked)).join('') || '<p class="mute">No lane works here.</p>'}</div>
     ${!locked && !H.more && total > rows.length ? `<button class="btn ghost" data-act="crew-hmore" data-fid="hmore">Show all ${total} lanes</button>` : ''}
     <h3 class="cr-h3">${edit ? 'Channel' : '3. Channel'}</h3>
     <div class="cr-chans" role="group" aria-label="Channel">
       <button class="cr-lc" aria-pressed="${H.channel === 'dom'}" data-act="crew-hchan" data-c="dom" data-fid="hc-dom" ${locked && H.channel !== 'dom' ? 'aria-disabled="true"' : ''}><b>Domestic</b><span class="small">Steady and predictable.</span></button>
-      <button class="cr-lc" aria-pressed="${H.channel === 'intl'}" data-act="crew-hchan" data-c="intl" data-fid="hc-intl" ${locked && H.channel !== 'intl' ? 'aria-disabled="true"' : ''}><b>International</b><span class="small">Margin x${intl.toFixed(2)}, but tariffs slow every cycle.</span></button></div>
+      <button class="cr-lc" aria-pressed="${H.channel === 'intl'}" data-act="crew-hchan" data-c="intl" data-fid="hc-intl" ${locked && H.channel !== 'intl' ? 'aria-disabled="true"' : ''}><b>International</b><span class="small">Margin x${intl.toFixed(2)}. A tariff shock slows these cycles by ${EVENTS.tariff.phases[0].eff.intlSlow / 24} days.</span></button></div>
     <h3 class="cr-h3">${edit ? 'Capital' : '4. Capital per cycle'}</h3>
     <label for="ch-amt">Putting <output id="chamt">${m(alloc)}</output> of ${m(cap)} to work each cycle</label>
     <input id="ch-amt" type="range" min="0" max="100" step="5" value="${cap ? Math.round(alloc / cap * 100) : 0}" data-input="crew-hamt" data-fid="ch-amt">
@@ -289,7 +290,7 @@ function hireBody(ctx) {
 function hireDialog(ctx) {
   const v = view(ctx), H = v.C.hire, Z = ZONES[H.zone];
   return `<div class="crd"><button class="btn ghost sm x" data-close>Close</button><h2 tabindex="-1" autofocus>${H.edit ? 'Edit lane' : `Hire a manager in ${esc(Z.name)}`}</h2>
-    <p class="small mute">A manager lends your cash to one niche for a cycle, then hands it back with a margin. The lane you pick (what to sell, and to whom) decides how crowded that niche is.</p>
+    <p class="small mute">The lane (what to sell, and to whom) decides how crowded the niche is.</p>
     <div id="chbody">${hireBody(ctx)}</div></div>`;
 }
 
@@ -412,7 +413,7 @@ export default {
         else {
           ctx.sfx.level();
           const cap = game.pipeCap(p);
-          ctx.toast(`Level ${p.level}. Capacity is now ${ctx.money(cap)} per cycle.${p.alloc < cap - 0.5 ? ' Use "Fund full" to put it all to work.' : ''}`, 'good');
+          ctx.toast(`Level ${p.level}. Capacity is now ${ctx.money(cap)} per cycle.${p.alloc < cap - 0.5 ? ' Press Fund full to use it.' : ''}`, 'good');
         }
         ctx.render();
       },
@@ -421,7 +422,7 @@ export default {
       'crew-rel'(b) {
         const p = pipe(b.dataset.id); if (!p) return;
         if (p.inflight) { fail('Wait for the running cycle to finish before releasing.'); return; }
-        ctx.confirmBox('Release this manager?', `<p>${esc(PIPE[p.kind].name)} in ${esc(ZONES[p.zone].name)} leaves. You get back <b>${ctx.money(p.basis * 0.6)}</b>, 60% of the ${ctx.money(p.basis)} you put in (hire cost and upgrades). The plot opens for someone new.</p>`, 'Release', () => { const back = p.basis * 0.6, r = ctx.say(g().releasePipeline(p.id), 'info'); if (r.ok) ctx.audio?.request?.('cash.in', { size: moneySize(back, g().netWorth()), cause: 'money' }); /* the engine sends no event for a release: the cash that comes back is heard here */ }, true);
+        ctx.confirmBox('Release this manager?', `<p>${esc(PIPE[p.kind].name)} in ${esc(ZONES[p.zone].name)} leaves. You get back <b>${ctx.money(p.basis * 0.6)}</b>: 60% of the ${ctx.money(p.basis)} you put in (hire cost and upgrades).</p>`, 'Release', () => { const back = p.basis * 0.6, r = ctx.say(g().releasePipeline(p.id), 'info'); if (r.ok) ctx.audio?.request?.('cash.in', { size: moneySize(back, g().netWorth()), cause: 'money' }); /* the engine sends no event for a release: the cash that comes back is heard here */ }, true);
       },
       'crew-upg'(b) { const r = ctx.say(g().buyUpgrade(b.dataset.id)); if (r.ok) ctx.sfx.level(); ctx.render(); },
       'crew-client'(b) { const r = ctx.say(g().acquireClient(b.dataset.t)); if (r.ok) ctx.sfx.blip(); ctx.render(); },
