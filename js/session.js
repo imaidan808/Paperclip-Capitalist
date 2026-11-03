@@ -846,7 +846,7 @@ export class Session {
       const payload = { offerId: id, deliver: { cash: r.deliver.cash, assets: r.deliver.assets.map((a) => cleanAsset(a, { fold: true })).filter(Boolean) }, handle: this.handle };
       this._tell(from, 'deliver', payload);
       this.delivering.set(id, { to: from, payload, at: Date.now(), last: Date.now(), tries: 1, name: p.name });
-      g.note('good', `Swap completed with ${p.name}.`);
+      g.note('good', `Swap completed with ${p.name}.`, { kind: 'swap' });
     }
     this.emit('change');
   }
@@ -869,7 +869,7 @@ export class Session {
       this._tell(from, 'ack', { offerId: id });
     } else { delete e.lockedBy; delete e.lockedAt; delete e.lockLapsed; delete e.recalling; } // a reply that is not that swap changes nothing: the offer is open again, and the hold is let go
     const short = assets.length < want.assets.length || cash < want.cash - 0.005;
-    g.note(r.ok ? (short ? 'warn' : 'good') : 'bad', r.ok ? (short ? `${name} delivered less than the swap said. What arrived was added.` : `${name} accepted. Swap completed.`) : r.msg);
+    g.note(r.ok ? (short ? 'warn' : 'good') : 'bad', r.ok ? (short ? `${name} delivered less than the swap said. What arrived was added.` : `${name} accepted. Swap completed.`) : r.msg, r.ok && !short ? { kind: 'swap' } : undefined);
     this.emit('change');
   }
   _onAbort(m, from) {

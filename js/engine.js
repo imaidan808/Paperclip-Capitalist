@@ -424,7 +424,7 @@ export class Game {
       if (!ev.warned && h < ev.start && h >= ev.start - lead) {
         ev.warned = true; ev.warnedAt = h;
         const hrs = ev.start - h;
-        this.note('warn', `${ev.name}: effective in ${hrs >= 24 ? plural(Math.round(hrs / 24), 'day') : plural(hrs, 'hour')}.`, { alert: { ...ev.alert, name: ev.name, level: ev.level, start: ev.start } });
+        this.note('warn', `${ev.name}: effective in ${hrs >= 24 ? plural(Math.round(hrs / 24), 'day') : plural(hrs, 'hour')}.`, { kind: 'advance', alert: { ...ev.alert, name: ev.name, level: ev.level, start: ev.start } });
       }
       if (!ev.started && h >= ev.start) {
         ev.started = true;
@@ -434,7 +434,7 @@ export class Game {
         s.shockLog.push({ id: ev.id, kind: ev.kind, name: ev.name, start: h, nw: this.netWorth(), cash: s.cash, debt: this.debt(), de: Math.min(this.deRatio(), DE_CAP), inv: this.invValue(), pipes: s.pipes.length, intl: s.pipes.filter((p) => p.channel === 'intl').length, pivot0: s.pivot, nwAfter: null, pivots: null, warnedHours: ev.start - (ev.warnedAt ?? ev.start) });
         this._m = null;
       }
-      if (ev.kind === 'tiktok' && h === ev.start + 48) this.note('bad', 'Market fatigue: trend goods lose half their value for 72 hours.');
+      if (ev.kind === 'tiktok' && h === ev.start + 48) this.note('bad', 'Market fatigue: trend goods lose half their value for 72 hours.', { kind: 'fatigue' });
     }
     for (const sh of s.shockLog) if (sh.nwAfter == null && h >= sh.start + 120) { sh.nwAfter = this.netWorth(); sh.pivots = s.pivot - sh.pivot0; }
   }
@@ -675,13 +675,13 @@ export class Game {
       s.assets = s.assets.filter((x) => x.id !== a.id);
       s.streak = 0; s.rep = clamp(s.rep - 10, 0, 100);
       this.led('pitch', `${ASSETS[a.cls].name} went to a fraudulent buyer and was never paid for.`, -(a.basis || 0), { z });
-      this.note('bad', 'Scam: the payment bounced and the buyer vanished. Verify buyers before you ship (Digital Natives attract these).');
+      this.note('bad', 'Scam: the payment bounced and the buyer vanished. Verify buyers before you ship (Digital Natives attract these).', { kind: 'scam' });
       evt('rejected', { gain: -1 });
       return ok('Scammed.', { ...q, outcome: 'scam' });
     }
     if (q.rejected) {
       s.streak = 0;
-      if (q.reason === 'counterfeit') { a.known = true; s.rep = clamp(s.rep - 3, 0, 100); this.note('bad', `The ${BUYERS[q.lead.seg].name} spotted a counterfeit. That ${ASSETS[a.cls].name} is worth almost nothing.`); }
+      if (q.reason === 'counterfeit') { a.known = true; s.rep = clamp(s.rep - 3, 0, 100); this.note('bad', `The ${BUYERS[q.lead.seg].name} spotted a counterfeit. That ${ASSETS[a.cls].name} is worth almost nothing.`, { kind: 'counterfeit' }); }
       if (this.P.flopRep) { s.rep = clamp(s.rep - this.P.flopRep, 0, 100); s.ps.goodwillUntil = s.hour + 48; }
       this.led('pitch', `Pitched ${ASSETS[a.cls].name} to ${BUYERS[q.lead.seg].name}: rejected (${q.reason === 'counterfeit' ? 'counterfeit' : 'no fit'}).`, 0, { z });
       evt('rejected', { gain: 0 });
@@ -914,7 +914,7 @@ export class Game {
     if (!s.settle.length) return;
     const due = s.settle.filter((x) => x.at <= s.hour);
     if (!due.length) return;
-    for (const d of due) { s.cash += d.amt; this.note('info', `${money(d.amt)} settled into cash.`); }
+    for (const d of due) { s.cash += d.amt; this.note('info', `${money(d.amt)} settled into cash.`, { kind: 'settle', amt: d.amt }); }
     s.settle = s.settle.filter((x) => x.at > s.hour);
   }
   freightQuote(ids, to) {
@@ -960,16 +960,16 @@ export class Game {
           const fee = Math.min(Math.max(0, s.cash), (f.book || 0) * 0.02);
           s.cash -= fee; f.arrive = s.hour + 12;
           this.led('customs', `Customs inspected freight bound for ${ZONES[f.to].short}`, fee ? -fee : 0, { z: f.to }); // (never -0: a broke founder's freight is inspected for nothing)
-          this.note('warn', `Customs inspected your freight in ${ZONES[f.to].short}: 12 hours' delay and a ${money(fee)} fee.`);
+          this.note('warn', `Customs inspected your freight in ${ZONES[f.to].short}: 12 hours' delay and a ${money(fee)} fee.`, { kind: 'customs', z: f.to });
           continue;
         }
       }
       for (const a of f.items) {
         a.zone = f.to;
-        if (this.rand() < f.risk) { a.quality *= 0.8; this.note('bad', `${ASSETS[a.cls].name} was damaged in transit (-20% quality). Higher Ops and a Logistics Agent cut this risk.`); }
+        if (this.rand() < f.risk) { a.quality *= 0.8; this.note('bad', `${ASSETS[a.cls].name} was damaged in transit (-20% quality). Higher Ops and a Logistics Agent cut this risk.`, { kind: 'damage' }); }
         s.assets.push(a);
       }
-      this.note('info', `Freight arrived in ${ZONES[f.to].short}.`);
+      this.note('info', `Freight arrived in ${ZONES[f.to].short}.`, { kind: 'freight-arrive', z: f.to });
     }
     s.freight = s.freight.filter((x) => x.arrive > s.hour);
     // a crate on a truck ages with the rest of the stock: spoilage and depreciation are paid at midnight whether it is on a shelf or on the road (_dayTick ages s.assets only)
@@ -1305,7 +1305,7 @@ export class Game {
     const Pm = this.P;
     if (Pm.familyTax && s.hour % Pm.familyTax.everyHours === 0 && s.cash > 0) { const t = s.cash * Pm.familyTax.rate; s.cash -= t; dayProfit -= t; this.led('family', 'Family obligations', -t); }
     if (Pm.subscription && s.hour % 720 === 0 && s.cash > 0) { const t = s.cash * Pm.subscription.rate; s.cash -= t; dayProfit -= t; this.led('subscription', 'Tool subscriptions', -t); }
-    if (Pm.burnout && day % Pm.burnout.everyDays === 0) { s.ps.burnoutUntil = s.hour + 24; this.note('warn', 'Burnout: you take a day off and no new buyers come to you.'); }
+    if (Pm.burnout && day % Pm.burnout.everyDays === 0) { s.ps.burnoutUntil = s.hour + 24; this.note('warn', 'Burnout: you take a day off and no new buyers come to you.', { kind: 'burnout' }); }
     if (Pm.mentor && day % 7 === 0) this._mentorTip();
     // clients: the day's income is one row, each SLA penalty its own; a contract's closing row is a memo (its CAC was booked at signing, its income day by day)
     let clientIn = 0, clientN = 0;
@@ -1319,7 +1319,7 @@ export class Game {
         const pen = C.perDay * 2;
         s.cash -= pen; c.breaches++; dayProfit -= pen;
         this.led('client', `SLA breach on a ${C.name}: penalty`, -pen, { sla: true });
-        this.note('bad', `SLA breach on a ${C.name}: ${money(pen)} penalty. Keep ${C.minRunning} pipeline(s) running.`);
+        this.note('bad', `SLA breach on a ${C.name}: ${money(pen)} penalty. Keep ${C.minRunning} pipeline(s) running.`, { kind: 'sla', amt: pen });
         if (c.breaches >= 2) { c.done = true; this.note('bad', `The ${C.name} walked away after repeated SLA breaches.`); }
       }
     }
@@ -1344,7 +1344,7 @@ export class Game {
         if (fee > 0) { ent[0].principal += fee; this.led('loan', 'Unused-commitment fee', 0, { fee, memo: true }); } // no cash moves: the fee is added to the loan and leaves with the repayment, which is the row that holds it
       }
     }
-    if (s.cash < 0) { const od = -s.cash * 0.005; s.cash -= od; s.overdraft += od; this.led('overdraft', 'Overdraft interest', -od); if (day % 3 === 0) this.note('bad', `Cash is negative (${money(s.cash)}). Overdraft interest is accruing.`); }
+    if (s.cash < 0) { const od = -s.cash * 0.005; s.cash -= od; s.overdraft += od; this.led('overdraft', 'Overdraft interest', -od); if (day % 3 === 0) this.note('bad', `Cash is negative (${money(s.cash)}). Overdraft interest is accruing.`, { kind: 'overdraft', amt: -s.cash }); }
     // p2p royalty streams you pay. The day's rate falls due and is paid from the cash there is; what cash cannot cover stays owed (`arrears`, a liability in netWorth() and in an exit's proceeds) and is paid first
     // from the next cash, a message of at most a day's rate at a time (the receiver takes no more than that at once). A stream whose receiver's run is over (the room says so) is ended: nothing could be received.
     for (const r of s.royalties) {
@@ -1371,7 +1371,7 @@ export class Game {
   _mentorTip() {
     let best = null;
     for (const z of this.s.zones) { const r = this.radar(z, 1)[0]; if (r && (!best || r.score > best.score)) best = { ...r, zone: z }; }
-    if (best) this.note('info', `Your mentor says: look at ${ASSETS[best.cls].name} for ${BUYERS[best.seg].name} in ${ZONES[best.zone].short}. Few people are selling there, so it should pay well.`);
+    if (best) this.note('info', `Your mentor says: look at ${ASSETS[best.cls].name} for ${BUYERS[best.seg].name} in ${ZONES[best.zone].short}. Few people are selling there, so it should pay well.`, { kind: 'mentor' });
   }
   _audits() {
     const s = this.s;
@@ -1469,7 +1469,7 @@ export class Game {
     s.exit = { kind: s.exiting.kind, hour: s.hour, nw, daysLeft: this.daysRemaining(), eei: eeiCalc(nw, s.startCapital, this.daysRemaining(), this.env.difficulty.eeiFloor) };
     s.exiting = null; s.over = true;
     this.led('exit', 'Exit completed', proceeds);
-    this.note('good', `Exit complete at ${money(nw)}. Score locked with ${plural(Math.round(this.daysRemaining()), 'day')} to spare.`, { final: true });
+    this.note('good', `Exit complete at ${money(nw)}. Score locked with ${plural(Math.round(this.daysRemaining()), 'day')} to spare.`, { final: true, exit: true });
   }
 
   // ------------------------------------------------------------------ peer-to-peer exchange
