@@ -122,6 +122,20 @@ test('M1: the end of a run: the bell is the horizon, a completed exit is "done",
   assert.deepEqual(calls(done), [['request', 'run.end', { variant: 'done' }]]); assert.deepEqual(calls({ ...done, text: 'x' }), calls(done));
 });
 
+test('M1: across whole runs, no note\'s sound depends on its words (every note the engine writes, over three Background pairs and three worlds)', () => {
+  const kinds = new Set(); let n = 0;
+  for (const [perks, seed] of [[['native', 'pro'], 3], [['gigger', 'heir'], 7], [['creator', 'veteran'], 13]]) {
+    const g = makeGame(perks, 'ops', seed), seen = []; g.onNote = (x) => seen.push(x);
+    run(g, { days: 70 });
+    for (const note of seen) {
+      n++; if (note.kind) kinds.add(note.kind);
+      assert.deepEqual(calls({ ...note, text: 'x' }), calls(note), `the sound of "${note.text}" reads its words`);
+    }
+  }
+  assert.ok(n > 150, `a run writes notes (${n})`);
+  for (const k of ['settle', 'freight-arrive']) assert.ok(kinds.has(k), `the runs wrote a ${k} note`);
+});
+
 // two classmates on an in-memory room, as the swap tests build them
 function hubOf(code) {
   const members = new Map(), queue = [];

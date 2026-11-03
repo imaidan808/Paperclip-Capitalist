@@ -25,11 +25,13 @@ The voice is dignified and assured. It says what is true, in the fewest words, a
 | The Deal Room: stages, result | `js/ui/deal.js`, `js/deal.js`, `js/play/*.js` (a buyer's lines are the character's, not the game's voice) |
 | Quests and the Goal card | `js/meta/quests.js` |
 | Debrief, instructor | `js/ui/debrief.js`, `js/ui/instructor.js`, `docs/FACULTY_KIT.md` |
-| Engine notes and the ticker | `js/engine.js`, `js/config.js` (EVENTS, AUDIT_THEMES) |
+| Engine notes, refusals and the ticker | `js/engine.js`, `js/session.js`, `js/config.js` (EVENTS, AUDIT_THEMES). A note a sound depends on carries a `kind` (and `amt`, `z`): reword it freely, never drop the tag. One message for one action: a result that carries the facts writes no second note |
+| The Cash and Net worth windows, the settings dialog | `js/ui/shell.js` (`worthRows`), `js/ui/common.js`, `js/audio/settings.js`. What a row is for is its hover; the footnote folds |
 
 ## What holds it
 
 - `tests/copy.test.mjs`: the claims against the engine (net worth, exit), the Backgrounds' headlines against their full claims, the banned phrases, the folded result.
+- `tests/copy2-messages.test.mjs`: the sound of every note the engine writes is held by its kind, not its words; the figures in notes and refusals are recomputed from the engine and the config; the Breakdown adds up to the net worth.
 - `tests/meta-academy.test.mjs`: every number a lesson quotes, and the limits (scene 80 to 190 characters, a coach line 30 to 200, a gist 60 to 160).
 - `tests/meta-codex.test.mjs`: every figure a Codex page quotes.
 - `tests/page-budget.test.mjs`: the first screen is 300 KB gzipped. Words cost bytes: the fold styles are written once in `css/styles.css`.
