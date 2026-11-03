@@ -44,22 +44,22 @@ Instructor, Create a room opens it. It redraws about once a second.
 
 | Panel | Control | What it does |
 |---|---|---|
-| Head | **Copy student link**, **Access**, **Close room** | The link carries the room code (and the relay). Access opens the display settings. Close room leaves the room and goes back to the title screen; to come back in, use **Resume as instructor** on the title screen with the room code and the recovery code (see Recovery code and the instructor's seat). |
+| Head | **Copy student link**, **Display and sound**, **Close room** | The link carries the room code (and the relay). Display and sound opens the display and sound settings. Close room leaves the room and goes back to the title screen; to come back in, use **Resume as instructor** on the title screen with the room code and the recovery code (see Recovery code and the instructor's seat). |
 | Global engine step controls | **Start simulation** | Leaves the lobby: Day 1, running. |
 | | **Pause** / **Resume**, **1x 4x 16x 64x** | The class's clock. Every student's clock follows yours. |
-| | **Rewind 1 day, 3 days, 7 days** | Restores each student's most recent daily checkpoint, up to 10 days back. A student with no checkpoint that old goes back as far as it can, and the roster says "rewind stopped at day N". A student who is offline catches up deterministically on return. |
+| | **Rewind 1 day, 3 days, 7 days** | Sends every connected student back to their daily checkpoint that many days earlier; a game keeps 10 days of checkpoints. A student with no checkpoint that old goes back as far as it can, and the roster says "rewind stopped at day N". A student who is offline when you rewind is not rewound: the rewind is not kept for them. |
 | | **Pace preset** | Sets the speed (table below). |
-| Manual black swan trigger | **Deploy to cohort** | Sends a shock: Scenario (the three scheduled shocks, or one of three algorithmic ones), When (right now with no warning, or later in virtual hours), and Replace the scheduled copy (pull it forward instead of stacking). |
+| Manual black swan trigger | **Deploy to cohort** | Sends a shock to the students who are connected when you press it: Scenario (the three scheduled shocks, or one of three algorithmic ones), When (right now with no warning, or later in virtual hours), and Replace the scheduled copy (pull it forward instead of stacking). The line under the button, **Upcoming**, lists the shocks still to come with their days, the ones you sent included. |
 | Asymmetric risk scaling | **Transaction friction** (0.5x to 3x) | Scales taxes and fees. |
 | | **Compliance audit frequency** (0.5x to 3x) | Scales how often audits come. |
-| | **Synthetic classmates filling the market** (0 to 80) | The herd that crowds niches, so the Creativity Engine has something to punish in a small class. It shapes prices, not the grade. |
+| | **Synthetic classmates filling the market** (0 to 80) | The herd that crowds niches, so the creativity multiplier has something to punish in a small class. It shapes prices, not the grade. |
 | | **Demo students on this dashboard** (0 to 24) | Made-up students for a demo of the dashboard. Leave at 0 when you grade (see Grading). |
 | | **EEI starting-capital floor** | The divisor floor of the score (default 1,000). |
 | | **Algorithmic surprise events** | A viral mention, a supply glut or a regulatory scare, derived from the room code and the day, so every student in a room sees the same ones. |
 | Live cohort metrics | Gini, median, where the class is, what was drafted, heat map | Wealth Gini with an alert above 0.65 and a one-click **Inject Credit Crunch now**, the median net worth, students by the highest district they have opened, the Backgrounds drafted, and a niche saturation heat map for any district (48 virtual hours of transactions by asset class and buyer). |
-| Operational bottlenecks | Stalled founders | Founders past the first milestone whose pipelines have shown no automated activity for more than three virtual days, with how long and their net worth. |
+| Operational bottlenecks | Stalled founders | Founders past the first milestone with no sale to a buyer and no manager cycle for more than three virtual days, with how long and their net worth. |
 | Flagged peer trades | Flags | A swap blocked for being outside +/-40% of fair value, with the variance. |
-| Roster and gradebook | **Export gradebook CSV**, Background filter | The pre-filled 60 points per founder. |
+| Roster and gradebook | **Export gradebook CSV**, Background filter | The pre-filled 60 points per founder. A founder with no graded shock shows 10.0 for adaptability, marked with a star: a neutral 50 of 100, the figure the subtotal counts. |
 
 The pace presets, and what a virtual day lasts at each:
 
@@ -76,13 +76,13 @@ The pace presets, and what a virtual day lasts at each:
 **The seat grace period.** If you cannot find the code, the relay's operator can set `SEAT_GRACE_MS` (milliseconds; 0 by default, which means never): once the seat's holder has been gone that long, another Founder ID that connects as the instructor is given the seat. Leave it at 0 unless you need a handover, because with a value set an instructor whose laptop lid stays shut for longer than that comes back to find someone else in the seat (the recovery code takes it back from them whatever the setting says). Without a relay (tabs of one browser) there is no seat to lose.
 
 ## Shocks
-Three shocks are scheduled; the dashboard can also deploy them at any time. Higher **Capital Sourcing** skill buys earlier warnings: 12 hours' notice at first, 72 hours at level 3 and 7 days at level 5 (the Market Research Suite upgrade brings each a tier earlier).
+Three shocks are scheduled; the dashboard can also deploy them at any time, and a shock deployed with Replace takes the place of the scheduled one of its kind. The days below are the scheduled ones; the debrief and its chart show the day a shock really hit. Higher **Capital Sourcing** skill buys earlier warnings: 12 hours' notice at first, 72 hours at level 3 and 7 days at level 5 (the Market Research Suite upgrade brings each a tier earlier).
 
-| Shock | Day | What happens |
+| Shock | Scheduled day | What happens |
 |---|---|---|
-| The TikTok Arbitrage Surge (demand) | Day 15 | For 48 hours demand for trend goods spikes +400% and matching pipelines run 60% faster; then market fatigue halves the value of trend inventory for 72 hours. Sell into the window, then get out. |
-| The Fed Taper and Credit Crunch (liquidity) | Day 45 | For 15 days the base borrowing rate goes from 2.5% to 8.5%, the transaction tax from 2.5% to 12.0% and pipeline overhead rises 20%; no new commercial bank loans may be drawn until Day 55. |
-| The Cross-Border Tariff Lock (supply) | Day 75 | For 15 days international pipeline cycles slow by 4 virtual days and repairs outside the four starter districts cost 45% more. Domestic channels are unaffected. |
+| The TikTok Arbitrage Surge (demand) | Day 15 | For 48 hours demand for trend goods spikes +400% and matching manager cycles run 60% faster; then market fatigue halves the value of trend inventory for 72 hours. Sell into the window, then get out. |
+| The Fed Taper and Credit Crunch (liquidity) | Day 45 | For 15 days the base monthly rate goes from 2.5% to 8.5%, the base fee on sales from 2.5% to 12.0% and manager overhead rises 20%; no new commercial bank loans may be drawn for 10 days (until Day 55). It has no effect on asset prices. |
+| The Cross-Border Tariff Lock (supply) | Day 75 | For 15 days international manager cycles slow by 4 virtual days and repairs outside the four starter districts cost 45% more. Domestic channels are unaffected. |
 
 The adaptability grade compares what each student's net worth did in the five days after a shock with the class median.
 
@@ -100,7 +100,7 @@ A competent player reaches districts 5, 9 and 13 around days 15, 30 and 55 (`doc
 | Domain | Weight | How it is measured |
 |---|---|---|
 | Economic performance | 30% | Percentile of EEI **among everyone on the roster** (everyone starts with one paperclip, so no start is compared separately; gradebook CSV) |
-| Strategic adaptability | 20% | Net-worth change over the 5 days after each shock vs the cohort median, plus credit for pivoting (telemetry). No shock yet reads as a neutral 50 |
+| Strategic adaptability | 20% | Net-worth change over the 5 days after each shock vs the cohort median, plus 10 of 100 for any pivot (telemetry). A founder with no graded shock counts a neutral 50, which is 10 of the 20 points |
 | Metacognitive reflection | 40% | Your rubric below, on the written debrief |
 | Peer market engagement | 10% | Completed peer swaps inside the fair-value band that moved real value (the game counts 3 a day at most and one per partner a day, so trading paperclips back and forth earns nothing), 25 points of the 100 for each, minus 10 for each flagged attempt (a flag means the deal was out of the band on the values the player could see, never a refusal made on a crate's hidden truth) |
 
@@ -118,10 +118,10 @@ The dashboard pre-fills the 60 automated points. The **Export gradebook CSV** bu
 | Market saturation and innovation | Uses Creativity Engine math; shows how segments were pivoted to avoid the herd | Knows crowding cuts margins; adjusted late | Blames luck rather than copycat strategy | Followed an online meta guide blindly |
 
 ## The debrief and the reflection paper (1,000-1,500 words)
-When a run ends (the bell on Day 90, or an exit) the student opens the **Debrief**. It assembles their own evidence: a net-worth chart on a log scale, what their Backgrounds cost them (from the ledger), their Deal Room play, how they met each shock, the swaps they made, their Day 45 capital structure and the crowded-niche table. Beside each prompt is a box for their analysis with a word count, and **Download workbook (.md)** saves it all as `reflection-<Founder ID>.md`, ready to submit. Ask for the three prompts:
+When a run ends (the bell on Day 90, or an exit) the student opens the **Debrief**; the menu opens it at any time. It assembles their own evidence: a net-worth chart on a log scale, what their Backgrounds cost them (from the ledger), their Deal Room play, how they met each shock, the swaps they made, their capital structure when the credit crunch hit and the crowded-niche table. The page opens on the numbers and the three prompts; the Backgrounds' text, the actions around the credit crunch, the niches past the first five and the Cm formula open on request, and what a figure means is on hover. One box at the end holds their analysis, with a word count, and **Download workbook (.md)** saves everything as `reflection-<Founder ID>.md`, ready to submit. Ask for the three prompts:
 
 - **Prompt A: the asymmetric trade.** Identify a swap with a classmate whose specialty differed from yours. State the asset before and after, and explain with margin data how it created value neither of you could create alone.
-- **Prompt B: the Day 45 credit crunch.** Detail your capital structure when the shock went live. If leveraged, explain what you did to prevent margin compression; if holding cash, how you exploited the drop in asset values.
+- **Prompt B: the credit crunch.** Detail your capital structure when the shock went live (the debrief names its day, 45 unless you deployed it). If debt exceeded net worth, explain what you did to prevent margin compression; if not, how you used that position while credit was tight (loans frozen, fees high). The shock does not move asset prices, so there is no drop in asset values to exploit.
 - **Prompt C: decoding the creativity penalty.** Pick a phase where the Creativity Engine compressed your margins. Using the formula, analyze how cohort volume drove your returns and which niche you pivoted to.
 
 ## Tuning for your course

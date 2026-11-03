@@ -182,7 +182,7 @@ test('L3: V2_DESIGN section 11 quotes the managers-against-hand-play figures tha
 // ============================================================================================================================ L4. the faculty kit against the screens
 test('L4: every control and label the faculty kit names is one a screen really has', () => {
   const kit = read('docs/FACULTY_KIT.md'), ui = read('js/ui/instructor.js') + read('js/main.js') + read('js/ui/debrief.js');
-  const names = ['Create a room', 'Join a classroom', 'Copy student link', 'Access', 'Close room', 'Start simulation', 'Pause', 'Resume', 'Rewind 1 day', 'Pace preset', 'Deploy to cohort',
+  const names = ['Create a room', 'Join a classroom', 'Copy student link', 'Display and sound', 'Close room', 'Start simulation', 'Pause', 'Resume', 'Rewind 1 day', 'Pace preset', 'Deploy to cohort',
     'Transaction friction', 'Compliance audit frequency', 'Synthetic classmates filling the market', 'Demo students on this dashboard', 'EEI starting-capital floor', 'Algorithmic surprise events',
     'Inject Credit Crunch now', 'Export gradebook CSV', 'Keep this room', 'Show the recovery code', 'Copy the recovery code', 'Resume as instructor', 'Take the room back', 'Reopen room', 'Download workbook (.md)',
     'Global engine step controls', 'Manual black swan trigger', 'Asymmetric risk scaling', 'Live cohort metrics', 'Operational bottlenecks', 'Flagged peer trades', 'Roster and gradebook',
