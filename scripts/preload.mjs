@@ -66,6 +66,10 @@ export function scanImports(src) {
     if (ID_START.test(c)) {
       let j = i + 1; while (j < n && ID_PART.test(src[j])) j++;
       const word = src.slice(i, j), before = src[i - 1];
+      if (word === 'URL' && before !== '.') { // new URL('./x.js', import.meta.url): the script a Worker is made from is a module the site needs though nothing imports it (a page that lacks it falls back to the main thread without a word)
+        const k = skipSpace(j), a = src[k] === '(' ? skipSpace(k + 1) : -1;
+        if (src[a] === '\'' || src[a] === '"') { const s = readString(a), b = skipSpace(s.end), c2 = skipSpace(b + 1); if (src[b] === ',' && /^import\s*\.\s*meta\s*\.\s*url\b/.test(src.slice(c2, c2 + 24)) && /\.m?js$/.test(s.value)) out.dynamics.push(s.value); }
+      }
       if (before !== '.' && (word === 'import' || word === 'export')) {
         const k = skipSpace(j), nx = src[k];
         if (word === 'import' && nx === '(') {

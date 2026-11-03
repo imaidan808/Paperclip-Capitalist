@@ -170,7 +170,7 @@ export function seaPass(buf, W, H, S, ox, oy, sc, skipLand = false) {
       const xc = px + 1, ci = Math.floor(xc * isk), tx = xc * isk - ci, k = cj * NX + ci, k1 = k + 1, k2 = k + NX, k3 = k2 + 1, d00 = nd[k], d10 = nd[k1], d01 = nd[k2], d11 = nd[k3];
       const dmin = d00 < d10 ? (d00 < d01 ? (d00 < d11 ? d00 : d11) : (d01 < d11 ? d01 : d11)) : (d10 < d01 ? (d10 < d11 ? d10 : d11) : (d01 < d11 ? d01 : d11));
       if (useIds && ids[py * W + px] !== 0 && TRI[ids[py * W + px] * TS + DEEPI] === 1 && ids[py1 * W + px] !== 0 && TRI[ids[py1 * W + px] * TS + DEEPI] === 1 && px + 1 < W && ids[py * W + px + 1] !== 0 && TRI[ids[py * W + px + 1] * TS + DEEPI] === 1) continue; // wholly under the land: its triangles are opaque
-      if (dmin < -7) continue;
+      if (Math.max(d00, d10, d01, d11) < -7) continue;
       if (dmin > NEAR) {
         const w00 = (1 - tx) * (1 - ty), w10 = tx * (1 - ty), w01 = (1 - tx) * ty, w11 = tx * ty;
         let r = nr[k] * w00 + nr[k1] * w10 + nr[k2] * w01 + nr[k3] * w11, g = ng[k] * w00 + ng[k1] * w10 + ng[k2] * w01 + ng[k3] * w11, b = nb[k] * w00 + nb[k1] * w10 + nb[k2] * w01 + nb[k3] * w11;
