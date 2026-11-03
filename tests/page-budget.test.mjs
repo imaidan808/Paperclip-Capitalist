@@ -57,7 +57,9 @@ test('B3: the screens that need the game are import()s with literal paths, and a
   assert.match(main, /if \(mine === route\) show\(screen, arg, mine\)/, 'and a second request while it waits wins');
   assert.match(main, /document\.getElementById\('pc-lazy'\)/, 'the rest is prefetched from the list the staged page carries');
   assert.match(main, /navigator\.connection\?\.saveData/, 'and not on a connection that asks for less data');
-  assert.match(main, /const warmWorld = \(\) => \{ import\('\.\/world\/scene\.js'\)\.catch\(\(\) => \{\}\); import\('\.\/world\/baseclient\.js'\)\.then\(\(m\) => m\.warmBaseClient\(\)\)\.catch\(\(\) => \{\}\); \};/, 'the island\'s static scene is built and the workers that make the ground\'s chunks are booted while the title is on screen, by import()s with literal paths');
+  assert.match(main, /const warmWorld = \(\) => \{ import\('\.\/world\/scene\.js'\)\.catch\(\(\) => \{\}\); \};/, 'the island\'s static scene is built while the title is on screen, by an import() with a literal path, and nothing else of the world: a title screen holds no workers (35 MB of memory each)');
+  assert.match(main, /if \(screen === 'game'\) import\('\.\/world\/baseclient\.js'\)\.then\(\(m\) => m\.bootBaseClient\(\)\)\.catch\(\(\) => \{\}\);/, 'the workers that make the ground\'s chunks boot as the game screen is asked for, by an import() with a literal path');
+  assert.ok(main.indexOf("if (screen === 'game') import('./world/baseclient.js')") < main.indexOf('const need = (NEEDS[screen]'), 'before its modules are waited for: the world is made while the workers load'); assert.ok(!/warmBaseClient/.test(main), 'and not at idle on the title screen any more');
   assert.match(main, /if \(list\.length\) idle\(pump\); else idle\(warmWorld\);/, 'once the last batch of modules is asked for, in idle time');
   assert.ok(main.indexOf('navigator.connection?.saveData') < main.indexOf('const warmWorld'), 'and never on a connection that asks for less data');
 });

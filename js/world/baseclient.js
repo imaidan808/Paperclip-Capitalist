@@ -1,7 +1,7 @@
 // The main thread's side of the chunk workers (basework.js): ask(key, job, world, unlocked, now) answers the bitmap of the chunk `job` ({ a, i, j, dpr, coarse, pin, zoom, sk }) once a worker has made it (handed over once), else null,
 // sending the job to the worker with the most room; prune(now, keep) drops the bitmaps nobody took (at once those of a scale `keep(sk)` refuses). A worker that errors, has no canvas or never says a word is given up for good, and the
 // cache makes its chunks itself. Owner: T5.
-export const BASE_TIMEOUT_MS = 6000, BASE_KEEP_MS = 4000, BASE_PER = 2, BASE_POOL = 3;
+export const BASE_TIMEOUT_MS = 6000, BASE_KEEP_MS = 4000, BASE_PER = 2, BASE_POOL = 3, BASE_SPARE_MS = 30000;
 
 export class BaseClient {
   constructor(spawn, size = 1) { this.spawn = spawn; this.size = size; this.ws = []; this.dead = false; this.cap = size * BASE_PER * 2; this.now = 0; this.t0 = 0; this.n = 0; this.takes = Infinity; this.out = new Map(); this.byId = new Map(); this.done = new Map(); this.stats = { posted: 0, got: 0 }; }
@@ -55,8 +55,13 @@ export class BaseClient {
 }
 
 let SPARE = null;
-/** Boot the pool now, while the title and the draft are on screen (js/main.js, with the island's scene): the workers take 0.4 s to load the ground's code, and the world takes the pool when it begins. */
-export function warmBaseClient() { if (!SPARE) { SPARE = makeBaseClient(); if (SPARE) { SPARE.now = typeof performance !== 'undefined' ? performance.now() : 0; SPARE.start(); } } }
+/** Boot the pool now. js/main.js does it as the game screen is asked for: the workers take 0.4 s to load the ground's code and the world is made while they do, then it takes the pool when its ground needs the first chunk. A title screen holds none (35 MB of memory each); a pool nobody takes in BASE_SPARE_MS (a game that opened without its world) is given back. */
+export function bootBaseClient() {
+  if (SPARE) return;
+  const c = SPARE = makeBaseClient(); if (!c) return;
+  c.now = typeof performance !== 'undefined' ? performance.now() : 0; c.start();
+  const t = typeof setTimeout === 'function' ? setTimeout(() => { if (SPARE === c) { SPARE = null; c.fail(); } }, BASE_SPARE_MS) : null; t?.unref?.();
+}
 /** A client that spawns the real workers (up to three, and two cores fewer than the machine has), or the one that was warmed, or null where there are none to spawn (no Worker, or a single core). */
 export function makeBaseClient() {
   if (SPARE) { const c = SPARE; SPARE = null; return c; }
