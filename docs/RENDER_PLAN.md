@@ -345,6 +345,7 @@ Why the splits fall where they do. `kits.js` is T3's because it names the buildi
     "toys.js",
     "nature.js",
     "characters.js",
+    "figure.js",
     "stock.js",
     "street.js",
     "yard.js",
@@ -434,7 +435,7 @@ Layers `lead`, `lot`, `asset`, `truck`, `car`, `player` and `static-prop` (the o
 2. **Street and yard** (4.1): `gate` (barrier, raised bridge leaf, ferry with the "NOT RUNNING" plank), `lookout`, `board`, `scrap`, `tires`, `barrel` (the burning one), `fence` (3.5 pixel pickets with caps), `lamp`, `neonlamp`, `bench`, `flag`, `lantern`, `neonpole`, `polesign`, `bollard`, `billboard`, `ticker`, `spot`, `statue`, `forsale`, `fountain`, `helipad`; contact shadows under everything.
 3. **Nature**: trees as puffs on a tapered trunk (5 greens, 3 sizes, species by district), bushes, hedges, planters, topiary, hay, flowers, tufts, rocks, reeds; sway live and cheap.
 4. **Machines and vehicles**: the crane (cab, striped jib, swinging magnet), gantry, ship with portholes and a wake, tank, silo, stack with round puffs, dome, dish, windmill, cart, car rows, containers, the freight truck and the traffic.
-5. **Characters** (3.1, 7.5, `figures.js`): the doll (capsules; head, torso, legs), faces at near and close (two dot eyes, cheeks), hair and hats by role, clothes by `personLook`, idle bob and blink, a hop when a buyer notices the player, the unique tomato-red player with a beanie pin; a pill at far zoom. Wait, walk, leave. All motion stops under Calm, Off and reduced motion with open eyes.
+5. **Characters** (3.4, 7.5, `figure.js` and `characters.js`): the flat figure (a small head, thin long limbs, oversized clothes, chunky shoes; flat fills only, no outline), faces at near and close (two dot eyes), hair and hats by role, clothes and silhouettes by `personLook` and `lookV2`, idle bob and blink, a hop when a buyer notices the player, the unique tomato-red player with a beanie pin; a pill at far zoom. Wait, walk, leave. All motion stops under Calm, Off and reduced motion with open eyes.
 6. **Micro-props** (7.4): a hashed `micro.js` (add it to the table) placing at most 60 per district in view at near and close, never on roads, pads or props.
 
 Needs T2 for shadows, T3's `solids.js` (`capsule`, `puff`), T5 for overlays. Judged by 10.1's Trees and plants, Characters, Crates, Street furniture, Gates, Industrial and harbor (the props), Motion rows and the `finest-2.4` gate; budget rows "static props", "plots, pipes, people, crates, traffic".

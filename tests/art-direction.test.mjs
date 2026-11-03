@@ -90,7 +90,7 @@ test('crate colours cover every tag, are light and saturated, and the people pal
   assert.deepEqual(Object.keys(K.crateTags).sort(), [...TAGS].sort());
   for (const [t, h] of Object.entries(K.crateTags)) { assert.match(h, HEX, t); assert.ok(luma(h) >= 0.5, `${t} crate is light (luma ${luma(h).toFixed(2)})`); }
   const P = K.people;
-  assert.deepEqual([P.shirts.length, P.hair.length, P.skin.length, P.pants.length], [12, 6, 6, 5]);
+  assert.deepEqual([P.shirts.length, P.hair.length, P.skin.length, P.pants.length], [14, 8, 6, 8]); // the vibrant palette of the flat figures (2.6, 3.4); tests/world-people-style.test.mjs holds how saturated it is
   for (const h of [...P.shirts, ...P.hair, ...P.skin, ...P.pants]) assert.match(h, HEX);
   assert.ok(!P.hair.includes('#000000') && !P.pants.includes('#000000'), 'no pure black on a person');
 });

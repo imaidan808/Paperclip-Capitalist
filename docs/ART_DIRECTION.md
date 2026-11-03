@@ -42,7 +42,7 @@ We describe and imitate shape language, palette logic, lighting and finish. We c
 
 ## 1. The look in one paragraph, and ten commandments
 
-**The look.** A small sunny island sitting in a warm turquoise sea, made of chunky, rounded, matte toys. Beaches are soft cream sand with a wet edge and a white foam line that scallops and breathes. Meadows roll in gentle light with tufts and flower dots. Houses are pastel, fat-eaved and round-cornered, with big friendly windows; towers are glassy and stepped; machines are fat and cheerful. One warm sun stands upper left and every shadow agrees, soft and violet-blue, never black. Edges are filled shapes and soft contours, never hairlines. People are round-headed dolls with two dot eyes. Locked districts sleep under thick, fluffy, lit clouds with blue bellies, not under a dark wash. The longer you look and the closer you zoom, the more crafted it gets: shingles, bricks, planks, grass blades, litter, faces. The default hour is a bright summer morning. It is not realistic; it is handmade, tactile, tidy and warm.
+**The look.** A small sunny island sitting in a warm turquoise sea, made of chunky, rounded, matte toys. Beaches are soft cream sand with a wet edge and a white foam line that scallops and breathes. Meadows roll in gentle light with tufts and flower dots. Houses are pastel, fat-eaved and round-cornered, with big friendly windows; towers are glassy and stepped; machines are fat and cheerful. One warm sun stands upper left and every shadow agrees, soft and violet-blue, never black. Edges are filled shapes and soft contours, never hairlines. People are flat figures (3.4): a small head, thin long limbs, oversized clothes and chunky shoes, in matte but vibrant flat colour and no outline. Locked districts sleep under thick, fluffy, lit clouds with blue bellies, not under a dark wash. The longer you look and the closer you zoom, the more crafted it gets: shingles, bricks, planks, grass blades, litter, faces. The default hour is a bright summer morning. It is not realistic; it is handmade, tactile, tidy and warm.
 
 **The ten commandments.** Each is testable on a 1440 x 900 capture.
 
@@ -140,7 +140,7 @@ A crate or lot item takes the colour of its asset's first tag (`TAG_COLOR` in `w
 `tool` `#b5c0d6`, `office` `#f4eed8`, `prestige` `#a98be0`, `paper` `#fff0cf`, `retro` `#e8a15a`, `electronics` `#6bc4e8`, `vehicle` `#ff7a63`, `consumer` `#ff8fb3`, `trend` `#ff5fb8`, `scrap` `#b79a78`, `industrial` `#c9ad7a`, `training` `#5fd08c`, `digital` `#8ae8ff`, `b2b` `#7e93e6`, `franchise` `#ffd96a`, `infra` `#9a8ce0`, `food` `#ffb066`, `farm` `#b4dc6a`, `bulk` `#d2bf93`, `marine` `#5cb9e8`, `collectible` `#f2c94c`, `luxury` `#c9a0f2`, `fashion` `#ff8fc0`, `ip` `#a98cff`, `media` `#f06cc0`, `realty` `#ee9a7a`, `finance` `#5fd69e`, `energy` `#ffe05a`, `medical` `#f2f8ff`, `home` `#d8b48c`, `outdoor` `#7cd07a`, `gem` `#78eed8`.
 ### 2.6 People
 
-Shirts (12): `#ff6a55` coral, `#ff9a3a` tangerine, `#ffd84d` sunflower, `#7bd36a` leaf, `#3ad4b6` teal, `#4aa0f0` sky, `#7f7bf0` periwinkle, `#b383f0` grape, `#ff7fb8` pink, `#f2f0e6` cream, `#e85a8a` raspberry, `#8fe0e8` aqua. Hair (6): `#3a2a22`, `#6b3f24`, `#b9772c`, `#e8c36a`, `#8a8fa8`, `#2e2a4a`. Skin (6): `#ffdcb8`, `#f3c08f`, `#dca070`, `#b97a4e`, `#8e5836`, `#6b3f2a`. Pants (5): `#4a5a9a`, `#6b5a8f`, `#3e6b73`, `#8a6a4a`, `#d8cdb8`. Cheeks `#ff9aa8` at 0.35, eyes `#2c2a56`. The player is always a tomato-red jacket (`#ff5f4e`), cream scarf, and a beanie with a paperclip pin: unique on the island, readable at far zoom.
+Matte but vibrant: saturated flat colour, never pastel and never grey. Shirts and jackets (14): `#2f5fe8` cobalt, `#ff7a1a` tangerine, `#f5b800` mustard, `#6fcf2f` lime, `#12b37a` emerald, `#12a8a8` teal, `#2aa2f0` sky, `#7a4df0` violet, `#c93fd1` magenta, `#ff5fa8` pink, `#d6246e` raspberry, `#2a3b8f` navy, `#c8dc2a` chartreuse, `#7a2a8a` plum. Hair (8): `#3a2a22`, `#6b3f24`, `#b9772c`, `#e8c36a`, `#8a8fa8`, `#2e2a4a`, and two dyed, `#ff5fa8` pink and `#12a8a8` teal. Skin (6): `#ffdcb8`, `#f3c08f`, `#dca070`, `#b97a4e`, `#8e5836`, `#6b3f2a`. Trousers and shorts (8): `#2f4fb8` denim, `#2c2a56` plum-navy, `#ff6fae` pink, `#12a8a8` teal, `#e0a410` mustard, `#6a8a1a` olive, `#7a2a8a` plum, `#f4ead2` cream (the one neutral). Trim for cuffs, stripes and prints (6): cream `#fffaf0`, `#ffd84d`, `#ff5fa8`, `#12a8a8`, `#2f5fe8`, `#ff7a1a`. Shoes (4 pairs, upper and sole): navy and cream, cream and coral, lime `#c8e832` and coral `#ff6f61`, cobalt and cream. Eyes `#2c2a56`. Nobody wears one colour from head to toe: the trousers and the trim are never the shirt's colour. The player is always a tomato-red jacket (`#ff5f4e`, no buyer's shirt is within reach of it), a cream scarf, denim trousers, cream sneakers with teal soles and a teal beanie with a paperclip pin: unique on the island, readable at far zoom.
 
 ### 2.7 The day, evening and night grade
 
@@ -173,7 +173,7 @@ Everything is chunky: wider and shorter than real, soft at every corner, one cle
 | Roads (`drawRoads`, block avenue and cross street) | avenue 2 tiles wide, cross street 2 tiles, sidewalks 1 tile each side | kerb 0.18 tile cream band both sides, rounded kerb returns of radius 0.9 tile at every junction | centre dashes 0.35 tile wide, 0.9 long, gap 0.8; lane edges 0.12 tile `#fff8e2`; zebra bars 0.22 tile wide; paver joints every 1 tile at near; drains and manholes at close | no contour; the kerb is the edge |
 | Trees (`tree`) | lollipop: canopy is 55% of the total height; trunk 0.12 of canopy width, tapering, rounded foot | puffs round (circles), trunk cap round | small tree (scale up to 0.8): 3 puffs; standard: 5 puffs plus one crown puff; big (1.2 and over): 7 plus crown; puff radius 0.32 to 0.42 of canopy width; one crescent highlight on the upper-left of each puff (`GRASS.hi` at 0.5), one crescent shade on the lower-right (`GRASS.deep` at 0.35); bark highlight 1.6 wpx; pines are 3 rounded tiers 1.0 / 0.74 / 0.5 wide; palms 5 curved fronds | contour near on the canopy mass only; contact shadow wide |
 | Bushes, hedges, planters | blob of 3 puffs; hedge top is scalloped every 0.35 tile | radius equals the puff | flower dots (2 to 3 wpx, 5 petals at close) from `BLOOM` on 1 in 3 bushes | contact only |
-| Characters (`person`) | doll: total height 34 wpx (player 42; the present `person()` is 29, the player 38, so a doll is about a fifth taller and much rounder). Head circle 0.40 of height, torso capsule 0.30, legs 0.20 stubs, round feet; torso width 0.34 of height; arms capsules 0.07 wide, 0.26 long, round mitt hands 0.06 | everything is a circle or capsule, no rectangle | eyes are dots 0.07 of height, 0.12 apart, `#2c2a56`; cheeks ellipses 0.07 `#ff9aa8` 0.35; mouth a 0.05 arc; hair or hat is a cap shape 0.46 wide; faces appear at near and close only; at far a character is a 5 x 8 spx pill in its shirt colour; squash and stretch: standing scale Y 1.00 +/- 1.5%, stop squash Y 0.92 / X 1.06, hop stretch Y 1.08 / X 0.94 | contour near and close in `#5a4a8c` at 0.55; contact shadow 7 wpx radius |
+| Characters (`person`, drawn by `figure.js`) | a flat figure, not a doll: 35 wpx from the soles to the crown, drawn at 1.1 (a buyer is 39 on the screen) and the player at 1.28 (46); the full rules, in numbers, are 3.4 | clothes are rounded polygons, limbs are capsules, shoes are chunky pills | a minimal face (two dots, or a short closed-eye line), hair a flat cap shape, clothing details (stripes, a print, quilting seams, a pocket, strings) are flat shapes; far a pill 5 x 8 spx in its shirt colour | no contour at all; light flat shading on the lower right (3.4); one flat ground shadow, a translucent ellipse thrown away from the sun |
 | Crates and lot items | rounded cube 0.72 tile, 17 high; pallet 0.8 tile, 4 high | edge chamfer 1.6, corner brackets | three filled plank slats and two brackets; stencil mark at near; class "peeker" on top at close (4.4) | contour near; contact |
 | Street furniture (lamps, benches, signs, bollards, fences, flags) | fat poles 3.6 wpx wide, taper 10%; pickets 3.5 wpx wide with rounded or pointed caps | ball caps radius 2.2 | no pole under 3 wpx at any zoom; a 1 px post is a fault | contour near; contact |
 | Cars, trucks, boats | toy capsules: car 1.1 x 0.56 tile body with a glass dome cabin; truck cab and box with a rounded bed; boat hulls rounded with a bow curl | radius 3 | round wheels with hub dots; windows pastel glass; boats have bow foam and wake | contour near; contact; boats cast onto the water (5.7) |
@@ -209,6 +209,19 @@ A hairline is any stroke under 1.5 wpx, any 1 dpx line, any dashed line with a d
 | a lane marking | a painted band 0.12 tile wide minimum |
 | shingle, tile courses | the roof recipe above |
 | an outline | the tone-on-tone contour above, or nothing |
+
+### 3.4 People: flat figures
+
+The second art direction of the author (2026-11-02), which replaces the round-headed dolls of 3.1: "a very simple yet effective art style, avoiding corporate happy textural design, often outline-less but contour-effective. Matte but vibrant colors." The sources are three still references (a street scene from a game of flat-shaded people, a flat illustration of a boy in a big jacket and bright sneakers, a flat illustration of three people in puffers, plaid and band shirts); they are described here in words and are not part of the repository. What they agree on, and what `figure.js` does about it:
+
+- **Flat, matte, vibrant, lightly shaded.** Every part of a person is one opaque flat fill in a saturated colour (2.6). There is no gradient, no highlight, no rim or sheen streak, no texture or grain, no soft blur, and no translucent part: the one translucent shape of a figure is its ground shadow. The shading is the flat shading of the references: a darker step of the same colour on the side away from the sun (upper left, as everywhere on the island), a rim of about a pixel and a half along the lower right of the clothes (and a band under the hem), of the near sleeve, of the head, of the hair and of a hat, with the head's shadow on the collar under the chin; the far arm and the far leg are a step darker whole. The rim is made by drawing a shape twice, the darker copy a little down and right and the lighter one a little up and left, so that no dark edge shows on the lit side; it is never a gradient and never a lit crescent, a highlight or a rim of light. A tone is a part's own colour or a darker step of it, never a lighter one.
+- **No outline.** Nothing is stroked. A limb is a filled capsule, a garment a filled rounded polygon, a ring (glasses, a rope) two arcs wound against each other. The silhouette does the work: a person must be told from another by the outline of the clothes alone.
+- **Small head, long thin limbs, big clothes, chunky shoes.** A figure is 35 world pixels from the soles to the crown. The head is a small ellipse a fifth of that (6.6 wide, 7.4 tall) and never more than a quarter; the legs and arms are four or five times as long as they are wide (2.4 to 2.8 wide, 11 to 14 long); the clothes are oversized, at least twice the width of the head (a jacket is 16 wide, a poncho 20); the shoes are smallish chunky pills 6.5 wide, two and a half times the width of a leg, in an upper and a flat sole of a second colour. Sleeves are wide tubes over a thin arm and end in a trim band, so a tiny hand sticks out.
+- **A minimal face.** Two small dots; a short flat line when the eyes are shut; a small closed arc when happy. At the close band a mouth is added (a small crescent, a dot, or a dash). No cheeks, no eyebrows, no white in the eyes. Round glasses are a ring and are fine; so are flat sunglasses.
+- **Hair is a flat cap shape**, with a few styles: short, crop, curly, bun, long, ponytail, bald. A hat covers the cap of hair and is one or two flat shapes.
+- **Silhouettes, so a crowd does not look cloned.** Six garments a person may wear (a boxy jacket with a ribbed hem and a zip, a rounded quilted puffer with a high collar, a poncho that hides the arms, a hoodie with a hood, strings and a pocket, a striped-neck sweater, an oversized tee), a long white coat for the medical roles, three kinds of legwear (trousers, baggy shorts over bare legs, striped legs), and three marks (plain, stripes, a print), picked from the person's own hash: 6 x 3 x 3 silhouettes, from fixed lists, so the number of looks is bounded. A role decides the garment only where it must (the white coat, the hoodie of the venture-capital buyer); the rest of its outfit (hat, glasses, scarf, apron, overalls, lanyard, tie, and what is held) is worn on top.
+- **Size and anchors do not move.** A buyer is drawn at 1.1 and the player at 1.28, so they stand about 39 and 46 world pixels tall at zoom 1; no hat reaches higher than 46 world pixels on the screen (the request bubble hangs there); the hit circle, the labels, the chip, the walk cycle (0.45 s), the idle bob (2.8 s), the blink, the hop, the squash, the wave of a buyer in a hurry and its golden pulse underneath all stay as 4.4 and 8.1 have them. Under Calm, Off and reduced motion a figure stands still with open eyes.
+- **How it is drawn.** Live, every frame, with the same level-of-detail ladder as before (far a pill, mid the body, hair and hat, near the face and what is held, close the mouth), about 39 flat fills a figure on average and 51 at the most (the round-headed doll it replaced took 47 and 66, with four strokes), and no stroke, clip or gradient; the shape of every garment is worked out once when the module loads. The numbers are held by `tests/world-people-style.test.mjs`, which paints a figure into a recording canvas with its colours set to markers and measures the head, the limbs, the shoes and the silhouettes from what was painted.
 
 ## 4. Element-by-element redesign
 
@@ -308,8 +321,8 @@ One paragraph per kit. Each lists the block's signature scenery, its ground trea
 
 Entities are drawn each frame by `drawEnt` and friends; their art is built from cached part sprites (a character is a pre-drawn body per look and facing, blitted, plus live bob and blink), so the new detail costs nothing per frame beyond blits.
 
-- **The player** (`drawPlayer`, `person`). A 42 wpx doll: tomato-red jacket `#ff5f4e`, cream scarf, denim pants `#4a5a9a`, a beanie with a paperclip pin (a 4 wpx silver clip shape, the game's emblem), two dot eyes and a small smile. Under the feet, not a yellow ring but a soft golden disc (radius 15, `#ffd36e` at 0.30, a lighter inner disc at 0.45) that breathes 2.8 s, plus a small chevron floating 12 wpx above the head at far and mid zoom (it replaces the flat ring at far zoom). Idle: bob 2.8 s +/- 0.8 wpx, blink every 3 to 6 s (80 ms). Moving: step cycle 0.45 s, body bob 1.2 wpx, footprint puffs as round dust (8.1). Sig: the beanie pin. Shadow: contact ellipse 7 wpx.
-- **Buyers** (`drawLead`, `person`, `lookOf`; 101 buyer kinds in `config.js`). The same 34 wpx doll body, differentiated by `lookOf` from the palettes of 2.6 (12 shirts x 6 hair x 6 skin x 5 pants, hashed from the lead id) plus an accessory by role. The accessory is chosen by the buyer's strongest `like` tag, in families:
+- **The player** (`drawPlayer`, `figure.js`). A flat figure drawn at 1.28, 46 wpx from the soles to the crown: an oversized tomato-red jacket `#ff5f4e` with cream trim, a cream scarf, denim trousers `#2f4fb8`, cream sneakers with teal soles, a teal beanie `#3ad4b6` with a paperclip pin (a small silver clip of two nested loops, flat fills, no outline: the game's emblem), two dots for eyes and a closed smile. Under the feet, not a yellow ring but a soft golden disc (radius 15, `#ffd36e` at 0.30, a lighter inner disc at 0.45) that breathes 2.8 s, plus a small chevron floating above the head at far and mid zoom (it replaces the flat ring at far zoom). Idle: bob 2.8 s +/- 0.8 wpx, blink every 3 to 6 s (80 ms). Moving: step cycle 0.45 s, body bob 1.2 wpx, footprint puffs as round dust (8.1). Sig: the beanie pin. Shadow: one flat ellipse.
+- **Buyers** (`drawLead`, `figure.js`, `lookV2` and `personLook`; 101 buyer kinds in `config.js`). The same flat figure at 1.1 (39 wpx), differentiated by the palettes of 2.6 and the silhouettes of 3.4 (14 shirts x 8 hair x 6 skin x 8 trousers, six garments, three kinds of legwear and three marks, hashed from the lead id; the legacy `lookOf` reads the same palette) plus an accessory by role. The accessory is chosen by the buyer's strongest `like` tag, in families:
 
   | Top tag | Accessory |
   |---|---|
@@ -324,7 +337,7 @@ Entities are drawn each frame by `drawEnt` and friends; their art is built from 
   | food, farm, bulk, outdoor | apron or straw hat, a basket |
   | marine, energy | a flat sailor cap or a hard hat, a coil of rope |
 
-  The 17 named originals override the rule: `student` backpack and beanie, `barista` apron and cap, `mechanic` overalls with a wrench, `collector` monocle and bowler, `scrapper` hard hat, `cyclist` helmet and a bike bell on a handlebar stub, `bookstore` glasses and a stack of books, `trainer` a whistle, `boutique` a scarf and bag, `smelog` a clipboard, `etailer` a parcel, `recruiter` a tie and badge, `freelancer` headphones and a laptop sleeve, `entIT` a lanyard, `holdco` a briefcase, `vcstart` a hoodie, `franchisor` a visor. An urgent buyer (`lead.need`) bounces: arm waving 1.2 s period and a golden pulse disc under the feet (as the player's but warmer `#ffb347`), never a flat ellipse. A buyer who leaves walks away with a small wave. Noticing: a buyer within 3.5 tiles of the player turns their head and body toward the player and hops 6 wpx once over 0.35 s, then every 20 to 40 s while the player stays near (8.1). Faces: eyes and cheeks always, mouth by state (neutral, smile after a sale, small "o" when urgent, flat when haggling hard). Far zoom: a 5 x 8 spx pill in the shirt colour, golden if urgent. Sig: the accessory, the face, the hop.
+  The 17 named originals override the rule (an accessory is a flat shape too: a handle is a band, never a stroke): `student` backpack and beanie, `barista` apron and cap, `mechanic` overalls with a wrench, `collector` monocle and bowler, `scrapper` hard hat, `cyclist` helmet and a bike bell on a handlebar stub, `bookstore` glasses and a stack of books, `trainer` a whistle, `boutique` a scarf and bag, `smelog` a clipboard, `etailer` a parcel, `recruiter` a tie and badge, `freelancer` headphones and a laptop sleeve, `entIT` a lanyard, `holdco` a briefcase, `vcstart` a hoodie, `franchisor` a visor. An urgent buyer (`lead.need`) bounces: arm waving 1.2 s period and a golden pulse disc under the feet (as the player's but warmer `#ffb347`), never a flat ellipse. A buyer who leaves walks away with a small wave. Noticing: a buyer within 3.5 tiles of the player turns their head and body toward the player and hops 6 wpx once over 0.35 s, then every 20 to 40 s while the player stays near (8.1). Faces: two dots always, the mouth by state at the close band (nothing when neutral, a crescent after a sale, a small "o" when urgent, a dash when haggling hard). Far zoom: a 5 x 8 spx pill in the shirt colour, golden if urgent. Sig: the accessory, the face, the hop.
 - **Crates in stock** (`drawAsset`) and **lot crates for sale** (`drawLot`). The rounded crate of 3.1 in the colour of 2.5. A lot sits on a wooden pallet (three stringers, 4 high). Condition: `broken` crates have a diagonal crack as a filled 2 wpx band, a cream tape cross, and a drooping corner; auction lots wear a gold rope loop and a small brass bell (it swings 4 s). A selected crate stands in a soft golden pool (radius 22, 0.30, no ring line) and bobs 2.2 s +/- 2 wpx. At close, a "peeker" sticks out of the top by tag family: a spanner (tool), a book (paper, training), a radio (retro, electronics), a bike wheel (outdoor, vehicle), a dress (fashion), a gem (gem, luxury), a leaf bunch (farm, food), a laptop (digital), a small bag of coins (finance), a lamp (home). The peeker is a 10 wpx rounded toy, one colour from 2.5. Sig: the stencil, the pallet, the peeker. The hit polygons stay the same boxes.
 - **Pipeline buildings** (`drawPipe`, the three manager roles). Their height grows by level (`26 + 13 x level`, unchanged); the art grows with it: each level adds a rounded floor band, level 4 adds a roof garden of 3 puffs and a flag, level 8 a gold crown ring. Roles: *Supply-Chain Student* is a cosy study pod in `PLASTER.mint` with a `TILE.teal` roof, a small globe and a stack of books on the sill; *Asset Broker* is a golden-trimmed brokerage in `PLASTER.butter` with a brass `TILE.mustard` roof and a rolling ticker band; *Logistics Agent* is a blue loading shed in `PLASTER.sky` with a rounded roll-up door and a little truck mural. Paused or audited pipelines drop to `#b8b4cf` (a cool grey-lilac) with a "zzz" cloud puff, never grey `#6a707c`. Running pipelines have a rounded vent with round smoke puffs. At near zoom a tiny worker doll stands at the door (idle bob) when running. The old emoji glyph on the wall (`fillText(K.icon)`) is retired; the role is told by colour, roof and mural. Sig: the role colours and the growing floors.
 - **Empty plots** (`drawPlot`). A fresh-dug patch: a soft `SOIL.light` square with rounded corners, four stakes joined by yellow-and-cream tape (a 3 wpx band, rounded), two traffic cones (rounded), a small sapling and a toy shovel at close; the "+ Hire" chip stays UI. Locked plot: the same patch frosted lilac with a padlock plate. The dashed 2 px outline is retired. Sig: tape and shovel.
@@ -533,7 +546,7 @@ The author likes that quality becomes more visible as you zoom, and wants the ce
 | Buildings | rounded extruded blocks in 3 values, roof colour, no windows | window rows as bands, roof 2-tone, door as a dark notch, signs as colour bars | framed windows with glints, doors, awnings, tile-course roof, chimney, brick bands, lettering | shingles one by one, mortar bands, plank joints, curtains and window boxes, door numbers, downspouts, signs with raised letters, a doormat |
 | Trees and plants | one round blob and a shadow | 3 puffs, trunk | full puff count, highlight and shade crescents, bark highlight | leaf dots, blossom, fruit (farm), a bird in a tree at times |
 | Small props (lamps, benches, fences, bins) | none (lamps as a 3 spx dot every 4th) | lamps, fences as bands, benches as slabs | all of 4.1 at near detail, micro-props appear (7.4) | full detail, nails, caps, bulbs, the pigeon on the bench |
-| Characters | none; a coloured pill 5 x 8 spx for the player and for urgent buyers only | pill with head dot, hat colour | full doll with face, hair, accessory, arms, shadow, bob | eyebrows, mouth states, hand-held items, blink, hop, footprints, wave |
+| Characters | none; a coloured pill 5 x 8 spx for the player and for urgent buyers only | pill with head dot, hat colour | full flat figure with face, hair, accessory, arms, shadow, bob | mouth states, hand-held items, blink, hop, footprints, wave |
 | Crates and lots | 4 spx coloured squares | rounded cubes without detail | slats, brackets, stencil, pallet | tape, tags, label, peeker, rope and bell on auction lots |
 | Clouds | one sprite per bank | puffs drifting, ground shadows, ghosts | mist rim, windows, sparkle | fraying puffs, seam lines |
 | Light | grade and haze | plus lamp pools at dusk | plus window glow and rim bands | plus soft god-ray shafts at dawn and dusk (existing) |
@@ -577,7 +590,7 @@ Hashed per district block (so the same island every time), near and close only, 
 
 ### 7.5 Characters at close zoom
 
-At 1.4 and over a doll is crafted: eyebrows (2 wpx rounded dashes, tilt by mood), mouth states (neutral, smile, small "o", flat), blink every 3 to 6 s, hands holding the accessory, a visible shirt shade crescent, hair strands as 3 rounded tufts, shoe soles, a footprint trail of round puffs. They face the way they walk (a flipped sprite), turn toward the player when noticing (8.1), and wave when leaving. Under reduced motion they stand with open eyes and a neutral mouth, no bob.
+At 1.4 and over a figure is crafted: mouth states (a crescent, a small "o", a dash; nothing when neutral), blink every 3 to 6 s (a short flat line for 80 ms), hands holding the accessory, a flat darker step on the far arm and leg and a rim of shade on the lower right of the clothes, the head and a hat, the strings, pocket, seams, stripes and prints of the clothes, the shoe soles in a colour of their own. They face the way they walk (a flipped figure), turn toward the player when noticing (8.1), and wave when leaving. Under reduced motion they stand with open eyes and no mouth, no bob.
 
 ## 8. Motion
 
@@ -678,7 +691,7 @@ A critic looks at a 1440 x 900 capture at device scale 2 (the evidence set: `coa
 | Towers and landmarks | (1) a stepped rounded silhouette with a sun streak on glass; (2) a unique crown or feature per landmark (bell, globe, vault door, dome); (3) towers standing out of cloud banks | a bare extruded box; the same tower repeated with no variation; windows as black rectangles |
 | Industrial and harbor | (1) fat tanks and silos with domed lids and bands; (2) containers in saturated colours with ridges; (3) round smoke puffs, hulls with portholes and wakes | pencil-thin stacks; thin-strut cranes; black or grey metal |
 | Trees and plants | (1) round puffs with highlight and shade crescents on a tapered trunk; (2) variety of species and sizes per district; (3) flowers and bushes at near zoom | triangle trees; every tree the same; a canopy that is one flat blob at near zoom |
-| Characters | (1) round-headed dolls with two dot eyes, cheeks and a hat or accessory by role at near zoom; (2) the player is the unique tomato-red doll with a beanie pin; (3) idle bob, blink, a hop when a buyer notices the player | voxel dolls with no face; every buyer in the same outfit; a flat yellow ring under anyone |
+| Characters | (1) flat figures (3.4) with a small head, thin long limbs, oversized clothes, chunky shoes, two dot eyes and a hat or accessory by role at near zoom, no outline and no gradient; (2) the player is the unique tomato-red figure with a beanie pin; (3) idle bob, blink, a hop when a buyer notices the player | voxel dolls with no face; every buyer in the same outfit; a flat yellow ring under anyone |
 | Crates, lots, stock | (1) rounded crates in saturated tag colours with slats and brackets; (2) pallets, rope and bell for auction lots, tape for broken; (3) a peeker toy on top at close zoom | grey crates; plain boxes with 1 px outlines; emoji on a wall |
 | Street furniture and micro-props | (1) fat lamps with globes, benches with curled arms, fences with capped pickets; (2) at close zoom flowerpots, mailboxes, signs, litter; (3) soft contact shadows under everything | 1 to 3 px sticks as fences and poles; anything without a contact shadow; litter in a rich district |
 | Gates, bridges, ferry | (1) striped boom arms, padlock plates and cones; (2) bridges with plank decks, ball-capped rails and foam collars; (3) a stubby ferry with portholes | hairline rails; a dashed ferry line; a flat grey bridge |
@@ -696,7 +709,7 @@ A critic looks at a 1440 x 900 capture at device scale 2 (the evidence set: `coa
 | `sea-0.5` | open water with a clear depth gradient, wave bands following the shore, a shoal glow, boats or buoys; lakes and rivers in the same water; no screen-space backdrop feel |
 | `locked-0.9` | a thick cloud loaf with blue bellies over the district, tall buildings poking out, ghosts below, a padlock; bright, not murky; the district reads as locked at a glance |
 | `locked-0.5` | cloud banks as clear loaves over the districts; the island reads as bright; gates visible; the seas around bright |
-| `finest-2.4` | rounded crates with slats, a rounded crane with a cab and striped jib, dolls with faces and accessories, picket fences with caps, pavers, tufts, litter; soft violet shadows; no hairlines |
+| `finest-2.4` | rounded crates with slats, a rounded crane with a cab and striped jib, flat figures with faces and accessories, picket fences with caps, pavers, tufts, litter; soft violet shadows; no hairlines |
 | fit (0.129) | a bright shaped island in a turquoise sea, the open districts bright (one at the start), a cloud loaf over every other district, a warm pale horizon haze |
 
 ### 10.3 Three quick tests anyone can run
@@ -1070,18 +1083,20 @@ Allowed: baked offscreen bitmaps in world space; `Path2D` in world pixels; cache
   },
   "people": {
     "shirts": [
-      "#ff6a55",
-      "#ff9a3a",
-      "#ffd84d",
-      "#7bd36a",
-      "#3ad4b6",
-      "#4aa0f0",
-      "#7f7bf0",
-      "#b383f0",
-      "#ff7fb8",
-      "#f2f0e6",
-      "#e85a8a",
-      "#8fe0e8"
+      "#2f5fe8",
+      "#ff7a1a",
+      "#f5b800",
+      "#6fcf2f",
+      "#12b37a",
+      "#12a8a8",
+      "#2aa2f0",
+      "#7a4df0",
+      "#c93fd1",
+      "#ff5fa8",
+      "#d6246e",
+      "#2a3b8f",
+      "#c8dc2a",
+      "#7a2a8a"
     ],
     "hair": [
       "#3a2a22",
@@ -1089,7 +1104,9 @@ Allowed: baked offscreen bitmaps in world space; `Path2D` in world pixels; cache
       "#b9772c",
       "#e8c36a",
       "#8a8fa8",
-      "#2e2a4a"
+      "#2e2a4a",
+      "#ff5fa8",
+      "#12a8a8"
     ],
     "skin": [
       "#ffdcb8",
@@ -1100,11 +1117,14 @@ Allowed: baked offscreen bitmaps in world space; `Path2D` in world pixels; cache
       "#6b3f2a"
     ],
     "pants": [
-      "#4a5a9a",
-      "#6b5a8f",
-      "#3e6b73",
-      "#8a6a4a",
-      "#d8cdb8"
+      "#2f4fb8",
+      "#2c2a56",
+      "#ff6fae",
+      "#12a8a8",
+      "#e0a410",
+      "#6a8a1a",
+      "#7a2a8a",
+      "#f4ead2"
     ]
   }
 }
@@ -1121,7 +1141,7 @@ This is the suggested split so parallel work does not collide. Files are new unl
 | `js/world/coast.js` (new) | smooth shoreline, foam, beach band, cliff faces | `smoothCoast(mask)` (no retreat over protected tiles, at most 12 wpx), `foamPath`, `beachWeight(d)` |
 | `js/world/terrain.js` (new) | the vertex colour field and dressing placement | `terrainColour(i, j)`, `dressingAt(tx, ty)` (no marks on roads, pads or props) |
 | `js/world/clouds.js` (new) | banks, puffs, shadows, dissolve | `bankPuffs(fp, z, scale)` (coverage at least 85% of the real footprint, every puff overlaps two, count 40 to 150; written in `cloudbank.js`), `dissolveAt(t, d)` |
-| `js/world/figures.js` (new) | the doll, accessories, faces, noticing | `lookOf`, `accessoryFor(buyer)`, `noticing(player, buyer)` |
+| `js/world/figure.js` (built; `characters.js` holds the outfits, the clock and the layers) | the flat figure, accessories, faces | `lookOf`, `accessoryFor(buyer)`, `noticing(player, buyer)` |
 | `js/world/iso.js`, `shading.js`, `props.js`, `kits.js`, `layout.js`, `lighting.js`, `world.js`, `fx.js` (edited) | per section 9 | existing tests, updated where they pin the old look (say so in the commit message) |
 
 Tests to add. `tests/art-direction.test.mjs` (this file's constants and coverage, already present). A world-water anchoring test: in headless Chrome with motion frozen, draw the same scene at two camera positions a few hundred pixels apart with the screen-space ambient layers and labels off and compare the sea region shifted by the camera displacement; skip when Chrome is absent, like the other browser tests. A no-hairline audit: a recording canvas run of `tests/world.test.mjs`'s draws that fails on any `lineWidth` under 1.5 (world space) or any `fillRect` of width or height under 1.5 in world drawing code. A palette audit: every `fillStyle` and `strokeStyle` the world sets is in the section 2 tables, a `mix`/`shade` of them, or a tint of the grade. A coverage test: every `DRAW` kind and every kit has its entry in section 4 (already in `tests/art-direction.test.mjs`).
@@ -1163,7 +1183,7 @@ Where a source said little (Egg, Inc., Townscaper's rendering, Monument Valley's
 | Contour | `mix(shade(fill, .62), '#4a3f88', .2)`, 1.2 / 1.6 / 2 spx at mid / near / close, none at far |
 | Min line | `max(1.5 wpx, 1.25 spx / zoom)` |
 | Tree | 3 / 5+1 / 7+1 puffs, canopy 55% of the height, trunk 0.12 of the canopy |
-| Doll | 34 wpx (player 42), head 0.40, torso 0.30, legs 0.20; eyes 0.07 dots; cheeks `#ff9aa8` |
+| Figure | 35 wpx at scale 1 (buyer 1.1, player 1.28); head a fifth, never over a quarter; limbs 4 to 5 times as long as wide; clothes over twice the head's width; eyes dots; no cheeks, no outline |
 | Sea | foam `#fbfffe`, shoal `#c4f4e6` (0.8), shallow `#7be0cf` (2.5), lagoon `#43c8d0` (6), sea `#2fa6d6` (14), deep `#2b80cf` (28), abyss `#2358b0` |
 | Water motifs | 12 wave levels, 3 ridges per 24 s; crest lens 14 to 26 wpx; curl 7 to 10; glint 3 to 6, at most 40 |
 | Coast | smooth, never over 12 wpx from the tile edge; foam 5 wpx, scallop 36 to 52 wpx, 6.5 s, 0.35 tile |

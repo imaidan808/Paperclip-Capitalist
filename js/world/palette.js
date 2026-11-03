@@ -65,13 +65,21 @@ export const CRATE_TAGS = Object.freeze({
 });
 /** The colour of a crate of a given first tag; an unknown tag gets a warm neutral that is still light. */
 export const crateColor = (tag) => (Object.hasOwn(CRATE_TAGS, tag) ? CRATE_TAGS[tag] : '#e0c9a0');
+/** The people (docs/ART_DIRECTION.md 2.6, and 3.4 for how they are drawn): matte but vibrant, saturated flat colours (no pastel, no grey), a navy and a plum for the dark ones. Skin is as it was. */
 export const PEOPLE = Object.freeze({
-  shirts: Object.freeze(['#ff6a55', '#ff9a3a', '#ffd84d', '#7bd36a', '#3ad4b6', '#4aa0f0', '#7f7bf0', '#b383f0', '#ff7fb8', '#f2f0e6', '#e85a8a', '#8fe0e8']),
-  hair: Object.freeze(['#3a2a22', '#6b3f24', '#b9772c', '#e8c36a', '#8a8fa8', '#2e2a4a']), skin: Object.freeze(['#ffdcb8', '#f3c08f', '#dca070', '#b97a4e', '#8e5836', '#6b3f2a']),
-  pants: Object.freeze(['#4a5a9a', '#6b5a8f', '#3e6b73', '#8a6a4a', '#d8cdb8']), cheeks: '#ff9aa8', eyes: INK.darkest, player: Object.freeze({ jacket: TOY.red, scarf: '#fffaf0' }),
+  shirts: Object.freeze(['#2f5fe8', '#ff7a1a', '#f5b800', '#6fcf2f', '#12b37a', '#12a8a8', '#2aa2f0', '#7a4df0', '#c93fd1', '#ff5fa8', '#d6246e', '#2a3b8f', '#c8dc2a', '#7a2a8a']),
+  hair: Object.freeze(['#3a2a22', '#6b3f24', '#b9772c', '#e8c36a', '#8a8fa8', '#2e2a4a', '#ff5fa8', '#12a8a8']), skin: Object.freeze(['#ffdcb8', '#f3c08f', '#dca070', '#b97a4e', '#8e5836', '#6b3f2a']),
+  pants: Object.freeze(['#2f4fb8', '#2c2a56', '#ff6fae', '#12a8a8', '#e0a410', '#6a8a1a', '#7a2a8a', '#f4ead2']),
+  accents: Object.freeze(['#fffaf0', '#ffd84d', '#ff5fa8', '#12a8a8', '#2f5fe8', '#ff7a1a']), shoes: Object.freeze([Object.freeze(['#2c2a56', '#fffaf0']), Object.freeze(['#fffaf0', '#ff6f61']), Object.freeze(['#c8e832', '#ff6f61']), Object.freeze(['#2f5fe8', '#fffaf0'])]),
+  cheeks: '#ff9aa8', eyes: INK.darkest, player: Object.freeze({ jacket: TOY.red, scarf: '#fffaf0' }),
 });
-/** One look from one hash number (the same person for the same id, every time): { shirt, hair, skin, pants }. The bit fields are separate so no two parts move together. */
-export const personLook = (h) => ({ shirt: PEOPLE.shirts[h % PEOPLE.shirts.length], hair: PEOPLE.hair[(h >>> 4) % PEOPLE.hair.length], skin: PEOPLE.skin[(h >>> 8) % PEOPLE.skin.length], pants: PEOPLE.pants[(h >>> 12) % PEOPLE.pants.length] });
+/** One look from one hash number (the same person for the same id, every time): { shirt, hair, skin, pants, accent, shoe, sole }. The bit fields are separate so no two parts move together, and nobody is one colour from head to toe (the trousers and the trim never match the shirt). */
+export const personLook = (h) => {
+  const P = PEOPLE, shirt = P.shirts[h % P.shirts.length]; let pants = P.pants[(h >>> 12) % P.pants.length], accent = P.accents[(h >>> 20) % P.accents.length];
+  if (pants === shirt) pants = P.pants[((h >>> 12) + 1) % P.pants.length]; if (accent === shirt) accent = P.accents[((h >>> 20) + 1) % P.accents.length];
+  const [shoe, sole] = P.shoes[(h >>> 24) % P.shoes.length];
+  return { shirt, hair: P.hair[(h >>> 4) % P.hair.length], skin: P.skin[(h >>> 8) % P.skin.length], pants, accent, shoe, sole };
+};
 
 // ---------------------------------------------------------------- 2.1 the face model, and the veil
 const faceMemo = new Map();

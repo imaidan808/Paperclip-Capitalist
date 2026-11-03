@@ -1,4 +1,4 @@
-// T4's people and crates (docs/RENDER_PLAN.md): the dolls of the buyers and the player, their outfits by role, their clock (hop, squash, blink, notice), the V2 drawers of the lead, player, lot, asset, truck and car layers
+// T4's people and crates (docs/RENDER_PLAN.md): the figures of the buyers and the player (their flat style is held by tests/world-people-style.test.mjs), their outfits by role, their clock (hop, squash, blink, notice), the V2 drawers of the lead, player, lot, asset, truck and car layers
 // and the hit shapes they leave, which are the legacy ones exactly. No canvas: the recording context of tests/helpers/recctx.mjs and a stand-in world with the few members the drawers read.
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -12,7 +12,7 @@ const env = (o = {}) => ({ t: 0, night: 0, wind: 0, dim: 0, far: false, lite: fa
 const lead = (o = {}) => ({ id: 'lead:abc', type: 'lead', zone: 1, x: X, y: Y, seg: 'student', dir: 1, moving: false, leaving: false, look: lookOf('abcstudent'), lead: { id: 'abc', need: false }, ...o });
 const strip = (hits) => JSON.stringify(hits.map((h) => ({ ...h, lead: undefined, lot: undefined, asset: undefined })));
 
-// ---------------------------------------------------------------- the clock of a doll
+// ---------------------------------------------------------------- the clock of a figure
 test('hopOf: 0.35 s, 6 world pixels at the top, stretch Y 1.08 at the top; nothing before it begins or after it ends', () => {
   assert.deepEqual(ch.hopOf(1000, -1), { h: 0, sy: 1, sx: 1 }); assert.equal(ch.hopOf(1000, 2000).h, 0); assert.equal(ch.hopOf(1400, 1000).h, 0);
   const top = ch.hopOf(1175, 1000); assert.ok(Math.abs(top.h - 6) < 1e-9 && Math.abs(top.sy - 1.08) < 1e-9 && top.sx < 1);
@@ -42,17 +42,17 @@ test('every buyer of the game has a look and an outfit: the named originals keep
   const shirts = new Set(), hairs = new Set(), skins = new Set(); for (let i = 0; i < 200; i++) { const l = ch.lookV2(lead({ id: 'lead:' + i, lead: { id: 'id' + i }, seg: 'student' })); shirts.add(l.shirt); hairs.add(l.hair); skins.add(l.skin); assert.ok(pal.PEOPLE.shirts.includes(l.shirt) && pal.PEOPLE.hair.includes(l.hair) && pal.PEOPLE.skin.includes(l.skin)); }
   assert.ok(shirts.size >= 10 && hairs.size >= 5 && skins.size >= 5, 'the palette of 2.6 is all in use');
 });
-test('the player is the one tomato-red doll with a beanie: no buyer wears the player\'s jacket or the player\'s beanie', () => {
+test('the player is the one tomato-red figure with a beanie: no buyer wears the player\'s jacket or the player\'s beanie', () => {
   assert.equal(ch.PLAYER.shirt, pal.TOY.red); assert.equal(ch.PLAYER.role.head, 'beanie');
   for (const s of pal.PEOPLE.shirts) assert.notEqual(s.toLowerCase(), pal.TOY.red.toLowerCase());
 });
 
 // ---------------------------------------------------------------- the drawers, and the hit shapes they leave
-test('lead: the same hit shape and the same labels as the legacy drawer; a doll with a face at the working zoom, a pill when far; one picture twice; nothing thinner than 1.5', () => {
+test('lead: the same hit shape and the same labels as the legacy drawer; a figure with a face at the working zoom, a pill when far; one picture twice; no stroke at all', () => {
   stack.setFlags('all:legacy'); const e1 = lead(), w1 = mkWorld(); actorMethods.drawLead.call(w1, recCtx().ctx, e1);
   stack.setFlag('lead', 'v2'); const e2 = lead(), w2 = mkWorld(), a = recCtx(); stack.slotFor('lead').draw(a.ctx, null, env(), w2, e2);
   assert.equal(strip(w2.hits), strip(w1.hits)); assert.equal(w2.hits.length, 1); assert.equal(w2.overlay.length, w1.overlay.length); assert.equal(w2.overlay[0].k, 'bub');
-  assert.ok(a.log.calls.length > 40, 'a doll is dozens of flat fills'); assert.equal(a.log.depth, 0); assert.equal(a.state.globalAlpha, 1); assert.ok(thinnestStroke(a.log) >= 1.5 - 1e-9);
+  assert.ok(a.log.calls.length > 40, 'a figure is dozens of flat fills'); assert.equal(a.log.depth, 0); assert.equal(a.state.globalAlpha, 1); assert.equal(a.log.strokes.length, 0, 'a flat figure has no outline'); assert.ok(thinnestStroke(a.log) >= 1.5 - 1e-9);
   const b = recCtx(); stack.slotFor('lead').draw(b.ctx, null, env(), mkWorld(), lead()); assert.deepEqual(a.log.calls, b.log.calls);
   const far = recCtx(); stack.slotFor('lead').draw(far.ctx, null, env({ far: true }), mkWorld({ cam: { z: 0.2 } }), lead()); assert.ok(far.log.calls.length < a.log.calls.length / 4, 'far is a pill');
   const leaving = mkWorld(); stack.slotFor('lead').draw(recCtx().ctx, null, env(), leaving, lead({ leaving: true, leaveAt: -1000 })); assert.equal(leaving.hits.length, 0, 'a buyer who is leaving takes no clicks');
@@ -67,9 +67,9 @@ test('lead: eyes open and no hop under reduced motion (t = 0); a buyer who notic
   stack.slotFor('lead').draw(recCtx().ctx, null, env({ t: 50100, wind: 1 }), w2, e2); assert.equal(e2.v2.hopAt, 50000, 'staying near does not hop again');
   stack.setFlags('all:legacy');
 });
-test('player: a soft golden disc under the feet (no ring line), a chip that says You, and a doll with the beanie; nothing thinner than 1.5', () => {
+test('player: a soft golden disc under the feet (no ring line), a chip that says You, and a figure with the beanie and its pin, no stroke at all', () => {
   stack.setFlag('player', 'v2'); const w = mkWorld(), r = recCtx(); stack.slotFor('player').draw(r.ctx, null, env(), w);
-  assert.equal(w.overlay.length, 1); assert.equal(w.overlay[0].k, 'chip'); assert.ok(r.log.calls.length > 60); assert.equal(r.log.depth, 0); assert.equal(r.state.globalAlpha, 1); assert.ok(thinnestStroke(r.log) >= 1.5 - 1e-9);
+  assert.equal(w.overlay.length, 1); assert.equal(w.overlay[0].k, 'chip'); assert.ok(r.log.calls.length > 60); assert.equal(r.log.depth, 0); assert.equal(r.state.globalAlpha, 1); assert.equal(r.log.strokes.length, 0, 'the paperclip pin is flat fills too'); assert.ok(thinnestStroke(r.log) >= 1.5 - 1e-9);
   assert.ok(!r.log.strokes.some((s) => s.style === '#ffd36e'), 'no yellow ring under the feet'); stack.setFlags('all:legacy');
 });
 test('lot and asset: the same hit polygons as the legacy drawers, a pallet under a lot, a pool under the chosen crate, and the labels', () => {
