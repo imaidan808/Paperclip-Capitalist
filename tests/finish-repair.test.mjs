@@ -658,7 +658,7 @@ test('browser A1, A5: lesson 7 stops its own clock when the glut lands, and its 
     g = await geo();
     assert.equal(g.inBody, true, 'Show me scrolled the panel to it'); assert.match(g.look, /gold frame/);
     assert.ok(g.ring[0] <= g.btn[0] && g.ring[1] <= g.btn[1], `the frame ${g.ring} stands on the button ${g.btn.map(Math.round)}`);
-    await pressed(p, '[data-act="bank-repay"]'); await until(p, `/WHY IT WORKED/i.test((document.querySelector('.ac-sheet .ac-eyebrow')||{}).innerText||'')`, 'the lesson won');
+    await pressed(p, '[data-act="bank-repay"]'); await until(p, `/RESULT/i.test((document.querySelector('.ac-sheet .ac-eyebrow')||{}).innerText||'')`, 'the lesson won'); // (the sheet after a win is the Result since the copy pass of 2026-11-03; it was "Why it worked")
   } finally { await p.close(); }
 });
 

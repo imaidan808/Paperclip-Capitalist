@@ -819,7 +819,7 @@ test('the staged site, served as Pages serves it, boots in Chrome: no console er
     await until(p, `(() => { const b=[...document.querySelectorAll('button')].find(b=>/Academy/.test(b.textContent)); b && b.click(); return !!b; })()`, 'the Academy button');
     await until(p, `document.title.startsWith('Academy')`, 'the Academy screen');
     assert.match(await p.eval(`document.querySelector('#app').innerText`), /LESSON 1 OF 10/);
-    await until(p, `(() => { const b=[...document.querySelectorAll('button')].find(b=>/Start the lesson/.test(b.textContent)); b && b.click(); return !!b; })()`, 'Start the lesson');
+    await until(p, `(() => { const b=[...document.querySelectorAll('button')].find(b=>/^Begin$/.test(b.textContent.trim())); b && b.click(); return !!b; })()`, 'Begin');
     await until(p, `!!document.querySelector('.ac-coach') && !!document.querySelector('canvas')`, 'the lesson\'s coach card over the world');
     // 3. a game starts: the draft, two Backgrounds, Begin, the world
     await p.eval(`localStorage.setItem('pc.academyDone.run1', 'true')`);
