@@ -54,7 +54,7 @@ export function rulePhrases(zone) {
   const Z = zoneOf(zone);
   if (!Z) return [];
   const r = Z.rules || {}, lead = HEADLINE[Z.teaches];
-  const out = [...(lead ? [lead] : []), ...ORDER.filter((k) => k !== lead)].filter((k) => r[k] && RULE[k]).map((k) => RULE[k](r));
+  const out = [...(lead ? [lead] : []), ...ORDER.filter((k) => k !== lead)].filter((k) => r[k] && RULE[k] && !(k === 'yield' && r.rent)).map((k) => RULE[k](r)); // (rent is the yield of property: said once)
   if (!out.length) out.push(...(LESSON_RULE[Z.teaches] || [String(Z.blurb || '').split(/(?<=[.!?])\s/)[0] || 'A new market with its own rules.']));
   return out;
 }
