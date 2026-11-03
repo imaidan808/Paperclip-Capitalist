@@ -320,6 +320,7 @@ test('D6: the schedule line is the list of shocks a student\'s game holds, with 
   S.kv.set('shocksent', { code: 'GRADE', list: U.sent });
   assert.deepEqual(I.loadSent(S).map((x) => x.id), U.sent.map((x) => x.id)); store.clear();
   assert.deepEqual(I.loadSent(S), []);
+  assert.ok(/close\(\) \{ S\.kv\?\.del\(SENT_KEY\); hooks\.onClose\(\); \}/.test(read('js/ui/instructor.js')), 'closing the room forgets the record, as it forgets the roster');
   // what the hover says about warnings is the engine's
   const g = makeGame([], 'ops', 3), warn = (level) => { g.s.skills.fintech = level; return g.warnLead(); };
   assert.deepEqual([warn(1), warn(3), warn(5)], [WARN_LEAD.novice, WARN_LEAD.mid, WARN_LEAD.adv]);

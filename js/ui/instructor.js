@@ -279,7 +279,7 @@ export function mountInstructor(root, S, hooks) {
 
   const acts = {
     settings() { settingsDialog(); },
-    close() { hooks.onClose(); },
+    close() { S.kv?.del(SENT_KEY); hooks.onClose(); }, // (closing the room forgets what it sent, as it forgets its roster: js/session.js `leaveRoom`)
     copykey() { copyRecovery(S, { write: (t) => navigator.clipboard.writeText(t), say: toast }); },
     linksound(b) { U.linkSound = LINK_SOUNDS.some((x) => x.id === b.value) ? b.value : 'normal'; render(); }, // the student link carries nothing, ?sound=quiet or ?sound=off
     copylink(b) { copyText(b.dataset.link).then((ok) => (ok ? toast(LINK_COPIED[b.dataset.sound] || LINK_COPIED.normal, 'good') : toast(`Could not copy it by itself. The student link is ${b.dataset.link}`, 'info', 9000))); }, // the box comes first and the toast says what the link carries: copying before ticking left a link without the flag, and nothing said so. With no way to copy the link is in the words, for nine seconds
