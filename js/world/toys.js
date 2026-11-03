@@ -65,8 +65,17 @@ export function disc(ctx, x, y, rx, ry, fill) { ctx.beginPath(); ctx.ellipse(x, 
 export function poly(ctx, pts, fill) { ctx.beginPath(); ctx.moveTo(pts[0][0], pts[0][1]); for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]); ctx.closePath(); ctx.fillStyle = fill; ctx.fill(); }
 /** A round-capped stroke (a limb, a post, a strut, a rung): at least 3 world pixels across. */
 export function bar(ctx, x0, y0, x1, y1, w, fill) { ctx.lineCap = 'round'; ctx.strokeStyle = fill; ctx.lineWidth = Math.max(3, w); ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke(); ctx.lineCap = 'butt'; }
+/** A capsule: a filled path from (x0, y0) to (x1, y1), `w` across, round at both ends: a stem, a trunk segment or a limb with no stroke in it. */
+export function capsule(ctx, x0, y0, x1, y1, w, fill) {
+  const r = w / 2, a = Math.atan2(y1 - y0, x1 - x0); ctx.beginPath(); ctx.arc(x0, y0, r, a + Math.PI / 2, a + Math.PI * 1.5); ctx.arc(x1, y1, r, a - Math.PI / 2, a + Math.PI / 2); ctx.closePath(); ctx.fillStyle = fill; ctx.fill();
+}
 /** A ball: a flat disc in `c` with a cool crescent lower right and a sunlit crescent upper left (three fills in a clip). */
 export function ball(ctx, x, y, r, c) { puff(ctx, x, y, r, c, hi(c, 0.55), shd(c)); }
+/** A flat round form with the light flat shading of docs/ART_DIRECTION.md 3.4: a darker step of `c` a little down and to the right and `c` itself a little up and to the left, so the dark shows as a rim on the lower right and none on the upper left. No clip, no crescent, no gradient, no highlight; `ry` makes it an ellipse. */
+export function blob(ctx, x, y, r, c, ry = r) {
+  const d = Math.max(0.5, r * 0.09);
+  disc(ctx, x + d * 0.9, y + d * 0.75, r - d * 0.8, ry - d * 0.65, shade(c, 0.78)); disc(ctx, x - d * 0.9, y - d * 0.75, r - d * 0.8, ry - d * 0.65, c);
+}
 /** An ellipse with the same two crescents (a lens, a loaf, a lid). Two flat fills and a highlight, no clip. */
 export function lens(ctx, x, y, rx, ry, c) {
   disc(ctx, x, y, rx, ry, shd(c)); disc(ctx, x - rx * 0.06, y - ry * 0.08, rx * 0.9, ry * 0.88, c);

@@ -24,7 +24,9 @@ const ZOOMS = [0.13, 0.3, 0.5, 0.9, 1.4, 2.4];
 const result = { base: BASE, cracks: [], pan: [], settle: [], memory: null, verdict: 'pass', failed: [] };
 
 const FREEZE = `(async()=>{ const w=pc.world; w.stop(); document.documentElement.dataset.motion='reduce'; const S=await import('/js/world/sprites.js'); S.setBuildBudget(1e9,6,100); if (S.setSpriteFade) S.setSpriteFade(0); w.gcBudget=[1e9,1e9]; w.gcRest=0; w.gcFade=0; w.t=w.vt=1.2e6; try { await import('/js/world/chunkcache.js'); return true; } catch { return false; } })()`; // (true: this build has the chunk cache)
-const SETTLE = `(()=>{ const w=pc.world; for(let i=0;i<30;i++){ w.draw(); } return {chunks: !!(w.gc && w.gc.map), valid: w.gcValid}; })()`;
+// (the ground's base is painted by a worker where there is one, and its answers arrive between tasks: a loop of draw() calls never lets them in, so settling is drawing, then yielding until every visible chunk is baked)
+const WAIT = `for(let i=0;i<800&&!w.gcValid;i++){ await new Promise((r)=>setTimeout(r,25)); w.draw(); }`;
+const SETTLE = `(async()=>{ const w=pc.world; for(let i=0;i<30;i++){ w.draw(); } ${WAIT} return {chunks: !!(w.gc && w.gc.map), valid: w.gcValid}; })()`;
 const CRACKS = `(async()=>{
   const OPAQUE = ${OPAQUE}, BLOCK = 16, countCracks = ${countCracks.toString()}, closeAlpha = ${closeAlpha.toString()}, countGaps = (d, w, h) => closeAlpha(Uint8ClampedArray.from(d), w, h, {}); // (the same function, shipped to the page: the build under test need not have it)
   const w=pc.world, {cv,W,H,dpr,cam}=w;
@@ -53,10 +55,10 @@ const PAN = (steps) => `(()=>{
   w.cam.x=x0; w.cam.y=y0; return out;
 })()`;
 
-const SETTLED = `(()=>{ const w=pc.world, cv=w.cv, g=cv.getContext('2d',{willReadFrequently:true}); w.gcBudget=[2,2]; w.gcRest=90;
+const SETTLED = `(async()=>{ const w=pc.world, cv=w.cv, g=cv.getContext('2d',{willReadFrequently:true}); w.gcBudget=[2,2]; w.gcRest=90;
   // a pan in progress: move the camera and draw once (cells the pan reveals are baked a few ms a frame, the rest stamped), then settle and compare
   const x0=w.cam.x; w.cam.x+=40/(w.cam.z); w.cam.y+=18/(w.cam.z); w.dirty=true; w.draw(); const A=g.getImageData(0,0,cv.width,cv.height).data;
-  w.gcBudget=[1e9,1e9]; w.gcRest=0; for(let i=0;i<30;i++) w.draw(); const B=g.getImageData(0,0,cv.width,cv.height).data;
+  w.gcBudget=[1e9,1e9]; w.gcRest=0; for(let i=0;i<30;i++) w.draw(); ${WAIT} const B=g.getImageData(0,0,cv.width,cv.height).data;
   let bad=0; for (let i=0;i<A.length;i+=4) if (Math.max(Math.abs(A[i]-B[i]),Math.abs(A[i+1]-B[i+1]),Math.abs(A[i+2]-B[i+2]))>12) bad++;
   return { share:+(bad/(A.length/4)).toFixed(5), valid:w.gcValid };
 })()`;

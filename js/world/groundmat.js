@@ -69,7 +69,7 @@ export function tonesOf(D, S, k) {
   const v = (c) => (k ? warmVeil(c, k * VEIL) : c), g = S.ground, ft = faceTone(v(g)), kt = faceTone(v(ROAD.kerb));
   t = {
     ground: v(g), rim: v(mix(g, '#fff6df', 0.34)), faceL: ft.l, faceR: ft.r, patchLo: v(mix(g, '#c98f55', 0.3)), patchHi: v(mix(g, '#fff8e6', 0.42)), pebLo: v(mix(g, '#a8774a', 0.5)), pebHi: v(mix(g, '#fffbe9', 0.62)),
-    tuft: [v(GRASS.hi), v(GRASS.shade), v(GRASS.mid)],
+    tuft: [v(TUFT_TONES[0]), v(TUFT_TONES[1]), v(TUFT_TONES[2])],
     walk: v(S.walk), walkHi: v(mix(S.walk, '#ffffff', 0.6)), walkLo: v(mix(S.walk, '#b79f78', 0.26)), joint: v(mix(S.walk, '#a58d6a', 0.34)),
     asph: v(S.asphalt), asphLo: v(mix(S.asphalt, ROAD.deep, 0.6)), asphHi: v(mix(S.asphalt, ROAD.hi, 0.55)), crack: v(mix(S.asphalt, INK.darkest, 0.5)), seam: v(mix(S.asphalt, ROAD.light, 0.6)),
     kerbTop: v(ROAD.kerb), kerbL: kt.l, kerbR: kt.r, dash: v(ROAD.dash), zebra: v(ROAD.zebra), manhole: v(ROAD.manhole), manholeHi: v(ROAD.light),
@@ -92,9 +92,16 @@ const disc = (ctx, gx, gy, z, rx, ry) => { ctx.moveTo(px(gx, gy) + rx, py(gx, gy
 const seen = (view, x0, y0, x1, y1) => x1 > view.x0 && x0 < view.x1 && y1 > view.y0 && y0 < view.y1;
 const inRect = (r, gx, gy) => gx > r.x && gx < r.x + r.w && gy > r.y && gy < r.y + r.d;
 
-/** A tuft of three leaning blades standing at (x, y), `hgt` pixels tall: the same shape wherever grass is drawn into the ground. */
-export function tuft(ctx, x, y, hh, hgt = 5 + hh * 3.4) {
-  for (let bl = -1; bl <= 1; bl++) { const bx = x + bl * 1.7, lean = bl * 1.5 + (hh - 0.5) * 2; ctx.moveTo(bx - 0.95, y); ctx.lineTo(bx + lean, y - hgt * (bl === 0 ? 1 : 0.78)); ctx.lineTo(bx + 0.95, y); ctx.closePath(); }
+/** The greens of the meadow's tufts (the second art direction: mid and dark greens, matte, nothing lighter than the grass's mid green, no lime): the first three are the plaza's, all four the terrain's. */
+export const TUFT_TONES = Object.freeze([GRASS.mid, GRASS.shade, mix(GRASS.shade, GRASS.deep, 0.4), GRASS.coolShade]);
+/** A tuft of three to five rounded blades standing at (x, y), `hgt` pixels tall: the same shape wherever grass is drawn into the ground. */
+export function tuft(ctx, x, y, hh, hgt = 5 + hh * 3.4) { // answers the number of blades (the budget of a chunk counts blades)
+  const n = 3 + Math.min(2, (hh * 3) | 0), mid = (n - 1) / 2;
+  for (let i = 0; i < n; i++) { // the middle blade tallest, each leaning away from it a little, every tip a small round cap
+    const o = i - mid, bx = x + o * 1.6, h = hgt * (1 - 0.22 * Math.abs(o) / (mid || 1)), lean = o * 1.4 + (hh - 0.5) * 2, tx = bx + lean, ty = y - h + 0.7;
+    ctx.moveTo(bx - 1, y); ctx.quadraticCurveTo(bx - 0.9 + lean * 0.25, y - h * 0.55, tx - 0.7, ty); ctx.arc(tx, ty, 0.7, Math.PI, Math.PI * 2); ctx.quadraticCurveTo(bx + 0.9 + lean * 0.25, y - h * 0.55, bx + 1, y); ctx.closePath();
+  }
+  return n;
 }
 
 /** The world rectangle [x0, y0, x1, y1] a kit's decal can reach at height z (a round one by its radius, a rectangular one by its four corners), with a margin for the soft edge: what the chunk's view is tested against. */
