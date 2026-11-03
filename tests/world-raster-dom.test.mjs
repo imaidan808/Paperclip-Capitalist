@@ -28,6 +28,14 @@ async function measure(args, ms = 420000) {
   } finally { await new Promise((ok) => server.close(ok)); rmSync(join(out, '..'), { recursive: true, force: true }); }
 }
 
+test('the raster measurement reads the canvas through a copy and never reads the live canvas back: Chrome moves a canvas that is read with getImageData off the GPU, and the readback is slow (a control page: 115,644 pixels of anti-aliased edge changed at the third read)', () => {
+  const src = readFileSync(SCRIPT, 'utf8');
+  assert.ok(!/\bcv\.getContext\(/.test(src), 'scripts/world-raster.mjs calls getContext on the live canvas: read a copy of it (GRAB)');
+  assert.match(src, /const GRAB = /, 'the copy-reading helper is the one place that reads pixels back');
+  assert.ok((src.match(/grab\(cv\)/g) || []).length >= 4, 'the settle, the pan and the picture at rest are all read through GRAB');
+  assert.match(src, /--throttle/, 'the measurement can be run with the page slowed, which is how the runner is reproduced');
+});
+
 test('cracks: the ground the old path draws has tens of thousands of gap pixels at the far zooms; the chunks the world stamps have none, at every density', { skip: !BROWSER, timeout: 500000 }, async () => {
   const { code, json } = await measure(['--only', 'cracks', '--dsf', '1,1.5,2']);
   assert.equal(code, 0, 'the gate: ' + json.failed.join('; '));
@@ -40,8 +48,20 @@ test('pan, settle and memory: every frame of a quarter-pixel pan is the first fr
   const { code, json } = await measure(['--only', 'pan,settle,memory', '--dsf', '2']);
   assert.equal(code, 0, 'the gate: ' + json.failed.join('; '));
   for (const r of json.pan) assert.ok(r.rigidShare < 0.005, `${r.scene} at dsf ${r.dsf}: ${(r.rigidShare * 100).toFixed(3)}% of the pixels are not rigid (the old build: 0.9% at the coast, 0.3% in a district, 0.8% at the finest zoom)`);
-  console.log('pan rigidity (the share of pixels that are not rigid): ' + json.pan.map((r) => `${r.scene} ${(r.rigidShare * 100).toFixed(4)}% (worst step ${(r.worst * 100).toFixed(4)}%)`).join('; ')); // always printed: a runner's value is what tells how much room the bars have
+  console.log('pan rigidity (the share of pixels that are not rigid): ' + json.pan.map((r) => `${r.scene} ${(r.rigidShare * 100).toFixed(4)}% (worst step ${(r.worst * 100).toFixed(4)}%, at rest after ${r.still ? r.still.frames : '?'} frames${r.still && !r.still.still ? ', NEVER STILL' : ''})`).join('; ')); // always printed: a runner's value is what tells how much room the bars have
   const fin = json.pan.find((r) => /finest/.test(r.scene)); assert.ok(fin.rigidShare < 0.0005, 'the finest zoom is rigid to 0.05%: ' + fin.rigidShare + ' ' + JSON.stringify(fin.diag));
+  console.log('settle (the share of pixels that change between the picture during a pan and the picture at rest, bar 1%): ' + json.settle.map((r) => `${r.scene} ${(r.share * 100).toFixed(3)}%`).join('; ') + '; the ledger holds ' + json.memory.total + ' MB (bar 160)'); // always printed, like the rigidity: a runner's value tells how much room the bars have
   for (const r of json.settle) { assert.equal(r.valid, true, 'every visible chunk baked'); assert.ok(r.share < 0.01, `${r.scene}: ${(r.share * 100).toFixed(2)}% of the pixels change between the picture during a pan and the picture at rest`); }
   assert.ok(json.memory.total <= 160, 'the pixel ledger holds ' + json.memory.total + ' MB: ' + JSON.stringify(json.memory.entries));
+});
+
+test('pan at the finest zoom is rigid however far apart its frames are: the prop atlas keeps a sprite for 400 ms, and a runner (or a comparison between two frames) takes longer than that', { skip: !BROWSER, timeout: 500000 }, async () => {
+  // The finest zoom has 94 atlas variants on the screen that need 9.2 million pixels and the atlas holds 5 million, so it keeps what it drew in the last 400 ms and nothing else: frames further apart than that make it
+  // evict, rebuild five sprites a frame and draw ten props directly, and their anti-aliased edges change from frame to frame (0.3% of the pixels, 3 runs in 3 with the page slowed 8 times, and the same at full speed with
+  // 450 ms between the frames: `--atlas keep` runs it that way). The measurement lifts the atlas's budget (ATLAS_ON in the script), as it lifts the sprite cache's building time, and this holds it to that.
+  const { code, json } = await measure(['--only', 'pan', '--dsf', '2', '--scenes', 'finest', '--gap', '450']);
+  assert.equal(code, 0, 'the gate: ' + json.failed.join('; '));
+  const fin = json.pan.find((r) => /finest/.test(r.scene)); assert.ok(fin, 'the finest zoom was measured');
+  assert.equal(fin.gap, 450); assert.equal(fin.atlas, 'free', 'the measurement runs with the atlas given room');
+  assert.ok(fin.rigidShare < 0.0005, `the finest zoom is rigid to 0.05% with its frames 450 ms apart: ${fin.rigidShare} ${JSON.stringify(fin.diag)}`);
 });
