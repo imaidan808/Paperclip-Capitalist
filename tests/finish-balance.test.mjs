@@ -35,7 +35,7 @@ test('the three retuned Backgrounds carry the numbers the finishing round chose,
   assert.match(n.strength, /Digital goods \+10% value/); assert.match(n.strength, /lots refresh 25% faster/); assert.match(n.cost, /12% of buyers are fraudulent/); assert.match(n.cost, /1\.5% of your cash a month/);
   // Legacy Heir: a small strength the bot can feel (family friends bring bigger budgets); the costs and the rest are as they were
   assert.equal(h.mods.leadBudget, 1.05); assert.equal(h.mods.xpMult, 0.9); assert.equal(h.mods.noSpecialty, true); assert.equal(h.mods.spreadAdj, -0.25); assert.equal(h.mods.bailout.fraction, 0.6);
-  assert.match(h.strength, /family friends send buyers who bring 5% bigger budgets/); assert.match(h.cost, /learn 10% slower/);
+  assert.match(h.strength, /buyers bring 5% bigger budgets/); assert.match(h.cost, /learn 10% slower/);
   // Seasoned Pro: digital goods -15% instead of -25%; the other costs and the strengths are as they were
   assert.equal(p.mods.digitalMult, 0.85); assert.equal(p.mods.xpMult, 0.85); assert.equal(p.mods.managerCost, 1.1); assert.equal(p.mods.inspectBonus, 2); assert.equal(p.mods.haggleAssist, 1);
   assert.match(p.cost, /digital goods -15%/); assert.match(p.cost, /learn 15% slower/); assert.match(p.cost, /managers cost 10% more/);
