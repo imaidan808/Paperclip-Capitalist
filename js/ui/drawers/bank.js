@@ -139,7 +139,7 @@ function exitHTML(v) {
   if (s.exiting) body = `<div class="callout good"><b>Your exit is settling.</b> ${dur(s.exiting.at - s.hour)} to go. The sale money lands then.</div>`;
   else if (s.exit) body = `<div class="callout good"><b>You exited.</b> Your score is locked at ${m(s.exit.nw)} with ${Math.round(s.exit.daysLeft)} days to spare.</div>`;
   else if (s.over) body = `<p class="small mute">The run is over. Your score is locked at <b>${g.eei().toFixed(2)}</b>.</p>`;
-  else body = `<p class="small mute">Exiting ends your run early and locks your score. The score multiplier is 1 plus the days you have left over 90, so leaving early only wins if you could not have grown more than that by playing on. If you stopped now your score would be <b>${g.eei().toFixed(2)}</b>.</p><div class="bk-grid">${exitCard(v, 'sale')}${exitCard(v, 'ipo')}</div>`;
+  else body = `<p class="small mute">Exiting ends your run early and locks your score. The time bonus is 1 + days left / 90, so leaving early pays only if playing on could not have grown you more. If you stopped now your score would be <b>${g.eei().toFixed(2)}</b>.</p><div class="bk-grid">${exitCard(v, 'sale')}${exitCard(v, 'ipo')}</div>`;
   return `<section class="bk-sec" aria-label="Exit"><h3 class="bk-h3">Exit</h3>${body}</section>`;
 }
 
@@ -178,7 +178,7 @@ export default {
     const gate = s.mil.m1
       ? `${mods.freeze ? '<div class="callout bad"><b>Credit freeze.</b> No new loans until it lifts. Your open loans are re-rating at the new rate.</div>' : ''}
          <section class="bk-sec" aria-label="Loans"><h3 class="bk-h3">Borrow</h3><div class="bk-grid">${ids.map((id) => productCard(v, id)).join('')}</div></section>${loansHTML(v)}`
-      : `<div class="callout warn"><b>The Commercial Bank opens at ${m(MIL.m1)} net worth.</b> You are at ${m(g.netWorth())}. Read the rules above first: borrowing is a lever, and levers cut both ways.</div>`;
+      : `<div class="callout warn"><b>The Commercial Bank opens at ${m(MIL.m1)} net worth.</b> You are at ${m(g.netWorth())}.</div>`;
     return `<div class="bk">${gaugeHTML(v)}${gate}${s.mil.m2 ? auditHTML(v) : ''}${s.mil.m3 ? exitHTML(v) : ''}${ledgerHTML(v)}</div>`;
   },
   acts(ctx) {
@@ -216,7 +216,7 @@ export default {
       'bank-exit'(el) {
         const game = g(), k = el.dataset.k, q = game.exitQuote(k), m = ctx.money;
         if (!q.ok) { ctx.toast(q.msg, 'bad', undefined, { refusal: true }); return; }
-        ctx.confirmBox(k === 'ipo' ? 'Go public (IPO)?' : 'Sell the business?', `<dl class="kv"><dt>Cash</dt><dd>${m(game.s.cash)}</dd><dt>Assets and managers (book)</dt><dd>${m(q.hard)}</dd><dt>Going-concern premium (${+((k === 'ipo' ? 10 : 6) * game.B.exitMult).toFixed(1)}x average daily profit of ${m(q.avg)})</dt><dd>${m(q.premium)}</dd><dt>Brokerage ${Math.round(FEES.exitBrokerage * 100)}%</dt><dd class="red">-${m(q.brokerage)}</dd><dt>Debt repaid</dt><dd class="red">-${m(game.debt())}</dd><div class="sep"></div><dt>You receive in 48 hours</dt><dd class="gold">${m(q.proceeds)}</dd><dt>Score locked at</dt><dd class="green">${q.eeiIfNow.toFixed(2)}</dd><dt>Score if you play on (today)</dt><dd>${game.eei().toFixed(2)}</dd></dl><p class="small mute">This ends your run and locks the score. Nothing is undone.</p>`, 'Exit now', () => { ctx.say(game.exit(k)); }, true);
+        ctx.confirmBox(k === 'ipo' ? 'Go public (IPO)?' : 'Sell the business?', `<dl class="kv"><dt>Cash</dt><dd>${m(game.s.cash)}</dd><dt>Assets and managers (book)</dt><dd>${m(q.hard)}</dd><dt>Going-concern premium (${+((k === 'ipo' ? 10 : 6) * game.B.exitMult).toFixed(1)}x average daily profit of ${m(q.avg)}${game.s.auditFail ? `, less ${Math.round(Math.min(0.7, 0.15 * game.s.auditFail) * 100)}% for failed audits` : ''})</dt><dd>${m(q.premium)}</dd><dt>Brokerage ${Math.round(FEES.exitBrokerage * 100)}%</dt><dd class="red">-${m(q.brokerage)}</dd><dt>Debt repaid</dt><dd class="red">-${m(game.debt())}</dd><div class="sep"></div><dt>You receive in 48 hours</dt><dd class="gold">${m(q.proceeds)}</dd><dt>Score locked at</dt><dd class="green">${q.eeiIfNow.toFixed(2)}</dd><dt>Score if you play on (today)</dt><dd>${game.eei().toFixed(2)}</dd></dl><p class="small mute">This ends your run and locks the score. Nothing is undone.</p>`, 'Exit now', () => { ctx.say(game.exit(k)); }, true);
       },
       'bank-ledger'() { const B = ST(ctx); B.ledger = !B.ledger; ctx.render(); },
       // a focused select blocks the shell's redraw, so let go of it, draw, then take it back

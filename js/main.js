@@ -100,7 +100,7 @@ const screens = {
       <div class="hero">
         <p class="mono mute small" style="margin:0">A 90-day entrepreneurship simulation for higher education</p>
         <h1>PAPERCLIP<br>CAPITALIST</h1>
-        <p class="sub">Everyone starts with one paperclip and $0. Draft two of twelve Backgrounds, trade your way up through sixteen districts, play the deals yourself in the skill games, survive the shocks, and out-think a class full of founders chasing the same obvious deal.</p>
+        <p class="sub">Everyone starts with one paperclip and $0. Draft two of twelve Backgrounds, trade up through sixteen districts and outthink a class chasing the same deal.</p>
         <ul class="sc-facts" aria-label="What is in the game"><li><b>1</b> paperclip, <b>$0</b></li><li><b>12</b> Backgrounds</li><li><b>16</b> districts</li><li><b>5</b> skill games</li><li><b>10</b> Academy missions</li></ul>
         <div class="row" style="justify-content:center">
           ${saved ? `<button class="btn big" data-act="resume">Resume your run</button>` : ''}

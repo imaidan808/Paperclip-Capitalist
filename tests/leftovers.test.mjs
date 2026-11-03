@@ -47,7 +47,7 @@ function lotsAt(ops, seed, zone = 7) {
 
 test('L1: the Ops blurb says what Ops does, and each part of it is true in the engine', () => {
   const b = SKILLS.ops.blurb;
-  assert.equal(b, 'Cheaper repairs, better restorations, lower prices on working lots (wrecks ask more as your Ops rises) and less pipeline overhead.');
+  assert.equal(b, 'Cheaper, better repairs and cheaper working lots, but wrecks ask more as Ops rises. Less pipeline overhead.'); // (copy pass, 2026-11-03: the same four claims in fewer words; each is held below)
   assert.doesNotMatch(b, /sourcing/i, 'Ops does not lower every sourcing price');
   assert.doesNotMatch(b, /friction/i, 'friction is the pool haircut and the taxes, which Ops does not touch; what it lowers is a manager\'s overhead');
   assert.ok(b.length < 160, 'it fits a Draft card');

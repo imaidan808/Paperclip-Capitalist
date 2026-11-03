@@ -88,7 +88,7 @@ test('R1 rescueButton: the cursor on a button the card\'s shape now hides goes t
 // ====================================================================================================================================
 test('S1: the intro\'s Start button has no autofocus (the page has already put the cursor on the heading, so the attribute was ignored and logged "Autofocus processing was blocked")', () => {
   const m = ACADEMY[0], html = AC.introHTML(m, { index: 0, total: ACADEMY.length, st: { done: [], skipped: [] }, concept: null, replay: false, missions: ACADEMY });
-  assert.match(html, /<button class="btn big" data-act="ac-start">Start the lesson<\/button>/);
+  assert.match(html, /<button class="btn big" data-act="ac-start">Begin<\/button>/); // (the button says Begin since the copy pass of 2026-11-03: the scene is one line and the button is one word)
   assert.doesNotMatch(html, /autofocus/, 'the cursor goes to the heading by script, where it is read out');
   assert.doesNotMatch(AC.introHTML(m, { index: 0, total: ACADEMY.length, st: { done: [m.id], skipped: [] }, concept: null, replay: true, missions: ACADEMY }), /autofocus/, 'a replay too');
 });

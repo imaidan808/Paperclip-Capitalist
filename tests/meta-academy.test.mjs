@@ -191,7 +191,7 @@ test('mission fields, types and limits', () => {
     assert.ok(isInt(m.zone) && m.zone >= 1 && m.zone <= ZONE_COUNT, `${m.id}: district 1..16`);
     assert.ok(REQUIRED_CODEX.includes(m.concept), `${m.id}: concept "${m.concept}" is not a required codex id`);
     assert.ok(isNum(m.minutes) && m.minutes >= 1.5 && m.minutes <= 2.5, `${m.id}: minutes must keep a mission at 90-150 seconds`);
-    assert.ok(isStr(m.intro) && m.intro.length >= 80 && m.intro.length <= 260, `${m.id}: intro is a scene of 80..260 characters (has ${m.intro.length})`);
+    assert.ok(isStr(m.intro) && m.intro.length >= 80 && m.intro.length <= 190, `${m.id}: intro is a scene of 80..190 characters (has ${m.intro.length}); the lesson is played first and read after (was 260)`);
   }
   assert.equal(new Set(ACADEMY.map((m) => m.concept)).size, 10, 'ten different concepts');
   assert.ok(new Set(ACADEMY.map((m) => m.zone)).size >= 7, 'the missions visit at least seven different districts');
@@ -351,7 +351,7 @@ test('steps: 3 to 9 per mission, each with a coach line, a real anchor, a wait a
       const w = `${m.id} step ${s.i + 1} (${s.id})`;
       keysOf(s, ['id', 'say', 'anchor', 'wait', 'hint', 'i', 'pause'], w); // pause: the runner stops the clock when the step is done (m07's glut; tests/finish-repair.test.mjs)
       assert.ok(/^[a-z][a-z0-9-]*$/.test(s.id), `${w}: id is kebab-case`);
-      assert.ok(isStr(s.say) && s.say.length >= 30 && s.say.length <= 220, `${w}: say is 30..220 characters (has ${s.say?.length})`);
+      assert.ok(isStr(s.say) && s.say.length >= 30 && s.say.length <= 200, `${w}: say is 30..200 characters (has ${s.say?.length}); one action at a time (was 220)`);
       assert.ok(isStr(s.hint) && s.hint.length >= 20 && s.hint.length <= 200 && s.hint !== s.say, `${w}: hint is 20..200 characters and says something new (has ${s.hint?.length})`);
       const pa = parseAnchor(s.anchor);
       if (pa) {
@@ -543,11 +543,14 @@ test('coach and hints use the names on the screen: Done reading, Bid, Drop out, 
 });
 
 // ---------------------------------------------------------------------------------------------------------------------------------------
-test('why cards: title, 2-3 short paragraphs, a formula and a worked example', () => {
+test('why cards: a title, one idea to keep, then 2-3 short paragraphs, a formula and a worked example (the last three are folded on the page)', () => {
   for (const m of ACADEMY) {
     const y = m.why, w = `${m.id} why`;
-    keysOf(y, ['title', 'body', 'formula', 'example'], w);
+    keysOf(y, ['title', 'gist', 'body', 'formula', 'example'], w);
     assert.ok(isStr(y.title) && y.title.length <= 60, `${w}: title`);
+    // the gist is all the player reads of the result before asking for more: one or two sentences, never a paragraph, and not a restatement of the title
+    assert.ok(isStr(y.gist) && y.gist.length >= 60 && y.gist.length <= 160, `${w}: gist is 60..160 characters (has ${y.gist?.length})`);
+    assert.ok(y.gist !== y.title && !y.body.includes(y.gist), `${w}: the gist says something the folded text does not repeat word for word`);
     assert.ok(Array.isArray(y.body) && y.body.length >= 2 && y.body.length <= 3, `${w}: 2-3 paragraphs`);
     for (const p of y.body) assert.ok(isStr(p) && p.length >= 80 && p.length <= 420, `${w}: paragraph of 80..420 characters (has ${p.length}): ${p.slice(0, 40)}`);
     assert.ok(isStr(y.formula) && y.formula.length <= 220, `${w}: formula (${y.formula?.length})`);
@@ -656,7 +659,8 @@ test('every skill is met by mission 10, and mission 10 uses them all', () => {
   for (const ev of ['pitch', 'buy', 'inspect', 'repair', 'auction', 'hire', 'cycle', 'draw', 'repay', 'shock', 'sell-pool']) assert.ok(events.has(ev), `the Academy exercises "${ev}"`);
 });
 
-test('pacing: the play of a mission, by a rough clock, fits 90-150 seconds with the Why card and teach-back (about 30 s)', () => {
+// The coach says less before the player acts and the result opens on one idea (work order of 2026-11-02), so a lesson is shorter than the 90 s it was held to: the floor is 60 s.
+test('pacing: the play of a mission, by a rough clock, fits 60-150 seconds with the result, the question and the reward (about 30 s)', () => {
   // A first-time player, playing most stages by hand. Quick is always allowed, so a hurried player is faster. The clock steps assume a fast speed.
   const EV = { pitch: 14, buy: 12, inspect: 18, auction: 22, repair: 22, haggle: 8, hire: 14, draw: 10, repay: 8, shock: 8, 'sell-pool': 12, cycle: 14 };
   const CLICK = { 'hud-cash': 4, 'hud-clock': 4, 'hud-networth': 6 };
@@ -670,7 +674,7 @@ test('pacing: the play of a mission, by a rough clock, fits 90-150 seconds with 
     const last = m.steps.at(-1), same = last.wait.type === 'event' && last.wait.event === m.win.event; // the win IS the last step's event: no work between them
     const play = m.steps.reduce((t, st) => t + 2 + st.say.length / 28 + act(m, st), 0) + (same ? 0 : WIN[m.win.event] ?? 10);
     const total = play + 30;
-    assert.ok(total >= 90 && total <= 150, `${m.id}: about ${Math.round(total)} seconds in all (${Math.round(play)} of play); aim for 90..150`);
+    assert.ok(total >= 60 && total <= 150, `${m.id}: about ${Math.round(total)} seconds in all (${Math.round(play)} of play); aim for 60..150`);
     assert.ok(Math.abs(m.minutes * 60 - total) <= 30, `${m.id}: minutes (${m.minutes}) should be near the estimate (${Math.round(total)} s)`);
   }
 });

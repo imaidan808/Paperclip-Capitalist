@@ -41,6 +41,13 @@
 .dr-line > b { font-family: ui-monospace, Menlo, monospace; font-size: 1.1rem; line-height: 1.1; text-align: center; }
 .dr-plus > b { color: var(--green); } .dr-minus > b { color: var(--red); }
 .dr-t { min-width: 0; overflow-wrap: anywhere; }
+/* the exact numbers: the card shows a headline for each side, and the full claims open under it on hover or focus (the build tray always shows them for the two chosen) */
+.dr-tip { position: absolute; left: -2px; right: -2px; top: calc(100% - 4px); z-index: 7; display: none; gap: .35rem; padding: .55rem .65rem; background: var(--bg2); border: var(--bw) solid var(--gold); box-shadow: 0 6px 0 rgba(0, 0, 0, .45); font-size: .82rem; line-height: 1.35; pointer-events: none; }
+.dr-tip > span { display: grid; grid-template-columns: 1rem minmax(0, 1fr); gap: .3rem; } .dr-tip b { font-family: ui-monospace, Menlo, monospace; text-align: center; }
+.dr-card:hover .dr-tip, .dr-card:has(.dr-in:focus-visible) .dr-tip { display: grid; }
+.dr-card:hover, .dr-card:has(.dr-in:focus-visible) { z-index: 6; }
+@media (hover: none) { .dr-card:hover .dr-tip { display: none; } }
+
 
 /* the tray: your build */
 .dr-tray { background: var(--panel); border: var(--bw) solid var(--gold); box-shadow: var(--shadow); padding: .75rem .85rem; display: grid; gap: .55rem; }

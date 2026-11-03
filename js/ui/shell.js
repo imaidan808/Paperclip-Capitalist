@@ -221,7 +221,7 @@ export function mountGame(root, S, hooks) {
     if (k === 'cash' || k === 'nw') {
       const inv = game.invValue(), pip = s.pipes.reduce((a, p) => a + p.basis, 0), fly = s.pipes.reduce((a, p) => a + (p.inflight || 0), 0), set = s.settle.reduce((a, x) => a + x.amt, 0);
       const esc2 = s.escrow.reduce((a, e) => a + (e.cash || 0) + e.assets.reduce((x, y) => x + game.val(y), 0), 0), tr = s.freight.reduce((a, f) => a + game.inTransit(f), 0); // the engine counts a crate on a truck at the lower of where it left and where it is going, so the dialog's rows add up to the net worth beside them
-      body = `<dl class="kv">${row('Cash on hand', money(s.cash))}${row('Inventory at fair value', money(inv))}${row('Assets in transit', money(tr))}${row('Manager capital (book)', money(pip))}${row('Capital in running cycles', money(fly))}${row('Settling sales', money(set))}${row('Held in escrow', money(esc2))}${row('Debt', '-' + money(game.debt()), 'red')}<div class="sep"></div>${row('Net worth', money(game.netWorth()), 'gold')}${row('Net worth peak', money(s.peak))}</dl><p class="small mute">Districts open as your net worth passes their gate. Stock decays and running cycles earn, so money that keeps moving beats money that sits.</p>`;
+      body = `<dl class="kv">${row('Cash on hand', money(s.cash))}${row('Inventory at fair value', money(inv))}${row('Assets in transit', money(tr))}${row('Manager capital (book)', money(pip))}${row('Capital in running cycles', money(fly))}${row('Settling sales', money(set))}${row('Held in escrow', money(esc2))}${row('Debt', '-' + money(game.debt()), 'red')}<div class="sep"></div>${row('Net worth', money(game.netWorth()), 'gold')}${row('Net worth peak', money(s.peak))}</dl><p class="small mute">Districts open as net worth passes their gate. Stock decays; running cycles earn.</p>`;
     } else if (k === 'day') {
       const ev = s.events.filter((e) => e.warned);
       body = `<dl class="kv">${row('Virtual day', `${game.day} of 90`)}${row('Virtual hour', s.hour + ' / ' + TOTAL_HOURS)}${row('Real time per virtual day', `${(168 / S.clock.speed).toFixed(0)} seconds at ${S.clock.speed}x`)}</dl><h3 class="gap">Known macro events</h3>${ev.length ? ev.map((e) => `<p class="small"><b>${esc(e.name)}</b>: ${e.start > s.hour ? 'in ' + Math.round((e.start - s.hour) / 24 * 10) / 10 + ' days' : 'started day ' + (Math.floor(e.start / 24) + 1)}</p>`).join('') : '<p class="small mute">No warnings yet. Capital Sourcing and the Market Research Suite buy earlier notice.</p>'}`;
@@ -233,7 +233,7 @@ export function mountGame(root, S, hooks) {
     dlg.open(`<button class="btn ghost sm x" data-close>Close</button><h2 tabindex="-1" autofocus>Menu</h2><div class="grid g2">
       <div class="card"><h3>Classroom room</h3>${inRoom ? `<p class="small">In room <b class="mono">${esc(S.roomInfo.code)}</b> via ${S.room.kind === 'relay' ? 'relay server' : 'this browser (other tabs)'}. The instructor's clock is in charge.</p><button class="btn sm ghost" data-act="leave">Leave room</button>`
         : `<p class="small mute">Joining restarts your run on the instructor's shared clock.</p><label for="m-code">Room code</label><input id="m-code" maxlength="8" style="text-transform:uppercase" autocomplete="off"><label for="m-relay" class="gap">Relay server URL (optional)</label><input id="m-relay" placeholder="wss://your-relay.example" value="${esc(kv.get('relay') || DEFAULT_RELAY)}"><button class="btn sm gap" data-act="joinroom">Join</button>`}</div>
-      <div class="card"><h3>This run</h3><div class="grid"><button class="btn sm" data-act="debrief">Open debrief and reflection</button><button class="btn sm ghost" data-act="academy">Academy: replay a lesson</button><button class="btn sm ghost" data-act="settings">Display and sound</button><button class="btn sm ghost" data-act="savefile">Download my save</button><button class="btn sm danger" data-act="reset">Start over</button></div></div></div>
+      <div class="card"><h3>This run</h3><div class="grid"><button class="btn sm" data-act="debrief">Debrief</button><button class="btn sm ghost" data-act="academy">Replay a lesson</button><button class="btn sm ghost" data-act="settings">Display and sound</button><button class="btn sm ghost" data-act="savefile">Download my save</button><button class="btn sm danger" data-act="reset">Start over</button></div></div></div>
       <p class="small mute gap">Privacy: your save lives only in this browser. Rooms share a pseudonymous Founder ID, your chosen alias and game numbers, never names or emails.</p>
       <p class="tiny mute" id="m-build" aria-live="polite"></p>`, { label: 'Menu' });
     stamp($('#m-build', dlg.el)); // which build this browser runs, and whether a later one is live (js/build.js)
@@ -253,7 +253,7 @@ export function mountGame(root, S, hooks) {
       render();
     },
     speed(b) { S.setSpeed(+b.value); },
-    help() { dlg.open(`<button class="btn ghost sm x" data-close>Close</button><h2 tabindex="-1" autofocus>How to play</h2><ol class="small"><li>Click a <b>buyer</b> in the world to sell something to them, or a <b>booth</b> to buy a lot. Every deal can be played (Read, Pitch, Close) or auto-played with <b>Quick</b>.</li><li>Your <b>Goal</b> card tells you what to do next. The <b>Codex</b> explains why things work.</li><li>Net worth opens new districts. Each one has a signature rule and teaches one idea.</li><li>Press <b>1</b> to <b>7</b> to open the panels, <b>Esc</b> to close them.</li><li>Press <b>M</b> to mute or unmute sound.</li></ol>`, { label: 'Help' }); },
+    help() { dlg.open(`<button class="btn ghost sm x" data-close>Close</button><h2 tabindex="-1" autofocus>How to play</h2><ol class="small"><li>Click a <b>buyer</b> to sell, or a <b>booth</b> to buy. Play each deal (Read, Pitch, Close) or press <b>Quick</b>.</li><li>The <b>Goal</b> card says what to do next. The <b>Codex</b> says why it works.</li><li>Net worth opens districts. Each has a rule of its own.</li><li>Press <b>1</b> to <b>7</b> to open the panels, <b>Esc</b> to close them, <b>M</b> to mute.</li></ol>`, { label: 'Help' }); },
     settings() { settingsDialog(() => render()); },
     menu,
     breakdown(b) { breakdown(b.dataset.k); },
@@ -269,7 +269,7 @@ export function mountGame(root, S, hooks) {
       kv.set('relay', relay); dlg.close(); hooks.onJoin({ code, relay });
     },
     savefile() { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([JSON.stringify(g().s)], { type: 'application/json' })); a.download = `paperclip-save-${g().s.pid}.json`; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000); },
-    reset() { confirmBox('Start over?', '<p>This deletes your current run from this browser. Your instructor still sees your last published numbers until you join again.</p>', 'Delete and restart', () => hooks.onReset(), true); },
+    reset() { confirmBox('Start over?', '<p>This deletes your current run from this browser. Your instructor keeps the last numbers you published.</p>', 'Delete and restart', () => hooks.onReset(), true); },
   };
   const acts = { ...base };
   for (const d of DRAWERS) Object.assign(acts, d.acts?.(ctx) || {});
@@ -339,7 +339,7 @@ export function mountGame(root, S, hooks) {
   const refusal = S.roomRefusal?.(); if (refusal) toast(refusal, 'bad', 9000); // the room was refused while the player was still on the draft: the note went by before this screen was here
   const over = setInterval(() => {
     const s = S.game?.s;
-    if (s?.over && !U.overShown) { U.overShown = true; queue(`<h2 tabindex="-1" autofocus>The simulation is complete</h2><p>Your final Economic Efficiency Index is <b class="gold">${S.game.eei().toFixed(2)}</b>. Open the debrief to review your decisions and prepare your reflection.</p><div class="row"><button class="btn big" data-act="debrief" autofocus>Open debrief</button><button class="btn ghost" data-close>Keep looking around</button></div>`, { label: 'Complete', sound: 'level' }); }
+    if (s?.over && !U.overShown) { U.overShown = true; queue(`<h2 tabindex="-1" autofocus>Day 90: the run is complete</h2><p>Your Economic Efficiency Index is <b class="gold">${S.game.eei().toFixed(2)}</b>. The debrief reviews your decisions.</p><div class="row"><button class="btn big" data-act="debrief" autofocus>Open the debrief</button><button class="btn ghost" data-close>Stay in the world</button></div>`, { label: 'Complete', sound: 'level' }); }
   }, 1500);
 
   function destroy() {
@@ -356,5 +356,5 @@ export function mountGame(root, S, hooks) {
 }
 
 export function alertHTML(a) {
-  return `<button class="btn ghost sm x" data-close>Close</button><h2 tabindex="-1" autofocus>${esc(a.name)}</h2><p class="mono small gold">${esc(a.code || '')}</p><p>${esc(a.readout || '')}</p>${(a.vars || []).length ? `<ul class="small">${a.vars.map((v) => `<li>${esc(v)}</li>`).join('')}</ul>` : ''}<p class="small mute">${esc(a.enforcement || '')}</p>`;
+  return `<button class="btn ghost sm x" data-close>Close</button><h2 tabindex="-1" autofocus>${esc(a.name)}</h2><p>${esc(a.readout || '')}</p>${(a.vars || []).length ? `<ul class="small">${a.vars.map((v) => `<li>${esc(v)}</li>`).join('')}</ul>` : ''}<p class="small mute">${esc(a.enforcement || '')}</p>`;
 }

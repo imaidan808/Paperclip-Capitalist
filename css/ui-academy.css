@@ -11,7 +11,7 @@
   background: radial-gradient(circle at 50% 38%, color-mix(in srgb, var(--gold) 22%, var(--bg)), var(--bg) 78%); border: 2px solid var(--gold); border-radius: 10px; box-shadow: 3px 3px 0 rgba(0, 0, 0, .55); }
 .ac-intro h1:focus, .ac-sheet h2:focus { outline: none; }
 .ac-scene { font-size: 1.05rem; border-left: 4px solid var(--cyan); padding: .55rem .95rem; background: var(--info-bg); margin: .3rem 0; line-height: 1.5; }
-.ac-facts { list-style: none; padding: 0; margin: 0; display: flex; gap: .4rem; flex-wrap: wrap; }
+.ac-meta { margin: 0; }
 .ac-pips { list-style: none; display: flex; gap: .45rem; padding: 0; margin: .5rem 0; flex-wrap: wrap; }
 .ac-pip { position: relative; width: 2.1rem; height: 2.1rem; display: grid; place-items: center; border: var(--bw) solid var(--line); font-family: ui-monospace, Menlo, monospace; font-size: .8rem; color: var(--mute); border-radius: 2px; }
 .ac-pip + .ac-pip::before { content: ""; position: absolute; right: 100%; top: 50%; width: .45rem; border-top: 2px solid var(--line); }
@@ -125,7 +125,17 @@ html.ac-strip .worldhost { --cam-top: min(max(calc(50% - var(--cam-h) / 2), calc
 .ac-cxcard { border-left: 4px solid var(--cyan); display: grid; grid-template-columns: 2.4rem 1fr; gap: .6rem; align-items: start; padding: .5rem .7rem; background: var(--panel2); border: 1px solid var(--line); }
 .ac-cxi { font-size: 1.6rem; text-align: center; line-height: 1.2; } .ac-cxcard p { margin: .1rem 0 0; }
 
-/* A phone on its side is 390px tall or less: the card is tightened (a smaller emblem and title, a shorter scene, the ten step markers on one line) until "Start the lesson"
+/* played first, read after: the tick on a finished step, the result's idea, the small rewards */
+.ac-pip.fresh { animation: ac-pop .6s cubic-bezier(.2, 1.5, .4, 1) both; }
+@keyframes ac-pop { 0% { transform: scale(.6); } 60% { transform: scale(1.18); } 100% { transform: none; } }
+.ac-check { position: absolute; right: -.45rem; top: -.65rem; width: 1.55rem; height: 1.55rem; display: grid; place-items: center; border-radius: 50%; background: var(--green); color: #06210f; font: 700 .9rem/1 ui-monospace, Menlo, monospace; opacity: 0; transform: scale(.3); pointer-events: none; }
+.ac-coach.ac-tick .ac-check { animation: ac-check 1s ease-out both; }
+@keyframes ac-check { 0% { opacity: 0; transform: scale(.3); } 25% { opacity: 1; transform: scale(1.25); } 45% { transform: scale(1); } 80% { opacity: 1; } 100% { opacity: 0; transform: scale(1); } }
+.ac-gist { font-size: 1.12rem; line-height: 1.5; margin: .35rem 0 .5rem; padding: .6rem .9rem; border-left: 4px solid var(--gold); background: color-mix(in srgb, var(--gold) 7%, var(--panel)); }
+.ac-more[open] > :not(summary) { animation: ac-rise .22s ease both; }
+.ac-cxcard { animation: ac-rise .35s calc(.35s + var(--n, 0) * .12s) cubic-bezier(.2, .9, .3, 1) both; }
+
+/* A phone on its side is 390px tall or less: the card is tightened (a smaller emblem and title, a shorter scene, the ten step markers on one line) until "Begin"
    is on the first screen, as it is in a taller window. */
 @media (max-height: 520px) {
   .ac-intro { margin: .5rem auto; gap: .35rem; padding-block: .7rem; }
@@ -144,7 +154,7 @@ html.ac-strip .worldhost { --cam-top: min(max(calc(50% - var(--cam-h) / 2), calc
   .ac-coach { width: calc(100vw - 1rem); }
   .ac-sheet { padding: 1vh .4rem; } .ac-sheet-in { padding: .8rem .85rem 1rem; }
 }
-@media (prefers-reduced-motion: reduce) { .ac-ring, .ac-ring.show, .ac-sheet-in, .ac-rw .chip { animation: none; } .ac-ring, .ac-coach { transition: none; } }
-:root[data-motion="reduce"] .ac-ring, :root[data-motion="reduce"] .ac-ring.show, :root[data-motion="reduce"] .ac-sheet-in, :root[data-motion="reduce"] .ac-rw .chip { animation: none; }
+@media (prefers-reduced-motion: reduce) { .ac-ring, .ac-ring.show, .ac-sheet-in, .ac-rw .chip, .ac-pip.fresh, .ac-coach.ac-tick .ac-check, .ac-cxcard, .ac-more[open] > :not(summary) { animation: none; } .ac-ring, .ac-coach { transition: none; } }
+:root[data-motion="reduce"] :is(.ac-ring, .ac-ring.show, .ac-sheet-in, .ac-rw .chip, .ac-pip.fresh, .ac-coach.ac-tick .ac-check, .ac-cxcard, .ac-more[open] > :not(summary)) { animation: none; }
 :root[data-motion="reduce"] .ac-ring, :root[data-motion="reduce"] .ac-coach { transition: none; }
 :root[data-contrast="high"] .ac-ring { box-shadow: 0 0 0 100vmax rgba(0, 0, 0, .7); }

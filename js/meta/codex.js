@@ -9,7 +9,7 @@ export const CODEX = [
     summary: "Value is use to a particular buyer. Fit measures how well what you hold matches what they want.",
     body: [
       "A paperclip is worth five cents to a stranger and as much as eight dollars to a student whose SIM tray just jammed. The object did not change. The match did. Every buyer likes certain tags (tool, office, prestige, retro) and every asset carries one to three of them. Fit is how well the two line up, from 0 to 1.",
-      "Take the buyer's strongest liked tag on your asset, then add 0.15 for each other liked tag, capped at 1. Fit becomes a price multiplier from 0.4x (barely useful) to 1.35x (perfect). Below 0.15 the buyer simply refuses. The Scrap Yard's barter ladder rewards you for finding whoever values your thing most, then swapping up.",
+      "Take the buyer's strongest liked tag on your asset, then add 0.15 for each other liked tag, capped at 1. Fit becomes a price multiplier from 0.4x (barely useful) to 1.35x (perfect). Below 0.15 the buyer refuses. The Scrap Yard's barter ladder rewards you for finding whoever values your thing most, then swapping up.",
       "This is why the buyer with the fattest wallet is not always the best one to pitch. A buyer who loves your tag beats one who merely tolerates it, even when the second can pay more.",
     ],
     formula: "fit = min(1, strongest liked tag + 0.15 x each other liked tag); price multiplier = 0.4 + 0.95 x fit",
@@ -33,7 +33,7 @@ export const CODEX = [
     summary: "Haggling is a search for a price both sides prefer to walking away. Your first move, patience and read of them decide where it lands.",
     body: [
       "At Flea Market Row almost every price is a conversation. In the Close stage you and the buyer trade offers over a few rounds, and the final price can land anywhere from 0.6x to 1.4x of fair value. Nobody at the stall is trying to be fair to you. They want a deal they like, and so do you.",
-      "A good haggle has three parts. Open with an anchor you can defend. Concede in steps that shrink, so your offers signal you are nearing your limit. And watch the person, not just the number: hard buyers punish overreach, friendly ones reward small concessions, impulsive ones respond to bold openings and analytical ones punish lowballs.",
+      "A good haggle has three parts. Open with an anchor you can defend. Concede in steps that shrink, so your offers signal you are nearing your limit. And watch the person as well as the number: hard buyers punish overreach, friendly ones reward small concessions, impulsive ones respond to bold openings and analytical ones punish lowballs.",
       "Decide your walk-away point before you begin, because the deal you refuse matters as much as the one you take. Quick plays the round for you at average skill. Playing it yourself is how you beat average.",
     ],
     formula: "mult = final price / fair value (the Deal Room keeps it between 0.6 and 1.4)",
@@ -92,7 +92,7 @@ export const CODEX = [
       ],
       result: "The ask looked like a $9 bargain on a $315 watch. Corrected for what you cannot see, it was an $83 loss in expectation.",
     },
-    mistakes: ["Pricing a lot as if it were certainly genuine.", "Assuming the seller is dishonest when they are simply better informed.", "Skipping the Read stage on big lots to save a few points."],
+    mistakes: ["Pricing a lot as if it were certainly genuine.", "Assuming the seller is dishonest when they are only better informed.", "Skipping the Read stage on big lots to save a few points."],
     tryIt: "Open a Pawn District lot, spend two probes in the Read stage and compare your fake probability before and after.",
     related: ['adverse-selection', 'due-diligence', 'winners-curse', 'expected-value'],
     unlock: { event: 'zone', match: { id: 4 } },
@@ -130,7 +130,7 @@ export const CODEX = [
     ],
     formula: "expected overshoot of the winning guess = a x (n - 1) / (n + 1), for n bidders with guesses spread evenly within +/- a of the truth",
     example: {
-      setup: "A hidden-value box is truly worth $1,000. Five bidders each estimate it within 20% of the truth, so guesses run from $800 to $1,200.",
+      setup: "A hidden-value box is worth $1,000. Five bidders each estimate it within 20% of the truth, so guesses run from $800 to $1,200.",
       steps: [
         "The expected top guess of five is 20% x 4 / 6 = +13.3%, so the winner's estimate averages $1,133.",
         "If everyone bids their estimate, the winner pays about $1,133 for a $1,000 box. Surplus: -$133.",
@@ -289,7 +289,7 @@ export const CODEX = [
     summary: "Few buyers, huge budgets, long contracts and no room for mistakes. One enterprise client can become most of your income.",
     body: [
       "In Corporate Valley the buyers are organizations: IT departments, holding companies, franchise groups. Budgets are large and decisions are slow. You win them by showing you can deliver at scale, not by charm at the counter. The signed contract matters more than any single sale.",
-      "Enterprise deals concentrate your income. One account might pay $2,797 a day after tax while the rest of your business earns $1,000. That is wonderful until it leaves. It also comes with strict service terms: if your managers fall short, the penalty is double the daily fee and a second miss ends the contract.",
+      "Enterprise deals concentrate your income. One account might pay $2,797 a day after tax while the rest of your business earns $1,000. That pays well until the client leaves. It also comes with strict service terms: if your managers fall short, the penalty is double the daily fee and a second miss ends the contract.",
       "Treat enterprise sales as a trade of risk for reward: high customer value, high acquisition cost and high dependence.",
     ],
     formula: "customer concentration = largest client's income / total income",
@@ -495,7 +495,7 @@ export const CODEX = [
     summary: "A buyer in a hurry pays for the need, not for your cost. Urgent leads quote the price they will pay.",
     body: [
       "Some buyers arrive with a problem. A student's SIM tray jams. A mechanic needs one bolt before closing. They tell you what they would pay. For these urgent leads the game uses their stated budget as the reference price instead of your asset's fair value, because what matters to them is the fix, not the object.",
-      "That is the urgency premium: the extra a person pays to solve a pressing need now. It can dwarf your cost. It only works if the asset truly answers the need (the lead names a tag and your asset must carry it) and if you reach them before they leave. Leads last only 18 to 36 virtual hours.",
+      "That is the urgency premium: the extra a person pays to solve a pressing need now. It can dwarf your cost. It only works if the asset answers the need (the lead names a tag and your asset must carry it) and if you reach them before they leave. Leads last only 18 to 36 virtual hours.",
       "Premium pricing is value-based pricing. Cost-plus asks what the thing cost you. Value-based asks what it is worth to this person, today.",
     ],
     formula: "urgent price = stated budget x (0.55 + 0.45 x fit) x 0.60 x 0.92 x Cm, never above the budget",
@@ -630,7 +630,7 @@ export const CODEX = [
   },
   {
     id: 'interest-and-compounding', title: 'Interest on Debt', icon: '🧾', category: 'Finance',
-    summary: "Debt grows by a rate, and the rate compounds on a schedule. The cost is not just the percentage but how often it is added.",
+    summary: "Debt grows by a rate, and the rate compounds on a schedule. The cost depends on the percentage and on how often it is added.",
     body: [
       "A loan has a price: a rate charged on what you still owe. In the default rules rates are quoted per 30 days, since a 90-day game would barely feel a yearly rate. Interest accrues every day on your principal and is added to the principal on the facility's schedule (daily for a micro line, weekly for a pipeline loan, monthly for enterprise credit). Once it is added, you pay interest on interest.",
       "Compounding more often makes a given rate cost more. Upfront fees and unused-credit fees raise the real cost further. Your Fintech skill and some Backgrounds lower the spread, and a credit crunch raises the index for everyone.",
@@ -657,7 +657,7 @@ export const CODEX = [
     body: [
       "Debt-to-equity (D/E) is the amount you owe divided by your net worth. Net worth already has debt subtracted, so it plays the part of equity. A D/E of 0.5 means you owe fifty cents for every dollar that is yours. At 3.0 you owe three dollars.",
       "The game draws two lines. At 3.0 the Bank stops lending: your draws are capped so D/E stays at or below it. At 4.5 a margin call fires. Between the two is a danger zone where a small fall in the value of your stock pushes the ratio up fast, because the equity underneath is thin.",
-      "Watch the gauge in the Bank drawer, not just the cash in your pocket.",
+      "Watch the gauge in the Bank drawer as well as the cash in your pocket.",
     ],
     formula: "D/E = total debt / net worth; room to borrow = 3.0 x net worth - current debt",
     example: {
@@ -748,7 +748,7 @@ export const CODEX = [
     summary: "A promise about how reliably you will deliver, with penalties if you do not. Corporate clients pay well and forgive little.",
     body: [
       "A service level agreement (SLA) turns a client's expectations into terms. In the game it is a number of managers that must be running every day. Meet it and the client pays. Miss it and you pay twice the daily fee as a penalty, and a second miss ends the contract.",
-      "SLAs are a trade. They make income predictable, which is why corporate accounts are valuable. They also remove slack: a delayed freight run, a manager on audit duty or a margin call can all push you under the line. Before you sign, count not just what you have but what could take it away.",
+      "SLAs are a trade. They make income predictable, which is why corporate accounts are valuable. They also remove slack: a delayed freight run, a manager on audit duty or a margin call can all push you under the line. Before you sign, count what could take your income away as well as what you have.",
       "Capacity is the real asset behind a contract.",
     ],
     formula: "penalty per missed day = 2 x daily fee; two misses end the contract",
@@ -863,7 +863,7 @@ export const CODEX = [
     summary: "Spread your bets so one bad thing cannot sink you. It only works when the bets do not move together.",
     body: [
       "Do not put all your eggs in one crate. When you split money across assets, buyers or districts, a loss in one is cushioned by the others. The arithmetic is friendly: with n independent bets of the same size and risk, the swing in your total falls by the square root of n.",
-      "The trick is independence. Two trend goods look like two bets, but they share a shock: when fatigue hits, both fall together. Goods with different tags sit in different markets and meet different shocks. Diversify across tags, buyers and districts, not just across items.",
+      "The trick is independence. Two trend goods look like two bets, but they share a shock: when fatigue hits, both fall together. Goods with different tags sit in different markets and meet different shocks. Diversify across tags, buyers and districts as well as items.",
       "It costs something. You give up the chance of being all-in on your best idea, trading a little upside for a lot of protection.",
     ],
     formula: "swing of an equal-weight mix of n independent bets = single-bet swing / sqrt(n)",
@@ -1160,7 +1160,7 @@ export const CODEX = [
     summary: "Goodwill that follows you from deal to deal. It is what turns one sale into a customer who comes back.",
     body: [
       "Reputation is what buyers, and later partners and clients, expect from you based on how you have dealt before. In a one-off trade you could squeeze every dollar. In a repeated game you cannot, because next time they will remember. A reputation meter from 0 to 100 on your player card keeps track.",
-      "The economics are simple. A returning buyer is worth every future sale, not just this one. If a repeat customer brings $60 of profit five times, squeezing an extra $40 from the first sale puts $300 at risk for a $40 gain. Some Backgrounds lean on this (Small-Town Roots earns loyal buyers with bigger budgets) and some are fragile to it (a Creator's failed pitch costs goodwill for two days).",
+      "The economics are simple. A returning buyer is worth every future sale as well as this one. If a repeat customer brings $60 of profit five times, squeezing an extra $40 from the first sale puts $300 at risk for a $40 gain. Some Backgrounds lean on this (Small-Town Roots earns loyal buyers with bigger budgets) and some are fragile to it (a Creator's failed pitch costs goodwill for two days).",
       "Good dealing is cheap. Rebuilding is not.",
     ],
     formula: "relationship value = profit per deal x expected number of deals",
@@ -1186,7 +1186,7 @@ export const CODEX = [
       "The multiple pays for steady earnings. Two businesses with the same assets can sell at very different prices if one earns far more per day. Each failed audit cuts the premium by 15%. So a business is worth three things: what it owns, what it earns and how clean its record is.",
       "Exiting ends the run. Your score freezes with the days you have left.",
     ],
-    formula: "proceeds = cash + hard assets + (multiple x average daily profit) - 12% x (hard assets + premium) - debt",
+    formula: "proceeds = cash + hard assets + premium - 12% x (hard assets + premium) - debt, where premium = multiple x average daily profit x max(0.3, 1 - 0.15 x failed audits)",
     example: {
       setup: "Cash $20,000, hard assets $90,000 (stock and managers at cost), debt $30,000, average daily profit $4,000 over the last 14 days and a clean audit record.",
       steps: [
@@ -1233,7 +1233,7 @@ export const CODEX = [
       "Net worth unlocks the sixteen districts: $20 for Flea Market Row, $80 for Campus Quad and on up to $2.5 million for the Global Exchange. Not every action moves it. Buying a lot at fair value swaps cash for stock and changes nothing. Paying interest, fees or a fire-sale discount lowers it. Selling above fair value raises it.",
       "Net worth is a snapshot. It says how much you own, not how easily you can spend it. For that, see liquidity.",
     ],
-    formula: "net worth = cash + stock at fair value + managers at cost + cash in transit - debt",
+    formula: "net worth = cash + stock at fair value + goods on trucks + goods held for a swap + sales waiting to settle + managers at cost - debt - royalties owed",
     example: {
       setup: "You have $300 cash, a Vintage Tube Radio worth $11.52 at Flea Market Row, $600 sitting in a manager and a $500 loan.",
       steps: [
