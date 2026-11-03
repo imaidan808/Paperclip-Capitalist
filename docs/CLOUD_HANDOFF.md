@@ -1,7 +1,9 @@
 # Cloud handoff: the whole-product audit and repair pass
 
+> **Status, 2026-11-03: a historical record.** This file was written for the cloud session of 2026-10-29 and 2026-10-30. The tree it describes was merged to `main` (pull request 1) and is live, and its open jobs were taken up in later pull requests (the audit blockers, the art pass, hosting, the deploy gate, performance, the ground, the people and the nature, the copy pass). The status lines below ("not merged", "not live", "nothing is at 8 yet") are true as of the dates they carry. For the current state use `git log origin/main`, the open pull requests and `docs/ARCHITECTURE.md`; `docs/handoff/NEXT_SESSION_PROMPT.md` is the prompt for a new session.
+
 Written 2026-10-29 for a cloud session; **updated at the end of that session (branch `v2/cloud-audit`)**. Read this file, then `docs/V2_DESIGN.md` (the contract) and `docs/ARCHITECTURE.md`.
-Nothing on this branch has been merged to `main` or deployed; the live site is still the old v1 + 2.5D build. Do not push to `main`
+As of 2026-10-29: nothing on this branch had been merged to `main` or deployed, and the live site was still the old v1 + 2.5D build (see the status above for what happened next). Do not push to `main`
 (the Pages workflow deploys on a push to `main` and it refuses a test marked `todo`). Work on a branch and say what you did.
 
 ## Update, 2026-10-29 evening (branch `v2/audit-blockers`): read this first
