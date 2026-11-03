@@ -1,6 +1,7 @@
 // The Academy (docs/V2_DESIGN.md section 9): ten short missions played in the REAL interface against the REAL engine, in a scripted sandbox.
-// Each mission: an intro card, the lesson (coach marks pointing at real controls), WHY it worked (formula and a worked example), a teach-back question,
-// and a reward (XP, a skill point, Codex pages). The pure parts live in ./academy-sandbox.js and are tested without a browser.
+// Each mission is played first and read after: a scene of one line, the lesson (one short coach line at a time, pointing at real controls; every step done pops a tick),
+// the result (the headline and the one idea to keep, with "Why it works" and "The math", the formula and the worked example, folded under it), one question, and a reward
+// (XP, a skill point, Codex pages). The pure parts live in ./academy-sandbox.js and are tested without a browser.
 //
 //   mountAcademy(root, S, { onDone, onSkip, only, missions }) -> cleanup()
 //     S        the real Session. A lesson never writes to it; rewards reach S.game only when a real run exists (otherwise they wait in kv 'academyRewards').
@@ -50,19 +51,23 @@ const pretty = (id) => String(id).replace(/-/g, ' ').replace(/^./, (c) => c.toUp
 const para = (t) => `<p>${esc(t)}</p>`;
 const entryOf = (id, lookup) => lookup?.(id) || { id, title: pretty(id), icon: '', summary: '' };
 
-export function introHTML(m, { index, total, st, concept, replay, missions = [] }) {
+/**
+ * The scene before a lesson: its title, one line of setting, one line of facts, the course's progress and Begin. What the lesson teaches is not said here: the player finds it out by playing,
+ * and the result sheet names it afterwards (`concept` is still passed by the driver and is not shown). The pip for the lesson just finished (`fresh`) lights up as the next scene opens.
+ */
+export function introHTML(m, { index, total, st, replay, missions = [] }) {
   const state = (id, i) => (st.done.includes(id) ? 'done' : st.skipped.includes(id) ? 'skipped' : i === index ? 'now' : 'todo');
   const label = { done: 'done', skipped: 'skipped', now: 'this lesson', todo: 'not played yet' };
-  const pips = missions.map((x, i) => `<li class="ac-pip ${state(x.id, i)}" aria-label="Lesson ${i + 1} of ${total}, ${label[state(x.id, i)]}: ${esc(x.title)}"><span aria-hidden="true">${state(x.id, i) === 'done' ? '✓' : i + 1}</span></li>`).join('');
-  const facts = [`About ${Math.max(1, Math.round(+m.minutes || 2))} min`, ZONES[m.zone] ? ZONES[m.zone].name : '', concept ? `You will learn: ${concept.title}` : ''].filter(Boolean);
+  const pips = missions.map((x, i) => `<li class="ac-pip ${state(x.id, i)}${i === index - 1 && state(x.id, i) === 'done' ? ' fresh' : ''}" aria-label="Lesson ${i + 1} of ${total}, ${label[state(x.id, i)]}: ${esc(x.title)}"><span aria-hidden="true">${state(x.id, i) === 'done' ? '✓' : i + 1}</span></li>`).join('');
+  const facts = [`About ${Math.max(1, Math.round(+m.minutes || 2))} min`, ZONES[m.zone] ? ZONES[m.zone].name : ''].filter(Boolean).join(' · ');
   return `<section class="ac-intro panel" aria-labelledby="ac-h">
     <p class="ac-eyebrow mono">Academy &middot; Lesson ${index + 1} of ${total}${replay ? ' &middot; replay' : ''}</p>
     <h1 id="ac-h" tabindex="-1"><span aria-hidden="true">${esc(m.icon || '')}</span> ${esc(m.title)}</h1>
     <p class="ac-scene">${esc(m.intro || '')}</p>
-    <ul class="ac-facts">${facts.map((f) => `<li class="chip info">${esc(f)}</li>`).join('')}</ul>
+    <p class="ac-meta small mute">${esc(facts)}</p>
     <ol class="ac-pips" aria-label="Your lessons">${pips}</ol>
-    <div class="row gap"><button class="btn big" data-act="ac-start">${replay ? 'Replay the lesson' : 'Start the lesson'}</button><button class="btn ghost" data-act="ac-leave">Leave the Academy</button></div>
-    <p class="small mute">${replay ? 'A replay is for learning: it pays no new XP.' : 'Nothing you do in a lesson touches your real run.'}</p>
+    <div class="row gap"><button class="btn big" data-act="ac-start">${replay ? 'Replay' : 'Begin'}</button><button class="btn ghost" data-act="ac-leave">Leave the Academy</button></div>
+    ${replay ? '<p class="small mute">A replay pays no new XP.</p>' : ''}
   </section>`;
 }
 
@@ -76,7 +81,7 @@ export function coachHTML(c, o = {}) {
   const dots = Array.from({ length: Math.min(12, Math.max(0, c.total | 0)) }, (_, i) => `<i${c.finishing || i <= c.index ? ' class="on"' : ''}></i>`).join('');
   const head = `<div class="ac-head"><small class="ac-eyebrow mono">${esc(o.title || 'Lesson')} &middot; ${c.finishing ? 'Last step' : `Step ${c.index + 1} of ${c.total}`}</small>${dots ? `<span class="ac-dots" aria-hidden="true">${dots}</span>` : ''}</div>`;
   if (o.confirm) {
-    return `${head}<p class="ac-say" id="ac-say">Skip this lesson? You will still see why it works and answer one question.</p>
+    return `${head}<p class="ac-say" id="ac-say">Skip this lesson? You will still see the result and answer one question.</p>
       <div class="ac-btns"><button class="btn sm" data-act="ac-skip-yes">Yes, skip it</button><button class="btn sm ghost" data-act="ac-skip-no">Keep going</button></div>`;
   }
   const framed = o.framed !== false;
@@ -102,15 +107,23 @@ export function strandedHTML(c, o = {}) {
     <div class="ac-btns"><button class="btn sm" data-act="ac-restart" data-fid="ac-restart">Restart</button><button class="btn sm ghost" data-act="ac-skip">Skip lesson</button>${foldBtn}</div>`;
 }
 
+/**
+ * What the player just did, in one line, with the explanation one tap away. The headline and the gist (`why.gist`: the one idea to keep; a lesson without one shows its first paragraph) are all that is
+ * open. "Why it works" and "The math" (the formula and the worked example) fold under it: nothing is lost, and the player who wants the detail asks for it.
+ */
 export function whyHTML(m, { skipped, index, total } = {}) {
-  const w = m.why || {}, ex = w.example;
-  return `<p class="ac-eyebrow mono">Lesson ${(index ?? 0) + 1} of ${total ?? ''} &middot; Why it worked</p>
-    <h2 id="ac-sh" tabindex="-1">${esc(w.title || m.title)}</h2>
-    ${skipped ? '<p class="callout warn">You skipped the hands-on part, so no XP this time. You can play it from the Codex whenever you like.</p>' : ''}
-    ${(w.body || []).map(para).join('')}
+  const w = m.why || {}, ex = w.example, body = w.body || [];
+  const gist = w.gist || body[0] || '';
+  const why = body.length ? `<details class="ac-more"><summary>Why it works</summary>${body.map(para).join('')}</details>` : '';
+  const math = w.formula || ex ? `<details class="ac-more"><summary>The math</summary>
     ${w.formula ? `<pre class="ac-formula mono" aria-label="Formula">${esc(w.formula)}</pre>` : ''}
-    ${ex ? `<section class="ac-ex" aria-label="Worked example"><h3>Worked example</h3>${para(ex.setup)}<ol>${(ex.steps || []).map((s) => `<li>${esc(s)}</li>`).join('')}</ol><p class="ac-result"><b>Result:</b> ${esc(ex.result)}</p></section>` : ''}
-    <div class="row gap"><button class="btn big" data-act="ac-why-next">${m.teachBack ? 'Test myself' : 'Continue'}</button></div>`;
+    ${ex ? `<section class="ac-ex" aria-label="Worked example"><h3>Worked example</h3>${para(ex.setup)}<ol>${(ex.steps || []).map((s) => `<li>${esc(s)}</li>`).join('')}</ol><p class="ac-result"><b>Result:</b> ${esc(ex.result)}</p></section>` : ''}</details>` : '';
+  return `<p class="ac-eyebrow mono">Lesson ${(index ?? 0) + 1} of ${total ?? ''} &middot; Result</p>
+    <h2 id="ac-sh" tabindex="-1">${esc(w.title || m.title)}</h2>
+    ${skipped ? '<p class="callout warn">You skipped the hands-on part, so no XP this time. Play it from the Codex whenever you like.</p>' : ''}
+    ${gist ? `<p class="ac-gist">${esc(gist)}</p>` : ''}
+    ${why}${math}
+    <div class="row gap"><button class="btn big" data-act="ac-why-next">${m.teachBack ? 'Check yourself' : 'Continue'}</button></div>`;
 }
 
 export function teachHTML(m, state) {
@@ -124,10 +137,10 @@ export function teachHTML(m, state) {
     return `<li><button class="ac-opt ${cls}" data-act="ac-pick" data-i="${i}" ${picked || done ? 'aria-disabled="true"' : ''} aria-pressed="${picked}"><span class="ac-k" aria-hidden="true">${LETTERS[i] || i + 1}</span><span>${esc(o.text)}</span></button>${picked || reveal ? `<p class="ac-why ${good || reveal ? 'good' : 'bad'}">${verdict}${esc(o.why)}</p>` : ''}</li>`;
   }).join('');
   const live = last == null ? '' : opts[last].correct ? `Correct. ${opts[last].why}` : `Not quite. ${opts[last].why}`;
-  const after = state.solved ? `<p class="callout good">${teachFirstTry(state) ? 'First try.' : 'Got it.'} That is the idea the lesson was built on.</p>`
-    : state.revealed ? '<p class="callout">That is the answer. Read why each choice is right or wrong, then carry on.</p>'
-      : state.picks.length ? '<p class="callout warn">Read why, then try another one. Wrong guesses are fine here.</p>' : '';
-  return `<p class="ac-eyebrow mono">Teach-back</p>
+  const after = state.solved ? `<p class="callout good">${teachFirstTry(state) ? 'First try.' : 'Got it.'}</p>`
+    : state.revealed ? '<p class="callout">That is the answer. Each choice is explained above.</p>'
+      : state.picks.length ? '<p class="callout warn">Read why, then try another.</p>' : '';
+  return `<p class="ac-eyebrow mono">Check yourself</p>
     <h2 id="ac-sh" tabindex="-1">${esc(tb.q)}</h2>
     <ul class="ac-opts" aria-label="Choose the true explanation">${rows}</ul>
     <div class="ac-fb sr" role="status" aria-live="polite">${esc(live)}</div>${after}
@@ -138,8 +151,8 @@ export function teachHTML(m, state) {
 export function rewardHTML(m, paid, lookup, { last, skipped, replay, index, total, only } = {}) {
   const ids = [...(paid.newCodex || []), ...(paid.knownCodex || [])];
   const chips = [paid.xp ? `<li class="chip good" data-count="${+paid.xp || 0}" data-fmt="int" data-pre="+" data-post=" XP">+${paid.xp} XP</li>` : '', paid.points ? `<li class="chip good">+${paid.points} skill point</li>` : ''].join('');
-  const cards = ids.map((id) => { const e = entryOf(id, lookup), fresh = (paid.newCodex || []).includes(id); return `<li class="ac-cxcard"><span class="ac-cxi" aria-hidden="true">${esc(e.icon || '')}</span><div><b>${esc(e.title)}</b>${fresh ? ' <span class="chip info">New</span>' : ''}<p class="small mute">${esc(e.summary || '')}</p></div></li>`; }).join('');
-  const note = replay ? 'A replay pays nothing new, but the pages stay in your Codex.' : skipped ? 'Play this lesson hands-on from the Codex to earn its XP and skill point.' : paid.pending ? 'These are held for you and arrive when your run begins.' : 'Added to your run.';
+  const cards = ids.map((id, n) => { const e = entryOf(id, lookup), fresh = (paid.newCodex || []).includes(id); return `<li class="ac-cxcard" style="--n:${n}"><span class="ac-cxi" aria-hidden="true">${esc(e.icon || '')}</span><div><b>${esc(e.title)}</b>${fresh ? ' <span class="chip info">New</span>' : ''}<p class="small mute">${esc(e.summary || '')}</p></div></li>`; }).join('');
+  const note = replay ? 'A replay pays nothing new. The pages stay in your Codex.' : skipped ? 'Play it from the Codex to earn its XP and skill point.' : paid.pending ? 'They arrive when your run begins.' : 'Added to your run.';
   return `<p class="ac-eyebrow mono">Lesson ${(index ?? 0) + 1} of ${total ?? ''} &middot; Complete</p>
     <h2 id="ac-sh" tabindex="-1">${esc(m.title)}: ${skipped ? 'explained' : 'done'}</h2>
     ${chips ? `<ul class="ac-rw">${chips}</ul>` : ''}
@@ -177,7 +190,7 @@ export function mountAcademy(root, S, { onDone, onSkip, only, missions, store = 
   function intro(idx) {
     cleanupPlay();
     const m = list[idx], st = readAcademy(store), replay = st.done.includes(m.id);
-    root.innerHTML = introHTML(m, { index: idx, total: list.length, st, concept: lookup(m.concept) || null, replay, missions: list });
+    root.innerHTML = introHTML(m, { index: idx, total: list.length, st, replay, missions: list });
     delegate(root, { 'ac-start': () => play(idx), 'ac-leave': leave });
     $('#ac-h', root)?.focus({ preventScroll: true }); // the heading is where the cursor goes (it is read out); go() has already focused the page, so an `autofocus` on the button was ignored and logged "Autofocus processing was blocked"
     announce(`Lesson ${idx + 1} of ${list.length}: ${m.title}. ${m.intro || ''}`);
@@ -250,7 +263,7 @@ export function mountAcademy(root, S, { onDone, onSkip, only, missions, store = 
       if (layer && layer.isConnected) return;
       layer = document.createElement('div');
       layer.className = 'ac-layer'; layer.dataset.academy = ''; layer.dataset.keep = ''; // keep: the Deal Room repaints its sheet with innerHTML, and setHTML (common.js) leaves a child marked so where it is
-      layer.innerHTML = '<div class="ac-ring" aria-hidden="true" hidden></div><i class="ac-stripbox" aria-hidden="true"></i><section class="ac-coach" role="dialog" aria-modal="false" aria-labelledby="ac-say" tabindex="-1"><div class="ac-coach-in"></div></section>';
+      layer.innerHTML = '<div class="ac-ring" aria-hidden="true" hidden></div><i class="ac-stripbox" aria-hidden="true"></i><section class="ac-coach" role="dialog" aria-modal="false" aria-labelledby="ac-say" tabindex="-1"><div class="ac-coach-in"></div><i class="ac-check" aria-hidden="true">&#10003;</i></section>';
       ringEl = layer.firstChild; stripEl = layer.children[1]; cardEl = layer.lastChild; bodyEl = cardEl.firstChild;
       ctx.el.overlay.appendChild(layer);
       lastKey = '';
@@ -448,12 +461,19 @@ export function mountAcademy(root, S, { onDone, onSkip, only, missions, store = 
     function soon() { if (checkQ) return; checkQ = true; Promise.resolve().then(() => { checkQ = false; check(); }); }
 
     // ---- feeding the resolver
+    // A step done is felt before it is read: a tick pops on the card's corner (css `.ac-check`, one beat; `reduced()` leaves it out, and the card's own words and sound say the same).
+    let tickT = 0;
+    function tick() {
+      if (!cardEl || reduced()) return;
+      cardEl.classList.remove('ac-tick'); void cardEl.offsetWidth; cardEl.classList.add('ac-tick');
+      clearTimeout(tickT); tickT = setTimeout(() => cardEl?.classList.remove('ac-tick'), 1000);
+    }
     function feed(evt) {
       if (dead || gone || sheet || winPending || run.won) return;
       const r = feedRun(m, run, evt);
       run = r.run;
       if (r.pause) { try { sb.setPaused(true); } catch { /* clock fixed */ } } // a step that says `pause`: the clock stops at the moment the step is done (m07's glut), before the next card is drawn
-      if (r.advanced) { stepChanged(); if (!r.won) hear('step', { i: run.i }); } // the goal has its own sound
+      if (r.advanced) { stepChanged(); if (!r.won) { hear('step', { i: run.i }); tick(); } } // the goal has its own sound and its own burst (win)
       if (r.won) win();
     }
     off.push(ctx.on(feed));
@@ -544,8 +564,8 @@ export function mountAcademy(root, S, { onDone, onSkip, only, missions, store = 
     }
     function showWhy() {
       winPending = false;
-      openSheet(whyHTML(m, { skipped, index: idx, total: list.length }), 'Why it worked'); hear('page', { late: true }); // after the window that won the lesson has been put away
-      announce('Why it worked.');
+      openSheet(whyHTML(m, { skipped, index: idx, total: list.length }), 'Lesson result'); hear('page', { late: true }); // after the window that won the lesson has been put away
+      announce('Lesson result.');
     }
     function showTeach() {
       if (!m.teachBack?.options?.length) { showReward(); return; }

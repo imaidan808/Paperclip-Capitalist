@@ -351,14 +351,22 @@ test('the cards are clean HTML: intro, coach, why, teach-back (before, after a m
     rewardSkipped: D.rewardHTML(m, { xp: 0, points: 0, newCodex: ['utility-fit'], knownCodex: [] }, lookup, { skipped: true, index: 0, total: 8 }),
   };
   for (const [name, html] of Object.entries(cards)) assert.deepEqual(checkHTML(html, name), []);
-  assert.match(cards.intro, /Lesson 1 of 8/); assert.match(cards.intro, /About 2 min/); assert.match(cards.intro, /The Scrap Yard|Scrap/); assert.match(cards.intro, /Utility &amp; Fit/); assert.match(cards.intro, /Start the lesson/);
+  assert.match(cards.intro, /Lesson 1 of 8/); assert.match(cards.intro, /About 2 min/); assert.match(cards.intro, /The Scrap Yard|Scrap/); assert.match(cards.intro, />Begin</);
+  // the scene does not give the lesson away (copy pass, work order of 2026-11-02: play first, read after): the idea is named by the result and the reward, not by a chip before the first step
+  assert.ok(!/Utility &amp; Fit|You will learn/.test(cards.intro), 'the scene says what happens, not what it teaches');
   assert.equal((cards.intro.match(/class="ac-pip /g) || []).length, LESSONS.length); assert.match(cards.intro, /ac-pip done/);
-  assert.match(cards.introReplay, /Replay the lesson/); assert.match(cards.introReplay, /pays no new XP/);
+  assert.match(cards.introReplay, />Replay</); assert.match(cards.introReplay, /pays no new XP/); assert.ok(!/pays no new XP/.test(cards.intro), 'the first play has no footnote');
+  assert.match(D.introHTML(LESSONS[1], { index: 1, total: 8, st, replay: false, missions: LESSONS }), /ac-pip done fresh/, 'the pip of the lesson just finished is the one that lights up'); assert.ok(!/fresh/.test(cards.intro), 'the first scene has no lesson behind it');
   assert.match(cards.coach, /Step 1 of 2/); assert.match(cards.coach, /Show me/); assert.match(cards.coach, /Skip lesson/); assert.ok(!/Hint:/.test(cards.coach));
   assert.match(cards.coachHint, /Hint:/); assert.match(cards.coachHint, /gold frame/); assert.match(cards.coachHint, /ac-continue/); assert.match(cards.coachHint, /aria-pressed="true"/); assert.match(cards.coachHint, /Restart/);
   assert.match(cards.coachConfirm, /ac-skip-yes/); assert.match(cards.coachFinish, /Last step/);
   assert.match(cards.stranded, /Closed early/); assert.match(cards.stranded, /That sale closed the lesson early/); assert.match(cards.stranded, /data-act="ac-restart"/);
-  assert.match(cards.why, /fit = min\(1/); assert.match(cards.why, /<ol><li>Strongest like is 1\.0\./); assert.match(cards.why, /Result:/); assert.match(cards.whySkipped, /skipped the hands-on part/); assert.match(cards.why, /Test myself/);
+  assert.match(cards.why, /fit = min\(1/); assert.match(cards.why, /<ol><li>Strongest like is 1\.0\./); assert.match(cards.why, /Result:/); assert.match(cards.whySkipped, /skipped the hands-on part/); assert.match(cards.why, /Check yourself/);
+  // the result opens on one idea and folds the rest: the paragraphs under "Why it works", the formula and the worked example under "The math", both closed until the player asks
+  assert.equal((cards.why.match(/<details class="ac-more">/g) || []).length, 2, 'two folds'); assert.ok(!/<details[^>]*\bopen\b/.test(cards.why), 'both are closed'); assert.match(cards.why, /<summary>Why it works<\/summary>/); assert.match(cards.why, /<summary>The math<\/summary>/);
+  assert.match(cards.why, /class="ac-gist"/, 'the idea to keep is open (a lesson with no gist of its own shows its first paragraph)');
+  assert.ok(cards.why.indexOf('ac-gist') < cards.why.indexOf('<details') && !/ac-gist[^<]*<\/p>[\s\S]*<pre/.test(cards.why.slice(0, cards.why.indexOf('<details'))), 'the formula is never open on the page');
+  assert.match(D.whyHTML({ ...m, why: { ...m.why, gist: 'One idea to keep.' } }, {}), /<p class="ac-gist">One idea to keep\.<\/p>/, 'a lesson\'s own gist is the one shown');
   assert.equal((cards.teach0.match(/data-act="ac-pick"/g) || []).length, 3, 'three large options'); assert.ok(!/ac-why/.test(cards.teach0), 'no reasons before a pick');
   assert.match(cards.teachMiss, /Not quite/); assert.match(cards.teachMiss, /tempting idea 0/); assert.match(cards.teachMiss, /Show me the answer/); assert.ok(!/need and fit set/.test(cards.teachMiss), 'a wrong pick does not give the answer away');
   assert.match(cards.teachOk, /ac-teach-next/); assert.match(cards.teachOk, /need and fit set the price/); assert.match(cards.teachOk, /tempting idea 0/, 'the miss is kept with its reason'); assert.match(cards.teachOk, /Got it/);
@@ -396,7 +404,7 @@ test('mountAcademy: no lessons ends at once; an unknown lesson id ends at once; 
   click(r, 'ac-leave'); assert.equal(skipped, 1); assert.equal(doneCalls, 0); cleanup(); cleanup();
   fresh(); store.set('academy', ['t01', 't02']);
   const r2 = root(); D.mountAcademy(r2, {}, { missions: LESSONS, store }); assert.match(r2.innerHTML, /Lesson t03/, 'resumes where the player stopped');
-  const r3 = root(); D.mountAcademy(r3, {}, { missions: LESSONS, only: 't02', store }); assert.match(r3.innerHTML, /Lesson t02/); assert.match(r3.innerHTML, /Replay the lesson/);
+  const r3 = root(); D.mountAcademy(r3, {}, { missions: LESSONS, only: 't02', store }); assert.match(r3.innerHTML, /Lesson t02/); assert.match(r3.innerHTML, />Replay</);
   fresh();
 });
 
