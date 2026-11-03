@@ -269,7 +269,7 @@ export function mountGame(root, S, hooks) {
       kv.set('relay', relay); dlg.close(); hooks.onJoin({ code, relay });
     },
     savefile() { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([JSON.stringify(g().s)], { type: 'application/json' })); a.download = `paperclip-save-${g().s.pid}.json`; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000); },
-    reset() { confirmBox('Start over?', '<p>This deletes your run from this browser. Your instructor keeps the last numbers you published.</p>', 'Delete and restart', () => hooks.onReset(), true); },
+    reset() { confirmBox('Start over?', '<p>This deletes your current run from this browser. Your instructor keeps the last numbers you published.</p>', 'Delete and restart', () => hooks.onReset(), true); },
   };
   const acts = { ...base };
   for (const d of DRAWERS) Object.assign(acts, d.acts?.(ctx) || {});

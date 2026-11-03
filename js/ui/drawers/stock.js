@@ -68,10 +68,10 @@ function crateHTML(ctx, a, sel) {
   const badge = fake ? '<span class="badge red">Counterfeit</span>' : broken ? '<span class="badge red">Broken</span>' : '<span class="badge cyan">Working</span>';
   const bel = !fake && !a.known ? beliefLine(ctx, a.belief) : null;
   let read;
-  if (fake) read = '<p class="stk-read stk-fake"><span aria-hidden="true">⚠</span> <b>Worth almost nothing.</b> A buyer spotted that it is a fake. The pool will still take it, and next time look it over before you pay.</p>';
+  if (fake) read = '<p class="stk-read stk-fake"><span aria-hidden="true">⚠</span> <b>Worth almost nothing.</b> A buyer spotted a fake. The pool will still take it.</p>';
   else if (a.known) read = '<p class="stk-read"><span aria-hidden="true">✓</span> Checked: this one is genuine.</p>';
   else if (bel) read = `<p class="stk-read${bel.fake ? ' stk-warnline' : ''}">${bel.fake ? '<span aria-hidden="true">⚠</span> ' : ''}${e(bel.text)}</p>`;
-  else read = '<p class="stk-read mute">Not inspected. It looks fine on the label, but you have not looked inside.</p>';
+  else read = '<p class="stk-read mute">Not inspected: fine on the label, unchecked inside.</p>';
   // small facts: quality, wear, and what the district's rule does to it
   const chips = [];
   if (Math.abs((a.quality ?? 1) - 1) > 0.004) chips.push(`<span class="chip ${a.quality < 1 ? 'warn' : 'good'}">Quality ${Math.round(a.quality * 100)}%</span>`);
@@ -115,7 +115,7 @@ function awayHTML(ctx) {
 // ---- the actions for whatever is ticked
 function selBarHTML(ctx, sel) {
   const g = ctx.g(), s = g.s, m = ctx.money, e = ctx.esc;
-  if (!sel.length) return '<p class="small mute stk-hint">Tick crates to sell them to the pool, repair them, ship them or offer them to a classmate. A buyer in the Market usually pays more than the pool does.</p>';
+  if (!sel.length) return '<p class="small mute stk-hint">Tick crates to sell, repair, ship or trade them. A buyer in the Market usually pays more than the pool.</p>';
   const ids = sel.map((a) => a.id), oneDistrict = new Set(sel.map((a) => a.zone)).size === 1;
   const worth = sel.reduce((x, a) => x + g.val(a), 0), paid = sel.reduce((x, a) => x + (a.basis || 0), 0);
   const pq = oneDistrict ? g.poolQuote(ids) : null; // used for "can it be done" and the delay only: its total is truth-weighted
@@ -170,7 +170,7 @@ function poolConfirm(ctx, ids, route) {
   const where = route ? `the ${e(ZONES[q.zone].short)} pool, the district that pays most for digital goods` : `the ${e(ZONES[q.zone].short)} pool`;
   const body = `<p>${plural(q.per.length, 'crate')} to ${where}.</p>
     <dl class="kv"><dt>Worth as described</dt><dd>${m(q.per.reduce((x, p) => x + g.val(p.a, q.zone), 0))}</dd><dt>${route ? 'Routing fee' : 'Pool fees and friction'}</dt><dd>-${Math.round(q.fric * 1000) / 10}%</dd><dt>You get about</dt><dd class="gold">${m(described)}</dd>${inspected ? `<dt>Going by your own read</dt><dd>${m(read)}</dd>` : ''}</dl>
-    ${unknown ? '<p class="small">The pool checks what it buys. A crate that is worn or fake fetches less than the figure above, and you will see the real total when it is done.</p>' : ''}
+    ${unknown ? '<p class="small">The pool checks what it buys: a worn or fake crate fetches less than shown.</p>' : ''}
     ${q.delay ? `<p class="small">The money arrives after <b>${q.delay} virtual hours</b>.</p>` : ''}
     ${described > q.room ? `<p class="callout warn small">The pool only has ${m(q.room)} left. It refills 35% a day, so a smaller batch may be needed.</p>` : `<p class="small mute">The pool has ${m(q.room)} left. A buyer in the Market usually pays more.</p>`}`;
   ctx.confirmBox(route ? 'Route to the pool?' : 'Sell to the pool?', body, 'Sell', () => {

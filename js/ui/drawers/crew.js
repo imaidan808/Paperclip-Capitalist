@@ -134,7 +134,7 @@ function hireCard(v, zone) {
   const first = used === 0;
   return `<div class="cr-hire${block ? ' off' : ''}"><div class="cr-hire-h"><span class="cr-plus" aria-hidden="true">+</span>
       <div><b>Hire a manager in ${esc(Z.name)}</b><small>${plural(free, 'free plot')}. Managers start at ${m(cheapest)}.</small></div></div>
-    <p class="small">${first ? 'Idle cash earns nothing. A manager lends it to one niche for a cycle and hands it back with a margin.' : 'Another manager is another niche working for you. Spread them out: crowded niches pay less.'}${s.cash < cheapest ? ` You have ${m(s.cash)}, so keep selling first.` : ''}</p>
+    <p class="small">${first ? '' : 'Another manager is another niche working for you. Spread them out: crowded niches pay less.'}${s.cash < cheapest ? ` You have ${m(s.cash)}, so keep selling first.` : ''}</p>
     <button class="btn" data-act="crew-hire" data-d="${zone}" data-fid="ch-${zone}" ${block ? 'aria-disabled="true"' : ''}>Hire a manager</button>
     ${block ? `<p class="cr-why small">${esc(block)}${g.autoLocked() ? ' <button class="btn sm ghost" data-act="dock" data-d="bank" data-fid="cr-tobank">Open the Bank</button>' : ''}</p>` : ''}</div>`;
 }
@@ -183,7 +183,7 @@ function upgradesTab(v) {
       <p class="small">${esc(u.blurb)}</p>
       ${have ? '' : `<button class="btn" data-act="crew-upg" data-id="${id}" data-fid="cx-${id}" ${why ? 'aria-disabled="true"' : ''}>Install</button>${why ? `<p class="cr-why small">${esc(why)}</p>` : ''}`}</article>`;
   }).join('');
-  return `<p class="small mute">One-off purchases that make every manager better. They never expire, so buy the ones that pay back first.</p><div class="cr-grid">${cards}</div>`;
+  return `<p class="small mute">One-off upgrades for every manager. They never expire: buy the ones that pay back first.</p><div class="cr-grid">${cards}</div>`;
 }
 
 function clientBlock(v, id) {
@@ -235,7 +235,7 @@ function previewHTML(ctx) {
   const t = tmpPipe(v, H), f = g.forecast(t), c = f.ci, edit = H.edit ? s.pipes.find((p) => p.id === H.edit) : null;
   const cost = edit ? 0 : g.pipeCost(H.kind, H.zone), left = s.cash - cost, row = (k, x, cl = '') => `<dt>${k}</dt><dd class="${cl}">${x}</dd>`;
   const warn = [];
-  if (f.net < 0) warn.push('<div class="callout bad small"><b>This lane loses money.</b> Fees and overhead are bigger than the margin. Try a quieter buyer, or put more capital to work.</div>');
+  if (f.net < 0) warn.push('<div class="callout bad small"><b>This lane loses money.</b> Fees and overhead exceed the margin. Try a quieter buyer or more capital.</div>');
   if (!edit && left < f.alloc) warn.push(`<div class="callout warn small"><b>It would wait for cash.</b> After paying ${m(cost)} you would have ${m(Math.max(0, left))}, but a cycle needs ${m(f.alloc)} free to start. Lower the capital, or earn a little more first.</div>`);
   else if (edit && !edit.inflight && s.cash < f.alloc) warn.push(`<div class="callout warn small"><b>It would wait for cash.</b> You have ${m(s.cash)}; a cycle needs ${m(f.alloc)}.</div>`);
   const pay = !edit && f.perDay > 0 ? ` It earns back its ${m(cost)} hire cost in about ${Math.max(1, Math.round(cost / f.perDay))} days.` : '';
@@ -421,7 +421,7 @@ export default {
       'crew-rel'(b) {
         const p = pipe(b.dataset.id); if (!p) return;
         if (p.inflight) { fail('Wait for the running cycle to finish before releasing.'); return; }
-        ctx.confirmBox('Release this manager?', `<p>${esc(PIPE[p.kind].name)} in ${esc(ZONES[p.zone].name)} leaves. You get back <b>${ctx.money(p.basis * 0.6)}</b>, which is 60% of the ${ctx.money(p.basis)} you put in (hire cost and upgrades). The rest is gone for good, and the plot opens up for someone new.</p>`, 'Release', () => { const back = p.basis * 0.6, r = ctx.say(g().releasePipeline(p.id), 'info'); if (r.ok) ctx.audio?.request?.('cash.in', { size: moneySize(back, g().netWorth()), cause: 'money' }); /* the engine sends no event for a release: the cash that comes back is heard here */ }, true);
+        ctx.confirmBox('Release this manager?', `<p>${esc(PIPE[p.kind].name)} in ${esc(ZONES[p.zone].name)} leaves. You get back <b>${ctx.money(p.basis * 0.6)}</b>, 60% of the ${ctx.money(p.basis)} you put in (hire cost and upgrades). The plot opens for someone new.</p>`, 'Release', () => { const back = p.basis * 0.6, r = ctx.say(g().releasePipeline(p.id), 'info'); if (r.ok) ctx.audio?.request?.('cash.in', { size: moneySize(back, g().netWorth()), cause: 'money' }); /* the engine sends no event for a release: the cash that comes back is heard here */ }, true);
       },
       'crew-upg'(b) { const r = ctx.say(g().buyUpgrade(b.dataset.id)); if (r.ok) ctx.sfx.level(); ctx.render(); },
       'crew-client'(b) { const r = ctx.say(g().acquireClient(b.dataset.t)); if (r.ok) ctx.sfx.blip(); ctx.render(); },

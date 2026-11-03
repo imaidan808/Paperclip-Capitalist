@@ -36,7 +36,7 @@ export function ruleText(zone) {
     haggle: () => 'Every deal can be haggled. Open with a price, and know when to walk away.',
     season: () => `Demand for ${list(r.season.tags)} goods swings by up to ${pc(r.season.amp)} on a ${r.season.period}-day wave. Buy in the dip, sell at the crest.`,
     fakes: () => (r.fakes >= 0.15 ? `Up to ${pc(r.fakes)} of lots may be counterfeit. Things here are rarely what they seem, so look closely before you pay.` : `Up to ${pc(r.fakes)} of lots may be counterfeit. Look over the dear ones before you pay.`),
-    auction: () => `${pc(r.auction)} of the lots are auctions. Rival bidders have limits: bid above the true value and you win by losing.`,
+    auction: () => `${pc(r.auction)} of the lots are auctions. Bid above the true value and you win by losing.`,
     gray: () => 'A gray market: few questions asked, and audit fines are not softened here.',
     repair: () => `Many lots here are broken, and repairs cost ${pc(r.repair)} less. Fixing things is the margin.`,
     customs: () => `Freight arriving here is inspected about ${pc(r.customs)} of the time: a 12-hour delay and a 2% fee.`,
@@ -45,7 +45,7 @@ export function ruleText(zone) {
     perish: () => 'Stock spoils. Sell it fresh, because every day on the shelf costs you.',
     yield: () => 'Some goods pay you every day while you hold them.',
     rent: () => 'Property pays rent. Cycles are long, and appraisals can be disputed.',
-    arbitrage: () => 'Price gaps between districts are your edge: buy where it is cheap, sell where it is dear.',
+    arbitrage: () => 'Price gaps between districts are your edge: buy cheap, sell dear.',
     audits: () => 'Regulatory audits begin once you get here. Keep your paperwork clean.',
     managers: () => 'Managers open here, so your money can work while you are away.',
     bank: () => 'The Bank opens here. Borrowing is a tool, and a risk.',
@@ -141,7 +141,7 @@ function buyersHTML(ctx, z) {
   const use = here.length > 1 ? `<div class="mkt-use" role="group" aria-label="Which crate to sell"><span class="small mute">Selling with</span>
       <button class="btn sm ghost" data-act="market-use" data-id="" data-fid="mk-use-best" aria-pressed="${!picks.length}">Best of mine</button>
       ${here.slice(0, 12).map((a) => `<button class="btn sm ghost" data-act="market-use" data-id="${a.id}" data-fid="mk-use-${a.id}" aria-pressed="${U.sel.has(a.id)}"><span aria-hidden="true">${ASSETS[a.cls].icon}</span> ${e(nameOf(a.cls, a.cond))} <span class="mono">${m(g.val(a))}</span></button>`).join('')}</div>` : '';
-  const scamNote = g.P.scamRate ? `<p class="callout warn small"><b>Scam magnet.</b> About ${Math.round(g.P.scamRate * 100)}% of the buyers who find you are fraudulent. Pay a little to verify a buyer before you sell, because a fake buyer takes the goods and never pays.</p>` : '';
+  const scamNote = g.P.scamRate ? `<p class="callout warn small"><b>Scam magnet.</b> About ${Math.round(g.P.scamRate * 100)}% of the buyers who find you are fraudulent. Verify a buyer before you sell: a fake takes the goods and never pays.</p>` : '';
   const card = (l) => {
     const B = BUYERS[l.seg], fraud = !!l.verified && !!l.scam;
     let best = null; const why = new Set();
@@ -153,7 +153,7 @@ function buyersHTML(ctx, z) {
     }
     const urgent = l.need ? `<span class="badge">Urgent</span> <span class="small">needs ${an(l.need)} ${e(l.need)} item</span>` : '';
     const verified = l.verified && !l.scam ? '<span class="chip good"><span aria-hidden="true">✓</span> Verified</span>' : '';
-    const fraudLine = fraud ? '<p class="callout bad small"><b>Fraud.</b> This buyer is not real: skip them. Selling to them would cost you the goods.</p>' : '';
+    const fraudLine = fraud ? '<p class="callout bad small"><b>Fraud.</b> This buyer is not real. Selling to them would cost you the goods.</p>' : '';
     const vcost = Math.max(0.01, Math.round(l.budget * 0.01 * 100) / 100);
     const verify = g.P.scamRate && !l.verified ? `<button class="btn sm ghost" data-act="market-verify" data-lead="${l.id}" data-fid="mk-v-${l.id}">Verify this buyer (${m(vcost)})<span class="sr">: ${e(B.name)}</span></button>` : '';
     let sell = '', fitRow = '', sat = '';
@@ -186,7 +186,7 @@ function qualityLine(Z) {
   if (f >= 0.15) return 'Things here are rarely what they seem. Look a lot over before you pay.';
   if (f > 0) return `A few lots here are fakes (up to ${pc(f)}). Look over the dear ones before you pay.`;
   if (Z.id <= 2) return 'Lots here are usually close to how they are described.';
-  return 'A lot can be worse than its label. Looking it over is how you find out what it really is.';
+  return 'A lot can be worse than its label. Look it over to find out.';
 }
 function lotsHTML(ctx, z) {
   const g = ctx.g(), s = g.s, e = ctx.esc, m = ctx.money, Z = ZONES[z];
@@ -276,7 +276,7 @@ function exchangeHTML(ctx) {
   }).join('');
   const sent = S.sent ? [...S.sent.values()] : (S.outgoing || []);
   const outgoing = sent.map(({ offer: o }) => `<li class="card small">Waiting on ${e(o.to)}: your ${o.give.assets.map((a) => e(nameOf(a.cls, a.cond))).join(', ') || 'cash'} sits in escrow. <button class="btn sm ghost" data-act="market-withdraw" data-id="${e(o.id)}" data-fid="mx-wd-${e(o.id)}">Withdraw</button></li>`).join('');
-  const practice = x.roster.some((r) => r.npc) ? '<div class="callout small"><b>Practice partner.</b> Trade with the Practice Partner, who accepts fair deals (within 30% of fair value). Join a classroom room from the menu to trade with real classmates.</div>' : '';
+  const practice = x.roster.some((r) => r.npc) ? '<div class="callout small"><b>Practice partner.</b> The Practice Partner accepts fair deals (within 30% of fair value). Join a room from the menu to trade with classmates.</div>' : '';
   const give = g.s.assets.filter((a) => U.sel.has(a.id));
   const form = x.partner ? `<h3 class="gap">New proposal</h3>
     <div class="mkt-form">

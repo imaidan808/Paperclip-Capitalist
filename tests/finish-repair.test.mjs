@@ -140,7 +140,7 @@ test('F6: the faculty kit\'s recovery flow names the controls the dashboard and 
 
 test('F7: the Ops blurb promises what Ops does: cheaper working lots, but a dearer wreck (and the rest of it is held in tests/leftovers.test.mjs)', () => {
   assert.doesNotMatch(SKILLS.ops.blurb, /lower sourcing prices/);
-  assert.match(SKILLS.ops.blurb, /lower prices on working lots \(wrecks ask more as your Ops rises\)/);
+  assert.match(SKILLS.ops.blurb, /cheaper working lots, but wrecks ask more as Ops rises/);
   // the engine: a sound lot gets cheaper with Ops (97% of its value at Ops 1, 2.5 points less each level, never under 84%), a wreck dearer (1.00 times its as-is value at Ops 1, 1.21 at Ops 2)
   const lot = (ops) => Math.max(ECON.lotDiscLo, ECON.lotDiscHi - 0.025 * (ops - 1)), wreck = (ops) => Math.max(ECON.brokenLo, 1 - ECON.brokenSlope * (ops - 1));
   assert.ok(lot(4) < lot(1) && wreck(4) > wreck(1), 'the two prices move opposite ways with Ops');
@@ -182,7 +182,7 @@ test('A1: Other People\'s Money stops its own clock when the glut lands, so the 
   assert.equal(shock.pause, true, 'the step that waits for the glut says the clock stops with it');
   for (const other of ACADEMY.flatMap((x) => x.steps.map((s) => [x.id, s]))) if (!(other[0] === 'm07' && other[1].id === 'shock')) assert.equal(other[1].pause, undefined, `${other[0]} ${other[1].id} is played with the clock in the player's hands`);
   assert.doesNotMatch(shock.say, /pause the clock/i, 'the card no longer tells the player to do what cannot be done in time');
-  assert.match(shock.say, /warning pops up at once/); assert.match(shock.say, /The clock stops itself then/); assert.match(shock.hint, /the clock stops itself when the glut is in effect/);
+  assert.match(shock.say, /warning appears at once/); assert.match(shock.say, /The clock stops itself then/); assert.match(shock.hint, /the clock stops itself when the glut is in effect/);
   assert.match(again.say, /the clock has stopped/);
   // the real engine and the real step resolver: the pause is asked for at the glut's event, not before, and not by any other event
   const S = A.makeSandboxSession(m.setup, { id: m.id, zone: m.zone }), g = S.game, events = [];

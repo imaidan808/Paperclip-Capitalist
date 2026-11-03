@@ -250,7 +250,7 @@ function shipHTML(ctx) {
   const head = `<div class="tv-crates"><p class="small"><b>${plural(plan.items.length, 'crate')}</b> in ${esc(from?.name || 'your district')}: ${esc(crateNames(plan.items))}.</p>
     <div class="tv-acts"><button class="btn ghost" data-act="travel-stock" data-fid="tv-stock">Change crates</button><button class="btn ghost" data-act="travel-clear" data-fid="tv-clear">Clear</button></div></div>`;
   if (plan.mixed) {
-    return `<section class="sect"><h3><span>Ship crates</span></h3>${head}<div class="callout warn"><b>These crates sit in different districts.</b> Freight moves crates from one district at a time, so pick crates from a single district in Stock.</div></section>`;
+    return `<section class="sect"><h3><span>Ship crates</span></h3>${head}<div class="callout warn"><b>These crates sit in different districts.</b> Freight moves one district at a time: pick crates from a single district in Stock.</div></section>`;
   }
   if (!plan.rows.length) {
     return `<section class="sect"><h3><span>Ship crates</span></h3>${head}<div class="callout">You have no other district to ship to yet. Net worth opens the next one.</div></section>`;
@@ -261,7 +261,7 @@ function shipHTML(ctx) {
   else if (!c.cashOk) why = `You need ${money(c.q.cost - s.cash)} more cash to pay for freight.`;
   const btn = `<button class="btn big" data-act="travel-ship" data-dist="${c.to}" data-fid="tv-ship"${why ? ' aria-disabled="true"' : ''}>Ship ${plural(plan.items.length, 'crate')} to ${esc(ZONES[c.to].short)} for ${money(c.q.cost)}</button>`;
   return `<section class="sect"><h3><span>Ship crates</span><span>${plan.rows.length} destination${plan.rows.length === 1 ? '' : 's'}</span></h3>${head}
-    ${plan.rows.some((r) => r.net > 0) ? '' : '<div class="callout warn"><b>No district pays more after freight.</b> Move goods only when the price gap is bigger than the freight bill, and mind the room and the risks.</div>'}
+    ${plan.rows.some((r) => r.net > 0) ? '' : '<div class="callout warn"><b>No district pays more after freight.</b> Ship only when the price gap beats the freight bill.</div>'}
     <div class="tv-dests" role="group" aria-label="Choose a destination">${plan.rows.map((r) => destRow(ctx, r, plan)).join('')}</div>
     <div class="tv-shiprow" data-stuck="bottom">${btn}${why ? `<p class="small tv-why">${esc(why)}</p>` : `<p class="small mute">Arrives in about ${hoursText(c.q.hours)}. Goods can be damaged on the way, and Ops and a Logistics Agent lower the risk.</p>`}</div></section>`;
 }

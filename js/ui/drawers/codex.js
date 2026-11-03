@@ -132,7 +132,7 @@ export function academyHTML(ctx, st = readAcademy(kv), missions = MISSIONS) {
     const teach = byId[m.concept] ? ` &middot; teaches ${esc(byId[m.concept].title)}` : '';
     return `<li class="card cx-lesson"><span class="cx-ic" aria-hidden="true">${esc(m.icon || '')}</span><div class="grow"><b>${i + 1}. ${esc(m.title)}</b><small class="mute">${ZONES[m.zone] ? esc(ZONES[m.zone].name) + ' &middot; ' : ''}about ${Math.max(1, Math.round(+m.minutes || 2))} min${teach}</small></div>${chip}<button class="btn sm ${state === 'todo' ? '' : 'ghost'}" data-act="codex-replay" data-id="${esc(m.id)}" data-fid="cx-ac-${esc(m.id)}" aria-label="${state === 'todo' ? 'Play' : 'Replay'} lesson ${i + 1}: ${esc(m.title)}">${state === 'todo' ? 'Play' : 'Replay'}</button></li>`;
   }).join('');
-  return `<div class="cx-ac"><p class="small">${done} of ${missions.length} lessons done. A replay pays no new XP, but it is the quickest way to refresh an idea.</p>${next ? `<button class="btn" data-act="codex-replay" data-id="">Continue with lesson ${missions.indexOf(next) + 1}</button>` : ''}<ol class="cx-lessons">${rows}</ol></div>`;
+  return `<div class="cx-ac"><p class="small">${done} of ${missions.length} lessons done. A replay pays no new XP.</p>${next ? `<button class="btn" data-act="codex-replay" data-id="">Continue with lesson ${missions.indexOf(next) + 1}</button>` : ''}<ol class="cx-lessons">${rows}</ol></div>`;
 }
 
 export default {
