@@ -1,5 +1,6 @@
-// The people of the toy island as FLAT FIGURES, drawn live: a small head, thin long limbs, oversized clothes, chunky shoes, a minimal face (two dots, or a short closed-eye line). Matte but vibrant flat fills; no outline,
-// no gradient, no highlight or rim streak, no texture: the silhouette carries the figure (docs/ART_DIRECTION.md 3.4, the second art direction of 2026-11-02, which replaced the round-headed dolls of 3.1).
+// The people of the toy island as FLAT FIGURES, drawn live: a small head, thin long limbs, oversized clothes, smallish chunky shoes, a minimal face (two dots, or a short closed-eye line). Matte but vibrant flat fills with a light
+// flat shading (a darker step of the same colour on the side away from the sun); no outline, no gradient, no highlight or rim streak, no texture: the silhouette carries the figure (docs/ART_DIRECTION.md 3.4, the second art direction
+// of 2026-11-02, which replaced the round-headed dolls of 3.1).
 // Owner: T4 PROPS, NATURE AND CHARACTERS (docs/RENDER_PLAN.md). Every part is a filled path: a limb is a capsule (limb), a garment a rounded polygon (rpoly), a ring is two arcs wound against each other; nothing here
 // strokes, clips, blurs or reads a gradient, and the one translucent fill of a figure is its flat ground shadow. Pure drawing over the toys.js helpers: nothing reads the game, the clock or Math.random; a pose is a function
 // of the record `K` that characters.js fills (poseOf), at the detail `A` = { mid, face, fine } of the ladder (far is a pill, drawn by the layer: mid is the body, hair and hat; near adds the face and what is held; close the mouth).
@@ -7,14 +8,18 @@ import { shade, rr, disc, poly, fade } from './toys.js';
 import { INK, LIGHT, TOY } from './palette.js';
 
 /** The numbers of a figure at scale 1, in world pixels, the soles on y = 0 and up negative (the head is a fifth of the height, a limb four or five times as long as it is wide). */
-export const DIM = Object.freeze({ height: 35, headY: -31.2, headRx: 3.3, headRy: 3.7, hipY: -15.4, ankleY: -3.9, shoulderY: -25.4, shoulderX: 6, legX: 2.1, legR: 1.3, armR: 1.2, armLen: 11.4, shoeW: 7.4 });
+export const DIM = Object.freeze({ height: 35, headY: -31.2, headRx: 3.3, headRy: 3.7, hipY: -15.4, ankleY: -3.5, shoulderY: -25.4, shoulderX: 6, legX: 2.1, legR: 1.3, armR: 1.2, armLen: 11.4, shoeW: 6.5 });
 /** The garments a person is drawn in (a long coat is the one a role makes), the legwear, the marks a garment may carry, and the hair: the lists a look is chosen from, so a crowd has a bounded number of silhouettes. */
 export const BUILDS = ['jacket', 'puffer', 'poncho', 'hoodie', 'sweater', 'tee'];
 export const LEGS = ['trousers', 'shorts', 'tights'];
 export const MARKS = ['plain', 'stripes', 'print'];
 export const STYLES = ['short', 'bun', 'long', 'curly', 'crop', 'bald', 'pony'];
 const D = DIM, TAU = Math.PI * 2;
-const dk = (c) => shade(c, 0.78), skd = (c) => shade(c, 0.86), CREAM = '#fffaf0', GOLD = '#ffd84d';
+const dk = (c) => shade(c, 0.78), skd = (c) => shade(c, 0.86), CREAM = '#fffaf0', GOLD = '#ffd84d', COOL = '#c8d6ea';
+/** The two darker tones a figure uses (of any colour, and of skin): the tests tell a part from its shade by them. */
+export const TONE = Object.freeze({ dk, skd });
+/** The light shading: a shape is drawn twice, the darker copy a little down and to the right and the lighter a little up and to the left (the sun is upper left), so that what shows of the darker is a flat rim on the lower right and none on the upper left: no outline, no gradient, no highlight. */
+const SH = Object.freeze({ x: 0.8, y: 0.6 });
 
 // ---------------------------------------------------------------- the parts every figure is made of (all fills)
 /** A limb: a capsule from (x0, y0) to (x1, y1), radius r0 at the first end and r1 at the second, one filled path round at both ends. */
@@ -30,17 +35,20 @@ function rounded(pts, r) {
     return [p[0], p[1], p[0] + (ux / lu) * t, p[1] + (uy / lu) * t, p[0] + (vx / lv) * t, p[1] + (vy / lv) * t, t * Math.tan(half)];
   });
 }
-/** A garment: its rounded corners (see rounded), moved down by dy, as one filled shape. */
-function rpoly(g, C, dy, fill) {
-  g.beginPath(); for (let i = 0; i < C.length; i++) { const c = C[i]; if (i) g.lineTo(c[2], c[3] + dy); else g.moveTo(c[2], c[3] + dy); g.arcTo(c[0], c[1] + dy, c[4], c[5] + dy, c[6]); }
+/** A garment: its rounded corners (see rounded), moved by (dx, dy), as one filled shape. */
+function rpoly(g, C, dx, dy, fill) {
+  g.beginPath(); for (let i = 0; i < C.length; i++) { const c = C[i]; if (i) g.lineTo(c[2] + dx, c[3] + dy); else g.moveTo(c[2] + dx, c[3] + dy); g.arcTo(c[0] + dx, c[1] + dy, c[4] + dx, c[5] + dy, c[6]); }
   g.closePath(); g.fillStyle = fill; g.fill();
 }
 /** A ring of width w and outer radius r (two arcs wound against each other: glasses, a rope, a handle). */
 function ring(g, x, y, r, w, fill) { g.beginPath(); g.arc(x, y, r, 0, TAU); g.arc(x, y, r - w, 0, TAU, true); g.fillStyle = fill; g.fill(); }
 /** A band of width w round (cx, cy) at radius r from angle a0 to a1 (a headband, an arch handle). */
 function band(g, cx, cy, r, w, a0, a1, fill) { g.beginPath(); g.arc(cx, cy, r, a0, a1); g.arc(cx, cy, r - w, a1, a0, true); g.closePath(); g.fillStyle = fill; g.fill(); }
-/** The top half of an ellipse, flat side down at y (a cap, a dome, a hood). */
-function dome(g, x, y, rx, ry, fill) { g.beginPath(); g.ellipse(x, y, rx, ry, 0, Math.PI, 0); g.closePath(); g.fillStyle = fill; g.fill(); }
+/** The top half of an ellipse, flat side down at y (a cap, a dome, a hood), lightly shaded. */
+function dome(g, x, y, rx, ry, fill, flat) {
+  const half = (cx, cy, a, b, c) => { g.beginPath(); g.ellipse(cx, cy, a, b, 0, Math.PI, 0); g.closePath(); g.fillStyle = c; g.fill(); };
+  if (flat) half(x, y, rx, ry, fill); else { half(x + 0.45, y + 0.3, rx - 0.45, ry - 0.3, dk(fill)); half(x - 0.45, y - 0.3, rx - 0.45, ry - 0.3, fill); } // shaded like everything else, unless asked flat (a hood that is already the dark step, a closed eye)
+}
 const mirror = (half) => half.concat(half.slice().reverse().map(([x, y]) => [-x, y])); // the right side of a garment from the neck down to the hem, made whole
 
 // ---------------------------------------------------------------- the garments: the right half from the neck to the hem, and the half-width of each at a height (for the marks that sit on it)
@@ -61,8 +69,8 @@ export const ROLE_BUILD = Object.freeze({ coat: 'coat', hoodie: 'hoodie' });
 
 function garment(g, K, b, dy, accent) {
   const G = GARMENT[b], c = K.shirt;
-  if (b === 'hoodie') dome(g, 0, -26.6 + dy * 0.9, 5.4, 4, dk(c)); // the hood, behind the head
-  rpoly(g, G.corners, dy, b === 'coat' ? CREAM : c);
+  if (b === 'hoodie') dome(g, 0, -26.6 + dy * 0.9, 5.4, 4, dk(c), true); // the hood, behind the head
+  rpoly(g, G.corners, SH.x, dy + SH.y, b === 'coat' ? COOL : dk(c)); rpoly(g, G.corners, -SH.x, dy - SH.y, b === 'coat' ? CREAM : c); // the shade on the lower right, the lit garment over it
   const edge = (y) => Math.max(1, halfAt(b, y) - 0.45);
   if (b === 'puffer') { for (const y of [-22.4, -17.4]) rr(g, -edge(y), y + dy, edge(y) * 2, 1, 0.5, dk(c)); rr(g, -3.4, -29.6 + dy, 6.8, 2.6, 1.3, dk(c)); } // the quilting seams and the high collar
   else if (b === 'jacket') { rr(g, -0.5, -27.4 + dy, 1, 14.4, 0.5, dk(c)); poly(g, [[-3.2, -28.2 + dy], [-0.7, -26.4 + dy], [-0.7, -28.8 + dy]], accent); poly(g, [[3.2, -28.2 + dy], [0.7, -26.4 + dy], [0.7, -28.8 + dy]], accent); rr(g, -edge(-14), -14.6 + dy, edge(-14) * 2, 1.6, 0.8, accent); } // the zip, the collar and a ribbed hem
@@ -91,7 +99,7 @@ function face(g, K, A, hy) { // the dots, a short line when blinking, a closed h
   const gz = K.gaze, ey = hy + 0.5 + K.look, ink = INK.darkest;
   if (A.face > 0.02) {
     const was = fade(g, A.face);
-    for (const sx of [-1, 1]) { const x = sx * 1.7 + gz * 0.9; if (K.blink) rr(g, x - 1, ey - 0.2, 2, 0.7, 0.35, ink); else if (K.mood === 'smile') dome(g, x, ey + 0.5, 1.05, 0.95, ink); else disc(g, x, ey, 0.8, 0.95, ink); }
+    for (const sx of [-1, 1]) { const x = sx * 1.7 + gz * 0.9; if (K.blink) rr(g, x - 1, ey - 0.2, 2, 0.7, 0.35, ink); else if (K.mood === 'smile') dome(g, x, ey + 0.5, 1.05, 0.95, ink, true); else disc(g, x, ey, 0.8, 0.95, ink); }
     g.globalAlpha = was;
   }
   if (A.fine > 0.02) {
@@ -165,7 +173,11 @@ export function drawFigure(g, x, y, s, K, A) {
   const arm = (a, front) => {
     const [x0, y0, x1, y1] = a, c = front ? K.shirt : dk(K.shirt), sk = front ? skin : skd(skin);
     limb(g, x0, y0, D.armR, x1, y1, D.armR - 0.1, sk);
-    if (G.sleeve > 0) { const k = G.sleeve, cx = x0 + (x1 - x0) * k, cy = y0 + (y1 - y0) * k; limb(g, x0, y0, G.sr, cx, cy, G.sr - 0.3, c); disc(g, cx, cy + 0.4, G.sr - 0.2, 1.3, b === 'puffer' ? dk(c) : accent); }
+    if (G.sleeve > 0) {
+      const k = G.sleeve, cx = x0 + (x1 - x0) * k, cy = y0 + (y1 - y0) * k;
+      if (front) { limb(g, x0 + 0.5, y0 + 0.4, G.sr, cx + 0.5, cy + 0.4, G.sr - 0.3, dk(c)); limb(g, x0 - 0.5, y0 - 0.4, G.sr, cx - 0.5, cy - 0.4, G.sr - 0.3, c); } else limb(g, x0, y0, G.sr, cx, cy, G.sr - 0.3, c); // the near sleeve is shaded, the far one is the dark step already
+      disc(g, cx, cy + 0.4, G.sr - 0.2, 1.3, b === 'puffer' ? dk(c) : accent);
+    }
     disc(g, x1, y1 + 0.5, 1.55, 1.55, sk);
   };
   const stepAng = (sign) => (st ? Math.sin(st) * 0.42 * sign * d : 0.1 * sign);
@@ -177,7 +189,7 @@ export function drawFigure(g, x, y, s, K, A) {
     limb(g, hx, D.hipY, D.legR, fx, fy, D.legR - 0.1, sh);
     if (K.legs === 'shorts') rr(g, hx - 2.7, D.hipY - 1.2, 5.4, 6.2, 1.8, back ? dk(pants) : pants); // baggy shorts: a short wide tube over the thin bare leg
     else if (K.legs === 'tights') for (const k of [0.45, 0.65]) rr(g, hx + (fx - hx) * k - 1.6, D.hipY + (fy - D.hipY) * k - 0.6, 3.2, 1.2, 0.6, accent);
-    const bx = fx - D.shoeW / 2 + d, by0 = fy - 0.1; rr(g, bx, by0, D.shoeW, 3, 1.5, K.shoe); rr(g, bx, by0 + 2, D.shoeW, 1.9, 0.95, K.sole);
+    const bx = fx - D.shoeW / 2 + d, by0 = fy - 0.1; rr(g, bx, by0, D.shoeW, 2.6, 1.3, K.shoe); rr(g, bx, by0 + 1.9, D.shoeW, 1.7, 0.85, K.sole);
   }
   // the garment, and what a role wears over it
   garment(g, K, b, by, accent); if (R.torso && A.mid > 0.02 && !ROLE_BUILD[R.torso]) torsoExtra(g, R.torso, K, by);
@@ -186,7 +198,8 @@ export function drawFigure(g, x, y, s, K, A) {
   if (K.wave) { const sxp = d * D.shoulderX, syp = D.shoulderY + by, a = [sxp, syp, sxp + d * (4.4 + Math.sin(K.wave * 1.2) * 2.2), syp - 9.8]; arm(a, true); hand = null; } else { const a = armTo(d, stepAng(-1)); arm(a, true); hand = [a[2], a[3]]; }
   if (hand && R.item && A.face > 0.02 && R.item !== 'backpack') { const was = fade(g, A.face); item(g, R.item, K, hand[0], hand[1]); g.globalAlpha = was; }
   // the head: a small ellipse, the cap of hair, two dots, what is worn on it
-  disc(g, 0, hy, D.headRx, D.headRy, skin);
+  { const ns = R.torso === 'scarf' || b === 'coat' ? COOL : dk(K.shirt); disc(g, 0.4, hy + 3.3, 3, 1.1, ns); } // the shadow of the head on the collar
+  disc(g, 0.4, hy + 0.35, D.headRx - 0.4, D.headRy - 0.35, skd(skin)); disc(g, -0.4, hy - 0.35, D.headRx - 0.4, D.headRy - 0.35, skin); // a small head, its shade a thin rim on the lower right
   if (A.mid > 0.02 && !covered) hairFront(g, K.style, K.hair, hy, d);
   face(g, K, A, hy);
   if (R.face && A.face > 0.02) { const was = fade(g, A.face); glasses(g, R.face, K.gaze, hy); g.globalAlpha = was; }
