@@ -20,12 +20,20 @@
 //     from the chunks of the frame's scales (chunkcache.js `ov`), and drawn, soft, into whatever nothing else covers. A camera that jumps, or a zoom out that reveals ground nobody has made, never shows the bare sea (a
 //     recording of the live site had hard-edged flat rectangles at the coast for about a second at every zoom or glide, and 10 to 14 frames a second: the first chunk of every frame was baked whatever it cost). With the
 //     overview made, a frame in which the camera moves does not start a chunk that costs more than its budget (`calmMove`: the stand-ins and the overview are the picture, and the exact chunks follow when the camera rests).
+// The V2 base (two thirds of what a chunk costs) is painted by a WORKER where the browser has one (basework.js, baseclient.js): the pass asks for the chunks it wants, nearest the middle first, and makes each when its pixels
+// come back (what is left for the main thread is the vector layers over them, the bitmap and the stamp), so a chunk is a third of what it cost and a frame never holds the thread for a whole bake. A chunk whose pixels
+// are not back is a chunk that is not made yet, and the stand-ins and the overview are the picture (no coarse cover then: the exact chunks are what is asked for). No worker (Node, the shot rig, a browser without module
+// workers, one that failed): the base is painted on the main thread as it always was.
 // `gcHoles` counts the pieces of the window that nothing at all covers after all of that (the sea shows there; the open sea beyond the island's box is not a hole), and `gcMore` says the ground wants another frame.
 import { groundKey, slotFor } from './stack.js';
-import { CHUNK_PX, scaleKey, chunkKey, cellsFor, chunkCap, snapTranslation, OVERVIEW_A, overviewCells } from './chunks.js';
+import { CHUNK_PX, scaleKey, chunkKey, cellsFor, chunkCap, snapTranslation, OVERVIEW_A, overviewCells, standInSmooth } from './chunks.js';
 import { ChunkCache } from './chunkcache.js';
-import { ledger, LEDGER_LIMIT_MB } from './gfx.js';
+import { ledger, LEDGER_LIMIT_MB, softwareRaster } from './gfx.js';
 import { lodOf } from './lod.js';
+import { makeBaseClient } from './baseclient.js';
+import { baseSceneOf } from './basework.js';
+import { sceneOf, lockedOf } from './scene.js';
+import { LAYOUT } from './layout.js';
 export { CHUNK_PX, chunkWorld, chunkBytes, chunksTouched, groundBytes, chunksFor } from './chunks.js'; // the chunk cache's arithmetic (tests/world-ledger.test.mjs holds the memory ledger to it)
 
 /** Milliseconds a frame may spend baking chunks: with the camera still (the picture is settling, nothing else to do) and while it moves (a pan must stay cheap). The first bake of a frame always goes ahead. */
@@ -34,8 +42,7 @@ export const BAKE_MS_STILL = 10, BAKE_MS_MOVING = 3.5;
 export const V2_BAKE_MS = [14, 9];
 /** While the zoom changes a frame bakes one chunk (the first is always baked) and no more than this many milliseconds of them: a pinch must never stall on the base. */
 export const ZOOM_BAKE_MS = 2.5;
-/** A stand-in magnified by more than this is drawn without smoothing while the zoom moves (a scaled, smoothed blit costs 3.2 ms a megapixel on a CPU-drawn canvas, a plain one about a third of it): the exact scale replaces it as soon as the zoom rests. */
-export const NEAREST_ABOVE = 1.6;
+export { NEAREST_ABOVE } from './chunks.js'; // (the line past which a CPU-drawn canvas draws a moving stand-in plain: chunks.js standInSmooth)
 /** The scale must stand still this long (ms) before chunks are baked at it: while it changes every frame, stale chunks and direct cells stand in. */
 export const ZOOM_REST_MS = 90;
 /** An exact chunk baked over the stand-in that was showing there fades in over this many ms (a zoom that comes to rest: the soft picture sharpens, a stride that changed does not pop). Never under Calm, Off and reduced motion. */
@@ -57,10 +64,14 @@ export const groundCacheMethods = {
     this.moving = moved; // (the loop reads it: a camera that moves draws every refresh)
     const gk = groundKey(this); k[6] = this.unlockHash; k[7] = gk;
     let store = this.gc; if (!(store instanceof ChunkCache)) { if (store) this.gc = null; store = this.gc = new ChunkCache('ground.chunks'); }
+    store.opaque = v2; // (the V2 base paints every pixel: its chunks are never read back to be sealed)
+    const client = v2 && !rig ? this.baseWorker() : null; // (the base painted off the main thread: null where there is no worker, and for the rig, which makes the whole window at once)
+    store.base = client ? this.baseHook(client, performance.now()) : null;
     const ver = (Math.imul(this.unlockHash | 0, 31) + gk) | 0;
     if (v2 ? store.markStale(ver) : store.setVer(ver)) this.gcValid = false;
     store.begin();
     const a = this.renderScale(), sk = scaleKey(a), snap = this.snap || (this.snap = [0, 0]); snapTranslation(W, H, dpr, cam.x, cam.y, a, snap);
+    if (client) { this.gcWantSk = sk; client.prune(performance.now(), this.gcWanted || (this.gcWanted = (k) => k === this.gcWantSk || k === scaleKey(OVERVIEW_A))); } // (pixels of a scale the camera has left go at once: the cap is for the scale in view)
     const now = performance.now(); if (a !== this.gcA) { this.gcUp = a > (this.gcA ?? a) ? 1 : this.gcUp === 1 && a === this.gcA ? 1 : a < (this.gcA ?? a) ? 0 : this.gcUp; this.gcA = a; this.gcAt = now; }
     const zooming = now - (this.gcAt ?? -1e9) < (this.gcRest ?? ZOOM_REST_MS); // the scale is changing (a pinch, a wheel, a glide): nothing is baked at a scale that is gone in the next frame; stand-ins and direct cells cover the window, and the exact scale is baked once it rests
     const e = snap[0], f = snap[1], cw = this.cv.width, ch = this.cv.height;
@@ -72,6 +83,7 @@ export const groundCacheMethods = {
     let ov = null; if (v2 && bnd) { ov = this.gcOv && this.gcOv.b === bnd ? this.gcOv : (this.gcOv = { b: bnd, c: overviewCells(bnd), n: 0 }); ov.n = (ov.c.i1 - ov.c.i0 + 1) * (ov.c.j1 - ov.c.j0 + 1); }
     const ovReady = !!ov && store.ov.size >= ov.n, calmMove = moved && ovReady; // the overview is made and under everything, and the camera moves
     const fadeMs = this.reduced() ? 0 : (this.gcFade ?? GROUND_FADE_MS);
+    const soft = softwareRaster(); // (a canvas the CPU draws cannot afford smoothed stand-ins magnified past NEAREST_ABOVE)
     // ---- which cells are baked, and which are not (the nearest to the middle of the window are baked first)
     const miss = this.gcMiss || (this.gcMiss = []); miss.length = 0; let have = 0;
     const cx = (cw / 2 - e) / (a * 1), cy = (ch / 2 - f) / (a * 1), s = cells.s;
@@ -85,7 +97,7 @@ export const groundCacheMethods = {
       const ab = Math.round(Math.pow(2, Math.round(Math.log2(a) * 4) / 4 - (this.gcUp ? 0.9 : 0)) * 1e5) / 1e5, sb = CHUNK_PX / ab; // the quarter-octave bucket, a zoom IN bakes at 0.54 of the scale it is at (a chunk of 3.4 times the world area, so a third of the chunks cover the window, and the per-pixel base costs a third; magnified 1.9 to 3.2 times while the zoom lasts), a zoom OUT at the scale it is at (shrunk to a half); the frames of one stretch of a zoom share their chunks
       if (v2) {
         // ---- COVER FIRST: a cell that no stand-in covers is made coarse (about half the scale: four cells to a chunk) before any exact chunk, unless the canvas is held back or the budget is the whole window's (a test)
-        const whole = budget >= 1e6, cover = !all && !whole && !this.veilHold && !calmMove; let bareLeft = false; // (held back: nobody sees the cells being made, and a canvas that is just attached is a scale that "just changed"; the overview is the cover while the camera moves)
+        const whole = budget >= 1e6, cover = !all && !whole && !this.veilHold && !calmMove && !client; let bareLeft = false; // (held back: nobody sees the cells being made, and a canvas that is just attached is a scale that "just changed"; the overview is the cover while the camera moves)
         if (cover) {
           const ac = Math.round(Math.pow(2, Math.round(Math.log2(a) * 4) / 4 - 0.9) * 1e5) / 1e5;
           bareLeft = store.cover(pts, s, winB, sk, a, now, ac, (ci, cj) => { const c = store.bake(draw, ac, ci, cj, dpr, true); if (c) baked++; return c; }, (made) => baked === 0 || performance.now() - t0 < budget); // (the first bake of a frame always goes ahead)
@@ -130,7 +142,7 @@ export const groundCacheMethods = {
         for (const c of L) {
           const kk = a / c.a, dx = c.i * CHUNK_PX * kk + e, dy = c.j * CHUNK_PX * kk + f, sz = CHUNK_PX * kk;
           if (dx + sz + kk < 0 || dy + sz + kk < 0 || dx - kk > cw || dy - kk > ch) continue;
-          if (c.empty || store.hidden(c, sk, s)) { c.last = ++store.tick; continue; } store.use(c); ctx.imageSmoothingEnabled = kk < NEAREST_ABOVE || !zooming; ctx.drawImage(c.img, dx - kk * 0.5, dy - kk * 0.5, sz + kk, sz + kk); // (a pixel larger than its cell, so scaled neighbours overlap and never leave a hairline; magnified past 1.6 it is drawn without smoothing only while the scale moves)
+          if (c.empty || store.hidden(c, sk, s)) { c.last = ++store.tick; continue; } store.use(c); ctx.imageSmoothingEnabled = standInSmooth(kk, zooming, soft); ctx.drawImage(c.img, dx - kk * 0.5, dy - kk * 0.5, sz + kk, sz + kk); // (a pixel larger than its cell, so scaled neighbours overlap and never leave a hairline; smoothed always, but on a canvas the CPU draws, where a magnified stand-in is drawn plain while the scale moves: chunks.js standInSmooth)
         }
         ctx.restore(); store.stats.stale += L.length;
       }
@@ -186,8 +198,20 @@ export const groundCacheMethods = {
     try { return !!store.bake(draw, OVERVIEW_A, bi, bj, dpr, false, true); } finally { if (env) env.lod = keep; }
   },
 
+  /** The worker that paints the V2 base (baseclient.js), made on first use: null where the browser has none, or where it failed (and then for good: the base is painted here). */
+  baseWorker() {
+    if (this.gcWorker === undefined) this.gcWorker = makeBaseClient();
+    if (this.gcWorker && !this.gcWorker.live) this.gcWorker = null;
+    return this.gcWorker;
+  },
+  /** The cache's `base` hook for this frame: the pixels of a chunk's base from the worker (null while it paints them), for the set of districts that are locked now. */
+  baseHook(client, now) {
+    if (this.gcLockHash !== this.unlockHash || this.gcSceneKey === undefined) { const locked = lockedOf(this.unlocked); this.gcLockHash = this.unlockHash; this.gcSceneKey = locked.join(','); this.gcScene = () => baseSceneOf(sceneOf(locked)); }
+    const sk = this.gcSceneKey, scene = this.gcScene, maxZ = LAYOUT.maxZ;
+    return (J) => { J.maxZ = maxZ; return client.ask(J.key + '|' + sk, J, sk, scene, now); };
+  },
   /** Give the ground cache's bitmaps back (World.release). */
-  releaseGround() { if (this.gc && typeof this.gc.release === 'function') this.gc.release(); this.gc = null; this.gcValid = false; this.gcHoles = 0; this.gcMore = false; this.gcSeen = 0; },
+  releaseGround() { if (this.gc && typeof this.gc.release === 'function') this.gc.release(); this.gc = null; if (this.gcWorker) this.gcWorker.dispose(); this.gcWorker = undefined; this.gcValid = false; this.gcHoles = 0; this.gcMore = false; this.gcSeen = 0; },
 
   cacheOK() { return typeof OffscreenCanvas === 'function' && this.cv.width > 0; },
 };

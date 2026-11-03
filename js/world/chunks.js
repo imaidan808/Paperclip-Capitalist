@@ -84,6 +84,13 @@ export const chunkKey = (sk, i, j) => (sk * 4096 + (i + 2048)) * 4096 + (j + 204
 export const STALE_UP = 1.5, STALE_DOWN = 0.7;
 /** A chunk baked for a zoom in motion (coarse: baked at about half the scale of the zoom when the zoom goes in, so a third of the chunks cover a window) stands in over a wider window, up to 3.2 times magnified and down to 0.5: soft for the moment the zoom lasts, and the exact scale is baked the moment it rests. */
 export const COARSE_UP = 3.2, COARSE_DOWN = 0.5;
+/**
+ * A stand-in magnified by this much or more is drawn without smoothing while the scale moves, ON A CANVAS THE CPU DRAWS (a smoothed, scaled blit costs 3.2 ms a megapixel there, a plain one about a third of it):
+ * the exact scale replaces it as soon as the zoom rests. Where the GPU draws (every Mac with a screen) a smoothed blit is nearly free, and the plain one was the blocky stair-steps on cliff edges that a recording of the
+ * live site showed at every zoom (a coarse stand-in is magnified up to 3.2 times).
+ */
+export const NEAREST_ABOVE = 1.6;
+export const standInSmooth = (k, zooming, soft) => !(soft && zooming && k >= NEAREST_ABOVE);
 export const staleRatio = (a0, a, coarse = false) => { const k = a / a0; return (coarse ? k <= COARSE_UP && k >= COARSE_DOWN : k <= STALE_UP && k >= STALE_DOWN) ? k : 0; };
 /** How many chunks the cache may hold: what the window touches, plus a third for the stale ones that stand in while a zoom settles and the cells a zoom out reveals, plus two. The memory table of docs/RENDER_PLAN.md is this number x 0.59 MB (the window touches at most 54 at dsf 2; a real window is 40 to 48). */
 export const chunkCap = (w, h, dpr) => Math.ceil(chunksTouched(w, h, dpr) * 1.35) + 2;
