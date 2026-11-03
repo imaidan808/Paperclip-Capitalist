@@ -140,7 +140,7 @@ test('F6: the faculty kit\'s recovery flow names the controls the dashboard and 
 
 test('F7: the Ops blurb promises what Ops does: cheaper working lots, but a dearer wreck (and the rest of it is held in tests/leftovers.test.mjs)', () => {
   assert.doesNotMatch(SKILLS.ops.blurb, /lower sourcing prices/);
-  assert.match(SKILLS.ops.blurb, /cheaper working lots, but wrecks ask more as Ops rises/);
+  assert.match(SKILLS.ops.blurb, /cheaper working lots, but dearer wrecks/);
   // the engine: a sound lot gets cheaper with Ops (97% of its value at Ops 1, 2.5 points less each level, never under 84%), a wreck dearer (1.00 times its as-is value at Ops 1, 1.21 at Ops 2)
   const lot = (ops) => Math.max(ECON.lotDiscLo, ECON.lotDiscHi - 0.025 * (ops - 1)), wreck = (ops) => Math.max(ECON.brokenLo, 1 - ECON.brokenSlope * (ops - 1));
   assert.ok(lot(4) < lot(1) && wreck(4) > wreck(1), 'the two prices move opposite ways with Ops');
