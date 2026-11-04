@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { BUYERS } from '../js/config.js';
 import { BUYER_STYLES } from '../js/data/schema.js';
-import { AVATAR_TONE, initialOf, avatarHTML } from '../js/avatar.js';
+import { AVATAR_TONE, initialOf, avatarHTML, marksOf } from '../js/avatar.js';
 
 const css = readFileSync(new URL('../css/styles.css', import.meta.url), 'utf8');
 const block = (re) => { const m = css.match(re); const o = {}; for (const [, k, v] of (m?.[1] || '').matchAll(/--([\w-]+):\s*([^;]+);/g)) o[k] = v.trim(); return o; };
@@ -64,4 +64,27 @@ test('avatarHTML: a hidden disc with the initial, the style as a data attribute,
   assert.equal(avatarHTML('&co', 'hard'), '<span class="ava" data-style="hard" aria-hidden="true">C</span>');
   assert.doesNotMatch(avatarHTML('"><img src=x onerror=alert(1)>', 'hard'), /<img|onerror=/);
   for (const k of BUYER_STYLES) assert.ok(avatarHTML('Zed', k).includes(`data-style="${k}"`));
+});
+
+test('marksOf: the first letter, or the shortest start that tells two names apart; the heat map reads them for its column heads and its key', () => {
+  assert.deepEqual(marksOf(['Wen, stressed student', 'Lucia, barista']), ['W', 'L']);
+  assert.deepEqual(marksOf(['Delgado Delivery Co.', 'DriveBoard Marketplace', 'Zed']), ['De', 'Dr', 'Z']);
+  assert.deepEqual(marksOf(['Mrs. Adeyemi', 'Aldrin Family Office']), ['Ad', 'Al'], 'a title is not a letter of the name');
+  assert.deepEqual(marksOf(['Dan', 'Daniel']), ['Dan', 'Dani'], 'a name that is the start of another keeps all its letters');
+  assert.deepEqual(marksOf(['', null, 'x']), ['?', '?', 'X']);
+  assert.deepEqual(marksOf([]), []);
+  const byZone = {};
+  for (const b of Object.values(BUYERS)) (byZone[b.zone] ||= []).push(b.name);
+  for (const [z, names] of Object.entries(byZone)) {
+    const m = marksOf(names);
+    assert.equal(new Set(m).size, m.length, `district ${z}: every column head is different (${m})`);
+    for (const x of m) assert.ok(x.length <= 3, `district ${z}: ${x} is short`);
+    for (const [i, n] of names.entries()) assert.ok(m[i].startsWith(initialOf(n)), `district ${z}: the mark of ${n} starts with its initial`);
+  }
+});
+
+test('avatarHTML with a mark: two letters or more say so, so the disc can widen to a pill; one letter is the plain disc', () => {
+  assert.equal(avatarHTML('Delgado Delivery Co.', 'analytical', 'sm', 'De'), '<span class="ava sm" data-len="2" data-style="analytical" aria-hidden="true">De</span>');
+  assert.equal(avatarHTML('Delgado Delivery Co.', 'analytical', 'sm', 'D'), '<span class="ava sm" data-style="analytical" aria-hidden="true">D</span>');
+  assert.equal(avatarHTML('Delgado Delivery Co.', 'analytical', 'sm'), '<span class="ava sm" data-style="analytical" aria-hidden="true">D</span>');
 });

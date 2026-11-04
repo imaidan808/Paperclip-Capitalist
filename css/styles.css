@@ -92,6 +92,7 @@ label { display: block; font-size: .82rem; color: var(--mute); margin-bottom: .2
 .ava { flex: none; display: inline-grid; place-items: center; width: 2.4rem; height: 2.4rem; border-radius: 50%; background: var(--ava-steady); color: var(--on-ava); font: 800 1.05rem/1 ui-monospace, Menlo, monospace; user-select: none; vertical-align: middle; }
 .ava[data-style=hard] { background: var(--ava-hard); } .ava[data-style=friendly] { background: var(--ava-friendly); } .ava[data-style=impulsive] { background: var(--ava-impulsive); } .ava[data-style=analytical] { background: var(--ava-analytical); }
 .ava.sm { width: 1.4rem; height: 1.4rem; font-size: .72rem; }
+.ava.sm[data-len] { width: auto; min-width: 1.4rem; padding-inline: .32rem; border-radius: 999px; } /* a mark of two letters (the heat map's heads where two buyers of a district share a first letter) widens the disc to a pill */
 @media (forced-colors: active) { .ava { forced-color-adjust: none; } }
 .badge { display: inline-block; padding: .05rem .4rem; font-size: .7rem; font-weight: 700; text-transform: uppercase; background: var(--gold); color: var(--on-gold); border-radius: 2px; }
 .badge.red { background: var(--red); color: #2a0503; } .badge.green { background: var(--green); color: #04210f; } .badge.cyan { background: var(--cyan); color: #04202c; }

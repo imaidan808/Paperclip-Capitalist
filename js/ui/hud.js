@@ -11,7 +11,7 @@ const lvlBase = xpForLevel; // the engine's level curve (config.js)
 
 export function playerCard(ctx) {
   const g = ctx.g(), s = g.s, lv = g.level(), lo = lvlBase(lv), hi = lvlBase(lv + 1), p = Math.max(0, Math.min(1, (s.xp - lo) / (hi - lo)));
-  const icons = s.perks.map((id) => `<i title="${esc(PERKS[id].name)}">${PERKS[id].icon}</i>`).join('') || `<i class="ini">${esc(initialOf(s.handle))}</i>`; // two Backgrounds, or, with none (a lesson's rehearsal has none), the initial of the player's name
+  const icons = s.perks.map((id) => `<i title="${esc(PERKS[id].name)}">${PERKS[id].icon}</i>`).join('') || (g.sandbox ? '' : `<i class="ini">${esc(initialOf(s.handle))}</i>`); // two Backgrounds, or, with none, the initial of the player's name; a lesson's rehearsal has none and its handle is "You", so its disc stays empty rather than show a stray Y
   if (g.sandbox) { // a lesson is a rehearsal in a game of its own: the XP, the level and the skill points it adds up are not the player's, so none is shown (the reward screen pays the real ones)
     return `<button class="pcard" data-anchor="player-card" data-act="dock" data-d="quests" aria-label="${esc(s.handle)}, practicing a lesson. Open quests and skills.">
     <span class="ring" style="--p:0%"><span class="av">${icons}</span></span>

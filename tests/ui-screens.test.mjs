@@ -4,7 +4,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { PERKS, PERK_IDS, SKILLS, ZONE_COUNT, BUYERS } from '../js/config.js';
-import { initialOf } from '../js/avatar.js';
+import { initialOf, marksOf } from '../js/avatar.js';
 import { PERK_PAIRS } from '../js/data/perks.js';
 import { Session } from '../js/session.js';
 import { makeSynth } from '../js/cohort.js';
@@ -374,8 +374,11 @@ test('the dashboard shows the sixteen districts: class distribution, heat map se
   for (const z of [1, 7, 15]) {
     const hm = heatHTML(S, { zone: z }, S.students(), dist), cols = Object.values(BUYERS).filter((b) => b.zone === z);
     assert.ok(cols.length >= 5);
-    for (const b of cols) {
-      const disc = `<span class="ava sm" data-style="${b.style}" aria-hidden="true">${initialOf(b.name)}</span>`;
+    const mk = marksOf(cols.map((b) => b.name)), ini = cols.map((b) => initialOf(b.name));
+    assert.equal(new Set(mk).size, mk.length, `district ${z}: every column head is different`);
+    assert.equal(mk.some((m) => m.length > 1), new Set(ini).size < ini.length, `district ${z}: two letters exactly where a first letter repeats`);
+    for (const [i, b] of cols.entries()) {
+      const disc = `<span class="ava sm"${mk[i].length > 1 ? ` data-len="${mk[i].length}"` : ''} data-style="${b.style}" aria-hidden="true">${mk[i]}</span>`;
       assert.ok(hm.includes(`<th scope="col" title="${esc1(b.name)}">${disc}<span class="sr">${esc1(b.name)}</span></th>`), `${b.name}: the column head is the disc and a name for a screen reader`);
       assert.ok(hm.includes(`${disc} ${esc1(b.name)}`), `${b.name}: the key shows the disc beside the name`);
     }

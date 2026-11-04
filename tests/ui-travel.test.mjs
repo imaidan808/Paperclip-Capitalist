@@ -2,6 +2,7 @@
 // the freight flow and the actions a click runs (go to a district, pick a destination, ship crates, read about the idea).
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { fakeCtx, checkHTML } from './helpers/ctx.mjs';
 import travel, { shipPlan, pickedCrates, keepScroll, scrollToTop, TIERS } from '../js/ui/drawers/travel.js';
 import { rulePhrases, rewardPhrases, lessonTitle, lessonGist } from '../js/ui/drawers/districttext.js';
@@ -331,4 +332,10 @@ test('keepScroll puts a long list back where the player left it after the shell 
     db = mkDb('quests'); rebuild(); assert.equal(db.scrollTop, 0, 'reopened at the top');
     keepScroll(fakeCtx({ days: 0 }), ['travel']);                                  // no drawer element: nothing happens
   } finally { globalThis.MutationObserver = real; }
+});
+
+test('a locked district\'s chip drops under its name on a narrow screen instead of running past the row', () => {
+  const css = readFileSync(new URL('../css/ui-travel.css', import.meta.url), 'utf8');
+  assert.match(css, /\.tv-d\.locked \.cx-more > summary \{[^}]*flex-wrap: wrap/, '"Opens at $250,000" is longer than the lock and the amount were');
+  assert.match(css, /\.tv-d\.locked \.cx-more > summary \.chip \{[^}]*margin-left: auto/, 'and it stays at the right when it fits');
 });

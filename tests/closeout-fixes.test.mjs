@@ -26,7 +26,7 @@ test('A5: a lesson shows no level, XP or skill point of its own, and its pretend
   g.sandbox = { id: 'm01', warnings: [] }; // what buildSandboxGame sets: only a lesson's game has one
   const lesson = playerCard(ctx), lessonNews = tickerHTML(ctx);
   assert.doesNotMatch(lesson, /XP|point to spend|class="lv"|class="pip"/, 'no XP line, no points, no level badge: ' + lesson);
-  assert.match(lesson, /Practice, nothing here is saved/); assert.match(lesson, /data-anchor="player-card"/, 'the card is still the anchor a step can name');
+  assert.match(lesson, /Practice, nothing here is saved/); assert.doesNotMatch(lesson, /class="ini"/, 'the rehearsal\'s handle is "You": no stray letter in its disc'); assert.match(lesson, /data-anchor="player-card"/, 'the card is still the anchor a step can name');
   assert.doesNotMatch(lessonNews, /Level 2/); assert.match(lessonNews, /A buyer walked in\./, 'the next line is shown instead');
   assert.match(lessonNews, /data-i="1"/, 'and its index is its place in the whole list, so an alert opens the right one');
   g.s.news = [{ h: 3, level: 2, text: 'Level 2. You earned a skill point.' }];
