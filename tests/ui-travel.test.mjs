@@ -87,6 +87,8 @@ test('the next district shows a progress bar of net worth toward its gate and th
   const ctx = fakeCtx({ days: 0 }), h = travel.html(ctx), g = ctx.g();
   assert.match(h, /aria-label="Net worth toward Flea Market Row"/);
   assert.match(text(h), /to go/);
+  const missing = ctx.money(Math.max(0, ZONES[2].gate - g.netWorth()));
+  assert.ok(text(h.slice(h.indexOf('class="tv-sum"'), h.indexOf('</section>', h.indexOf('class="tv-sum"')))).includes(`Next stop: Flea Market Row . ${missing} to go.`), 'the summary at the top says how far the next district is: a player decides what to do next there, and the card that says it too is a screen down the list');
   assert.match(text(h), /Campus Quad 🔒 \$80\.00/, 'a locked district beyond the next is one line that states its gate');
   assert.ok(!text(h).includes(rulePhrases(3)[0]), 'and keeps its rule, reward and lesson under the line');
   const pct = +h.match(/Net worth toward Flea Market Row" aria-valuemin="0" aria-valuemax="100" aria-valuenow="(\d+)"/)[1];

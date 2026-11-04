@@ -133,6 +133,8 @@ test('the district switcher lists the open districts and switching changes the f
   const locked = ZONE_IDS.find((z) => !g.s.zones.includes(z));
   assert.ok(!html.includes(`data-z="${locked}"`), 'a closed district has no chip');
   assert.match(html, /Next district:/);
+  const nextZ = ZONE_IDS.find((z) => !g.s.zones.includes(z));
+  assert.ok(html.includes(`Next district: ${ZONES[nextZ].name}, at ${ctx.money(ZONES[nextZ].gate)} net worth. ${ctx.money(Math.max(0, ZONES[nextZ].gate - g.netWorth()))} to go.`), 'the strip says how far the next district is, in the engine\'s figure');
   acts['market-zone']({ dataset: { z: '2' } });
   assert.equal(ctx.U.zone, 2);
   acts['market-zone']({ dataset: { z: String(locked) } });

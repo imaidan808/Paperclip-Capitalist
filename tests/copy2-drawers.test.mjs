@@ -102,6 +102,10 @@ test('D1: the Lots line is the range the lot generator draws, and what a counter
     const said = shown(market.html(ctx)), lo = z <= 2 ? 85 : 70;
     assert.ok(said.includes(`Lots are worth ${lo}% to 115% of how they are described.`), `${ZONES[z].name}: the range`);
     assert.equal(said.includes(`A counterfeit is worth ${Math.round(FAKE_VALUE * 100)}%.`), !!ZONES[z].rules.fakes, `${ZONES[z].name}: the exception is said exactly where the rule is`);
+    // how many lots are fakes is said where the lots are: once, by the banner where it leads the district's rules, and by this line where it is only in the fold (shut here)
+    const rate = ZONES[z].rules.fakes ? `About ${pct(ZONES[z].rules.fakes)} of lots are counterfeit.` : null;
+    assert.equal(said.split(rate || 'no such sentence').length - 1, rate ? 1 : 0, `${ZONES[z].name}: the share of fakes is on the Lots tab once, and only where the district has the rule`);
+    if (rate) assert.equal(/<p class="small mkt-qual">[\s\S]*?<\/p>/.exec(market.html(ctx))[0].includes(rate), T.rulePhrases(z)[0] !== rate, `${ZONES[z].name}: this line says it unless the banner leads with it`);
   }
   // ...and what the engine does: no genuine lot is worth less than the stated floor, a fake is worth FAKE_VALUE, and fakes exist exactly where the rule is
   for (const z of ZONE_IDS) {
@@ -619,7 +623,7 @@ test('D7: the drawers stay short: an item is a few lines, and little stands arou
   const BUDGET = { // kind: [what an item opens with, most words in one item (one number, or one for each opening), most words around the items]
     travel: [['<li class="tv-d'], 38, 60],
     'market-buyers': [['<li class="mkt-lead'], 53, 83],
-    'market-lots': [['<li class="mkt-lot'], 54, 80],
+    'market-lots': [['<li class="mkt-lot'], 54, 90], // (80 before the browser pass restored two figures a player checks before acting: the share of fakes on the Lots line where the banner does not lead with it, 6 words, and how far the next district is on the strip, 3)
     stock: [['<li class="stk-crate'], 90, 110], // (the longest crate is a broken Logistics Warehouse with no cash to mend it: 80 words)
     bank: [['<article class="bk-prod', '<article class="bk-loan'], 51, 320], // (around the items: the margin call may sell everything, and each exit card says what its multiple prices; 286 words on day 45 before a tenth more)
     quests: [['<article class="qs-skill', '<article class="qs-q', '<article class="qs-day', '<li class="qs-ach'], [85, 52, 52, 52], 130], // (a skill card is 79 words with its fold open, which it is by itself while a point can be spent on it)

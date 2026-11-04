@@ -57,7 +57,7 @@ function switcherHTML(ctx, z) {
   return `<nav class="mkt-zones" aria-label="Districts you can trade in">${[...s.zones].sort((a, b) => a - b).map((id) => {
     const Z = ZONES[id];
     return `<button class="mkt-z" data-act="market-zone" data-z="${id}" data-fid="mk-z-${id}" aria-pressed="${id === z}" aria-label="${e(Z.name)}, district ${id}" title="${e(Z.name)}"><span aria-hidden="true">${Z.icon}</span><b>${id}</b></button>`;
-  }).join('')}</nav>${next ? `<p class="tiny mute mkt-next">Next district: ${e(ZONES[next].name)}, at ${m(ZONES[next].gate)} net worth.</p>` : ''}`;
+  }).join('')}</nav>${next ? `<p class="tiny mute mkt-next">Next district: ${e(ZONES[next].name)}, at ${m(ZONES[next].gate)} net worth. ${m(Math.max(0, ZONES[next].gate - g.netWorth()))} to go.</p>` : ''}`;
 }
 function bannerHTML(ctx, z) {
   const g = ctx.g(), s = g.s, e = ctx.esc, m = ctx.money, Z = ZONES[z], [head, ...more] = rulePhrases(Z);
@@ -124,9 +124,11 @@ function buyersHTML(ctx, z) {
 
 // ---- lots
 /** What the engine draws for a lot's condition (_spawnLot: a multiplier of 0.85 to 1.15 in districts 1 and 2, 0.7 to 1.15 after them), and the one exception to it: in a district with a counterfeit rule a fake is worth FAKE_VALUE
- *  (market.js truthMult), so the range is only true with that said. How many are fakes is the rule's (the banner and its fold), not repeated here. */
+ *  (market.js truthMult), so the range is only true with that said. How many are fakes is the rule's: the banner leads with it where it is the district's lead rule. Everywhere else it is only in the banner's fold,
+ *  and what a buyer of lots checks before paying is on this tab, so this line says it unless the banner does. */
 function qualityLine(Z) {
-  return `Lots are worth ${Z.id <= 2 ? 85 : 70}% to 115% of how they are described.${Z.rules?.fakes ? ` A counterfeit is worth ${Math.round(FAKE_VALUE * 100)}%.` : ''}`;
+  const rate = rulePhrases(Z).slice(1).find((t) => /counterfeit/.test(t));
+  return `Lots are worth ${Z.id <= 2 ? 85 : 70}% to 115% of how they are described.${Z.rules?.fakes ? `${rate ? ` ${rate}` : ''} A counterfeit is worth ${Math.round(FAKE_VALUE * 100)}%.` : ''}`;
 }
 function lotsHTML(ctx, z) {
   const g = ctx.g(), s = g.s, e = ctx.esc, m = ctx.money, Z = ZONES[z];

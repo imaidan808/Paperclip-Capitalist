@@ -105,7 +105,7 @@ function summaryHTML(ctx) {
   const pips = ZONE_IDS.map((id, i) => `<span class="tv-pip ${s.zones.includes(id) ? 'open' : id === nextId ? 'next' : 'locked'}${i && i % 4 === 0 ? ' gap' : ''}"></span>`).join('');
   return `<section class="tv-sum"><div class="tv-here"><span class="tv-ic" aria-hidden="true">${here.icon}</span><div><small>You are in</small><b>${esc(here.name)}</b></div></div>
     <div class="tv-pips" role="img" aria-label="${open} of ${N} districts open">${pips}</div>
-    <p class="tv-meta">${open} of ${N} districts open.${nextId ? ` Next stop: <b>${esc(ZONES[nextId].name)}</b>.` : ' Every district is open.'}</p></section>`;
+    <p class="tv-meta">${open} of ${N} districts open.${nextId ? ` Next stop: <b>${esc(ZONES[nextId].name)}</b>. <b>${money(Math.max(0, ZONES[nextId].gate - g.netWorth()))}</b> to go.` : ' Every district is open.'}</p></section>`;
 }
 
 function crateNames(items) {
