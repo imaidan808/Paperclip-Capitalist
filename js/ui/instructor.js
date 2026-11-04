@@ -18,9 +18,9 @@ export const PRESETS = [
  * `hint` is one line under the choice; `more` is the whole of what the choice does, on hover. Classroom is "less than half as loud, and still not silent" (12.6 dB under Full for a game sound at any volume, 10.6 for an interface sound).
  */
 export const LINK_SOUNDS = [
-  { id: 'normal', label: 'Normal', query: '', hint: 'Adds nothing. Joining a room sets Classroom sound.', more: 'The link carries only the room. A student who joins is put in Classroom sound by the room, and their own sound returns when they leave. A student with sound settings of their own keeps them.' },
-  { id: 'quiet', label: 'Quiet', query: '&sound=quiet', hint: 'Adds &amp;sound=quiet. Students start in Classroom sound.', more: 'Students who open the link start in Classroom sound, less than half as loud and still not silent, only while they are in the room. A student with sound settings of their own keeps them.' },
-  { id: 'off', label: 'Off', query: '&sound=off', hint: 'Adds &amp;sound=off. Students start muted; M turns sound on.', more: 'Students who open the link start muted, only while they are in the room. M turns sound on in Classroom, and their own sound returns when they leave. A student with sound settings of their own keeps them.' },
+  { id: 'normal', label: 'Normal', query: '', hint: 'Adds nothing. The room sets Classroom sound at Join.', more: 'The link carries only the room. A student who joins is put in Classroom sound by the room, and their own sound returns when they leave. A student with sound settings of their own keeps them.' },
+  { id: 'quiet', label: 'Quiet', query: '&sound=quiet', hint: 'Adds &amp;sound=quiet. Classroom sound starts at the title screen, before Join.', more: 'Students who open the link are in Classroom sound at once, even on the title screen: less than half as loud and still not silent. Their own sound returns when they leave the room. A student with sound settings of their own keeps them.' },
+  { id: 'off', label: 'Off', query: '&sound=off', hint: 'Adds &amp;sound=off. Students start muted; M turns sound on.', more: 'Students who open the link are muted at once, even on the title screen. M turns sound on in Classroom. Their own sound returns when they leave the room. A student with sound settings of their own keeps them.' },
 ];
 /** What the toast says when the link is copied: it names what the link carries (the choice comes before the copy, and copying first left a link without it and nothing said so). */
 export const LINK_COPIED = { normal: 'Student link copied.', quiet: 'Student link copied, with quiet sound.', off: 'Student link copied, with sound off.' };
@@ -35,14 +35,25 @@ const warnTip = `Students with higher Capital Sourcing get earlier warnings: ${W
 export const GINI_ALERT = 0.65;
 /** A founder past the first milestone with no sale and no manager cycle for more days than this is listed under Operational bottlenecks (js/engine.js `lastAuto`: a pitch, a manager's cycle). */
 export const STALL_DAYS = 3;
-const rewindTip = (d) => `Sends every connected student back ${d} day${d === 1 ? '' : 's'} to a daily checkpoint. A rewind reaches back ${CHECKPOINT_DAYS} days at most. A student who is offline is not rewound.`;
+/** The Rewind buttons' days. A rewind goes to the students who are online when it is sent (a live message: js/session.js `rewind`; the relay keeps only the last snapshots and the clock), so a student who is away is not rewound. */
+const REWIND_DAYS = [1, 3, 7];
+const rewindTip = (d) => `Sends every online student back ${d} day${d === 1 ? '' : 's'} to a daily checkpoint. A rewind reaches back ${CHECKPOINT_DAYS} days at most.`;
+const REWIND_LIST = `Sends every online student back ${REWIND_DAYS.slice(0, -1).join(', ')} or ${REWIND_DAYS.at(-1)} days to a daily checkpoint. A rewind reaches back ${CHECKPOINT_DAYS} days at most.`;
+/** What the sliders and boxes do. `ghosts` is the herd: it is not a roster row, but it sets every sale's price pressure and creativity multiplier (js/engine.js `crowd`, `cmFor`), so it moves the results the percentile ranks. */
+const TIP = {
+  friction: 'Scales taxes and fees.', audit: 'Scales how often audits come.',
+  ghosts: 'Simulated sellers that crowd niches, so the creativity multiplier has something to punish in a small class. They are not roster rows and never enter the percentile, but they change what sales pay, and with it the results the percentile ranks. Keep the number the same in every section you compare.',
+  demo: 'Made-up students for a demo. They count in everyone\'s percentile, so leave this at 0 when you grade.',
+  floor: `The divisor floor of the efficiency index (default ${money(EEI_FLOOR_DEFAULT)}).`,
+  algo: 'A viral mention, a supply glut or a regulatory scare, drawn from the room code and the day, so every student sees the same ones.',
+};
 /** The three scheduled shocks, named as the Credit Crunch button and the schedule line name them. */
 const SHOCK_NAME = { tiktok: 'TikTok Surge', fed: 'Credit Crunch', tariff: 'Tariff Lock' };
 const shockName = (kind) => SHOCK_NAME[kind] || (own(ALGO_EVENTS, kind) ? ALGO_EVENTS[kind].name : own(EVENTS, kind) ? EVENTS[kind].name : String(kind));
 const dayOf = (hour) => Math.floor(hour / 24) + 1;
 /** The points of 20 that a row's adaptability puts into its subtotal. A founder with no graded shock has `adapt` null and still counts a neutral score (js/session.js `gradebook`: `adapt ?? 50`), so what the subtotal used is read back from the row. */
 const adaptUsed = (r) => (r.adapt == null ? r.auto - r.econ * 0.3 - r.engage * 0.1 : r.adapt * 0.2);
-const adaptCell = (r) => (r.adapt == null ? `<span class="mute" title="No shock graded yet: counted as a neutral ${Math.round(adaptUsed(r) / 0.2)} of 100.">${adaptUsed(r).toFixed(1)}*</span>` : adaptUsed(r).toFixed(1));
+const adaptCell = (r) => (r.adapt == null ? `<span class="mute">${adaptUsed(r).toFixed(1)}*</span>` : adaptUsed(r).toFixed(1));
 
 /**
  * Put `text` on the clipboard where the page can (fifth round, W2-1). The async clipboard exists only on a secure origin (https, localhost): on plain http at a LAN address, which is how a shared lab
@@ -79,17 +90,20 @@ export { FOLLOW_NOTE, RECOVER_WAIT_SECONDS }; // (room-notes.js: the title scree
 /** The panel that keeps the room: what runs only here, the recovery code (hidden until asked for, because the dashboard is often on a projector) and what to do with it. Pure; built from the session alone. */
 export function recoveryHTML(S) {
   const code = S.roomInfo?.code || '', key = typeof S.recoveryCode === 'function' ? S.recoveryCode() : null;
-  const where = S.room?.kind === 'relay' ? '' : ' Without a relay server the room also exists only in this browser\'s tabs.';
+  // a room with no relay is the tabs of one browser (js/net.js LocalTransport, a BroadcastChannel): no other laptop can take it over, with the recovery code or without it, so the paragraph read without opening the fold must not offer one
+  const lead = S.room?.kind === 'relay'
+    ? `<b>This live room runs only from this browser unless you save its recovery code.</b> The room code <b class="mono">${esc(code)}</b> and the recovery code are the only way back in from another laptop or after this browser forgets the room.`
+    : `<b>This live room exists only in this browser's tabs.</b> Without a relay server, another laptop cannot take it over. If this browser forgets the room, resume it here with the room code <b class="mono">${esc(code)}</b> and the recovery code.`;
   if (!key) {
     return `<section class="panel in-keep" aria-labelledby="in-keep-h"><h2 id="in-keep-h">Keep this room</h2>
       <div class="callout warn"><b>No recovery code is saved for room <span class="mono">${esc(code)}</span>.</b> This browser could not keep one (its storage may be blocked, or this is a private window), so only this tab can run the room. If you close it, you cannot resume as instructor.</div></section>`;
   }
   return `<section class="panel in-keep" aria-labelledby="in-keep-h"><h2 id="in-keep-h">Keep this room</h2>
-    <p class="small" style="margin-top:0"><b>This live room runs only from this browser unless you save its recovery code.</b> The room code <b class="mono">${esc(code)}</b> and the recovery code are the only way back in from another laptop or after this browser forgets the room.</p>
+    <p class="small" style="margin-top:0">${lead}</p>
     <details class="in-code"><summary class="small">Show the recovery code</summary>
       <p class="mono in-key" id="in-key" tabindex="0">${esc(key)}</p>
       <div class="row"><button class="btn sm" data-act="copykey" data-fid="in-copykey">Copy the recovery code</button></div>
-      <p class="tiny mute">Anyone with this code can run the room: keep it like a password and off the projector. To use it, open the title screen, choose <b>Instructor</b>, then <b>Resume as instructor</b>, and enter the room code and this code.${where}</p>
+      <p class="tiny mute">Anyone with this code can run the room: keep it like a password and off the projector. To use it, open the title screen, choose <b>Instructor</b>, then <b>Resume as instructor</b>, and enter the room code and this code.</p>
       <p class="tiny mute">${esc(FOLLOW_NOTE)}</p>
     </details></section>`;
 }
@@ -121,7 +135,7 @@ const fold = (U, key, summary, body) => `<details class="gap" data-fold="${key}"
 
 // ---------------------------------------------------------------- the shocks still to come
 /**
- * The shocks still to come, as the students' games will have them. Every game schedules the three of js/config.js EVENTS (js/engine.js `_new`). A shock sent from this dashboard begins at its hour, and one sent
+ * The scheduled shocks still to come and the ones this dashboard sent, as the students' games will have them. The algorithmic surprise events the room code draws (js/engine.js `_algoEvent`, one day ahead) are not in it: this dashboard does not draw them. Every game schedules the three of js/config.js EVENTS (js/engine.js `_new`). A shock sent from this dashboard begins at its hour, and one sent
  * with Replace first takes out the shocks of its kind that had not begun when it was sent (js/engine.js `injectEvent`). `sent` is what this dashboard sent, in order: { id, kind, at, from, replace }. A shock in
  * `S.injected` that `sent` does not hold (the dashboard was reloaded and the record was lost) is listed too, and the scheduled shock of its kind is marked: whether it was replaced is not known.
  */
@@ -141,7 +155,8 @@ export function shockSchedule(S, hour, sent = []) {
   }
   return list.filter((e) => e.start > Math.floor(hour)).sort((a, b) => a.start - b.start || a.kind.localeCompare(b.kind));
 }
-const scheduleText = (list) => (list.length ? 'Upcoming: ' + list.map((e) => `${shockName(e.kind)} day ${dayOf(e.start)}${e.unsure ? ' (if not replaced)' : ''}`).join(', ') + '.' : 'No shock is scheduled.');
+const ALGO_NOTE = 'Algorithmic surprise events, drawn from the room code and the day, are not listed.';
+const scheduleText = (list, algo) => (list.length ? 'Scheduled: ' + list.map((e) => `${shockName(e.kind)} day ${dayOf(e.start)}${e.unsure ? ' (if not replaced)' : ''}`).join(', ') + '.' : 'No shock is scheduled.') + (algo ? ' ' + ALGO_NOTE : '');
 /** The shocks this dashboard sent, kept in this browser so that a reload of the dashboard still knows which of them replaced a scheduled one. */
 const SENT_KEY = 'shocksent';
 export function loadSent(S) {
@@ -185,14 +200,17 @@ export function instructorParts(S, U) {
   const recovering = S.recovering === true, off = recovering ? ' aria-disabled="true"' : '';
   const lobby = !recovering && S.clock.paused && hour < 1;
   const room = S.roomInfo || { code: '', relay: '' };
+  // every hover of the controls is made by `hint`, so that the fold "What the controls do" says the same words once more where a keyboard, a finger and a screen reader can read them (a title is shown to a mouse and to nothing else)
+  const notes = [];
+  const hint = (label, text, listed = text) => { if (!notes.some(([k]) => k === label)) notes.push([label, listed]); return ` title="${esc(text)}"`; };
   const ls = LINK_SOUNDS.find((x) => x.id === U.linkSound) || LINK_SOUNDS[0];
   const link = `${typeof location !== 'undefined' ? location.origin + location.pathname : ''}?room=${room.code}${room.relay ? '&relay=' + encodeURIComponent(room.relay) : ''}${ls.query}`; // `sound=quiet` or `sound=off`: students who open it start in Classroom sound, or muted, while they are in the room (docs/AUDIO.md 7.1); never over a sound setting a student has chosen
   const dist = distribution(students), drafted = draftCounts(students), here = U.zone && ZONES[U.zone] ? U.zone : busiest(dist);
 
-  const head = `<div class="grow"><h1 tabindex="-1" style="margin:0;font-size:1.3rem">Instructor dashboard</h1><span class="small mute">Room <b class="mono gold" style="font-size:1.2rem">${esc(room.code)}</b> &middot; ${S.room?.kind === 'relay' ? 'relay server (' + esc(S.room.state) + ')' : '<span title="Students join from other tabs of this browser with Copy student link. Students on other devices need a relay.">this browser only</span>'} &middot; <b>${onlineN}</b> student${onlineN === 1 ? '' : 's'} online${real.length > onlineN ? ' (' + (real.length - onlineN) + ' away)' : ''}${S.demo ? ' + ' + S.demo + ' demo' : ''}</span></div>
+  const head = `<div class="grow"><h1 tabindex="-1" style="margin:0;font-size:1.3rem">Instructor dashboard</h1><span class="small mute">Room <b class="mono gold" style="font-size:1.2rem">${esc(room.code)}</b> &middot; ${S.room?.kind === 'relay' ? 'relay server (' + esc(S.room.state) + ')' : '<span title="Students join from other tabs of this browser with Copy student link.">this browser only</span> (other devices need a relay)'} &middot; <b>${onlineN}</b> student${onlineN === 1 ? '' : 's'} online${real.length > onlineN ? ' (' + (real.length - onlineN) + ' away)' : ''}${S.demo ? ' + ' + S.demo + ' demo' : ''}</span></div>
       <fieldset class="in-linksound" style="display:grid;gap:.15rem;max-width:15rem;margin:0;padding:0;border:0;min-width:0"><legend style="color:var(--ink);padding:0;font-size:.82rem">Sound in the student link</legend>
         <div class="row" style="gap:.15rem .35rem">${LINK_SOUNDS.map((x) => `<input type="radio" name="linksound" id="ls-${x.id}" value="${x.id}" data-change="linksound" data-fid="ls-${x.id}" aria-describedby="ls-h"${x.id === ls.id ? ' checked' : ''}><label for="ls-${x.id}" style="color:var(--ink);margin:0 .6rem 0 0">${x.label}</label>`).join('')}</div>
-        <span class="tiny mute" id="ls-h" title="${esc(ls.more)}">${ls.hint}</span></fieldset>
+        <span class="tiny mute" id="ls-h" title="${esc(ls.more)}">${ls.hint}<span class="sr"> ${esc(ls.more)}</span></span></fieldset>
       <button class="btn sm ghost" data-act="copylink" data-link="${esc(link)}"${ls.id === 'normal' ? '' : ` data-sound="${ls.id}"`}>Copy student link</button>
       <button class="btn sm ghost" data-act="settings">Display and sound</button><button class="btn sm danger" data-act="close">Close room</button>`;
 
@@ -205,21 +223,24 @@ export function instructorParts(S, U) {
         <div class="bar gap" role="progressbar" aria-label="Simulation progress" aria-valuemin="0" aria-valuemax="${TOTAL_DAYS}" aria-valuenow="${day}"><i style="width:${hour / 2160 * 100}%"></i></div>
         <div class="row gap"><button class="btn sm" data-act="pause"${off}>${S.clock.paused ? 'Resume' : 'Pause'}</button>
           ${[1, 4, 16, 64].map((v) => `<button class="btn sm ghost" data-act="speed" data-v="${v}" aria-pressed="${S.clock.speed === v}"${off}>${v}x</button>`).join('')}
-          <span class="grow"></span>${[1, 3, 7].map((d) => `<button class="btn sm ghost" data-act="rewind" data-d="${d}" title="${esc(rewindTip(d))}"${off}>${d === 1 ? 'Rewind 1 day' : d + ' days'}</button>`).join('')}</div>
+          <span class="grow"></span>${REWIND_DAYS.map((d) => `<button class="btn sm ghost" data-act="rewind" data-d="${d}"${hint('Rewind', rewindTip(d), REWIND_LIST)}${off}>${d === 1 ? 'Rewind 1 day' : d + ' days'}</button>`).join('')}</div>
+        <p class="tiny mute">A rewind reaches only the students who are online when you send it.</p>
         <label for="pace" class="gap">Pace preset</label><select id="pace" data-change="pace" data-fid="pace"${recovering ? ' disabled' : ''}><option value="">Choose a pace...</option>${PRESETS.map(([l], i) => `<option value="${i}">${esc(l)}</option>`).join('')}</select></section>
       <section class="panel"><h2>Manual black swan trigger</h2>
         <div class="grid g2"><div><label for="ev">Scenario</label><select id="ev" data-change="evsel" data-fid="ev">${events}</select></div>
         <div><label for="evw">When</label><select id="evw" data-change="evwhen" data-fid="evw"><option value="0" ${U.when === '0' ? 'selected' : ''}>Right now (breaking, no warning)</option><option value="24" ${U.when === '24' ? 'selected' : ''}>In 24 virtual hours</option><option value="72" ${U.when === '72' ? 'selected' : ''}>In 72 virtual hours</option></select></div></div>
         <label class="row gap" style="color:var(--ink)"><input type="checkbox" data-change="evrep" ${U.replace ? 'checked' : ''}> Replace the scheduled copy (pull it forward instead of stacking)</label>
-        <button class="btn gap" data-act="deploy" title="Reaches the students who are connected now."${off}>Deploy to cohort</button>
-        <p class="tiny mute" title="${esc(warnTip)}">${esc(scheduleText(shockSchedule(S, hour, Array.isArray(U.sent) ? U.sent : [])))}</p></section>
+        <button class="btn gap" data-act="deploy"${off}>Deploy to cohort</button>
+        <p class="tiny mute">A shock reaches only the students who are online when you deploy it.</p>
+        <p class="tiny mute"${hint('Warnings', warnTip)}>${esc(scheduleText(shockSchedule(S, hour, Array.isArray(U.sent) ? U.sent : []), S.algo))}</p></section>
       <section class="panel"><h2>Asymmetric risk scaling</h2>
-        <label for="fr" title="Scales taxes and fees.">Transaction friction: <b class="mono" id="frv">${S.difficulty.friction.toFixed(2)}x</b></label><input id="fr" type="range" min="0.5" max="3" step="0.05" value="${S.difficulty.friction}" data-input="fr">
-        <label for="au" class="gap" title="Scales how often audits come.">Compliance audit frequency: <b class="mono" id="auv">${S.difficulty.audit.toFixed(2)}x</b></label><input id="au" type="range" min="0.5" max="3" step="0.05" value="${S.difficulty.audit}" data-input="au">
-        <label for="gh" class="gap" title="Simulated sellers that crowd niches, so the creativity multiplier has something to punish in a small class. They move prices, not the grade.">Synthetic classmates filling the market: <b class="mono" id="ghv">${S.ghosts}</b></label><input id="gh" type="range" min="0" max="80" step="2" value="${S.ghosts}" data-input="gh">
-        <label for="dm" class="gap" title="Made-up students for a demo. They count in everyone's percentile, so leave this at 0 when you grade.">Demo students on this dashboard: <b class="mono" id="dmv">${S.demo}</b></label><input id="dm" type="range" min="0" max="24" step="1" value="${S.demo}" data-input="dm">
-        <label for="fl" class="gap" title="The divisor floor of the efficiency index (default ${money(EEI_FLOOR_DEFAULT)}).">EEI starting-capital floor</label><input id="fl" inputmode="numeric" value="${S.difficulty.eeiFloor}" data-change="floor">
-        <label class="row gap" style="color:var(--ink)" title="A viral mention, a supply glut or a regulatory scare, drawn from the room code and the day, so every student sees the same ones."><input type="checkbox" data-change="algo" ${S.algo ? 'checked' : ''}> Algorithmic surprise events</label></section>`;
+        <label for="fr"${hint('Transaction friction', TIP.friction)}>Transaction friction: <b class="mono" id="frv">${S.difficulty.friction.toFixed(2)}x</b></label><input id="fr" type="range" min="0.5" max="3" step="0.05" value="${S.difficulty.friction}" data-input="fr">
+        <label for="au" class="gap"${hint('Compliance audit frequency', TIP.audit)}>Compliance audit frequency: <b class="mono" id="auv">${S.difficulty.audit.toFixed(2)}x</b></label><input id="au" type="range" min="0.5" max="3" step="0.05" value="${S.difficulty.audit}" data-input="au">
+        <label for="gh" class="gap"${hint('Synthetic classmates filling the market', TIP.ghosts)}>Synthetic classmates filling the market: <b class="mono" id="ghv">${S.ghosts}</b></label><input id="gh" type="range" min="0" max="80" step="2" value="${S.ghosts}" data-input="gh">
+        <label for="dm" class="gap"${hint('Demo students on this dashboard', TIP.demo)}>Demo students on this dashboard: <b class="mono" id="dmv">${S.demo}</b></label><input id="dm" type="range" min="0" max="24" step="1" value="${S.demo}" data-input="dm">
+        <label for="fl" class="gap"${hint('EEI starting-capital floor', TIP.floor)}>EEI starting-capital floor</label><input id="fl" inputmode="numeric" value="${S.difficulty.eeiFloor}" data-change="floor">
+        <label class="row gap" style="color:var(--ink)"${hint('Algorithmic surprise events', TIP.algo)}><input type="checkbox" data-change="algo" ${S.algo ? 'checked' : ''}> Algorithmic surprise events</label>
+        ${fold(U, 'controls', 'What the controls do', `<ul class="small">${notes.map(([k, v]) => `<li><b>${esc(k)}</b>: ${esc(v)}</li>`).join('')}</ul>`)}</section>`;
 
   const flags = S.flagsAll();
   const chips = PERK_IDS.filter((id) => drafted[id]).sort((a, b) => drafted[b] - drafted[a] || a.localeCompare(b));
@@ -236,14 +257,16 @@ export function instructorParts(S, U) {
   const gb = S.gradebook().sort((a, b) => b.eei - a.eei);
   const bg = own(PERKS, U.bg) ? U.bg : 'all';
   const shown = gb.filter((r) => bg === 'all' || perksOf(r).includes(bg));
+  const ungraded = shown.find((r) => r.adapt == null);
   const grade = `<div class="row"><h2 class="grow">Roster and gradebook</h2><label class="sr" for="pf">Background</label><select id="pf" data-change="bgf" data-fid="pf"><option value="all">All Backgrounds</option>${PERK_IDS.map((id) => `<option value="${id}" ${bg === id ? 'selected' : ''}>${esc(PERKS[id].name)}</option>`).join('')}</select><button class="btn sm" data-act="gradecsv">Export gradebook CSV</button></div>
       <div class="scroll" style="max-height:26rem"><table class="tbl"><caption class="sr">Roster with automated grade components</caption><thead><tr><th scope="col">Founder</th><th scope="col">Backgrounds</th><th scope="col">District</th><th scope="col">Net worth</th><th scope="col">EEI</th><th scope="col">Economic (30)</th><th scope="col">Adaptability (20)</th><th scope="col">Peer market (10)</th><th scope="col">Auto subtotal / 60</th><th scope="col">Status</th></tr></thead><tbody>
       ${shown.map((r) => `<tr><td>${esc(r.handle)} <span class="tiny mute">${esc(r.pid)}</span>${r.rewind && !r.rewind.ok ? ` <span class="chip warn" title="Their run could not go all the way back: it has no checkpoint that old">rewind stopped at day ${Math.floor(r.rewind.hour / 24) + 1} (asked for day ${Math.floor(r.rewind.wanted / 24) + 1})</span>` : ''}</td><td>${bgIcons(r)}</td><td class="mono" title="${esc(ZONES[topZone(r)].name)}">${topZone(r)}</td><td class="mono">${money(r.nw)}</td><td class="mono">${r.eei >= 100 ? r.eei.toFixed(0) : r.eei.toFixed(2)}</td><td class="mono">${(r.econ * 0.3).toFixed(1)}</td><td class="mono">${adaptCell(r)}</td><td class="mono">${(r.engage * 0.1).toFixed(1)}</td><td class="mono"><b>${r.auto.toFixed(1)}</b></td><td>${r.synth ? '<span class="chip">demo</span>' : r.online ? '<span class="chip good">online</span>' : '<span class="chip warn">away</span>'}${r.flags?.insolvent ? ' <span class="chip bad">insolvent</span>' : ''}${r.flagged ? ` <span class="chip bad">${r.flagged} flagged</span>` : ''}</td></tr>`).join('') || '<tr><td colspan="10" class="mute">Waiting for students. Share the room code, or add demo students with the slider above.</td></tr>'}</tbody></table></div>
-      ${shown.some((r) => r.adapt == null) ? `<p class="tiny mute">* No shock graded yet: counted as a neutral ${Math.round(adaptUsed(shown.find((r) => r.adapt == null)) / 0.2)} of 100.</p>` : ''}
+      ${ungraded ? `<p class="tiny mute">* No shock graded yet: counted as a neutral ${Math.round(adaptUsed(ungraded) / 0.2)} of 100, which is ${Math.round(adaptUsed(ungraded))} of the 20 points.</p>` : ''}
       ${fold(U, 'points', 'How the automated points are worked out', `<ul class="small mute">
+        <li>Each component is scored from 0 to 100, then weighted to the points in its column heading.</li>
         <li><b>Economic (30):</b> percentile of the efficiency index among everyone on the roster, demo students included. Every founder starts with one paperclip and $0, so no start is compared separately.</li>
-        <li><b>Adaptability (20):</b> how far net worth moved in the five days after each shock, compared with the class median, plus 10 of 100 for a pivot. With no graded shock a founder counts a neutral 50.</li>
-        <li><b>Peer market (10):</b> 25 of 100 for each completed swap with a classmate, less 10 for each flagged attempt.</li>
+        <li><b>Adaptability (20):</b> how far net worth moved in the five days after each shock, compared with the class median, plus 10 for a pivot. With no graded shock a founder counts a neutral 50.</li>
+        <li><b>Peer market (10):</b> 25 for each completed swap with a classmate, less 10 for each flagged attempt.</li>
         <li>The 40 points for reflection are yours to grade with the rubric in the <a href="${KIT_URL}" target="_blank" rel="noopener noreferrer">faculty kit</a> (docs/FACULTY_KIT.md in the repository).</li>
         <li>Grade passback (LTI 1.3) is not built: export the CSV and import it into your LMS gradebook.</li></ul>`)}`;
   return { head, keep: recoveryHTML(S), c1, c2, grade };
@@ -252,8 +275,8 @@ export function instructorParts(S, U) {
 /** A cell that a spreadsheet will read as text, never as a formula (aliases are typed by students). */
 const textCell = (v) => { const t = String(v ?? ''); return /^[=+\-@\t\r]/.test(t) ? "'" + t : t; };
 export function gradebookCSV(S) {
-  const rows = [['founder_id', 'alias', 'background_1', 'background_2', 'district_reached', 'level', 'net_worth', 'eei', 'economic_percentile', 'economic_points_of_30', 'adaptability_points_of_20', 'peer_market_points_of_10', 'auto_subtotal_of_60', 'reflection_points_of_40', 'p2p_swaps', 'flagged_trades', 'virtual_days_played'],
-    ...S.gradebook().filter((r) => !r.synth).map((r) => { const ids = perksOf(r); return [textCell(r.pid), textCell(r.handle), ids[0] || '', ids[1] || '', topZone(r), r.level ?? '', r.nw.toFixed(2), r.eei.toFixed(3), r.econ.toFixed(1), (r.econ * 0.3).toFixed(1), adaptUsed(r).toFixed(1), (r.engage * 0.1).toFixed(1), r.auto.toFixed(1), '', r.p2p || 0, r.flagged, r.hoursPlayed]; })];
+  const rows = [['founder_id', 'alias', 'background_1', 'background_2', 'district_reached', 'level', 'net_worth', 'eei', 'economic_percentile', 'economic_points_of_30', 'adaptability_points_of_20', 'peer_market_points_of_10', 'auto_subtotal_of_60', 'reflection_points_of_40', 'p2p_swaps', 'flagged_trades', 'virtual_days_played', 'adaptability_graded'],
+    ...S.gradebook().filter((r) => !r.synth).map((r) => { const ids = perksOf(r); return [textCell(r.pid), textCell(r.handle), ids[0] || '', ids[1] || '', topZone(r), r.level ?? '', r.nw.toFixed(2), r.eei.toFixed(3), r.econ.toFixed(1), (r.econ * 0.3).toFixed(1), adaptUsed(r).toFixed(1), (r.engage * 0.1).toFixed(1), r.auto.toFixed(1), '', r.p2p || 0, r.flagged, r.hoursPlayed, r.adapt == null ? 'no' : 'yes']; })];
   return rows.map((r) => r.map((c) => '"' + String(c).replace(/"/g, '""') + '"').join(',')).join('\n');
 }
 
@@ -287,10 +310,10 @@ export function mountInstructor(root, S, hooks) {
     pause() { S.setPaused(!S.clock.paused); },
     speed(b) { S.setSpeed(+b.dataset.v); },
     pace(b) { if (b.value !== '') { S.setSpeed(PRESETS[+b.value][1]); toast(`1 virtual day is now ${realPerDay(S.clock.speed)}.`, 'info'); } },
-    rewind(b) { const r = S.rewind(+b.dataset.d); toast(r && r.ok === false ? r.msg : 'Rewind sent to all students.', 'warn'); }, // (a room still taking itself back refuses: Session._holdWhileRecovering)
+    rewind(b) { const r = S.rewind(+b.dataset.d); toast(r && r.ok === false ? r.msg : 'Rewind sent to the students who are online.', 'warn'); }, // (a room still taking itself back refuses: Session._holdWhileRecovering)
     hzsel(b) { U.zone = +b.value; render(); },
     evsel(b) { U.ev = b.value; }, evwhen(b) { U.when = b.value; }, evrep(b) { U.replace = b.checked; },
-    deploy() { const r = S.inject(U.ev, { when: +U.when, replace: U.replace && !!EVENTS[U.ev], cls: 'sneakers' }); noteSent(r, U.ev, U.replace && !!EVENTS[U.ev], +U.when); toast(r && r.ok === false ? r.msg : 'Event deployed to the cohort.', 'warn'); },
+    deploy() { const r = S.inject(U.ev, { when: +U.when, replace: U.replace && !!EVENTS[U.ev], cls: 'sneakers' }); noteSent(r, U.ev, U.replace && !!EVENTS[U.ev], +U.when); toast(r && r.ok === false ? r.msg : 'Event deployed to the students who are online.', 'warn'); },
     squeeze() { const r = S.inject('fed', { when: 0, replace: true }); noteSent(r, 'fed', true, 0); toast(r && r.ok === false ? r.msg : 'Credit Crunch injected.', 'warn'); },
     fr(b) { S.setDifficulty({ friction: +b.value }); $('#frv').textContent = (+b.value).toFixed(2) + 'x'; },
     au(b) { S.setDifficulty({ audit: +b.value }); $('#auv').textContent = (+b.value).toFixed(2) + 'x'; },
