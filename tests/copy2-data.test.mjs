@@ -22,8 +22,9 @@ const { Game } = await import('../js/engine.js');
 const C = await import('../js/config.js');
 const { ZONES, ASSETS, BUYERS, PERKS, SKILLS, PIPE, UPGRADES, CLIENTS, LOANS, AUDIT_THEMES, EVENTS, AUDIT, FEES, BASE_RATE, ECON, MIL, MIL_ZONE } = C;
 const { assetFMV, seasonMult } = await import('../js/market.js');
-const { haggleParams, inspectParams, auctionParams, planFor } = await import('../js/deal.js');
+const { haggleParams, inspectParams, auctionParams, planFor, startRun } = await import('../js/deal.js');
 const haggle = await import('../js/play/haggle.js');
+const auction = await import('../js/play/auction.js');
 const D = await import('../js/ui/draft.js');
 const market = (await import('../js/ui/drawers/market.js')).default;
 const { fakeCtx } = await import('./helpers/ctx.mjs');
@@ -52,7 +53,7 @@ function lotShares(zone, cash, perks = [], n = 4000) {
   }
   return s;
 }
-/** New buyers that turn up in a district over `hours` (the player takes every one at once; the rate is deterministic, the draw is not). */
+/** New buyers that turn up in a district over `hours` (the player takes every one at once). The rate is deterministic and the same on every seed, so a ratio of two counts is exact to about 0.01 and a wider band is slack; only which buyer arrives is drawn. */
 function arrivals(g, zone, hours = 300) {
   let n = 0; g.s.leads[zone] = [];
   for (let h = 0; h < hours; h++) { g.advanceTo(g.s.hour + 1); n += g.s.leads[zone].length; g.s.leads[zone] = []; }
@@ -136,18 +137,34 @@ test('D1 Metro Hub: managers, clients, upgrades and the Bank open here', () => {
   assert.ok(g.s.mil.m1 && g.s.zones.includes(5)); assert.equal(g.loanBlock('micro'), '', 'the Bank is open');
 });
 
-test('D1 Estate Sales: more than half the lots are auctions, and the winner of an auction tends to have overpaid', () => {
-  const r = ZONES[6].rules;
-  assert.ok(r.auction > 0.5 && /More than half the lots are auctions/.test(ZONES[6].blurb));
+test('D1 Estate Sales: more than half the lots are auctions, and a winner often pays more than the lot is worth', () => {
+  const r = ZONES[6].rules, b = ZONES[6].blurb;
+  assert.ok(r.auction > 0.5 && /More than half the lots are auctions/.test(b));
   const s = lotShares(6, 3000);
   assert.ok(s.auction / s.n > 0.5 && s.auction / s.n < 0.6, `${pc(s.auction / s.n)}% at auction`);
-  // several rivals bid against a noisy estimate, and whoever bids highest wins: the winning estimate is high (the winner's curse)
-  const g = rich(mk(), 3000); g.s.lots[6] = []; g._spawnLot(6); const lot = g.s.lots[6][0]; assert.ok(lot, 'a lot to bid on');
-  const runs = [];
-  for (let seed = 1; seed <= 600; seed++) { const p = auctionParams(g, 6, lot, { seed }); runs.push({ est: p.estimate, win: p.estimate > Math.max(...p.bidders.map((b) => b.limit)) }); }
-  const won = runs.filter((x) => x.win);
-  assert.ok(runs[0] && auctionParams(g, 6, lot, { seed: 1 }).bidders.length >= 2, 'a field of rivals');
-  assert.ok(won.length > 20 && mean(won.map((x) => x.est)) > 1.05 * mean(runs.map((x) => x.est)), `the estimates that win average ${(mean(won.map((x) => x.est)) / mean(runs.map((x) => x.est))).toFixed(2)}x all of them`);
+  // "Overpay" is the price at the hammer against what the lot is worth, and the Deal Room has two worths for an auction lot: the auction's own true value (the lesson's surplus, the quests)
+  // and the engine's value of the crate (DealRun.worth, which the card's "Paid a little too much" uses). Play each auction through, bidding up to your own estimate.
+  const hammer = (p) => { let a = auction.create(p); for (let i = 0; i < 500 && !a.done; i++) { const v = auction.view(a); a = auction.act(a, { type: v.yourTurn && v.actions.some((x) => x.type === 'bid') && v.nextBid <= p.estimate + 1e-9 ? 'bid' : 'drop' }).state; } return auction.result(a); };
+  const g = rich(mk(), 3000), won = { n: 0, overTrue: 0, overWorth: 0, fakes: 0, fakesOver: 0 };
+  for (let i = 0; i < 300; i++) {
+    g.s.lots[6] = []; g._spawnLot(6); const lot = g.s.lots[6][0];
+    if (!lot || lot.mode !== 'auction') continue;
+    const run = startRun(g, { kind: 'buy', zone: 6, lotId: lot.id }), secret = run.secret(), worth = run.worth(secret);
+    assert.ok(auctionParams(g, 6, lot, { seed: 1 }).bidders.length >= 2, 'a field of rivals');
+    for (let seed = 1; seed <= 12; seed++) {
+      const p = auctionParams(g, 6, lot, { seed }), res = hammer(p); if (!res.won) continue;
+      won.n++; if (res.price > p.trueValue) won.overTrue++; if (res.price > worth) won.overWorth++;
+      if (secret.fake) { won.fakes++; if (res.price > p.trueValue && res.price > worth) won.fakesOver++; }
+    }
+  }
+  assert.ok(won.n > 1000 && won.fakes > 50 && won.fakesOver === won.fakes, 'winners enough to count, and whoever wins a counterfeit (worth 8% of what it looks) overpays by either worth');
+  const shares = [won.overTrue / won.n, won.overWorth / won.n], low = Math.min(...shares);
+  const quantifier = low > 0.5 ? 'tend to' : low > 0.15 ? 'often' : null; // "tend to" is a majority, by both worths; a quarter is "often"
+  assert.ok(quantifier && b.includes(`winners ${quantifier} overpay`), `${pc(shares[0])}% of the winners paid more than the auction's true value, ${pc(shares[1])}% more than the crate's worth; the blurb says: ${b}`);
+  // the mechanism the Codex names, apart from the price: the highest estimate wins, and it runs high (the same on every lot, so the last one will do)
+  const lot = g.s.lots[6][0], runs = Array.from({ length: 3000 }, (_, i) => { const p = auctionParams(g, 6, lot, { seed: i + 1 }); return { est: p.estimate, win: p.estimate > Math.max(...p.bidders.map((x) => x.limit)) }; });
+  const top = runs.filter((x) => x.win);
+  assert.ok(top.length > 20 && mean(top.map((x) => x.est)) > 1.02 * mean(runs.map((x) => x.est)), `the estimates that win average ${(mean(top.map((x) => x.est)) / mean(runs.map((x) => x.est))).toFixed(3)}x all of them`);
 });
 
 test('D1 Auto Row: six in ten lots are broken, and a repair here costs a quarter less', () => {
@@ -235,12 +252,28 @@ test('D1 Real Estate Row: property pays rent every day, and a quarter of the lot
 
 test('D1 Global Exchange: gems, watches and cargo are priced very differently from one district to the next', () => {
   assert.match(ZONES[16].blurb, /Gems, watches and cargo sell at very different prices from district to district/);
-  for (const cls of ['diamondParcel', 'copperCargo', 'watchVault']) {
+  const g = rich(mk(), 1e7), others = Object.keys(ZONES).map(Number).filter((z) => z !== 16);
+  // what the best buyer in a district would pay for a crate of the good (each buyer at their top budget; 0 when no buyer there will take it)
+  const bestQuote = (cls, z) => {
+    const a = put(g, cls, z); a.known = true; let best = 0;
+    for (const [id, b] of Object.entries(BUYERS).filter(([, b]) => b.zone === z)) {
+      g.s.leads[z] = [{ id: 'LB' + id, zone: z, seg: id, budget: Math.max(...b.budget), need: null, born: 0, exp: 999 }];
+      const q = g.quotePitch(a.id, 'LB' + id, undefined, { blind: false }); if (q.ok && !q.rejected) best = Math.max(best, q.price);
+    }
+    g.s.leads[z] = []; g.s.assets = g.s.assets.filter((x) => x.id !== a.id); return best;
+  };
+  const gap = {};
+  for (const cls of ['diamondParcel', 'postwarCanvas', 'copperCargo', 'watchVault']) {
     const here = assetFMV({ cls, cond: 'ok', quality: 1, wear: 1 }, 16, {});
-    const there = Object.keys(ZONES).map(Number).filter((z) => z !== 16).map((z) => assetFMV({ cls, cond: 'ok', quality: 1, wear: 1 }, z, {}));
+    const there = others.map((z) => assetFMV({ cls, cond: 'ok', quality: 1, wear: 1 }, z, {}));
     assert.ok(there.every((v) => v * 1.3 <= here), `${cls}: a district within 30% of its Global Exchange price`);
-    assert.ok(there.filter((v) => v * 3 < here).length >= 12, `${cls}: in most districts it is worth under a third`);
+    // (no count of "districts worth under a third": a good with no demand in a district is marked at 15% of its base there, and nobody in that district will buy it)
+    const elsewhere = Math.max(...others.map((z) => bestQuote(cls, z))); gap[cls] = elsewhere > 0 ? bestQuote(cls, 16) / elsewhere : Infinity;
   }
+  // what a player can trade on: the gem, the watches and the cargo each sell in one other district, where the Exchange pays 2.5, 2.3 and 1.5 times as much
+  for (const cls of ['diamondParcel', 'copperCargo', 'watchVault']) assert.ok(gap[cls] >= 1.3 && gap[cls] < Infinity, `${cls}: the Exchange pays ${gap[cls].toFixed(2)}x the best other district`);
+  // and the canvas sells nowhere else (district 13 wants it at 2 and no buyer there likes art), which is why the blurb names no art: a good with one market has no gap to trade
+  assert.equal(gap.postwarCanvas, Infinity, 'the canvas sells in the Exchange only');
 });
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -269,10 +302,15 @@ test('D2: a buyer\'s line is short, plain and its own (no two alike), and the se
   assert.equal(new Set(all.map(([, h]) => h)).size, all.length, 'no two buyers say the same');
   assert.ok(mean(mine.map(([, h]) => words(h))) <= 11, `a line takes ${mean(mine.map(([, h]) => words(h))).toFixed(1)} words`);
   assert.ok(mean(all.map(([, h]) => words(h))) <= 12, 'and so does the whole set, new buyers too');
-  // the line still says what the buyer wants: the words of a line that names a good name one the buyer likes (spot checks on the characters the lines were cut for)
-  const likes = (id, tag) => assert.ok((BUYERS[id].like[tag] || 0) >= 0.5, `${id} likes ${tag}`);
-  likes('trainer', 'training'); likes('boutique', 'fashion'); likes('etailer', 'electronics'); likes('thrift', 'home'); likes('boatyard', 'marine');
-  likes('lakeshorePower', 'energy'); likes('marloweGrocers', 'food'); likes('ridgelineDealer', 'farm'); likes('almansooriDubai', 'luxury'); likes('cobaltReit', 'industrial');
+  // the line still says what the buyer wants (spot checks on the characters the lines were cut for): the line keeps a word that points at its good, and the buyer likes that good
+  const cue = {
+    trainer: ['training', /binder/], boutique: ['fashion', /rack/], etailer: ['electronics', /spec sheet/], thrift: ['home', /furniture/], boatyard: ['marine', /haul-out|engines/i],
+    lakeshorePower: ['energy', /uptime/], marloweGrocers: ['food', /shelf life/i], ridgelineDealer: ['farm', /hours meter|hydraulics/], almansooriDubai: ['luxury', /best pieces/], cobaltReit: ['realty', /cap rate|operating income/i],
+  };
+  for (const [id, [tag, re]] of Object.entries(cue)) {
+    assert.match(BUYERS[id].hello, re, `${id}: the line no longer points at ${tag}`);
+    assert.ok((BUYERS[id].like[tag] || 0) >= 0.5, `${id} likes ${tag}`);
+  }
 });
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -321,15 +359,22 @@ test('D3 trades: a haggle has one round fewer, and a pitch is 8% lower', () => {
   assert.equal(buy(['trades']), buy([]) - 1, 'buying too');
 });
 
-test('D3 creator: a failed pitch halves the arrival of buyers for two days, and other demand swings by the stated share every three days', () => {
+test('D3 creator: a rejected or no-gain pitch halves the arrival of buyers for two days, and other demand swings by the stated share every three days', () => {
   const c = PERKS.creator.cost, m = PERKS.creator.mods;
-  assert.ok(c.includes('halves buyer arrivals for 2 days') && c.includes(`up to ${pc(m.volatility)}% every 3 days`), c);
+  assert.ok(/[Rr]ejected or no-gain pitch halves buyer arrivals for 2 days/.test(c) && c.includes(`up to ${pc(m.volatility)}% every 3 days`), c);
   const calm = mk(); const sulk = mk(); sulk.s.ps.goodwillUntil = 1e9;
   const a = arrivals(calm, 1, 400), b = arrivals(sulk, 1, 400);
-  assert.ok(Math.abs(b / a - 0.5) < 0.1, `${b} arrivals against ${a}`);
+  assert.ok(Math.abs(b / a - 0.5) < 0.03, `${b} arrivals against ${a}: halved means 0.5x, and the count is exact`);
   const f = mk(['creator']), pen = put(f, 'pen', 1); f.s.leads[1].push({ id: 'LX', zone: 1, seg: 'mechanic', budget: 50, need: null, born: 0, exp: 999 }); // a buyer who has no use for a pen
   const h0 = f.s.hour, rep0 = f.s.rep, r = f.pitch(pen.id, 'LX');
   assert.equal(r.outcome, 'rejected'); assert.equal(f.s.ps.goodwillUntil - h0, 48, 'two days'); assert.equal(rep0 - f.s.rep, m.flopRep, 'and the reputation it costs');
+  // a no-gain pitch is also a sale that does not clear fair value by 2% ("Traded, no gain."): the same two days and half the reputation; a sale that wins costs nothing, and only a Creator pays
+  const trade = (perks, share, need) => { const x = mk(perks, 3), a = put(x, 'pen', 1); a.known = true; x.s.leads[1].push({ id: 'LS', zone: 1, seg: 'student', budget: share * x.val(a), need, born: 0, exp: 999 }); return { x, a, h0: x.s.hour, rep0: x.s.rep, r: x.pitch(a.id, 'LS') }; };
+  const flat = trade(['creator'], 0.9, null);
+  assert.equal(flat.r.outcome, 'flat'); assert.ok(!flat.x.s.assets.some((a) => a.id === flat.a.id), 'the pen was sold');
+  assert.equal(flat.x.s.ps.goodwillUntil - flat.h0, 48, 'a sale below fair value costs the same two days'); assert.equal(flat.rep0 - flat.x.s.rep, m.flopRep / 2, 'and half the reputation');
+  const won = trade(['creator'], 6, 'prestige'); assert.equal(won.r.outcome, 'win'); assert.equal(won.x.s.ps.goodwillUntil, 0, 'a winning sale costs nothing');
+  assert.equal(trade([], 0.9, null).x.s.ps.goodwillUntil, 0, 'and only a Creator is penalized');
   const crowd = (day) => { const x = mk(['creator']); x.s.hour = day * 24; return x.crowd('paperbacks', 1); };
   const swing = [3, 6, 9, 12, 15, 18, 21, 24].map(crowd);
   assert.ok(Math.max(...swing) - Math.min(...swing) > 0.03 && Math.max(...swing) <= 1 + m.volatility + 1e-9 && Math.min(...swing) >= 1 - m.volatility - 1e-9, swing.join(' '));
@@ -345,7 +390,7 @@ test('D3 roots: repeat buyers bring up to the loyalty share more, and the engine
   const ratio = mean(b3) / mean(b0); assert.ok(ratio > 1.1 && ratio <= 1 + m.loyalty + 1e-9, `${ratio.toFixed(3)}x`);
   const far = (perks, z) => { const g = mk(perks); rich(g, ZONES[z].gate + 5e3); return arrivals(g, z, 300); };
   const share = far(['roots'], 9) / far([], 9), edge = far(['roots'], 8) / far([], 8);
-  assert.ok(Math.abs(share - m.farLeadMult) < 0.1, `beyond district 8: ${share.toFixed(2)}x`); assert.ok(Math.abs(edge - 1) < 0.05, `in district 8 itself: ${edge.toFixed(2)}x`);
+  assert.ok(Math.abs(share - m.farLeadMult) < 0.03, `beyond district 8: ${share.toFixed(3)}x`); assert.ok(Math.abs(edge - 1) < 0.03, `in district 8 itself: ${edge.toFixed(3)}x`);
   assert.ok(PERKS.roots.cost.includes('beyond district 8') && PERKS.roots.cost.includes(`${pc(1 - m.farLeadMult)}% fewer`) && PERKS.roots.cost.includes(`${pc(m.freightMult - 1)}% more`));
 });
 
@@ -432,7 +477,7 @@ test('D4: the upgrade lines say what the engine does', () => {
   assert.equal(UPGRADES.jit.blurb, 'Manager cycles 20% shorter, stock decays half as fast, overhead 10% lower.');
   // SEO: buyers arrive 50% faster, margin +8%, clients 15% cheaper
   const s = withUpg('seo'); near(s.forecast(p).margin / plain.forecast(p).margin, 1.08, 1e-9); near(s.clientQuote('smb').cac / plain.clientQuote('smb').cac, 0.85, 1e-9);
-  assert.ok(Math.abs(arrivals(s, 5, 300) / arrivals(plain, 5, 300) - 1.5) < 0.2, 'arrivals');
+  const seoRatio = arrivals(s, 5, 300) / arrivals(plain, 5, 300); assert.ok(Math.abs(seoRatio - 1.5) < 0.03, `arrivals: ${seoRatio.toFixed(3)}x`);
   assert.equal(UPGRADES.seo.blurb, '+50% buyer arrivals, +8% manager margin, 15% cheaper clients.');
   // freight: 40% less
   const ship = (g) => { g._openZone(2); const a = put(g, 'pen', 1, { basis: 1 }); return g.freightQuote([a.id], 2).cost; }; near(ship(withUpg('freight')) / ship(mk()), 0.6, 1e-9);
@@ -527,4 +572,90 @@ test('D6: the Draft says the paperclip once, asks nothing, and shows no summary 
   // the claims shown in the tray are the Backgrounds' own, and the headline is shorter than the claim
   for (const id of ['trades', 'pro']) { assert.ok(D.trayHTML(two).includes(PERKS[id].strength.replace(/'/g, '&#39;')) || D.trayHTML(two).includes(PERKS[id].strength), id); }
   const lede = /<p class="dr-lede">([\s\S]*?)<\/p>/.exec(full)[1]; assert.ok(words(text(lede)) <= 14, `the lede is ${words(text(lede))} words (it was 23)`);
+});
+
+// ---------------------------------------------------------------------------------------------------------------------
+// D3/D5 numerals and direction (the review of this pass)
+// ---------------------------------------------------------------------------------------------------------------------
+test('D3: every +N / -N a claim words with a unit is that Background\'s own mod, and the Heir\'s skills start where its cost says', () => {
+  const unit = { 'Ops': 'opsBonus', 'Growth': 'growthBonus', 'Capital Sourcing': 'fintechBonus', 'inspection probe': 'probeBonus' };
+  for (const [id, p] of Object.entries(PERKS)) {
+    const said = {};
+    for (const m of (p.strength + ' ' + p.cost).matchAll(/([+-])(\d+) (Ops|Growth|Capital Sourcing|inspection probe)/g)) said[unit[m[3]]] = +(m[1] + m[2]);
+    const held = Object.fromEntries(Object.entries(p.mods).filter(([k]) => Object.values(unit).includes(k)));
+    assert.deepEqual(said, held, `${id}: the claim and the mods state the same +N / -N`);
+  }
+  const start = Object.values(mk(['heir'], 1, { specialty: 'ops' }).s.skills);
+  assert.ok(start.every((v) => v === start[0]) && PERKS.heir.cost.includes(`all skills start at ${start[0]}`), `the Heir's skills start at ${start}`);
+});
+
+test('D5: an open loan accrues at the crunch rate from the first midnight after the Fed shock starts, and no later than the hours its line says', () => {
+  const F = EVENTS.fed, said = /re-rate within (\d+) hours/.exec(F.alert.enforcement); assert.ok(said, F.alert.enforcement);
+  const calm = mk().loanRate('micro'), latency = [], day0 = (F.day - 1) * 24;
+  for (const start of [day0, day0 + 1, day0 + 12, day0 + 23]) { // scheduled for a midnight, or deployed by an instructor at any hour of a day
+    const g = rich(mk(), ZONES[5].gate + 10); assert.equal(g.draw('micro', 1000).ok, true);
+    g.s.hour = day0 - 26; assert.equal(g.injectEvent('fed', start, { id: 'x' }), true);
+    let prev = g.debt(), first = null;
+    while (g.s.hour < start + 48 && first === null) { g.stepHour(); const d = g.debt(); if (g.s.hour >= start && d > prev + 1e-9) first = { hour: g.s.hour, rate: (d - prev) * 30 / prev }; prev = d; }
+    assert.ok(first, `start ${start}: a midnight tick came`); near(first.rate, g.loanRate('micro'), 1e-9); assert.ok(first.rate > calm + 0.03, `start ${start}: the crunch rate, not the calm ${calm}`);
+    latency.push(first.hour - start);
+  }
+  assert.equal(Math.max(...latency) + 1, +said[1], 'the longest wait for the new rate is a day, less one hour');
+});
+
+// D3/D5 direction and pairing. figures() above is the cheap backstop (a magnitude that is some mod's); here every clause is REBUILT from the mod it states,
+// so the figure, the word that gives its direction (faster/slower, rises/falls, lose/gain ...), its sign and the thing it is paired with all come from the data.
+const fig = (x) => String(+(Math.abs(x) * 100).toFixed(1));                 // 0.3 -> "30", 0.015 -> "1.5", 4 -> "400"
+const modAt = (o, path) => path.split('.').reduce((v, k) => v[k], o);
+/** One clause rebuilt from its mod value v. kind 'x': v is a multiplier (the figure is |v-1|, "up" when v > 1); 'a': an adder or a rate (|v|, "up" when v > 0); 'n': a count (|v|, no percent).
+ *  In the template {p} is the figure, {s} its sign, and {up/down} picks the word by the sign of the mod; everything else is the claim's own words (the thing the figure is paired with). */
+function clause(v, kind, tpl) {
+  const d = kind === 'x' ? v - 1 : v, up = d > 0, p = kind === 'n' ? String(Math.abs(d)) : fig(d);
+  return tpl.replace(/\{(\w+)\/(\w+)\}/g, (_, u, w) => (up ? u : w)).replace(/\{s\}/g, up ? '+' : '-').replace(/\{p\}/g, p);
+}
+/** [Background, field, path in mods, kind, template] */
+const CLAUSES = [
+  ['connected', 'strength', 'leadMult', 'x', 'arrive {p}% {faster/slower}'], ['connected', 'strength', 'leadBudget', 'x', '{p}% {bigger/smaller} budgets'], ['connected', 'cost', 'familyTax.rate', 'a', 'take {p}% of your cash'],
+  ['grad', 'strength', 'spreadAdj', 'a', 'loan spreads {p}% {higher/lower}'], ['grad', 'strength', 'leadBudget', 'x', '{p}% {bigger/smaller} budgets'], ['grad', 'strength', 'fintechBonus', 'n', '{s}{p} Capital Sourcing'],
+  ['grad', 'cost', 'garnish.rate', 'a', '{p}% of every profit'], ['grad', 'cost', 'opsBonus', 'n', '{s}{p} Ops'],
+  ['trades', 'strength', 'opsBonus', 'n', '{s}{p} Ops'], ['trades', 'strength', 'repairMult', 'x', 'repairs cost {p}% {more/less}'], ['trades', 'strength', 'brokenDiscount', 'a', 'broken goods are {p}% {cheaper/dearer}'],
+  ['trades', 'cost', 'pitchMult', 'x', 'Pitch prices are {p}% {higher/lower}'],
+  ['immigrant', 'strength', 'freightMult', 'x', 'freight {p}% {dearer/cheaper}'], ['immigrant', 'strength', 'circle.pct', 'a', 'up to {p}% of net worth'],
+  ['veteran', 'strength', 'overheadMult', 'x', 'Manager overhead {p}% {higher/lower}'], ['veteran', 'strength', 'shockSoften', 'a', 'hit {p}% {softer/harder}'], ['veteran', 'strength', 'freightSpeed', 'a', 'freight {p}% {faster/slower}'],
+  ['veteran', 'cost', 'trendMult', 'x', 'Trend goods sell {p}% {higher/lower}'],
+  ['heir', 'strength', 'bailout.fraction', 'a', 'clears {p}% of your debt'], ['heir', 'strength', 'spreadAdj', 'a', 'Loan spreads are {p}% {higher/lower}'], ['heir', 'strength', 'leadBudget', 'x', '{p}% {bigger/smaller} budgets'],
+  ['heir', 'cost', 'xpMult', 'x', 'learn {p}% {faster/slower}'],
+  ['creator', 'strength', 'trendMult', 'x', 'Trend goods sell {p}% {higher/lower}'], ['creator', 'cost', 'volatility', 'a', 'swings up to {p}%'],
+  ['gigger', 'strength', 'lotDiscount', 'a', 'Small lots {p}% {cheaper/dearer}'], ['gigger', 'strength', 'xpMult', 'x', '{s}{p}% XP'], ['gigger', 'strength', 'cycleMult', 'x', 'manager cycles {p}% {longer/shorter}'],
+  ['roots', 'strength', 'loyalty', 'a', 'up to {p}% {bigger/smaller} budgets'], ['roots', 'strength', 'overheadMult', 'x', 'overhead is {p}% {higher/lower}'],
+  ['roots', 'cost', 'farLeadMult', 'x', '{p}% {more/fewer} buyers beyond district 8'], ['roots', 'cost', 'freightMult', 'x', 'freight costs {p}% {more/less}'],
+  ['native', 'strength', 'digitalMult', 'x', 'Digital goods {s}{p}% value'], ['native', 'strength', 'lotRefresh', 'a', 'lots refresh {p}% {faster/slower}'],
+  ['native', 'cost', 'scamRate', 'a', '{p}% of buyers are fraudulent'], ['native', 'cost', 'subscription.rate', 'a', 'take {p}% of your cash a month'],
+  ['second', 'strength', 'probeBonus', 'n', '{s}{p} inspection probe'], ['second', 'strength', 'lotDiscountGray', 'a', 'lots {p}% {cheaper/dearer} in gray-market districts'],
+  ['pro', 'cost', 'xpMult', 'x', 'learn {p}% {faster/slower}'], ['pro', 'cost', 'managerCost', 'x', 'managers cost {p}% {more/less}'], ['pro', 'cost', 'digitalMult', 'x', 'digital goods {s}{p}%'],
+];
+test('D3 direction: each clause of a Background\'s claim carries its mod\'s figure, direction word, sign and noun, and no percent is left that no clause accounts for', () => {
+  // the one figure that is no mod: a check costs a share of the buyer's budget (deal.js verifyCost), read from the Deal Room's own plan for a buyer with a budget of 40
+  const px = mk(['native']), pa = put(px, 'pen', 1); px.s.leads[1].push({ id: 'L9', zone: 1, seg: 'student', budget: 40, need: null, born: 0, exp: 999 });
+  const phrase = `(verifying costs ${pc(planFor(px, { kind: 'sell', assetId: pa.id, leadId: 'L9' }).verifyCost / 40)}% of their budget)`;
+  assert.ok(PERKS.native.cost.includes(phrase), PERKS.native.cost);
+  const left = { 'native.cost': PERKS.native.cost.replace(phrase, '') };
+  for (const [id, field, path, kind, tpl] of CLAUSES) {
+    const want = clause(modAt(PERKS[id].mods, path), kind, tpl), key = id + '.' + field, have = (left[key] ??= PERKS[id][field]);
+    assert.ok(have.includes(want), `${key}: expected "${want}" in "${PERKS[id][field]}"`);
+    left[key] = have.replace(want, '');
+  }
+  for (const [key, rest] of Object.entries(left)) assert.doesNotMatch(rest, /\d%/, `${key}: a percent no clause accounts for: "${rest}"`);
+  for (const [id, p] of Object.entries(PERKS)) for (const f of ['strength', 'cost']) if (/\d%/.test(p[f])) assert.ok((id + '.' + f) in left, `${id}.${f} states a percent and has no clause row`);
+});
+
+test('D5 direction: the TikTok and Fed lines say rises or falls, faster or slower, lose or gain, and the sign, as the phases\' effects do', () => {
+  const T = EVENTS.tiktok.phases, F = EVENTS.fed.phases[0].eff, V = EVENTS.tiktok.alert.vars, W = EVENTS.fed.alert.vars;
+  assert.ok(V[0].includes(clause(T[0].eff.demand.mult, 'x', 'Demand for trend goods {rises/falls} {p}%')), V[0]);
+  assert.ok(V[1].includes(clause(T[0].eff.speed.mult, 'x', 'run {p}% {faster/slower}')), V[1]);
+  assert.ok(V[2].includes(clause(T[1].eff.price.mult, 'x', 'trend goods {gain/lose} {p}% of their value')), V[2]);
+  const pct1 = (x) => (x * 100).toFixed(1), word = F.rateBps > 0 ? 'rises' : 'falls', sign = F.rateBps > 0 ? '+' : '-';
+  assert.ok(W[0].includes(`rate ${word} from ${pct1(BASE_RATE)}% to ${pct1(BASE_RATE + F.rateBps / 1e4)}% (${sign}${Math.abs(F.rateBps)} bps)`), W[0]);
+  assert.ok(W[1].includes(`fee on sales ${F.fee > 0 ? 'rises' : 'falls'} from ${pct1(FEES.base)}% to ${pct1(FEES.base + F.fee)}%`), W[1]);
+  assert.ok(W[2].includes(clause(F.overhead, 'x', 'Manager overhead {rises/falls} {p}%')), W[2]);
 });
