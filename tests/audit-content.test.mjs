@@ -1,7 +1,7 @@
 // Content audit: the facts the game's words and numbers promise, checked against the real engine and data (docs/V2_DESIGN.md sections 4, 7.1, 12).
 // Every section here failed on the commit before the fixes it guards: yield assets that lose net worth, an epic nobody can earn, haggle
 // achievements Quick earns by accident, daily bounties that are always neighbours in the list, Codex examples that quote goods and buyers
-// that do not exist, blurbs that promise what the rules do not do, and docs and commands from v1.
+// that do not exist, district rules the lot generator does not draw, and docs and commands from v1.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -253,9 +253,9 @@ test('the words of the haggle goals say what is measured: sales against fair pri
 });
 
 // ===================================================================================================================================
-// The words of districts, quests and the Codex against the rules
+// The rules of districts, and the words of quests and the Codex, against the engine
 
-/** Lots made in a district with a given amount of cash, to measure the shares a blurb quotes. */
+/** Lots made in a district with a given amount of cash, to measure the shares its rules give. */
 function lotShares(zone, cash, n = 12000) {
   const g = new Game({ perks: [], seed: 11 }); g.env.algo = false; g.s.events = []; g.s.cash = cash; g._unlock();
   if (!g.s.zones.includes(zone)) { g.s.zones.push(zone); g.s.leads[zone] = []; g.s.lots[zone] = []; g.s.pool[zone] = ZONES[zone].pool; }
@@ -270,28 +270,21 @@ function lotShares(zone, cash, n = 12000) {
   return s;
 }
 
-test('district blurbs promise only what the rules do', () => {
+test('the lot generator draws the shares each district\'s rules give (fakes, auctions, broken lots, the Flea Market\'s condition)', () => {
   const pawn = lotShares(4, 1000), estate = lotShares(6, 3000), auto = lotShares(7, 8000), row = lotShares(15, 1.1e6), flea = lotShares(2, 100);
-  assert.ok(pawn.fake / pawn.n > 0.19 && pawn.fake / pawn.n < 0.25, `Pawn District: ${pct(pawn.fake / pawn.n)} of lots are fakes (the rule is 22%, the blurb says about one lot in five)`);
-  assert.match(ZONES[4].blurb, /one lot in five/);
+  assert.ok(pawn.fake / pawn.n > 0.19 && pawn.fake / pawn.n < 0.25, `Pawn District: ${pct(pawn.fake / pawn.n)} of lots are fakes (the rule is 22%)`);
   assert.ok(Math.abs(pawn.auction / pawn.n - 1 / 3) < 0.04, 'a third of the Pawn District goes to auction');
-  assert.match(ZONES[4].blurb, /a third of the stock goes to auction/);
   assert.ok(Math.abs(estate.auction / estate.n - 0.5) < 0.08, 'Estate Sales: about half at auction');
-  assert.ok(Math.abs(auto.broken / auto.n - 0.6) < 0.04, `Auto Row: ${pct(auto.broken / auto.n)} of all lots arrive broken (the rule is 60%)`);
-  assert.match(ZONES[7].blurb, /Six in ten lots/); // lots, not cars: the 60% is a share of every lot on the shelf (engine.js `brokenLots`), the tool chest's included
+  assert.ok(Math.abs(auto.broken / auto.n - 0.6) < 0.04, `Auto Row: ${pct(auto.broken / auto.n)} of all lots arrive broken (the rule is 60%)`); // of every lot on the shelf, the tool chest's included (engine.js `brokenLots`), not of cars
   assert.ok(Math.abs(row.auction / row.n - 0.25) < 0.05, 'Real Estate Row: a quarter of the lots are foreclosure auctions');
-  assert.match(ZONES[15].blurb, /a quarter of the lots are foreclosure auctions/);
-  // Flea Market Row: a sealed box is no wilder than any other lot there, so the blurb says gamble on condition, not "junk to treasure"
+  // Flea Market Row: a sealed box is no wilder than any other lot there
   assert.ok(flea.fake === 0 && flea.boxes > 100 && flea.qMin >= 0.85 && flea.qMax <= 1.15, 'a sealed box is worth 85% to 115% of what it looks like and is never fake');
-  assert.doesNotMatch(ZONES[2].blurb, /treasure|junk/);
-  assert.match(ZONES[2].blurb, /gamble on condition/);
 });
 
-test('no blurb or quest calls cycles long where managers get faster', () => {
+test('no quest, achievement or Codex page calls cycles long where managers get faster', () => {
   const g = new Game({ perks: [], seed: 1 });
   const len = (z) => g.cycleLen({ kind: 'broker', zone: z, alloc: 1000, level: 1 });
   assert.ok(len(13) < len(5) && len(15) < len(5), 'a broker\'s cycle is shorter in Corporate Valley and on Real Estate Row than in Metro Hub');
-  for (const z of Object.values(ZONES)) assert.doesNotMatch(z.blurb, /long (sales )?cycles|cycles are long/i, z.name);
   for (const t of [...QUESTS, ...ACHIEVEMENTS]) assert.doesNotMatch(t.desc, /long cycles/i, t.id);
   assert.doesNotMatch(JSON.stringify(CODEX), /long cycles|Cycles are long/);
 });

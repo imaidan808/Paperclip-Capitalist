@@ -13,7 +13,6 @@
 export const zones = {
   9: {
     id: 9, name: 'Industrial Park', short: 'Industrial', icon: '⚙️', theme: 'industrial', tier: 3, teaches: 'scale-compliance',
-    blurb: 'Your first compliance audit arrives here, among machines, metal and medical gear.',
     gate: 25000, scale: 9000, tax: 0.088, friction: 0.132, pool: 250000, speed: 3.4, store: 24,
     leadEvery: 3, lotEvery: 4, urgent: 0.10, auto: true, plots: 4,
     palette: ['#4b5a6a', '#f5c518'],
@@ -22,7 +21,6 @@ export const zones = {
   },
   10: {
     id: 10, name: 'Tech Corridor', short: 'Tech', icon: '💻', theme: 'tech', tier: 3, teaches: 'obsolescence',
-    blurb: 'Software and silicon, where digital goods lose value twice as fast.',
     gate: 50000, scale: 18000, tax: 0.0975, friction: 0.136, pool: 500000, speed: 3.7, store: 25,
     leadEvery: 2, lotEvery: 4, urgent: 0.09, auto: true, plots: 4,
     palette: ['#0a0f1c', '#19e3f2'],
@@ -31,7 +29,6 @@ export const zones = {
   },
   11: {
     id: 11, name: 'Farmland Co-op', short: 'Farmland', icon: '🌾', theme: 'farm', tier: 3, teaches: 'inventory-risk',
-    blurb: 'Food spoils by the day, and food and farm demand follows a 30-day harvest wave.',
     gate: 90000, scale: 30000, tax: 0.107, friction: 0.14, pool: 900000, speed: 4.0, store: 27,
     leadEvery: 4, lotEvery: 4, urgent: 0.09, auto: true, plots: 4,
     palette: ['#2e6b34', '#e3b93c'],
@@ -40,7 +37,6 @@ export const zones = {
   },
   12: {
     id: 12, name: 'Creative Quarter', short: 'Creative', icon: '🎨', theme: 'creative', tier: 3, teaches: 'recurring-revenue',
-    blurb: 'Catalogs and rights that pay you every day you hold them.',
     gate: 150000, scale: 50000, tax: 0.1165, friction: 0.144, pool: 1500000, speed: 4.3, store: 29,
     leadEvery: 3, lotEvery: 4, urgent: 0.08, auto: true, plots: 4,
     palette: ['#9d1c6b', '#8f5bff'],
