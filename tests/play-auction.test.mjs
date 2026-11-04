@@ -198,7 +198,7 @@ test('assist gives the textbook advice, and following it is profitable', () => {
   const p = { ...fieldOf(9, 5), assist: true };
   assert.ok(!('advice' in A.view(A.create({ ...p, assist: false }))));
   const adv = A.view(A.create(p)).advice;
-  assert.match(adv.text, /Do not bid above your own estimate/); assert.match(adv.text, /winner's curse/); assert.equal(adv.concept, 'winners-curse');
+  assert.match(adv.text, /^Stop near \$/); assert.match(adv.text, /winner's curse/); assert.equal(adv.concept, 'winners-curse');
   assert.ok(adv.ceiling < p.estimate, 'the ceiling sits under the estimate');
   assert.ok(A.ceiling({ estimate: 100, rivals: 8 }) < A.ceiling({ estimate: 100, rivals: 3 }) && A.ceiling({ estimate: 100, rivals: 1 }) === 100, 'more rivals, more margin');
   const followed = Array.from({ length: 600 }, (_, i) => { let s = A.create({ ...fieldOf(i, 6), assist: true }); while (!s.done) { const a = A.view(s).advice.action; assert.ok(A.legal(s).some((l) => l.type === a.type)); s = A.act(s, a).state; } return A.result(s); });

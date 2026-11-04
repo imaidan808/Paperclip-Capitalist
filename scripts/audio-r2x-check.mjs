@@ -129,7 +129,7 @@ try {
     ok(sw && sw.name === null && sw.pressed === 'false' && /Dial tone off/.test(sw.text), 'A4: the Dial tone switch is in the room, off, named by its words (no other label): ' + JSON.stringify(sw));
     ok(sw && sw.after === 'deal-sound' && sw.next === 'leave', 'A4: beside Sound, before Leave');
     const ear = await p.eval(`document.getElementById('dial-ear')?.textContent`);
-    ok(/^Prefer to listen\? Turn on Repair dial tone/.test(ear || '') && /Careful: pay more, no timing/.test(ear || ''), 'A4: the line under the dial: ' + ear);
+    ok(/^To follow the marker by ear, turn on Dial tone next to Sound or in Display and sound\./.test(ear || '') && /Careful needs no timing\./.test(ear || ''), 'A4: the line under the dial: ' + ear);
     ok(await p.eval(`document.querySelector('[data-deal="stop"]').getAttribute('aria-describedby') === 'dial-short' && document.activeElement === document.querySelector('[data-deal="stop"]')`), 'A4: the cursor lands on Stop, which is described by the short line');
     const say = await p.eval(`document.querySelector('#dlg [data-say="status"]')?.textContent`);
     ok(/Fix\. A marker moves across a bar by itself/.test(say || '') && /choose Careful: pay more, no timing/.test(say || ''), 'A4: the room\'s own live region, inside the sheet, says it: ' + (say || '').slice(0, 140));

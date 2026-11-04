@@ -125,7 +125,7 @@ test('the result screen reveals what the lot really was, what Quick and an exper
   const lot = g.s.lots[4].find((l) => l.mode === 'fixed'); lot.truth = { q: 0.8137, fake: false, defects: [{ id: 'd0', label: 'SECRETFLAW-a' }] };
   const r = start(g, { kind: 'buy', zone: 4, lotId: lot.id }); r.quickAll(); r.finish();
   const h = html(r);
-  for (const want of ['81% condition, genuine', 'SECRETFLAW-a', 'Quick', 'Expert', 'You', 'Why', '+', 'XP', 'Lesson'.slice(0, 0) + 'lesson', 'Continue']) assert.ok(h.toLowerCase().includes(want.toLowerCase()), `result lacks ${want}`);
+  for (const want of ['81% of its described condition, genuine', 'SECRETFLAW-a', 'Quick', 'Expert', 'You', 'Why', '+', 'XP', 'Lesson'.slice(0, 0) + 'lesson', 'Continue']) assert.ok(h.toLowerCase().includes(want.toLowerCase()), `result lacks ${want}`);
   assert.match(h, /aria-label="How you compare"/); assert.match(h, /class="vs quick/); assert.match(h, /class="vs expert/); assert.match(h, /class="vs you/);
   assert.match(h, /<blockquote class="lesson">/);
   const s = start(g, sell(g)); s.quickAll(); s.finish(); const hs = html(s);
@@ -195,7 +195,7 @@ test('toggling Assist mid-deal reaches the game in progress (haggle advice, a wi
 test('Close: first the three openings, then the moves; only legal moves are enabled; the board shows both numbers and the read', { skip: !HAS }, () => {
   const g = world(), r = start(g, fixedLot(g)); r.quick(); r.next();
   let h = UI.closeHTML(model(r));
-  assert.equal((h.match(/data-deal="anchor"/g) || []).length, 3); assert.match(h, /Lowball/); assert.match(h, /Generous/); assert.ok(!/data-deal="hold"/.test(h)); assert.match(h, /Your read of their limit/);
+  assert.equal((h.match(/data-deal="anchor"/g) || []).length, 3); assert.match(h, /Lowball/); assert.match(h, /Generous/); assert.ok(!/data-deal="hold"/.test(h)); assert.match(h, /Your read of their lowest price/);
   r.act({ type: 'anchor', level: 'low' }); h = UI.closeHTML(model(r));
   for (const a of ['hold', 'concede', 'split', 'accept', 'walk']) assert.match(h, new RegExp(`data-deal="${a}"`));
   assert.match(h, /Raise your offer/); assert.match(h, /neg-track/); assert.match(h, /role="img" aria-label="\d+ rounds? left of \d+"/);

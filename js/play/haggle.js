@@ -43,6 +43,7 @@ const BUY_LINES = {
   analytical: { levYes: 'A comparable listing is evidence. Revising to %t.', levNo: "That listing is no better than mine. %t stands." },
 };
 const money = (x) => '$' + (x >= 100 ? String(Math.round(x)).replace(/\B(?=(\d{3})+(?!\d))/g, ',') : x >= 1 ? x.toFixed(2) : x >= 0.01 ? x.toFixed(3) : Number(x.toPrecision(2)));
+const OPENING = { sell: { high: 'Aim high', fair: 'Fair', low: 'Quick sale' }, buy: { high: 'Generous', fair: 'Fair', low: 'Lowball' } }; // the Close screen's names for the three openings (js/ui/deal.js): the Assist says a control as the screen does (docs/COPY.md rule 6)
 const flip = (role, level) => (role === 'sell' ? level : level === 'high' ? 'low' : level === 'low' ? 'high' : level); // literal <-> frame
 const real = (s, u) => sig((s.role === 'sell' ? u : 2 - u) * s.fair);
 const line = (s, key) => ((s.role === 'buy' && BUY_LINES[s.style]?.[key]) || LINES[s.style][key] || LINES[s.style].far).replace('%t', s.bid == null ? '' : money(real(s, s.bid)));
@@ -201,17 +202,17 @@ function advise(s) { // the textbook move and the reason, from public informatio
   let text, concept = 'zopa';
   if (a.type === 'anchor') {
     concept = 'anchoring';
-    text = `Open ${flip(s.role, a.level)} at ${$(ANCHORS[a.level])}. The first number pulls the whole talk toward it. ${edge}, so this stays inside the zone of possible agreement (ZOPA) without insulting them.` +
-      (s.style === 'hard' ? (sell ? ' Hard bargainers dig in if you open past about 1.25 times their limit.' : ' Hard bargainers dig in if you open far below their lowest price.') : s.style === 'analytical' ? (sell ? ' They know the market price: a number far from fair makes them suspicious.' : ' They know the market price: an offer far under it is dismissed out of hand.') : s.style === 'impulsive' ? (sell ? ' A big first number excites them.' : ' A bold first offer excites them.') : '');
-  } else if (a.type === 'leverage') { concept = 'batna'; text = `Mention your alternative (${$(p.alt)}). It is your BATNA, the best you can do without this deal: a real competing offer makes walking away credible and lifts what they will accept.`; }
-  else if (a.type === 'walk') { concept = 'batna'; text = `Their best (${$(p.bid)}) is worse than your alternative (${$(p.alt)}). Never settle below your BATNA: walk away and take the alternative.`; }
-  else if (a.type === 'accept') text = atFloor ? `You are already at the ${sell ? 'lowest ask' : 'highest offer'} this talk allows (${$(p.ask)}), so there is no step left to take. Their number, ${$(p.bid)}, is the best on offer: take it, or walk away.` : `Their number, ${$(p.bid)}, is already near the edge of their range. ${edge}. Pushing further risks the whole deal. Take it.`;
+    text = `Choose ${OPENING[s.role][flip(s.role, a.level)]} (${$(ANCHORS[a.level])}). That stays inside the zone of possible agreement (ZOPA) without insulting them.` + // the read of their limit is printed above the box and why the first number matters is on the stage: the box says the move and the reason that is its own
+      (s.style === 'hard' ? (sell ? ' Hard bargainers dig in if you open past about 1.25 times their limit.' : ' Hard bargainers dig in if you open far below their lowest price.') : s.style === 'analytical' ? (a.level === 'fair' ? (sell ? ' They know the market price, so a number near fair suits them.' : ' They know the market price, so an offer near fair suits them.') : '') : s.style === 'impulsive' ? (sell ? ' A big first number excites them.' : ' A bold first offer excites them.') : '');
+  } else if (a.type === 'leverage') { concept = 'batna'; text = `Mention your other option (${$(p.alt)}). It is your BATNA, the best you can do without this deal: a real competing offer makes walking away credible and lifts what they will accept.`; }
+  else if (a.type === 'walk') { concept = 'batna'; text = `Their best (${$(p.bid)}) is worse than your other option (${$(p.alt)}). Never settle below your BATNA: walk away and take the other option.`; }
+  else if (a.type === 'accept') text = atFloor ? `You are already at the ${sell ? 'lowest ask' : 'highest offer'} this talk allows (${$(p.ask)}), so there is no step left to take. Their number, ${$(p.bid)}, is the best on offer. ${sell ? 'Accept their offer' : 'Accept their price'}, or walk away.` : `Their number, ${$(p.bid)}, is already near the edge of their range. ${edge}. Pushing further risks the whole deal. ${sell ? 'Accept their offer' : 'Accept their price'}.`;
   else if (a.type === 'hold') { concept = 'patience'; text = s.style === 'hard' ? 'Hold your number. Hard bargainers give ground slowly, but their patience also wears thin; wait, then close the gap in the last rounds.' : "Hold your number for a round and watch how fast their offers move: the pace of a counterparty's numbers shows where they are heading."; }
   else {
     concept = s.style === 'friendly' ? 'reciprocity' : 'zopa';
     const to = $(Math.max(LO, p.ask - STEPS[a.size]));
     const pc = (x) => `${Math.round(x * 100)}%`;
-    text = `${sell ? 'Lower your ask' : 'Raise your offer'} by a ${a.size} step (${money(STEPS[a.size] * fair)}, to ${to}). ${s.style === 'friendly' ? (a.size === 'small' ? 'A friendly counterparty answers a small step in kind.' : `That closes the gap fast, but a friendly counterparty returns only ${pc(RECIP.medium)} of a medium step and ${pc(RECIP.large)} of a large one.`) : s.style === 'impulsive' ? `Impulsive ${sell ? 'buyers' : 'sellers'} cool off: close while they are keen.` : `They are ${TELLS[p.tell] || 'close'}: step toward the zone, not past it.`}`;
+    text = `${sell ? 'Come down' : 'Raise your offer'} by a ${a.size} step (${money(STEPS[a.size] * fair)}, to ${to}). ${s.style === 'friendly' ? (a.size === 'small' ? 'A friendly counterparty answers a small step in kind.' : `That closes the gap fast, but a friendly counterparty returns only ${pc(RECIP.medium)} of a medium step and ${pc(RECIP.large)} of a large one.`) : s.style === 'impulsive' ? `Impulsive ${sell ? 'buyers' : 'sellers'} cool off: close while they are keen.` : `They are ${TELLS[p.tell] || 'close'}: step toward the zone, not past it.`}`;
   }
   return { action: toReal(s, a), text, concept };
 }
@@ -249,7 +250,7 @@ export function result(s) {
   // The model lives in the seller's frame; the words are the player's own. For a buyer the aggressive opening (frame 'high') is a LOW offer.
   const sell = s.role === 'sell', said = flip(s.role, s.anchor);
   const why = s.flag === 'mad' ? (sell ? 'Opening far past their limit soured the talk.' : 'Opening far under their lowest price soured the talk.') : s.flag === 'sus' ? 'A lowball made them suspicious and capped what they would pay.' : s.anchor === 'high' && share >= 70 ? `Your ${said} opening set the frame.` : share < 50 ? 'You gave ground faster than they did.' : 'You read where the zone ended.';
-  return { ...base, deal: true, price, mult, score, reveal: { reserve: real(s, s.R) }, lesson: { concept: s.flag ? 'anchoring' : 'zopa', text: `Closed at ${mult.toFixed(2)} times fair, ${share}% of the way to their limit (${money(real(s, s.R))}). ${why}` } };
+  return { ...base, deal: true, price, mult, score, reveal: { reserve: real(s, s.R) }, lesson: { concept: s.flag ? 'anchoring' : 'zopa', text: `The price landed ${share}% of the way to their limit (${money(real(s, s.R))}). ${why}` } };
 }
 
 export function autoplay(params, skill = 0.5) {

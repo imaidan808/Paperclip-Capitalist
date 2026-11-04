@@ -188,12 +188,12 @@ const lite = (n) => ({ plan: { kind: 'buy' }, summary: { tone: 'info', title: 'N
 test('a table never sat at: Quick and the expert are "kept back" and the box says why, while your own row still says you walked away', () => {
   const h = UI.resultHTML(lite({ hidden: true }));
   assert.equal((h.match(/kept back/g) || []).length, 3, 'two rows and the sentence');
-  assert.match(h, /<dt>Quick<\/dt><dd>kept back<\/dd>/); assert.match(h, /<dt>Expert<\/dt><dd>kept back<\/dd>/); assert.match(h, /<dt>You<\/dt><dd>walks away<\/dd>/, 'you did walk: that row is true');
+  assert.match(h, /<dt>Quick<\/dt><dd>kept back<\/dd>/); assert.match(h, /<dt>Expert<\/dt><dd>kept back<\/dd>/); assert.match(h, /<dt>You<\/dt><dd>walked away<\/dd>/, 'you did walk: that row is true, and in the past');
   assert.match(h, /kept back until you have sat at the table/);
   const shown = UI.resultHTML(lite({ quick: 100, expert: 90, you: null }));
-  assert.ok(!/kept back/.test(shown), 'a table that was sat at shows its figures'); assert.match(shown, /<dt>You<\/dt><dd>walks away<\/dd>/);
+  assert.ok(!/kept back/.test(shown), 'a table that was sat at shows its figures'); assert.match(shown, /<dt>You<\/dt><dd>walked away<\/dd>/);
   const plain = UI.resultHTML(lite({}));
-  assert.ok(!/kept back/.test(plain), 'nothing hidden, nothing said'); assert.equal((plain.match(/walks away/g) || []).length, 3, 'a deal nobody did reads as it always did');
+  assert.ok(!/kept back/.test(plain), 'nothing hidden, nothing said'); assert.equal((plain.match(/walk(s|ed) away/g) || []).length, 3, 'a deal nobody did reads as it always did'); assert.match(plain, /<dt>Quick<\/dt><dd>walks away<\/dd>/); assert.match(plain, /<dt>You<\/dt><dd>walked away<\/dd>/);
   const net = UI.resultHTML({ ...lite({ hidden: true, net: 0, quickNet: null, expertNet: null }) });
   assert.ok(!/Against what it was really worth/.test(net), 'no "$0" for figures that are not there');
 });

@@ -42,7 +42,7 @@ test('the result says where you stand against Quick, in words, and its numbers c
   assert.match(low, /class="rver win">Better than Quick/, 'when lower is better, lower wins');
   const walked = UI.resultHTML(result({ you: null }));
   assert.ok(!/rver/.test(walked), 'a walk-away has nothing to compare');
-  assert.match(walked, /walks away/);
+  assert.match(walked, /<dt>You<\/dt><dd>walked away<\/dd>/, 'the one blank row is yours, and you did the walking');
   const h = UI.resultHTML(result({ you: 130 }));
   assert.match(h, /data-count="130" data-fmt="money"/); assert.match(h, /data-count="60" data-fmt="int" data-pre="\+" data-post=" XP">\+60 XP</, 'the text is whole before it counts');
   assert.match(h, /class="vs you/); assert.match(h, /<blockquote class="lesson">/);

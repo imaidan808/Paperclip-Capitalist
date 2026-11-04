@@ -281,7 +281,7 @@ S('haggle.close', { bus: 'game', tier: 'medium', cd: 600, pan: 'center',
   build: (p) => p.walk ? [swoosh(0, 0.2, 1600, 500, 0.2), thump('D3', 'D2', 0.22, 0.5, 0.1), click(0.25, 0.25, 2600), ...body(0.22, 0.35, 'A4', 0.1, 'D5')] : [thump('A2', 'D2', 0, 0.5, 0.08), thump('A2', 'D2', 0.09, 0.5, 0.08), ...coin('D6', 0.18, 0.3), ...stamp(0.22, 0.6), ...body(0.09, 0.5, 'A4', 0.28, null, 0.6)] });
 
 S('haggle.tell', { bus: 'game', tier: 'tiny', cd: 300, pan: 'center',
-  trigger: 'After each counter, their stance changes ("far apart", "getting closer", "very close")',
+  trigger: 'After each counter, their stance changes ("far from your number", "getting closer", "very close")',
   meaning: 'Warmer or colder: the interval shrinks and the tone opens as you close in', recipe: 'a two-note chord that narrows: far D3 + F#5 behind a 700 Hz lowpass; closer D4 + A4 behind 2 kHz; very close A4 + A4 (+7 cents, a slow beat) wide open', visual: 'The words "They are very close"',
   variants: { far: { v: 'far' }, reach: { v: 'reach' }, near: { v: 'near' } }, dur: 0.6,
   build: (p) => ({ far: () => [{ k: 'tone', f: 'D3', a: 0.01, d: 0.3, g: 0.16, lp: [700, 0.7] }, { k: 'tone', f: 'F#4', a: 0.01, d: 0.3, g: 0.32, lp: [700, 0.7] }, { k: 'tone', f: 'F#5', a: 0.01, d: 0.3, g: 0.12, lp: [700, 0.7] }], reach: () => [{ k: 'tone', f: 'D4', a: 0.01, d: 0.3, g: 0.34, lp: [2000, 0.7] }, { k: 'tone', f: 'A4', a: 0.01, d: 0.3, g: 0.3, lp: [2000, 0.7] }, { k: 'tone', f: 'D5', a: 0.01, d: 0.3, g: 0.14, lp: [2000, 0.7] }], near: () => [{ k: 'tone', f: 'A4', a: 0.01, d: 0.4, g: 0.32 }, { k: 'tone', f: 'A4', det: 7, a: 0.01, d: 0.4, g: 0.32 }, gls('A5', 0, 0.12, 0.3)] })[p.v]() });
