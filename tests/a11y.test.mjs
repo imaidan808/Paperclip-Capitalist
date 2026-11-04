@@ -24,6 +24,17 @@ for (const [name, T] of [['standard', base], ['high contrast', high]]) {
   });
 }
 
+test('a shut Release keeps readable text: its label says what opens it, and the global .5 opacity left the red at 2.5:1 (browser pass, finding 3)', () => {
+  const crew = readFileSync(new URL('../css/ui-crew.css', import.meta.url), 'utf8'), op = +/\.cr-acts \.danger-text\[aria-disabled="true"\] \{ opacity: ([.\d]+);/.exec(crew)?.[1];
+  assert.ok(op > 0.5 && op < 1, 'a shut Release has an opacity of its own');
+  const hex = (h) => { h = h.length === 4 ? '#' + [...h.slice(1)].map((c) => c + c).join('') : h; const n = parseInt(h.slice(1), 16); return [16, 8, 0].map((s) => (n >> s) & 255); };
+  const L = (rgb) => { const [r, g, b] = rgb.map((c) => { c /= 255; return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4; }); return 0.2126 * r + 0.7152 * g + 0.0722 * b; };
+  for (const [name, T] of [['standard', base], ['high contrast', high]]) {
+    const fg = hex(T.red), bg = hex(T.panel2), shown = fg.map((c, i) => c * op + bg[i] * (1 - op)), [a, b] = [L(shown), L(bg)].sort((p, q) => q - p);
+    assert.ok((a + 0.05) / (b + 0.05) >= 4.5, `${name}: the shut Release's red at opacity ${op} on its card is ${((a + 0.05) / (b + 0.05)).toFixed(2)}:1`);
+  }
+});
+
 test('coloured buttons keep readable text', () => {
   assert.ok(ratio('#04210f', base.green) >= 4.5, 'green button');
   assert.ok(ratio('#2a0503', base.red) >= 4.5, 'danger button');

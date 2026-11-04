@@ -36,6 +36,7 @@ const ANGLE = { prestige: ['👑', 'Prestige', 'Status, standing, how it looks t
 const PROBE = { look: ['👀', 'Look it over', 'Cheap. Catches obvious wear.'], serial: ['🔎', 'Check the serial', 'The best test for a counterfeit.'], power: ['⚡', 'Power it up', 'The sharpest read on condition.'], papers: ['📄', 'Read the paperwork', 'A cheap second opinion on both.'], expert: ['🧑‍🔧', 'Hire an expert', 'Costly, but needs no skill of yours.'] };
 const MOOD = { steady: 'steady', loud: 'loud', quiet: 'quiet' };
 const MOOD_TIP = { steady: 'Patient. Raises one step at a time.', loud: 'Aggressive or bluffing. You cannot tell which until it folds.', quiet: 'Waits, then bids late.' };
+const ESTIMATE_TIP = 'Rivals bid on estimates of their own, and the highest guess usually wins. Yours is a guess too, sharper with Capital Sourcing and a good read.'; // (the winner's curse: the page says "A guess: bid below it." where Assist does not, and this is why: on hover, and in the fold for a keyboard and a finger)
 
 // ------------------------------------------------------------------ the frame
 export const titleOf = (m) => {
@@ -189,10 +190,10 @@ export function bidHTML(m) {
   const end = m.stageDone ? `<div class="callout ${m.res && m.res.won ? 'good' : ''}">${esc(m.res && m.res.won ? `You won at ${money(m.res.price)}.` : 'You are out.')}</div>` : '';
   const past = v.budget != null && v.nextBid > v.budget, hint = !m.stageDone && m.assist && m.advice; // with the Assist hint on the sheet it says this, with the figure
   const budget = past && !hint ? `<div class="callout warn" title="${LIMIT_TIP}">The next bid is past your limit. You can only drop out.</div>` : '';
-  const seen = [...new Set(v.rivals.map((r) => r.mood))].filter((k) => MOOD_TIP[k]); // the hover on a mood is the mouse's way to its meaning; this fold is the keyboard's, the finger's and a screen reader's
-  const moods = m.stageDone || !seen.length ? '' : `<details class="deal-more"><summary>What the moods mean</summary><ul class="hints">${seen.map((k) => `<li><b>${MOOD[k]}.</b> ${esc(MOOD_TIP[k])}</li>`).join('')}</ul></details>`;
+  const seen = [...new Set(v.rivals.map((r) => r.mood))].filter((k) => MOOD_TIP[k]); // the hover on a mood (and on the estimate) is the mouse's way to its meaning; this fold is the keyboard's, the finger's and a screen reader's
+  const moods = m.stageDone ? '' : `<details class="deal-more"><summary>What the estimate${seen.length ? ' and the moods' : ''} mean${seen.length ? '' : 's'}</summary><ul class="hints"><li><b>Your estimate.</b> ${esc(ESTIMATE_TIP)}</li>${seen.map((k) => `<li><b>${MOOD[k]}.</b> ${esc(MOOD_TIP[k])}</li>`).join('')}</ul></details>`;
   return panel(m, 'bid', 'Bid',
-    `<p class="small" title="Rivals bid on estimates of their own, and the highest guess usually wins. Yours is a guess too, sharper with Capital Sourcing and a good read.">Your estimate: <b>${money(v.estimate)}</b>.</p>${ladder}<ul class="rivals">${riv}</ul>${moods}${ev ? `<ul class="evlog">${ev}</ul>` : ''}${budget}${m.stageDone ? '' : advice(m, '', past ? LIMIT_TIP : '')}${act}${quickNote(m)}${end}`);
+    `<p class="small" title="${esc(ESTIMATE_TIP)}">Your estimate: <b>${money(v.estimate)}</b>.${m.stageDone || hint ? '' : ' A guess: bid below it.'}</p>${ladder}<ul class="rivals">${riv}</ul>${moods}${ev ? `<ul class="evlog">${ev}</ul>` : ''}${budget}${m.stageDone ? '' : advice(m, '', past ? LIMIT_TIP : '')}${act}${quickNote(m)}${end}`);
 }
 
 // ------------------------------------------------------------------ Fix (Repair)

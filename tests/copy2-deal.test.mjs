@@ -15,6 +15,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { makeGame } from './bot.mjs';
 import { ASSETS, BUYERS } from '../js/config.js';
+import { CODEX } from '../js/meta/codex.js';
 import { FAKE_VALUE, fitOf } from '../js/market.js';
 import * as D from '../js/deal.js';
 import * as UI from '../js/ui/deal.js';
@@ -124,13 +125,14 @@ test('D1: the hover words are not on hover alone: a fold for the probes and the 
   assert.ok(!f2.body.includes('counts against you') && visible(pitch).includes('A claim they cannot back counts against you.'), 'the rule for the bars is printed once, under the cards, and not again in the fold');
   const rivals = ['steady', 'loud', 'quiet'].map((m, id) => ({ id, name: `R${id}`, mood: m, active: true, droppedAt: null, high: false }));
   const bid = (o) => UI.bidHTML({ plan: { lot: { price: 100, mode: 'auction' } }, view: bidView(o), stageDone: false }), f3 = fold(bid({ rivals }));
-  assert.equal(f3.summary, 'What the moods mean');
+  assert.equal(f3.summary, 'What the estimate and the moods mean');
   for (const t of ['Patient. Raises one step at a time.', 'Aggressive or bluffing. You cannot tell which until it folds.', 'Waits, then bids late.']) assert.ok(f3.body.includes(t), t);
+  assert.ok(f3.body.includes('Your estimate. Rivals bid on estimates of their own, and the highest guess usually wins. Yours is a guess too, sharper with Capital Sourcing and a good read.'), 'and the estimate, in the words of its hover: the caveat a bid turns on is not on hover alone');
   assert.equal(fold(bid({ rivals: [rivals[0], rivals[0]] })).body.split('Patient.').length - 1, 1, 'a mood is listed once however many rivals have it');
-  assert.equal(fold(bid({ rivals: [] })), null, 'no rivals, no fold');
+  const f4 = fold(bid({ rivals: [] })); assert.equal(f4.summary, 'What the estimate means'); assert.ok(f4.body.startsWith('Your estimate.') && !f4.body.includes('Patient.'), 'no rivals, only the estimate in the fold');
   const m1 = model(buy); m1.stageDone = true; assert.equal(fold(UI.readHTML(m1)), null, 'a Read that is done has no key to its probes');
   const m2 = model(sale); m2.stageDone = true; assert.equal(fold(UI.pitchHTML(m2)), null, 'and a Pitch that is done none to its angles');
-  assert.equal(UI.bidHTML({ plan: { lot: { price: 100, mode: 'auction' } }, view: bidView({ rivals }), stageDone: true, res: { won: false } }).includes('What the moods mean'), false, 'nor a Bid that is over');
+  assert.equal(UI.bidHTML({ plan: { lot: { price: 100, mode: 'auction' } }, view: bidView({ rivals }), stageDone: true, res: { won: false } }).includes('What the estimate'), false, 'nor a Bid that is over');
 });
 
 // =====================================================================================================================================================
@@ -479,8 +481,13 @@ test('D5: an estimate is a guess, sharper with Capital Sourcing and with a good 
   for (let i = 1; i <= 300; i++) { const a = D.auctionParams(g, z, lot, { seed: i }), b = D.auctionParams(g, z, lot, { seed: i, read: { estimate: { quality: 0.8, fakeProb: 0 }, confidence: 0.9 } }); blind += Math.abs(a.estimate - a.trueValue); informed += Math.abs(b.estimate - b.trueValue); }
   assert.ok(informed < blind * 0.6, 'a confident, right read pulls the estimate toward the truth');
   const h = UI.bidHTML({ plan: { lot: { price: 100, mode: 'auction' } }, view: bidView({ price: null, nextBid: 60, budget: 140, high: null, actions: [{ type: 'bid' }, { type: 'drop' }], round: 0 }), stageDone: false });
-  assert.match(h, /<p class="small" title="Rivals bid on estimates of their own, and the highest guess usually wins\. Yours is a guess too, sharper with Capital Sourcing and a good read\.">Your estimate: <b>\$100<\/b>\.<\/p>/);
+  assert.match(h, /<p class="small" title="Rivals bid on estimates of their own, and the highest guess usually wins\. Yours is a guess too, sharper with Capital Sourcing and a good read\.">Your estimate: <b>\$100<\/b>\. A guess: bid below it\.<\/p>/);
   assert.ok(!/\(it could be off\)|Opening bid|held by/.test(h));
+  // what a bid turns on is printed (docs/COPY.md, rule 9): a phone has no hover, and with Assist off nothing else says the estimate is a guess to bid under (the Codex page of the winner's curse says it in these words)
+  assert.ok(visible(h).includes('Your estimate: $100 . A guess: bid below it.')); assert.match(CODEX.find((c) => c.id === 'winners-curse').summary, /Bid below your estimate\.$/);
+  const assisted = UI.bidHTML({ plan: { lot: { price: 100, mode: 'auction' } }, view: bidView({ price: null, nextBid: 60, budget: 140, high: null, actions: [{ type: 'bid' }, { type: 'drop' }], round: 0 }), advice: { text: "Stop near $95.00: your estimate less a margin for the winner's curse. The next bid, $60.00, is inside that." }, assist: true, stageDone: false });
+  assert.ok(!visible(assisted).includes('A guess: bid below it.') && visible(assisted).includes('margin for the winner\'s curse'), 'with Assist on the box says it, once');
+  assert.ok(!visible(UI.bidHTML({ plan: { lot: { price: 100, mode: 'auction' } }, view: bidView({ actions: [], done: true }), stageDone: true, res: { won: false } })).includes('A guess'), 'and a bid that is over has nothing to advise');
 });
 
 test('D5: the auctioneer says only "Lot up for bids", the guide price is printed once, and a lot you lose costs nothing', () => {

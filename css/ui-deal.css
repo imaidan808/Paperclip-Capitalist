@@ -112,6 +112,7 @@ dialog.deal:focus-visible { outline-offset: -4px; } /* the sheet fills a phone's
 .angle .apick { position: absolute; top: -.6rem; right: -.45rem; display: grid; place-items: center; width: 1.5rem; height: 1.5rem; border-radius: 50%; background: var(--gold); color: var(--on-gold); border: 2px solid var(--bg); font: 800 .8rem ui-monospace, Menlo, monospace; }
 .angle .abar { display: block; width: 100%; height: .5rem; margin-top: .25rem; background: var(--bg); border: 1px solid var(--line); }
 .angle .abar i { display: block; height: 100%; background: var(--green); background-image: repeating-linear-gradient(90deg, transparent 0 calc(20% - 2px), var(--bg) calc(20% - 2px) 20%); }
+@media (forced-colors: active) { .angle .abar i { forced-color-adjust: none; background-color: Highlight; background-image: none; } } /* the bar is the only sign of how well the goods back an angle: forced colors paint a fill in the Canvas color, so it stays a system color */
 .angle .ahint { margin-top: .15rem; padding: .02rem .45rem; font-size: .68rem; line-height: 1.35; color: var(--cyan); border: 1px solid var(--cyan); border-radius: 99px; }
 .angle .ahint::before { content: "\2605\00a0"; }
 .hints { margin: 0; padding-left: 1.1rem; font-size: .84rem; } .hints li::marker { color: var(--cyan); }

@@ -324,6 +324,12 @@ test('css/ui-deal.css uses tokens only: every var() exists, no hex colours, no !
   const index = readFileSync(new URL('../index.html', import.meta.url), 'utf8'); assert.match(index, /css\/ui-deal\.css/);
 });
 
+test('css/ui-deal.css keeps the angle bars visible in forced colors: the bar is the only printed sign of how well the goods back an angle', () => {
+  const css = readFileSync(new URL('../css/ui-deal.css', import.meta.url), 'utf8');
+  assert.match(css, /@media \(forced-colors: active\) \{ \.angle \.abar i \{ forced-color-adjust: none; background-color: Highlight; background-image: none; \} \}/, 'a fill that forced colors would paint in the Canvas color is a system color instead');
+  assert.ok(css.indexOf('@media (forced-colors: active) { .angle .abar i') > css.indexOf('.angle .abar i { display: block'), 'and the rule comes after the fill it replaces');
+});
+
 test('the keyboard: every control is a real button or input, Stop answers Space and Enter, and focus goes to the new stage', () => {
   const src = readFileSync(new URL('../js/ui/deal.js', import.meta.url), 'utf8');
   assert.ok(!/<(div|span|li)[^>]*data-deal=/.test(src), 'actions are on buttons, never on divs');

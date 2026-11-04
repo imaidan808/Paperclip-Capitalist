@@ -39,6 +39,7 @@
 .cr-acts { display: flex; flex-wrap: wrap; gap: .4rem; }
 .cr-acts .btn { flex: 1 1 auto; }
 .cr-acts .danger-text { color: var(--red); border-color: var(--red); }
+.cr-acts .danger-text[aria-disabled="true"] { opacity: .85; border-style: dashed; min-height: 2rem; padding-block: .25rem; font-size: .78rem; } /* a Release that is shut is a state, its label says what opens it: a dashed line, not a move's height (the global .5 left its red at 2.5:1; .85 is 4.8:1) */
 .cr-note, .cr-why { margin: 0; border-left: 3px solid var(--field); padding-left: .5rem; }
 .cr-note { border-left-color: var(--gold); }
 .cr-why { color: var(--mute); }

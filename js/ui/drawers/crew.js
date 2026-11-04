@@ -110,6 +110,7 @@ function pipeCard(v, p, cache) {
   const left = Math.max(1, p.len - p.prog);
   const relTip = stt.key !== 'running' ? 'Opens when the cycle has ended and no other begins.'
     : alloc > 0 ? `Its next cycle starts in the hour this one ends, cash permitting. Set capital to 0 in Edit lane to stop after this one, in ${left} h.` : `Opens when this cycle ends, in ${left} h.`;
+  const relWord = !p.inflight ? '' : stt.key !== 'running' ? ': mid-cycle' : alloc > 0 ? ': needs capital at 0' : `: opens in ${left} h`; // what opens it, on the button: a funded manager's wait never ends by itself (the hover has the detail)
   const upLine = up.maxed ? '' : `<p class="cr-up small" title="${esc(upTip)}">${up.gain > 0 ? `Level ${p.level + 1} pays back in about ${Math.max(1, Math.round(up.payback))} days once funded to ${m(up.nextCap)}.` : `Level ${p.level + 1}: this lane cannot use more capital profitably yet.`}</p>`;
   return `<article class="cr-card${flash ? ' cr-focus' : ''}" data-pipe="${p.id}" data-st="${stt.key}" tabindex="-1" aria-label="${esc(K.name)}, level ${p.level}, ${esc(Z.name)}, ${esc(stt.label)}">
     <header class="cr-top"><span class="cr-ic" aria-hidden="true">${K.icon}</span>
@@ -127,9 +128,9 @@ function pipeCard(v, p, cache) {
       ${upBtn}
       ${alloc < cap - 0.5 ? `<button class="btn ghost" data-act="crew-fill" data-id="${p.id}" data-fid="cf-${p.id}">Fund full ${m(cap)}</button>` : ''}
       <button class="btn ghost" data-act="crew-pause" data-id="${p.id}" data-fid="cp-${p.id}">${p.status === 'paused' ? 'Resume' : 'Pause'}</button>
-      <button class="btn ghost danger-text" data-act="crew-rel" data-id="${p.id}" data-fid="cr-${p.id}" ${p.inflight ? `aria-disabled="true" title="${relTip}"` : ''}>Release${p.inflight ? ': mid-cycle' : ''}</button></div>
+      <button class="btn ghost danger-text" data-act="crew-rel" data-id="${p.id}" data-fid="cr-${p.id}" ${p.inflight ? `aria-disabled="true" title="${relTip}"` : ''}>Release${relWord}</button></div>
     ${upLine}
-    ${up.why && !up.maxed ? `<p class="cr-why small">${up.why}</p>` : ''}
+    ${up.why && !up.maxed ? `<p class="cr-why small"><b>Level ${p.level + 1}:</b> ${up.why}</p>` : ''}
   </article>`;
 }
 
