@@ -4,6 +4,7 @@ import { ZONES, ZONE_IDS, ZONE_COUNT, ASSETS, BUYERS, PERKS, PERK_IDS, EVENTS, A
 import { gini, fmtMoney as money, nicheKey, demandOf } from '../market.js';
 import { median } from '../cohort.js';
 import { $, esc, setHTML, delegate, dlg, toast, settingsDialog } from './common.js';
+import { avatarHTML } from '../avatar.js';
 import { FOLLOW_NOTE, RECOVER_WAIT_SECONDS } from './room-notes.js';
 
 export const PRESETS = [
@@ -178,9 +179,9 @@ export function heatHTML(S, U, students, dist) {
   const max = Math.max(1, ...Object.values(agg));
   const rows = shown.map((c) => `<tr><th scope="row">${esc(ASSETS[c].name)}</th>${buyers.map((b) => { const n = agg[nicheKey(z, c, b)] || 0, a = Math.min(0.6, n / max * 0.6); return `<td class="mono right" style="background:rgba(255,125,117,${a.toFixed(2)})">${n ? Math.round(n) || '&lt;1' : ''}</td>`; }).join('')}</tr>`).join('');
   return `<div class="row"><label for="hz">District</label><select id="hz" data-change="hzsel" data-fid="hz">${ZONE_IDS.map((n) => `<option value="${n}" ${n === z ? 'selected' : ''}>${n}. ${esc(ZONES[n].name)}${dist[n] ? ` (${dist[n]} here)` : ''}</option>`).join('')}</select></div>
-    <div class="scroll gap"><table class="tbl"><caption class="sr">Niche saturation in ${esc(ZONES[z].name)}: 48-hour transaction counts by asset class and buyer</caption><thead><tr><th scope="col">Asset class</th>${buyers.map((b) => `<th scope="col" title="${esc(BUYERS[b].name)}">${BUYERS[b].icon}<span class="sr">${esc(BUYERS[b].name)}</span></th>`).join('')}</tr></thead><tbody>${rows || `<tr><td class="mute" colspan="${buyers.length + 1}">Nobody has traded here yet.</td></tr>`}</tbody></table></div>
+    <div class="scroll gap"><table class="tbl"><caption class="sr">Niche saturation in ${esc(ZONES[z].name)}: 48-hour transaction counts by asset class and buyer</caption><thead><tr><th scope="col">Asset class</th>${buyers.map((b) => `<th scope="col" title="${esc(BUYERS[b].name)}">${avatarHTML(BUYERS[b].name, BUYERS[b].style, 'sm')}<span class="sr">${esc(BUYERS[b].name)}</span></th>`).join('')}</tr></thead><tbody>${rows || `<tr><td class="mute" colspan="${buyers.length + 1}">Nobody has traded here yet.</td></tr>`}</tbody></table></div>
     <p class="tiny mute">Darker means more of the class sold to the same buyer in the last 48 virtual hours${classes.length > shown.length ? ` (${shown.length} busiest of ${classes.length} classes)` : ''}.</p>
-    ${fold(U, 'buyers', 'Buyer key', `<p class="tiny mute">${buyers.map((b) => BUYERS[b].icon + ' ' + esc(BUYERS[b].name)).join(' &middot; ')}</p>`)}`;
+    ${fold(U, 'buyers', 'Buyer key', `<p class="tiny mute">${buyers.map((b) => avatarHTML(BUYERS[b].name, BUYERS[b].style, 'sm') + ' ' + esc(BUYERS[b].name)).join(' &middot; ')}</p>`)}`;
 }
 
 /** Where the class is: students by the highest district they have opened, as a column chart with a text equivalent. */

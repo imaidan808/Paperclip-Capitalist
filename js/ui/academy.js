@@ -49,7 +49,7 @@ export function claimPendingRewards(game, store = kv) { return claimPending(stor
 const LETTERS = ['A', 'B', 'C', 'D'];
 const pretty = (id) => String(id).replace(/-/g, ' ').replace(/^./, (c) => c.toUpperCase());
 const para = (t) => `<p>${esc(t)}</p>`;
-const entryOf = (id, lookup) => lookup?.(id) || { id, title: pretty(id), icon: '', summary: '' };
+const entryOf = (id, lookup) => lookup?.(id) || { id, title: pretty(id), summary: '' };
 
 /**
  * The scene before a lesson: its title, one line of setting, one line of facts, the course's progress and Begin. What the lesson teaches is not said here: the player finds it out by playing,
@@ -62,7 +62,7 @@ export function introHTML(m, { index, total, st, replay, missions = [] }) {
   const facts = [`About ${Math.max(1, Math.round(+m.minutes || 2))} min`, ZONES[m.zone] ? ZONES[m.zone].name : ''].filter(Boolean).join(' · ');
   return `<section class="ac-intro panel" aria-labelledby="ac-h">
     <p class="ac-eyebrow mono">Academy &middot; Lesson ${index + 1} of ${total}${replay ? ' &middot; replay' : ''}</p>
-    <h1 id="ac-h" tabindex="-1"><span aria-hidden="true">${esc(m.icon || '')}</span> ${esc(m.title)}</h1>
+    <h1 id="ac-h" tabindex="-1">${esc(m.title)}</h1>
     <p class="ac-scene">${esc(m.intro || '')}</p>
     <p class="ac-meta small mute">${esc(facts)}</p>
     <ol class="ac-pips" aria-label="Your lessons">${pips}</ol>
@@ -151,7 +151,7 @@ export function teachHTML(m, state) {
 export function rewardHTML(m, paid, lookup, { last, skipped, replay, index, total, only } = {}) {
   const ids = [...(paid.newCodex || []), ...(paid.knownCodex || [])];
   const chips = [paid.xp ? `<li class="chip good" data-count="${+paid.xp || 0}" data-fmt="int" data-pre="+" data-post=" XP">+${paid.xp} XP</li>` : '', paid.points ? `<li class="chip good">+${paid.points} skill point</li>` : ''].join('');
-  const cards = ids.map((id, n) => { const e = entryOf(id, lookup), fresh = (paid.newCodex || []).includes(id); return `<li class="ac-cxcard" style="--n:${n}"><span class="ac-cxi" aria-hidden="true">${esc(e.icon || '')}</span><div><b>${esc(e.title)}</b>${fresh ? ' <span class="chip info">New</span>' : ''}<p class="small mute">${esc(e.summary || '')}</p></div></li>`; }).join('');
+  const cards = ids.map((id, n) => { const e = entryOf(id, lookup), fresh = (paid.newCodex || []).includes(id); return `<li class="ac-cxcard" style="--n:${n}"><div><b>${esc(e.title)}</b>${fresh ? ' <span class="chip info">New</span>' : ''}<p class="small mute">${esc(e.summary || '')}</p></div></li>`; }).join('');
   const note = replay ? 'A replay pays nothing new. The pages stay in your Codex.' : skipped ? 'Play it from the Codex to earn its XP and skill point.' : paid.pending ? 'They arrive when your run begins.' : 'Added to your run.';
   return `<p class="ac-eyebrow mono">Lesson ${(index ?? 0) + 1} of ${total ?? ''} &middot; Complete</p>
     <h2 id="ac-sh" tabindex="-1">${esc(m.title)}: ${skipped ? 'explained' : 'done'}</h2>
@@ -234,7 +234,7 @@ export function mountAcademy(root, S, { onDone, onSkip, only, missions, store = 
 
     let layer = null, ringEl = null, cardEl = null, bodyEl = null, stripEl = null, stripOn = false; // the card is a frame with a caret on its edge; its text scrolls in bodyEl, so the caret is never clipped
 
-    U.tracker = () => { const c = stranded || coachFor(m, run); return { title: m.title, desc: shortSay(c.say), icon: m.icon, p: Math.min(run.i, steps.length), n: steps.length, drawer: null }; };
+    U.tracker = () => { const c = stranded || coachFor(m, run); return { title: m.title, desc: shortSay(c.say), p: Math.min(run.i, steps.length), n: steps.length, drawer: null }; };
     sb.game.onEvent = (evt) => ctx.emit(evt);  // the sandbox feeds the steps, never quests, achievements or the Codex
     const emit0 = sb.emit.bind(sb);
     sb.emit = (type, data) => { if (type === 'note' && typeof data?.level === 'number') return; emit0(type, data); }; // a pretend level-up is not news

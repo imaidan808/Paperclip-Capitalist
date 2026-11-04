@@ -1,7 +1,7 @@
 // Empty building plots and the pipelines built on them (a building per pipeline, its height the level). LEGACY drawers.
 // Owner: T3 BUILDINGS (docs/RENDER_PLAN.md).
 import { PIPE } from '../config.js';
-import { P, box, quad, shadow, cyl, tone, shade, clamp, diamond, facePoint, windows } from './iso.js';
+import { P, box, quad, shadow, cyl, tone, shade, clamp, diamond, windows } from './iso.js';
 import { DIST, PLOTS } from './layout.js';
 import { PIP_ZOOM } from './common.js';
 import './plots.js'; // the V2 drawers of the 'plot' and 'pipe' layers (registerLayer): used while those flags are v2
@@ -30,7 +30,6 @@ export const plotMethods = {
     const f = box(ctx, pl[0] + 0.3, pl[1] + 0.3, 2.4, 2.4, h, tone(col), { z: 1, line: hov ? '#fff' : undefined });
     if (!this.far) {
       windows(ctx, f.left, 3, floors + 1, '#16264a', running ? 0.8 + 0.2 * this.night : this.night * 0.5); windows(ctx, f.right, 3, floors + 1, '#10203f', running ? 0.8 : this.night * 0.5);
-      ctx.fillStyle = '#e8eef6'; ctx.font = '800 11px ui-monospace, Menlo, monospace'; ctx.textAlign = 'center'; const sp = facePoint(f.left, 0.5, 0.04); ctx.fillText(K.icon, sp[0], sp[1] - 2);
     }
     box(ctx, pl[0] + 0.1, pl[1] + 0.1, 2.8, 2.8, 4, tone(shade(col, 0.8)), { z: h + 1 });
     if (running && !this.reduced() && !this.far) { cyl(ctx, pl[0] + 2.2, pl[1] + 0.8, 0.22, 16, tone('#6a6f78'), h + 5); const [cx, cy] = P(pl[0] + 2.2, pl[1] + 0.8, h + 21); for (let i = 0; i < 4; i++) { const k = ((this.vt / 1700) + i / 4) % 1; ctx.fillStyle = `rgba(235,240,250,${0.38 * (1 - k)})`; ctx.beginPath(); ctx.arc(cx + k * 10, cy - k * 38, 3 + k * 8, 0, 7); ctx.fill(); } }

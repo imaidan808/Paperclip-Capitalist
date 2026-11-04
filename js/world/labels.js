@@ -87,16 +87,17 @@ export class Labels {
     });
   }
 
-  /** A buyer's speech bubble: the segment's icon, the budget, a tail pointing down at the buyer, and an urgent badge. The anchor is where the tail begins, on the bubble's lower edge. */
-  bubble(icon, text, urgent, hov, s) {
-    return this.sprite(`b|${icon}|${text}|${urgent ? 1 : 0}|${hov ? 1 : 0}|${s}|${this.dpr}`, () => {
+  /** A buyer's speech bubble: the buyer's disc (the initial `ch` on the style's `tone`, as css .ava draws it), the budget, a tail pointing down at the buyer, and an urgent badge. The anchor is where the tail begins, on the bubble's lower edge. */
+  bubble(ch, tone, text, urgent, hov, s) {
+    return this.sprite(`b|${ch}|${tone}|${text}|${urgent ? 1 : 0}|${hov ? 1 : 0}|${s}|${this.dpr}`, () => {
       const f = mono(800, 11 * s), w = Math.ceil(this.width(f, text) + 32 * s), h = Math.ceil(22 * s), lw = this.lw(urgent ? 1.33 : 1), tail = 6 * s;
       const sp = this.make(w, h + tail, (g) => {
         roundRect(g, 0.5, 2.5, w, h, 7 * s); g.fillStyle = 'rgba(2,4,10,.4)'; g.fill();
         roundRect(g, lw / 2, lw / 2, w - lw, h - lw, 7 * s); g.fillStyle = 'rgba(16,20,28,.95)'; g.fill(); g.strokeStyle = urgent ? '#ffd36e' : hov ? '#ffffff' : '#5b6b85'; g.lineWidth = lw; g.stroke();
         g.beginPath(); g.moveTo(w / 2 - 4 * s, h - lw / 2); g.lineTo(w / 2 + 4 * s, h - lw / 2); g.lineTo(w / 2, h + tail); g.closePath(); g.fill();
-        g.textAlign = 'left'; g.textBaseline = 'middle'; g.font = sans(14 * s); g.fillStyle = '#fff'; this.text(g, icon, 5 * s, h / 2 + 1);
-        g.font = f; g.fillStyle = urgent ? '#ffd36e' : '#e8eef6'; this.text(g, text, 23 * s, h / 2 + 1);
+        g.beginPath(); g.arc(12.5 * s, h / 2, 7.5 * s, 0, 7); g.fillStyle = tone; g.fill();
+        g.textAlign = 'center'; g.textBaseline = 'middle'; g.font = mono(800, 10 * s); g.fillStyle = '#0d1117'; this.text(g, ch, 12.5 * s, h / 2 + 1);
+        g.textAlign = 'left'; g.font = f; g.fillStyle = urgent ? '#ffd36e' : '#e8eef6'; this.text(g, text, 23 * s, h / 2 + 1);
         if (urgent) { g.fillStyle = '#ffd36e'; g.beginPath(); g.arc(w - 2, 2, 7 * s, 0, 7); g.fill(); g.fillStyle = '#1a1303'; g.font = mono(900, 11 * s); g.textAlign = 'center'; this.text(g, '!', w - 2, 3); }
       }, PAD + 6);
       if (sp) { sp.ax = w / 2; sp.ay = h; }

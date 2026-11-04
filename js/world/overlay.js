@@ -5,6 +5,7 @@ import { LAYOUT, DIST } from './layout.js';
 import { qs } from './labels.js';
 import { snap, sans } from './gfx.js';
 import { money, PIP_ZOOM } from './common.js';
+import { AVATAR_TONE, initialOf } from '../avatar.js';
 
 const TAG_SHIFT = [[0, 0], [0, -19], [0, 19], [-34, 0], [34, 0], [-34, -19], [34, -19], [-34, 19], [34, 19], [0, -38], [0, 38], [-34, -38], [34, -38], [-34, 38], [34, 38], [-68, 0], [68, 0], [-68, -19], [68, -19], [-68, 19], [68, 19]], TAG_PULL = 3, TAG_SHORT = 0.03; // where a name tag may stand off its district (x, y in px) to clear another tag (a tag is 18px high), and what a px of that costs against the area it would cover
 const NARROW = 500, CROWD = 4;                                 // a screen narrower than this (a phone) has no room for passing notes once this many name tags are on it (the whole-island view: sixteen)
@@ -144,13 +145,14 @@ export const overlayMethods = {
   },
 
   leadBubble(g, x, y, s, B, l, hov) {
-    const text = money(l.budget), urgent = !!l.need, bob = this.reduced() ? 0 : Math.sin(this.vt / 500 + l.born) * 1.5;
-    const sp = this.labels.bubble(B.icon, text, urgent, hov, qs(s)); if (sp) { this.labels.blit(g, sp, x, y + bob); return; }
+    const text = money(l.budget), urgent = !!l.need, bob = this.reduced() ? 0 : Math.sin(this.vt / 500 + l.born) * 1.5, ch = initialOf(B.name), tone = AVATAR_TONE[B.style] || AVATAR_TONE.steady;
+    const sp = this.labels.bubble(ch, tone, text, urgent, hov, qs(s)); if (sp) { this.labels.blit(g, sp, x, y + bob); return; }
     g.font = `800 ${Math.round(11 * s)}px ui-monospace, Menlo, monospace`; const w = g.measureText(text).width + 32 * s, h = 22 * s;
     roundRect(g, x - w / 2, y - h + bob, w, h, 7 * s); g.fillStyle = 'rgba(16,20,28,.94)'; g.fill(); g.strokeStyle = urgent ? '#ffd36e' : hov ? '#ffffff' : '#5b6b85'; g.lineWidth = urgent ? 2 : 1.5; g.stroke();
     g.beginPath(); g.moveTo(x - 4 * s, y + bob); g.lineTo(x + 4 * s, y + bob); g.lineTo(x, y + 6 * s + bob); g.fill();
-    g.font = `${Math.round(14 * s)}px system-ui, sans-serif`; g.textAlign = 'left'; g.textBaseline = 'middle'; g.fillStyle = '#fff'; g.fillText(B.icon, x - w / 2 + 5 * s, y - h / 2 + 1 + bob);
-    g.font = `800 ${Math.round(11 * s)}px ui-monospace, Menlo, monospace`; g.fillStyle = urgent ? '#ffd36e' : '#e8eef6'; g.fillText(text, x - w / 2 + 23 * s, y - h / 2 + 1 + bob);
+    g.beginPath(); g.arc(x - w / 2 + 12.5 * s, y - h / 2 + bob, 7.5 * s, 0, 7); g.fillStyle = tone; g.fill();
+    g.font = `800 ${Math.round(10 * s)}px ui-monospace, Menlo, monospace`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillStyle = '#0d1117'; g.fillText(ch, x - w / 2 + 12.5 * s, y - h / 2 + 1 + bob);
+    g.font = `800 ${Math.round(11 * s)}px ui-monospace, Menlo, monospace`; g.textAlign = 'left'; g.fillStyle = urgent ? '#ffd36e' : '#e8eef6'; g.fillText(text, x - w / 2 + 23 * s, y - h / 2 + 1 + bob);
     if (urgent) { g.fillStyle = '#ffd36e'; g.beginPath(); g.arc(x + w / 2 - 2, y - h + 2 + bob, 7 * s, 0, 7); g.fill(); g.fillStyle = '#1a1303'; g.font = `900 ${Math.round(11 * s)}px ui-monospace, Menlo, monospace`; g.textAlign = 'center'; g.fillText('!', x + w / 2 - 2, y - h + 3 + bob); }
     g.textBaseline = 'alphabetic';
   },

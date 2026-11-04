@@ -133,43 +133,43 @@ export const assets = {
 export const buyers = {
   // ------------------------------------------------------------------ Metro Hub: steady appetites a manager can serve
   trainer: {
-    zone: 5, name: 'Brightpath Corporate Training', icon: '🎓', pop: 0.35,
+    zone: 5, name: 'Brightpath Corporate Training', pop: 0.35,
     like: { training: 1, paper: 0.8, b2b: 0.5, office: 0.4 }, budget: [120, 1500],
     style: 'analytical', patience: 6, bias: 'utility',
     hello: 'Fifty new hires a quarter, and each one needs a binder.',
   },
   boutique: {
-    zone: 5, name: 'Loft 9 Trend Boutique', icon: '🛍️', pop: 0.8,
+    zone: 5, name: 'Loft 9 Trend Boutique', pop: 0.8,
     like: { trend: 1, fashion: 0.8, consumer: 0.6, prestige: 0.5 }, budget: [100, 1400],
     style: 'impulsive', patience: 4, bias: 'story',
     hello: 'In every feed by Friday means on my rack by Thursday.',
   },
   etailer: {
-    zone: 5, name: 'ClickCart E-Tailer', icon: '🛒', pop: 0.85,
+    zone: 5, name: 'ClickCart E-Tailer', pop: 0.85,
     like: { electronics: 1, trend: 0.6, digital: 0.7 }, budget: [160, 1900],
     style: 'hard', patience: 4, bias: 'price',
     hello: 'Send volume and a clean spec sheet. I list by morning.',
   },
   recruiter: {
-    zone: 5, name: 'Dana Reyes, Corporate Recruiter', icon: '👔', pop: 0.7,
+    zone: 5, name: 'Dana Reyes, Corporate Recruiter', pop: 0.7,
     like: { prestige: 1, office: 0.6, training: 0.55 }, budget: [80, 1100],
     style: 'friendly', patience: 6, bias: 'prestige',
     hello: 'First impressions close offers. Make candidates feel looked after.',
   },
   freelancer: {
-    zone: 5, name: 'Sam Okoro, Tech Freelancer', icon: '🎧', pop: 0.45,
+    zone: 5, name: 'Sam Okoro, Tech Freelancer', pop: 0.45,
     like: { electronics: 0.9, digital: 0.7, training: 0.5, tool: 0.2 }, budget: [90, 1300],
     style: 'analytical', patience: 5, bias: 'utility',
     hello: 'Between gigs I rebuild my desk. Fast, clean and fairly priced.',
   },
   cowork: {
-    zone: 5, name: 'Hotdesk Cowork Space', icon: '🏢', pop: 0.5,
+    zone: 5, name: 'Hotdesk Cowork Space', pop: 0.5,
     like: { office: 1, b2b: 0.9, electronics: 0.5, digital: 0.3 }, budget: [200, 1700],
     style: 'friendly', patience: 7, bias: 'utility',
     hello: 'Thirty members, fresh desks every quarter. Get it right and I reorder.',
   },
   popup: {
-    zone: 5, name: 'Corner Kicks Pop-Up Stall', icon: '🎪', pop: 0.3,
+    zone: 5, name: 'Corner Kicks Pop-Up Stall', pop: 0.3,
     like: { fashion: 1, trend: 0.9, consumer: 0.4 }, budget: [60, 900],
     style: 'impulsive', patience: 3, bias: 'scarcity',
     hello: 'Weekend market, one folding table. Something people stop walking for.',
@@ -177,37 +177,37 @@ export const buyers = {
 
   // ------------------------------------------------------------------ Estate Sales: collectors who know what a lot is worth
   antiqueDealer: {
-    zone: 6, name: 'Hargrove & Daughters Antiques', icon: '🏺', pop: 0.85,
+    zone: 6, name: 'Hargrove & Daughters Antiques', pop: 0.85,
     like: { home: 1, collectible: 0.6, retro: 0.4, luxury: 0.4 }, budget: [200, 3600],
     style: 'hard', patience: 4, bias: 'story',
     hello: 'Three generations of estate sales. I know a good dovetail.',
   },
   designer: {
-    zone: 6, name: 'Wren & Co. Home Staging', icon: '🖼️', pop: 0.45,
+    zone: 6, name: 'Wren & Co. Home Staging', pop: 0.45,
     like: { home: 0.9, luxury: 0.5, prestige: 0.6 }, budget: [150, 2400],
     style: 'friendly', patience: 6, bias: 'prestige',
     hello: 'I stage with pieces that tell a story. Provenance sells the house.',
   },
   recordShop: {
-    zone: 6, name: 'Needle & Groove Records', icon: '🎶', pop: 0.65,
+    zone: 6, name: 'Needle & Groove Records', pop: 0.65,
     like: { media: 1, retro: 0.7, collectible: 0.3 }, budget: [80, 1400],
     style: 'impulsive', patience: 4, bias: 'scarcity',
     hello: "Vinyl from somebody's basement? Say no more. I'll bring a flashlight.",
   },
   watchCollector: {
-    zone: 6, name: 'Dr. Imran Qureshi, Watch Collector', icon: '🕰️', pop: 0.4,
+    zone: 6, name: 'Dr. Imran Qureshi, Watch Collector', pop: 0.4,
     like: { luxury: 1, prestige: 0.6, collectible: 0.45 }, budget: [300, 3800],
     style: 'analytical', patience: 6, bias: 'scarcity',
     hello: 'Show me the caseback. I buy movements first, stories second.',
   },
   boxFlipper: {
-    zone: 6, name: 'Marcus Bell, Box Flipper', icon: '🗃️', pop: 0.7,
+    zone: 6, name: 'Marcus Bell, Box Flipper', pop: 0.7,
     like: { collectible: 0.8, retro: 0.5, home: 0.5, tool: 0.4 }, budget: [90, 1500],
     style: 'impulsive', patience: 3, bias: 'price',
     hello: 'Sealed lots, no peeking. I live for the lid coming off.',
   },
   thrift: {
-    zone: 6, name: 'Second Life Thrift', icon: '🧺', pop: 0.6,
+    zone: 6, name: 'Second Life Thrift', pop: 0.6,
     like: { home: 0.8, consumer: 0.5, tool: 0.5, retro: 0.4 }, budget: [60, 1200],
     style: 'friendly', patience: 7, bias: 'price',
     hello: 'Five shops, new furniture monthly. Fair price, clean, no mystery smells.',
@@ -215,43 +215,43 @@ export const buyers = {
 
   // ------------------------------------------------------------------ Auto Row: dealers, fleets and the people who fix things
   smelog: {
-    zone: 7, name: 'Delgado Delivery Co.', icon: '📦', pop: 0.5,
+    zone: 7, name: 'Delgado Delivery Co.', pop: 0.5,
     like: { vehicle: 1, b2b: 0.7, industrial: 0.5 }, budget: [700, 6500],
     style: 'analytical', patience: 6, bias: 'utility',
     hello: 'Eight vans, one dispatcher, no time for downtime. Reliable beats pretty.',
   },
   dealerGroup: {
-    zone: 7, name: 'Kowalski Motors', icon: '🚙', pop: 0.9,
+    zone: 7, name: 'Kowalski Motors', pop: 0.9,
     like: { vehicle: 1, consumer: 0.6, digital: 0.5, tool: 0.5, prestige: 0.55 }, budget: [900, 10000],
     style: 'hard', patience: 3, bias: 'price',
     hello: 'Sixty cars a month. Give me a number for the sticker.',
   },
   rideshare: {
-    zone: 7, name: 'Yellowline Rideshare Co-op', icon: '🚕', pop: 0.55,
+    zone: 7, name: 'Yellowline Rideshare Co-op', pop: 0.55,
     like: { vehicle: 0.9, consumer: 0.7, b2b: 0.5 }, budget: [600, 6500],
     style: 'friendly', patience: 7, bias: 'utility',
     hello: 'Drivers rent by the week. Clean, cheap to run, passes inspection.',
   },
   classicCollector: {
-    zone: 7, name: 'Hal Pennington, Classic Roadsters', icon: '🎩', pop: 0.35,
+    zone: 7, name: 'Hal Pennington, Classic Roadsters', pop: 0.35,
     like: { collectible: 1, retro: 0.9, prestige: 0.5, vehicle: 0.4 }, budget: [1800, 11000],
     style: 'impulsive', patience: 4, bias: 'story',
     hello: 'Matching numbers or nothing. Tell me its story before its price.',
   },
   toolTruck: {
-    zone: 7, name: 'Tool Truck Tony', icon: '🛻', pop: 0.4,
+    zone: 7, name: 'Tool Truck Tony', pop: 0.4,
     like: { tool: 1, industrial: 0.6, vehicle: 0.4, collectible: 0.4 }, budget: [150, 2800],
     style: 'friendly', patience: 5, bias: 'price',
     hello: 'I supply every bay on this row. A good chest sells itself.',
   },
   restorer: {
-    zone: 7, name: 'Bondo & Sons Restorations', icon: '🔧', pop: 0.25,
+    zone: 7, name: 'Bondo & Sons Restorations', pop: 0.25,
     like: { retro: 1, collectible: 0.6, vehicle: 0.45, tool: 0.5 }, budget: [300, 5500],
     style: 'hard', patience: 5, bias: 'utility',
     hello: "Rust doesn't scare me, bad paperwork does. Bring me an honest project.",
   },
   autoMarketplace: {
-    zone: 7, name: 'DriveBoard Marketplace', icon: '🖱️', pop: 0.3,
+    zone: 7, name: 'DriveBoard Marketplace', pop: 0.3,
     like: { digital: 1, b2b: 0.8, trend: 0.3 }, budget: [1000, 8500],
     style: 'analytical', patience: 5, bias: 'scarcity',
     hello: 'Ten thousand listings. The right web address beats a hundred of them.',
@@ -259,37 +259,37 @@ export const buyers = {
 
   // ------------------------------------------------------------------ Harbor Docks: importers, yards and the people who clear cargo
   boatyard: {
-    zone: 8, name: 'Salty Dog Boatyard', icon: '⛵', pop: 0.45,
+    zone: 8, name: 'Salty Dog Boatyard', pop: 0.45,
     like: { marine: 1, vehicle: 0.6, industrial: 0.4 }, budget: [900, 14000],
     style: 'hard', patience: 4, bias: 'utility',
     hello: 'Haul-out starts in October. I need engines that run, with papers.',
   },
   shipyard: {
-    zone: 8, name: 'Port Royal Shipbuilders', icon: '🏗️', pop: 0.55,
+    zone: 8, name: 'Port Royal Shipbuilders', pop: 0.55,
     like: { industrial: 1, marine: 0.9, bulk: 0.4, b2b: 0.3 }, budget: [2200, 20000],
     style: 'analytical', patience: 6, bias: 'price',
     hello: 'Steel by the ton, certificates by the page. No cert, no deal.',
   },
   forwarder: {
-    zone: 8, name: 'Ng & Sons Freight Forwarding', icon: '🚛', pop: 0.6,
+    zone: 8, name: 'Ng & Sons Freight Forwarding', pop: 0.6,
     like: { b2b: 1, bulk: 0.7, vehicle: 0.55, digital: 0.4 }, budget: [1500, 15000],
     style: 'friendly', patience: 6, bias: 'utility',
     hello: "I clear other people's cargo. Delay costs me more than duty.",
   },
   bigBox: {
-    zone: 8, name: 'Bargain Barn Merchandising', icon: '🏬', pop: 0.9,
+    zone: 8, name: 'Bargain Barn Merchandising', pop: 0.9,
     like: { consumer: 1, fashion: 0.7, electronics: 0.7, bulk: 0.45 }, budget: [1800, 18000],
     style: 'hard', patience: 3, bias: 'price',
     hello: 'Thirty stores, one buyer: me. Quote the container price.',
   },
   fastFashion: {
-    zone: 8, name: 'Mira Costa Fast Fashion', icon: '👗', pop: 0.4,
+    zone: 8, name: 'Mira Costa Fast Fashion', pop: 0.4,
     like: { fashion: 1, trend: 0.9, bulk: 0.4, consumer: 0.3 }, budget: [900, 11000],
     style: 'impulsive', patience: 4, bias: 'scarcity',
     hello: 'Sketch to rack in three weeks. Late means no trend.',
   },
   liquidator: {
-    zone: 8, name: 'Bonded Warehouse Liquidators', icon: '🏷️', pop: 0.3,
+    zone: 8, name: 'Bonded Warehouse Liquidators', pop: 0.3,
     like: { electronics: 0.8, consumer: 0.7, b2b: 0.6, bulk: 0.45 }, budget: [700, 12000],
     style: 'impulsive', patience: 4, bias: 'story',
     hello: "Unclaimed cargo, seized pallets, orphaned containers. I'll bid on any of it.",
