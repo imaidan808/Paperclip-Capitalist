@@ -122,7 +122,7 @@ test('F6 (#59): Assist never advises a bid the budget makes illegal', () => {
         const v = A.view(s); if (!v.advice) break;
         steps++;
         assert.ok(A.legal(s).some((l) => l.type === v.advice.action.type), `budget ${budget} seed ${seed}: advice ${v.advice.action.type} next ${v.nextBid} legal ${JSON.stringify(A.legal(s))}`);
-        if (v.nextBid > budget + 1e-9 && v.nextBid <= v.advice.ceiling) { overBudget++; assert.equal(v.advice.action.type, 'drop'); assert.match(v.advice.text, /budget/); }
+        if (v.nextBid > budget + 1e-9 && v.nextBid <= v.advice.ceiling) { overBudget++; assert.equal(v.advice.action.type, 'drop'); assert.match(v.advice.text, /past your limit/); }
         const r = A.act(s, v.advice.action); assert.notEqual(r.say, null, 'following the advice always moves'); s = r.state;
       }
     }

@@ -67,7 +67,8 @@ export function scoreHTML(m) {
   if (m.stage === 'fix' && v) chips.push(['Step', `${Math.min(v.step + 1, v.steps)} of ${v.steps}`, 1]);
   return `<dl class="deal-score" aria-label="Scoreboard">${chips.map(([k, x, hot]) => `<div${hot ? ' class="hot"' : ''}><dt>${esc(k)}</dt><dd>${esc(x)}</dd></div>`).join('')}</dl>`;
 }
-const advice = (m, extra = '') => (m.advice && m.assist ? `<div class="callout deal-hint" role="note"><b>Assist.</b> ${esc(m.advice.text)}${extra}</div>` : '');
+const advice = (m, extra = '', tip = '') => (m.advice && m.assist ? `<div class="callout deal-hint" role="note"${tip ? ` title="${esc(tip)}"` : ''}><b>Assist.</b> ${esc(m.advice.text)}${extra}</div>` : '');
+const LIMIT_TIP = 'Your limit is 1.4x the guide price, or your cash if that is less.';
 const quickBtn = (label, anchor = true) => `<button class="btn ghost" data-deal="quick-stage" data-snd${anchor ? ' data-anchor="deal-quick"' : ''} data-fid="dq">${esc(label)}</button>`;
 export const QUICK_LABEL = 'Quick: auto-play at average skill';
 function footHTML(m) {
@@ -91,10 +92,13 @@ export function readHTML(m) {
     return `<button class="probe${x.used ? ' used' : ''}${m.advice && m.advice.probe === x.id ? ' rec' : ''}" data-deal="probe" data-snd data-id="${x.id}" data-fid="pr-${x.id}" title="${esc(why)}" ${x.affordable && !m.stageDone ? '' : 'disabled'}><span class="pic" aria-hidden="true">${ic}</span><span class="pnm">${esc(nm)}</span><span class="pco">${x.used ? 'done' : `${x.cost} pt${x.cost > 1 ? 's' : ''}`}</span></button>`;
   }).join('');
   const pips = Array.from({ length: v.budget }, (_, i) => `<i class="${i < v.spent ? 'spent' : ''}"></i>`).join('');
+  const expertNote = !m.stageDone && v.probes.some((x) => x.id === 'expert' && x.affordable) ? '<p class="small mute">The expert needs no skill of yours.</p>' : '';
+  // The hover is the mouse's way to the blurbs; this fold is the keyboard's, the finger's and a screen reader's way to the same words (only the summary is on the page until it is asked for)
+  const key = m.stageDone ? '' : `<details class="deal-more"><summary>What the probes and the bar mean</summary><ul class="hints">${v.probes.map((x) => `<li><b>${esc(PROBE[x.id][1])}.</b> ${esc(PROBE[x.id][2])}</li>`).join('')}</ul><p class="small mute">The bar spans the likely range. The true condition is inside it about two times in three.</p></details>`;
   const q = v.belief.quality, sd = v.doubt;
   const ev = v.evidence.map((e) => `<li><span><span class="evi" aria-hidden="true">${PROBE[e.id][0]}</span><b>${esc(PROBE[e.id][1])}.</b> ${esc(e.text)}</span></li>`).join('');
   const belief = `<div class="belief" aria-label="Your current read">
-      <div title="The bar spans the likely range. The true condition is inside it about two times in three."><span class="bl">Condition relative to the description</span><b>about ${pc(q)}</b> <span class="mute small">(give or take ${Math.round(sd * 100)} points)</span>
+      <div title="The bar spans the likely range. The true condition is inside it about two times in three."><span class="bl">Condition relative to the description</span><b>about ${pc(q)}</b> <span class="mute small">(${pc(q - sd)} to ${pc(q + sd)})</span>
         <div class="meter" aria-hidden="true"><i class="rng" style="left:${at(q - sd, 0.6, 1.2)};width:${at(q + sd, 0.6, 1.2) === at(q - sd, 0.6, 1.2) ? '2%' : `calc(${at(q + sd, 0.6, 1.2)} - ${at(q - sd, 0.6, 1.2)})`}"></i><i class="mk" style="left:${at(q, 0.6, 1.2)}"></i></div></div>
       <div><span class="bl">Chance it is a counterfeit</span><b>${pc(v.belief.fakeProb)}</b>
         <div class="meter fake" aria-hidden="true"><i class="fill" style="width:${pc(v.belief.fakeProb)}"></i></div></div></div>`;
@@ -104,13 +108,13 @@ export function readHTML(m) {
   return panel(m, 'read', 'Read the lot', `${lot}
     ${m.blocker ? '' : `<p class="seller-line">${esc(v.opening)}</p>${v.warning ? `<div class="callout info" role="note">${esc(v.warning)}</div>` : ''}`}
     <div class="pts" role="img" aria-label="${v.left} of ${v.budget} points left"><span class="small mute">Points</span><span class="pips">${pips}</span></div>
-    <div class="probes">${probes}</div>${ev ? `<ul class="evidence">${ev}</ul>` : ''}${belief}${m.stageDone ? '' : advice(m)}${quickNote(m)}${done}`);
+    <div class="probes">${probes}</div>${expertNote}${key}${ev ? `<ul class="evidence">${ev}</ul>` : ''}${belief}${m.stageDone ? '' : advice(m)}${quickNote(m)}${done}`);
 }
 
 // ------------------------------------------------------------------ Pitch
 export function pitchHTML(m) {
   const v = m.view, p = m.plan;
-  const head = `<div class="lotcard"><span class="ic" aria-hidden="true">${p.asset.icon}</span><div><b>${esc(p.asset.name)}</b><div class="small mute">${esc(p.quote.fitLabel)} (${pc(p.quote.fit)})</div></div></div>`;
+  const head = `<div class="lotcard"><span class="ic" aria-hidden="true">${p.asset.icon}</span><div><b>${esc(p.asset.name)}</b><div class="small mute">${esc(p.quote.fitLabel)} (${pc(p.quote.fit)})${!v && p.need ? `, ${esc(p.need)} needed now` : ''}</div></div></div>`; // (a refused room draws no chips, so the need is said here)
   const fraud = !!(p.verified && p.scam), pm = fraud ? { ...m, blocker: '' } : m; // a confirmed fraud is said once, by its own callout, and not again by the stage's blocker
   const verify = p.canVerify && !p.verified ? `<div class="callout warn"><b>Scam magnet.</b> Some buyers are frauds. <button class="btn sm" data-deal="verify" data-snd data-fid="vf" title="The check costs 1% of their budget.">Verify this buyer (${money(p.verifyCost)})</button></div>` : p.verified ? `<div class="callout ${p.scam ? 'bad' : 'good'}"${p.scam ? ' role="alert"' : ''}>${p.scam ? 'Fraud confirmed. Skip this buyer.' : 'Verified: this buyer is genuine.'}</div>` : '';
   if (!v) return panel(pm, 'pitch', 'Pitch', `${head}${verify}${m.stageDone ? quickNote(m) : ''}`);
@@ -121,14 +125,16 @@ export function pitchHTML(m) {
     const [ic, nm, why] = ANGLE[a], on = sel.includes(a), rec = m.assist && m.advice && m.advice.angles.includes(a), backed = feat[a] >= 0.6 ? 'strongly' : feat[a] >= 0.3 ? 'somewhat' : 'barely';
     return `<button class="angle${on ? ' on' : ''}${rec ? ' rec' : ''}" data-deal="angle" data-snd data-angle="${a}" aria-pressed="${on}" data-fid="an-${a}" title="${esc(why)}" ${lock ? 'disabled' : ''}>
       ${on ? `<span class="apick" aria-hidden="true">${sel.indexOf(a) + 1}</span>` : ''}<span class="aic" aria-hidden="true">${ic}</span><span class="anm">${nm}</span>
-      <span class="abar" role="img" aria-label="Your goods back this up: ${backed}" title="How well your goods back this claim. A claim they cannot back counts against you."><i style="width:${pc(feat[a])}"></i></span>${hinted.has(a) ? '<span class="ahint">Buyer leans this way</span>' : ''}</button>`;
+      <span class="abar" role="img" aria-label="Your goods back this up: ${backed}"><i style="width:${pc(feat[a])}"></i></span>${hinted.has(a) ? `<span class="ahint">Buyer ${hinted.size > 1 ? 'may lean' : 'leans'} this way</span>` : ''}</button>`;
   }).join('');
-  const hints = v.hints.length ? `<ul class="hints">${v.hints.map((h) => `<li>${esc(h.text)}</li>`).join('')}</ul>` : '';
-  const needs = v.buyer.needs.length ? `<p class="small mute">Looking for: ${v.buyer.needs.map((t) => `<span class="chip${t === p.need ? ' warn' : ''}"${t === p.need ? ' title="Needed now: a crate with this tag is a perfect fit, and one without it halves the fit."' : ''}>${esc(t)}</span>`).join(' ')}</p>` : '';
+  const said = v.hints.filter((h) => !(h.angles && h.kind !== 'temper')); // the hint that names the angles the buyer leans toward is what the stars say (view() builds `likely` from it): said on the cards, not again in the list
+  const hints = said.length ? `<ul class="hints">${said.map((h) => `<li>${esc(h.text)}</li>`).join('')}</ul>` : '';
+  const needs = v.buyer.needs.length ? `<p class="small mute">Looking for: ${v.buyer.needs.map((t) => (t === p.need ? `<span class="chip warn" title="A crate with this tag is a perfect fit, and one without it halves the fit.">${esc(t)}, needed now</span>` : `<span class="chip">${esc(t)}</span>`)).join(' ')}</p>` : '';
   const out = v.outcome ? `<div class="callout ${v.outcome.fitDelta >= 0.05 ? 'good' : v.outcome.fitDelta <= -0.03 ? 'warn' : ''}" title="Fit stays within 0.30 either way, and keenness between 0.85x and 1.20x."><b>${v.outcome.fitDelta >= 0 ? '+' : ''}${v.outcome.fitDelta.toFixed(2)} fit.</b> The buyer is ${v.outcome.mult.toFixed(2)}x as keen.</div>` : '';
+  const key = m.stageDone ? '' : `<details class="deal-more"><summary>What the angles mean</summary><ul class="hints">${v.angles.map((a) => `<li><b>${ANGLE[a][1]}.</b> ${esc(ANGLE[a][2])}</li>`).join('')}</ul></details>`; // (the hover words, for a keyboard, a finger and a screen reader)
   const go = m.stageDone ? '' : `<div class="row"><button class="btn" data-deal="pitch-go" data-fid="pg" ${sel.length === 2 && !m.blocker ? '' : 'disabled'}>${sel.length === 2 ? `Pitch ${ANGLE[sel[0]][1]} and ${ANGLE[sel[1]][1]}` : `Pick ${2 - sel.length} more angle${sel.length === 1 ? '' : 's'}`}</button></div>`;
   return panel(pm, 'pitch', 'Pitch',
-    `${head}${verify}${needs}${hints}<div class="angles" role="group" aria-label="Pitch angles, choose two">${btns}</div>${m.stageDone ? '' : advice(m)}${out}${quickNote(m)}${go}`);
+    `${head}${verify}${needs}${hints}<div class="angles" role="group" aria-label="Pitch angles, choose two">${btns}</div>${m.stageDone ? '' : `<p class="small mute">Bars show how well your goods back each angle. A claim they cannot back counts against you.</p>${key}${advice(m)}`}${out}${quickNote(m)}${go}`);
 }
 
 // ------------------------------------------------------------------ Close (Haggle)
@@ -143,20 +149,20 @@ export function closeHTML(m) {
     ${v.yours != null && v.theirs != null && v.yours !== v.theirs ? `<i class="gap" style="left:${at(Math.min(v.yours, v.theirs), lo, hi)};width:calc(${at(Math.max(v.yours, v.theirs), lo, hi)} - ${at(Math.min(v.yours, v.theirs), lo, hi)})"></i>` : ''}${v.yours != null ? `<i class="you${flip(v.yours, lo, hi)}" style="left:${at(v.yours, lo, hi)}"><b>You</b></i>` : ''}${v.theirs != null ? `<i class="them${flip(v.theirs, lo, hi)}" style="left:${at(v.theirs, lo, hi)}"><b>Them</b></i>` : ''}</div>
     <div class="neg-scale" aria-hidden="true"><span>${money(lo)}</span><span>fair ${money(v.fair)}</span><span>${money(hi)}</span></div>`;
   const pips = `<span class="pips" role="img" aria-label="${v.roundsLeft} round${v.roundsLeft === 1 ? '' : 's'} left of ${v.rounds}">${Array.from({ length: v.rounds }, (_, i) => `<i class="${i < v.round ? 'spent' : ''}"></i>`).join('')}</span>`;
-  const read = `<p class="small"><span title="Their limit is inside this range. Growth narrows it.">Your read of their limit: <b>${money(Math.min(v.read.lo, v.read.hi))} to ${money(Math.max(v.read.lo, v.read.hi))}</b>.</span> ${m.plan.alt ? `Your other option: <b>${money(m.plan.alt)}</b>.` : ''}</p>`;
+  const read = `<p class="small"><span title="Their limit is inside this range. Growth narrows it.">${buy ? 'Your read of their lowest price' : 'Your read of their limit'}: <b>${money(Math.min(v.read.lo, v.read.hi))} to ${money(Math.max(v.read.lo, v.read.hi))}</b>.</span> ${m.plan.alt ? `Your other option: <b>${money(m.plan.alt)}</b>.` : ''}</p>`;
   const flag = v.flag === 'mad' ? '<div class="callout warn">They took offense at that number.</div>' : v.flag === 'sus' ? '<div class="callout warn">They are suspicious of a price that low.</div>' : '';
   let moves;
   if (m.stageDone) moves = '';
   else if (v.round === 0) {
     const L = buy ? { high: ['Generous', 'offer'], fair: ['Fair', 'offer'], low: ['Lowball', 'offer'] } : { high: ['Aim high', 'ask'], fair: ['Fair', 'ask'], low: ['Quick sale', 'ask'] }, G = { high: '\u25b2', fair: '\u25c6', low: '\u25bc' };
-    moves = `<p class="small" title="The first number pulls the whole talk toward it.">Your opening ${buy ? 'offer' : 'ask'}</p><div class="moves anchors">${['high', 'fair', 'low'].map((lv) => `<button class="move${recIf('anchor', 'level', lv)}" data-deal="anchor" data-snd data-level="${lv}" data-fid="mv-${lv}" ${can(v, 'anchor', 'level', lv) ? '' : 'disabled'}><span><span aria-hidden="true">${G[lv]}</span> ${L[lv][0]}</span><b>${money(v.anchors[lv])}</b><small class="mv-d">${vsFair(v.anchors[lv], v.fair)}</small></button>`).join('')}</div>
+    moves = `<p class="small">Your opening ${buy ? 'offer' : 'ask'}. The first number pulls the whole talk toward it.</p><div class="moves anchors">${['high', 'fair', 'low'].map((lv) => `<button class="move${recIf('anchor', 'level', lv)}" data-deal="anchor" data-snd data-level="${lv}" data-fid="mv-${lv}" ${can(v, 'anchor', 'level', lv) ? '' : 'disabled'}><span><span aria-hidden="true">${G[lv]}</span> ${L[lv][0]}</span><b>${money(v.anchors[lv])}</b><small class="mv-d">${vsFair(v.anchors[lv], v.fair)}</small></button>`).join('')}</div>
       <div class="row"><button class="btn ghost sm" data-deal="walk" data-fid="walk">${buy ? 'Pass on this lot' : 'Walk away'}</button></div>`;
   } else {
     const verb = buy ? 'Raise your offer' : 'Come down', landNote = (w, k) => { const to = concedeTo(w, k), d = to == null ? '' : vsFair(to, w.fair); return d && `lands ${d}`; }, sz = (k) => `<button class="move${recIf('concede', 'size', k)}" data-deal="concede" data-snd data-size="${k}" data-fid="mv-${k}" ${can(v, 'concede', 'size', k) ? '' : 'disabled'}><span>${verb}</span><b>${money(v.steps[k])}</b><small class="mv-d">${landNote(v, k)}</small></button>`;
     moves = `<div class="moves">
       <button class="move${recIf('hold')}" data-deal="hold" data-snd data-fid="mv-hold"><span>Hold</span><b>${money(v.yours)}</b><small class="mv-d">${vsFair(v.yours, v.fair)}</small></button>${sz('small')}${sz('medium')}${sz('large')}
       <button class="move${recIf('split')}" data-deal="split" data-snd data-fid="mv-split" ${can(v, 'split') ? '' : 'disabled'}><span>Split the difference</span><b>${v.yours != null && v.theirs != null ? money((v.yours + v.theirs) / 2) : '-'}</b><small class="mv-d">${v.yours != null && v.theirs != null ? vsFair((v.yours + v.theirs) / 2, v.fair) : ''}</small></button>
-      ${v.alt != null ? `<button class="move${recIf('leverage')}" data-deal="leverage" data-snd data-fid="mv-lev" title="Once per talk. It counts only if it beats their offer." ${v.canLeverage ? '' : 'disabled'}><span>Mention your other option</span><b>${money(v.alt)}</b></button>` : ''}
+      ${v.alt != null ? `<button class="move${recIf('leverage')}" data-deal="leverage" data-snd data-fid="mv-lev" ${v.canLeverage ? '' : 'disabled'}><span>Mention your other option</span><b>${money(v.alt)}</b><small class="mv-d">Once. Counts only if it beats their offer.</small></button>` : ''}
       <button class="move good${recIf('accept')}" data-deal="accept" data-snd data-fid="mv-acc"><span>Accept their ${buy ? 'price' : 'offer'}</span><b>${money(v.theirs)}</b><small class="mv-d">${vsFair(v.theirs, v.fair)}</small></button>
       <button class="move bad" data-deal="walk" data-snd data-fid="walk"><span>Walk away</span><b>no deal</b></button></div>`;
   }
@@ -181,9 +187,12 @@ export function bidHTML(m) {
   const act = m.stageDone ? '' : `<div class="moves auc-moves"><button class="move paddle${rec && rec.type === 'bid' ? ' rec' : ''}" data-deal="bid" data-snd data-fid="bid" ${can(v, 'bid') ? '' : 'disabled'}><span>${v.price == null ? 'Open the bidding' : 'Bid'}</span><b>${money(v.nextBid)}</b></button>
       <button class="move bad${rec && rec.type === 'drop' ? ' rec' : ''}" data-deal="drop" data-snd data-fid="drop"><span>Drop out</span><b>keep your cash</b></button></div>`;
   const end = m.stageDone ? `<div class="callout ${m.res && m.res.won ? 'good' : ''}">${esc(m.res && m.res.won ? `You won at ${money(m.res.price)}.` : 'You are out.')}</div>` : '';
-  const budget = v.budget != null && v.nextBid > v.budget ? '<div class="callout warn" title="Your limit is 1.4x the guide price, or your cash if that is less.">The next bid is past your limit. You can only drop out.</div>' : '';
+  const past = v.budget != null && v.nextBid > v.budget, hint = !m.stageDone && m.assist && m.advice; // with the Assist hint on the sheet it says this, with the figure
+  const budget = past && !hint ? `<div class="callout warn" title="${LIMIT_TIP}">The next bid is past your limit. You can only drop out.</div>` : '';
+  const seen = [...new Set(v.rivals.map((r) => r.mood))].filter((k) => MOOD_TIP[k]); // the hover on a mood is the mouse's way to its meaning; this fold is the keyboard's, the finger's and a screen reader's
+  const moods = m.stageDone || !seen.length ? '' : `<details class="deal-more"><summary>What the moods mean</summary><ul class="hints">${seen.map((k) => `<li><b>${MOOD[k]}.</b> ${esc(MOOD_TIP[k])}</li>`).join('')}</ul></details>`;
   return panel(m, 'bid', 'Bid',
-    `<p class="small" title="Rivals bid on estimates of their own, and the highest guess usually wins. Yours is a guess too, sharper with Capital Sourcing and a good read.">Your estimate: <b>${money(v.estimate)}</b>.</p>${ladder}<ul class="rivals">${riv}</ul>${ev ? `<ul class="evlog">${ev}</ul>` : ''}${budget}${m.stageDone ? '' : advice(m)}${act}${quickNote(m)}${end}`);
+    `<p class="small" title="Rivals bid on estimates of their own, and the highest guess usually wins. Yours is a guess too, sharper with Capital Sourcing and a good read.">Your estimate: <b>${money(v.estimate)}</b>.</p>${ladder}<ul class="rivals">${riv}</ul>${moods}${ev ? `<ul class="evlog">${ev}</ul>` : ''}${budget}${m.stageDone ? '' : advice(m, '', past ? LIMIT_TIP : '')}${act}${quickNote(m)}${end}`);
 }
 
 // ------------------------------------------------------------------ Fix (Repair)
@@ -218,14 +227,14 @@ const dialWord = (x, z) => (x < z.lo ? `Dial at ${pc(x)}: below the green zone` 
 
 // ------------------------------------------------------------------ the result
 export function resultHTML(m) {
-  const s = m.summary, n = s.numbers, f = (x) => (x == null ? 'walks away' : money(x));
+  const s = m.summary, n = s.numbers, f = (x, who) => (x == null ? (n.none || (who === 'you' ? 'walked away' : 'walks away')) : money(x));
   // Quick's and the expert's figures at a table never sat at are withheld (numbers.hidden, js/deal.js): they would be the next sitting's answers. A blank there is not "walks away"
   // (they would have sat down and played); it is "kept back", and the box says why. Your own row is still your own: you did walk.
-  const kept = !!n.hidden, g = (x) => (x == null && kept ? 'kept back' : f(x));
+  const kept = !!n.hidden, g = (x, who) => (x == null && kept ? 'kept back' : f(x, who));
   const better = n.better === 'low' ? Math.min : Math.max;
   const vals = [n.quick, n.expert, n.you].filter((x) => x != null && x > 0), top = Math.max(1e-9, ...vals.map(Math.abs)), best = vals.length ? better(...vals) : null;
   const tied = [n.quick, n.expert, n.you].filter((x) => x != null && x === best).length; // a three-way tie has no best row to mark
-  const row = (label, x, cls, say = f, tip = '') => `<div class="vs ${cls}${x != null && x === best && tied < 3 ? ' best' : ''}"${tip ? ` title="${tip}"` : ''}><dt>${label}</dt><dd${x == null ? '' : ` data-count="${x}" data-fmt="money"`}>${say(x)}</dd><span class="vbar" aria-hidden="true"><i style="width:${x == null ? 0 : Math.max(2, (Math.abs(x) / top) * 100).toFixed(1)}%"></i></span></div>`;
+  const row = (label, x, cls, say = f, tip = '') => `<div class="vs ${cls}${x != null && x === best && tied < 3 ? ' best' : ''}"${tip ? ` title="${tip}"` : ''}><dt>${label}</dt><dd${x == null ? '' : ` data-count="${x}" data-fmt="money"`}>${say(x, cls)}</dd><span class="vbar" aria-hidden="true"><i style="width:${x == null ? 0 : Math.max(2, (Math.abs(x) / top) * 100).toFixed(1)}%"></i></span></div>`;
   const net = m.plan.kind === 'buy' && n.net != null && !kept ? `<p class="small mute">Worth minus price: Quick ${money(n.quickNet)}, expert ${money(n.expertNet)}${n.net !== undefined && s.reveal ? `, you ${money(n.net)}` : ''}.</p>` : '';
   const rev = s.reveal ? `<div class="reveal"><h4>What the lot really was</h4><p><b>${esc(s.reveal.truth)}.</b> ${s.reveal.total ? `It had ${s.reveal.total} flaw${s.reveal.total === 1 ? '' : 's'}${s.reveal.defects.length ? `: ${esc(s.reveal.defects.join(', '))}` : ''}. You found ${s.reveal.found}.` : 'It had no flaws.'} <span class="mute">Your read: ${esc(s.reveal.estimate)}.</span></p></div>` : '';
   const why = s.reasons.length ? `<div class="why"><h4>Why</h4><ul>${s.reasons.map((r) => `<li><b>${esc(r.label)}.</b> ${esc(r.text)}</li>`).join('')}</ul></div>` : '';

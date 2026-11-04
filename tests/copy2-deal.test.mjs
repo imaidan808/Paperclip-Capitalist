@@ -1,20 +1,21 @@
 // Copy pass, part 2, package P1: the Deal Room and the skill games. The words of the stages, the result and the games keep to what the engine does, and they keep the voice of docs/COPY.md.
-//   D1  the stages print no lede and stay short; what a card is (a probe, an angle) and what a figure means is said on hover, and every figure and claim a hover makes is held against the engine below
+//   D1  the stages print no lede and stay short; what a choice turns on is printed, what a card is (a probe, an angle) and what a figure means is said on hover and again in a fold for a keyboard and a finger, and every figure and claim they make is held against the engine below
 //   D2  the Read stage: the probe blurbs (cheap, best test for a counterfeit, sharpest read, second opinion, the expert) and the bar's range are what the engine does; a reading is printed once; the seller's opening says nothing about the lot
-//   D3  the Pitch stage: the keenness a pitch can earn, an unbacked claim, an urgent need, the fee to verify a buyer
+//   D3  the Pitch stage: the keenness a pitch can earn, an unbacked claim (and what Assist says of it), an urgent need told in words, the buyer's lean said once, the fee to verify a buyer
 //   D4  the Close stage: the read of their limit, the words for their stance, what a friendly counterparty returns, the one use of the other option, the budget that leaves nothing to haggle over
-//   D5  the Bid stage: the limit on a bid, what a rival's mood means, how sure an estimate is
+//   D5  the Bid stage: the limit on a bid (one word for it, with Assist or without), what a rival's mood means, how sure an estimate is
 //   D6  the Fix stage: the bill, the 60% the Assist adds to the zone, the dial tone's offer
-//   D7  the result: one notation for a multiplier, headlines that do not repeat the sheet's title, the reveal's flaw count, the figures and lessons the result prints
+//   D7  the result: one notation for a multiplier, headlines that do not repeat the sheet's title, one worth per card (auction lessons, wrecks), the reveal's flaw count and condition, what a blank row says, the figures and lessons the result prints
 //   D8  the voice: no filler, no question and no exclamation in what the game says (a buyer's own lines are the character's)
 //   D9  the refusals the engine owns (a fraud you verified, a full yard) are said in the engine's words, once
+//   D10 the Assist box says a move and its reason, adds at most 35 words to a stage, and tells nothing the stage prints
 // Run: node --test tests/copy2-deal.test.mjs
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { makeGame } from './bot.mjs';
 import { ASSETS, BUYERS } from '../js/config.js';
-import { FAKE_VALUE } from '../js/market.js';
+import { FAKE_VALUE, fitOf } from '../js/market.js';
 import * as D from '../js/deal.js';
 import * as UI from '../js/ui/deal.js';
 import * as H from '../js/play/haggle.js';
@@ -53,6 +54,7 @@ const titles = (h) => [...h.matchAll(/ title="([^"]*)"/g)].map((m) => m[1].repla
 const money = (x) => { const v = Math.abs(x); return `${x < 0 ? '-' : ''}$${v < 100 ? v.toFixed(2) : Math.round(v).toLocaleString('en-US')}`; };
 const mean = (xs) => xs.reduce((a, b) => a + b, 0) / xs.length;
 const escQ = (t) => t.replace(/'/g, '&#39;');
+const bidView = (o = {}) => ({ estimate: 100, opening: 60, price: 130, nextBid: 140, budget: 135, high: 'Marla', youHigh: false, rivals: [], events: [], actions: [{ type: 'drop' }], done: false, increment: 10, round: 3, yourTurn: true, ...o });
 
 // =====================================================================================================================================================
 // D1: no lede, short stages, and the old sentences are gone from every state of every deal
@@ -76,12 +78,12 @@ test('D1: no stage opens on a lede, none of the old ledes is anywhere in the roo
   for (const [label, h] of all) { assert.ok(!/class="lede"/.test(h), `${label}: no lede`); for (const old of OLD_LEDES) assert.ok(!h.includes(old), `${label}: "${old}" is gone`); }
   // the words a stage prints before anything is pressed (a fold and a hover are not counted). Before this pass the room printed 129, 126, 69, 69 and 104.
   const g = world(), at = (spec, n = 0) => { const r = start(g, spec); for (let i = 0; i < n; i++) { r.quick(); r.next(); } return r; };
-  for (const [key, r, max] of [['read', at(fixedLot(g)), 90], ['pitch', at(sellSpec(g)), 70], ['close', at(fixedLot(g, 3), 1), 52], ['bid', at(auctionLot(g), 1), 55], ['fix', at(brokenCrate(g)), 80]]) {
+  for (const [key, r, max] of [['read', at(fixedLot(g)), 90], ['pitch', at(sellSpec(g)), 75], ['close', at(fixedLot(g, 3), 1), 52], ['bid', at(auctionLot(g), 1), 55], ['fix', at(brokenCrate(g)), 80]]) {
     assert.equal(r.key, key); const n = words(panel(r)); assert.ok(n <= max, `${key}: ${n} words before a press (at most ${max})`);
   }
 });
 
-test('D1: what a card is, and what a figure means, is on hover: the five probes, the five angles, the range, the opening number, the other option, the fee to verify', () => {
+test('D1: what a choice turns on is printed and the detail is on hover: the five probes, the five angles, the range, the other option, the fee to verify', () => {
   const g = world(), buy = start(g, fixedLot(g)), sale = start(g, sellSpec(g));
   const read = panel(buy);
   for (const id of Object.keys(I.PROBES)) assert.ok(new RegExp(`data-id="${id}"[^>]* title="[^"]+"`).test(read), `probe ${id} carries its blurb on hover`);
@@ -92,11 +94,43 @@ test('D1: what a card is, and what a figure means, is on hover: the five probes,
   assert.equal((pitch.match(/class="(awh|atag)"/g) || []).length, 0, 'and none prints it, or a "Backed" tag over the bar');
   assert.ok(!/Backed (barely|somewhat|strongly)/.test(visible(pitch)), 'the bar speaks for the backing');
   assert.equal((pitch.match(/role="img" aria-label="Your goods back this up: (barely|somewhat|strongly)"/g) || []).length, 5, 'and is still named for a screen reader');
+  assert.ok(visible(pitch).includes('Bars show how well your goods back each angle. A claim they cannot back counts against you.'), 'what the bars mean, and the rule a pitch turns on, are printed');
+  assert.ok(!titles(pitch).some((t) => /back this claim/.test(t)), 'once: the bars carry no second telling on hover');
   buy.quick(); buy.next(); const close = panel(buy);
   assert.ok(titles(close).includes('Their limit is inside this range. Growth narrows it.'), 'the read of their limit');
-  assert.ok(titles(close).includes('The first number pulls the whole talk toward it.'), 'the opening number');
-  buy.act({ type: 'anchor', level: 'fair' });
-  if (buy.plan.alt != null) assert.match(panel(buy), /data-deal="leverage"[^>]* title="Once per talk\. It counts only if it beats their offer\."/, 'the other option');
+  assert.ok(visible(close).includes('Your opening offer. The first number pulls the whole talk toward it.'), 'the opening number is printed at round 0 (the Assist box no longer says it)');
+  // the other option is drawn only when a second lot of the same kind sits on the shelf and the talk is still open: build exactly that, and say so before asserting
+  const g2 = world(), lot = g2.s.lots[4].find((l) => l.mode === 'fixed');
+  g2.s.lots[4] = g2.s.lots[4].filter((l) => l.id === lot.id || l.cls !== lot.cls); g2.s.lots[4].push({ ...lot, id: 'Ttwin', price: lot.price * 1.15 });
+  const b = start(g2, { kind: 'buy', zone: 4, lotId: lot.id }); assert.ok(b.plan.alt != null, 'the lot has an alternative on the shelf');
+  b.quick(); b.next(); b.act({ type: 'anchor', level: 'low' }); assert.ok(!b.stageDone(), 'the talk is still open after the opening offer');
+  const after = panel(b); assert.match(after, /data-deal="leverage"/); assert.ok(!/data-deal="leverage"[^>]* title=/.test(after), 'the other option says its rule on the button, not on hover');
+  assert.match(visible(after), /Mention your other option .*Once\. Counts only if it beats their offer\./, 'the other option');
+});
+
+// A hover is a mouse's way to a detail: a title is not shown to a keyboard or to a finger, and on a span, a div or a p a screen reader may not say it. What a choice turns on is printed (D2, D3, D4 and D5 hold those lines),
+// and the words of every hover that says what a card or a bar is are also in a fold: only its summary is on the page until it is asked for.
+test('D1: the hover words are not on hover alone: a fold for the probes and the bar, one for the angles, one for the moods', () => {
+  const g = world(), buy = start(g, fixedLot(g)), sale = start(g, sellSpec(g));
+  const fold = (h) => { const m = /<details class="deal-more"><summary>([^<]*)<\/summary>([\s\S]*?)<\/details>/.exec(h); return m ? { summary: m[1], body: visible(m[2]) } : null; };
+  const tip = (h, attr, id) => h.match(new RegExp(`${attr}="${id}"[^>]* title="([^"]*)"`))[1];
+  const read = panel(buy), f1 = fold(read);
+  assert.equal(f1.summary, 'What the probes and the bar mean');
+  for (const id of Object.keys(I.PROBES)) assert.ok(f1.body.includes(tip(read, 'data-id', id)), `the fold says what ${id} is for, in the words of its hover`);
+  assert.ok(f1.body.includes('The true condition is inside it about two times in three.'), 'and what the bar holds');
+  const pitch = panel(sale), f2 = fold(pitch);
+  assert.equal(f2.summary, 'What the angles mean');
+  for (const a of ['prestige', 'utility', 'scarcity', 'price', 'story']) assert.ok(f2.body.includes(tip(pitch, 'data-angle', a)), `the fold says what ${a} is, in the words of its hover`);
+  assert.ok(!f2.body.includes('counts against you') && visible(pitch).includes('A claim they cannot back counts against you.'), 'the rule for the bars is printed once, under the cards, and not again in the fold');
+  const rivals = ['steady', 'loud', 'quiet'].map((m, id) => ({ id, name: `R${id}`, mood: m, active: true, droppedAt: null, high: false }));
+  const bid = (o) => UI.bidHTML({ plan: { lot: { price: 100, mode: 'auction' } }, view: bidView(o), stageDone: false }), f3 = fold(bid({ rivals }));
+  assert.equal(f3.summary, 'What the moods mean');
+  for (const t of ['Patient. Raises one step at a time.', 'Aggressive or bluffing. You cannot tell which until it folds.', 'Waits, then bids late.']) assert.ok(f3.body.includes(t), t);
+  assert.equal(fold(bid({ rivals: [rivals[0], rivals[0]] })).body.split('Patient.').length - 1, 1, 'a mood is listed once however many rivals have it');
+  assert.equal(fold(bid({ rivals: [] })), null, 'no rivals, no fold');
+  const m1 = model(buy); m1.stageDone = true; assert.equal(fold(UI.readHTML(m1)), null, 'a Read that is done has no key to its probes');
+  const m2 = model(sale); m2.stageDone = true; assert.equal(fold(UI.pitchHTML(m2)), null, 'and a Pitch that is done none to its angles');
+  assert.equal(UI.bidHTML({ plan: { lot: { price: 100, mode: 'auction' } }, view: bidView({ rivals }), stageDone: true, res: { won: false } }).includes('What the moods mean'), false, 'nor a Bid that is over');
 });
 
 // =====================================================================================================================================================
@@ -127,6 +161,8 @@ test('D2: the probe blurbs are what the engine does: a look is cheap and finds f
   const g = world(), h = panel(start(g, fixedLot(g))), tip = (id) => h.match(new RegExp(`data-id="${id}"[^>]* title="([^"]*)"`))[1];
   assert.equal(tip('look'), 'Cheap. Catches obvious wear.'); assert.equal(tip('serial'), 'The best test for a counterfeit.'); assert.equal(tip('power'), 'The sharpest read on condition.');
   assert.equal(tip('papers'), 'A cheap second opinion on both.'); assert.equal(tip('expert'), 'Costly, but needs no skill of yours.');
+  assert.ok(visible(h).includes('The expert needs no skill of yours.'), 'the one probe that ignores your skill says so on the sheet, while it can still be hired');
+  const used = start(g, fixedLot(g)); used.act({ type: 'probe', id: 'expert' }); assert.ok(!visible(panel(used)).includes('The expert needs no skill of yours.'), 'and not after it has been');
 });
 
 test('D2: the bar around "about 93%" holds the true condition about two times in three, with or without probes', () => {
@@ -187,7 +223,9 @@ test('D3: the keenness a pitch earns stays between 0.85x and 1.20x and its fit w
   assert.ok(Math.abs(+m[2] / +m[1] - 0.2) < 1e-9);
   const fit = (C) => P.act(P.create({ buyer: { needs: ['tool'], bias: 'utility', quirk: null }, asset: { tags: [], features: [{ angle: 'utility', strength: C }, { angle: 'price', strength: 0.7 }] }, insight: 3, seed: 11 }), { type: 'pick', angles: ['utility', 'price'] }).state.outcome.fitDelta;
   assert.ok(fit(0) < fit(0.2) && fit(0.2) < fit(0.4) && fit(0.4) < fit(0.7), 'more backing, a better pitch');
-  assert.ok(titles(panel(start(g, sellSpec(g)))).includes('How well your goods back this claim. A claim they cannot back counts against you.'));
+  const pp = panel(start(g, sellSpec(g)));
+  assert.ok(visible(pp).includes('Bars show how well your goods back each angle. A claim they cannot back counts against you.'), 'the rule a pitch turns on is printed, once');
+  assert.ok(!titles(pp).some((t) => /back this claim/.test(t)), 'and is not told again on every bar');
 });
 
 test('D3: the buyer\'s speech is printed once after a pitch, and a multiplier is written 1.12x', () => {
@@ -198,23 +236,83 @@ test('D3: the buyer\'s speech is printed once after a pitch, and a multiplier is
   assert.ok(!/\bx\d\.\d\d\b/.test(h));
 });
 
-test('D3: an urgent need is said once, on its chip, and the engine does what the chip says; the check to verify a buyer is 1% of the budget, and a fraud is 12% of buyers', () => {
+test('D3: an urgent need is said once, in words, on its chip, and the engine does what the chip says; the check to verify a buyer is 1% of the budget, and a fraud is 12% of buyers', () => {
   const g = world(['grad', 'native']);
   let found = null;
   for (const z of g.s.zones) for (const lead of g.s.leads[z]) for (const a of g.s.assets.filter((x) => x.zone === z)) { const q = g.quotePitch(a.id, lead.id, undefined, { blind: true }); if (q.ok && !found) found = { a, lead }; }
   assert.ok(found, 'a crate and a lead in one district');
   const { a, lead } = found, tag = ASSETS[a.cls].tags[0], other = Object.keys(BUYERS).flatMap((id) => Object.keys(BUYERS[id].like)).find((t) => !ASSETS[a.cls].tags.includes(t));
+  lead.need = null; // the baseline is a buyer with no urgent need: the draw may have given this one a need, and the baseline would then already include it
   const base = g.quotePitch(a.id, lead.id, undefined, { blind: true }).fit;
   lead.need = tag; assert.equal(g.quotePitch(a.id, lead.id, undefined, { blind: true }).fit, 1, 'the tag the buyer needs: a perfect fit');
   lead.need = other; assert.ok(Math.abs(g.quotePitch(a.id, lead.id, undefined, { blind: true }).fit - base * 0.5) < 1e-9, 'a tag the crate lacks: half the fit');
   lead.need = tag;
   const run = start(g, { kind: 'sell', assetId: a.id, leadId: lead.id }), h = sheet(run);
   assert.ok(!/Right now they need|needs something/.test(h), 'it is not said in the bubble or under the name');
-  assert.match(h, new RegExp(`<span class="chip warn" title="Needed now: a crate with this tag is a perfect fit, and one without it halves the fit\\.">${tag}</span>`), 'it is marked on its chip');
+  assert.match(h, new RegExp(`<span class="chip warn" title="A crate with this tag is a perfect fit, and one without it halves the fit\\.">${tag}, needed now</span>`), 'it is marked on its chip');
+  assert.equal(visible(h).split(`${tag}, needed now`).length - 1, 1, 'in words a player reads without hovering (colour is not the only carrier of an urgent need), and once');
   const fee = Math.max(0.01, Math.round(lead.budget * 0.01 * 100) / 100), cash0 = g.s.cash, plan = run.plan;
   assert.ok(plan.canVerify, 'a Digital Native may verify'); assert.match(h, /<b>Scam magnet\.<\/b> Some buyers are frauds\./); assert.match(h, /title="The check costs 1% of their budget\."/);
   assert.ok(Math.abs(plan.verifyCost - fee) < 1e-9, 'the button names the fee'); assert.ok(run.verify().ok); assert.ok(Math.abs(cash0 - g.s.cash - fee) < 1e-9, 'and the engine charges it: 1% of their budget');
   assert.equal(g.P.scamRate, 0.12, 'a fraud is 12% of a Digital Native\'s buyers, as the Draft says');
+});
+
+test('D3: an urgent need is told in words when the room is refused too (no chip row is drawn then, so the lot card says it)', () => {
+  let hit = null;
+  for (const seed of [9, 3, 5, 7, 11, 13]) {
+    const g = world(['grad', 'native'], seed);
+    for (const z of g.s.zones) for (const cls of Object.keys(ASSETS)) if ((ASSETS[cls].dem?.[z] || 0) > 0 && !g.s.assets.some((x) => x.zone === z && x.cls === cls)) g.s.assets.push(g._mk(g.s, cls, { zone: z, basis: 1 }));
+    for (const z of g.s.zones) for (const lead of g.s.leads[z]) for (const a of g.s.assets.filter((x) => x.zone === z)) for (const seg of Object.keys(BUYERS)) {
+      const f = fitOf(a.cls, seg); // a fit of 0.15 to 0.30 is open on its own and refused once an urgent need the crate lacks halves it
+      if (!hit && (ASSETS[a.cls].dem?.[z] || 0) > 0 && f >= 0.15 && f < 0.3) hit = { g, lead, a, seg };
+    }
+    if (hit) break;
+  }
+  assert.ok(hit, 'a crate and a buyer that only just fit');
+  const { g, lead, a } = hit; lead.seg = hit.seg;
+  const need = Object.values(ASSETS).flatMap((d) => d.tags).find((t) => !ASSETS[a.cls].tags.includes(t));
+  lead.need = need;
+  const run = start(g, { kind: 'sell', assetId: a.id, leadId: lead.id });
+  assert.ok(run.plan.blocker, 'an urgent need the crate lacks halves a fit of 0.15 to 0.30 under 0.15: the planner refuses');
+  assert.ok(!D.modelOf(run, {}).view, 'and no stage state exists, so the sheet has no chip row');
+  assert.ok(new RegExp(`\\b${need}\\b[^.]{0,20}needed now`).test(visible(sheet(run))), `"${need}" is still said to be needed now`);
+});
+
+test('D3: the buyer\'s lean is said once, by the stars on the cards, and not again in the list; two candidates are each a maybe', () => {
+  for (const growth of [0, 2, 4, 5, 8]) {
+    const g = world(); g.s.skills.growth = growth;
+    const run = start(g, sellSpec(g)), h = panel(run), lean = run.view().hints.filter((x) => x.angles && x.kind !== 'temper');
+    const stars = [...h.matchAll(/class="ahint">([^<]*)</g)].map((x) => x[1]);
+    assert.equal(stars.length, lean.length ? lean[lean.length - 1].angles.length : 0, `growth ${growth}: a star on each angle the hint names, none when it names none`);
+    for (const x of lean) assert.ok(!visible(h).includes(x.text), `growth ${growth}: "${x.text}" is on the stars and not also in the list`);
+    for (const st of stars) assert.equal(st, stars.length > 1 ? 'Buyer may lean this way' : 'Buyer leans this way', 'one angle outright, two as a maybe: only one of two is the bias');
+  }
+});
+
+// Assist names two angles by a score in which the buyer's lean outweighs the backing; what it says about the backing must be what the engine does with it
+const ANG = ['prestige', 'utility', 'scarcity', 'price', 'story'];
+function* pitchGrid() { // every crate against every buyer at every level of insight, as the Pitch stage would show it
+  const needsOf = (seg) => Object.entries(BUYERS[seg].like).filter(([, w]) => w >= 0.5).sort((a, b) => b[1] - a[1]).map(([t]) => t).slice(0, 4);
+  for (const cls of Object.keys(ASSETS)) for (const seg of Object.keys(BUYERS)) for (let insight = 0; insight <= 5; insight++) {
+    const v = P.view(P.create({ buyer: { needs: needsOf(seg), bias: BUYERS[seg].bias, quirk: null }, asset: { tags: [...ASSETS[cls].tags], features: [] }, insight, seed: 3 }));
+    yield { label: `${cls} / ${seg} / insight ${insight}`, adv: D.pitchAdvice(v), feat: Object.fromEntries(ANG.map((a) => [a, Math.max(0, ...v.asset.features.filter((f) => f.angle === a).map((f) => f.strength))])) };
+  }
+}
+
+test('D3: Assist says "your goods can back it up" only of angles the goods back, and names the ones they cannot', () => {
+  let n = 0, said = 0;
+  for (const { label, adv, feat } of pitchGrid()) {
+    n++; const weak = adv.angles.filter((a) => feat[a] < 0.2); // 0.2: pitch.js, where the backing term 1.25 C - 0.25 turns negative
+    if (/can back it up/.test(adv.text)) { said++; assert.deepEqual(weak, [], `${label}: "${adv.text}" while ${weak} is unbacked`); }
+    else assert.ok(weak.length && /cannot back/.test(adv.text) && weak.every((a) => adv.text.includes(a)), `${label}: "${adv.text}"`);
+  }
+  assert.ok(n > 40000 && said > 1000, `${n} views, ${said} of them say the goods can back it`);
+});
+
+test('D3: Assist advises no angle the goods cannot back while two others are backed (a claim they cannot back counts against you)', () => {
+  let n = 0;
+  for (const { label, adv, feat } of pitchGrid()) if (ANG.filter((a) => feat[a] >= 0.2).length >= 2) { n++; assert.deepEqual(adv.angles.filter((a) => feat[a] < 0.2), [], `${label}: ${adv.text}`); }
+  assert.ok(n > 40000);
 });
 
 // =====================================================================================================================================================
@@ -279,8 +377,50 @@ test('D4: the other option is used once, and it counts only when it beats their 
   assert.ok(H.legal(high).some((a) => a.type === 'leverage') && !H.legal(used).some((a) => a.type === 'leverage'), 'and it is gone after one use');
 });
 
+test('D4: the Assist names the move it recommends as the Close screen does (docs/COPY.md, rule 6)', () => {
+  const rec = (html) => { const m = /<button class="move[^"]*\brec\b[^"]*"[^>]*>([\s\S]*?)<\/button>/.exec(html); return m ? visible(m[1].split('<b>')[0]).replace(/[▲◆▼]/g, '').trim() : null; };
+  const kinds = new Set(), names = new Set();
+  for (const role of ['sell', 'buy']) for (const style of H.STYLES) for (const reserve of [role === 'sell' ? 80 : 120, role === 'sell' ? 125 : 78]) for (let seed = 1; seed <= 16; seed++) for (const alt of [null, role === 'sell' ? 112 : 88]) {
+    let s = H.create({ role, fair: 100, reserve, style, seed, assist: true, insight: seed % 6, patience: 6, alt });
+    for (let i = 0; i < 12 && !s.done; i++) {
+      const v = H.view(s); if (!v.advice) break;
+      const html = UI.closeHTML({ plan: { kind: role, alt }, view: v, advice: v.advice, assist: true, stageDone: false }), name = v.advice.action.type === 'walk' ? 'Walk away' : rec(html); // (the Walk away button carries no ring)
+      assert.ok(name, `a button is highlighted for ${JSON.stringify(v.advice.action)}`);
+      assert.ok(v.advice.text.toLowerCase().includes(name.toLowerCase()), `"${name}" is the button, and the Assist says: ${v.advice.text}`);
+      kinds.add(v.advice.action.type + (v.advice.action.level ? ':' + v.advice.action.level : '')); names.add(`${role}/${name}`);
+      s = H.act(s, v.advice.action).state;
+    }
+  }
+  for (const k of ['anchor:high', 'anchor:fair', 'anchor:low', 'concede', 'hold', 'leverage', 'walk', 'accept']) assert.ok(kinds.has(k), `${k} was advised somewhere in the sweep`);
+  for (const n of ['sell/Aim high', 'sell/Fair', 'sell/Quick sale', 'buy/Generous', 'buy/Fair', 'buy/Lowball', 'sell/Come down', 'buy/Raise your offer', 'sell/Mention your other option', 'sell/Accept their offer', 'buy/Accept their price']) assert.ok(names.has(n), `${n} was the highlighted button somewhere in the sweep`);
+});
+
+test('D4: the first-number advice is the move and the zone, and warns of a style only where the style bites; the lesson says the multiplier once', () => {
+  let anchors = 0, warned = 0;
+  for (const role of ['sell', 'buy']) for (const insight of [0, 2, 5]) for (let seed = 1; seed <= 60; seed++) {
+    const s = H.create({ role, fair: 100, reserve: role === 'sell' ? 125 : 78, style: 'analytical', seed, assist: true, insight, patience: 6 }), a = H.view(s).advice;
+    if (!a || a.action.type !== 'anchor') continue; anchors++;
+    assert.match(a.text, /^Choose (Aim high|Fair|Quick sale|Generous|Lowball) \(\$[\d,.]+\)\. That stays inside the zone of possible agreement \(ZOPA\) without insulting them\./, a.text);
+    if (a.action.level === 'fair') { warned++; assert.match(a.text, /They know the market price, so (a number|an offer) near fair suits them\.$/, a.text); }
+    else { assert.ok(!/They know the market price/.test(a.text), `an analytical buyer is not warned off the opening it was advised: ${a.text}`); assert.equal(H.act(s, a.action).state.flag, null, 'and the opening does not rouse them'); }
+  }
+  assert.ok(anchors > 40 && warned > 5, `${anchors} openings advised, ${warned} of them fair`);
+  // a deal's lesson names the share of the way to their limit, not the multiplier (the Haggle reason has it, once)
+  let deals = 0;
+  for (const role of ['sell', 'buy']) for (const style of H.STYLES) for (let seed = 1; seed <= 24; seed++) {
+    let s = H.create({ role, fair: 100, reserve: role === 'sell' ? 125 : 78, style, seed, insight: 3, patience: 8 });
+    const first = H.act(s, { type: 'anchor', level: 'fair' }); if (first.say === null) continue; s = first.state;
+    for (let i = 0; i < 12 && !s.done; i++) { const r = H.act(s, { type: i < 2 ? 'concede' : 'accept', size: 'medium' }); if (r.say === null) break; s = r.state; }
+    const lesson = H.result(s).lesson; if (!lesson || !/landed/.test(lesson.text)) continue; deals++;
+    assert.ok(!/\d\.\d\d|\btimes\b/.test(lesson.text.replace(/\$[\d.,]+/g, '')), lesson.text); assert.match(lesson.text, /^The price landed \d+% of the way to their limit \(\$[\d,.]+\)\./);
+  }
+  assert.ok(deals > 20, `${deals} deals read`);
+});
+
 test('D4: a buyer with under 12% of headroom has nothing to haggle over, and the card says so in the words the lessons use', () => {
-  const g = world(), spec = sellSpec(g), lead = leadOf(g, spec.leadId), raw = D.planFor(g, spec).raw;
+  const g = world();
+  for (const z of g.s.zones) for (const l of g.s.leads[z]) l.need = null; // an urgent buyer is priced from their own budget (engine.js:633), so the budget set below would move the price with it
+  const spec = sellSpec(g), lead = leadOf(g, spec.leadId), raw = D.planFor(g, spec).raw;
   lead.budget = raw * 1.11; assert.equal(D.planFor(g, spec).capped, true, 'a budget 11% over the price is spent');
   lead.budget = raw * 1.13; assert.equal(D.planFor(g, spec).capped, false, 'one 13% over is not');
   lead.budget = raw * 1.11;
@@ -291,7 +431,6 @@ test('D4: a buyer with under 12% of headroom has nothing to haggle over, and the
 // =====================================================================================================================================================
 // D5: the Bid stage
 // =====================================================================================================================================================
-const bidView = (o = {}) => ({ estimate: 100, opening: 60, price: 130, nextBid: 140, budget: 135, high: 'Marla', youHigh: false, rivals: [], events: [], actions: [{ type: 'drop' }], done: false, increment: 10, round: 3, yourTurn: true, ...o });
 
 test('D5: the limit on a bid is 1.4x the guide price or your cash, whichever is less, and the callout says "limit"', () => {
   const g = world(), spec = auctionLot(g), lot = g.s.lots[6].find((l) => l.id === spec.lotId);
@@ -300,6 +439,20 @@ test('D5: the limit on a bid is 1.4x the guide price or your cash, whichever is 
   const h = UI.bidHTML({ plan: { lot: { price: 100, mode: 'auction' } }, view: bidView(), stageDone: false });
   assert.match(h, /<div class="callout warn" title="Your limit is 1\.4x the guide price, or your cash if that is less\.">The next bid is past your limit\. You can only drop out\.<\/div>/);
   assert.ok(!/past your budget/.test(h));
+});
+
+test('D5: with Assist on, the cap is said once, by the Assist box in the callout\'s word, and the limit rule moves to the box\'s hover', () => {
+  let s = A.create({ trueValue: 100, estimate: 100, seed: 1, reserve: 50, increment: 10, budget: 120, assist: true, bidders: [{ style: 'steady', limit: 400 }, { style: 'steady', limit: 400 }] });
+  for (let i = 0; i < 20 && A.view(s).nextBid <= 120; i++) s = A.act(s, { type: 'bid' }).state;
+  const v = A.view(s), plan = { lot: { price: 100, mode: 'auction' } };
+  assert.ok(v.nextBid > v.budget && !A.legal(s).some((a) => a.type === 'bid'), 'the next bid is past the limit, so a drop is all that is left');
+  assert.match(v.advice.text, /is past your limit \(\$120\): drop\.$/);
+  const on = UI.bidHTML({ plan, view: v, advice: v.advice, assist: true, stageDone: false }), off = UI.bidHTML({ plan, view: v, stageDone: false });
+  assert.match(on, /<b>Assist\.<\/b>/); assert.ok(!/class="callout warn"/.test(on), 'with the hint on screen the callout does not say it again');
+  assert.equal(visible(on).split('past your limit').length - 1, 1, 'the cap is said once');
+  assert.ok(titles(on).includes('Your limit is 1.4x the guide price, or your cash if that is less.'), 'and the hint carries the rule on hover');
+  assert.match(off, /<div class="callout warn" title="Your limit is 1\.4x the guide price, or your cash if that is less\.">The next bid is past your limit\. You can only drop out\.<\/div>/);
+  assert.ok(!/\bbudget\b/.test(visible(on)) && !/\bbudget\b/.test(visible(off)), 'one word for the cap on the one panel');
 });
 
 test('D5: a rival\'s mood is what the hover says: steady raises one step at a time, loud jumps, quiet waits', () => {
@@ -422,6 +575,35 @@ test('D7: a headline does not repeat the sheet\'s title; it says what was paid',
   const left = start(fixes, brokenCrate(fixes)).walkAway(); assert.ok(/The .+ is still broken/.test(left.headline) && !/\(broken\)/.test(left.headline), left.headline);
 });
 
+test('D7: the sale card compares what you received with the crate\'s market value in the engine\'s figures: the percent, above or below, and a multiple from 5 times', () => {
+  // The comparison is the engine's gain, received / fmv - 1 (quotePitch): what lands after tax and fees against the value Stock shows. Every sale below is played on a world of its own, with urgent buyers
+  // among the others, so the sweep reaches a sale above the value, one below it, and one that pays a multiple of a cheap crate's value.
+  const sweep = (perks, seed) => { const g = world(perks, seed); for (const z of g.s.zones) for (let k = 0; k < 6; k++) g._spawnLead(z, false, k % 2 === 0); return g; };
+  const seen = new Set();
+  for (const [perks, seed] of [[['grad', 'roots'], 1], [['grad', 'roots'], 2], [['native', 'second'], 3]]) {
+    const g0 = sweep(perks, seed), pairs = [];
+    for (const z of g0.s.zones) for (const lead of g0.s.leads[z]) for (const a of g0.s.assets.filter((x) => x.zone === z)) { const q = g0.quotePitch(a.id, lead.id); if (q.ok && !q.rejected) pairs.push([a.id, lead.id]); }
+    for (const [assetId, leadId] of pairs.filter((_, i) => i % 3 === 0)) {
+      const g = sweep(perks, seed), run = start(g, { kind: 'sell', assetId, leadId }); run.quickAll();
+      const sm = run.finish(), row = g.s.ledger.findLast((x) => x.type === 'pitch' && x.fmv != null);
+      if (!sm.ok || !row) continue; // (a buyer who refuses, or a fraud, leaves no sale row)
+      const gain = row.recv / row.fmv - 1, pct = Math.round(Math.abs(gain) * 100), kind = gain >= 4 ? 'times' : pct === 0 ? 'line' : gain > 0 ? 'above' : 'below';
+      const want = `${{ times: `${Math.round(1 + gain)} times`, line: 'In line with', above: `${pct}% above`, below: `${pct}% below` }[kind]} the crate's market value of ${money(row.fmv)}.`;
+      assert.ok(sm.lines.includes(want), `${kind}: gain ${gain.toFixed(4)} wants "${want}" in ${JSON.stringify(sm.lines)}`); seen.add(kind);
+    }
+  }
+  for (const kind of ['above', 'below', 'times']) assert.ok(seen.has(kind), `the sweep reached a sale that reads "${kind}"`);
+});
+
+test('D7: the comparison line says "In line with" under half a percent, a whole percent up to 4 times the value, and a multiple of it from 5 times', () => {
+  for (const [gain, says] of [[0.004, 'In line with'], [-0.004, 'In line with'], [0.006, '1% above'], [-0.006, '1% below'], [0.21, '21% above'], [-0.3, '30% below'], [3.99, '399% above'], [4, '5 times'], [130.9467, '132 times']]) {
+    const g = world(['grad', 'roots']), pitch = g.pitch.bind(g); g.pitch = (...args) => { const r = pitch(...args); return r.ok ? { ...r, gain } : r; }; // the engine's own sale, read with the gain this row is about
+    const run = start(g, sellSpec(g)); run.quickAll();
+    const vs = run.finish().lines.find((l) => /the crate's market value/.test(l));
+    assert.ok(vs && vs.startsWith(`${says} the crate's market value of $`), `gain ${gain}: "${vs}" starts "${says}"`);
+  }
+});
+
 test('D7: the reveal counts the flaws a lot had and the ones you found, and "worth minus price" is the engine\'s sum', () => {
   const g = world(['grad', 'roots']), lot = g.s.lots[4].find((l) => l.mode === 'fixed');
   lot.truth = { q: 0.83, fake: false, defects: ['worn finish', 'loose fittings', 'faded markings'].map((label, i) => ({ id: 'd' + i, label })) };
@@ -429,6 +611,7 @@ test('D7: the reveal counts the flaws a lot had and the ones you found, and "wor
   run.act({ type: 'probe', id: 'look' }); run.act({ type: 'conclude' }); run.next(); run.quick();
   const secret = run.secret(), worth = run.worth(secret), sm = run.finish(), h = sheet(run), found = sm.reveal.found;
   assert.equal(sm.reveal.total, 3);
+  assert.equal(sm.reveal.truth, '83% of its described condition, genuine'); assert.ok(h.includes('<b>83% of its described condition, genuine.</b>'), 'the real condition says what it is a share of');
   assert.ok(h.includes(`It had 3 flaws: worn finish, loose fittings, faded markings. You found ${found}.`), h.slice(h.indexOf('What the lot really was'), h.indexOf('What the lot really was') + 260));
   assert.ok(!/You found \d+ of its/.test(h), 'it no longer reads as if the three were the ones you found');
   assert.ok(Math.abs(sm.numbers.net - (worth - sm.numbers.you)) < 0.01, 'your net is worth minus price');
@@ -473,6 +656,120 @@ test('D7: leaving a sale keeps the buyer, a lot bought dear is "Paid too much", 
   const g5 = world(['grad', 'roots']), again = start(g5, fixedLot(g5)); again.quick(); again.next(); again.act({ type: 'anchor', level: 'low' }); again.act({ type: 'walk' }); again.finish();
   const second = start(g5, fixedLot(g5)); second.quick(); second.next();
   assert.ok(second.res.close && second.res.close.quick && /sat at this table before\. Quick played it for you\.$/.test(second.lastSay()), 'a table sat at before is played at Quick, and says so');
+});
+
+test('D7: a won auction is told in one worth: the lesson quotes the figure the card prints, and gives the verdict the title gives', () => {
+  let wins = 0, lost = 0;
+  for (const perks of [['grad', 'native'], ['grad', 'roots'], ['trades', 'roots']]) for (const seed of [3, 9, 14]) {
+    const g = world(perks, seed);
+    for (const z of [3, 4, 6]) for (let k = 0; k < 30; k++) g._spawnLot(z);
+    for (const z of [3, 4, 6]) for (const lot of g.s.lots[z].filter((l) => l.mode === 'auction')) {
+      const run = D.startRun(g, { kind: 'buy', zone: z, lotId: lot.id }); if (!run.ok) continue;
+      run.quickAll(); const secret = run.secret(), worth = run.worth(secret), sm = run.finish();
+      if (!sm.ok || !run.res.bid || !run.res.bid.won || secret.fake) continue;
+      wins++;
+      const net = worth - sm.numbers.you, curse = /winner's curse/.test(sm.lesson.text);
+      if (!run.wreck(secret)) assert.ok(sm.lines.includes(`Worth about ${money(worth)}.`), 'the card prints the engine\'s worth');
+      assert.ok(sm.lesson.text.includes(money(worth)), `the lesson quotes that worth: ${sm.lesson.text}`);
+      assert.ok(!/true value/.test(sm.lesson.text), 'and not the Bid game\'s own "true value" (the guide price over TUNE.guide)');
+      assert.equal(curse, net < 0, `the lesson and the title give one verdict (${sm.title}): ${sm.lesson.text}`);
+      assert.equal(sm.title === 'Paid too much', net < 0);
+      if (net < 0) lost++;
+    }
+  }
+  assert.ok(wins >= 15 && lost >= 3, `${wins} wins, ${lost} of them above the worth`);
+});
+
+test('D7: a dropped auction says a profitable win was possible only when the engine\'s worth leaves one', () => {
+  let drops = 0, possible = 0;
+  for (const perks of [['grad', 'native'], ['grad', 'roots'], ['trades', 'roots']]) for (const seed of [3, 5, 8, 9, 11, 14, 17]) {
+    const g = world(perks, seed);
+    for (const z of [3, 4, 6]) for (let k = 0; k < 60; k++) g._spawnLot(z);
+    for (const z of [3, 4, 6]) for (const lot of g.s.lots[z].filter((l) => l.mode === 'auction')) {
+      const run = D.startRun(g, { kind: 'buy', zone: z, lotId: lot.id }); if (!run.ok) continue;
+      const price = lot.price; run.quickAll(); const secret = run.secret(), worth = run.worth(secret), sm = run.finish();
+      if (!run.res.bid || run.res.bid.won !== false || secret.fake) continue;
+      drops++;
+      const top = Math.max(0, ...run.res.bid.reveal.rivals.map((b) => b.limit * (b.style === 'bluffer' ? 0.9 : 1))), could = worth - Math.max(price * 0.6, top + price / 20) > 0.01 * worth;
+      assert.equal(/win at a profit was possible/.test(sm.lesson.text), could, sm.lesson.text);
+      if (could) possible++;
+    }
+  }
+  assert.ok(drops >= 20 && possible >= 3, `${drops} dropped lots, ${possible} with a profitable win left`);
+});
+
+test('D7: a wreck is judged on its better use: where the repair pays it is a "Good buy", and the line, the title and the three nets read one worth', () => {
+  let wrecks = 0, pays = 0, payless = 0;
+  for (const ops of [1, 4]) for (let seed = 1; seed <= 6; seed++) {
+    const g = makeGame(['roots', 'second'], 'ops', seed);
+    for (const z of [2, 3, 4]) g._openZone(z);
+    g.s.cash = 1e9; g.s.skills.ops = ops;
+    for (const z of g.s.zones) { g.s.lots[z] = []; for (let k = 0; k < 8; k++) g._spawnLot(z); } // lots posted AFTER the Ops level is set, as the engine posts them
+    for (const z of g.s.zones) for (const lot of [...g.s.lots[z]].filter((l) => l.cond === 'broken')) {
+      const run = D.startRun(g, { kind: 'buy', zone: z, lotId: lot.id }); assert.ok(run.ok, run.msg);
+      const t = run.secret(), rq = g.repairQuoteFor(lot.cls, z), truth = { q: t.q, fake: false };
+      const asIs = g.val({ cls: lot.cls, cond: 'broken', quality: 1, wear: 1, zone: z, known: true, truth });
+      const fixed = g.val({ cls: lot.cls, cond: 'ok', quality: rq.quality, wear: 1, zone: z, known: true, truth });
+      run.quickAll(); const sm = run.finish(); g.s.assets = [];
+      if (!sm.ok || sm.numbers.you == null) continue;
+      wrecks++; const price = sm.numbers.you, best = Math.max(asIs, fixed - rq.cost), n = sm.numbers;
+      assert.ok(Math.abs(n.net - (best - price)) < 0.011, `your net is the better use minus the price (${n.net} vs ${best - price})`);
+      assert.ok(Math.abs(n.net - n.quickNet) < 0.011, `Quick paid the same price, so its net is yours (${n.quickNet} vs ${n.net})`);
+      assert.equal(sm.title, best - price >= 0 ? 'Good buy' : 'Paid too much', `${sm.title} at ops ${ops}`);
+      assert.ok(sm.lines.includes(`Worth about ${money(asIs)} as it stands, ${money(fixed)} repaired for a bill of about ${money(rq.cost)}.`), sm.lines.join(' | '));
+      if (fixed - rq.cost > asIs) pays++; else payless++;
+    }
+  }
+  assert.ok(wrecks >= 20 && pays >= 5 && payless >= 5, `wrecks ${wrecks}, repair pays ${pays}, does not ${payless}`);
+});
+
+// a blank row of the comparison says what happened: nobody is paid in a sale a fraud took or a buyer refused, talks the other side ended are no deal, and a walk is a walk
+const rowsOf = (h) => Object.fromEntries([...h.matchAll(/<div class="vs [^"]*"[^>]*><dt>([^<]*)<\/dt><dd[^>]*>([^<]*)<\/dd>/g)].map((m) => [m[1], m[2]]));
+const cardOf = (run) => { const sm = run.summary || run.finish(); return { sm, rows: rowsOf(UI.resultHTML({ plan: run.plan, summary: sm })) }; };
+
+test('D7: a sale a fraud took or a buyer refused reads "no sale" on all three rows, and a sale still prints its prices', () => {
+  const g = world(['native', 'second']), spec = sellSpec(g); leadOf(g, spec.leadId).scam = true;
+  const robbed = start(g, spec); robbed.quickAll(); const a = cardOf(robbed);
+  assert.equal(a.sm.title, 'Scammed'); assert.deepEqual(a.rows, { Quick: 'no sale', Expert: 'no sale', You: 'no sale' });
+  const g2 = world(['grad', 'roots']), crate = g2.s.assets[0]; crate.truth = { q: 1, fake: true, defects: [] }; crate.known = false;
+  let spec2 = null; for (const lead of g2.s.leads[crate.zone]) { const q = g2.quotePitch(crate.id, lead.id, undefined, { blind: true }); if (!spec2 && q.ok && q.fit >= 0.15) spec2 = { kind: 'sell', assetId: crate.id, leadId: lead.id }; }
+  assert.ok(spec2, 'a buyer who would look at the crate');
+  const refused = start(g2, spec2); refused.quickAll(); const b = cardOf(refused);
+  assert.equal(b.sm.title, 'Counterfeit spotted'); assert.deepEqual(b.rows, { Quick: 'no sale', Expert: 'no sale', You: 'no sale' });
+  const g3 = world(['grad', 'roots']), sold = start(g3, sellSpec(g3)); sold.quickAll(); sold.finish();
+  assert.ok(Object.values(cardOf(sold).rows).every((v) => /^\$/.test(v)), JSON.stringify(cardOf(sold).rows));
+});
+
+test('D7: a blank row of your own is a walk in the past tense, talks the buyer ended are "no deal", and nobody walks away from a table that was gone', () => {
+  const g = world(), walked = start(g, sellSpec(g)); walked.quick(); walked.next(); walked.act({ type: 'anchor', level: 'high' }); walked.act({ type: 'walk' }); walked.finish();
+  assert.equal(cardOf(walked).rows.You, 'walked away', 'the Walk away button inside a haggle is a walk, and you did it');
+  const g2 = world(), left = start(g2, sellSpec(g2)); left.walkAway();
+  assert.equal(cardOf(left).rows.You, 'walked away', 'leaving the table is a walk');
+  const g3 = world(), patience = start(g3, sellSpec(g3)); patience.quick(); patience.next(); patience.act({ type: 'anchor', level: 'high' });
+  for (let n = 0; !patience.res.close && n < 30; n++) patience.act({ type: 'hold' });
+  patience.finish(); assert.equal(patience.summary.title, 'No deal'); assert.equal(cardOf(patience).rows.You, 'no deal', 'the buyer ran out of patience: not a walk of yours');
+  const g4 = world(), spec4 = sellSpec(g4), gone = start(g4, spec4); g4.s.leads[gone.plan.zone] = g4.s.leads[gone.plan.zone].filter((l) => l.id !== spec4.leadId); gone.quickAll(); gone.finish();
+  assert.equal(gone.summary.title, 'Not done'); assert.equal(cardOf(gone).rows.You, 'no deal', 'a buyer who has left while the table was open: nobody walked');
+  const lite = { plan: { kind: 'buy' }, summary: { tone: 'info', title: 'No deal', headline: 'x', lines: [], numbers: { unit: 'price paid', better: 'low', quick: null, expert: null, you: null }, reasons: [], reveal: null, xp: 0, streak: 0, lesson: { concept: 'anchoring', text: 'x' } } };
+  assert.deepEqual(rowsOf(UI.resultHTML(lite)), { Quick: 'walks away', Expert: 'walks away', You: 'walked away' }, 'a third person walks, you walked');
+});
+
+test('D7: a condition is said against its description wherever the figure stands alone (the reveal, the read left on the shelf, the Quick note), and the Read prints the range its bar draws in percent, not in "points"', () => {
+  // a lot's real condition runs from 85% (the first two districts) or 70% to 115% of its description (engine.js _spawnLot), so a bare "111% condition" has no scale to be read on
+  const g = world(['grad', 'roots']), lot = g.s.lots[4].find((l) => l.mode === 'fixed'); lot.truth = { q: 1.11, fake: false, defects: [] };
+  const run = start(g, { kind: 'buy', zone: 4, lotId: lot.id }); run.quick(); run.next(); run.quick();
+  const sm = run.finish();
+  assert.equal(sm.reveal.truth, '111% of its described condition, genuine');
+  assert.match(sm.reveal.estimate, /^\d+% of its described condition, \d+% chance of counterfeit$/);
+  assert.match(visible(sheet(run)), /111% of its described condition, genuine\. It had no flaws\. Your read: \d+% of its described condition, \d+% chance of counterfeit\./);
+  const g2 = world(['grad', 'roots']), walk = start(g2, fixedLot(g2)); walk.act({ type: 'probe', id: 'look' });
+  assert.match(walk.walkAway().reasons.find((r) => r.label === 'Your read').text, /^\d+% of its described condition, \d+% chance of counterfeit$/, 'on the shelf the read is the only place the figure stands');
+  const g3 = world(['grad', 'roots']), quick = start(g3, fixedLot(g3)); quick.quick();
+  assert.match(D.modelOf(quick).quickRes.text, /^\d+% of its described condition, \d+% chance of counterfeit \(\d+ points? spent\)\.$/);
+  // the Read: the range is what the bar draws (q - sd to q + sd), said in percent; "points" is the budget's word and nothing else's
+  const g4 = world(), r4 = start(g4, fixedLot(g4)), m4 = model(r4), q = m4.view.belief.quality, sd = m4.view.doubt, pc = (x) => `${Math.round(x * 100)}%`, h = UI.readHTML(m4);
+  assert.ok(h.includes(`about ${pc(q)}</b> <span class="mute small">(${pc(q - sd)} to ${pc(q + sd)})</span>`), 'about 93% (80% to 106%)');
+  assert.ok(!/give or take|\d+ points\b/.test(visible(h)), 'no figure in the Read is counted in "points" but the budget');
 });
 
 // =====================================================================================================================================================
@@ -529,4 +826,38 @@ test('D9: a fraud you verified and a full yard are refused in the engine\'s own 
   assert.equal(visible(sheet(start(g2, fixedLot(g2)))).split(FULL).length - 1, 1, 'a full yard is said once');
   for (const f of ['js/deal.js', 'js/ui/deal.js']) { const src = read(f); assert.ok(src.includes(FRAUD), `${f} says the engine's fraud refusal`); assert.ok(!/Extreme Asymmetric|will not take a broken asset/.test(src), `${f} names no refusal the engine has reworded`); }
   assert.ok(read('js/deal.js').includes(FULL), 'and the planner says the engine\'s full-yard refusal');
+});
+
+// =====================================================================================================================================================
+// D10: the Assist box
+// =====================================================================================================================================================
+test('D10: the Assist box says a move and its reason, adds at most 35 words to any stage, and does not tell again what the stage prints', () => {
+  const g = world(), at = (spec, assist, n = 0) => { const r = start(g, spec, { assist }); for (let i = 0; i < n; i++) { r.quick(); r.next(); } return r; };
+  for (const [key, spec, n] of [['read', fixedLot(g), 0], ['pitch', sellSpec(g), 0], ['close', fixedLot(g, 3), 1], ['bid', auctionLot(g), 1], ['fix', brokenCrate(g), 0]]) {
+    const off = at(spec, false, n), on = at(spec, true, n); assert.equal(on.key, key);
+    const added = words(panel(on)) - words(panel(off)); assert.ok(added > 0 && added <= 35, `${key}: Assist adds ${added} words (at most 35)`);
+  }
+  // Close, round 0: the move, then the zone. The read of their limit and the first-number principle are printed on the stage, once, whether or not Assist is on.
+  const close = at(fixedLot(g, 3), true, 1), principle = 'The first number pulls the whole talk toward it.';
+  assert.equal(visible(panel(close)).split(principle).length - 1, 1, 'with Assist on, the principle is said once');
+  assert.equal(visible(panel(at(fixedLot(g, 3), false, 1))).split(principle).length - 1, 1, 'and with it off');
+  for (const role of ['sell', 'buy']) for (const style of H.STYLES) {
+    const v = H.view(H.create({ role, fair: 100, reserve: role === 'sell' ? 125 : 78, style, seed: 4, assist: true, insight: 3, patience: 6 })), t = v.advice.text;
+    assert.match(t, /^Choose (Aim high|Fair|Quick sale|Generous|Lowball) \(\$[\d,.]+\)\. That stays inside the zone of possible agreement \(ZOPA\) without insulting them\./, `${role}/${style}: the move, then the zone`);
+    assert.ok(!/probably between|pulls the whole talk/.test(t), `${role}/${style}: neither the read nor the principle is told again`);
+    assert.ok(!t.includes(money(v.read.lo)) && !t.includes(money(v.read.hi)), `${role}/${style}: the figures of the read are not in the box`);
+  }
+  // Bid: the stop, how the next bid stands to it, what a drop shows. The estimate, the rivals and their drops are printed on the stage.
+  const room = (o) => A.create({ trueValue: 100, estimate: 100, reserve: 50, increment: 5, assist: true, seed: 3, bidders: [{ style: 'steady', limit: 200 }, { style: 'steady', limit: 200 }, { style: 'steady', limit: 200 }], ...o });
+  const fine = A.view(room({})).advice, past = A.view(room({ estimate: 60, reserve: 70 })).advice, over = A.view(room({ budget: 52, reserve: 55 })).advice;
+  assert.equal(fine.action.type, 'bid'); assert.equal(fine.text, "Stop near $95.00: your estimate less a margin for the winner's curse. The next bid, $55.00, is inside that.");
+  assert.equal(past.action.type, 'drop'); assert.equal(past.text, "Stop near $57.00: your estimate less a margin for the winner's curse. The next bid, $75.00, is past that: drop.");
+  assert.equal(over.action.type, 'drop'); assert.equal(over.text, "Stop near $95.00: your estimate less a margin for the winner's curse. The next bid, $60.00, is past your limit ($52.00): drop.");
+  let s = room({ reserve: 40, increment: 4, bidders: [55, 64, 73, 82].map((limit, i) => ({ style: i % 2 ? 'steady' : 'sniper', limit })) }); const opens = new Set();
+  for (let k = 0; k < 40 && !s.done; k++) {
+    const t = A.view(s).advice.text; opens.add((/(A rival has|Rivals have) dropped near \$[\d,.]+; that is evidence\.$/.exec(t) || [, 'none'])[1]);
+    for (const x of t.split(/(?<=[.:;]) /)) assert.ok(!/^\d/.test(x), `no sentence opens on a numeral: ${t}`);
+    const r = A.act(s, { type: 'bid' }); if (r.say === null) break; s = r.state;
+  }
+  assert.deepEqual([...opens].sort(), ['A rival has', 'Rivals have', 'none'], 'a drop is said once, in words, after the stop and the next bid');
 });

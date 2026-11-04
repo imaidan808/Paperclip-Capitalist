@@ -186,7 +186,7 @@ try {
     say = await sayInSheet(p);
     ok(/Fix\. A marker moves across a bar by itself/.test(say) && /Dial tone button, to follow it by ear/.test(say), 'U4: and now the room explains it, once: ' + say.slice(-190));
     let ear = await p.eval(`document.getElementById('dial-ear')?.textContent`);
-    ok(/^Prefer to listen\? Turn on Repair dial tone with the Dial tone switch next to Sound, or in Display and sound\./.test(ear || ''), 'U4: the line under the dial does not depend on where the header is: ' + ear);
+    ok(/^To follow the marker by ear, turn on Dial tone next to Sound or in Display and sound\./.test(ear || ''), 'U4: the line under the dial does not depend on where the header is: ' + ear);
     await p.key('Escape'); await sleep(500);
     await openRepair(p);
     ear = await p.eval(`document.getElementById('dial-ear')?.textContent`);

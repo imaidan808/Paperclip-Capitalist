@@ -1431,13 +1431,15 @@ test('m10: every skill, then the score', () => {
   assert.ok(lot.price < ceiling, 'the opening price is under the all-in value, so the chain pays');
   // The lot "as it stands" is the figure the player can SEE: Stock lists the crate at $490 once it is theirs, and the repair quote's "before" is the same number. The Deal
   // Room has two others for the same lot, neither of them a good one to quote: the auction game's hidden worth ($534, the guide price over 0.8 times the real condition, which
-  // its winner's-curse line prints after a win) and, on the result screen, "Worth about $441". The card used to call $534 the room's
+  // its winner's-curse line prints after a win) and, on the result screen, "Worth about $441 as it stands, $919 repaired". The card used to call $534 the room's
   // value as it stands; a player who read Stock and the result screen had three numbers for one lot.
   const lotA = g.s.lots[6].find((l) => l.id === 'estate-lot-a'), params = D.auctionParams(g, 6, lotA);
   assert.equal(ui(params.trueValue), '$534');
   const gs = sandbox(m), wonStock = auctionDeal(gs, 6, 'estate-lot-d', { ceiling }), stock = gs.val(gs.s.assets[0]);
   assert.equal(ui(stock), '$490'); assert.equal(stock, gs.repairQuote(gs.s.assets[0].id).before, 'Stock and the repair quote agree');
-  assert.match(wonStock.summary.lines.join(' '), /Worth about \$441\./);
+  assert.match(wonStock.summary.lines.join(' '), /^Worth about \$441 as it stands, \$919 repaired for a bill of about \$160\.$/);
+  assert.equal(wonStock.summary.title, 'Good buy', 'a wreck bought under what it is worth repaired is a good buy, as the lesson says');
+  assert.equal(wonStock.summary.reveal.truth, '90% of its described condition, genuine', 'the reveal says what the 90% is a share of');
   assert.ok(stock < ceiling && lot.price < stock, 'the lot as it stands is worth less than the all-in value, so the repair is the edge');
   has('m10 why', m.why.body[2], ui(stock), 'the figure Stock shows', 'fix and resell', 'sale price is an estimate too', ui(ceiling));
   assert.ok(!/\$534|\$441/.test(text(m)), 'the card quotes neither of the Deal Room\'s other two numbers for the lot');

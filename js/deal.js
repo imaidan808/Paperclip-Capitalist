@@ -29,6 +29,7 @@ const r2 = (x) => Math.round(fin(x) * 100) / 100;
 const money = (x) => { x = fin(x); const v = Math.abs(x), s = x < 0 ? '-' : ''; return v < 100 ? `${s}$${v.toFixed(2)}` : `${s}$${Math.round(v).toLocaleString('en-US')}`; };
 const pctOf = (x) => `${Math.round(fin(x) * 100)}%`;
 const pts = (n) => `${n} point${n === 1 ? '' : 's'}`;
+const condOf = (x) => `${pctOf(x)} of its described condition`; // the words of the sale line: a lot's condition is a share of its description, and runs to 115% (so "111% condition" alone reads as an error)
 const own = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
 
 /** Deterministic from the game seed and the ids, and NOT from the clock: a deal replays exactly however long ago it was opened. The hour used to
@@ -161,8 +162,9 @@ export function pitchAdvice(view) {
   for (const f of view.asset?.features || []) feat[f.angle] = Math.max(feat[f.angle] || 0, f.strength);
   const likely = view.likely?.angles || [], temper = (view.hints || []).find((h) => h.kind === 'temper')?.angles || [], qa = (view.hints || []).find((h) => h.kind === 'quirk-angle');
   const score = (a) => (likely.includes(a) ? 1 / Math.sqrt(likely.length) : 0) + (temper.includes(a) ? 0.3 : 0) + 0.9 * feat[a] + (qa && qa.angle === a ? qa.sign * 0.8 : 0);
-  const best = [...view.angles].sort((a, b) => score(b) - score(a)).slice(0, 2);
-  return { angles: best, text: `Try ${best[0]} with ${best[1]}: the buyer leans that way and your goods can back it up.` };
+  const backed = view.angles.filter((a) => feat[a] >= 0.2), from = backed.length >= 2 ? backed : view.angles; // 0.2: where pitch.js's 1.25 C - 0.25 turns negative, so a claim the goods cannot back counts against the pitch
+  const best = [...from].sort((a, b) => score(b) - score(a)).slice(0, 2), weak = best.filter((a) => feat[a] < 0.2);
+  return { angles: best, text: `Try ${best[0]} with ${best[1]}: the buyer leans that way${weak.length ? `, but your goods cannot back ${weak.join(' or ')}, and a claim they cannot back counts against you.` : ' and your goods can back it up.'}` };
 }
 /** The next probe worth its price (Assist), from view() only. */
 export function inspectAdvice(view) {
@@ -293,7 +295,7 @@ export class DealRun {
   lose(msg, nothing = true) {
     const { plan, g } = this;
     this.over = true; this.walked = true; this.deal = null;
-    const numbers = { unit: plan.kind === 'sell' ? 'sale price' : plan.kind === 'buy' ? 'price paid' : 'net gain after the bill', better: plan.kind === 'buy' ? 'low' : 'high', you: null, quick: null, expert: null, quickNet: null, expertNet: null, expertVia: null, hidden: true };
+    const numbers = { unit: plan.kind === 'sell' ? 'sale price' : plan.kind === 'buy' ? 'price paid' : 'net gain after the bill', better: plan.kind === 'buy' ? 'low' : 'high', you: null, quick: null, expert: null, quickNet: null, expertNet: null, expertVia: null, hidden: true, none: 'no deal' };
     this.summary = sanitize({ ok: false, gone: nothing, msg, kind: plan.kind, tone: 'warn', title: 'Not done', headline: msg, lines: nothing ? ['Nothing was bought, sold, repaired or charged.'] : [], reasons: [], reveal: null, xp: 0, streak: g.s.streak, numbers,
       lesson: { concept: 'opportunity-cost', text: nothing ? 'Deals do not wait. In a live class the market moves while you think, so decide before the lot, the buyer or the crate is gone.' : 'Your stock and your cash show where it stands.' }, quick: false, engineMsg: msg });
     return this.summary;
@@ -453,7 +455,15 @@ export class DealRun {
     return { done: buy, price: buy ? price : 0, mult: buy ? deal.mult : null, net: buy ? this.worth(secret) - price : 0, blind };
   }
   secret() { return this.plan.kind === 'buy' ? this.g.lotTruth(this.plan.zone, this.plan.lot.id) : null; }
-  worth(t) { const lot = this.lot(), p = this.plan; return this.g.val({ cls: p.lot.cls, cond: lot ? lot.cond : p.lot.cond, quality: 1, wear: 1, zone: p.zone, known: true, truth: { q: t.q ?? t.quality ?? 1, fake: !!t.fake } }); }
+  /** The crate as it stands, with the truth `t` known (the shelf lot is gone once it is bought, so the plan's snapshot carries the condition). */
+  asIs(t) { const lot = this.lot(), p = this.plan; return this.g.val({ cls: p.lot.cls, cond: lot ? lot.cond : p.lot.cond, quality: 1, wear: 1, zone: p.zone, known: true, truth: { q: t.q ?? t.quality ?? 1, fake: !!t.fake } }); }
+  /** A wreck is posted for its repair upside (market.js lotShare: 1.0x its as-is value at Ops 1, more with every level), so its worth is the better of what it is as it stands and what it is once repaired (the quote's neutral terms, the lot's real condition) less the bill. null for a working crate. */
+  wreck(t) {
+    const lot = this.lot(), p = this.plan; if ((lot ? lot.cond : p.lot.cond) !== 'broken') return null;
+    const rq = this.g.repairQuoteFor(p.lot.cls, p.zone), asIs = this.asIs(t), fixed = this.g.val({ cls: p.lot.cls, cond: 'ok', quality: rq.quality, wear: 1, zone: p.zone, known: true, truth: { q: t.q ?? t.quality ?? 1, fake: !!t.fake } });
+    return { asIs, fixed, bill: rq.cost, best: Math.max(asIs, fixed - rq.cost) };
+  }
+  worth(t) { const w = this.wreck(t); return w ? w.best : this.asIs(t); }
   compare(truth = false) { return this.cmp ||= { quick: this.simulate(QUICK, truth), expert: this.simulate(EXPERT, truth) }; }
 
   // ---- the end: the only place a run calls the engine
@@ -523,8 +533,8 @@ function pitchReveal(run) { // rebuild the (deterministic) pitch game to read it
 }
 function readLine(run, secret) {
   const r = run.res.read; if (!r || !r.estimate) return null;
-  const e = r.estimate, truthQ = Math.round(secret.q * 100), found = (r.defects || []).length, total = secret.defects.length;
-  return { estimate: `${pctOf(e.quality)} condition, ${pctOf(e.fakeProb)} chance of counterfeit`, truth: `${truthQ}% condition, ${secret.fake ? 'counterfeit' : 'genuine'}`, found, total };
+  const e = r.estimate, found = (r.defects || []).length, total = secret.defects.length;
+  return { estimate: `${condOf(e.quality)}, ${pctOf(e.fakeProb)} chance of counterfeit`, truth: `${condOf(secret.q)}, ${secret.fake ? 'counterfeit' : 'genuine'}`, found, total };
 }
 
 function summarize(run, { r, deal, noDeal, before, after, cmp, secret }) {
@@ -567,9 +577,9 @@ function summarize(run, { r, deal, noDeal, before, after, cmp, secret }) {
         // by exactly the crate's real condition, and the card says so with both numbers (the lot's real condition was told when it was bought; a crate never read tells it here, once it is gone).
         const cond = r.parts && Number.isFinite(r.parts.quality) ? r.parts.quality : 1, said = hag && hag.deal && Number.isFinite(hag.price) ? hag.price : null;
         if (!r.capped && Math.abs(cond - 1) >= 0.005 && said != null && said > 0 && Math.abs(r.price / said - cond) <= 0.03) {
-          lines.push(`The talk closed at ${money(said)}. The buyer checked the crate, found it at ${pctOf(cond)} of its described condition, and paid ${money(r.price)}.`); // (this line is the reason too: it is not said twice below)
+          lines.push(`The talk closed at ${money(said)}. The buyer checked the crate, found it at ${condOf(cond)}, and paid ${money(r.price)}.`); // (this line is the reason too: it is not said twice below)
         } else if (!r.capped && Math.abs(cond - 1) >= 0.005 && said == null) {
-          reasons.push({ label: 'Condition', text: `The crate is really ${pctOf(cond)} of its described condition, so the buyer paid ${cond.toFixed(2)}x the fair price shown.` });
+          reasons.push({ label: 'Condition', text: `The crate is really ${condOf(cond)}, so the buyer paid ${cond.toFixed(2)}x the fair price shown.` });
         }
         lines.push(`You received ${money(r.received)} after tax and fees${r.gotName ? `, including ${r.gotName} in trade` : ''}.`);
         if (r.capped) lines.push('The buyer paid their whole budget.');
@@ -602,7 +612,7 @@ function summarize(run, { r, deal, noDeal, before, after, cmp, secret }) {
     if (rd) {
       if (onShelf) reasons.push({ label: 'Your read', text: rd.estimate }); // once the lot is revealed, the reveal carries your read
       else out.reveal = { ...truth(), truth: rd.truth, found: rd.found, total: rd.total, estimate: rd.estimate };
-    } else if (!onShelf) out.reveal = { ...truth(), truth: `${Math.round(secret.q * 100)}% condition, ${secret.fake ? 'counterfeit' : 'genuine'}`, found: 0, total: secret.defects.length, estimate: 'none' };
+    } else if (!onShelf) out.reveal = { ...truth(), truth: `${condOf(secret.q)}, ${secret.fake ? 'counterfeit' : 'genuine'}`, found: 0, total: secret.defects.length, estimate: 'none' };
     if (hag) reasons.push({ label: 'Haggle', text: hag.deal ? `Closed at ${hag.mult.toFixed(2)}x the posted price${hag.quick ? ' (Quick played it)' : ''}.` : 'No deal was struck.' });
     if (bid) reasons.push({ label: 'Auction', text: bid.won ? `Won at ${money(bid.price)}, ${(bid.mult || 0).toFixed(2)}x the guide price.` : 'You dropped out.' });
     const worth = run.worth(secret);
@@ -612,16 +622,20 @@ function summarize(run, { r, deal, noDeal, before, after, cmp, secret }) {
       // On the shelf the comparison shows only what each way of playing agreed to pay (their prices follow the posted price and the dice, not the lot),
       // never what the lot was worth to them: that difference would give the lot away.
       out.numbers = onShelf ? { ...compare(null, 'price paid', 'low', { net: null }), quick: cmp.quick.blind == null ? null : r2(cmp.quick.blind), expert: cmp.expert.blind == null ? null : r2(cmp.expert.blind), quickNet: null, expertNet: null } : compare(null, 'price paid', 'low', { net: 0 });
-      if (lostAuction && bid.lesson) out.lesson = bid.lesson;
+      if (lostAuction && bid.lesson) { // the Bid game's own text rests on its "true value" (the guide price over TUNE.guide); the card's worth is the engine's, so the same test is made against that
+        const top = Math.max(0, ...bid.reveal.rivals.map((b) => b.limit * (b.style === 'bluffer' ? 0.9 : 1))), best = Math.max(0, worth - Math.max(plan.lot.price * 0.6, top + plan.lot.price / 20));
+        out.lesson = { concept: 'winners-curse', text: best <= 0.01 * worth ? 'You dropped and kept your cash. Nobody could have won this one at a profit.' : 'You dropped, but a win at a profit was possible.' };
+      }
     } else if (!r || !r.ok) {
       Object.assign(out, { tone: 'warn', title: 'Not bought', headline: r ? r.msg : 'The deal could not be completed.' });
     } else {
       const price = r.price, net = worth - price;
       Object.assign(out, { tone: secret.fake ? 'bad' : net >= 0 ? 'good' : 'warn', title: secret.fake ? 'It was a counterfeit' : net >= 0 ? 'Good buy' : 'Paid too much', headline: `Bought for ${money(price)}.` });
-      lines.push(`Worth about ${money(worth)}.`); // what it really was (the condition, a counterfeit) is the reveal's, once
+      const w = run.wreck(secret);
+      lines.push(w ? `Worth about ${money(w.asIs)} as it stands, ${money(w.fixed)} repaired for a bill of about ${money(w.bill)}.` : `Worth about ${money(worth)}.`); // what it really was (the condition, a counterfeit) is the reveal's, once
       out.numbers = compare(price, 'price paid', 'low', { net: r2(net) });
       if (secret.fake) out.lesson = { concept: 'due-diligence', text: `The seller knows more than you do (information asymmetry). A check before you pay, such as the serial number, costs ${pts(inspect.PROBES.serial.cost)} and can save the whole price.` };
-      else if (bid && bid.lesson) out.lesson = bid.lesson;
+      else if (bid && bid.won) out.lesson = { concept: 'winners-curse', text: worth < price ? `You won at ${money(price)}, but it was worth ${money(worth)}. That is the winner's curse: the winning bid comes from the rosiest estimate, so it is usually too high.` : `You won at ${money(price)} and it was worth ${money(worth)}: a margin of ${money(worth - price)}. Shading below your estimate paid.` }; // (the card's own worth, not the auction game's "true value")
     }
     if (!out.lesson && hag && hag.lesson) out.lesson = keepHidden(hag, lostAuction || !!(r && r.ok));
     if (!out.lesson && rd && !onShelf) out.lesson = { concept: 'due-diligence', text: `${rd.total === 0 ? 'The lot had no flaws to find.' : rd.found >= rd.total ? 'Your read found every flaw.' : `Your read found ${rd.found} of ${rd.total} flaws.`} What you do not check, you pay for.` };
@@ -647,6 +661,9 @@ function summarize(run, { r, deal, noDeal, before, after, cmp, secret }) {
   }
   out.xp = xp;
   if (!out.numbers) out.numbers = compare(null, kind === 'sell' ? 'sale price' : 'price paid', kind === 'sell' ? 'high' : 'low');
+  // A blank row says "walks away" only when the player left (the button, the haggle's own walk, dropping out of the bidding). A sale a fraud took or a buyer refused is "no sale", and talks the other side ended are "no deal" (the sheet reads numbers.none)
+  const left = run.walked || !!(run.st.close && run.st.close.end === 'walk') || !!(res.bid && res.bid.won === false);
+  if (out.numbers.you == null && !left && !out.numbers.none) out.numbers.none = kind === 'sell' && r && r.ok && (r.outcome === 'scam' || r.outcome === 'rejected') ? 'no sale' : 'no deal';
   // A table never sat at keeps its answers. What Quick and Expert would have got at a Close, a Bid or a Fix is what an average and a full-skill player get at THIS table (a function of the seller's hidden floor, the rivals'
   // limits, the dial), and the table is still there to be sat at: printed for a deal that was not done, they would be the next sitting's answers. They are withheld (`hidden`, so the sheet can say they were), unless
   // the player did sit at it: a table played or walked away from is marked tried, and the next sitting is Quick's anyway.
@@ -710,7 +727,7 @@ function publicPlan(p) {
 }
 function stageNote(run, key) {
   const r = run.res[key];
-  if (key === 'read') return `${pctOf(r.estimate.quality)} condition, ${pctOf(r.estimate.fakeProb)} chance of counterfeit (${pts(r.spent)} spent).`;
+  if (key === 'read') return `${condOf(r.estimate.quality)}, ${pctOf(r.estimate.fakeProb)} chance of counterfeit (${pts(r.spent)} spent).`;
   if (key === 'pitch') return r.pick ? `${ANGLE_WORD[r.pick[0]]} and ${ANGLE_WORD[r.pick[1]]}: ${r.mult.toFixed(2)}x as keen.` : 'No pitch.';
   if (key === 'close') return r.deal ? `Agreed at ${money(r.price)} (${fin(r.mult, 1).toFixed(2)}x fair).` : 'No deal.';
   if (key === 'bid') return r.won ? `Won at ${money(r.price)}.` : 'Dropped out.';
