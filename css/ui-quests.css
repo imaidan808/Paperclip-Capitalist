@@ -12,7 +12,6 @@
 @keyframes qs-landed { from { background: color-mix(in srgb, var(--gold) 30%, transparent); } }
 .qs-nav { position: sticky; top: calc(-1 * var(--db-pad, .8rem)); z-index: 2; display: flex; gap: .35rem; flex-wrap: wrap; margin: calc(-1 * var(--db-pad, .8rem)) calc(-1 * var(--db-pad, .8rem)) 0; padding: .45rem var(--db-pad, .8rem); background: var(--panel); border-bottom: 1px dashed var(--line); }
 .qs-nav .btn { flex: 1 1 4rem; }
-.qs-ic { font-size: 1.5rem; line-height: 1; flex: none; width: 2rem; text-align: center; }
 .qs-prog { display: flex; align-items: center; gap: .6rem; }
 .qs-prog .bar { flex: 1; height: .8rem; }
 .qs-rw { display: flex; gap: .35rem; align-items: center; flex-wrap: wrap; font-size: .76rem; }
@@ -30,7 +29,6 @@
 .qs-lvtx .bar { height: .9rem; }
 .qs-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr)); gap: .5rem; }
 .qs-stat { display: flex; gap: .55rem; align-items: flex-start; background: var(--bg2); border: 1px solid var(--line); padding: .5rem .6rem; font-size: .86rem; }
-.qs-stat > span { font-size: 1.4rem; line-height: 1.1; }
 .qs-stat small { display: block; color: var(--mute); font-size: .74rem; margin-top: .1rem; }
 .qs-stat.pts.on { border-color: var(--green); box-shadow: inset 0 0 0 1px var(--green); }
 .qs-reprow { display: flex; justify-content: space-between; gap: .5rem; font-size: .86rem; margin-bottom: .25rem; }
@@ -74,12 +72,11 @@
 .qs-dist small { color: var(--mute); font-weight: 400; }
 .qs-fold { justify-self: start; }
 .qs-donel { list-style: none; margin: 0; padding: 0; display: grid; gap: .2rem; font-size: .84rem; }
-.qs-donel li > span:first-child { color: var(--green); font-weight: 700; }
 .qs-donel li small { color: var(--mute); margin-left: .3rem; }
 
 /* daily bounties */
 .qs-days { display: grid; gap: .6rem; }
-.qs-day { display: grid; grid-template-columns: auto 1fr; gap: .6rem; background: var(--panel2); border: 1px solid var(--line); border-left: 6px solid var(--cyan); padding: .55rem .7rem; }
+.qs-day { display: grid; gap: .6rem; background: var(--panel2); border: 1px solid var(--line); border-left: 6px solid var(--cyan); padding: .55rem .7rem; }
 .qs-day.done { border-left-color: var(--green); }
 .qs-day h4 { margin: 0 0 .15rem; font-size: .92rem; }
 .qs-day p { margin: 0 0 .3rem; }
@@ -92,7 +89,7 @@
 .qs-rarity.epic { color: var(--gold); }
 .qs-filter { margin-bottom: .6rem; }
 .qs-achs { list-style: none; margin: 0 0 .6rem; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(12.5rem, 1fr)); gap: .55rem; }
-.qs-ach { display: grid; grid-template-columns: auto 1fr; gap: .5rem; min-width: 0; background: var(--panel2); border: 1px solid var(--line); border-top: 3px solid var(--cyan); padding: .5rem .6rem; }
+.qs-ach { display: grid; gap: .5rem; min-width: 0; background: var(--panel2); border: 1px solid var(--line); border-top: 3px solid var(--cyan); padding: .5rem .6rem; }
 .qs-ach.rare { border-top-color: var(--violet); }
 .qs-ach.epic { border-top-color: var(--gold); }
 .qs-ach h4 { margin: 0 0 .1rem; font-size: .86rem; }
@@ -102,7 +99,5 @@
 .qs-ach.earned { background: var(--good-bg); border-color: var(--green); border-top-color: var(--green); }
 .qs-ach.earned.rare { border-top-color: var(--violet); }
 .qs-ach.earned.epic { border-top-color: var(--gold); }
-.qs-ach.todo .qs-ic { filter: grayscale(.85); }
 .qs-ach.secret { border-style: dashed; }
-.qs-ach.secret .qs-ic { font: 800 1.5rem ui-monospace, Menlo, monospace; color: var(--mute); }
 .qs-got { color: var(--green); }
