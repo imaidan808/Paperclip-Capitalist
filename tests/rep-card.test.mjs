@@ -333,7 +333,7 @@ function taps(p, log, label) {
     }
   };
   const press = async (sel, re, o = {}) => { await find(sel, re, o.nth || 0); await p.eval(BRING('center')); await p.sleep(300); const m = await p.eval(`(()=>{ const e=window.__t, r=e.getBoundingClientRect(), cx=r.x+r.width/2, cy=r.y+r.height/2, h=document.elementFromPoint(cx,cy); return { cx, cy, lands: !!h&&(e===h||e.contains(h)) } })()`); assert.ok(m.lands, `${label}: ${sel} ${re}: a tap at the middle lands on it`); await p.click(m.cx, m.cy); }; // the lesson is won and its card gone: the room's own button
-  const hint = async () => { await p.eval(`window.__skew += 30000`); await until(p, `!!document.querySelector('.ac-coach .ac-hint, .ac-coach.handle .ac-grab')`, 'the hint'); await p.sleep(500); };
+  const hint = async () => { await p.eval(`window.__skew += 30000`); await until(p, `!!document.querySelector('.ac-coach .ac-hint, .ac-coach.handle .ac-grab')`, 'the hint'); await until(p, `(()=>{ const c=document.querySelector('.ac-coach'); return !c || !c.classList.contains('handle') || /hint/i.test(c.querySelector('.ac-grab')?.getAttribute('aria-label') || '') })()`, 'the tab to say it has a hint', 8000).catch(() => {}); await p.sleep(500); };
   return { check, tap, press, hint, find };
 }
 const dealOpen = async (p, stage) => {
@@ -582,7 +582,8 @@ test('browser, the folded card: a real tap or the keyboard opens it, Fold away o
     await p.key('c', { wait: 200 });
     assert.equal(await p.eval(`document.activeElement && document.activeElement.dataset.act`), 'ac-expand', 'C jumps to the tab');
     await p.key('Enter', { wait: 700 });
-    const open = await p.eval(`(()=>{ const c=document.querySelector('.ac-coach'), s=c.querySelector('.ac-say'), r=s.getBoundingClientRect(), f=c.querySelector('[data-act="ac-fold"]'); return { handle: c.classList.contains('handle'), sayH: r.height, fold: !!f, focus: document.activeElement === f, pressed: f && f.getAttribute('aria-expanded') } })()`);
+    const readOpen = () => p.eval(`(()=>{ const c=document.querySelector('.ac-coach'), s=c.querySelector('.ac-say'), r=s.getBoundingClientRect(), f=c.querySelector('[data-act="ac-fold"]'); return { handle: c.classList.contains('handle'), sayH: r.height, fold: !!f, focus: document.activeElement === f, pressed: f && f.getAttribute('aria-expanded') } })()`);
+    let open = await readOpen(); for (let k = 0; k < 15 && !(open.fold && open.focus && open.pressed === 'true'); k++) { await p.sleep(200); open = await readOpen(); } // (the card opens and moves the cursor on its own frame: a slow runner is given up to three seconds)
     assert.equal(open.handle, false, 'Enter opens the card'); assert.ok(open.sayH > 20, 'with its words showing'); assert.ok(open.fold && open.focus && open.pressed === 'true', 'and the cursor is on Fold away');
     await p.sleep(600); assert.equal(await shape(), 'card', 'it stays open while the player reads');
     await p.key('Enter', { wait: 700 });

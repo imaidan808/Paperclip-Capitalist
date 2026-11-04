@@ -127,7 +127,7 @@ test('Swap hold (item-3): the end of the hold is a question: an acceptor that ne
   offset += LOCK_MS + 1000;
   for (let i = 0; i < 6; i++) {
     A.tick(Date.now()); assert.ok(e3.recalling, 'asked ' + (i + 1));
-    A._onMsg({ t: 'holding', from: B.pid, role: 'student', to: A.pid, offerId: o3.offer.id }); assert.equal(e3.recalling, undefined); assert.equal(e3.lockLapsed, undefined, 'and the hold starts again'); near(e3.lockedAt + LOCK_MS - Date.now(), 5 * 60000, 5);
+    A._onMsg({ t: 'holding', from: B.pid, role: 'student', to: A.pid, offerId: o3.offer.id }); assert.equal(e3.recalling, undefined); assert.equal(e3.lockLapsed, undefined, 'and the hold starts again'); near(e3.lockedAt + LOCK_MS - Date.now(), 5 * 60000, 500); // (the clock is virtual but Date.now() is real: a slow runner pauses a few ms between the two)
     offset += 5 * 60000 + 1000;
   }
   A.tick(Date.now());
