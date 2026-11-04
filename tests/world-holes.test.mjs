@@ -122,6 +122,16 @@ test('soften reads the overview bilinear, never bicubic: \'high\' smoothing of a
   assert.ok(sets.length >= 1 && sets.every((v) => v === 'low'), `smoothing quality set to ${JSON.stringify(sets)}: only 'low'`);
   store.release();
 });
+test('soften can be told not to smooth: on a CPU-drawn canvas a smoothed blit of the overview is 4 ms a megapixel against 1 plain, so while the scale changes groundcache.js draws it plain, as it draws the stand-ins (the placeholder of a few frames; the context is left as it was found)', async () => {
+  const S = stand(), store = new ChunkCache('test.soft4', S.make), a = 2.1;
+  store.bake(() => {}, OVERVIEW_A, 0, 0, 2, false, true);
+  const r = recCtx(), sets = []; Object.defineProperty(r.state, 'imageSmoothingEnabled', { enumerable: true, configurable: true, get: () => true, set: (v) => sets.push(['enabled', v]) }); Object.defineProperty(r.state, 'imageSmoothingQuality', { enumerable: true, configurable: true, get: () => 'low', set: (v) => sets.push(['quality', v]) });
+  assert.equal(store.soften(r.ctx, [10, 10, 60, 40], a, 0, 0, false), 1); const own = sets.filter(([k]) => k === 'enabled').map(([, v]) => v); assert.ok(own.length >= 1 && own[0] === false, `smoothing enabled set to ${JSON.stringify(own)} while the draw is made`);
+  assert.ok(!sets.some(([k, v]) => k === 'quality' && v === 'high'), 'and never bicubic');
+  const { readFileSync } = await import('node:fs'), g = readFileSync(new URL('../js/world/groundcache.js', import.meta.url), 'utf8');
+  assert.match(g, /store\.soften\(ctx, bare, a, e, f, standInSmooth\(Infinity, zooming, soft\)\)/, 'the ground pass hands soften the same rule as the stand-ins: plain on a CPU canvas while the scale changes');
+  store.release();
+});
 test('standIns lists the chunks outside the ratio window apart, nearest scale first; they are a last resort and are never in the list that is drawn', () => {
   const S = stand(), store = new ChunkCache('test.soft2', S.make), a = 2, sk = scaleKey(a);
   store.bake(() => {}, 0.4, 0, 0, 2); store.bake(() => {}, 0.9, 0, 0, 2); const win = store.bake(() => {}, 1.9, 0, 0, 2);

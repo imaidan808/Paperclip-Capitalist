@@ -138,7 +138,7 @@ export const groundCacheMethods = {
       const L = store.standIns(a, sk, tNow), direct = this.gcDirect || (this.gcDirect = []); direct.length = 0;
       if (v2) { // the pieces of the window that no stand-in covers, in the cells with no finished chunk of their own: the chunk of any other scale that has the area is drawn into them, soft; what is left is the sea
         bare.length = 0; for (let j = cells.j0; j <= cells.j1; j++) for (let i = cells.i0; i <= cells.i1; i++) { const ex = store.map.get(chunkKey(sk, i, j)); if (!ex || ex.fadeEnd > tNow) store.bareOf(i, j, s, bare, winB); }
-        if (bare.length) { store.soften(ctx, bare, a, e, f); holes = bare.length >> 2; }
+        if (bare.length) { store.soften(ctx, bare, a, e, f, standInSmooth(Infinity, zooming, soft)); holes = bare.length >> 2; } // (the overview is magnified 13 times and more: on a CPU-drawn canvas a smoothed blit of it is 4 ms a megapixel against 1 plain, so while the scale changes it is drawn plain, as the stand-ins are)
       }
       if (L.length) {
         ctx.save(); ctx.beginPath(); ctx.rect(0, 0, cw, ch);
