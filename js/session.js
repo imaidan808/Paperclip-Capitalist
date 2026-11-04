@@ -760,7 +760,7 @@ export class Session {
     const offer = { ...i.offer, want: { ...i.offer.want, assets: this._ownWant(i.offer) } };
     if (!offer.want.assets) return { ok: false, msg: 'You no longer hold the crate they asked for.' };
     const chk = g.checkOffer(offer);
-    if (!chk.ok) return { ok: false, msg: `Blocked: ${(chk.variance * 100).toFixed(0)}% from fair value.`, chk };
+    if (!chk.ok) return { ok: false, msg: `Blocked: the two sides are ${(chk.variance * 100).toFixed(0)}% apart.`, chk };
     if (offer.want.cash > g.s.cash) return { ok: false, msg: 'You do not have the cash they asked for.' };
     const name = i.handle || i.offer.from;
     this.accepting.set(offerId, { offer, from: i.offer.from, name, at: Date.now() });

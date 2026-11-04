@@ -19,7 +19,7 @@ const SPEED_STEPS = [0.25, 1, 4, 16, 64];
  * for every level, every milestone, every epic achievement and the same loud alert on every laptop at the moment the instructor deployed a shock. With the rule on, those play the voice one tier
  * down that the sound map already has, so nothing new is composed and every level of the tiers is as measured: a level plays its everyday run (`level.up` s, never the full fanfare or the big one),
  * an epic achievement plays the rare one, a milestone the quest-complete run, and the three scheduled shocks play the medium shock voices (TikTok the bright one, the Fed and the tariff the sinking
- * one). The toast, the ledger row and the breaking-news dialog say what happened in words either way. `quiet` is `settings.audio.quiet`. Returns [id, opts]; with the rule off it is the request unchanged.
+ * one). The toast, the ledger row and the alert dialog say what happened in words either way. `quiet` is `settings.audio.quiet`. Returns [id, opts]; with the rule off it is the request unchanged.
  * Every call site that asks for one of these sounds goes through it (a source scan in tests/audio-r6-wire.test.mjs holds that): the wiring below, the shell's achievement request, the audition page.
  */
 const SOFT_SHOCK = { tiktok: 'viral', fed: 'glut', tariff: 'glut' };

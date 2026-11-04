@@ -94,9 +94,11 @@ test('M1: freight arriving, customs and damage name their district and their pan
   const [c] = heldByKind(customs, 'customs', [['request', 'ship.trouble', { variant: 'customs', state: 'trouble-customs', pan: 0.08 }]]); void c;
   assert.equal(customs.z, 8);
   const at = g.s.freight[0].arrive - g.s.hour; assert.equal(g.s.freight[0].arrive, customs.h + 12, 'the delay the note names is 12 hours'); assert.ok(at > 0);
+  assert.equal(+/(\d+) hours' delay/.exec(customs.text)[1], g.s.freight[0].arrive - customs.h, 'the delay the note names is the delay the engine adds');
   g.advanceTo(g.s.hour + 12);
   const dmg = ns.find((n) => n.kind === 'damage'); heldByKind(dmg, 'damage', [['request', 'ship.trouble', { variant: 'damage', state: 'trouble-damage' }]]);
   near(crate.quality, 0.8, 1e-12); // "-20% quality"
+  assert.equal(+/-(\d+)% quality/.exec(dmg.text)[1], Math.round((1 - crate.quality) * 100), 'the loss the note names is the loss the engine applies');
   const arrived = ns.find((n) => n.kind === 'freight-arrive'); heldByKind(arrived, 'freight-arrive', [['request', 'ship.arrive', { clock: true, pan: 0.08 }]]);
   assert.equal(arrived.z, 8);
 });
@@ -203,10 +205,15 @@ test('M2: a district opens in one line; the milestones quote the config and say 
   b.s.pipes.push({ id: 'Pq', kind: 'student', zone: 5, level: 1, status: 'idle', basis: 10, inflight: 0 }); assert.equal(b.upgradePipeline('Pq').msg, hire.msg);
   assert.equal(b.buyUpgrade('freight').ok, true, 'a company upgrade is not locked');
   assert.ok(b.resolveAudit('A').ok); assert.equal(b.autoLocked(), false);
-  // Milestone 3: Enterprise accounts, a trade sale and an IPO
+  // Milestone 3: Enterprise accounts and a trade sale; an IPO only with a clean audit record
   const c = mk(), cn = noted(c); c.s.cash = MIL.m3 + 5000; c.advanceTo(c.s.hour + 1);
-  const m3 = cn.find((n) => n.milestone === 3); assert.equal(m3.text, `Milestone 3 (${usd(MIL.m3)} net worth): Enterprise accounts, a trade sale and an IPO are open.`);
+  const m3 = cn.find((n) => n.milestone === 3); assert.equal(m3.text, `Milestone 3 (${usd(MIL.m3)} net worth): Enterprise accounts and a trade sale are open, and an IPO if your audit record is clean.`);
   assert.equal(c.exitQuote('trade').ok, true); assert.equal(c.exitQuote('ipo').ok, true); assert.notEqual(c.acquireClient('ent').msg, `Unlocks at Milestone 3.`);
+  const d = mk(); noted(d); d.s.cash = MIL.m2 + 5000; d.advanceTo(d.s.hour + 1); d.advanceTo(d.s.auditPending.due + 1);
+  d.s.cash = MIL.m3 + 5000; d.advanceTo(d.s.hour + 1);
+  assert.equal(d.exitQuote('trade').ok, true); assert.equal(d.exitQuote('ipo').ok, false); assert.match(d.exitQuote('ipo').msg, /clean audit record/);
+  // n=20: the engine's own sentence, held here, since the Bank's own line says the same words
+  c.s.auditFail = 1; assert.equal(c.exitQuote('ipo').ok, false); assert.equal(c.exitQuote('ipo').msg, 'An IPO needs a clean audit record. Choose a trade sale.'); assert.equal(c.exitQuote('trade').ok, true, 'a failed audit cuts a trade sale, it does not close it'); c.s.auditFail = 0;
   assert.equal(a.s.mil.m3, false); assert.equal(a.exitQuote('trade').ok, false);
 });
 
@@ -233,7 +240,7 @@ test('M2: the margin call says what the bank does: the largest manager first, th
   const call = ns.find((n) => n.alert), off = Math.round(DEBT.fireSale * 100);
   assert.equal(call.text, `Margin call: debt-to-equity passed ${DEBT.callDE}. The bank is selling your assets at a ${off}% discount.`);
   assert.equal(call.alert.name, 'Margin call'); assert.equal(call.alert.level, 3);
-  assert.equal(call.alert.readout, `Debt-to-equity passed ${DEBT.callDE}. The bank sells your largest managers first, then your stock, at a ${off}% discount, until the ratio is back to ${DEBT.maxDE.toFixed(1)}.`);
+  assert.equal(call.alert.readout, `Debt-to-equity passed ${DEBT.callDE}. The bank sells your largest managers first, then your stock, at a ${off}% discount, until the ratio is back to ${DEBT.maxDE.toFixed(1)} or nothing is left to sell. Selling at a discount can push the ratio up, so a call can sell all your managers and stock.`);
   assert.deepEqual(wire.noteCalls(call, wire.newWireState(), {}), [], 'and the note is silent: the margin-call event plays the siren');
 });
 
@@ -279,8 +286,15 @@ test('M2: a failed audit names the fine and the speed it costs, as the Bank show
   const none = mk(); none.s.auditPending = { id: 'x', title: 't', due: 99, at: 0 }; assert.equal(none.resolveAudit('B').msg, 'You have no manager to spare. Choose another path.');
   const c = mk(); c.s.auditPending = { id: 'x', title: 't', due: 99, at: 0 }; c.rand = () => 0; const ev = []; c.onEvent = (e) => ev.push(e); const C1 = c.resolveAudit('C');
   assert.equal(C1.msg, 'Nobody noticed.'); assert.equal(ev.find((e) => e.type === 'audit').ok, true);
-  const d = mk(); d.s.auditPending = { id: 'x', title: 't', due: 99, at: 0 }; d.rand = () => 0.99; const ev2 = []; d.onEvent = (e) => ev2.push(e); const D1 = d.resolveAudit('C');
-  assert.equal(D1.msg, 'Caught.'); assert.equal(ev2.find((e) => e.type === 'audit').ok, false, 'the event still reads "Caught" as a failed audit');
+  const d = mk(), dn = noted(d); d.s.auditPending = { id: 'x', title: 't', due: 99, at: 0 }; d.rand = () => 0.99; const ev2 = []; d.onEvent = (e) => ev2.push(e); const D1 = d.resolveAudit('C');
+  assert.equal(D1.ok, true); assert.equal(D1.msg, '', 'the result has no words: the note is the message'); assert.equal(dn.length, 1);
+  assert.equal(dn[0].level, 'bad'); assert.match(dn[0].text, /^You were caught\. Fine \$[\d,]+\. Manager speed drops 15% for good\.$/);
+  assert.equal(ev2.find((e) => e.type === 'audit').ok, false, 'the event still reads the failed bypass as a failed audit, though the result has no words to read it from');
+  // the state and the event do not read the message: over many worlds the event is false exactly when the bypass failed, and the fine and the speed are the engine's
+  for (let seed = 1; seed <= 40; seed++) {
+    const x = mk([], seed), xe = []; x.onEvent = (e) => xe.push(e); x.s.auditPending = { id: 'x', title: 't', due: 99, at: 0 }; const v0 = x.s.velPenalty, r = x.resolveAudit('C'), failed = x.s.auditFail === 1;
+    assert.equal(xe.find((e) => e.type === 'audit').ok, !failed); assert.equal(x.s.auditPass, failed ? 0 : 1); assert.equal(r.msg, failed ? '' : 'Nobody noticed.'); assert.equal(x.s.velPenalty, failed ? v0 * AUDIT.velocityHit : v0);
+  }
 });
 
 test('M2: market fatigue says what the craze\'s phases do: half their value, for 72 hours, from hour 48', () => {
@@ -325,6 +339,55 @@ test('M2: a refusal for want of cash says what it takes and what there is, the s
   say(g.buyUpgrade('freight'), C.UPGRADES.freight.cost, 'this upgrade');
   say(g.acquireClient('smb'), g.clientQuote('smb').cac, 'the account');
   g.s.mil.m2 = true; g.s.auditPending = { id: 'x', title: 't', due: 99, at: 0 }; const fee = AUDIT.fee * Math.max(0.7, 1 - 0.03 * (g.lvl('fintech') - 1)); say(g.resolveAudit('A'), fee, 'the consultant');
+  // the three sites the list left out: the check on a buyer (a manager is hired, so the last-crate voucher does not apply), a repair, a truck
+  const buyer = { id: 'Lv', zone: 1, seg: 'student', budget: 5000, need: null, born: 0, exp: 999 }; g.s.leads[1].push(buyer);
+  say(g.verifyLead('Lv'), buyer.budget * 0.01, 'verification');
+  const dear = Object.keys(ASSETS).filter((c) => ASSETS[c].repair).sort((x, y) => g.repairQuoteFor(y, 1).cost - g.repairQuoteFor(x, 1).cost)[0];
+  const wreck = g._mk(g.s, dear, { zone: 1, basis: 1, cond: 'broken' }); g.s.assets.push(wreck);
+  say(g.repair(wreck.id), g.repairQuote(wreck.id).cost, 'the repair');
+  const prized = Object.keys(ASSETS).sort((x, y) => ASSETS[y].base - ASSETS[x].base)[0], crate = g._mk(g.s, prized, { zone: 1, basis: 1 }); g.s.assets.push(crate);
+  say(g.ship([crate.id], 5), g.freightQuote([crate.id], 5).cost, 'freight');
+});
+
+test('M2: a full destination is named in the refusal to ship there', () => {
+  const g = mk(); g.s.cash = 1e6; g.s.zones.push(5); g.s.assets = [];
+  const at = (z) => g._mk(g.s, 'pen', { zone: z, basis: 1 });
+  for (let i = 0; i < g.storeCap(5); i++) g.s.assets.push(at(5));
+  const a = at(1); g.s.assets.push(a); assert.equal(g.roomIn(5), 0);
+  const r = g.ship([a.id], 5); assert.equal(r.ok, false); assert.equal(r.msg, `${ZONES[5].short} does not have room for all of that.`);
+});
+
+test('M2: an SLA breach asks for the managers the config names, and the client leaves on the breach the note counts', () => {
+  const g = mk(), ns = noted(g), K = CLIENTS.corp, WORDS = { one: 1, two: 2, three: 3, four: 4 }, left = () => ns.find((n) => /left after/.test(n.text));
+  g.s.clients.push({ id: 'C9', tier: 'corp', cac: 1, until: 24 * 60, earned: 0, breaches: 0 });
+  g.advanceTo(24);
+  const first = ns.find((n) => n.kind === 'sla');
+  assert.equal(first.text, `SLA breach on your ${K.name}: ${usd(K.perDay * 2)} penalty. Keep ${K.minRunning} managers running.`);
+  assert.equal(g.s.clients.length, 1); assert.ok(!left(), 'one breach is not the end');
+  g.advanceTo(48);
+  const bye = left(); assert.ok(bye, 'the second is'); assert.equal(g.s.clients.length, 0);
+  assert.equal(WORDS[/left after (\w+) SLA breaches/.exec(bye.text)[1]], ns.filter((n) => n.kind === 'sla').length, 'the number the note says is the number of breaches it took');
+});
+
+test('M2: a refusal for want of cash never prints a balance at or above the cost, however near the two are', () => {
+  const g = mk(); g.s.cash = 1; g.advanceTo(g.s.hour + 1);
+  const best = g.radar(5, 1)[0], lane = { cls: best.cls, buyer: best.seg };
+  g.s.zones.push(5); g.s.mil.m1 = true;
+  const cost = g.pipeCost('student', 5), figure = (s) => Number(s.replace(/[$,]/g, ''));
+  assert.equal(cost, 120);
+  const say = (cash) => { g.s.cash = cash; const r = g.hirePipeline('student', 5, lane); assert.equal(r.ok, false); return r.msg; };
+  for (const short of [0.001, 0.05, 0.3, 0.49, 0.5, 0.51, 0.7, 0.99, 1, 1.4, 1.5, 2, 30]) {
+    const m = /^Need (\$[\d,.]+) for hiring; you have (\$[\d,.]+)\.$/.exec(say(cost - short));
+    assert.ok(m, `${short} short`); assert.ok(figure(m[2]) < figure(m[1]), `${m[0]} (${short} short)`);
+  }
+  assert.equal(say(cost - 0.3), 'Need $120.00 for hiring; you have $119.70.', 'whole dollars cannot show a gap of under a dollar, so both go to the cent');
+  assert.equal(say(cost - 2), 'Need $120 for hiring; you have $118.', 'a wider gap reads as the screens write money');
+  assert.equal(say(cost - 0.001), 'Need $120.00 for hiring; you have $119.99.', 'and a balance under the cost by less than a cent still reads lower');
+  for (const z of Object.keys(ZONES)) if (!g.s.zones.includes(+z)) g.s.zones.push(+z);
+  g.advanceTo(g.s.hour + 48);
+  const lot = Object.keys(ZONES).flatMap((z) => (g.s.lots[z] || []).map((l) => ({ z: +z, l }))).find((x) => x.l.price >= 100);
+  g.s.cash = lot.l.price - 0.3;
+  assert.equal(g.buyLot(lot.z, lot.l.id).msg, `Need $${lot.l.price.toFixed(2)} for the lot; you have $${(lot.l.price - 0.3).toFixed(2)}.`);
 });
 
 test('M2: storage counts trucks and open swaps, as the refusal says', () => {
@@ -350,12 +413,12 @@ test('M2: the pool refills the share of its size the refusal names, and a swap h
   assert.ok(max >= 2 && max < 30); assert.doesNotMatch(s.createOffer({ to: 'B', giveIds: ids.slice(0, max) }).msg || '', /at most/); assert.match(s.createOffer({ to: 'B', giveIds: ids.slice(0, max + 1) }).msg, new RegExp(`at most ${max} crates`));
 });
 
-test('M2: a lopsided swap says how far it is from fair value and what the limit is, and an instructor is told', () => {
+test('M2: a lopsided swap says how far apart its sides are and what the limit is, and says when an instructor is told', () => {
   const A = mk([], 1), B = mk([], 2); A.s.pid = 'AAA'; B.s.pid = 'BBB';
   const scrap = B._mk(B.s, 'scrap', { zone: 1, basis: 1 }); B.s.assets.push(scrap);
   const bad = A.createOffer({ to: 'BBB', giveIds: [], giveCash: 1_000_000, want: { assets: [B.pub(scrap)], cash: 0 } });
   const flag = A.out.find((m) => m.t === 'flag');
-  assert.equal(bad.msg, `Blocked: this deal is ${(flag.offer.variance * 100).toFixed(0)}% from fair value (limit ${FMV_BAND * 100}%). Instructors are told of blocked deals. Balance it with cash or another crate.`);
+  assert.equal(bad.msg, `Blocked: the two sides are ${(flag.offer.variance * 100).toFixed(0)}% apart (limit ${FMV_BAND * 100}%). In a classroom, your instructor is told. Balance it with cash or another crate.`);
   assert.ok(flag.offer.variance > FMV_BAND, 'it is past the limit it names');
   assert.doesNotMatch(bad.msg, /Extreme|Asymmetric|Premium|deviates|fair market/);
   // a bid for a crate from a district the bidder has not opened is not misconduct: it is said so, with something to do, and nobody is told
@@ -373,8 +436,22 @@ test('M2: a lopsided swap says how far it is from fair value and what the limit 
   // and the same crate priced where the bidder would hold it, still far off: the refusal quotes the engine's own figures
   const cheap = P.createOffer({ to: 'RICH', giveCash: 1, want: { assets: [R.pub(x)], cash: 0 } });
   assert.equal(cheap.ok, false);
-  const m = /^Blocked: (?:this deal is|priced where you would hold the crates you ask for, this deal is) (\d+)% from fair value \(limit (\d+)%\)\. /.exec(cheap.msg);
+  const m = /^Blocked: (?:the two sides are|priced where you would hold the crates you ask for, the two sides are) (\d+)% apart \(limit (\d+)%\)\. /.exec(cheap.msg);
   assert.ok(m, cheap.msg); assert.equal(+m[1], Math.round(cheap.chk.variance * 100)); assert.equal(+m[2], FMV_BAND * 100);
+});
+
+test('M2: the figure is the gap as a share of the LOWER side: a bid 28% under what a crate is worth goes through and 30% under is blocked, while an ask 39% over goes through and 41% over is blocked', () => {
+  const bid = (share) => {
+    const A = mk([], 1), B = mk([], 2); A.s.pid = 'AAA'; B.s.pid = 'BBB'; A.s.cash = 1e6;
+    const c = B._mk(B.s, 'scrap', { zone: 1, basis: 1 }); B.s.assets.push(c);
+    return A.createOffer({ to: 'BBB', giveIds: [], giveCash: B.val(c) * share, want: { assets: [B.pub(c)], cash: 0 } });
+  };
+  assert.equal(bid(0.72).ok, true, '28% under is inside: 1 / 0.72 - 1 = 38.9%');
+  const low = bid(0.70); assert.equal(low.ok, false, '30% under is outside: 1 / 0.70 - 1 = 42.9%, though the player is only 30% under what the crate is worth');
+  assert.match(low.msg, /^Blocked: the two sides are 43% apart \(limit 40%\)\. /); near(low.chk.variance, 1 / 0.70 - 1);
+  assert.equal(bid(1.39).ok, true); const high = bid(1.41); assert.equal(high.ok, false);
+  assert.match(high.msg, /^Blocked: the two sides are 41% apart \(limit 40%\)\. /);
+  assert.doesNotMatch(low.msg + high.msg, /from fair value/, 'it does not say the figure is a distance from fair value: for a bid under the crate\'s worth it is not');
 });
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -390,6 +467,7 @@ test('M3: a hire, a loan and an exit say it once: the result carries the facts a
   const e = mk(); e.s.cash = 400000; e.advanceTo(e.s.hour + 1); e.s.auditFirst = true; e.s.auditNext = null; const n1 = e.s.news.length;
   const exit = e.exit('ipo'); assert.ok(exit.ok, exit.msg);
   assert.equal(exit.msg, 'IPO launched. It settles in 48 hours.'); assert.equal(e.s.exiting.at - e.s.hour, 48, 'the 48 hours the message names'); assert.equal(e.s.news.length, n1);
+  assert.equal(e.s.settle.at(-1).at, e.s.exiting.at, 'and the money lands when the exit closes (the Bank says "The sale money lands then")');
   assert.equal(mk().exit('trade').ok, false);
 });
 
@@ -421,7 +499,8 @@ test('M4: the lines of the Cash and Net worth windows add up to the net worth, r
   const owed = worthRows(g).find(([label]) => label === 'Royalties owed'); assert.ok(owed && owed[1] < 0 && Math.abs(owed[1] + g.royaltyOwed()) < 1e-9, 'the line the Breakdown used to leave out: what netWorth() takes off');
   assert.ok(worthLines(g).some(([label]) => label === 'Royalties owed'));
   // a line that is zero is not shown, except the first two
-  const labels = worthLines(fresh).map(([label]) => label); assert.deepEqual(labels, ['Cash on hand', 'Inventory at fair value']);
+  const labels = worthLines(fresh).map(([label]) => label); assert.deepEqual(labels, ['Cash on hand', 'Stock at fair value']);
+  assert.deepEqual(worthRows(fresh).map(([label]) => label).filter((l) => /\bassets?\b|inventory|\(book\)/i.test(l)), [], 'the windows say stock and crates, as the screens do');
   assert.ok(worthRows(g).every(([label, v, tip], i) => i < 2 || i === 7 || (typeof tip === 'string' && tip.length > 10)), 'each derived line says on hover what it is');
 });
 
@@ -432,13 +511,19 @@ test('M5: the settings dialog\'s default words are few: the WCAG note and the pr
   const common = read('js/ui/common.js');
   assert.ok(!/WCAG|Settings are stored only in this browser/.test(common), 'no accessibility claim and no privacy line in front');
   const html = audioSettingsHTML(audioDefaults(), 'running');
-  const words = (h) => h.replace(/<details[\s\S]*?<\/details>/g, ' About sound ').replace(/<option[^>]*>/g, ' ').replace(/<[^>]+>/g, ' ').replace(/&#39;/g, "'").split(/\s+/).filter(Boolean).length;
+  const words = (h) => h.replace(/<details[\s\S]*?<\/details>/g, ' What these are, and if you hear nothing ').replace(/<option[^>]*>/g, ' ').replace(/<[^>]+>/g, ' ').replace(/&#39;/g, "'").split(/\s+/).filter(Boolean).length;
   assert.ok(words(html) <= 50, `the Sound section is ${words(html)} words by default (it was 128)`);
   for (const id of ['s-ui', 's-game', 's-world', 's-clock', 's-amb', 's-dial']) {
     assert.match(html, new RegExp(`<label title="[^"]{12,}"><input type="checkbox" id="${id}"[^>]* title="[^"]{12,}">`), `${id}: what it covers is its hover`);
     assert.match(html, new RegExp(`id="${id}-h"[^>]*></span>`), `${id}: nothing is written beside the row until there is a state to say`);
   }
-  assert.match(html, /<details class="cx-more"><summary>About sound<\/summary>/); assert.ok(!/<details[^>]* open/.test(html), 'and it is closed');
+  assert.match(html, /<details class="cx-more"><summary>What these are, and if you hear nothing<\/summary><p class="small">Check your device's volume and its silent switch: the browser can be on while the device is silent\.<\/p><dl class="small">/); assert.ok(!/<details[^>]* open/.test(html), 'and it is closed');
+  // a title is shown to a mouse and to nothing else (the HTML Standard says so of the attribute): the same sentences are in the fold, which Tab, Enter and a tap reach
+  const fold = html.match(/<details class="cx-more">[\s\S]*?<\/details>/)[0];
+  for (const id of ['s-ui', 's-game', 's-world', 's-clock', 's-amb', 's-dial']) {
+    const tip = html.match(new RegExp(`<label title="([^"]+)"><input type="checkbox" id="${id}"`))[1];
+    assert.ok(fold.includes(`<dd>${tip}</dd>`), `${id}: what it covers is in the fold as well as in its hover`);
+  }
   assert.equal(statusText(audioDefaults(), 'running'), 'Sound is on.'); assert.match(statusText(audioDefaults(), 'locked'), /^Sound is on\. Your browser starts audio after your first click\.$/);
   // a state is still said where it matters
   assert.match(audioSettingsHTML({ ...audioDefaults(), mute: true }, 'running'), /id="s-ui-h"[^>]*>Muted\./); assert.match(audioSettingsHTML({ ...audioDefaults(), quiet: true }, 'running'), /id="s-amb-h"[^>]*>Off in Classroom\./);
@@ -448,8 +533,8 @@ test('M5: the settings dialog\'s default words are few: the WCAG note and the pr
 // the old words are gone from what a player reads
 // ---------------------------------------------------------------------------------------------------------------------
 test('M2: the jargon this pass replaced is gone from the sources that speak', () => {
-  const OLD = [/clearing horizon/i, /Liability added/, /Governance drag/, /Extreme Asymmetric/, /Gate 2/, /BREAKING:/, /MARGIN CALL/, /Margin Liquidation Protocol/, /Digital Natives attract/, /fair market value/, /fire-sale/, /Pipeline lane:/, /liquidating assets/];
-  for (const f of ['js/engine.js', 'js/session.js', 'js/ui/shell.js', 'js/ui/worldview.js', 'js/ui/audiocues.js', 'js/ui/common.js', 'js/audio/settings.js', 'js/audio/wire.js']) {
+  const OLD = [/clearing horizon/i, /Liability added/, /Governance drag/, /Extreme Asymmetric/, /Gate 2/, /BREAKING:/, /MARGIN CALL/, /Margin Liquidation Protocol/, /Digital Natives attract/, /fair market value/, /fire-sale/, /Pipeline lane:/, /family stepped in/, /simulation is complete/i, /Resolve your audit/, /liquidating assets/];
+  for (const f of ['js/engine.js', 'js/session.js', 'js/ui/shell.js', 'js/ui/worldview.js', 'js/ui/audiocues.js', 'js/ui/common.js', 'js/audio/settings.js', 'js/audio/wire.js', 'js/audio/recipes.js', 'docs/AUDIO.md']) {
     const src = read(f);
     for (const re of OLD) assert.ok(!re.test(src), `${f} still says ${re}`);
   }

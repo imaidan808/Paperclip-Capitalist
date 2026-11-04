@@ -358,10 +358,10 @@ export function worthRows(game) {
   const s = game.s, sum = (a, f) => a.reduce((t, x) => t + f(x), 0);
   return [
     ['Cash on hand', s.cash],
-    ['Inventory at fair value', game.invValue()],
-    ['Assets in transit', sum(s.freight, (f) => game.inTransit(f)), 'Crates on trucks, at the lower of where they left and where they are going.'],
-    ['Manager capital (book)', sum(s.pipes, (p) => p.basis), 'What you paid for your managers, upgrades included.'],
-    ['Capital in running cycles', sum(s.pipes, (p) => p.inflight || 0), 'Cash your managers have out on a cycle. It returns with the profit.'],
+    ['Stock at fair value', game.invValue()],
+    ['Crates in transit', sum(s.freight, (f) => game.inTransit(f)), 'Crates on trucks, at the lower of where they left and where they are going.'],
+    ['Managers at cost', sum(s.pipes, (p) => p.basis), 'What you paid for your managers, upgrades included.'],
+    ['Capital at work', sum(s.pipes, (p) => p.inflight || 0), 'Cash your managers have out on a cycle. It comes back plus the profit, or minus the loss.'],
     ['Settling sales', sum(s.settle, (x) => x.amt), 'Sales whose cash has not landed yet.'],
     ['Held in escrow', sum(s.escrow, (e) => (e.cash || 0) + sum(e.assets, (a) => game.val(a))), 'Cash and crates held for a swap you proposed.'],
     ['Debt', -game.debt()],

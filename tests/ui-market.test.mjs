@@ -388,7 +388,7 @@ test('the Exchange lists invitations, sent offers and a proposal form, and every
   const held = g.s.assets.length;
   acts['market-send']({ dataset: {} });
   assert.equal(blocked.length, 1, 'a blocked proposal opens a dialog');
-  assert.match(blocked[0][0], /Proposal blocked/); assert.match(blocked[0][0], /Blocked: this deal is \d+% from fair value/);
+  assert.match(blocked[0][0], /Proposal blocked/); assert.match(blocked[0][0], /Blocked: the two sides are \d+% apart/);
   assert.equal(g.s.assets.length, held, 'nothing left the shelf');
   assert.equal(g.s.escrow.length, 0);
 

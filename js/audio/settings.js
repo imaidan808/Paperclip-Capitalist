@@ -262,7 +262,7 @@ export function audioSettingsHTML(a, state = 'locked') {
   const preset = C['s-preset'].value;
   const opt = (v) => `<option value="${v}"${preset === v ? ' selected' : ''}>${PRESET_NAMES[v]}</option>`;
   const hint = (id) => `<span class="small mute" id="${id}-h" data-h="${id}">${esc(noteOf(id, a))}</span>`;
-  const row = (id, key, label, tip) => `<p class="snd-row"><label title="${esc(tip)}"><input type="checkbox" id="${id}" data-snd="${key}"${chk(id)}${dis(id)} aria-describedby="${id}-h" title="${esc(tip)}"> ${label}</label> ${hint(id)}</p>`;
+  const said = [], row = (id, key, label, tip) => (said.push(`<dt>${label}</dt><dd>${esc(tip)}</dd>`), `<p class="snd-row"><label title="${esc(tip)}"><input type="checkbox" id="${id}" data-snd="${key}"${chk(id)}${dis(id)} aria-describedby="${id}-h" title="${esc(tip)}"> ${label}</label> ${hint(id)}</p>`); // a title reaches a mouse only: each row hands its words to the fold too
   return `<fieldset class="snd gap"><legend class="h3">Sound</legend>
     <div class="grid g2">
       <div><label for="s-preset">Sound preset</label><select id="s-preset" data-snd="preset"${dis('s-preset')}>${['full', 'classroom', 'interface', 'off'].map(opt).join('')}${preset === 'custom' ? '<option value="custom" selected>Custom (your own mix)</option>' : ''}</select></div>
@@ -278,7 +278,7 @@ export function audioSettingsHTML(a, state = 'locked') {
     <p class="snd-row"><label for="s-ambvol">Ambience level</label> <input id="s-ambvol" type="range" min="0" max="100" step="5" value="${a.ambientLevel}" data-snd="ambientLevel" aria-valuetext="${a.ambientLevel} percent"${dis('s-ambvol')}></p>
     ${row('s-dial', 'dial', 'Repair dial tone', 'Hear where the marker is while you time a repair. Off by default.')}
     <p class="snd-row"><label><input type="checkbox" id="s-mkey" data-snd="mKey"${chk('s-mkey')}${dis('s-mkey')}> Keyboard shortcut: M mutes and unmutes</label></p>
-    <details class="cx-more"><summary>About sound</summary><p class="small">Sound is made in your browser. Nothing is downloaded or recorded. If you hear nothing, check your device's volume and its silent switch.</p></details>
+    <details class="cx-more"><summary>What these are, and if you hear nothing</summary><p class="small">Check your device's volume and its silent switch: the browser can be on while the device is silent.</p><dl class="small">${said.join('')}</dl><p class="small">Sound is made in your browser. Nothing is downloaded or recorded.</p></details>
   </fieldset>`;
 }
 /** Bring the controls already on the page to the settings, without replacing a single element: the control with the cursor keeps it (replacing the section dropped the cursor to the page). */
