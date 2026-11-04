@@ -57,7 +57,7 @@ test('the hero: level ring, XP to the next level, streak meaning and reputation 
   assert.match(t, /Win streak 3 \(best 7\)/); assert.match(t, new RegExp(`Next win: \\+${Math.round(20 * g.P.xpMult)} bonus XP`), 'the engine adds 5 XP per streak step to the next win (the Backgrounds\' XP multiplier applies, as on a quest reward)');
   assert.match(t, /Reputation: Respected 72 \/ 100/);
   assert.match(t, new RegExp(`Buyers arrive at ${(0.85 + 0.003 * 72).toFixed(2)}x speed`));
-  s.streak = 0; assert.match(text(quests.html(ctx)), /A win beats fair price by more than 2%\./);
+  s.streak = 0; assert.match(text(quests.html(ctx)), /A win nets more than 2% over fair value, after tax and fees\./);
   s.rep = 5; assert.match(text(quests.html(ctx)), /Reputation: Doubtful/);
   // a Background that changes how fast you learn is stated
   const heir = mk({ perks: ['gigger', 'pro'] }); assert.match(text(quests.html(heir)), /All XP [+-]\d+% from your Backgrounds/);

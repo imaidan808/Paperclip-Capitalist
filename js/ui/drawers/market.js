@@ -6,7 +6,7 @@
 // (`lead.verified`). The buyer cards do not call the engine's `quotePitch`, because its price and rejection depend on the crate's hidden truth;
 // fit and the Creativity band come from public data and the Deal Room shows the real price.
 import { ASSETS, BUYERS, ZONES, ZONE_IDS, FMV_BAND } from '../../config.js';
-import { fitOf, fitMult, fitLabel } from '../../market.js';
+import { fitOf, fitMult, fitLabel, FAKE_VALUE } from '../../market.js';
 import { dur, nameOf, knownFake, focusZone, heldIn, beliefLine, fold, flip } from './stock.js';
 import { lessonTitle, lessonGist, rulePhrases, rewardPhrases, grayBreak } from './districttext.js';
 
@@ -64,7 +64,6 @@ function bannerHTML(ctx, z) {
   const poolNow = s.pool[z] ?? 0, tax = g.zoneTax(z), gave = rewardPhrases(Z).join(' '), gray = grayBreak(Z, g.P.lotDiscountGray);
   const lines = [...more, gray].filter(Boolean), lesson = lessonTitle(Z.teaches), gist = lessonGist(Z.teaches);
   // the rule that matters first is on the banner; the other rules, what opening the district gave and its lesson are one fold, opened on request (and the same words are its hover).
-  // The district's blurb is not here: it says the rule again (districttext.js).
   const body = `${lines.length ? `<ul>${lines.map((t) => `<li>${e(t)}</li>`).join('')}</ul>` : ''}${gave ? `<p>Opening it gave you: ${e(gave)}</p>` : ''}<p>Teaches <b>${e(lesson)}</b>${gist ? `: ${e(gist)}` : ''}</p>`;
   const tip = [...lines, gave && `Opening it gave you: ${gave}`, `Teaches ${lesson}.`].filter(Boolean).join(' ');
   return `<section class="mkt-banner" style="--zg:${e(Z.palette?.[0] || '#34445c')};--za:${e(Z.palette?.[1] || '#ffc247')}" aria-label="About ${e(Z.name)}">
@@ -124,9 +123,10 @@ function buyersHTML(ctx, z) {
 }
 
 // ---- lots
-/** What the engine draws for a lot's condition (_spawnLot: a multiplier of 0.85 to 1.15 in districts 1 and 2, 0.7 to 1.15 after them); a fake is worth about 8% (the district's counterfeit share is its rule). */
+/** What the engine draws for a lot's condition (_spawnLot: a multiplier of 0.85 to 1.15 in districts 1 and 2, 0.7 to 1.15 after them), and the one exception to it: in a district with a counterfeit rule a fake is worth FAKE_VALUE
+ *  (market.js truthMult), so the range is only true with that said. How many are fakes is the rule's (the banner and its fold), not repeated here. */
 function qualityLine(Z) {
-  return `Lots are worth ${Z.id <= 2 ? 85 : 70}% to 115% of how they are described.`;
+  return `Lots are worth ${Z.id <= 2 ? 85 : 70}% to 115% of how they are described.${Z.rules?.fakes ? ` A counterfeit is worth ${Math.round(FAKE_VALUE * 100)}%.` : ''}`;
 }
 function lotsHTML(ctx, z) {
   const g = ctx.g(), s = g.s, e = ctx.esc, m = ctx.money, Z = ZONES[z];
@@ -192,10 +192,10 @@ function offerShape(ctx, x) {
   const want = (x.partner?.inventory || []).filter((a) => x.want.has(a.id));
   return { give: { assets: give, cash: +x.giveCash || 0, royalty: +x.roy > 0 ? { perDay: +x.roy, days: Math.max(1, +x.royDays || 10) } : null }, want: { assets: want, cash: +x.wantCash || 0 } };
 }
-/** Why a swap cannot be sent, in the words of the refusal the engine gives when it is sent (createOffer): out of the band as the crates sit and where they would land (blocked, and the instructor told);
+/** Why a swap cannot be sent, in the words of the refusal the engine gives when it is sent (createOffer): out of the band as the crates sit and where they would land (blocked; in a classroom the instructor is told);
  *  out of it only as they sit (a crate asked for from a district you have not opened: nobody is told); out of it only where they would land. The figure is the check's, shown on the chip above. */
 function blockedWhy(g, o, chk) {
-  if (chk.flagged) return '<b>Blocked.</b> Instructors are told of blocked deals. Balance it with cash or another crate.';
+  if (chk.flagged) return '<b>Blocked.</b> In a classroom, your instructor is told. Balance it with cash or another crate.';
   if (g.checkOffer(o, 'offerer', { landing: false }).ok) return '<b>Blocked:</b> priced where you would hold the crates you ask for. Balance it with cash or another crate.';
   return '<b>Cannot be sent:</b> a crate you ask for sits in a district you have not opened, so its owner values it far above what it is worth to you. Ask for another crate.';
 }
@@ -209,7 +209,7 @@ export function matrixHTML(ctx) {
     <tr><th scope="row">Crates and cash</th><td>${side(o.give.assets, o.give.cash)}${o.give.royalty ? `<br>${m(o.give.royalty.perDay)} a day for ${o.give.royalty.days} days<br><span class="small mute">Counted at no more than a tenth of your net worth. What you cannot pay stays owed.</span>` : ''}</td><td>${side(o.want.assets, o.want.cash)}</td></tr>
     <tr><th scope="row">Fair value</th><td class="mono">${m(chk.va)}</td><td class="mono">${m(chk.vb)}</td></tr>
     <tr><th scope="row">Worth in the new owner's hands</th><td class="mono">${m(myP)} <span class="tiny mute">to you</span></td><td class="mono">${m(theirP)} <span class="tiny mute">to them</span></td></tr>
-    <tr><th scope="row">Fair-value check</th><td colspan="2"><span class="chip ${chk.ok ? 'good' : 'bad'}"><span aria-hidden="true">${chk.ok ? '✓' : '✕'}</span> ${(chk.variance * 100).toFixed(1)}% from fair value, ${chk.ok ? 'inside' : 'outside'} the limit of ${FMV_BAND * 100}%</span>
+    <tr><th scope="row">Fair-value check</th><td colspan="2"><span class="chip ${chk.ok ? 'good' : 'bad'}"><span aria-hidden="true">${chk.ok ? '✓' : '✕'}</span> ${(chk.variance * 100).toFixed(1)}% apart, ${chk.ok ? 'inside' : 'outside'} the limit of ${FMV_BAND * 100}%</span>
       ${chk.ok ? '' : `<p class="small red">${blockedWhy(g, o, chk)}</p>`}</td></tr></tbody></table>`;
 }
 function exchangeHTML(ctx) {
@@ -217,12 +217,12 @@ function exchangeHTML(ctx) {
   const incoming = (S.incoming || []).map(({ offer: o, handle }) => {
     const c = g.checkOffer(o);
     return `<li class="card small"><b>${e(handle || o.fromHandle || o.from)}</b> offers ${o.give.assets.map((a) => e(nameOf(a.cls, a.cond))).join(', ') || 'no crates'}${o.give.cash ? ' + ' + m(o.give.cash) : ''}${o.give.royalty ? ` + ${m(o.give.royalty.perDay)} a day for ${o.give.royalty.days} days` : ''} for ${o.want.assets.map((a) => e(nameOf(a.cls, a.cond))).join(', ') || 'nothing'}${o.want.cash ? ' + ' + m(o.want.cash) : ''}.
-      <span class="chip ${c.ok ? 'good' : 'bad'}"><span aria-hidden="true">${c.ok ? '✓' : '✕'}</span> ${(c.variance * 100).toFixed(0)}% from fair value</span>
+      <span class="chip ${c.ok ? 'good' : 'bad'}"><span aria-hidden="true">${c.ok ? '✓' : '✕'}</span> ${(c.variance * 100).toFixed(0)}% apart</span>
       <div class="row gap"><button class="btn sm green" data-act="market-accept" data-id="${e(o.id)}" data-fid="mx-ok-${e(o.id)}">Approve</button><button class="btn sm ghost" data-act="market-decline" data-id="${e(o.id)}" data-fid="mx-no-${e(o.id)}">Reject</button></div></li>`;
   }).join('');
   const sent = S.sent ? [...S.sent.values()] : (S.outgoing || []);
   const outgoing = sent.map(({ offer: o }) => `<li class="card small">Waiting on ${e(o.to)}: your ${o.give.assets.map((a) => e(nameOf(a.cls, a.cond))).join(', ') || 'cash'} sits in escrow. <button class="btn sm ghost" data-act="market-withdraw" data-id="${e(o.id)}" data-fid="mx-wd-${e(o.id)}">Withdraw</button></li>`).join('');
-  const practice = x.roster.some((r) => r.npc) ? '<div class="callout small"><b>Practice partner.</b> It accepts deals within 30% of fair value. Join a room from the menu to trade with classmates.</div>' : '';
+  const practice = x.roster.some((r) => r.npc) ? '<div class="callout small"><b>Practice partner.</b> It accepts a swap when you give at least the fair value of what you ask for, up to 30% more. Join a room from the menu to trade with classmates.</div>' : '';
   const give = g.s.assets.filter((a) => U.sel.has(a.id));
   const form = x.partner ? `<h3 class="gap">New proposal</h3>
     <div class="mkt-form">
@@ -238,7 +238,7 @@ function exchangeHTML(ctx) {
     <div class="gap" data-matrix>${matrixHTML(ctx)}</div>
     <div class="row gap"><button class="btn" data-act="market-send" data-fid="mx-send">Send proposal</button><span class="small mute">Your side waits in escrow until they answer.</span></div>`
     : '<p class="mute">Nobody is online to trade with yet. Classmates appear when they join your room.</p>';
-  return `<p class="small">Swap crates and cash with classmates. Each swap must stay within ${FMV_BAND * 100}% of fair value.</p>${practice}
+  return `<p class="small">Swap crates and cash with classmates. One side of a swap may be worth at most ${FMV_BAND * 100}% more than the other.</p>${practice}
     ${incoming ? `<h3>Invitations</h3><ul class="mkt-list">${incoming}</ul>` : ''}${outgoing ? `<h3 class="gap">Sent</h3><ul class="mkt-list">${outgoing}</ul>` : ''}${form}`;
 }
 
@@ -275,7 +275,7 @@ export default {
     const ensure = () => (U.exch ||= { want: new Set() });
     const blocked = (r) => {
       const c = r.chk;
-      ctx.dlg.open(`<h2 tabindex="-1" autofocus>Proposal blocked</h2><div class="callout bad">${ctx.esc(r.msg)}</div>${c ? `<p class="small mono">Your side ${ctx.money(c.va)} against theirs ${ctx.money(c.vb)}${/\d%/.test(r.msg) ? '' : ` (${(c.variance * 100).toFixed(0)}% from fair value)`}.</p>` : ''}<button class="btn" data-close autofocus>OK</button>`, { cls: 'alert', label: 'Proposal blocked' });
+      ctx.dlg.open(`<h2 tabindex="-1" autofocus>Proposal blocked</h2><div class="callout bad">${ctx.esc(r.msg)}</div>${c ? `<p class="small mono">Your side ${ctx.money(c.va)} against theirs ${ctx.money(c.vb)}${/\d%/.test(r.msg) ? '' : ` (${(c.variance * 100).toFixed(0)}% apart)`}.</p>` : ''}<button class="btn" data-close autofocus>OK</button>`, { cls: 'alert', label: 'Proposal blocked' });
       ctx.sfx?.buzz?.();
     };
     return {

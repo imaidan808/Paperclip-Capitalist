@@ -1,7 +1,7 @@
 // Bank drawer: the debt-to-equity gauge, loan products, open loans, the audit, the exit and the ledger (docs/V2_DESIGN.md section 8).
 // Contract: see the header of ../shell.js. State that must survive a redraw lives in ctx.U.bank; the HTML is rebuilt from the engine every time.
 // The game teaches leverage here, so the rules of the margin call are always on the page, before the player ever feels one.
-import { LOANS, DEBT, AUDIT, BASE_RATE, FEES, PIPE, ZONES, ASSETS, BUYERS, MIL } from '../../config.js';
+import { LOANS, DEBT, AUDIT, BASE_RATE, FEES, PIPE, ZONES, ASSETS, BUYERS, MIL, TOTAL_DAYS } from '../../config.js';
 import { esc } from '../common.js';
 
 // ---------------------------------------------------------------- helpers
@@ -17,7 +17,7 @@ const tone = (x) => (x >= 0 ? 'green' : 'red');
 const SCALE = 6; // the gauge runs 0 to 6; anything higher pins to the right edge
 const PRODUCT = {
   micro: { icon: '💳', line: 'Small, short-term credit.' },
-  pipeline: { icon: '🏗️', line: `Up to ${Math.round(LOANS.pipeline.limitPct * 100)}% of your stock and manager capital.` }, // engine loanRoom: limitPct x (stock value + what the managers cost)
+  pipeline: { icon: '🏗️', line: `Up to ${Math.round(LOANS.pipeline.limitPct * 100)}% of your stock plus your managers' hire fees and upgrades.` }, // engine loanRoom: limitPct x (stock value + each manager's basis: hire fee plus upgrades)
   circle: { icon: '🤝', line: 'People who trust you lend with no interest and no fee.' },
   enterprise: { icon: '🏛️', line: 'A large revolving credit line.' },
 };
@@ -55,7 +55,7 @@ function gaugeHTML(v) {
     ${stress != null ? `<p class="small mute"><b>Stress test:</b> if your net worth fell 30% tomorrow, the ratio would jump to <b class="${stress > DEBT.callDE ? 'red' : stress > DEBT.maxDE ? 'gold' : ''}">${stress.toFixed(2)}</b>${stress > DEBT.callDE ? ', which is a margin call' : stress > DEBT.maxDE ? ', which freezes new loans' : ', which is still fine'}.</p>` : ''}
     <ul class="bk-rules small"><li><b>Up to ${DEBT.maxDE.toFixed(1)}:</b> the bank lends while debt stays under ${DEBT.maxDE.toFixed(1)} times your net worth.</li>
       <li><b>${DEBT.maxDE.toFixed(1)} to ${DEBT.callDE.toFixed(1)}:</b> no new loans.</li>
-      <li><b>Above ${DEBT.callDE.toFixed(1)}:</b> margin call. The bank sells your biggest manager (or, with none, your most valuable stock) at ${Math.round(DEBT.fireSale * 100)}% off until the ratio is back at ${DEBT.maxDE.toFixed(1)}.${s.ps.bailout > 0 ? ` Your family will clear ${Math.round(g.P.bailout.fraction * 100)}% of your debt once, first.` : ''}</li></ul>
+      <li><b>Above ${DEBT.callDE.toFixed(1)}:</b> margin call. The bank sells your biggest manager (or, with none, your most valuable stock) at ${Math.round(DEBT.fireSale * 100)}% off until the ratio is back at ${DEBT.maxDE.toFixed(1)} or nothing is left to sell. Selling at a discount can push the ratio up, so a call can sell all your managers and stock.${s.ps.bailout > 0 ? ` Your family will clear ${Math.round(g.P.bailout.fraction * 100)}% of your debt once, first.` : ''}</li></ul>
 </section>`;
 }
 
@@ -69,7 +69,7 @@ function drawPreview(v, id, amount) {
   const { g, m } = v, L = LOANS[id], nw = g.netWorth(), debt = g.debt(), fee = amount * L.fee;
   if (amount <= 0) return '<span class="mute">Slide to pick an amount.</span>';
   const after = nw - fee > 0 ? (debt + amount) / (nw - fee) : Infinity, rate = g.loanRate(id), z = zoneOf(after, debt + amount);
-  return `You receive <b>${m(amount - fee)}</b>${fee ? ` after a ${m(fee)} fee` : ' with no fee'}. Interest costs about <b>${m(amount * rate)}</b> over 30 days. Debt-to-equity goes from <b>${isFinite(g.deRatio()) ? g.deRatio().toFixed(2) : 'over 6'}</b> to <b>${isFinite(after) ? after.toFixed(2) : 'over 6'}</b> (${z.label.toLowerCase()}).`;
+  return `You receive <b>${m(amount - fee)}</b>${fee ? ` after a ${m(fee)} fee` : L.commit ? ' with no upfront fee' : ' with no fee'}. Interest costs about <b>${m(amount * rate)}</b> over 30 days. Debt-to-equity goes from <b>${isFinite(g.deRatio()) ? g.deRatio().toFixed(2) : 'over 6'}</b> to <b>${isFinite(after) ? after.toFixed(2) : 'over 6'}</b> (${z.label.toLowerCase()}).`;
 }
 
 function productCard(v, id) {
@@ -78,8 +78,8 @@ function productCard(v, id) {
   if (!why && r.room <= 0) why = r.limit - r.owed <= 0.005 ? 'You have drawn this line to its limit. Repay some to borrow again.' : `Borrowing is capped at ${DEBT.maxDE.toFixed(1)} times your net worth.`;
   const pct = B.pct[id] || 0, amount = amountFor(r.room, pct);
   const lvl = g.lvl('fintech'), base = (BASE_RATE + g.mods().rateBps / 10000) * 100, cut = Math.round((1 - Math.max(0.45, 1 - 0.07 * (lvl - 1))) * 100); // engine loanRate: (base + spread) x the Capital Sourcing factor
-  const facts = [['Limit', m(r.limit)], ['Rate', id === 'circle' ? '0%' : `${(rate * 100).toFixed(1)}% per 30 days`, id === 'circle' ? '' : `Base rate ${base.toFixed(1)}% per 30 days${g.mods().rateBps ? ', raised by the credit crunch' : ''}, plus this line's spread. Capital Sourcing level ${lvl} cuts loan interest by ${cut}%.`], ['Fee', L.fee ? `${(L.fee * 100).toFixed(0)}% upfront` : 'None'], ['Compounds', id === 'circle' ? 'Never' : every(L.every)]];
-  if (L.commit) facts.push(['Unused part', `${(L.commit * 100).toFixed(1)}% a month`]);
+  const facts = [['Limit', m(r.limit)], ['Rate', id === 'circle' ? '0%' : `${(rate * 100).toFixed(1)}% per 30 days`, id === 'circle' ? '' : `Base rate ${base.toFixed(1)}% per 30 days${g.mods().rateBps ? ', raised by the credit crunch' : ''}, plus this line's spread. Capital Sourcing level ${lvl} cuts loan interest by ${cut}%.`], ['Fee', L.fee ? `${(L.fee * 100).toFixed(0)}% upfront` : L.commit ? 'None upfront' : 'None'], ['Compounds', id === 'circle' ? 'Never' : every(L.every)]];
+  if (L.commit) facts.push(['Fee on unused part', `${(L.commit * 100).toFixed(1)}% a month`, 'Charged each month while you owe on this line, on the part of it you have not borrowed. It is added to what you owe.']);
   facts.push(['You can borrow', m(r.room)]);
   return `<article class="bk-prod${why ? ' off' : ''}" aria-label="${esc(L.name)}"><header class="bk-ph"><span class="bk-ic" aria-hidden="true">${P.icon}</span><div class="grow"><h4>${esc(L.name)}</h4><p class="small mute">${P.line}</p></div></header>
     <dl class="bk-facts">${facts.map(([k, x, tip]) => `<div><dt>${k}</dt><dd class="mono"${tip ? ` title="${esc(tip)}"` : ''}>${x}</dd></div>`).join('')}</dl>
@@ -128,9 +128,9 @@ function auditHTML(v) {
 }
 
 function exitCard(v, kind) {
-  const { g, m } = v, q = g.exitQuote(kind), name = kind === 'ipo' ? 'IPO' : 'Trade sale', mult = +((kind === 'ipo' ? 10 : 6) * g.B.exitMult).toFixed(1), line = kind === 'ipo' ? `Goes public at ${mult}x average daily profit; needs a clean audit record.` : `Sells the whole business at ${mult}x average daily profit.`; // engine exitQuote
+  const { g, m } = v, q = g.exitQuote(kind), name = kind === 'ipo' ? 'IPO' : 'Trade sale', mult = +((kind === 'ipo' ? 10 : 6) * g.B.exitMult).toFixed(1), line = `Pays your cash, assets and managers at book value plus ${mult}x average daily profit, less ${Math.round(FEES.exitBrokerage * 100)}% brokerage and your debt. ${kind === 'ipo' ? 'Needs a clean audit record.' : 'Each failed audit takes 15% off the profit part (70% at most).'}`; // engine exitQuote: cash + hard assets + premium - brokerage - debt; the multiple prices the premium only
   return `<article class="bk-exit"><h4>${name}</h4><p class="small mute">${line}</p>${q.ok
-    ? `<p class="small">You would receive about <b class="gold">${m(q.proceeds)}</b> in 48 hours, and your score would lock at <b class="green">${q.eeiIfNow.toFixed(2)}</b>.</p><button class="btn" data-act="bank-exit" data-k="${kind}" data-fid="ex-${kind}">See the numbers</button>`
+    ? `<p class="small">You would receive about <b class="gold">${m(q.proceeds)}</b> in ${q.hours} hours, and your score would lock at <b class="green">${q.eeiIfNow.toFixed(2)}</b>.</p><button class="btn" data-act="bank-exit" data-k="${kind}" data-fid="ex-${kind}">See the numbers</button>`
     : `<p class="bk-why small">${esc(q.msg)}</p><button class="btn" data-act="bank-exit" data-k="${kind}" data-fid="ex-${kind}" aria-disabled="true">See the numbers</button>`}</article>`;
 }
 function exitHTML(v) {
@@ -139,7 +139,7 @@ function exitHTML(v) {
   if (s.exiting) body = `<div class="callout good"><b>Your exit is settling.</b> ${dur(s.exiting.at - s.hour)} to go. The sale money lands then.</div>`;
   else if (s.exit) body = `<div class="callout good"><b>You exited.</b> Net worth locked at ${m(s.exit.nw)} with ${Math.round(s.exit.daysLeft)} days to spare. Score ${g.eei().toFixed(2)}.</div>`;
   else if (s.over) body = `<p class="small mute">The run is over. Your score is locked at <b>${g.eei().toFixed(2)}</b>.</p>`;
-  else body = `<p class="small mute">Exiting ends the run and locks your score. The time bonus is 1 + days left / 90. If you stopped now your score would be <b>${g.eei().toFixed(2)}</b>.</p><div class="bk-grid">${exitCard(v, 'sale')}${exitCard(v, 'ipo')}</div>`;
+  else body = `<p class="small mute">Exiting ends the run and locks your score. The time bonus is 1 + days left / ${TOTAL_DAYS}. If you stopped now your score would be <b>${g.eei().toFixed(2)}</b>.</p><div class="bk-grid">${exitCard(v, 'sale')}${exitCard(v, 'ipo')}</div>`;
   return `<section class="bk-sec" aria-label="Exit"><h3 class="bk-h3">Exit</h3>${body}</section>`;
 }
 
@@ -215,7 +215,7 @@ export default {
       'bank-exit'(el) {
         const game = g(), k = el.dataset.k, q = game.exitQuote(k), m = ctx.money;
         if (!q.ok) { ctx.toast(q.msg, 'bad', undefined, { refusal: true }); return; }
-        ctx.confirmBox(k === 'ipo' ? 'Go public (IPO)?' : 'Sell the business?', `<dl class="kv"><dt>Cash</dt><dd>${m(game.s.cash)}</dd><dt>Assets and managers (book)</dt><dd>${m(q.hard)}</dd><dt>Going-concern premium (${+((k === 'ipo' ? 10 : 6) * game.B.exitMult).toFixed(1)}x average daily profit of ${m(q.avg)}${game.s.auditFail ? `, less ${Math.round(Math.min(0.7, 0.15 * game.s.auditFail) * 100)}% for failed audits` : ''})</dt><dd>${m(q.premium)}</dd><dt>Brokerage ${Math.round(FEES.exitBrokerage * 100)}%</dt><dd class="red">-${m(q.brokerage)}</dd><dt>Debt repaid</dt><dd class="red">-${m(game.debt())}</dd><div class="sep"></div><dt>You receive in 48 hours</dt><dd class="gold">${m(q.proceeds)}</dd><dt>Score locked at</dt><dd class="green">${q.eeiIfNow.toFixed(2)}</dd><dt>Score if you play on (today)</dt><dd>${game.eei().toFixed(2)}</dd></dl><p class="small mute">This ends your run and locks the score.</p>`, 'Exit now', () => { ctx.say(game.exit(k)); }, true);
+        ctx.confirmBox(k === 'ipo' ? 'Go public (IPO)?' : 'Sell the business?', `<dl class="kv"><dt>Cash</dt><dd>${m(game.s.cash)}</dd><dt>Assets and managers (book)</dt><dd>${m(q.hard)}</dd><dt>Going-concern premium (${+((k === 'ipo' ? 10 : 6) * game.B.exitMult).toFixed(1)}x average daily profit of ${m(q.avg)}${game.s.auditFail ? `, less ${Math.round(Math.min(0.7, 0.15 * game.s.auditFail) * 100)}% for failed audits` : ''})</dt><dd>${m(q.premium)}</dd><dt>Brokerage ${Math.round(FEES.exitBrokerage * 100)}%</dt><dd class="red">-${m(q.brokerage)}</dd><dt>Debt repaid</dt><dd class="red">-${m(game.debt())}</dd><div class="sep"></div><dt>You receive in ${q.hours} hours</dt><dd class="gold">${m(q.proceeds)}</dd><dt>Score locked at</dt><dd class="green">${q.eeiIfNow.toFixed(2)}</dd><dt>Score if you play on (today)</dt><dd>${game.eei().toFixed(2)}</dd></dl><p class="small mute">This ends your run and locks the score.</p>`, 'Exit now', () => { ctx.say(game.exit(k)); }, true);
       },
       'bank-ledger'() { const B = ST(ctx); B.ledger = !B.ledger; ctx.render(); },
       // a focused select blocks the shell's redraw, so let go of it, draw, then take it back

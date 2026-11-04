@@ -14,12 +14,12 @@ const UP = '▲', DOWN = '▼', FLAT = '▬';
 
 // ---- the fold every drawer uses: the Codex's pattern (css/styles.css), closed until asked. The shell redraws a drawer whenever its text changes, and that would shut a bare <details> the
 // reader had opened, so the choice lives in ctx.U.fold and the summary is the control (data-act="<drawer>-fold"). A closed fold draws only its summary; `tip` is the same words as a hover.
-export function fold(ctx, drawer, key, label, body, tip = '') {
-  const open = !!ctx.U.fold?.[`${drawer}.${key}`];
+export function fold(ctx, drawer, key, label, body, tip = '', dflt = false) {
+  const open = ctx.U.fold?.[`${drawer}.${key}`] ?? dflt;
   return `<details class="cx-more"${open ? ' open' : ''}><summary data-act="${drawer}-fold" data-k="${key}" data-fid="${drawer}-fd-${key}"${tip ? ` title="${esc(tip)}"` : ''}>${label}</summary>${open ? body : ''}</details>`;
 }
 /** The act behind a fold's summary. */
-export function flip(ctx, drawer, key) { const f = (ctx.U.fold ||= {}), k = `${drawer}.${key}`; f[k] = !f[k]; ctx.render(); }
+export function flip(ctx, drawer, key, dflt = false) { const f = (ctx.U.fold ||= {}), k = `${drawer}.${key}`; f[k] = !(f[k] ?? dflt); ctx.render(); }
 
 // ---- small helpers, shared with market.js
 export const plural = (n, one, many = one + 's') => `${n} ${n === 1 ? one : many}`;
@@ -146,7 +146,7 @@ function selBarHTML(ctx, sel) {
       ${btn('stock-offer', 'Offer to a classmate', true)}
     </div>
     ${why.map((w) => `<p class="tiny mute">${e(w)}</p>`).join('')}
-    ${pq && pq.ok && pq.delay ? `<p class="tiny mute">Money from the pool arrives after ${pq.delay} virtual hours here.</p>` : ''}
+    ${pq && pq.ok && pq.delay ? `<p class="tiny mute">Money from the pool arrives after ${pq.delay} hours here.</p>` : ''}
     ${rq && rq.ok ? `<p class="tiny mute">Digital routing sends them to ${e(ZONES[rq.zone].short)}, where they pay most. It costs a ${Math.round(rq.fric * 100)}% fee and pays after ${rq.delay} hours.</p>` : ''}
   </div>`;
 }
@@ -178,14 +178,14 @@ function poolConfirm(ctx, ids, route) {
   const body = `<p>${plural(q.per.length, 'crate')} to ${where}.</p>
     <dl class="kv"><dt>Worth as described</dt><dd>${m(q.per.reduce((x, p) => x + g.val(p.a, q.zone), 0))}</dd><dt>${route ? 'Routing fee' : 'Pool fees and friction'}</dt><dd>-${Math.round(q.fric * 1000) / 10}%</dd><dt>You get about</dt><dd class="gold">${m(described)}</dd>${inspected ? `<dt>Going by your own read</dt><dd>${m(read)}</dd>` : ''}</dl>
     ${unknown ? '<p class="small">The pool checks what it buys: a worn or fake crate fetches less than shown.</p>' : ''}
-    ${q.delay ? `<p class="small">The money arrives after <b>${q.delay} virtual hours</b>.</p>` : ''}
+    ${q.delay ? `<p class="small">The money arrives after <b>${q.delay} hours</b>.</p>` : ''}
     ${described > q.room ? `<p class="callout warn small">The pool has only ${m(q.room)} left. It refills 35% of its depth a day.</p>` : `<p class="small mute">The pool has ${m(q.room)} left. A buyer in the Market usually pays more.</p>`}`;
   ctx.confirmBox(route ? 'Route to the pool?' : 'Sell to the pool?', body, 'Sell', () => {
     const r = g.sellPool(ids, route);
     for (const id of ids) U.sel.delete(id);
     if (!r.ok) { ctx.say(r); return; }
     // the engine's own message is empty here (the quote's blank one wins the spread), so say the real total, which is the first time the player sees it
-    ctx.toast(`Sold ${plural(q.per.length, 'crate')} for ${m(r.total)}.${r.delay ? ` The money arrives in ${r.delay} virtual hours.` : ''}`, 'good');
+    ctx.toast(`Sold ${plural(q.per.length, 'crate')} for ${m(r.total)}.${r.delay ? ` The money arrives in ${r.delay} hours.` : ''}`, 'good');
     ctx.sfx?.kaching?.();
   });
 }

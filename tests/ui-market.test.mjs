@@ -93,7 +93,7 @@ test('ruleText turns every district\'s rules into short plain sentences', () => 
   assert.match(satWords(0, 0), /Nobody/); assert.match(satWords(0.9, 30), /Packed/);
 });
 
-test('the banner leads with the rule, its tax and its pool; the other rules, what opening it gave and the lesson are one fold, and its hover; the blurb is not repeated', () => {
+test('the banner leads with the rule, its tax and its pool; the other rules, what opening it gave and the lesson are one fold, and its hover', () => {
   const ctx = fakeCtx({ days: 25, perks: PAIRS[0] }), g = ctx.g(), esc = (t) => t.replace(/&/g, '&amp;').replace(/'/g, '&#39;');
   for (const z of g.s.zones) {
     ctx.U.zone = z; ctx.U.fold = {};
@@ -105,7 +105,6 @@ test('the banner leads with the rule, its tax and its pool; the other rules, wha
     assert.ok(html.includes(`title="${ctx.esc(tip)}"`), `${Z.name}: its hover is what opens`);
     ctx.U.fold = { 'market.about': true }; html = market.html(ctx);
     const page = html.replace(/<[^>]*>/g, ' ');
-    assert.ok(!html.includes(esc(Z.blurb)), `${Z.name}: the blurb says the rule again; it is the news line\'s, not the banner\'s`);
     assert.ok(page.includes(esc(teachName(Z.teaches))), `${Z.name}: what it teaches`);
     for (const t of rest) assert.ok(page.includes(ctx.esc(t)), `${Z.name}: the other rules open`);
     for (const t of bonusText(Z)) assert.ok(page.includes(ctx.esc(t)), `${Z.name}: what opening it gave opens`);
@@ -288,7 +287,10 @@ test('lots are booths: the price, Working or Broken, the district\'s quality lin
     assert.match(card, /Look it over/); assert.match(card, /Quick buy/);
     assert.match(card, /Not inspected yet/);
   }
-  assert.match(html, /Lots are worth 70% to 115% of how they are described\./, 'the range the lot generator draws (85% to 115% in districts 1 and 2)');
+  assert.match(html, /Lots are worth 70% to 115% of how they are described\. A counterfeit is worth 8%\./, 'the range the lot generator draws (85% to 115% in districts 1 and 2), and the Pawn District has counterfeits, which are the exception to it');
+  const qual = (h) => (/<p class="small mkt-qual">([\s\S]*?)<\/p>/.exec(h) || [])[1] || '';
+  assert.ok(g.s.zones.includes(3) && !ZONES[3].rules.fakes); ctx.U.zone = 3;
+  assert.doesNotMatch(qual(market.html(ctx)), /counterfeit/i, 'a district with no counterfeit rule says nothing of one');
   ctx.U.zone = 1;
   assert.match(market.html(ctx), /Lots are worth 85% to 115% of how they are described\./);
 });

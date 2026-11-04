@@ -64,5 +64,5 @@ export function tickerHTML(ctx) {
   const n = list.find((x) => x.level !== 'info' || x.milestone) || list[0];
   if (!n) return '';
   const idx = all.indexOf(n);
-  return `<button class="tick ${n.level}" data-anchor="ticker" data-act="${n.alert ? 'alert' : 'dock'}" data-i="${idx}" data-d="quests"><small>Day ${Math.floor(n.h / 24) + 1}</small> <span class="tk-t">${esc(n.text)}</span></button>`;
+  return `<button class="tick ${n.level}" data-anchor="ticker" data-act="${n.alert ? 'alert' : 'dock'}" data-i="${idx}" data-d="quests"><small>Day ${Math.min(TOTAL_DAYS, Math.floor(n.h / 24) + 1)}</small> <span class="tk-t">${esc(n.text)}</span></button>`;
 }

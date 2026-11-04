@@ -102,6 +102,7 @@ test('a district card carries its rule, the lesson as a button to its Codex page
   assert.ok(h.includes('title="Opening it gave you: Freight costs 30% less everywhere."'), 'what an open district gave is the hover on its name');
   assert.match(text(h), new RegExp(`${ZONES[next].name} → Next stop`));
   assert.match(text(h), /Opening it: /, 'the next stop says what opening it gives');
+  assert.ok(text(h).includes(`of ${ctx.money(ZONES[next].gate)} net worth.`), 'and says what its gate measures');
   assert.match(h, /You are here/);
   assert.doesNotMatch(text(h), /Reward you earned|In your Codex/, 'said once');
 });
@@ -110,8 +111,8 @@ test('a locked district past the next is one line; its rule, reward and lesson o
   const ctx = fakeCtx({ days: 25 }), g = ctx.g(), acts = travel.acts(ctx), s = g.s;
   const far = ZONE_IDS.filter((id) => !s.zones.includes(id)).at(-1), Z = ZONES[far];
   let h = travel.html(ctx);
-  const row = (html) => html.slice(html.indexOf(`<li class="tv-d locked"`, html.indexOf(Z.name) - 400));
-  const reward = rewardPhrases(Z).join(' '), tip = `${rulePhrases(Z)[0]}${reward ? ` Opening it: ${reward}` : ''} Teaches ${lessonTitle(Z.teaches)}.`;
+  const row = (html) => { const at = html.lastIndexOf('<li class="tv-d locked"', html.indexOf(`<summary data-act="travel-fold" data-k="d${far}"`)); return at < 0 ? '' : html.slice(at, html.indexOf('</li>', at)); };
+  const reward = rewardPhrases(Z).join(' '), tip = `Opens at ${ctx.money(Z.gate)} net worth. ${rulePhrases(Z)[0]}${reward ? ` Opening it: ${reward}` : ''} Teaches ${lessonTitle(Z.teaches)}.`;
   assert.ok(h.includes(`title="${ctx.esc(tip)}"`), 'the hover carries the rule, the reward and the lesson');
   assert.ok(!text(h).includes(rulePhrases(Z)[0]), 'but the rule is not on the page until the line is opened');
   assert.match(h, new RegExp(`<summary data-act="travel-fold" data-k="d${far}"`));
@@ -120,7 +121,8 @@ test('a locked district past the next is one line; its rule, reward and lesson o
   h = travel.html(ctx);
   assert.match(h, /<details class="cx-more" open>/); assert.ok(text(h).includes(rulePhrases(Z)[0]), 'opened, the rule is there');
   assert.match(text(h), new RegExp(`Teaches ${lessonTitle(Z.teaches).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`));
-  assert.ok(row(h).length > 0);
+  assert.ok(/<details class="cx-more" open>/.test(row(h)) && text(row(h)).includes(rulePhrases(Z)[0]), 'it opens inside its own line');
+  assert.ok(text(row(h)).includes(`Opens at ${ctx.money(Z.gate)} net worth.`), 'and says what its amount is');
   acts['travel-fold'](el({ k: `d${far}` })); assert.ok(!text(travel.html(ctx)).includes(rulePhrases(Z)[0]), 'and shut again');
 });
 

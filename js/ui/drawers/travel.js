@@ -70,14 +70,14 @@ function distCard(ctx, id, nextId) {
   const pal = Array.isArray(Z.palette) && /^#[0-9a-f]{6}$/i.test(Z.palette[1]) ? ` style="--za:${Z.palette[1]}"` : '';
   const node = `<span class="tv-node" aria-hidden="true">${open ? '✓' : id}</span>`;
   if (state === 'locked') {
-    const body = `<p class="tv-rule">${esc(rule)}</p>${reward ? `<p class="tv-meta">Opening it: ${esc(reward)}</p>` : ''}<p class="tv-meta">Teaches <b>${esc(lesson)}</b></p>`;
-    const tip = `${rule}${reward ? ` Opening it: ${reward}` : ''} Teaches ${lesson}.`;
+    const body = `<p class="tv-meta">Opens at ${money(Z.gate)} net worth.</p><p class="tv-rule">${esc(rule)}</p>${reward ? `<p class="tv-meta">Opening it: ${esc(reward)}</p>` : ''}<p class="tv-meta">Teaches <b>${esc(lesson)}</b></p>`;
+    const tip = `Opens at ${money(Z.gate)} net worth. ${rule}${reward ? ` Opening it: ${reward}` : ''} Teaches ${lesson}.`;
     return `<li class="tv-d locked"${pal}>${node}${fold(ctx, 'travel', 'd' + id, `<span aria-hidden="true">${Z.icon}</span> <b>${esc(Z.name)}</b> <span class="chip">🔒 ${money(Z.gate)}</span>`, body, tip)}</li>`;
   }
   const nw = g.netWorth(), frac = clamp(nw / Z.gate, 0, 1), missing = Math.max(0, Z.gate - nw);
   const chip = open ? '<span class="chip good">✓ Open</span>' : '<span class="chip warn">→ Next stop</span>';
   const gate = open ? '' : `<div class="tv-gate"><span class="bar gold" role="progressbar" aria-label="Net worth toward ${esc(Z.name)}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.floor(frac * 100)}"><i style="width:${Math.floor(frac * 100)}%"></i></span>
-      <p class="tv-meta"><b>${money(nw)}</b> of ${money(Z.gate)}. <b>${money(missing)}</b> to go.</p></div>`;
+      <p class="tv-meta"><b>${money(nw)}</b> of ${money(Z.gate)} net worth. <b>${money(missing)}</b> to go.</p></div>`;
   const go = open ? `<button class="btn ${here ? 'ghost' : ''}" data-act="travel-go" data-dist="${id}" data-fid="tv-go-${id}">${here ? 'Look around' : `Go to ${esc(Z.short)}`}</button>` : '';
   // an open district's lesson is a page the player has: its title opens it; the next one's is only named (the page is still locked in the Codex)
   const teach = open ? `<button class="btn ghost sm" data-act="travel-codex" data-id="${esc(Z.teaches)}" data-fid="tv-cx-${id}" title="${esc(gist)}" aria-label="Read about ${esc(lesson)} in the Codex">${esc(lesson)}</button>` : `<b>${esc(lesson)}</b>`;
