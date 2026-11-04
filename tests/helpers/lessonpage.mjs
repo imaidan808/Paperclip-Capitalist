@@ -44,7 +44,7 @@ export async function lessonPage(b, lesson, { w, h, dsf, mobile, touch }) {
 }
 export const atStep = (p, n) => until(p, `/STEP ${n} OF/i.test((document.querySelector('.ac-coach .ac-eyebrow')||{}).innerText||'') || !!document.querySelector('.ac-sheet')`, `lesson step ${n}`);
 /** Moves the clock the Academy reads 30 seconds on: the hint is due. */
-export const hint = async (p) => { await p.eval(`window.__skew += 30000`); await until(p, `!!document.querySelector('.ac-coach .ac-hint, .ac-coach.handle .ac-grab')`, 'the hint'); await p.sleep(500); };
+export const hint = async (p) => { await p.eval(`window.__skew += 30000`); await until(p, `!!document.querySelector('.ac-coach .ac-hint, .ac-coach.handle .ac-grab')`, 'the hint'); await until(p, `(()=>{ const c=document.querySelector('.ac-coach'); return !c || !c.classList.contains('handle') || /hint/i.test(c.querySelector('.ac-grab')?.getAttribute('aria-label') || '') })()`, 'the tab to say it has a hint', 8000).catch(() => {}); await p.sleep(500); };
 
 /** The first control matching `sel` (and `re`, against its name) that can be seen and is not the card's own, as an expression for the page. */
 const FIND = (sel, re, nth = 0) => `(()=>{ const d=document.querySelector('dialog#dlg'), root=d.open?d:document; const all=[...root.querySelectorAll(${JSON.stringify(sel)})].filter(e=>{const r=e.getBoundingClientRect(); return r.width>0&&r.height>0&&!e.closest('.ac-coach')}).filter(e=>new RegExp(${JSON.stringify(re)},'i').test((e.getAttribute('aria-label')||e.textContent).trim())); return all[${nth}]||null })()`;
