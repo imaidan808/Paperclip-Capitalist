@@ -817,7 +817,7 @@ export const CODEX = [
     summary: "When money gets scarce, rates and fees jump and new loans freeze. Floating-rate debt is where it hurts first.",
     body: [
       "A credit crunch is when the cost of borrowing leaps and lenders pull back. In the game's Fed Taper the base rate climbs from 2.5% to 8.5% (+600 bps), the fee on trades rises from 2.5% to 12%, pipeline overhead climbs 20%, and the Bank refuses new loans for 10 days.",
-      "Open loans re-price within a day. A loan that cost 7.0% per 30 days now costs 13.0%, so the daily interest on $2,000 goes from $4.67 to $8.67, up 86%. Every sale gets dearer too. A crunch is a test of working capital: those with a buffer pay the new price, and the rest sell stock into a falling market to raise cash.",
+      "Open loans re-price within a day. A loan that cost 7.0% per 30 days now costs 13.0%, so the daily interest on $2,000 goes from $4.67 to $8.67, up 86%. Every sale gets dearer too. A crunch is a test of working capital: those with a buffer pay the new price, and the rest sell stock at the 12% fee to raise cash.",
       "A warning arrives ahead of time and Fintech lengthens it. Use it to repay and build cash.",
     ],
     formula: "new rate = old rate + 6 points; daily interest = principal x rate / 30",

@@ -401,7 +401,7 @@ test('the gradebook uses an overall percentile and the CSV has Backgrounds, dist
   assert.ok(lines.some((l) => l.includes('"trades","pro","3"')));
   assert.ok(lines.some((l) => l.includes('"heir","creator","9"')));
   assert.ok(lines.some((l) => l.startsWith('"PC-A","\'=cmd|calc<b>Zelda</b>"')), 'a formula in an alias is made text');
-  for (const l of lines) assert.equal(l.split('","').length, 17, 'every row has the 17 columns');
+  for (const l of lines) assert.equal(l.split('","').length, 18, 'every row has the 18 columns');
 });
 
 test('the dashboard builds with no students at all and with a room that is not connected', () => {

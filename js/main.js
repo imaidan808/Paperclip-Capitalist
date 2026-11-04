@@ -112,7 +112,7 @@ const screens = {
             <details class="gap"><summary class="small">Relay (only if your instructor gave one)</summary><label for="jr" class="gap">Relay URL</label><input id="jr" placeholder="wss://relay.example.edu" value="${esc(relay)}"></details>
             <button class="btn gap" data-act="join">Join</button></section>
           <section class="panel"><h2>Instructor</h2><p class="small mute">Set the pace, deploy shocks and export grades.</p>
-            <label for="ir" title="Without a relay, students join from other tabs of this browser, each tab its own founder.">Relay URL (needed for other devices)</label><input id="ir" placeholder="wss://relay.example.edu" value="${esc(relay)}">
+            <label for="ir">Relay URL (blank: other tabs of this browser only; other devices need one)</label><input id="ir" placeholder="wss://relay.example.edu" value="${esc(relay)}">
             <div class="row gap"><button class="btn" data-act="instr">Create a room</button>${instr ? `<button class="btn ghost" data-act="instr-resume">Reopen room ${esc(instr.code)}</button>` : ''}</div>
             ${instrKey ? `<details class="gap"><summary class="small">Recovery code for room ${esc(instr.code)}</summary><p class="small mute">Keep it somewhere safe. With the room code it lets you run this room from another device, or after this browser has forgotten it.</p><p class="mono" id="ik-show" tabindex="0">${esc(instrKey)}</p></details>` : ''}
             <details class="gap" id="ires"><summary class="small">Resume as instructor: take back a room</summary>

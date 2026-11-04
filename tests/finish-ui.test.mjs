@@ -116,8 +116,9 @@ test('Instructor dashboard: the recovery code is on the page behind a closed "Sh
   assert.deepEqual(checkHTML(p.keep, 'keep panel'), []);
   assert.ok(!DASHES.test(p.keep) && !/\bzones?\b/i.test(p.keep), 'no dash, and "district"');
   assert.equal(recoveryHTML(S), p.keep, 'the same text each time, so the open "Show" is not closed by the next tick');
-  // a room with no relay says that it is also only this browser's tabs
-  assert.ok(!recoveryHTML(S).includes("browser's tabs") && recoveryHTML(roomOf({ kind: 'local' })).includes("browser's tabs"));
+  // a room with no relay says, in the paragraph that is read without opening the fold, that it is only this browser's tabs and that no other laptop can take it over
+  const local = recoveryHTML(roomOf({ kind: 'local' })), shown = local.slice(0, local.indexOf('<details'));
+  assert.ok(!recoveryHTML(S).includes("browser's tabs") && shown.includes("browser's tabs") && shown.includes('cannot take it over') && !shown.includes('from another laptop'), 'with no relay the paragraph that is read without opening the fold says no other laptop can take the room over, and does not offer one');
   // the escaping holds for whatever a room is called
   const odd = roomOf(); odd.roomInfo = { code: '<b>X</b>', relay: '', role: 'instructor' }; assert.ok(!recoveryHTML(odd).includes('<b>X</b>'));
 });

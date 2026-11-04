@@ -1,15 +1,18 @@
 // Copy pass, part 2, package P2: the Debrief, the instructor dashboard, the title's classroom panels and the faculty kit. Each test holds a claim these screens make against the engine
 // (the numbers are recomputed from the engine or the config, never copied from the text), and fails on the text it replaced:
 //   D1  the Prompt C result column is the ledger's own signed number (a gain is not "value lost"; a manager's cycle is profit), the five most crowded niches are in front and the rest fold
-//   D2  a niche's saturation is the one at its latest sale ("last seen" was its first); the creativity figures (herd 0.55, pioneer 2.4, the score's scale, the formula) are the engine's
-//   D3  the Prompt A gain column is the same figure at both ends of a swap (the old "you / them" pair was proposer / acceptor, so it was reversed for half the rows)
-//   D4  Prompt B, the chart and the workbook name the day the credit crunch really hit (an instructor can deploy it on any day); what the crunch changes is the engine's, and it moves no asset price
-//   D5  the adaptability column shows what the subtotal counts, in the table and in the CSV; the grade notes (25, 10, 10, a neutral 50) are the gradebook's own
-//   D6  the schedule line is the list of shocks the students' games really hold, after a deploy with or without Replace
-//   D7  what the rewind, the stalled list and the room line say is what the engine and the relay do
+//   D2  a niche's saturation is the one at its latest crowded sale ("last seen" was its first); the workbook prints it with the two volumes it is the ratio of, never as a count of pitches (D2b); the creativity figures (herd 0.55, pioneer 2.4, the score's scale, the formula) are the engine's
+//   D3  the Prompt A gain column is the same figure at both ends of a swap (the old "you / them" pair was proposer / acceptor, so it was reversed for half the rows); the two sides' sizes are shown by role, cash included (D3b); a skill that is not on record says n/a
+//   D4  Prompt B, the chart and the workbook name the day the credit crunch really hit; what the crunch changes is the engine's, it moves no asset price, and the Debrief's line splits where debt passes net worth; a Veteran feels the three rises 40% smaller (D4b)
+//   D5  the adaptability column shows what the subtotal counts, in the table and in the CSV (whose last column says whether it was graded); the grade notes (25, 10, 10, a neutral 50) are the gradebook's own
+//   D6  the schedule line is the list of scheduled and sent shocks the students' games really hold, after a deploy with or without Replace, and says that the algorithmic events are not on it
+//   D7  what the rewind, the stalled list, the room line and the recovery paragraph say is what the engine and the relay do; who a rewind and a shock reach is in front, in the roster's word (online)
 //   D8  the voice: what these screens show at first has no question, no filler and no dash, is a fraction of what it was, and what was folded is folded
 //   D9  the title's classroom panels and the kit: the names the screens use, the numbers the engine has
-//   D10 the figures' hovers and labels (efficiency index, percentile, pivots, the band of a swap, the sliders) are what the engine does
+//   D10 the figures' hovers and labels (efficiency index, percentile, pivots, the band of a swap, the sliders, the herd) are what the engine does; the algorithmic events come from the room code
+//   D11 the five days after a shock are n/a until they are over, never 0 pivots
+//   D12 every hover of the Debrief and of the dashboard's controls is said once more in the page: a fold, a line or a screen-reader span, and a cue for a pointer
+// What Deploy, Inject and Close room store, the print listeners and the word counter are held on a stand-in page in tests/copy2-debrief-mount.test.mjs.
 // Run: node --test tests/copy2-debrief.test.mjs
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -24,9 +27,8 @@ const read = (rel) => readFileSync(join(ROOT, rel), 'utf8');
 
 const { Game } = await import('../js/engine.js');
 const { ASSETS, BUYERS, PERKS, EVENTS, CM, FEES, BASE_RATE, FMV_BAND, WARN_LEAD, SWAPS, TOTAL_DAYS } = await import('../js/config.js');
-const { creativityBand, creativity, fmtMoney: money } = await import('../js/market.js');
+const { creativityBand, creativity, fmtMoney: money, fmtPct } = await import('../js/market.js');
 const { CODEX } = await import('../js/meta/codex.js');
-const { hash01 } = await import('../js/rng.js');
 const { Session, Clock } = await import('../js/session.js');
 const C = await import('../js/cohort.js');
 const D = await import('../js/ui/debrief.js');
@@ -57,7 +59,8 @@ const ordered = ['herd', 'crowded', 'open', 'balanced', 'pioneer'];
 function lowerEdge(id) { let lo = CM.min, hi = CM.max; for (let i = 0; i < 80; i++) { const mid = (lo + hi) / 2; if (ordered.indexOf(creativityBand(mid).id) >= ordered.indexOf(id)) hi = mid; else lo = mid; } return hi; }
 
 const cycleNets = [];
-const late = (() => { const g = makeGame(['native', 'heir'], 'growth', 11); g.onEvent = (e) => { if (e.type === 'cycle') cycleNets.push(e.net); }; run(g, { days: 60 }); return g; })();
+// The two scheduled shocks only (days 15 and 45): D8 counts the words of the debrief's shock table, so this world must not move with the algorithmic draw (js/engine.js `_algoEvent`).
+const late = (() => { const g = makeGame(['native', 'heir'], 'growth', 11); g.env.algo = false; g.onEvent = (e) => { if (e.type === 'cycle') cycleNets.push(e.net); }; run(g, { days: 60 }); return g; })();
 const fresh = makeGame(['connected', 'grad']);
 
 /** An instructor's session with students whose snapshots say what a test wants (a stand-in room records what it is sent). */
@@ -126,8 +129,13 @@ test('D2: saturation is the niche\'s latest, and the creativity figures the debr
   const html = D.debriefHTML(REAL(g)), md = D.reflectionMD(REAL(g), '');
   assert.ok(html.includes('<td class="mono red">0.60x</td><td class="mono">70%</td>'), 'the saturation at the latest sale (70%), beside the average multiplier of the two (0.60)');
   assert.ok(!html.includes('<td class="mono">30%</td>'));
-  assert.ok(md.includes('at the latest sale 7 of 10 recent pitches went to the same buyer (saturation 70%)'));
+  assert.ok(md.includes('saturation 70% at its latest crowded sale (V_niche 7.0000, V_total 10.0000)'), 'the workbook states the saturation and the two volumes it is the ratio of, under the formula\'s names');
   assert.ok(!/last seen/.test(md) && !/last seen/.test(read('js/ui/debrief.js')));
+  // real engine rows: the volumes behind a saturation are fractions of a pitch (the class's expected pitches, in parts: js/cohort.js `ghostCounts`), so a count of pitches rounded from them contradicts the percentage beside it
+  const mdLate = D.reflectionMD(REAL(late), ''), lines = [...mdLate.matchAll(/saturation (\d+)% at its latest crowded sale \(V_niche ([\d.]+), V_total ([\d.]+)\)/g)];
+  assert.ok(lines.length > 10 && late.s.ledger.some((e) => e.type === 'pitch' && Number.isFinite(e.vN) && Math.abs(e.vN - Math.round(e.vN)) > 0.05), 'the run has niches whose volumes are fractions');
+  assert.ok(!/\d+ of \d+ recent pitches|at the latest sale/.test(mdLate), 'no rounded volume is worded as a count');
+  for (const m of lines) assert.ok(Math.abs(+m[2] / +m[3] - +m[1] / 100) <= 0.01, `${m[0]}: the printed volumes reproduce the printed saturation`);
 
   // the bands: 0.55 and 2.4 are where the engine's own band names change; the table's 0.8 sits inside the crowded band
   assert.ok(Math.abs(lowerEdge('crowded') - 0.55) < 1e-9 && creativityBand(0.55).id === 'herd', 'the herd trap is 0.55 or less');
@@ -153,6 +161,37 @@ test('D2: saturation is the niche\'s latest, and the creativity figures the debr
   for (const [vN, vT] of [[0, 40], [10, 100], [60, 100], [4, 20], [8, 24]]) {
     const S = Math.min(1, vN / vT), by = Math.min(CM.max, Math.max(CM.min, (CM.beta + Math.log((vT + 2) / (vN + 1))) * (1 - S)));
     assert.ok(Math.abs(creativity(vN, vT) - by) < 1e-9, `the formula for ${vN} of ${vT}`);
+  }
+  assert.ok(fold.includes('(the class\'s expected pitches plus yours, so not whole numbers)'), 'and the fold says why the volumes in the workbook are decimals');
+});
+
+test('D2b: the workbook states the saturation of the niche\'s latest crowded sale, which is not necessarily its latest sale, and never a count of pitches', () => {
+  const g = makeGame(['connected', 'grad']);
+  g.s.ledger.push(
+    { h: 5, type: 'pitch', text: 'a', amt: -1, cm: 0.5, S: 3.61 / 6.68, vN: 3.61, vT: 6.68, cls: 'pen', seg: 'collector' },
+    { h: 6, type: 'pitch', text: 'b', amt: -1, cm: 0.6, S: 0.076 / 0.235, vN: 0.076, vT: 0.235, cls: 'radio', seg: 'student' },
+    { h: 9, type: 'pitch', text: 'c', amt: 3, cm: 1.5, S: 0.15, vN: 1.5, vT: 10, cls: 'pen', seg: 'collector' }); // the pen niche reopened afterwards (Cm 1.5): its later sale is not a crowded one
+  const S = REAL(g), md = D.reflectionMD(S, ''), html = D.debriefHTML(S);
+  assert.ok(md.includes('saturation 54% at its latest crowded sale (V_niche 3.6100, V_total 6.6800)'), 'the pen niche says its crowded sale\'s saturation, not the open one\'s 15%');
+  assert.ok(md.includes('saturation 32% at its latest crowded sale (V_niche 0.0760, V_total 0.2350)'), 'a thin niche keeps its decimals, not "0 of 0"');
+  assert.ok(!/\d+ of \d+/.test(md.split('Prompt C')[1].split('## My analysis')[0]), 'no "N of M" in the Prompt C evidence');
+  assert.ok(html.includes('<td class="mono red">0.50x</td><td class="mono">54%</td>') && !html.includes('<td class="mono">15%</td>'), 'the table and the workbook speak of the same sale');
+  // the hover says which sale: "latest sale there" was any sale, and the row is the latest one under the crowded line
+  assert.ok(titles(html).includes('The niche\'s share of the recent pitches of that asset in that district, at its latest crowded sale. Not recorded for manager cycles.'));
+  assert.ok(!/latest sale there/.test(html));
+  // an old save that holds only the share (no volumes) keeps the share; a manager's cycle keeps its sentence
+  const old = makeGame(['connected', 'grad']);
+  old.s.ledger.push({ h: 5, type: 'pitch', text: 'a', amt: -1, cm: 0.5, S: 0.4, cls: 'pen', seg: 'collector' }, { h: 6, type: 'pipe', text: 'Asset Broker: Radio to Student', amt: 10, cm: 0.6, z: 5 });
+  const mdOld = D.reflectionMD(REAL(old), '');
+  assert.ok(mdOld.includes('saturation 40% at its latest crowded sale;') && mdOld.includes('saturation not recorded for manager cycles'));
+  assert.ok(!/NaN|undefined/.test(mdOld));
+  // and on the engine's own rows, each niche line carries the ledger's recorded share, which is vN / vT (market.js `saturation` adds 1e-9 to vT)
+  const L = late.s.ledger, E = D.evidence(REAL(late)), mdLate = D.reflectionMD(REAL(late), '');
+  for (const [k, v] of E.niches) {
+    if (v.cycles) continue;
+    const rows = L.filter((e) => e.type === 'pitch' && e.cm && e.cm < D.CROWDED && e.cls + '|' + e.seg === k), last = rows[rows.length - 1];
+    assert.ok(Math.abs(last.S - last.vN / last.vT) < 1e-6, 'the ledger share is the engine\'s vN / vT');
+    assert.ok(mdLate.includes(`saturation ${fmtPct(last.S)} at its latest crowded sale (V_niche ${last.vN.toFixed(4)}, V_total ${last.vT.toFixed(4)})`), `${k}: the line carries ${fmtPct(last.S)}`);
   }
 });
 
@@ -180,11 +219,16 @@ test('D3: a swap\'s gain is the same figure at both ends; the old "you / them" p
   // the top skill is known for a swap the player accepted only (the offer carries the proposer's skills)
   assert.ok(rowB.peerSkills && !rowA.peerSkills);
   assert.ok(htmlB.includes('<td>Ops</td></tr>') && !htmlA.includes('<td>Ops</td></tr>'));
+  // ...and where it is not on record the cell says n/a (as the variance, saturation and shock cells do), never an empty cell that reads as none; the hover says why
+  assert.ok(htmlA.includes('<td>n/a</td></tr>') && !/<td><\/td>/.test(htmlA) && !/<td><\/td>/.test(htmlB), 'no empty cell in the Prompt A table');
+  assert.ok(D.reflectionMD(REAL(A), '').includes('Counterparty skills: n/a;') && titles(htmlA).includes('The highest skill of the classmate who proposed the swap. Recorded only for swaps you accepted.'));
+  const bare = mk(4, 'BARE'); bare.s.ledger.push({ type: 'p2p', h: 30, text: 'Swap', amt: 1.5, gave: ['pen'], got: ['scrap'], va: 5, vb: 6.5, variance: 0.1, peerSkills: {} }); // an offer that carried no skills
+  assert.ok(D.reflectionMD(REAL(bare), '').includes('Counterparty skills: n/a;') && D.debriefHTML(REAL(bare)).includes('<td>n/a</td></tr>'));
   assert.ok(D.reflectionMD(REAL(B), '').includes(`Gain at fair value ${money(rowB.amt, { plus: true })} (variance ${(rowB.variance * 100).toFixed(1)}%)`));
-  // a swap with the Practice Partner supplies data and earns nothing: the empty line says it on hover (js/engine.js `_swapDone`)
+  // a swap with the Practice Partner supplies data and earns nothing: the empty line says it in front, where a keyboard and a touch screen read it (js/engine.js `_swapDone`)
   const none = D.debriefHTML(REAL(fresh));
-  assert.ok(none.includes('No peer swaps completed. A swap with a classmate or the Practice Partner supplies the data for this prompt.'));
-  assert.ok(titles(none).includes('Swaps with classmates also count toward Peer Market Engagement (10% of the grade). The Practice Partner earns no credit.'));
+  assert.ok(visible(none).includes('No peer swaps completed. A swap with a classmate or the Practice Partner supplies the data for this prompt, but only a classmate\'s counts toward Peer Market Engagement (10% of the grade).'));
+  assert.ok(!titles(none).some((t) => /Peer Market Engagement/.test(t)), 'and it is not left on a hover');
   const npc = mk(3, 'NPC');
   assert.equal(npc._swapDone('PARTNER', 10, 0.1, true), false); assert.equal(npc.s.p2p, 0, 'and it pays the grade nothing');
   assert.equal(npc.s.pivot, 0, 'nor is it a pivot');
@@ -192,6 +236,41 @@ test('D3: a swap\'s gain is the same figure at both ends; the old "you / them" p
   // the band in the variance hover is the guardrail: 39% apart passes, 41% does not (js/engine.js `checkOffer`)
   const at = (cash) => A.checkOffer({ from: 'AAA', give: { assets: [A.pub(pen)], cash: 0 }, want: { assets: [], cash } }, 'offerer');
   assert.equal(at(worth.pen * (1 + FMV_BAND - 0.01)).ok, true); assert.equal(at(worth.pen * (1 + FMV_BAND + 0.01)).ok, false);
+});
+
+
+// ---------------------------------------------------------------------------------------------------------------------
+test('D3b: a swap\'s two sides are shown at fair value, cash included, the right way round at both ends, even when prices moved before the proposer settled', () => {
+  const mk = (seed, pid) => { const g = new Game({ perks: [], seed, handle: pid, pid }); g.env.algo = false; return g; };
+  const put = (g, cls) => { const a = g._mk(g.s, cls, { zone: 1, basis: 1 }); g.s.assets.push(a); return a; };
+  const cell = (gave, got) => `<td class="mono">${money(gave)} for ${money(got)}</td>`;
+  const swap = (between = () => {}) => {
+    const A = mk(1, 'AAA'), B = mk(2, 'BBB'), pen = put(A, 'pen'), scrap = put(B, 'scrap'); B.s.cash = 50;
+    const worth = { pen: A.val(pen), scrap: B.val(scrap) };
+    const off = A.createOffer({ to: 'BBB', giveIds: [pen.id], want: { assets: [B.pub(scrap)], cash: 0 } }), acc = B.acceptOffer(off.offer);
+    between(A);
+    assert.ok(off.ok && acc.ok && A.finalizeOffer(off.offer.id, acc.deliver, 'BBB').ok);
+    return { A, B, worth, rowA: A.s.ledger.find((e) => e.type === 'p2p' && e.gave), rowB: B.s.ledger.find((e) => e.type === 'p2p' && e.gave) };
+  };
+  // the pair is the proposer's side then the side they asked for: each founder reads it as what they gave for what they got
+  const calm = swap();
+  assert.ok(D.debriefHTML(REAL(calm.A)).includes(cell(calm.worth.pen, calm.worth.scrap)) && D.debriefHTML(REAL(calm.B)).includes(cell(calm.worth.scrap, calm.worth.pen)));
+  assert.ok(D.reflectionMD(REAL(calm.A), '').includes(`Worth at fair value: gave ${money(calm.worth.pen)}, got ${money(calm.worth.scrap)}.`));
+  assert.ok(D.reflectionMD(REAL(calm.B), '').includes(`Worth at fair value: gave ${money(calm.worth.scrap)}, got ${money(calm.worth.pen)}.`));
+  // the proposer's gain is counted when the swap settles and the pair when the offer was made: after a glut in pens the two disagree in sign, and the pair must still be read by role, never by the gain's sign
+  const moved = swap((A) => A.injectEvent('glut', A.s.hour, { cls: 'pen', id: 'glut-1' }));
+  assert.ok(moved.rowA.amt > 0 && moved.rowA.vb - moved.rowA.va < 0, 'the glut turned the proposer\'s loss into a gain on settlement');
+  assert.ok(D.debriefHTML(REAL(moved.A)).includes(cell(moved.worth.pen, moved.worth.scrap)) && !D.debriefHTML(REAL(moved.A)).includes(cell(moved.worth.scrap, moved.worth.pen)));
+  assert.ok(D.debriefHTML(REAL(moved.B)).includes(cell(moved.worth.scrap, moved.worth.pen)));
+  // a side that is cash shows its amount (the row names assets only), at both ends
+  const A = mk(1, 'AAA'), B = mk(2, 'BBB'), pen = put(A, 'pen'); B.s.cash = 50;
+  const off = A.createOffer({ to: 'BBB', giveIds: [pen.id], want: { assets: [], cash: 3 } }), acc = B.acceptOffer(off.offer);
+  assert.ok(off.ok && acc.ok && A.finalizeOffer(off.offer.id, acc.deliver, 'BBB').ok);
+  assert.ok(D.debriefHTML(REAL(A)).includes(cell(A.val(pen), 3)) && D.debriefHTML(REAL(B)).includes(cell(3, A.val(pen))));
+  assert.ok(D.reflectionMD(REAL(B), '').includes(`Worth at fair value: gave ${money(3)}, got ${money(A.val(pen))}.`));
+  // a row with no values (a save from before they were kept) says so and prints no NaN
+  const old = mk(3, 'OLD'); old.s.ledger.push({ type: 'p2p', h: 30, text: 'Swap', amt: 1.5, gave: ['pen'], got: ['scrap'] });
+  assert.ok(D.debriefHTML(REAL(old)).includes('<td class="mono">n/a</td><td class="mono green">+$1.50</td>') && !/NaN/.test(D.debriefHTML(REAL(old)) + D.reflectionMD(REAL(old), '')));
 });
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -237,13 +316,51 @@ test('D4: Prompt B, the chart and the workbook name the day the credit crunch re
   const kit = read('docs/FACULTY_KIT.md'), row = kit.split('\n').find((l) => l.startsWith('| The Fed Taper')), pct = (x) => (x * 100).toFixed(1) + '%';
   for (const t of [`${pct(BASE_RATE)} to ${pct(BASE_RATE + 600 / 10000)}`, `${pct(FEES.base)} to ${pct(FEES.crunch)}`, 'manager overhead rises 20%', 'for 10 days (until Day 55)', 'It has no effect on asset prices', `For ${days(rates)} days`]) assert.ok(row.includes(t), `the kit's crunch row says "${t}"`);
   assert.ok(!/transaction tax/.test(kit) && !/exploited the drop in asset values/.test(kit), 'it is a fee, not the tax, and there is no drop in asset values to exploit');
+  // the Codex page says the same: the rest sell stock at the crunch's fee, not into a falling market (the crunch moves no price)
+  const page = CODEX.find((x) => x.id === 'credit-crunch').body.join(' ');
+  assert.ok(page.includes(`sell stock at the ${Math.round(FEES.crunch * 100)}% fee to raise cash`) && !/falling market/.test(page));
   assert.ok(kit.includes('If debt exceeded net worth, explain what you did to prevent margin compression'));
+  // the Debrief's own line for Prompt B: debt above net worth is the shock log's debt-to-equity over 1 (js/engine.js `deRatio`), and the crunch moves no price, so no line asks how to exploit a drop
+  const asks = (loan) => {
+    const x = makeGame([], 'ops', 3); x.env.algo = false; x.injectEvent('fed', 24 * 19, { id: 'inj-fed-9-1', replace: true, injected: true });
+    x.s.mil.m1 = true; x.s.cash = 1000; x.advanceTo(24 * 19 - 2); if (loan) assert.ok(x.draw('micro', loan).ok); x.advanceTo(24 * 19 + 1);   // the loan is drawn just before the shock
+    const logged = x.s.shockLog.find((e) => e.kind === 'fed'), page = D.debriefHTML(REAL(x));
+    assert.equal(logged.de > 1, logged.debt > logged.nw, `debt ${logged.debt} against net worth ${logged.nw}: the log's debt-to-equity is over 1 exactly when debt is above net worth`);
+    assert.ok(!/exploit|asset price|drop in asset/i.test(page), 'the crunch moves no asset price (m.price is empty above), so no line asks how it was exploited');
+    return /<h2>Prompt B[^<]*<\/h2>\s*<p class="mute small">([^<]*)<\/p>/.exec(page)?.[1];
+  };
+  const above = 'Debt exceeded your net worth when it hit: explain what stopped margin compression.', atMost = 'Debt was at most your net worth when it hit: explain how you used that position while credit was tight.';
+  assert.equal(asks(0), atMost, 'no debt'); assert.equal(asks(200), atMost, 'debt well under net worth'); assert.equal(asks(1500), above, 'debt above net worth');
   // the other two rows of the kit's table are the engine's too
   const tik = EVENTS.tiktok.phases, tr = kit.split('\n').find((l) => l.startsWith('| The TikTok'));
   assert.ok(tr.includes(`For ${tik[0].to} hours demand for trend goods spikes +${(tik[0].eff.demand.mult - 1) * 100}%`) && tr.includes(`manager cycles run ${Math.round((tik[0].eff.speed.mult - 1) * 100)}% faster`));
   assert.ok(tr.includes(`halves the value of trend inventory for ${tik[1].to - tik[1].from} hours`) && tik[1].eff.price.mult === 0.5);
   const tar = EVENTS.tariff.phases[0], tt = kit.split('\n').find((l) => l.startsWith('| The Cross-Border'));
   assert.ok(tt.includes(`For ${(tar.to - tar.from) / 24} days`) && tt.includes(`slow by ${tar.eff.intlSlow / 24} virtual days`) && tt.includes(`cost ${Math.round((tar.eff.repair - 1) * 100)}% more`));
+});
+
+// ---------------------------------------------------------------------------------------------------------------------
+test('D4b: a Veteran feels the credit crunch\'s three rises 40% smaller (js/engine.js `mods`): the fold and the kit say so in the engine\'s numbers, and the freeze and the days stay', () => {
+  const pct = (x, d = 1) => (x * 100).toFixed(d) + '%';
+  const sf = PERKS.veteran.mods.shockSoften, rises = EVENTS.fed.phases.find((p) => p.eff.rateBps).eff, start = (EVENTS.fed.day - 1) * 24;
+  const vet = makeGame(['veteran', 'heir'], 'ops', 3); vet.env.algo = false; vet.advanceTo(start + 1);
+  const m = vet.mods();
+  assert.ok(Math.abs(m.rateBps - rises.rateBps * (1 - sf)) < 1e-9 && Math.abs(m.fee - rises.fee * (1 - sf)) < 1e-12 && Math.abs(m.overhead - (1 + (rises.overhead - 1) * (1 - sf))) < 1e-12, 'the engine softens the three rises');
+  assert.equal(m.freeze, true); vet.advanceTo(start + 239); assert.equal(vet.mods().freeze, true); vet.advanceTo(start + 240); assert.equal(vet.mods().freeze, false, 'the freeze is not softened: ten days');
+  vet.advanceTo(24 * 50);
+  const open = unescape(folds(D.debriefHTML(REAL(vet))).find((x) => /base monthly rate/.test(x)) || '');
+  const rate = pct(BASE_RATE + rises.rateBps * (1 - sf) / 10000), fee = pct(FEES.base + rises.fee * (1 - sf)), ovh = pct((rises.overhead - 1) * (1 - sf), 0);
+  for (const x of [`Your Veteran Background softens the three rises by ${Math.round(sf * 100)}%`, `base monthly rate rises to ${rate}`, `base fee on sales to ${fee}`, `manager overhead by ${ovh}`, 'The loan freeze is not softened.']) assert.ok(open.includes(x), x);
+  for (const v of EVENTS.fed.alert.vars) assert.ok(open.includes(v), 'the announced lines stay: ' + v);
+  assert.ok(!/softens the three rises/.test(unescape(folds(D.debriefHTML(REAL(fresh))).join(' '))), 'a founder without the Background is not told it');
+  // the kit says it once, under the table, for the three rows
+  const kit = read('docs/FACULTY_KIT.md'), para = kit.split('\n').find((l) => l.startsWith('A student with the Veteran Background'));
+  assert.ok(para, 'the kit has the sentence');
+  const tik = EVENTS.tiktok.phases[0].eff.demand.mult, tar = EVENTS.tariff.phases[0].eff.intlSlow, rep = EVENTS.tariff.phases[0].eff.repair;
+  const inside = (kind) => { const v = makeGame(['veteran', 'heir'], 'ops', 3); v.env.algo = false; v.advanceTo((EVENTS[kind].day - 1) * 24 + 1); return v.mods(); };   // the surge and the lock, softened by the same line of `mods`
+  assert.ok(Math.abs(inside('tiktok').demand[0].mult - (1 + (tik - 1) * (1 - sf))) < 1e-9 && Math.abs(inside('tariff').intlSlow - tar * (1 - sf)) < 1e-9 && Math.abs(inside('tariff').repair - (1 + (rep - 1) * (1 - sf))) < 1e-9, 'the engine softens the other two rows the same way');
+  assert.ok(para.includes(`repairs cost ${pct((rep - 1) * (1 - sf), 0)} more (not ${pct(rep - 1, 0)})`), 'and the kit says the repairs');
+  for (const x of [`${Math.round(sf * 100)}% smaller`, `to ${rate} (not ${pct(BASE_RATE + rises.rateBps / 10000)})`, `to ${fee} (not ${pct(FEES.crunch)})`, `rises ${ovh} (not ${pct(rises.overhead - 1, 0)})`, `demand rises ${pct((tik - 1) * (1 - sf), 0)} (not ${pct(tik - 1, 0)})`, `slow by ${tar * (1 - sf) / 24} days (not ${tar / 24})`, 'The loan freeze and the length of each shock do not change.']) assert.ok(para.includes(x), `the kit says "${x}"`);
 });
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -259,11 +376,12 @@ test('D5: the adaptability column shows what the subtotal counts, in the table a
     assert.ok(Math.abs(num(cells[5]) + num(cells[6]) + num(cells[7]) - num(cells[8])) < 0.15, 'the three components add up to the subtotal the row shows (to a tenth)');
     const c = csv.find((l) => l.startsWith(`"${r.pid}"`)).split('","').map((x) => x.replace(/"/g, ''));
     assert.equal(c[10], '10.0', 'the CSV says it too, where it was blank');
+    assert.equal(c.at(-1), 'no', 'and its last column says the 10.0 is the neutral figure');
     assert.ok(Math.abs(num(c[9]) + num(c[10]) + num(c[11]) - num(c[12])) < 0.15, 'its components add up to its subtotal');
   }
-  assert.ok(grade.includes('<p class="tiny mute">* No shock graded yet: counted as a neutral 50 of 100.</p>'));
+  assert.ok(grade.includes('<p class="tiny mute">* No shock graded yet: counted as a neutral 50 of 100, which is 10 of the 20 points.</p>'), 'the note says the points as well as the score');
   assert.ok(!/>n\/a</.test(grade) && !/<span class="mute">n\/a<\/span>/.test(read('js/ui/instructor.js')), 'no "n/a" where a number is counted');
-  assert.ok(csv[0].includes('"adaptability_points_of_20"'), 'the column keeps its name');
+  assert.ok(csv[0].includes('"adaptability_points_of_20"') && csv[0].endsWith('"virtual_days_played","adaptability_graded"'), 'the column keeps its name and its place, and the new one is last');
   // a shock graded for three founders: a real figure, no star, no note
   const log = (after, pivots) => [{ id: `fed@${(EVENTS.fed.day - 1) * 24}`, nw: 1000, nwAfter: after, pivots }];
   const T = instructorWith([['A', { nw: 2000, shockLog: log(1200, 1) }], ['B', { nw: 2000, shockLog: log(1200, 0) }], ['C', { nw: 2000, shockLog: log(1200, 0) }]], 24 * 60);
@@ -271,6 +389,12 @@ test('D5: the adaptability column shows what the subtotal counts, in the table a
   assert.ok(tg.every((r) => r.adapt != null));
   assert.ok(!gradeT.includes('*</span>') && !gradeT.includes('No shock graded yet'));
   assert.equal(cellsOf(gradeT, 'A')[6], (tg.find((r) => r.pid === 'A').adapt * 0.2).toFixed(1));
+  assert.ok(I.gradebookCSV(T).split('\n').slice(1).every((l) => l.endsWith('","yes"')), 'a graded founder says yes');
+  // the same 10.0 from two different facts: a founder at the class median (graded) and one with no graded shock
+  const M = instructorWith([['A', { nw: 2000, shockLog: log(1500, 0) }], ['B', { nw: 2000, shockLog: log(1200, 0) }], ['C', { nw: 2000, shockLog: log(900, 0) }], ['D', { nw: 2000 }]], 24 * 60);
+  const mc = (pid) => I.gradebookCSV(M).split('\n').find((l) => l.startsWith(`"${pid}"`)).split('","').map((x) => x.replace(/"/g, ''));
+  assert.deepEqual([mc('B')[10], mc('D')[10]], ['10.0', '10.0'], 'the same figure');
+  assert.deepEqual([mc('B').at(-1), mc('D').at(-1)], ['yes', 'no'], 'told apart by the last column');
   // the notes in the fold: 10 of 100 for a pivot, 25 per swap, 10 per flagged attempt, the weights
   assert.ok(Math.abs(tg.find((r) => r.pid === 'A').adapt - tg.find((r) => r.pid === 'B').adapt - 10) < 1e-9, 'a pivot is worth 10 of the 100');
   const one = instructorWith([['A', { nw: 100, p2p: 1, trades: 1 }], ['B', { nw: 90, p2p: 2, trades: 2 }]], 24 * 5);
@@ -278,7 +402,7 @@ test('D5: the adaptability column shows what the subtotal counts, in the table a
   const engage = Object.fromEntries(one.gradebook().map((r) => [r.pid, r.engage]));
   assert.equal(engage.A, 25, 'one swap is 25 of 100'); assert.equal(engage.B, 2 * 25 - 10, 'and a flagged attempt takes 10');
   const fold = folds(I.instructorParts(S, {}).grade).join(' ');
-  for (const t of ['Economic (30)', 'Adaptability (20)', 'Peer market (10)', 'plus 10 of 100 for a pivot', 'a neutral 50', '25 of 100 for each completed swap', 'less 10 for each flagged attempt', 'The 40 points for reflection', 'percentile of the efficiency index among everyone on the roster, demo students included']) assert.ok(fold.includes(t), t);
+  for (const t of ['Each component is scored from 0 to 100, then weighted to the points in its column heading.', 'Economic (30)', 'Adaptability (20)', 'Peer market (10)', 'plus 10 for a pivot', 'a neutral 50', '25 for each completed swap', 'less 10 for each flagged attempt', 'The 40 points for reflection', 'percentile of the efficiency index among everyone on the roster, demo students included']) assert.ok(fold.includes(t), t);
   assert.ok(gb.every((r) => r.autoMax === 60) && grade.includes('Auto subtotal / 60'), 'the pre-filled points are 60 of 100');
   const demo = new Session(); demo.mode = 'instructor'; demo.roomInfo = { code: 'D', relay: '' }; demo.setDemo(6);
   assert.equal(demo.gradebook().length, 6, 'the demo students are rows of the roster, so they are in the percentile');
@@ -288,20 +412,23 @@ test('D5: the adaptability column shows what the subtotal counts, in the table a
 });
 
 // ---------------------------------------------------------------------------------------------------------------------
-test('D6: the schedule line is the list of shocks a student\'s game holds, with and without Replace', () => {
-  const S = instructorWith([], 24 * 20);
-  const atHour = 24 * 20 + 1, dayOf = (h) => Math.floor(h / 24) + 1;
+test('D6: the schedule line is the list of scheduled and sent shocks a student\'s game holds, with and without Replace, and says the algorithmic events are not on it (what Deploy stores: tests/copy2-debrief-mount.test.mjs)', () => {
+  const S = instructorWith([], 24 * 20); S.worldSeed = 'GRADE';
+  const atHour = 24 * 20 + 1, dayOf = (h) => Math.floor(h / 24) + 1, NOTE = ' Algorithmic surprise events, drawn from the room code and the day, are not listed.';
   S.clock.set({ hour: atHour });
-  const engine = (sends) => {                                  // a student's game at the class's hour, given what the instructor sent (js/engine.js `injectEvent`)
-    const g = makeGame([], 'ops', 3); g.env.algo = false; g.advanceTo(24 * 20);
+  const game = (sends) => {                                    // a student's game at the class's hour, in this room, given what the instructor sent (js/engine.js `injectEvent`); the algorithmic events are on, as they are by default
+    const g = makeGame([], 'ops', 3); g.env.worldSeed = 'GRADE'; g.advanceTo(24 * 20);
     for (const m of sends) g.injectEvent(m.kind, m.atHour, { id: m.id, replace: m.replace, injected: true });
     g.advanceTo(atHour);
-    return g.s.events.filter((e) => !e.started).map((e) => `${e.kind}@${e.start}`).sort();
+    return g;
   };
-  const line = (U) => I.instructorParts(S, U).c1.match(/<p class="tiny mute" title="[^"]*">((?:Upcoming|No shock)[^<]*)<\/p>/)[1];
+  const engine = (sends) => game(sends).s.events.filter((e) => !e.started && !e.id.startsWith('algo')).map((e) => `${e.kind}@${e.start}`).sort();
+  const line = (U) => I.instructorParts(S, U).c1.match(/<p class="tiny mute" title="[^"]*">((?:Scheduled|No shock)[^<]*)<\/p>/)[1];
   const mine = (U) => I.shockSchedule(S, S.clock.now(), U.sent).map((e) => `${e.kind}@${e.start}`).sort();
   assert.deepEqual(mine({ sent: [] }), engine([]), 'before anything is sent: what the games hold');
-  assert.equal(line({ sent: [] }), `Upcoming: Credit Crunch day ${EVENTS.fed.day}, Tariff Lock day ${EVENTS.tariff.day}.`, 'the TikTok surge of day 15 is behind the class: it is not upcoming');
+  assert.deepEqual(game([]).s.events.filter((e) => !e.started && e.id.startsWith('algo')).map((e) => `${e.kind}@${e.start}`), ['glut@488'], 'a game of this room already holds its next algorithmic event, and the line does not list it (js/engine.js `_algoEvent`, one day ahead)');
+  assert.equal(line({ sent: [] }), `Scheduled: Credit Crunch day ${EVENTS.fed.day}, Tariff Lock day ${EVENTS.tariff.day}.${NOTE}`, 'the TikTok surge of day 15 is behind the class: it is not scheduled, and the line says what it leaves out');
+  S.setAlgo(false); assert.equal(line({ sent: [] }), `Scheduled: Credit Crunch day ${EVENTS.fed.day}, Tariff Lock day ${EVENTS.tariff.day}.`, 'with the algorithmic events off there is nothing left out to say'); S.setAlgo(true);
   const U = { sent: [] };
   for (const [kind, when, replace] of [['fed', 0, true], ['tiktok', 72, false], ['tariff', 24, true]]) {
     const r = S.inject(kind, { when, replace });
@@ -309,13 +436,13 @@ test('D6: the schedule line is the list of shocks a student\'s game holds, with 
     U.sent.push({ id: r.id, kind, at: r.atHour, from: r.atHour - when, replace });
     assert.deepEqual(mine(U), engine(S.sent.filter((m) => m.t === 'inject')), `after ${kind} in ${when} hours${replace ? ', replacing' : ''}: the same shocks as a student's game`);
   }
-  assert.equal(line(U), `Upcoming: Tariff Lock day ${dayOf(24 * 20 + 24)}, TikTok Surge day ${dayOf(24 * 20 + 72)}.`, 'the credit crunch was sent for now (it is not to come), the tariff replaced the scheduled one, the surge was added');
+  assert.equal(line(U), `Scheduled: Tariff Lock day ${dayOf(24 * 20 + 24)}, TikTok Surge day ${dayOf(24 * 20 + 72)}.${NOTE}`, 'the credit crunch was sent for now (it is not to come), the tariff replaced the scheduled one, the surge was added');
   // nothing left to come
   assert.equal(I.shockSchedule(S, 24 * 89, []).length, 0);
-  assert.ok(/<p class="tiny mute"[^>]*>No shock is scheduled\.<\/p>/.test(I.instructorParts(instructorWith([], 24 * 80), {}).c1));
+  assert.ok(new RegExp(`<p class="tiny mute"[^>]*>No shock is scheduled\\.${NOTE}</p>`).test(I.instructorParts(instructorWith([], 24 * 80), {}).c1));
   // a shock the record does not hold (the dashboard was reloaded): listed, and the scheduled one of its kind says it may be gone
   const R = instructorWith([], 24 * 20); R.injected.set('inj-fed-480-1234', 480);
-  assert.ok(I.instructorParts(R, {}).c1.includes('Upcoming: Credit Crunch day 45 (if not replaced), Tariff Lock day 75.'));
+  assert.ok(I.instructorParts(R, {}).c1.includes('Scheduled: Credit Crunch day 45 (if not replaced), Tariff Lock day 75.'));
   // the record survives a reload, and belongs to its room
   S.kv.set('shocksent', { code: 'GRADE', list: U.sent });
   assert.deepEqual(I.loadSent(S).map((x) => x.id), U.sent.map((x) => x.id)); store.clear();
@@ -325,7 +452,10 @@ test('D6: the schedule line is the list of shocks a student\'s game holds, with 
   const g = makeGame([], 'ops', 3), warn = (level) => { g.s.skills.fintech = level; return g.warnLead(); };
   assert.deepEqual([warn(1), warn(3), warn(5)], [WARN_LEAD.novice, WARN_LEAD.mid, WARN_LEAD.adv]);
   assert.ok(titles(I.instructorParts(S, {}).c1).includes(`Students with higher Capital Sourcing get earlier warnings: ${warn(1)} hours at first, ${warn(3)} hours at level 3, ${warn(5) / 24} days at level 5.`));
-  assert.ok(!/Scheduled: TikTok Surge day 15/.test(read('js/ui/instructor.js')), 'the fixed line is gone');
+  assert.ok(!/Scheduled: TikTok Surge day 15/.test(read('js/ui/instructor.js')) && !/Upcoming/.test(read('js/ui/instructor.js')), 'the fixed line is gone, and so is the label that claimed all of them');
+  // the kit says what the line does not know after a resume on another device, and which shocks it leaves out
+  const kit = read('docs/FACULTY_KIT.md');
+  assert.ok(kit.includes('**Scheduled**') && kit.includes('The Scheduled line does not know the shocks the old dashboard sent') && /algorithmic surprise events that the room code draws are not on it/.test(kit));
 });
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -333,19 +463,22 @@ test('D7: what the rewind, the stalled list and the room line say is what the en
   // a game keeps ten days of daily checkpoints, so a rewind reaches back ten days at most
   const g = makeGame([], 'ops', 3); g.advanceTo(24 * 25);
   assert.equal(Math.floor(g.s.hour / 24) - Math.min(...g.ckpt.keys()), I.CHECKPOINT_DAYS, 'ten days back, from the day the game is on');
-  const S = instructorWith([], 24 * 30);
-  const rewinds = [...I.instructorParts(S, {}).c1.matchAll(/<button[^>]*data-act="rewind" data-d="(\d)" title="([^"]*)"[^>]*>([^<]*)<\/button>/g)];
+  const S = instructorWith([], 24 * 30), c1 = I.instructorParts(S, {}).c1;
+  const rewinds = [...c1.matchAll(/<button[^>]*data-act="rewind" data-d="(\d)" title="([^"]*)"[^>]*>([^<]*)<\/button>/g)];
   assert.deepEqual(rewinds.map((m) => [m[1], m[3]]), [['1', 'Rewind 1 day'], ['3', '3 days'], ['7', '7 days']]);
-  for (const m of rewinds) assert.ok(m[2].includes(`A rewind reaches back ${I.CHECKPOINT_DAYS} days at most.`) && m[2].endsWith('A student who is offline is not rewound.'), m[2]);
+  for (const m of rewinds) assert.equal(m[2], `Sends every online student back ${m[1]} day${m[1] === '1' ? '' : 's'} to a daily checkpoint. A rewind reaches back ${I.CHECKPOINT_DAYS} days at most.`);
   assert.ok(rewinds.every((m) => +m[1] <= I.CHECKPOINT_DAYS), 'every button is inside what a game keeps');
   // a rewind goes to the room as one live message (js/session.js `rewind`) and the relay replays only the last snapshots and the clock (server/relay.mjs): a student who is away is not rewound
   const before = S.sent.length; S.rewind(3);
   assert.deepEqual(S.sent.slice(before).map((m) => m.t), ['rewind', 'clock']);
   const relay = read('server/relay.mjs');
-  assert.ok(/snaps:\s*new Map\(\)[^}]*clock:\s*null/.test(relay) && /room\.clock = \{/.test(relay) && !/room\.(rewind|inject)\b/.test(relay), 'the relay keeps snapshots and the clock for a late joiner, nothing else');
+  assert.ok(/snaps:\s*new Map\(\)[^}]*clock:\s*null/.test(relay) && /room\.clock = \{/.test(relay) && !/room\.(rewind|inject)\b/.test(relay), 'the relay keeps snapshots and the clock for a late joiner (a cheap check of the source; tests/multiplayer.test.mjs plays it against a running relay: a late joiner is sent the clock and the snapshots, not the rewind or the shock)');
   const kit = read('docs/FACULTY_KIT.md');
   assert.ok(!/catch up deterministically/.test(kit + read('js/ui/instructor.js')) && kit.includes('A student who is offline when you rewind is not rewound'));
-  assert.ok(I.instructorParts(S, {}).c1.includes('title="Reaches the students who are connected now."'));
+  // who a rewind and a shock reach is in front, under their buttons, in the roster's own word (a title is read by a mouse and by nothing else)
+  assert.ok(visible(c1).includes('A rewind reaches only the students who are online when you send it.') && visible(c1).includes('A shock reaches only the students who are online when you deploy it.'));
+  assert.ok(!/title="[^"]*(?:connected|offline)/.test(c1) && !/connected/.test(visible(c1)), 'one word for it on the dashboard: online, as the head and the roster chips say');
+  assert.ok(I.instructorParts(instructorWith([['A', { nw: 100 }]], 24 * 5), {}).head.includes('<b>1</b> student online'));
 
   // the stalled list counts a sale to a buyer or a manager cycle: the two places the engine sets `lastAuto` (a sale to the pool does not)
   const b = makeGame(['trades', 'pro'], 'ops', 9); run(b, { days: 40 });
@@ -366,16 +499,23 @@ test('D7: what the rewind, the stalled list and the room line say is what the en
   const calm = instructorWith([['A', { nw: 100 }], ['B', { nw: 100 }]], 24 * 5), parts = I.instructorParts(calm, {});
   assert.equal(I.GINI_ALERT, 0.65);
   assert.ok(!/Inequality alert|alert line/.test(parts.c2) && titles(parts.c2).includes('The alert starts above 0.65.'), 'a calm room has no line about the alert, and the card says where it starts');
-  assert.ok(parts.head.includes('<span title="Students join from other tabs of this browser with Copy student link. Students on other devices need a relay.">this browser only</span>'));
+  assert.ok(parts.head.includes('<span title="Students join from other tabs of this browser with Copy student link.">this browser only</span> (other devices need a relay)'));
+  assert.match(visible(parts.head), /this browser only\s*\(other devices need a relay\)/, 'who cannot join is in front, where a keyboard and a tablet read it');
   assert.ok(!visible(parts.head).includes('students join from other tabs'));
+  // the paragraph that is read without opening the fold says the room is this browser's tabs when there is no relay, and does not offer another laptop (js/net.js LocalTransport is a BroadcastChannel)
+  const keyed = (room) => { room.recoveryCode = () => 'abcd-abcd-abcd-abcd-abcd-abcd-abcd-abcd'; return room; };
+  const local = I.recoveryHTML(keyed(instructorWith([], 24 * 5))), shown = local.slice(0, local.indexOf('<details'));
+  assert.ok(shown.includes('This live room exists only in this browser\'s tabs.') && shown.includes('another laptop cannot take it over') && !shown.includes('from another laptop'));
+  const viaRelay = keyed(instructorWith([], 24 * 5)); viaRelay.room = { ...viaRelay.room, kind: 'relay' };
+  assert.ok(I.recoveryHTML(viaRelay).includes('are the only way back in from another laptop') && !I.recoveryHTML(viaRelay).includes('cannot take it over'), 'and a room on a relay keeps its sentence');
 });
 
 // ---------------------------------------------------------------------------------------------------------------------
 const VOICE = /\b(simply|basically|essentially|literally|incredibly|extremely|truly|obviously|of course|it is important to|keep in mind|please note|not just|good luck|exciting|amazing|fantastic|wonderful|delve|welcome|free)\b|\blet[’']s\b|!|—|–|\?/i;
 
 test('D8: what the debrief and the dashboard show at first is a fraction of what it was, speaks plainly, and keeps the rest one fold or hover away', () => {
-  // the words at first (a fresh run, and a bot's day 60). Before this pass the debrief read 449 and 1,194 words and the dashboard 632 and 643
-  const was = { debrief: [449, 1194], dashboard: [632, 643] };
+  // the words at first (a fresh run, and a bot's day 60). Before this pass the debrief read 449 and 1,194 words and the dashboard 640 and 651 (as this file's visible() counts them on c4b9c48)
+  const was = { debrief: [449, 1194], dashboard: [640, 651] };
   const freshD = visible(D.debriefHTML(REAL(fresh))), lateD = visible(D.debriefHTML(REAL(late)));
   assert.ok(words(freshD) <= 0.75 * was.debrief[0], `a fresh debrief reads ${words(freshD)} words`);
   assert.ok(words(lateD) <= 0.45 * was.debrief[1], `a day-60 debrief reads ${words(lateD)} words`);
@@ -400,7 +540,7 @@ test('D8: what the debrief and the dashboard show at first is a fraction of what
   for (const id of late.s.perks) assert.ok(!open.includes(PERKS[id].strength.slice(0, 30)) && html.includes(PERKS[id].name), `${id}: the build is named in front and described in the fold`);
   assert.ok(!/Everyone starts with one paperclip/.test(html));
   const dash = I.instructorParts(dashboard(late), {});
-  assert.ok(!/Rewind restores|catch up|Scheduled:/.test(Object.values(dash).join('')));
+  assert.ok(!/Rewind restores|catch up|Scheduled: TikTok Surge day 15/.test(Object.values(dash).join('')), 'the old rewind sentence and the fixed schedule line stay gone');
   assert.ok(dash.c2.includes('<summary class="small" data-fid="fold-buyers">Buyer key</summary>') && Object.values(BUYERS).some((b) => unescape(folds(dash.c2)[0]).includes(b.name)), 'the buyer key is a fold');
   assert.equal(folds(dash.grade).length, 1); assert.ok(dash.grade.includes('data-fold="points"'));
   // a fold the instructor opened stays open when its panel is drawn again
@@ -412,7 +552,8 @@ test('D8: what the debrief and the dashboard show at first is a fraction of what
   // the strings that stay, read from the screens' sources
   const d = read('js/ui/debrief.js'), i = read('js/ui/instructor.js');
   for (const t of ['work through prices, speed and limits', 'No Deal Room scores were recorded', 'Family obligations paid', 'Student-loan garnishment']) assert.ok(d.includes(t), t);
-  for (const t of ['Rewind sent to all students.', 'Event deployed to the cohort.', 'Student link copied, with quiet sound.']) assert.ok(i.includes(t), t);
+  for (const t of ['Rewind sent to the students who are online.', 'Event deployed to the students who are online.', 'Student link copied, with quiet sound.']) assert.ok(i.includes(t), t);
+  assert.ok(!/Rewind sent to all students|Event deployed to the cohort/.test(i), 'a toast does not claim a reach the hover and the kit deny');
 });
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -423,7 +564,7 @@ test('D9: the title\'s classroom panels say less, and the kit names what the scr
   assert.ok(words(text) <= 80, `the Join, Instructor and Accessible panels read ${words(text)} words (99 before this pass)`);
   assert.ok(!VOICE.test(text), text);
   for (const t of ['Join a classroom', 'Room code from your instructor', 'Create a room', 'Resume as instructor: take back a room', 'Accessible by design', 'Display and sound settings']) assert.ok(text.includes(t), t);
-  assert.ok(main.includes('<label for="ir" title="Without a relay, students join from other tabs of this browser, each tab its own founder.">Relay URL (needed for other devices)</label>'));
+  assert.ok(main.includes('<label for="ir">Relay URL (blank: other tabs of this browser only; other devices need one)</label>'), 'the label says what a blank box does and what it cannot, in front');
   assert.ok(!/Keyboard-only play, screen-reader announcements/.test(main) && !/Relay server \(only if/.test(main));
   assert.ok(!/—|–/.test(FOLLOW_NOTE) && /about a minute, not at once/.test(FOLLOW_NOTE));
 
@@ -431,7 +572,8 @@ test('D9: the title\'s classroom panels say less, and the kit names what the scr
   const kit = read('docs/FACULTY_KIT.md'), head = kit.split('\n').find((l) => l.startsWith('| Head |'));
   assert.ok(/\*\*Display and sound\*\*/.test(head) && !/\*\*Access\*\*/.test(kit));
   assert.ok(I.instructorParts(dashboard(fresh), {}).head.includes('data-act="settings">Display and sound<'));
-  assert.ok(kit.includes('**Upcoming**') && kit.includes('Sends a shock to the students who are connected when you press it'));
+  assert.ok(kit.includes('**Scheduled**') && !kit.includes('**Upcoming**') && kit.includes('Sends a shock to the students who are online when you press it') && kit.includes('Sends every online student back to their daily checkpoint'));
+  assert.ok(!/connected/.test(kit.split('\n').filter((l) => /^\| (\||Manual black swan|Global engine)/.test(l)).join('\n')), 'the kit\'s dashboard table uses the dashboard\'s word, online');
   assert.ok(kit.includes('A founder with no graded shock shows 10.0 for adaptability') && kit.includes('counts a neutral 50, which is 10 of the 20 points'));
   assert.ok(/One box at the end holds their analysis/.test(kit) && !/Beside each prompt is a box/.test(kit));
   assert.ok(kit.includes(`${SWAPS.perDay} a day`) && kit.includes(`${FMV_BAND * 100}%`));
@@ -494,11 +636,110 @@ test('D10: the figures\' hovers and labels are what the engine does: the index, 
   T.setGhosts(0); const quiet = T.cohort.counts(24 * 20, 5, cls).total, rows = T.gradebook().length;
   T.setGhosts(60); assert.ok(T.cohort.counts(24 * 20, 5, cls).total > quiet, 'the herd is in the market');
   assert.equal(T.gradebook().length, rows, 'and not in the roster');
-  // the algorithmic events are drawn from the room code and the day (js/engine.js `_algoEvent`): the days the rule picks are the days the game has them, and another code picks others
-  const picked = (code) => { const out = []; for (let d = 4; d <= 86; d++) if (![15, 45, 75].some((x) => Math.abs(x - d) < 3) && hash01(code + 'algo' + d) <= 0.14) out.push('algo-' + d); return out; };
-  const had = (code) => { const x = new Game({ perks: [], seed: 1, handle: 'T', pid: 'T-1', worldSeed: code }); x.advanceTo(24 * 87); return x.s.events.filter((e) => e.id.startsWith('algo-')).map((e) => e.id); };
-  const codes = []; for (const a of 'ABCDEFGH') for (const b of 'ABCDEFGH') if (picked(`R${a}${b}Z`).length >= 2 && codes.length < 2) codes.push(`R${a}${b}Z`);
-  assert.equal(codes.length, 2);
-  assert.deepEqual(had(codes[0]), picked(codes[0])); assert.deepEqual(had(codes[1]), picked(codes[1]));
-  assert.notDeepEqual(picked(codes[0]), picked(codes[1]), 'the same room code gives the same events, another room others');
+  // the algorithmic events are drawn from the room code and the day (js/engine.js `_algoEvent`): every student of a room has the same shocks (the same kind on the same class), whatever their seed and perks, the gradebook (js/session.js `shockStart`) knows each of them, and another room has others
+  const shocks = (code, seed, perks) => { const x = new Game({ perks, seed, handle: 'S' + seed, pid: 'S-' + seed, worldSeed: code }); x.advanceTo(24 * 87); return x.s.events.filter((e) => e.id.startsWith('algo-')).map((e) => ({ id: e.id, kind: e.kind, name: e.name, start: e.start })); };
+  const rooms = [];
+  search: for (const a of 'ABCDEFGH') for (const b of 'ABCDEFGH') { const code = `R${a}${b}Z`, mine = shocks(code, 1, []); if (mine.length >= 2) rooms.push({ code, mine }); if (rooms.length === 2) break search; }
+  assert.equal(rooms.length, 2, 'two rooms that have algorithmic shocks to compare');
+  for (const { code, mine } of rooms) {
+    assert.ok(mine.every((m) => { const d = +m.id.slice(5); return d >= 1 && d <= TOTAL_DAYS; }), `room ${code}: every shock falls inside the run`);
+    assert.deepEqual(shocks(code, 7, ['trades', 'pro']), mine, `room ${code}: a student with another seed and other perks has the same shocks`);
+    const grade = instructorWith([], 24 * 87); grade.worldSeed = code;
+    for (const m of mine) assert.equal(grade.shockStart(m.id), m.start, `room ${code}: the gradebook knows ${m.id}`);
+  }
+  assert.notDeepEqual(rooms[0].mine, rooms[1].mine, 'another room has others');
+
+  // the herd is not on the roster and still moves what a sale pays (js/engine.js `crowd`, `cmFor`): the same sale pays more with 80 simulated sellers than with none for some, less for others, so the hover and the kit do not call the herd outside the grade
+  let up = 0, down = 0, pairs = 0;
+  for (const [perks, spec, seed] of [[['native', 'heir'], 'growth', 11], [['trades', 'pro'], 'ops', 9]]) {
+    const x = makeGame(perks, spec, seed), co = x.env.cohort; run(x, { days: 14 });
+    for (const z of x.s.zones) for (const lead of x.s.leads[z]) for (const a of x.s.assets) {
+      if (a.zone !== z) continue;
+      const pay = {};
+      for (const n of [0, 80]) { co.ghosts = n; co.refresh(); const q = x.quotePitch(a.id, lead.id, undefined, { blind: true }); pay[n] = q.ok && !q.rejected ? q.received : null; }
+      if (pay[0] == null || pay[80] == null) continue;
+      pairs++; if (pay[80] > 1.2 * pay[0]) up++; if (pay[80] < 0.8 * pay[0]) down++;
+    }
+  }
+  assert.ok(pairs > 20 && up >= 1 && down >= 1, `of ${pairs} sales, ${up} pay over 20% more with 80 sellers than with none and ${down} pay over 20% less`);
+  const herd = titles(c1).find((t) => t.startsWith('Simulated sellers that crowd niches')), tableRow = kit.split('\n').find((l) => l.includes('**Synthetic classmates filling the market**')), bullet = kit.split('\n').find((l) => l.startsWith('- **Demo students count'));
+  assert.ok(herd && /never enter the percentile/.test(herd) && /change what sales pay/.test(herd) && /same in every section you compare/.test(herd));
+  assert.ok(!/not the grade|do not affect the grade/i.test(herd + kit), 'neither the hover nor the kit says the herd is outside the grade');
+  assert.ok(/never enters the percentile, but it changes what sales pay/.test(tableRow) && /never enter the percentile, but they change what sales pay/.test(bullet));
+});
+
+// ---------------------------------------------------------------------------------------------------------------------
+/** The cells of the shock table's row for the credit crunch. */
+const fedRow = (html) => { const m = /<tr><td>The Fed Taper and Credit Crunch<\/td>((?:<td class="mono[^"]*">[^<]*<\/td>)+)<\/tr>/.exec(html); assert.ok(m, 'the crunch has a row'); return [...m[1].matchAll(/<td class="mono[^"]*">([^<]*)<\/td>/g)].map((x) => x[1]); };
+const dd = (html, dt) => new RegExp(`<dt[^>]*>${dt}</dt><dd>([^<]*)</dd>`).exec(html)?.[1];
+
+test('D11: the five days after a shock are n/a until they are over, never 0 pivots', () => {
+  const g = makeGame(['native', 'heir'], 'growth', 11); g.env.algo = false; run(g, { days: 47 }); // three days after the credit crunch: the menu opens the Debrief at any time
+  const f = g.s.shockLog.find((x) => x.kind === 'fed');
+  assert.ok(g.s.hour < f.start + 120 && f.nwAfter == null && f.pivots == null, 'the engine has measured neither the net worth nor the pivots yet (js/engine.js `_events`)');
+  assert.ok(g.s.pivot - f.pivot0 > 0, 'though the founder has made pivots since the shock');
+  const html = D.debriefHTML(REAL(g)), md = D.reflectionMD(REAL(g), '');
+  assert.equal(dd(html, 'Net worth five days later'), 'n/a');
+  assert.equal(dd(html, 'Pivots in the five days after'), 'n/a', 'an unmeasured count is not zero');
+  const row = fedRow(html);
+  assert.deepEqual([row[2], row[3], row[5]], ['n/a', 'n/a', 'n/a'], 'the table says the same: no net worth, no change, no count');
+  assert.ok(md.includes('- Five days later: n/a, fewer than five days had passed since the shock.') && !/after 0 pivot action/.test(md), 'and so does the workbook');
+
+  // a run that closes inside the five days (an exit settles after 48 hours) never measures them either
+  const e = makeGame(['native', 'heir'], 'growth', 11); e.env.algo = false; run(e, { days: 46 });
+  assert.ok(e.exit('trade').ok); for (let i = 0; i < 100 && !e.s.over; i++) e.advanceTo(e.s.hour + 1);
+  const ef = e.s.shockLog.find((x) => x.kind === 'fed');
+  assert.ok(e.s.over && e.s.hour < ef.start + 120 && ef.pivots == null);
+  assert.equal(dd(D.debriefHTML(REAL(e)), 'Pivots in the five days after'), 'n/a');
+  assert.ok(!/after 0 pivot action/.test(D.reflectionMD(REAL(e), '')));
+
+  // and once the five days are over, the count is the engine's, whatever it is
+  const done = makeGame(['native', 'heir'], 'growth', 11); done.env.algo = false; run(done, { days: 52 });
+  const df = done.s.shockLog.find((x) => x.kind === 'fed');
+  assert.ok(df.nwAfter != null && Number.isInteger(df.pivots));
+  assert.equal(dd(D.debriefHTML(REAL(done)), 'Pivots in the five days after'), String(df.pivots));
+  assert.ok(D.reflectionMD(REAL(done), '').includes(`after ${df.pivots} pivot action(s).`));
+});
+
+// ---------------------------------------------------------------------------------------------------------------------
+test('D12: every hover of the Debrief and of the dashboard\'s controls is said once more in the page, where a keyboard, a touch screen, a screen reader and the paper can read it', () => {
+  // a title is shown to a mouse and to nothing else: the words of each are also in a fold (the print opens the Debrief's), a line or a screen-reader span
+  const text = (html) => unescape(html.replace(/<[^>]+>/g, ' ')).replace(/\s+/g, ' ');
+  const mk = (seed, pid) => { const g = new Game({ perks: [], seed, handle: pid, pid }); g.env.algo = false; return g; };
+  const P = mk(1, 'AAA'), Q = mk(2, 'BBB'), pen = P._mk(P.s, 'pen', { zone: 1, basis: 1 }), scrap = Q._mk(Q.s, 'scrap', { zone: 1, basis: 1 });
+  P.s.assets.push(pen); Q.s.assets.push(scrap);
+  const off = P.createOffer({ to: 'BBB', giveIds: [pen.id], want: { assets: [Q.pub(scrap)], cash: 0 } }), acc = Q.acceptOffer(off.offer);
+  assert.ok(off.ok && acc.ok && P.finalizeOffer(off.offer.id, acc.deliver, 'BBB').ok);
+  const seen = new Set();
+  for (const [name, game] of [['a day-60 run with shocks and niches', late], ['a run with a swap', Q], ['a fresh run', fresh]]) {
+    const html = D.debriefHTML(REAL(game)), tips = titles(html), gloss = folds(html).find((f) => /^<summary class="small">What the figures mean<\/summary>/.test(f)) || '';
+    assert.ok(tips.length >= 5, `${name}: the page has hovers`);
+    assert.ok(html.includes('<details class="gap" data-print><summary class="small">What the figures mean</summary>'), `${name}: the fold is one the print opens`);
+    for (const t of new Set(tips)) { seen.add(t); assert.equal(text(gloss).split(t).length - 1, 1, `${name}: "${t}" is in the fold, once`); }
+  }
+  assert.ok(seen.size >= 13, `the Debrief has ${seen.size} distinct hovers across these pages and every one is in a fold`);
+  assert.ok(![...folds(D.debriefHTML(REAL(late)))].some((f) => /^<summary class="small">What the figures mean/.test(f) && /title=/.test(f)), 'a fold repeats the words and carries no hover of its own');
+
+  // the dashboard's controls: one fold under them lists what each does; the three rewind buttons are one line there
+  const parts = I.instructorParts(dashboard(late), {}), c1 = parts.c1;
+  const rewinds = [...c1.matchAll(/data-act="rewind" data-d="(\d)" title="([^"]*)"/g)].map((m) => [+m[1], unescape(m[2])]);
+  assert.equal(rewinds.length, 3);
+  const controls = folds(c1).find((f) => /^<summary class="small" data-fid="fold-controls">What the controls do<\/summary>/.test(f)) || '';
+  assert.ok(controls, 'the fold exists');
+  for (const t of new Set(titles(c1))) {
+    if (rewinds.some(([, r]) => r === t)) continue;
+    assert.ok(text(controls).includes(t), `the dashboard's hover "${t}" is also in the fold`);
+  }
+  const days = rewinds.map(([d]) => d);
+  assert.ok(text(controls).includes(`Sends every online student back ${days.slice(0, -1).join(', ')} or ${days.at(-1)} days to a daily checkpoint. A rewind reaches back ${I.CHECKPOINT_DAYS} days at most.`), 'the three rewinds are one line');
+  assert.ok(I.instructorParts(dashboard(late), { open: { controls: true } }).c1.includes('<details class="gap" data-fold="controls" open>'), 'and the fold stays open once it is opened');
+  assert.ok(read('docs/FACULTY_KIT.md').split('\n').some((l) => l.startsWith('| | **What the controls do** |')), 'the kit names the fold, as the screen does');
+  // the sound choice's description is read by a screen reader through aria-describedby, which reads text and not a title
+  const ls = parts.head.match(/<span class="tiny mute" id="ls-h" title="([^"]*)">([\s\S]*?)<\/span><\/fieldset>/);
+  assert.ok(ls && ls[2].includes(`<span class="sr"> ${ls[1]}</span>`) && /aria-describedby="ls-h"/.test(parts.head), 'the description of the sound choice has a screen-reader twin');
+  for (const x of I.LINK_SOUNDS) assert.ok(unescape(I.instructorParts(dashboard(late), { linkSound: x.id }).head).includes(unescape(x.more)), `${x.id}: its full description is in the page`);
+
+  // a hovered label or figure wears a dotted underline and a help cursor where a pointer exists (css/ui-draft.css), and not on touch
+  const css = read('css/ui-draft.css');
+  assert.ok(/@media \(hover: hover\) \{ \.sc-stat\[title\] \.sc-k, th\[title\], dt\[title\], label\[title\] \{ cursor: help; text-decoration: underline dotted;/.test(css), 'the cue is there for a pointer');
 });
