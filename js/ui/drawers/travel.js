@@ -72,17 +72,17 @@ function distCard(ctx, id, nextId) {
   if (state === 'locked') {
     const body = `<p class="tv-meta">Opens at ${money(Z.gate)} net worth.</p><p class="tv-rule">${esc(rule)}</p>${reward ? `<p class="tv-meta">Opening it: ${esc(reward)}</p>` : ''}<p class="tv-meta">Teaches <b>${esc(lesson)}</b></p>`;
     const tip = `Opens at ${money(Z.gate)} net worth. ${rule}${reward ? ` Opening it: ${reward}` : ''} Teaches ${lesson}.`;
-    return `<li class="tv-d locked"${pal}>${node}${fold(ctx, 'travel', 'd' + id, `<span aria-hidden="true">${Z.icon}</span> <b>${esc(Z.name)}</b> <span class="chip">🔒 ${money(Z.gate)}</span>`, body, tip)}</li>`;
+    return `<li class="tv-d locked"${pal}>${node}${fold(ctx, 'travel', 'd' + id, `<span aria-hidden="true">${Z.icon}</span> <b>${esc(Z.name)}</b> <span class="chip">Opens at ${money(Z.gate)}</span>`, body, tip)}</li>`;
   }
   const nw = g.netWorth(), frac = clamp(nw / Z.gate, 0, 1), missing = Math.max(0, Z.gate - nw);
-  const chip = open ? '<span class="chip good">✓ Open</span>' : '<span class="chip warn">→ Next stop</span>';
+  const chip = open ? '<span class="chip good">Open</span>' : '<span class="chip warn">→ Next stop</span>';
   const gate = open ? '' : `<div class="tv-gate"><span class="bar gold" role="progressbar" aria-label="Net worth toward ${esc(Z.name)}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.floor(frac * 100)}"><i style="width:${Math.floor(frac * 100)}%"></i></span>
       <p class="tv-meta"><b>${money(nw)}</b> of ${money(Z.gate)} net worth. <b>${money(missing)}</b> to go.</p></div>`;
   const go = open ? `<button class="btn ${here ? 'ghost' : ''}" data-act="travel-go" data-dist="${id}" data-fid="tv-go-${id}">${here ? 'Look around' : `Go to ${esc(Z.short)}`}</button>` : '';
   // an open district's lesson is a page the player has: its title opens it; the next one's is only named (the page is still locked in the Codex)
   const teach = open ? `<button class="btn ghost sm" data-act="travel-codex" data-id="${esc(Z.teaches)}" data-fid="tv-cx-${id}" title="${esc(gist)}" aria-label="Read about ${esc(lesson)} in the Codex">${esc(lesson)}</button>` : `<b>${esc(lesson)}</b>`;
   return `<li class="tv-d ${state}${here ? ' here' : ''}"${pal}>${node}
-    <header class="tv-dh"><span class="tv-ic" aria-hidden="true">${Z.icon}</span><h4${open && reward ? ` title="${esc(`Opening it gave you: ${reward}`)}"` : ''}>${esc(Z.name)}</h4>${chip}${here ? '<span class="chip info">📍 You are here</span>' : ''}</header>
+    <header class="tv-dh"><span class="tv-ic" aria-hidden="true">${Z.icon}</span><h4${open && reward ? ` title="${esc(`Opening it gave you: ${reward}`)}"` : ''}>${esc(Z.name)}</h4>${chip}${here ? '<span class="chip info">You are here</span>' : ''}</header>
     <p class="tv-rule">${esc(rule)}</p>
     ${gate}${open || !reward ? '' : `<p class="tv-meta">Opening it: ${esc(reward)}</p>`}
     <div class="tv-acts"><span class="tv-lsn"><span class="tv-meta">Teaches</span> ${teach}</span>${go}</div>
@@ -109,7 +109,7 @@ function summaryHTML(ctx) {
 }
 
 function crateNames(items) {
-  const names = items.map((a) => `${ASSETS[a.cls]?.icon || '📦'} ${ASSETS[a.cls]?.name || a.cls}`);
+  const names = items.map((a) => (ASSETS[a.cls] ? `${ASSETS[a.cls].icon} ${ASSETS[a.cls].name}` : a.cls));
   return names.length > 3 ? `${names.slice(0, 3).join(', ')} and ${names.length - 3} more` : list(names);
 }
 
@@ -120,11 +120,11 @@ function destRow(ctx, r, plan) {
     : r.gap > 0 ? `▲ Worth ${money(r.gap)} more there (${r.net >= 0 ? '+' : '-'}${money(Math.abs(r.net))} after freight)`
       : `▼ Worth ${money(-r.gap)} less there`;
   const warn = [];
-  if (cu) warn.push(`⚠ Customs may inspect it: a ${pctN(cu)}% chance of a 12-hour delay and a fee of about ${money(q.book * 0.02)}.`);
-  if (!r.roomOk) warn.push(`⚠ Only room for ${plural(Math.max(0, q.room), 'more crate')} there.`);
-  if (!r.cashOk) warn.push(`⚠ You need ${money(q.cost - ctx.g().s.cash)} more cash for freight.`);
+  if (cu) warn.push(`Customs may inspect it: a ${pctN(cu)}% chance of a 12-hour delay and a fee of about ${money(q.book * 0.02)}.`);
+  if (!r.roomOk) warn.push(`Only room for ${plural(Math.max(0, q.room), 'more crate')} there.`);
+  if (!r.cashOk) warn.push(`You need ${money(q.cost - ctx.g().s.cash)} more cash for freight.`);
   return `<button class="tv-dest${sel ? ' sel' : ''}" data-act="travel-pick" data-dist="${r.to}" data-fid="tv-pick-${r.to}" aria-pressed="${sel}">
-    <span class="tv-dn"><span aria-hidden="true">${Z.icon}</span> <b>${esc(Z.name)}</b> ${plan.best?.to === r.to && r.net > 0 ? '<span class="chip good">★ Best price</span>' : ''}${sel ? '<span class="chip info">✓ Chosen</span>' : ''}</span>
+    <span class="tv-dn"><span aria-hidden="true">${Z.icon}</span> <b>${esc(Z.name)}</b> ${plan.best?.to === r.to && r.net > 0 ? '<span class="chip good">Best price</span>' : ''}${sel ? '<span class="chip info">Chosen</span>' : ''}</span>
     <span class="tv-q">Freight <b>${money(q.cost)}</b> · ${hoursText(q.hours)} · <span title="Ops and a Logistics Agent lower the risk of damage.">damage risk <b>${pctN(q.risk)}%</b> (${riskWord})</span> · room for ${Math.max(0, q.room)}</span>
     <span class="tv-gap ${Math.abs(r.gap) < 0.005 ? '' : r.gap > 0 ? 'up' : 'down'}">${gapLine}</span>
     ${warn.map((w) => `<span class="tv-warn">${esc(w)}</span>`).join('')}
@@ -134,7 +134,7 @@ function destRow(ctx, r, plan) {
 function shipHTML(ctx) {
   const plan = shipPlan(ctx), s = ctx.g().s;
   if (!plan.ids.length) {
-    return `<section class="sect"><h3><span>Ship crates</span></h3><div class="tv-empty"><span class="tv-big" aria-hidden="true">📦</span>
+    return `<section class="sect"><h3><span>Ship crates</span></h3><div class="tv-empty">
       <p><b>No crates picked.</b> Tick crates in Stock, then choose a destination here.</p>
       <button class="btn" data-act="travel-stock" data-fid="tv-stock">Pick crates in Stock</button></div></section>`;
   }
@@ -168,9 +168,9 @@ function transitHTML(ctx) {
     const now = Math.round(clamp(1 - left / span, 0, 1) * 100);
     const worth = f.items.reduce((x, a) => x + g.val(a, f.to), 0);
     const cu = to?.rules?.customs;
-    const note = f.checked ? '<p class="tv-warn">⚠ Held at customs: the inspection added 12 hours.</p>'
-      : cu ? `<p class="tv-warn">⚠ Customs may inspect it on arrival (${pctN(cu)}% chance).</p>` : '';
-    return `<article class="tv-fr"><header><span class="tv-ic" aria-hidden="true">🚚</span><h4>${plural(f.items.length, 'crate')} to ${esc(to?.name || 'a district')}</h4><span class="chip info">Arrives in ${hoursText(left)}</span></header>
+    const note = f.checked ? '<p class="tv-warn">Held at customs: the inspection added 12 hours.</p>'
+      : cu ? `<p class="tv-warn">Customs may inspect it on arrival (${pctN(cu)}% chance).</p>` : '';
+    return `<article class="tv-fr"><header><h4>${plural(f.items.length, 'crate')} to ${esc(to?.name || 'a district')}</h4><span class="chip info">Arrives in ${hoursText(left)}</span></header>
       <p class="tv-meta">${esc(crateNames(f.items))}. From ${esc(from?.name || 'another district')}, worth about ${money(worth)} on arrival.</p>
       <span class="bar green" role="progressbar" aria-label="Freight to ${esc(to?.name || 'a district')}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${now}" aria-valuetext="${now} percent of the way, arrives in ${hoursText(left)}"><i data-bar="freight:${esc(f.id)}"></i></span>
       ${note}</article>`;

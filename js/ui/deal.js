@@ -6,6 +6,7 @@
 //   * createSession(ctx, run): the thin DOM half. It forwards clicks (data-deal="...") to the run, repaints the sheet, runs the repair dial and
 //     plays the sounds. openDeal(ctx, spec) is the one function the shell calls.
 import { esc, keepInView } from './common.js';
+import { avatarHTML } from '../avatar.js';
 import { kv } from '../session.js';
 import { fmtMoney as money, fmtPct } from '../market.js';
 import { startRun, modelOf, tForPos, STAGE_LABEL } from '../deal.js';
@@ -31,9 +32,9 @@ export function concedeTo(v, k) {
   return Number.isFinite(v.floor) ? (buy ? Math.min(to, v.floor) : Math.max(to, v.floor)) : to;
 }
 const flip = (v, lo, hi) => ((num(v) - lo) / Math.max(1e-9, hi - lo) > 0.8 ? ' flip' : ''); // a label near the right edge hangs to the left of its line
-// [icon, name, hover text]: what a card is, said on the card's hover and not printed (the Read and Pitch stages carry five of each)
-const ANGLE = { prestige: ['👑', 'Prestige', 'Status, standing, how it looks to others.'], utility: ['🔧', 'Utility', 'What it does and how well.'], scarcity: ['⏳', 'Scarcity', 'Rare, now or never.'], price: ['🏷️', 'Price', 'A bargain, good value.'], story: ['📖', 'Story', 'Where it came from, why it matters.'] };
-const PROBE = { look: ['👀', 'Look it over', 'Cheap. Catches obvious wear.'], serial: ['🔎', 'Check the serial', 'The best test for a counterfeit.'], power: ['⚡', 'Power it up', 'The sharpest read on condition.'], papers: ['📄', 'Read the paperwork', 'A cheap second opinion on both.'], expert: ['🧑‍🔧', 'Hire an expert', 'Costly, but needs no skill of yours.'] };
+// [name, hover text]: what a card is, said on the card's hover and not printed (the Read and Pitch stages carry five of each)
+const ANGLE = { prestige: ['Prestige', 'Status, standing, how it looks to others.'], utility: ['Utility', 'What it does and how well.'], scarcity: ['Scarcity', 'Rare, now or never.'], price: ['Price', 'A bargain, good value.'], story: ['Story', 'Where it came from, why it matters.'] };
+const PROBE = { look: ['Look it over', 'Cheap. Catches obvious wear.'], serial: ['Check the serial', 'The best test for a counterfeit.'], power: ['Power it up', 'The sharpest read on condition.'], papers: ['Read the paperwork', 'A cheap second opinion on both.'], expert: ['Hire an expert', 'Costly, but needs no skill of yours.'] };
 const MOOD = { steady: 'steady', loud: 'loud', quiet: 'quiet' };
 const MOOD_TIP = { steady: 'Patient. Raises one step at a time.', loud: 'Aggressive or bluffing. You cannot tell which until it folds.', quiet: 'Waits, then bids late.' };
 const ESTIMATE_TIP = 'Rivals bid on estimates of their own, and the highest guess usually wins. Yours is a guess too, sharper with Capital Sourcing and a good read.'; // (the winner's curse: the page says "A guess: bid below it." where Assist does not, and this is why: on hover, and in the fold for a keyboard and a finger)
@@ -55,7 +56,7 @@ export function castHTML(m) {
   const c = m.cast, bubble = m.say || c.hello, role = { buyer: 'Buyer', seller: 'Seller', bench: 'Workbench' }[c.role] || '';
   const talk = m.says.length > 1 ? foldHTML(m, 'log', 'Talk so far', `<ol>${m.says.map((x) => `<li>${esc(x)}</li>`).join('')}</ol>`, 'deal-log') : '';
   return `<section class="deal-cast" aria-label="${esc(c.name)}">
-    <div class="cast-floor"><div class="cast-icon" aria-hidden="true">${c.icon}</div></div>
+    <div class="cast-floor">${avatarHTML(c.name, c.style, 'cast-ava')}</div>
     <h3 class="cast-name">${esc(c.name)}</h3>
     <p class="cast-role"><span class="cast-tag">${esc(role)}</span>${c.style && c.style !== 'steady' ? `<span class="cast-mood">${esc(c.style)}</span>` : ''}</p>
     <div class="bubble" role="status" aria-live="polite"><p>${esc(bubble)}</p></div>${talk}
@@ -93,15 +94,15 @@ export function readHTML(m) {
   const lot = `<div class="lotcard"><span class="ic" aria-hidden="true">${p.icon}</span><div><b>${esc(p.name)}</b><div class="small mute">${p.cond === 'broken' ? 'Sold as broken' : 'Sold as working'}</div></div></div>`; // (the price is the scoreboard's)
   if (!v) return panel(m, 'read', 'Read the lot', `${lot}${m.stageDone ? quickNote(m) : ''}`);
   const probes = v.probes.map((x) => {
-    const [ic, nm, why] = PROBE[x.id];
-    return `<button class="probe${x.used ? ' used' : ''}${m.advice && m.advice.probe === x.id ? ' rec' : ''}" data-deal="probe" data-snd data-id="${x.id}" data-fid="pr-${x.id}" title="${esc(why)}" ${x.affordable && !m.stageDone ? '' : 'disabled'}><span class="pic" aria-hidden="true">${ic}</span><span class="pnm">${esc(nm)}</span><span class="pco">${x.used ? 'done' : `${x.cost} pt${x.cost > 1 ? 's' : ''}`}</span></button>`;
+    const [nm, why] = PROBE[x.id];
+    return `<button class="probe${x.used ? ' used' : ''}${m.advice && m.advice.probe === x.id ? ' rec' : ''}" data-deal="probe" data-snd data-id="${x.id}" data-fid="pr-${x.id}" title="${esc(why)}" ${x.affordable && !m.stageDone ? '' : 'disabled'}><span class="pnm">${esc(nm)}</span><span class="pco">${x.used ? 'done' : `${x.cost} pt${x.cost > 1 ? 's' : ''}`}</span></button>`;
   }).join('');
   const pips = Array.from({ length: v.budget }, (_, i) => `<i class="${i < v.spent ? 'spent' : ''}"></i>`).join('');
   const expertNote = !m.stageDone && v.probes.some((x) => x.id === 'expert' && x.affordable) ? '<p class="small mute">The expert needs no skill of yours.</p>' : '';
   // The hover is the mouse's way to the blurbs; this fold is the keyboard's, the finger's and a screen reader's way to the same words (only the summary is on the page until it is asked for)
-  const key = m.stageDone ? '' : foldHTML(m, 'probes', 'What the probes and the bar mean', `<ul class="hints">${v.probes.map((x) => `<li><b>${esc(PROBE[x.id][1])}.</b> ${esc(PROBE[x.id][2])}</li>`).join('')}</ul><p class="small mute">The bar spans the likely range. The true condition is inside it about two times in three.</p>`);
+  const key = m.stageDone ? '' : foldHTML(m, 'probes', 'What the probes and the bar mean', `<ul class="hints">${v.probes.map((x) => `<li><b>${esc(PROBE[x.id][0])}.</b> ${esc(PROBE[x.id][1])}</li>`).join('')}</ul><p class="small mute">The bar spans the likely range. The true condition is inside it about two times in three.</p>`);
   const q = v.belief.quality, sd = v.doubt;
-  const ev = v.evidence.map((e) => `<li><span><span class="evi" aria-hidden="true">${PROBE[e.id][0]}</span><b>${esc(PROBE[e.id][1])}.</b> ${esc(e.text)}</span></li>`).join('');
+  const ev = v.evidence.map((e) => `<li><span><b>${esc(PROBE[e.id][0])}.</b> ${esc(e.text)}</span></li>`).join('');
   const belief = `<div class="belief" aria-label="Your current read">
       <div title="The bar spans the likely range. The true condition is inside it about two times in three."><span class="bl">Condition relative to the description</span><b>about ${pc(q)}</b> <span class="mute small">(${pc(q - sd)} to ${pc(q + sd)})</span>
         <div class="meter" aria-hidden="true"><i class="rng" style="left:${at(q - sd, 0.6, 1.2)};width:${at(q + sd, 0.6, 1.2) === at(q - sd, 0.6, 1.2) ? '2%' : `calc(${at(q + sd, 0.6, 1.2)} - ${at(q - sd, 0.6, 1.2)})`}"></i><i class="mk" style="left:${at(q, 0.6, 1.2)}"></i></div></div>
@@ -127,17 +128,17 @@ export function pitchHTML(m) {
   for (const f of v.asset.features) feat[f.angle] = Math.max(feat[f.angle], f.strength);
   const hinted = new Set([...(v.likely ? v.likely.angles : [])]), sel = m.pick || [], lock = m.stageDone || !!m.blocker;
   const btns = v.angles.map((a) => {
-    const [ic, nm, why] = ANGLE[a], on = sel.includes(a), rec = m.assist && m.advice && m.advice.angles.includes(a), backed = feat[a] >= 0.6 ? 'strongly' : feat[a] >= 0.3 ? 'somewhat' : 'barely';
+    const [nm, why] = ANGLE[a], on = sel.includes(a), rec = m.assist && m.advice && m.advice.angles.includes(a), backed = feat[a] >= 0.6 ? 'strongly' : feat[a] >= 0.3 ? 'somewhat' : 'barely';
     return `<button class="angle${on ? ' on' : ''}${rec ? ' rec' : ''}" data-deal="angle" data-snd data-angle="${a}" aria-pressed="${on}" data-fid="an-${a}" title="${esc(why)}" ${lock ? 'disabled' : ''}>
-      ${on ? `<span class="apick" aria-hidden="true">${sel.indexOf(a) + 1}</span>` : ''}<span class="aic" aria-hidden="true">${ic}</span><span class="anm">${nm}</span>
+      ${on ? `<span class="apick" aria-hidden="true">${sel.indexOf(a) + 1}</span>` : ''}<span class="anm">${nm}</span>
       <span class="abar" role="img" aria-label="Your goods back this up: ${backed}"><i style="width:${pc(feat[a])}"></i></span>${hinted.has(a) ? `<span class="ahint">Buyer ${hinted.size > 1 ? 'may lean' : 'leans'} this way</span>` : ''}</button>`;
   }).join('');
   const said = v.hints.filter((h) => !(h.angles && h.kind !== 'temper')); // the hint that names the angles the buyer leans toward is what the stars say (view() builds `likely` from it): said on the cards, not again in the list
   const hints = said.length ? `<ul class="hints">${said.map((h) => `<li>${esc(h.text)}</li>`).join('')}</ul>` : '';
   const needs = v.buyer.needs.length ? `<p class="small mute">Looking for: ${v.buyer.needs.map((t) => (t === p.need ? `<span class="chip warn" title="A crate with this tag is a perfect fit, and one without it halves the fit.">${esc(t)}, needed now</span>` : `<span class="chip">${esc(t)}</span>`)).join(' ')}</p>` : '';
   const out = v.outcome ? `<div class="callout ${v.outcome.fitDelta >= 0.05 ? 'good' : v.outcome.fitDelta <= -0.03 ? 'warn' : ''}" title="Fit stays within 0.30 either way, and keenness between 0.85x and 1.20x."><b>${v.outcome.fitDelta >= 0 ? '+' : ''}${v.outcome.fitDelta.toFixed(2)} fit.</b> The buyer is ${v.outcome.mult.toFixed(2)}x as keen.</div>` : '';
-  const key = m.stageDone ? '' : foldHTML(m, 'angles', 'What the angles mean', `<ul class="hints">${v.angles.map((a) => `<li><b>${ANGLE[a][1]}.</b> ${esc(ANGLE[a][2])}</li>`).join('')}</ul>`); // (the hover words, for a keyboard, a finger and a screen reader)
-  const go = m.stageDone ? '' : `<div class="row"><button class="btn" data-deal="pitch-go" data-fid="pg" ${sel.length === 2 && !m.blocker ? '' : 'disabled'}>${sel.length === 2 ? `Pitch ${ANGLE[sel[0]][1]} and ${ANGLE[sel[1]][1]}` : `Pick ${2 - sel.length} more angle${sel.length === 1 ? '' : 's'}`}</button></div>`;
+  const key = m.stageDone ? '' : foldHTML(m, 'angles', 'What the angles mean', `<ul class="hints">${v.angles.map((a) => `<li><b>${ANGLE[a][0]}.</b> ${esc(ANGLE[a][1])}</li>`).join('')}</ul>`); // (the hover words, for a keyboard, a finger and a screen reader)
+  const go = m.stageDone ? '' : `<div class="row"><button class="btn" data-deal="pitch-go" data-fid="pg" ${sel.length === 2 && !m.blocker ? '' : 'disabled'}>${sel.length === 2 ? `Pitch ${ANGLE[sel[0]][0]} and ${ANGLE[sel[1]][0]}` : `Pick ${2 - sel.length} more angle${sel.length === 1 ? '' : 's'}`}</button></div>`;
   return panel(pm, 'pitch', 'Pitch',
     `${head}${verify}${needs}${hints}<div class="angles" role="group" aria-label="Pitch angles, choose two">${btns}</div>${m.stageDone ? '' : `<p class="small mute">Bars show how well your goods back each angle. A claim they cannot back counts against you.</p>${key}${advice(m)}`}${out}${quickNote(m)}${go}`);
 }

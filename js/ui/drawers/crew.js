@@ -20,26 +20,28 @@ const view = (ctx) => { const g = ctx.g(); return { ctx, g, s: g.s, m: ctx.money
 const sgn = (v, x) => v.m(x, { plus: true });
 const tone = (x) => (x >= 0 ? 'green' : 'red');
 
-/** The Creativity Engine, in words. Glyphs and labels carry the meaning; colour only backs them up. */
+/** The Creativity Engine, in words. The label carries the meaning; colour only backs it up. */
 const BANDS = {
-  herd: { glyph: '⚠', tone: 'bad', note: 'Too many pitches chase this buyer, so your margin shrinks.' },
-  crowded: { glyph: '◐', tone: 'warn', note: 'Getting crowded: a quieter buyer would pay more.' },
-  open: { glyph: '○', tone: 'info', note: 'An ordinary niche: nobody has crowded it.' },
-  balanced: { glyph: '●', tone: 'info', note: 'A healthy niche with room for you.' },
-  pioneer: { glyph: '★', tone: 'good', note: 'Few others are here, so your margin is boosted.' },
+  herd: { tone: 'bad', note: 'Too many pitches chase this buyer, so your margin shrinks.' },
+  crowded: { tone: 'warn', note: 'Getting crowded: a quieter buyer would pay more.' },
+  open: { tone: 'info', note: 'An ordinary niche: nobody has crowded it.' },
+  balanced: { tone: 'info', note: 'A healthy niche with room for you.' },
+  pioneer: { tone: 'good', note: 'Few others are here, so your margin is boosted.' },
 };
 const bandOf = (ci) => BANDS[ci.band.id] || BANDS.balanced;
-const cmChip = (ci) => `<span class="chip ${bandOf(ci).tone}" title="${esc(bandOf(ci).note)}"><span aria-hidden="true">${bandOf(ci).glyph}</span> ${esc(ci.band.label)} ${ci.cm.toFixed(2)}x</span>`;
+const cmChip = (ci) => `<span class="chip ${bandOf(ci).tone}" title="${esc(bandOf(ci).note)}">${esc(ci.band.label)} ${ci.cm.toFixed(2)}x</span>`;
 const crowdWords = (ci) => (ci.vT < 2 ? 'Almost nobody else is pitching this niche.' : `${Math.round(ci.S * 100)}% of recent pitches use this niche.`);
+/** The goods' icon before a lane's name, when the lane has goods (a manager with no lane yet has none). */
+const goodsMark = (cls) => (ASSETS[cls] ? `<span aria-hidden="true">${ASSETS[cls].icon}</span> ` : '');
 const laneName = (cls, seg) => `${esc(ASSETS[cls]?.name || 'No lane yet')} to ${esc(BUYERS[seg]?.name || '?')}`;
 
 function statusOf(p) {
-  if (p.status === 'paused') return { key: 'paused', glyph: '⏸', tone: 'warn', label: 'Paused' };
-  if (p.status === 'audit') return { key: 'audit', glyph: '🛡', tone: 'warn', label: 'On compliance duty' };
-  if (p.status === 'running') return { key: 'running', glyph: '▶', tone: 'good', label: 'Running' };
-  if (!p.cls) return { key: 'nolane', glyph: '◌', tone: 'warn', label: 'Needs a lane' };
-  if (p.starved) return { key: 'starved', glyph: '⚠', tone: 'bad', label: 'Waiting for cash' };
-  return { key: 'idle', glyph: '◌', tone: '', label: 'Idle' };
+  if (p.status === 'paused') return { key: 'paused', tone: 'warn', label: 'Paused' };
+  if (p.status === 'audit') return { key: 'audit', tone: 'warn', label: 'On compliance duty' };
+  if (p.status === 'running') return { key: 'running', tone: 'good', label: 'Running' };
+  if (!p.cls) return { key: 'nolane', tone: 'warn', label: 'Needs a lane' };
+  if (p.starved) return { key: 'starved', tone: 'bad', label: 'Waiting for cash' };
+  return { key: 'idle', tone: '', label: 'Idle' };
 }
 const hiredEver = (s) => s.pipes.length > 0 || s.ledger.some((e) => e.type === 'hire' && String(e.text).startsWith('Hired'));
 const autoDistricts = (v) => {
@@ -101,7 +103,7 @@ function pipeCard(v, p, cache) {
   const better = betterLane(v, p, f, cache), crowded = f.ci.band.id === 'herd' || f.ci.band.id === 'crowded';
   const cyc = p.inflight ? `Cycle ${Math.min(p.prog, p.len)} of ${p.len} h${Math.abs(p.inflight - alloc) > 0.5 ? `, ${m(p.inflight)} at work` : ''}` : `A cycle takes ${f.len} h`; // (the capital below is what is set; the amount out is only said when it differs)
   const upBtn = up.maxed
-    ? '<span class="chip good"><span aria-hidden="true">★</span> Top level</span>'
+    ? '<span class="chip good">Top level</span>'
     : `<button class="btn" data-act="crew-up" data-id="${p.id}" data-fid="cu-${p.id}" ${up.why ? 'aria-disabled="true"' : ''}>Level ${p.level + 1} for ${m(up.cost)}</button>`;
   // what the next level is worth: its payback is the line, its capacity and daily gain are the hover (capacity doubles with each level, engine pipeCap)
   const upTip = up.maxed ? '' : `Capacity ${m(up.cap)} to ${m(up.nextCap)} per cycle${up.gain > 0 ? `, about ${sgn(v, up.gain)} a day when fully funded` : ''}.`;
@@ -113,10 +115,10 @@ function pipeCard(v, p, cache) {
   const relWord = !p.inflight ? '' : stt.key !== 'running' ? ': mid-cycle' : alloc > 0 ? ': needs capital at 0' : `: opens in ${left} h`; // what opens it, on the button: a funded manager's wait never ends by itself (the hover has the detail)
   const upLine = up.maxed ? '' : `<p class="cr-up small" title="${esc(upTip)}">${up.gain > 0 ? `Level ${p.level + 1} pays back in about ${Math.max(1, Math.round(up.payback))} days once funded to ${m(up.nextCap)}.` : `Level ${p.level + 1}: this lane cannot use more capital profitably yet.`}</p>`;
   return `<article class="cr-card${flash ? ' cr-focus' : ''}" data-pipe="${p.id}" data-st="${stt.key}" tabindex="-1" aria-label="${esc(K.name)}, level ${p.level}, ${esc(Z.name)}, ${esc(stt.label)}">
-    <header class="cr-top"><span class="cr-ic" aria-hidden="true">${K.icon}</span>
+    <header class="cr-top">
       <div class="cr-id"><h4 class="cr-name">${esc(K.name)} <span class="chip">Lv ${p.level} of ${PIPE_RULES.maxLevel}</span></h4>
-        <p class="cr-lane"><span aria-hidden="true">${ASSETS[p.cls]?.icon || '📦'}</span> ${laneName(p.cls, p.buyer)}${p.channel === 'intl' ? ' <span class="chip warn">International</span>' : ''}</p></div>
-      <span class="chip ${stt.tone}"><span aria-hidden="true">${stt.glyph}</span> ${esc(stt.label)}</span></header>
+        <p class="cr-lane">${goodsMark(p.cls)}${laneName(p.cls, p.buyer)}${p.channel === 'intl' ? ' <span class="chip warn">International</span>' : ''}</p></div>
+      <span class="chip ${stt.tone}">${esc(stt.label)}</span></header>
     <div class="bar gold cr-bar" aria-hidden="true"><i data-bar="pipe:${p.id}"></i></div>
     <p class="small mute cr-cyc">${cyc}.</p>
     <dl class="cr-nums"><div><dt>Per cycle</dt><dd class="mono ${tone(f.net)}">${sgn(v, f.net)}</dd></div><div><dt>Per day</dt><dd class="mono ${tone(f.perDay)}">${sgn(v, f.perDay)}</dd></div><div><dt>Capital</dt><dd class="mono">${m(alloc)} <span class="mute">of ${m(cap)}</span></dd></div></dl>
@@ -186,7 +188,7 @@ function upgradesTab(v) {
   const cards = Object.entries(UPGRADES).map(([id, u]) => {
     const have = !!s.upg[id], open = s.zones.includes(u.zone);
     const why = have ? '' : !open ? `Unlocks when ${ZONES[u.zone].name} opens.` : s.cash < u.cost ? `Short by ${m(u.cost - s.cash)}.` : '';
-    return `<article class="cr-upg${have ? ' have' : ''}"><div class="row"><b class="grow">${esc(u.name)}</b>${have ? '<span class="chip good"><span aria-hidden="true">✓</span> Installed</span>' : `<span class="mono gold">${m(u.cost)}</span>`}</div>
+    return `<article class="cr-upg${have ? ' have' : ''}"><div class="row"><b class="grow">${esc(u.name)}</b>${have ? '<span class="chip good">Installed</span>' : `<span class="mono gold">${m(u.cost)}</span>`}</div>
       <p class="small">${esc(u.blurb)}</p>
       ${have ? '' : `<button class="btn" data-act="crew-upg" data-id="${id}" data-fid="cx-${id}" ${why ? 'aria-disabled="true"' : ''}>Install</button>${why ? `<p class="cr-why small">${esc(why)}</p>` : ''}`}</article>`;
   }).join('');
@@ -207,19 +209,19 @@ function clientBlock(v, id) {
 function clientCard(v, id) {
   const { g, s, m } = v, C = CLIENTS[id], q = g.clientQuote(id), n = g.liveClients(id).length, block = clientBlock(v, id);
   const run = g.runningPipes(), met = run >= C.minRunning, top = Math.max(q.cac, q.ltv, 1);
-  const verdict = q.ratio >= 3 ? { t: 'good', g: '★', w: 'Strong' } : q.ratio >= 1.5 ? { t: 'warn', g: '◐', w: 'Thin' } : { t: 'bad', g: '⚠', w: 'Risky' };
-  return `<article class="cr-client"><div class="row"><span class="cr-ic" aria-hidden="true">${C.icon}</span><div class="grow"><b title="${esc(C.blurb)}">${esc(C.name)}</b></div><span class="chip">${n} of ${C.max}</span></div>
+  const verdict = q.ratio >= 3 ? { t: 'good', w: 'Strong' } : q.ratio >= 1.5 ? { t: 'warn', w: 'Thin' } : { t: 'bad', w: 'Risky' };
+  return `<article class="cr-client"><div class="row"><div class="grow"><b title="${esc(C.blurb)}">${esc(C.name)}</b></div><span class="chip">${n} of ${C.max}</span></div>
     <div class="cr-vs" role="group" aria-label="What it costs to win this client against what they pay you">
       <div class="cr-vsrow"><span class="cr-vsl">You pay to win them (CAC)</span><span class="cr-vsb" aria-hidden="true"><i class="cost" style="width:${(q.cac / top * 100).toFixed(1)}%"></i></span><b class="mono">${m(q.cac)}</b></div>
       <div class="cr-vsrow"><span class="cr-vsl">They pay you ${q.payDays < C.days ? `over the ${plural(q.payDays, 'day')} you have left` : `over ${C.days} days`} (LTV)</span><span class="cr-vsb" aria-hidden="true"><i class="ltv" style="width:${(q.ltv / top * 100).toFixed(1)}%"></i></span><b class="mono">${m(q.ltv)}</b></div></div>
-    <p class="small"><span class="chip ${verdict.t}"><span aria-hidden="true">${verdict.g}</span> ${verdict.w}</span> LTV is ${q.ratio.toFixed(1)}x CAC. Paid back in about ${q.payback.toFixed(1)} days${q.worthwhile ? '' : ', more than the run has left'}.</p>
-    <p class="small cr-sla"><span class="chip ${met ? 'good' : 'bad'}" title="A missed day costs ${m(C.perDay * 2)}."><span aria-hidden="true">${met ? '✓' : '✗'}</span> ${met ? 'SLA met' : 'SLA not met'}</span> Needs ${plural(C.minRunning, 'manager')} running every day; you have ${run}.</p>
+    <p class="small"><span class="chip ${verdict.t}">${verdict.w}</span> LTV is ${q.ratio.toFixed(1)}x CAC. Paid back in about ${q.payback.toFixed(1)} days${q.worthwhile ? '' : ', more than the run has left'}.</p>
+    <p class="small cr-sla"><span class="chip ${met ? 'good' : 'bad'}" title="A missed day costs ${m(C.perDay * 2)}.">${met ? 'SLA met' : 'SLA not met'}</span> Needs ${plural(C.minRunning, 'manager')} running every day; you have ${run}.</p>
     <button class="btn" data-act="crew-client" data-t="${id}" data-fid="cl-${id}" ${block ? 'aria-disabled="true"' : ''}>Sign for ${m(q.cac)}</button>${block ? `<p class="cr-why small">${esc(block)}</p>` : ''}</article>`;
 }
 
 function clientsTab(v) {
   const { s, m, g } = v;
-  const live = g.liveClients().map((c) => { const C = CLIENTS[c.tier]; return `<article class="cr-active"><div class="row"><b class="grow">${C.icon} ${esc(C.name)}</b><span class="mono green">${sgn(v, c.earned)} earned</span></div><div class="bar green" aria-hidden="true"><i data-bar="client:${c.id}"></i></div>
+  const live = g.liveClients().map((c) => { const C = CLIENTS[c.tier]; return `<article class="cr-active"><div class="row"><b class="grow">${esc(C.name)}</b><span class="mono green">${sgn(v, c.earned)} earned</span></div><div class="bar green" aria-hidden="true"><i data-bar="client:${c.id}"></i></div>
       <p class="small mute">${c.breaches ? `<span class="red">${c.breaches} of 2 SLA breaches.</span> ` : 'No SLA breaches. '}Ends in ${dur(c.until - s.hour)}.</p></article>`; }).join('');
   return `<p class="small mute">Clients pay every day while enough managers are running. A missed day costs twice the account's daily rate, and a second ends the contract.</p>
     <div class="cr-grid">${Object.keys(CLIENTS).map((id) => clientCard(v, id)).join('')}</div>
@@ -258,7 +260,7 @@ function laneCard(v, r, H, locked) {
   const off = locked && !on;
   return `<button class="cr-lc" aria-pressed="${on}" data-act="crew-hlane" data-cls="${esc(r.cls)}" data-seg="${esc(r.seg)}" data-fid="hl-${esc(r.cls)}-${esc(r.seg)}" ${off ? 'aria-disabled="true"' : ''}>
     <span class="cr-rank">${tag}</span>
-    <span class="cr-ln"><span aria-hidden="true">${ASSETS[r.cls]?.icon || '📦'}</span> <b>${esc(ASSETS[r.cls]?.name)}</b> to <b>${esc(BUYERS[r.seg]?.name)}</b></span>
+    <span class="cr-ln">${goodsMark(r.cls)}<b>${esc(ASSETS[r.cls]?.name)}</b> to <b>${esc(BUYERS[r.seg]?.name)}</b></span>
     <span class="cr-lm">${cmChip(r)} <span class="mono ${tone(f.perDay)}">about ${sgn(v, f.perDay)} a day</span></span>
     <span class="small mute">${crowdWords(r)} ${esc(fitLabel(r.fit))}.</span></button>`;
 }
@@ -269,9 +271,9 @@ function hireBody(ctx) {
   const t = tmpPipe(v, H), cap = g.pipeCap(t), alloc = Math.min(+H.alloc || 0, cap), cost = edit ? 0 : g.pipeCost(H.kind, H.zone), left = s.cash - cost;
   const take = H.more ? 60 : g.P.radar || s.upg.research ? 8 : 5;
   const { rows, total } = lanesFor(v, H.zone, take, [{ cls: H.cls, seg: H.buyer }], H.edit || null);
-  const kinds = edit ? `<p class="small"><span class="cr-ic" aria-hidden="true">${PIPE[edit.kind].icon}</span> <b>${esc(PIPE[edit.kind].name)}</b> <span class="chip">Lv ${edit.level} of ${PIPE_RULES.maxLevel}</span></p>`
+  const kinds = edit ? `<p class="small"><b>${esc(PIPE[edit.kind].name)}</b> <span class="chip">Lv ${edit.level} of ${PIPE_RULES.maxLevel}</span></p>`
     : `<h3 class="cr-h3">1. Choose a manager</h3><div class="cr-kinds" role="group" aria-label="Manager type">${Object.entries(PIPE).map(([id, K]) => `<button class="cr-kind" aria-pressed="${H.kind === id}" data-act="crew-hkind" data-k="${id}" data-fid="hk-${id}" data-anchor="hire-${id}">
-        <span class="cr-ic" aria-hidden="true">${K.icon}</span><b>${esc(K.name)}</b><span class="small">${esc(K.blurb)}</span>
+        <b>${esc(K.name)}</b><span class="small">${esc(K.blurb)}</span>
         <span class="small mono">${m(g.pipeCost(id, H.zone))} to hire</span><span class="small mute">Up to ${m(startCap(g, id, H.zone))} per cycle. ${K.cycle < 1 ? 'Fast' : K.cycle > 1 ? 'Slow' : 'Steady'} cycles. Royalty ${Math.round(K.royalty * 100)}%.</span></button>`).join('')}</div>`;
   const shown = locked ? rows.filter((r) => r.cls === H.cls && r.seg === H.buyer) : rows, intl = 1.3 + (g.P.intlBonus || 0);
   const why = !edit && s.cash < cost ? `You need ${m(cost - s.cash)} more to hire this manager.` : !H.cls ? 'Pick a lane first.' : '';

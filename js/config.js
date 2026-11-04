@@ -63,9 +63,9 @@ export const SKILL_MAX = 8;
 export const BROKEN_FACTOR = 0.3; // as-is value of a broken asset relative to working
 
 export const PIPE = {
-  student: { name: 'Supply-Chain Student', icon: '🎓', hire: 120, royalty: 0.03, margin: 0.052, cycle: 1.3, overhead: 2, cap: 450, blurb: 'Cheapest to hire. Its margin grows with experience.' },
-  broker: { name: 'Asset Broker', icon: '🤝', hire: 600, royalty: 0.10, margin: 0.068, cycle: 1.0, overhead: 6, cap: 1000, blurb: 'The highest base margin.' },
-  logistics: { name: 'Logistics Agent', icon: '🚛', hire: 420, royalty: 0.06, margin: 0.055, cycle: 0.8, overhead: 5, cap: 700, blurb: 'Cuts freight cost 20% and damage risk by half.' },
+  student: { name: 'Supply-Chain Student', hire: 120, royalty: 0.03, margin: 0.052, cycle: 1.3, overhead: 2, cap: 450, blurb: 'Cheapest to hire. Its margin grows with experience.' },
+  broker: { name: 'Asset Broker', hire: 600, royalty: 0.10, margin: 0.068, cycle: 1.0, overhead: 6, cap: 1000, blurb: 'The highest base margin.' },
+  logistics: { name: 'Logistics Agent', hire: 420, royalty: 0.06, margin: 0.055, cycle: 0.8, overhead: 5, cap: 700, blurb: 'Cuts freight cost 20% and damage risk by half.' },
 };
 // Pipelines scale with a district's gate: a manager in district 13 handles about 31x the money of one in district 5.
 // A cycle's gross is allocation x kind margin x ECON.margin x pipeMargin x (Cm / 1.68) x lane. With marginBase 1.15 a balanced niche (Cm 1.68) pays 6.0% (student), 7.8% (broker) or 6.3% (logistics) before costs,
@@ -87,9 +87,9 @@ export const UPGRADES = {
 };
 
 export const CLIENTS = {
-  smb: { name: 'SMB Account', icon: '🏪', zone: 5, cac: 450, perDay: 55, days: 30, minRunning: 1, max: 6, blurb: 'Local businesses. Light SLA.' },
-  corp: { name: 'Corporate Account', icon: '🏢', zone: 5, cac: 4000, perDay: 380, days: 45, minRunning: 2, max: 4, needs: 'm2', b2b: true, blurb: 'Mid-size firms. Strict SLA.' },
-  ent: { name: 'Enterprise Account', icon: '🏛️', zone: 13, cac: 40000, perDay: 3200, days: 60, minRunning: 3, max: 3, needs: 'm3', b2b: true, blurb: 'Corporate Valley contracts. The strictest SLA.' },
+  smb: { name: 'SMB Account', zone: 5, cac: 450, perDay: 55, days: 30, minRunning: 1, max: 6, blurb: 'Local businesses. Light SLA.' },
+  corp: { name: 'Corporate Account', zone: 5, cac: 4000, perDay: 380, days: 45, minRunning: 2, max: 4, needs: 'm2', b2b: true, blurb: 'Mid-size firms. Strict SLA.' },
+  ent: { name: 'Enterprise Account', zone: 13, cac: 40000, perDay: 3200, days: 60, minRunning: 3, max: 3, needs: 'm3', b2b: true, blurb: 'Corporate Valley contracts. The strictest SLA.' },
 };
 
 export const LOANS = {

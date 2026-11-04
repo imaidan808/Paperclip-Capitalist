@@ -1,0 +1,97 @@
+// No emoji, and no symbol that stands in for an icon, in anything the site ships (js/, css/, index.html, 404.html): the interface draws its icons or goes without (docs/COPY.md rule 7,
+// docs/ART_DIRECTION.md 3.6). A system emoji looks different on every platform, can show as an empty box on an old device, is glossy against the flat art, and is read aloud by its name.
+// The scanner finds a pictograph or an icon symbol however it is written: the character itself, a JS escape (\u{1F512}, ⏸, a surrogate pair), a CSS escape (content: "\2713"),
+// an HTML entity (&#10003; or &check;) or String.fromCodePoint. Ordinary typography stays: the allowlist below is the whole list.
+//
+// It is a RATCHET. The count may not rise above BASELINE; each part of the icons work lowers BASELINE to what it leaves, and the last part makes the test strict (zero, ALLOW unchanged).
+// Where the rest are, and which part draws them (2026-11-04, after "Icons 1: remove the decorative emoji", which took the count from 535 to 148):
+//   Icons 2, the glyph kit, the dock and the marks that are the only cue ........ 46  the dock and the seven drawer tabs 7; ticks, carets, play and pause, the menu, close and the camera
+//                                                                                    in js/ 15; the Deal Room's verdict marks, the Draft's tick and the pressed toggles in css/ 18;
+//                                                                                    the world's lock, "you are here" dot and manager status marks 6
+//   Icons 3, the districts and the Backgrounds ................................... 28  the sixteen districts' icons 16, the twelve Backgrounds' 12
+//   Icons 4, the goods ........................................................... 74  the 72 goods' icons and the gavel on an auction lot's tag in the world, twice
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { readFileSync, readdirSync, statSync } from 'node:fs';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { BUYERS, PIPE, CLIENTS, ASSETS, ZONES, PERKS } from '../js/config.js';
+import { QUESTS, ACHIEVEMENTS, DAILIES } from '../js/meta/quests.js';
+import { CODEX } from '../js/meta/codex.js';
+import { ACADEMY } from '../js/meta/academy.js';
+import { sellerFor } from '../js/deal.js';
+
+const ROOT = fileURLToPath(new URL('..', import.meta.url));
+const read = (p) => readFileSync(join(ROOT, p), 'utf8');
+
+/** The characters that may stay: the two plain arrows and the multiplication sign of ordinary text, the middle dot, the minus, the ellipsis, and the two plain triangles of a price going up or down (no emoji form: Emoji=No in Unicode). */
+const ALLOW = new Set(['←', '→', '×', '·', '−', '…', '▲', '▼']);
+/** The named entities that draw a symbol (the HTML ones that draw a letter, a quote or a space are not icons). */
+const NAMED = { larr: '←', rarr: '→', uarr: '↑', darr: '↓', harr: '↔', check: '✓', cross: '✗', star: '☆', starf: '★', bigstar: '★', hearts: '♥', diams: '♦', spades: '♠', clubs: '♣', phone: '☎', female: '♀', male: '♂', sung: '♪' };
+/** What the shipped sources hold today. A pull request may only lower it, and says so here. STRICT=1 asks for zero. */
+const BASELINE = 148;
+
+const PICTO = /\p{Extended_Pictographic}/u;
+const SYMBOL = /[←-⇿⌀-⏿■-◿☀-➿⬀-⯿⤀-⥿]/u; // arrows, technical, geometric shapes, miscellaneous symbols, dingbats
+const isBad = (ch) => !ALLOW.has(ch) && (PICTO.test(ch) || SYMBOL.test(ch));
+const walk = (dir) => readdirSync(dir).flatMap((n) => { const p = join(dir, n); return statSync(p).isDirectory() ? walk(p) : [p]; });
+const shipped = () => [...walk(join(ROOT, 'js')), ...walk(join(ROOT, 'css')), join(ROOT, 'index.html'), join(ROOT, '404.html')].filter((f) => /\.(js|css|html)$/.test(f));
+
+/** Every pictograph or icon symbol in a source text, in whatever form it was written. */
+function findings(src) {
+  const out = [];
+  src.split('\n').forEach((ln, i) => {
+    const push = (ch, form) => { if (isBad(ch)) out.push({ line: i + 1, ch, form }); };
+    for (const ch of ln.replace(/️|‍/g, '')) push(ch, 'literal');                                                                                                        // the character itself (VS16 and ZWJ ignored: the emoji they join is found)
+    for (const m of ln.matchAll(/\\u\{([0-9a-fA-F]{1,6})\}/g)) push(String.fromCodePoint(parseInt(m[1], 16)), 'js escape');                                                       // \u{1F512}
+    for (const m of ln.matchAll(/\\u([dD][89abAB][0-9a-fA-F]{2})\\u([dD][c-fC-F][0-9a-fA-F]{2})/g)) push(String.fromCodePoint(((parseInt(m[1], 16) - 0xD800) << 10) + (parseInt(m[2], 16) - 0xDC00) + 0x10000), 'js escape'); // a surrogate pair
+    for (const m of ln.matchAll(/\\u([0-9a-fA-F]{4})/g)) push(String.fromCodePoint(parseInt(m[1], 16)), 'js escape');                                                             // ⏸
+    for (const m of ln.matchAll(/&#x([0-9a-fA-F]+);/g)) push(String.fromCodePoint(parseInt(m[1], 16)), 'entity');                                                                  // &#x2713;
+    for (const m of ln.matchAll(/&#(\d+);/g)) push(String.fromCodePoint(parseInt(m[1], 10)), 'entity');                                                                            // &#10003;
+    for (const m of ln.matchAll(/&([a-z]+);/g)) if (NAMED[m[1]]) push(NAMED[m[1]], 'entity');                                                                                      // &check;
+    for (const m of ln.matchAll(/\\([0-9a-fA-F]{4,6})(?![0-9a-fA-F])/g)) push(String.fromCodePoint(parseInt(m[1], 16)), 'css escape');                                             // content: "\2713" (a backslash and hex digits)
+    for (const m of ln.matchAll(/fromCodePoint\(\s*(0x[0-9a-fA-F]+|\d+)\s*\)/g)) push(String.fromCodePoint(Number(m[1])), 'fromCodePoint');
+  });
+  return out;
+}
+
+test('the scanner finds every form: a character, a ZWJ sequence, a variation selector, a JS escape, a surrogate pair, a CSS escape, an HTML entity, a code point', () => {
+  const forms = (s) => findings(s).map((f) => `${f.form}:${f.ch}`);
+  assert.deepEqual(forms("const a = '📎';"), ['literal:📎']);
+  assert.deepEqual(forms('x = "🧑‍🔧"'), ['literal:🧑', 'literal:🔧']);
+  assert.deepEqual(forms("g = '⚠️'"), ['literal:⚠']);
+  assert.deepEqual(forms("t = '\\u{1F512} '"), ['js escape:🔒']);
+  assert.deepEqual(forms("t = '\\uD83D\\uDD12'"), ['js escape:🔒']);
+  assert.deepEqual(forms("t = '\\u23F8'"), ['js escape:⏸']);
+  assert.deepEqual(forms('.a::after { content: "\\2713"; }'), ['css escape:✓']);
+  assert.deepEqual(forms('<i>&#10003;</i>'), ['entity:✓']);
+  assert.deepEqual(forms('<i>&#x1F512;</i>'), ['entity:🔒']);
+  assert.deepEqual(forms('<i>&check;</i> <i>&starf;</i>'), ['entity:✓', 'entity:★']);
+  assert.deepEqual(forms('s = String.fromCodePoint(0x1F512)'), ['fromCodePoint:🔒']);
+  assert.deepEqual(forms('3 × 4 → 5 ← 6 · ▲ ▼ − … &larr; &rarr; &middot; &hellip; &ldquo;x&rdquo; and a \\d+ regex, \\n, &#39; and &amp;'), [], 'ordinary typography, the plain arrows, an apostrophe entity and regular expressions are not findings');
+});
+
+test('no emoji or icon symbol in anything the site ships, beyond what the icons work has not drawn yet (a ratchet: it only goes down)', () => {
+  const all = [], byFile = {};
+  for (const f of shipped()) for (const x of findings(readFileSync(f, 'utf8'))) { all.push(`${f.slice(ROOT.length)}:${x.line} ${x.ch} (${x.form})`); byFile[f.slice(ROOT.length)] = (byFile[f.slice(ROOT.length)] || 0) + 1; }
+  const where = Object.entries(byFile).sort((p, q) => q[1] - p[1]).map(([f, n]) => `${f} ${n}`).join(', ');
+  if (process.env.STRICT) assert.deepEqual(all, [], `${all.length} emoji or icon symbols in shipped sources: ${where}`);
+  else assert.ok(all.length <= BASELINE, `${all.length} findings, the ratchet says ${BASELINE}: a change may only lower it. Count by file: ${where}`);
+  assert.ok(all.length >= BASELINE - 20 || process.env.STRICT, `${all.length} findings is far under the ratchet's ${BASELINE}: lower BASELINE to ${all.length}, so the next change cannot spend the difference`);
+});
+
+test('the emoji that were decoration are gone for good: buyers, managers, clients, quests, badges, bounties, Codex pages, Academy lessons and the Deal Room\'s cards and cast carry no icon', () => {
+  const has = (list, name) => { for (const x of Object.values(list)) assert.ok(!('icon' in x), `${name} ${x.id ?? x.name}: no icon field`); };
+  has(BUYERS, 'buyer'); has(PIPE, 'manager kind'); has(CLIENTS, 'client kind'); has(QUESTS, 'quest'); has(ACHIEVEMENTS, 'badge'); has(DAILIES, 'bounty'); has(CODEX, 'Codex page'); has(ACADEMY, 'Academy lesson');
+  assert.equal(Object.keys(BUYERS).length, 101); assert.equal(QUESTS.length, 32); assert.equal(ACHIEVEMENTS.length, 78); assert.equal(DAILIES.length, 12); assert.equal(CODEX.length, 56); assert.equal(ACADEMY.length, 10);
+  const seen = new Set(); for (let i = 0; i < 60; i++) { const sl = sellerFor('guard' + i, 'Clip', 10); seen.add(sl.style); assert.ok(!('icon' in sl), 'a seller has no icon'); } assert.equal(seen.size, 4, 'all four styles of seller were looked at');
+  // the sources that build the rest: the Deal Room's seller kinds, auctioneer and bench, and the cards of the Read and Pitch stages; the Bank's loan products
+  assert.deepEqual([...read('js/deal.js').matchAll(/\bicon:\s*([^,}]+)/g)].map((m) => m[1].trim()).sort(), ['ASSETS[a.cls].icon', 'ASSETS[a.cls].icon', 'ZONES[z].icon', 'def.icon'], 'js/deal.js keeps an icon for goods and districts only');
+  assert.ok(!/\bicon\b/.test(read('js/ui/deal.js').replace(/\.icon\b/g, '').replace(/^\/\/.*$/gm, '')), 'js/ui/deal.js: the angle and probe cards have no icon (goods and districts are read as .icon)');
+  assert.deepEqual([...read('js/ui/drawers/bank.js').matchAll(/\bicon:\s*('[^']*')/g)].map((m) => m[1]), ["'🏦'"], 'the Bank keeps its dock icon and its loan products have none');
+});
+
+test('what the later parts draw is still there: goods, districts and Backgrounds keep their icon, and so does every dock and drawer tab', () => {
+  for (const [name, list] of [['good', ASSETS], ['district', ZONES], ['Background', PERKS]]) for (const [id, x] of Object.entries(list)) assert.ok(typeof x.icon === 'string' && x.icon.trim(), `${name} ${id}: icon`);
+  for (const d of ['stock', 'market', 'crew', 'bank', 'travel', 'codex', 'quests']) assert.match(read(`js/ui/drawers/${d}.js`), new RegExp(`id: '${d}', icon: '[^']+', label:`), `${d}: the tab keeps its icon until Icons 2`);
+});

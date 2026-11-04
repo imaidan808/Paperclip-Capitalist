@@ -116,7 +116,7 @@ test('quests: the active quest first with a progress bar and its reward, locked 
   assert.doesNotMatch(h, /class="qs-q locked"/, 'the quests still to come are not drawn while their fold is shut');
   assert.match(t, new RegExp(`Coming up \\(${QUESTS.filter((q) => q.zone <= 2).length - 1}\\)`), 'it says how many wait');
   ctx.U.fold = { 'quests.later': true }; h = quests.html(ctx); t = text(h);
-  assert.match(h, /class="qs-q active"/); assert.match(t, /Now \S+ First Swap/); assert.match(t, /0 \/ 1/);
+  assert.match(h, /class="qs-q active"/); assert.match(t, /Now\s+First Swap/); assert.match(t, /0 \/ 1/); assert.ok(!/qs-ic/.test(h), 'a quest has no picture: its title and its district say what it is');
   assert.match(h, /role="progressbar"[^>]*aria-label="First Swap progress"/);
   assert.match(t, new RegExp(`Reward \\+${Math.round(50 * g.P.xpMult)} XP`), 'the reward is shown after the Backgrounds\' XP multiplier');
   assert.match(h, /class="qs-q locked"/); assert.match(t, /Unlocks after “First Swap”\./);
@@ -129,7 +129,7 @@ test('quests: the active quest first with a progress bar and its reward, locked 
   const xp = g.s.xp; pr.onEvent(pitch(1));
   h = quests.html(ctx); t = text(h);
   assert.ok(g.s.xp > xp);
-  assert.match(t, /1 of 32 done/); assert.match(t, /Now \S+ Need Beats Cost/); assert.doesNotMatch(t, /Now \S+ First Swap/);
+  assert.match(t, /1 of 32 done/); assert.match(t, /Now\s+Need Beats Cost/); assert.doesNotMatch(t, /Now\s+First Swap/);
   assert.match(h, /qs-fold/); assert.match(t, /Show completed quests \(1\)/); assert.ok(!t.includes('Done: First Swap'), 'completed quests are folded away');
   // partial progress shows a fraction (the same trade also counted toward the quest it unlocked)
   assert.match(t, /1 \/ 3/); assert.match(h, /aria-valuenow="33"/);
@@ -145,7 +145,7 @@ test('completed quests fold and unfold; a quest in a district you have not opene
   // the chain reaches a district that is still closed: the quest is the active one, and says what opens its district
   for (const q of QUESTS.slice(0, 2)) pr.m.q[q.id] = { p: q.goal.count, done: true };
   h = quests.html(ctx); let t = text(h);
-  assert.match(h, /class="qs-q active"/); assert.match(t, /Now \S+ Stall Crawler/);
+  assert.match(h, /class="qs-q active"/); assert.match(t, /Now\s+Stall Crawler/);
   assert.match(t, new RegExp(`Open ${ZONES[2].name} first: it needs \\$${ZONES[2].gate}`));
   assert.doesNotMatch(h, /data-act="quests-go"/, 'no Go button into a district that is not open');
   assert.equal(ctx.progress.current().def.id, 'q02a', 'the HUD tracker names the same quest');
@@ -196,17 +196,18 @@ test('daily bounties: three a day with bars, from the first morning on', () => {
   assert.deepEqual(checkHTML(h), []);
 });
 
-test('badges: rarity has a shape and a word, secrets are a question mark, progress shows, earned ones are marked', () => {
+test('badges: rarity is a word and a colour, secrets say so in words, progress shows, earned ones are marked, and none has a picture', () => {
   const ctx = mk(), pr = ctx.progress, a = quests.acts(ctx);
   a['quests-ach-all']();
   let h = quests.html(ctx), t = text(h);
   assert.equal((h.match(/class="qs-ach /g) || []).length, 78, 'all badges once they are all shown');
-  for (const [shape, word] of [['●', 'Common'], ['◆', 'Rare'], ['★', 'Epic']]) assert.ok(t.includes(`${shape} ${word}`), word);
+  for (const word of ['Common', 'Rare', 'Epic']) assert.ok(t.includes(word) && h.includes(`qs-rarity ${word.toLowerCase()}`), word);
+  assert.ok(!/[●◆★✓]/.test(t) && !/qs-ic/.test(h), 'no shape before a rarity, no picture on a badge');
   const secrets = ACHIEVEMENTS.filter((x) => x.hidden);
   assert.ok(secrets.length >= 5);
   assert.equal((h.match(/class="qs-ach \w+ secret"/g) || []).length, secrets.length);
   for (const x of secrets) { assert.ok(!t.includes(x.title), `secret "${x.title}" leaked`); assert.ok(!t.includes(x.desc), `secret text of "${x.title}" leaked`); }
-  assert.match(t, /Secret badge/); assert.match(t, /· secret/); assert.match(h, /aria-hidden="true">\?<\/span>/);
+  assert.match(t, /Secret badge/); assert.match(t, /· secret/); assert.match(t, /Revealed when earned/);
   // epic badges promise a skill point
   assert.match(t, /\+1 skill point/);
   // earn a secret and an ordinary one (the badges still to earn open first, so the full list is asked for)
@@ -214,7 +215,7 @@ test('badges: rarity has a shape and a word, secrets are a question mark, progre
   pr.m.a[sec.id] = { p: sec.goal.count, done: true, day: 3 }; pr.m.a[plain.id] = { p: 1, done: false };
   a['quests-ach'](el({ k: 'all' })); a['quests-ach-all']();
   h = quests.html(ctx); t = text(h);
-  assert.ok(t.includes(sec.title), 'an earned secret shows itself'); assert.match(t, /✓ Earned/);
+  assert.ok(t.includes(sec.title), 'an earned secret shows itself'); assert.match(t, /Earned/); assert.ok(!t.includes('✓'), 'and says it in a word, not a mark');
   assert.match(t, new RegExp(`${plain.goal.count > 9 ? `1 / ${plain.goal.count}` : `1 / ${plain.goal.count}`}`), 'progress on an unfinished badge');
   assert.match(t, /1 of 78 earned/);
   assert.equal((h.match(/class="qs-ach \w+ earned"/g) || []).length, 1);
@@ -305,11 +306,21 @@ test('every control is a real button with a label and a stable focus id, and eve
 
 test('data from a save is never trusted: odd quest, daily and badge state still renders', () => {
   const ctx = mk(), pr = ctx.progress;
-  pr.m.q.q01a = { p: -3 }; pr.m.q.q01b = { p: 'x' }; pr.m.d = { day: 1, list: [{ id: 'd-x', title: '<b>x</b>', desc: 'a & b', icon: '🎲', goal: { event: 'buy', count: 3 }, reward: { xp: 10 }, p: 99, done: false }] };
+  pr.m.q.q01a = { p: -3 }; pr.m.q.q01b = { p: 'x' }; pr.m.d = { day: 1, list: [{ id: 'd-x', title: '<b>x</b>', desc: 'a & b', icon: '🎲' /* an older save carries the icon it was given: nothing reads it */, goal: { event: 'buy', count: 3 }, reward: { xp: 10 }, p: 99, done: false }] };
   pr.m.a['a-haggle-first'] = { p: 99, done: false };
   const h = quests.html(ctx);
   assert.deepEqual(checkHTML(h), []);
   assert.ok(h.includes('&lt;b&gt;x&lt;/b&gt;') && !h.includes('<b>x</b>'), 'text from data is escaped');
+  assert.ok(!h.includes('🎲'), 'an icon left in an older save is ignored, not printed');
+});
+
+test('a save from before the pictures went still loads: its daily list keeps the icon it was given, nothing reads it, and the next day\'s bounties are saved without one', () => {
+  const ctx = mk(), pr = ctx.progress, day = pr.m.d.day;
+  pr.m.d = { day, list: pr.m.d.list.map((d) => ({ ...d, icon: '🎲' })) }; // as an older build wrote it
+  const saved = JSON.parse(JSON.stringify(ctx.g().s)), again = mk(); again.g().s.meta = saved.meta; // and as a save file hands it back
+  for (const c of [ctx, again]) { const h = quests.html(c); assert.deepEqual(checkHTML(h), []); assert.ok(!h.includes('🎲'), 'the icon is not printed'); assert.equal((h.match(/class="qs-day[ "]/g) || []).length, 3, 'the three bounties are there'); }
+  pr.onEvent({ type: 'day', day: day + 1 });
+  assert.equal(pr.dailies().length, 3); assert.ok(pr.dailies().every((d) => !('icon' in d) && d.id && d.title && d.goal && d.reward), 'a new bounty is saved without an icon');
 });
 
 test('the words of every quest, bounty and badge are free of stale terms and the word zone', async () => {

@@ -179,7 +179,7 @@ test('exactly ten missions m01..m10, in the order of section 9', () => {
   assert.deepEqual(ACADEMY.map((m) => m.title), ['First Swap', 'Read the Room', 'Know Your Buyer', 'Haggle 101', 'Fix It', 'Cash Is Not Sleeping', "Other People's Money", "Don't Follow the Herd", 'Storm Warning', 'Deal Day']);
 });
 
-const MISSION_KEYS = ['id', 'title', 'icon', 'zone', 'concept', 'minutes', 'intro', 'setup', 'steps', 'win', 'why', 'teachBack', 'reward'];
+const MISSION_KEYS = ['id', 'title', 'zone', 'concept', 'minutes', 'intro', 'setup', 'steps', 'win', 'why', 'teachBack', 'reward'];
 const OPTIONAL_KEYS = ['finish']; // what the coach says after the last step when the win is a separate act (js/ui/academy-sandbox.js coachFor)
 const SETUP_KEYS = ['clock', 'assets', 'leads', 'lots', 'cash', 'zones', 'features', 'skills', 'perks', 'cohort', 'events'];
 test('mission fields, types and limits', () => {
@@ -187,7 +187,7 @@ test('mission fields, types and limits', () => {
     keysOf(m, [...MISSION_KEYS, ...OPTIONAL_KEYS], m.id);
     for (const k of MISSION_KEYS) assert.ok(k in m, `${m.id}: missing ${k}`);
     assert.ok(isStr(m.title) && m.title.length <= 40, `${m.id}: title`);
-    assert.ok(isStr(m.icon) && [...m.icon].length <= 3, `${m.id}: icon is a single emoji`);
+    assert.ok(!('icon' in m), `${m.id}: a lesson has no icon: its title says what it is`);
     assert.ok(isInt(m.zone) && m.zone >= 1 && m.zone <= ZONE_COUNT, `${m.id}: district 1..16`);
     assert.ok(REQUIRED_CODEX.includes(m.concept), `${m.id}: concept "${m.concept}" is not a required codex id`);
     assert.ok(isNum(m.minutes) && m.minutes >= 1.5 && m.minutes <= 2.5, `${m.id}: minutes must keep a mission at 90-150 seconds`);
@@ -686,7 +686,7 @@ test('voice: no em dashes, no double spaces, no stray markup, no emoji in prose,
     assert.ok(!/ {2}|\s$|^\s/.test(s), `${m.id}${p}: stray whitespace`);
     assert.ok(!/<[a-z/][^>]*>|\*\*|`/.test(s), `${m.id}${p}: markup in a plain string`);
     assert.ok(!/\bzones?\b/i.test(s), `${m.id}${p}: say "district", not "zone"`);
-    if (!p.endsWith('.icon')) assert.ok(!/\p{Extended_Pictographic}/u.test(s), `${m.id}${p}: emoji in prose`);
+    assert.ok(!/\p{Extended_Pictographic}/u.test(s), `${m.id}${p}: emoji in prose`);
   }
 });
 

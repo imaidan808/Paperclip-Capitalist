@@ -43,6 +43,8 @@
 .tv-acts { display: flex; gap: .45rem; flex-wrap: wrap; justify-content: flex-end; align-items: center; }
 .tv-lsn { display: inline-flex; align-items: center; gap: .4rem; margin-right: auto; }
 .tv-d.locked .cx-more { margin: 0; border: 0; background: none; }
+.tv-d.locked .cx-more > summary { flex-wrap: wrap; row-gap: .3rem; } /* "Opens at $250,000" is longer than the lock and the amount were: on a phone the chip drops under the name instead of running past the row */
+.tv-d.locked .cx-more > summary .chip { margin-left: auto; }
 
 /* freight: the destination picker */
 .tv-crates { display: grid; gap: .4rem; background: var(--panel2); border: 1px solid var(--line); padding: .55rem .7rem; margin-bottom: .6rem; }
@@ -64,7 +66,6 @@
 .tv-why { margin: 0; color: var(--gold); }
 .tv-empty { display: grid; gap: .5rem; justify-items: center; text-align: center; padding: 1rem; background: var(--panel2); border: 2px dashed var(--line); }
 .tv-empty p { margin: 0; }
-.tv-big { font-size: 2.4rem; line-height: 1; }
 
 /* freight: crates on the road */
 .tv-frs { display: grid; gap: .6rem; }

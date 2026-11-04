@@ -6,6 +6,7 @@ import { readFileSync } from 'node:fs';
 import { makeGame } from './bot.mjs';
 import { fakeCtx, checkHTML } from './helpers/ctx.mjs';
 import { ASSETS } from '../js/config.js';
+import { initialOf } from '../js/avatar.js';
 import * as D from '../js/deal.js';
 import * as UI from '../js/ui/deal.js';
 
@@ -79,9 +80,13 @@ test('the stepper names the stages, marks the current one and what is done', { s
   assert.match(UI.titleOf(model(start(g, brokenCrate(g)))), /^Repair /);
 });
 
-test('the cast: a large character, a name, their line, and a polite live bubble', { skip: !HAS }, () => {
-  const g = world(), r = start(g, sell(g)), h = UI.castHTML(model(r));
-  assert.match(h, /class="cast-icon"/); assert.match(h, /role="status" aria-live="polite"/); assert.ok(h.includes(UI.titleOf(model(r)).split(' to ')[1].replace(/&/g, '&amp;')) || h.includes('cast-name'));
+test('the cast: a large disc with their initial in the tone of their style, a name, their line, and a polite live bubble', { skip: !HAS }, () => {
+  const g = world(), r = start(g, sell(g)), m0 = model(r), h = UI.castHTML(m0);
+  const ava = /<span class="ava cast-ava" data-style="(\w+)" aria-hidden="true">(.)<\/span>/.exec(h);
+  assert.ok(ava, 'the character is a disc, hidden from a screen reader: the name is printed under it'); assert.equal(ava[1], m0.cast.style, 'tinted by their style'); assert.equal(ava[2], initialOf(m0.cast.name), 'with the first letter of their name');
+  assert.ok(!/cast-icon/.test(h) && !('icon' in m0.cast), 'no picture of a person is an emoji any more');
+  for (const spec of [fixedLot(g), auctionLot(g), brokenCrate(g)]) { const c = model(start(g, spec)).cast; assert.ok(!('icon' in c), `${c.role}: the cast carries no icon`); assert.match(UI.castHTML(model(start(g, spec))), new RegExp(`<span class="ava cast-ava" data-style="${c.style}" aria-hidden="true">${initialOf(c.name)}</span>`), `${c.role} has a disc too`); }
+  assert.match(h, /role="status" aria-live="polite"/); assert.ok(h.includes(UI.titleOf(model(r)).split(' to ')[1].replace(/&/g, '&amp;')) || h.includes('cast-name'));
   r.act({ type: 'pick', angles: ['utility', 'story'] }); const h2 = UI.castHTML(model(r)); assert.notEqual(h, h2, 'the bubble now carries what the buyer said');
   assert.match(UI.castHTML(model(start(g, fixedLot(g)))), /Seller/);
   assert.match(UI.castHTML(model(start(g, brokenCrate(g)))), /Workbench/);
@@ -341,7 +346,7 @@ test('the folds keep what the player opened across the sheet\'s paints, and each
   }
   const done = start(g, fixedLot(g)); done.quick(); done.next(); done.quick(); done.finish();
   assert.equal(opened(UI.resultHTML({ ...model(done), open: { why: true } }), 'why'), true, 'Why this result');
-  const talk = (open) => UI.castHTML({ cast: { name: 'Dev', role: 'buyer', icon: 'x', hello: 'hi', style: 'steady' }, says: ['one', 'two'], say: 'two', open });
+  const talk = (open) => UI.castHTML({ cast: { name: 'Dev', role: 'buyer', hello: 'hi', style: 'steady' }, says: ['one', 'two'], say: 'two', open });
   assert.equal(opened(talk({ log: true }), 'log'), true, 'Talk so far'); assert.equal(opened(talk(undefined), 'log'), false);
   const src = readFileSync(new URL('../js/ui/deal.js', import.meta.url), 'utf8');
   assert.ok(!/<details class="deal-(more|log)">/.test(src), 'no fold is written by hand: each comes from foldHTML, which keeps its state and its data-fid');

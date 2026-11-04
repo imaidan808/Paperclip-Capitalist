@@ -1,6 +1,7 @@
 // The overlay on top of the world: player card, the three numbers that matter, the clock, the mission tracker and the news ticker.
 // Pure builders: (ctx) -> HTML. Interaction is data-act attributes handled in shell.js.
 import { PERKS, TOTAL_DAYS, xpForLevel } from '../config.js';
+import { initialOf } from '../avatar.js';
 import { fmtMoney as money } from '../market.js';
 import { MONEY_SUMS } from '../meta/quests.js';
 import { esc, settings } from './common.js';
@@ -10,7 +11,7 @@ const lvlBase = xpForLevel; // the engine's level curve (config.js)
 
 export function playerCard(ctx) {
   const g = ctx.g(), s = g.s, lv = g.level(), lo = lvlBase(lv), hi = lvlBase(lv + 1), p = Math.max(0, Math.min(1, (s.xp - lo) / (hi - lo)));
-  const icons = s.perks.map((id) => `<i title="${esc(PERKS[id].name)}">${PERKS[id].icon}</i>`).join('') || '<i>📎</i>';
+  const icons = s.perks.map((id) => `<i title="${esc(PERKS[id].name)}">${PERKS[id].icon}</i>`).join('') || (g.sandbox ? '' : `<i class="ini">${esc(initialOf(s.handle))}</i>`); // two Backgrounds, or, with none, the initial of the player's name; a lesson's rehearsal has none and its handle is "You", so its disc stays empty rather than show a stray Y
   if (g.sandbox) { // a lesson is a rehearsal in a game of its own: the XP, the level and the skill points it adds up are not the player's, so none is shown (the reward screen pays the real ones)
     return `<button class="pcard" data-anchor="player-card" data-act="dock" data-d="quests" aria-label="${esc(s.handle)}, practicing a lesson. Open quests and skills.">
     <span class="ring" style="--p:0%"><span class="av">${icons}</span></span>
@@ -52,11 +53,11 @@ export function hudHTML(ctx) {
 
 /** The current objective: an Academy mission while the player is learning, otherwise the lowest-district active quest. */
 export function trackerHTML(ctx) {
-  const t = ctx.U.tracker?.(ctx) ?? (() => { const q = ctx.progress?.current(); return q ? { title: q.def.title, desc: q.def.desc, icon: q.def.icon, p: q.p, n: q.n, drawer: 'quests', money: !!(q.def.goal.sum && MONEY_SUMS.has(q.def.goal.sum)) } : null; })();
+  const t = ctx.U.tracker?.(ctx) ?? (() => { const q = ctx.progress?.current(); return q ? { title: q.def.title, desc: q.def.desc, p: q.p, n: q.n, drawer: 'quests', money: !!(q.def.goal.sum && MONEY_SUMS.has(q.def.goal.sum)) } : null; })();
   if (!t) return '';
   const f = t.n ? Math.max(0, Math.min(1, t.p / t.n)) : 0;
   // Reading order is Goal, title, words, count; the stylesheet lays the count at the top right and, on a small screen, shows only title and bar (the rest is read out).
-  return `<button class="tracker" data-anchor="tracker" data-act="dock" data-d="${t.drawer || 'quests'}"><small class="tk-lb">Goal</small><b>${t.icon || '🎯'} ${esc(t.title)}</b><span class="tk-ds">${esc(t.desc || '')}</span>${t.n ? `<span class="bar green" role="progressbar" aria-valuemin="0" aria-valuemax="${t.n}" aria-valuenow="${Math.min(t.p, t.n)}" aria-label="Goal progress"><i style="width:${f * 100}%"></i></span><small class="mono tk-ct">${t.money ? `${money(Math.min(t.p, t.n))} / ${money(t.n)}` : `${Math.min(+t.p.toFixed(1), t.n)} / ${t.n}`}</small>` : ''}</button>`;
+  return `<button class="tracker" data-anchor="tracker" data-act="dock" data-d="${t.drawer || 'quests'}"><small class="tk-lb">Goal</small><b>${esc(t.title)}</b><span class="tk-ds">${esc(t.desc || '')}</span>${t.n ? `<span class="bar green" role="progressbar" aria-valuemin="0" aria-valuemax="${t.n}" aria-valuenow="${Math.min(t.p, t.n)}" aria-label="Goal progress"><i style="width:${f * 100}%"></i></span><small class="mono tk-ct">${t.money ? `${money(Math.min(t.p, t.n))} / ${money(t.n)}` : `${Math.min(+t.p.toFixed(1), t.n)} / ${t.n}`}</small>` : ''}</button>`;
 }
 
 export function tickerHTML(ctx) {

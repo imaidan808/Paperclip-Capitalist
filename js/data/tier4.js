@@ -145,43 +145,43 @@ export const assets = {
 export const buyers = {
   // ------------------------------------------------------------------ 13 Corporate Valley: committees, deadlines, models
   holdco: {
-    zone: 13, name: 'Halvorsen Holding Co.', icon: '🏦', pop: 0.55,
+    zone: 13, name: 'Halvorsen Holding Co.', pop: 0.55,
     like: { b2b: 1, franchise: 1, industrial: 0.6, infra: 0.5 }, budget: [25000, 420000],
     style: 'hard', patience: 6, bias: 'utility',
     hello: 'Forty years of holding good companies. Convince me yours belongs.',
   },
   franchisor: {
-    zone: 13, name: 'Brightside Franchise Group', icon: '🍔', pop: 0.35,
+    zone: 13, name: 'Brightside Franchise Group', pop: 0.35,
     like: { franchise: 1, vehicle: 0.5, realty: 0.4, b2b: 0.3 }, budget: [18000, 300000],
     style: 'friendly', patience: 5, bias: 'prestige',
     hello: 'Four hundred units, nine states, and a board hungry for territory.',
   },
   lakeshoreHealth: {
-    zone: 13, name: 'Evergreen Health Network', icon: '🏥', pop: 0.65,
+    zone: 13, name: 'Evergreen Health Network', pop: 0.65,
     like: { medical: 1, b2b: 0.4, digital: 0.4 }, budget: [20000, 210000],
     style: 'analytical', patience: 7, bias: 'price',
     hello: 'The committee meets Thursday. Bring numbers it can read aloud, slowly.',
   },
   harbourlinePE: {
-    zone: 13, name: 'Rhea Nair, Harborline Capital', icon: '📊', pop: 0.45,
+    zone: 13, name: 'Rhea Nair, Harborline Capital', pop: 0.45,
     like: { franchise: 0.8, digital: 0.6, industrial: 0.5, b2b: 0.45, finance: 0.4 }, budget: [30000, 450000],
     style: 'analytical', patience: 4, bias: 'story',
     hello: "I've modeled this at three entry multiples already. Where's your floor?",
   },
   altitudeSI: {
-    zone: 13, name: 'Altitude Systems Integrators', icon: '🖥️', pop: 0.75,
+    zone: 13, name: 'Altitude Systems Integrators', pop: 0.75,
     like: { digital: 1, electronics: 0.5, b2b: 0.4 }, budget: [12000, 220000],
     style: 'impulsive', patience: 3, bias: 'scarcity',
     hello: 'My client needs this live by quarter-end. Best number today?',
   },
   pinecrestChain: {
-    zone: 13, name: 'Pinecrest Pharmacy Group', icon: '💊', pop: 0.5,
+    zone: 13, name: 'Pinecrest Pharmacy Group', pop: 0.5,
     like: { medical: 0.9, consumer: 0.6, franchise: 0.5, b2b: 0.4 }, budget: [15000, 240000],
     style: 'friendly', patience: 6, bias: 'utility',
     hello: 'Sixty stores, one purchasing desk. Make it easy to say yes.',
   },
   ironbridgeMfg: {
-    zone: 13, name: 'Ironbridge Manufacturing Group', icon: '⚙️', pop: 0.4,
+    zone: 13, name: 'Ironbridge Manufacturing Group', pop: 0.4,
     like: { industrial: 1, b2b: 0.4, vehicle: 0.4 }, budget: [40000, 380000],
     style: 'hard', patience: 5, bias: 'price',
     hello: "Third-generation plant owners. We buy what big groups can't stomach.",
@@ -189,37 +189,37 @@ export const buyers = {
 
   // ------------------------------------------------------------------ 14 Financial District: sharp, analytical, fast
   harborTrustBank: {
-    zone: 14, name: 'Harbor Trust Commercial Bank', icon: '🏛️', pop: 0.8,
+    zone: 14, name: 'Harbor Trust Commercial Bank', pop: 0.8,
     like: { finance: 0.8, b2b: 0.6, consumer: 0.5, infra: 0.4 }, budget: [60000, 750000],
     style: 'analytical', patience: 6, bias: 'price',
     hello: 'The committee decides in rounds. Show me collateral and clean paper.',
   },
   kestrelFund: {
-    zone: 14, name: 'Kestrel Credit Partners', icon: '🦅', pop: 0.5,
+    zone: 14, name: 'Kestrel Credit Partners', pop: 0.5,
     like: { finance: 0.9, ip: 0.5, media: 0.4, b2b: 0.3 }, budget: [40000, 650000],
     style: 'impulsive', patience: 3, bias: 'scarcity',
     hello: 'Speed is a yield. One number, answered inside a minute.',
   },
   countyTreasurer: {
-    zone: 14, name: 'Ana Ortiz, County Treasurer', icon: '🧮', pop: 0.4,
+    zone: 14, name: 'Ana Ortiz, County Treasurer', pop: 0.4,
     like: { infra: 1, finance: 0.4, realty: 0.3 }, budget: [50000, 450000],
     style: 'friendly', patience: 7, bias: 'utility',
     hello: 'Public money, public scrutiny. I buy boring things on purpose.',
   },
   graniteMutual: {
-    zone: 14, name: 'Granite State Mutual', icon: '☂️', pop: 0.6,
+    zone: 14, name: 'Granite State Mutual', pop: 0.6,
     like: { home: 1, infra: 0.6, realty: 0.5, finance: 0.45 }, budget: [80000, 900000],
     style: 'analytical', patience: 6, bias: 'prestige',
     hello: 'We price risk for a living. Show us the loss ratios.',
   },
   tillmanFactor: {
-    zone: 14, name: 'Tillman Factoring Co.', icon: '🤝', pop: 0.85,
+    zone: 14, name: 'Tillman Factoring Co.', pop: 0.85,
     like: { b2b: 1, consumer: 0.5, finance: 0.4 }, budget: [20000, 260000],
     style: 'hard', patience: 5, bias: 'story',
     hello: "I buy invoices from people who can't wait. Fair, never generous.",
   },
   echoRights: {
-    zone: 14, name: 'Echo Rights Capital', icon: '🎧', pop: 0.25,
+    zone: 14, name: 'Echo Rights Capital', pop: 0.25,
     like: { media: 1, ip: 0.9, finance: 0.4, collectible: 0.3 }, budget: [25000, 320000],
     style: 'friendly', patience: 5, bias: 'scarcity',
     hello: 'We fund songs people hum in the shower. Tell me its story.',
@@ -227,37 +227,37 @@ export const buyers = {
 
   // ------------------------------------------------------------------ 15 Real Estate Row: appraisal-minded, patient
   cobaltReit: {
-    zone: 15, name: 'Cobalt Industrial REIT', icon: '🏙️', pop: 0.8,
+    zone: 15, name: 'Cobalt Industrial REIT', pop: 0.8,
     like: { industrial: 1, realty: 0.7, infra: 0.6, b2b: 0.4 }, budget: [100000, 1700000],
     style: 'hard', patience: 6, bias: 'price',
     hello: 'Cap rate or nothing. What is the net operating income?',
   },
   okaforLandlord: {
-    zone: 15, name: 'Mrs. Adeyemi, 40 Doors', icon: '🔑', pop: 0.7,
+    zone: 15, name: 'Mrs. Adeyemi, 40 Doors', pop: 0.7,
     like: { home: 1, realty: 0.45, consumer: 0.3 }, budget: [60000, 700000],
     style: 'friendly', patience: 7, bias: 'story',
     hello: "Thirty years collecting rent on the first. Don't rush me, dear.",
   },
   tidewaterDev: {
-    zone: 15, name: 'Tidewater Development Group', icon: '🏗️', pop: 0.5,
+    zone: 15, name: 'Tidewater Development Group', pop: 0.5,
     like: { realty: 0.9, prestige: 0.6, home: 0.4, b2b: 0.4 }, budget: [150000, 1900000],
     style: 'impulsive', patience: 3, bias: 'scarcity',
     hello: "They aren't making more land. I'll take the good parcels.",
   },
   nimbusCloud: {
-    zone: 15, name: 'Stratus Cloud Site Team', icon: '☁️', pop: 0.3,
+    zone: 15, name: 'Stratus Cloud Site Team', pop: 0.3,
     like: { infra: 1, digital: 1, b2b: 0.4, energy: 0.4 }, budget: [200000, 2200000],
     style: 'analytical', patience: 5, bias: 'utility',
     hello: 'Power, fiber, cooling. If your hall has all three, name your price.',
   },
   redlineFreight: {
-    zone: 15, name: 'Redline Freight & Logistics', icon: '🚛', pop: 0.6,
+    zone: 15, name: 'Redline Freight & Logistics', pop: 0.6,
     like: { industrial: 0.9, vehicle: 0.6, infra: 0.5, realty: 0.45 }, budget: [80000, 950000],
     style: 'hard', patience: 4, bias: 'utility',
     hello: 'Dock doors and highway access. Everything else is decoration.',
   },
   aldrinOffice: {
-    zone: 15, name: 'Aldrin Family Office', icon: '🪙', pop: 0.35,
+    zone: 15, name: 'Aldrin Family Office', pop: 0.35,
     like: { prestige: 0.8, home: 0.6, luxury: 0.6, finance: 0.5, realty: 0.4 }, budget: [120000, 1600000],
     style: 'friendly', patience: 7, bias: 'prestige',
     hello: 'We think in generations, not quarters. Will it stand in 2090?',
@@ -265,37 +265,37 @@ export const buyers = {
 
   // ------------------------------------------------------------------ 16 Global Exchange: six desks, six ways to value the same thing
   rochatGeneva: {
-    zone: 16, name: 'Rochat & Fils, Geneva', icon: '🏔️', pop: 0.6,
+    zone: 16, name: 'Rochat & Fils, Geneva', pop: 0.6,
     like: { luxury: 1, gem: 0.5, finance: 0.6, collectible: 0.5 }, budget: [150000, 3800000],
     style: 'analytical', patience: 6, bias: 'prestige',
     hello: 'Discretion is part of the price. Papers first, then your number.',
   },
   sanghviMumbai: {
-    zone: 16, name: 'Sanghvi Jewelers, Mumbai', icon: '💍', pop: 0.65,
+    zone: 16, name: 'Sanghvi Jewelers, Mumbai', pop: 0.65,
     like: { gem: 1, luxury: 0.6, collectible: 0.3 }, budget: [100000, 2000000],
     style: 'friendly', patience: 7, bias: 'story',
     hello: 'Sit, have chai. We will haggle properly. It is only polite.',
   },
   laiwingHK: {
-    zone: 16, name: 'Lai Wing Trading, Hong Kong', icon: '🏮', pop: 0.55,
+    zone: 16, name: 'Lai Wing Trading, Hong Kong', pop: 0.55,
     like: { industrial: 0.9, bulk: 0.8, energy: 0.6, luxury: 0.4 }, budget: [200000, 2800000],
     style: 'hard', patience: 4, bias: 'price',
     hello: 'Containers wait for no one. Grade, tonnage, port. Three questions; go.',
   },
   almansooriDubai: {
-    zone: 16, name: 'Al-Mansoori Trading House, Dubai', icon: '👑', pop: 0.5,
+    zone: 16, name: 'Al-Mansoori Trading House, Dubai', pop: 0.5,
     like: { luxury: 0.9, gem: 0.9, collectible: 0.5, bulk: 0.5 }, budget: [150000, 3600000],
     style: 'impulsive', patience: 3, bias: 'scarcity',
     hello: 'The best pieces never reach the window. What did you bring?',
   },
   norlandFund: {
-    zone: 16, name: 'Norland Sovereign Fund', icon: '🧭', pop: 0.3,
+    zone: 16, name: 'Norland Sovereign Fund', pop: 0.3,
     like: { finance: 1, infra: 0.8, energy: 0.6, realty: 0.5 }, budget: [300000, 4500000],
     style: 'hard', patience: 7, bias: 'utility',
     hello: 'We hold for decades and read every page. Take your time.',
   },
   whitcombeMuseum: {
-    zone: 16, name: 'Whitcombe Foundation', icon: '🎨', pop: 0.25,
+    zone: 16, name: 'Whitcombe Foundation', pop: 0.25,
     like: { collectible: 1, luxury: 0.8, prestige: 0.6 }, budget: [120000, 3800000],
     style: 'friendly', patience: 7, bias: 'story',
     hello: 'We acquire for the public, so provenance matters more than price.',

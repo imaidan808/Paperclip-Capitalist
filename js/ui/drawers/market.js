@@ -9,6 +9,7 @@ import { ASSETS, BUYERS, ZONES, ZONE_IDS, FMV_BAND } from '../../config.js';
 import { fitOf, fitMult, fitLabel, FAKE_VALUE } from '../../market.js';
 import { dur, nameOf, knownFake, focusZone, heldIn, beliefLine, fold, flip } from './stock.js';
 import { lessonTitle, lessonGist, rulePhrases, rewardPhrases, grayBreak } from './districttext.js';
+import { avatarHTML } from '../../avatar.js';
 
 const UP = '▲', DOWN = '▼';
 const TABS = ['buyers', 'lots', 'radar', 'exchange'];
@@ -29,8 +30,8 @@ export function satWords(S, vT) {
   if (S < 0.75) return 'Crowded: most sellers pick this buyer.';
   return 'Packed: nearly everyone sells this to them.';
 }
-const BAND = { herd: { g: '⚠', tone: 'bad' }, crowded: { g: '◐', tone: 'warn' }, open: { g: '○', tone: 'info' }, balanced: { g: '●', tone: 'info' }, pioneer: { g: '★', tone: 'good' } };
-const cmChip = (ci) => { const b = BAND[ci.band.id] || BAND.balanced; return `<span class="chip ${b.tone}" title="Creativity multiplier"><span aria-hidden="true">${b.g}</span> ${ci.band.label} ${ci.cm.toFixed(2)}x</span>`; };
+const BAND = { herd: 'bad', crowded: 'warn', open: 'info', balanced: 'info', pioneer: 'good' }; // the chip's tone; its label says which band
+const cmChip = (ci) => `<span class="chip ${BAND[ci.band.id] || BAND.balanced}" title="Creativity multiplier">${ci.band.label} ${ci.cm.toFixed(2)}x</span>`;
 const fitTone = (f) => (f >= 0.85 ? 'good' : f >= 0.5 ? 'info' : 'warn');
 const an = (w) => (/^[aeiou]/i.test(w) ? 'an' : 'a');
 
@@ -97,7 +98,7 @@ function buyersHTML(ctx, z) {
       if (!best || score > best.score) best = { a, fit: c.fit, ci, score };
     }
     const urgent = l.need ? `<span class="badge">Urgent</span> <span class="small">needs ${an(l.need)} ${e(l.need)} item</span>` : '';
-    const verified = l.verified && !l.scam ? '<span class="chip good"><span aria-hidden="true">✓</span> Verified</span>' : '';
+    const verified = l.verified && !l.scam ? '<span class="chip good">Verified</span>' : '';
     const fraudLine = fraud ? '<p class="callout bad small"><b>Fraud.</b> This buyer is not real: a sale would cost you the goods.</p>' : '';
     const vcost = Math.max(0.01, Math.round(l.budget * 0.01 * 100) / 100);
     const verify = g.P.scamRate && !l.verified ? `<button class="btn sm ghost" data-act="market-verify" data-lead="${l.id}" data-fid="mk-v-${l.id}" title="A fraud takes the goods, pays nothing and costs 10 reputation.">Verify this buyer (${m(vcost)})<span class="sr">: ${e(B.name)}</span></button>` : '';
@@ -112,14 +113,14 @@ function buyersHTML(ctx, z) {
       sell = here.length === 0 ? '' : `<p class="small mkt-nosell">${e(WHY[first] || 'Nothing you hold works for this buyer.')}</p>`;
     }
     return `<li class="mkt-lead${l.need ? ' is-urgent' : ''}${fraud ? ' is-fraud' : ''}">
-      <div class="mkt-who"><span class="mkt-av" aria-hidden="true">${B.icon}</span>
+      <div class="mkt-who">${avatarHTML(B.name, B.style, 'mkt-av')}
         <div class="mkt-id"><b class="mkt-name" title="“${e(B.hello)}”">${e(B.name)}</b> ${urgent} ${verified}</div></div>
       <dl class="mkt-meta"><dt>Pays up to</dt><dd class="mono gold">${m(l.budget)}</dd><dt>Leaves in</dt><dd>${dur(l.exp - s.hour)}</dd></dl>
       <div class="bar ${l.need ? 'gold' : ''}" aria-hidden="true"><i data-bar="lead:${l.id}"></i></div>
       ${fraudLine}${fitRow}${sat}${verify}${sell}</li>`;
   };
   const empty = here.length === 0 && leads.length ? `<p class="callout small">You hold nothing to sell in ${e(ZONES[z].short)}. ${s.assets.length ? 'Ship stock in from another district, or buy' : 'Buy'} a lot here.</p>` : '';
-  return `${scamNote}${empty}${use}<ul class="mkt-list">${leads.map(card).join('') || '<li class="k-empty"><span class="k-empty-ic" aria-hidden="true">🕰️</span><p>No buyers right now.</p></li>'}</ul>`;
+  return `${scamNote}${empty}${use}<ul class="mkt-list">${leads.map(card).join('') || '<li class="k-empty"><p>No buyers right now.</p></li>'}</ul>`;
 }
 
 // ---- lots
@@ -146,8 +147,8 @@ function lotsHTML(ctx, z) {
       worth = `<p class="small">Worth about <span class="mono">${m(described)}</span> as described: ${gap >= 0 ? `<b class="green"><span aria-hidden="true">${UP}</span> +${m(gap)}</b>` : `<b class="red"><span aria-hidden="true">${DOWN}</span> -${m(-gap)}</b>`} against the price.</p>`;
     }
     const bel = beliefLine(ctx, l.belief);
-    const read = bel ? `<p class="small${bel.fake ? ' mkt-warnline' : ''}">${bel.fake ? '<span aria-hidden="true">⚠</span> ' : ''}${e(bel.text)}</p>` : (l.probed && l.probed.length ? `<p class="small mute">Looked over with ${l.probed.length} check${l.probed.length === 1 ? '' : 's'}, no conclusion yet.</p>` : '<p class="small mute">Not inspected yet.</p>');
-    const warn = l.warn ? '<p class="callout bad small"><b><span aria-hidden="true">⚠</span> Counterfeit warning.</b> Your street sense flags this one as a fake.</p>' : '';
+    const read = bel ? `<p class="small${bel.fake ? ' mkt-warnline' : ''}">${e(bel.text)}</p>` : (l.probed && l.probed.length ? `<p class="small mute">Looked over with ${l.probed.length} check${l.probed.length === 1 ? '' : 's'}, no conclusion yet.</p>` : '<p class="small mute">Not inspected yet.</p>');
+    const warn = l.warn ? '<p class="callout bad small"><b>Counterfeit warning.</b> Your street sense flags this one as a fake.</p>' : '';
     const short = s.cash < l.price, reason = !full && short ? `You need ${m(l.price - s.cash)} more.` : ''; // a full yard is said once, above the list
     return `<li class="mkt-lot${auction ? ' is-auction' : ''}">
       <span class="mkt-ic" aria-hidden="true">${def.icon}</span>
@@ -164,9 +165,9 @@ function lotsHTML(ctx, z) {
         ${reason ? `<p class="tiny red">${e(reason)}</p>` : ''}
       </div></li>`;
   };
-  return `<p class="small mkt-qual"><span aria-hidden="true">🔎</span> ${e(qualityLine(Z))}</p>
+  return `<p class="small mkt-qual">${e(qualityLine(Z))}</p>
     <p class="tiny mute">Storage here: ${held} of ${cap}${full ? ' <span class="badge red">Full</span>' : ''}</p>${full ? '\n    <p class="small red" id="mk-full">Storage is full here, counting trucks and open swaps. Sell something or ship it out.</p>' : ''}
-    <ul class="mkt-list">${lots.map(card).join('') || '<li class="k-empty"><span class="k-empty-ic" aria-hidden="true">🧺</span><p>No lots right now.</p></li>'}</ul>`;
+    <ul class="mkt-list">${lots.map(card).join('') || '<li class="k-empty"><p>No lots right now.</p></li>'}</ul>`;
 }
 
 // ---- radar
@@ -177,7 +178,7 @@ function radarHTML(ctx, z) {
     <ul class="mkt-list">${rows.map((r) => {
     const held = s.assets.some((a) => a.cls === r.cls && a.zone === z);
     return `<li class="mkt-rrow"><span class="mkt-ic" aria-hidden="true">${ASSETS[r.cls].icon}</span><div class="mkt-body">
-        <p class="mkt-rname"><b>${e(ASSETS[r.cls].name)}</b> to <b><span aria-hidden="true">${BUYERS[r.seg].icon}</span> ${e(BUYERS[r.seg].name)}</b></p>
+        <p class="mkt-rname"><b>${e(ASSETS[r.cls].name)}</b> to <b>${e(BUYERS[r.seg].name)}</b></p>
         <div class="row mkt-chips"><span class="chip ${fitTone(r.fit)}">${fitLabel(r.fit)}</span>${cmChip(r)}${held ? '<span class="chip good">You hold one</span>' : ''}</div>
         <p class="tiny mute">${e(satWords(r.S, r.vT))} (about ${r.vN.toFixed(0)} of ${r.vT.toFixed(0)} recent sales, ${pc(r.S)})</p></div></li>`;
   }).join('') || '<li class="mute">No clear gaps right now.</li>'}</ul>`;
@@ -211,7 +212,7 @@ export function matrixHTML(ctx) {
     <tr><th scope="row">Crates and cash</th><td>${side(o.give.assets, o.give.cash)}${o.give.royalty ? `<br>${m(o.give.royalty.perDay)} a day for ${o.give.royalty.days} days<br><span class="small mute">Counted at no more than a tenth of your net worth. What you cannot pay stays owed.</span>` : ''}</td><td>${side(o.want.assets, o.want.cash)}</td></tr>
     <tr><th scope="row">Fair value</th><td class="mono">${m(chk.va)}</td><td class="mono">${m(chk.vb)}</td></tr>
     <tr><th scope="row">Worth in the new owner's hands</th><td class="mono">${m(myP)} <span class="tiny mute">to you</span></td><td class="mono">${m(theirP)} <span class="tiny mute">to them</span></td></tr>
-    <tr><th scope="row">Fair-value check</th><td colspan="2"><span class="chip ${chk.ok ? 'good' : 'bad'}"><span aria-hidden="true">${chk.ok ? '✓' : '✕'}</span> ${(chk.variance * 100).toFixed(1)}% apart, ${chk.ok ? 'inside' : 'outside'} the limit of ${FMV_BAND * 100}%</span>
+    <tr><th scope="row">Fair-value check</th><td colspan="2"><span class="chip ${chk.ok ? 'good' : 'bad'}">${(chk.variance * 100).toFixed(1)}% apart, ${chk.ok ? 'inside' : 'outside'} the limit of ${FMV_BAND * 100}%</span>
       ${chk.ok ? '' : `<p class="small red">${blockedWhy(g, o, chk)}</p>`}</td></tr></tbody></table>`;
 }
 function exchangeHTML(ctx) {

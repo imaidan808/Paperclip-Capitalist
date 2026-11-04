@@ -5,7 +5,7 @@
 export const CODEX = [
   // ------------------------------------------------------------------ the sixteen district concepts
   {
-    id: 'utility-fit', title: 'Utility and Fit', icon: '🎯', category: 'Value', zone: 1,
+    id: 'utility-fit', title: 'Utility and Fit', category: 'Value', zone: 1,
     summary: "Value is use to a particular buyer. Fit measures how well what you hold matches what they want.",
     body: [
       "A paperclip is worth five cents to a stranger and as much as eight dollars to a student whose SIM tray just jammed. The object did not change. The match did. Every buyer likes certain tags (tool, office, prestige, retro) and every asset carries one to three of them. Fit is how well the two line up, from 0 to 1.",
@@ -29,7 +29,7 @@ export const CODEX = [
     unlock: 'start',
   },
   {
-    id: 'negotiation', title: 'Negotiation', icon: '🤝', category: 'People', zone: 2,
+    id: 'negotiation', title: 'Negotiation', category: 'People', zone: 2,
     summary: "Haggling is a search for a price both sides prefer to walking away. Your first move, patience and read of them decide where it lands.",
     body: [
       "At Flea Market Row almost every price is a conversation. In the Close stage you and the buyer trade offers over a few rounds, and the final price can land anywhere from 0.6x to 1.4x of fair value. Nobody at the stall is trying to be fair to you. They want a deal they like, and so do you.",
@@ -52,7 +52,7 @@ export const CODEX = [
     unlock: { event: 'zone', match: { id: 2 } },
   },
   {
-    id: 'saturation-herd', title: 'The Herd and the Wave', icon: '🐑', category: 'Markets', zone: 3,
+    id: 'saturation-herd', title: 'The Herd and the Wave', category: 'Markets', zone: 3,
     summary: "When everyone chases the same buyer at the same time, the price collapses. Campus waves make the crowd easy to see.",
     body: [
       "Campus Quad runs on a 28-day semester cycle. Demand for paper, training and electronics rises toward the start of term, falls away mid-semester, and swings back. Trends also spread fast here, so a good idea stops being a secret within days. The whole class feels the same wave at once.",
@@ -75,7 +75,7 @@ export const CODEX = [
     unlock: { event: 'zone', match: { id: 3 } },
   },
   {
-    id: 'information-asymmetry', title: 'Information Asymmetry', icon: '🕵️', category: 'Risk', zone: 4,
+    id: 'information-asymmetry', title: 'Information Asymmetry', category: 'Risk', zone: 4,
     summary: "One side knows more than the other. In the Pawn District the seller knows what is real, and you pay for what you cannot check.",
     body: [
       "The Pawn District has a 22% fake rate: about one lot in five on the counter is a fake, piled on the goods easiest to fake. A vintage watch is fake about a third of the time (32% at the start, a little more later), a road bike about one time in ten. The person behind it knows which crate holds the fake. You do not. That gap in what each side knows is information asymmetry, and it decides who wins most trades.",
@@ -98,7 +98,7 @@ export const CODEX = [
     unlock: { event: 'zone', match: { id: 4 } },
   },
   {
-    id: 'working-capital', title: 'Working Capital', icon: '💧', category: 'Finance', zone: 5,
+    id: 'working-capital', title: 'Working Capital', category: 'Finance', zone: 5,
     summary: "Working capital is the cash and quick stock that keeps your machine turning between paying and being paid.",
     body: [
       "Metro Hub is where you stop doing every deal by hand. Managers run cycles for you, and each cycle locks up the money you allocate until it returns. That money is still yours and still counts toward net worth. It just cannot buy anything else until the cycle ends.",
@@ -121,7 +121,7 @@ export const CODEX = [
     unlock: { event: 'zone', match: { id: 5 } },
   },
   {
-    id: 'winners-curse', title: "The Winner's Curse", icon: '🔨', category: 'Risk', zone: 6,
+    id: 'winners-curse', title: "The Winner's Curse", category: 'Risk', zone: 6,
     summary: "In an auction the winner is usually the bidder who overestimated the prize the most. Bid below your estimate.",
     body: [
       "Estate Sales sends 55% of its lots to auction, and many hold boxes whose real value nobody knows for certain. Every bidder makes a private guess. Some guess high, some low. The highest guess wins, which means the winner is the person whose guess was most likely too high.",
@@ -144,7 +144,7 @@ export const CODEX = [
     unlock: { event: 'zone', match: { id: 6 } },
   },
   {
-    id: 'repair-roi', title: 'Repair ROI', icon: '🛠️', category: 'Operations', zone: 7,
+    id: 'repair-roi', title: 'Repair ROI', category: 'Operations', zone: 7,
     summary: "Fixing a broken asset pays only when the value you restore beats what the repair costs. Your Ops level decides which side wins.",
     body: [
       "Auto Row sells broken things on purpose: 6 in 10 of its lots arrive broken, and repairs here cost 25% less (opening the district also takes 10% off repairs everywhere). A broken asset trades at about 30% of its working value, so a repair is a small purchase that can unlock a big jump in price. It can also be a way to spend good money on a bad idea.",
@@ -169,7 +169,7 @@ export const CODEX = [
     unlock: { event: 'zone', match: { id: 7 } },
   },
   {
-    id: 'supply-chain', title: 'Supply Chains', icon: '🚢', category: 'Operations', zone: 8,
+    id: 'supply-chain', title: 'Supply Chains', category: 'Operations', zone: 8,
     summary: "Moving goods from where they are cheap to where they are wanted costs time, money and breakage. Customs can add more.",
     body: [
       "A supply chain is every step between the place something is cheap and the place someone will pay for it. At Harbor Docks that includes the dock itself. Freight to the next district takes six hours (a little longer for each district further on), costs a slice of the cargo's value, and carries a chance of damage that falls as your Ops rises.",
@@ -193,7 +193,7 @@ export const CODEX = [
     unlock: { event: 'zone', match: { id: 8 } },
   },
   {
-    id: 'scale-compliance', title: 'Scale and Compliance', icon: '📋', category: 'Operations', zone: 9,
+    id: 'scale-compliance', title: 'Scale and Compliance', category: 'Operations', zone: 9,
     summary: "As a business grows, rules arrive with it. Compliance is a fixed cost that stings small firms and gets cheaper per dollar at scale.",
     body: [
       "Industrial Park is where size starts to attract attention. At $25,000 net worth (Milestone 2) audits begin, corporate clients open up, and their service levels are written into the deals. None of this is optional, and none of it scales down for a smaller company.",
@@ -216,7 +216,7 @@ export const CODEX = [
     unlock: { event: 'zone', match: { id: 9 } },
   },
   {
-    id: 'obsolescence', title: 'Obsolescence', icon: '📼', category: 'Value', zone: 10,
+    id: 'obsolescence', title: 'Obsolescence', category: 'Value', zone: 10,
     summary: "Some goods lose value because something newer arrives, not because they wear out. In the Tech Corridor, being first matters.",
     body: [
       "A fountain pen is the same pen in ten years. A hot gadget is not the same product in ten days. Obsolescence is value lost to time and novelty rather than wear, and in the Tech Corridor digital goods lose it twice as fast as anywhere else.",
@@ -239,7 +239,7 @@ export const CODEX = [
     unlock: { event: 'zone', match: { id: 10 } },
   },
   {
-    id: 'inventory-risk', title: 'Inventory Risk', icon: '🍎', category: 'Risk', zone: 11,
+    id: 'inventory-risk', title: 'Inventory Risk', category: 'Risk', zone: 11,
     summary: "Stock can spoil, fall in price or sit unsold. Every day you hold it, you carry all three risks.",
     body: [
       "In the Farmland Co-op produce is cheap at harvest and spoils if it waits. Perishable stock loses value each day, and harvest waves flood the district with sellers at the same moment. Storage is limited, with four extra crates once the district is unlocked. Inventory looks like money on your balance sheet but behaves like melting ice.",
@@ -262,7 +262,7 @@ export const CODEX = [
     unlock: { event: 'zone', match: { id: 11 } },
   },
   {
-    id: 'recurring-revenue', title: 'Recurring Revenue', icon: '🔁', category: 'Finance', zone: 12,
+    id: 'recurring-revenue', title: 'Recurring Revenue', category: 'Finance', zone: 12,
     summary: "Income that comes back without a new sale: royalties, rent, subscriptions. It is steadier and slower than flipping.",
     body: [
       "The Creative Quarter sells assets that pay you every day you hold them: media, IP, catalogs. You do not sell them to earn. You keep them. A royalty is a bet on time rather than a bet on a trade, and it behaves very differently from flipping.",
@@ -285,7 +285,7 @@ export const CODEX = [
     unlock: { event: 'zone', match: { id: 12 } },
   },
   {
-    id: 'enterprise-sales', title: 'Enterprise Sales', icon: '🏢', category: 'People', zone: 13,
+    id: 'enterprise-sales', title: 'Enterprise Sales', category: 'People', zone: 13,
     summary: "Few buyers, huge budgets, long contracts and no room for mistakes. One enterprise client can become most of your income.",
     body: [
       "In Corporate Valley the buyers are organizations: IT departments, holding companies, franchise groups. Budgets are large and decisions are slow. You win them by showing you can deliver at scale, not by charm at the counter. The signed contract matters more than any single sale.",
@@ -308,7 +308,7 @@ export const CODEX = [
     unlock: { event: 'zone', match: { id: 13 } },
   },
   {
-    id: 'leverage-risk', title: 'Leverage and Risk', icon: '⚖️', category: 'Finance', zone: 14,
+    id: 'leverage-risk', title: 'Leverage and Risk', category: 'Finance', zone: 14,
     summary: "Borrowing multiplies your returns and your losses by the same amount. The size of the multiplier is the risk.",
     body: [
       "In the Financial District spreads are cheaper and credit is easy to get, so borrowing stops being a rescue and becomes a strategy. Leverage means controlling more assets than your own money buys. When prices rise you keep the whole gain on a bigger position. When they fall you owe the whole loss on that same bigger position.",
@@ -331,7 +331,7 @@ export const CODEX = [
     unlock: { event: 'zone', match: { id: 14 } },
   },
   {
-    id: 'asset-cash-flow', title: 'Assets That Pay', icon: '🏠', category: 'Finance', zone: 15,
+    id: 'asset-cash-flow', title: 'Assets That Pay', category: 'Finance', zone: 15,
     summary: "A property that pays rent turns value into income. It beats borrowing only if the rent covers the cost of the loan.",
     body: [
       "Real Estate Row is built around assets that pay rent. Deals are large, a quarter of the lots are foreclosure auctions and patience is part of the price. In exchange you earn from the first day you own the property, whether or not its price moves, and the district's bonus pays 25% more rent.",
@@ -354,7 +354,7 @@ export const CODEX = [
     unlock: { event: 'zone', match: { id: 15 } },
   },
   {
-    id: 'arbitrage-at-scale', title: 'Arbitrage at Scale', icon: '🌐', category: 'Markets', zone: 16,
+    id: 'arbitrage-at-scale', title: 'Arbitrage at Scale', category: 'Markets', zone: 16,
     summary: "Arbitrage profits from a price gap between two places. At global scale the gap must beat every cost, and trading closes it.",
     body: [
       "The Global Exchange links world markets, and the same asset sells at different prices in different districts. Buying where it is cheap and selling where it is dear is arbitrage. It is the oldest trade there is, and it only works while the gap lasts.",
@@ -378,7 +378,7 @@ export const CODEX = [
   },
   // ------------------------------------------------------------------ the thirty-six core concepts
   {
-    id: 'fair-market-value', title: 'Fair Market Value', icon: '🏷️', category: 'Value',
+    id: 'fair-market-value', title: 'Fair Market Value', category: 'Value',
     summary: "The price a well-informed buyer and seller would agree on today. Everything else in the game is measured against it.",
     body: [
       "Fair market value (FMV) is what an asset would sell for between two informed people, neither of them in a hurry. The game works it out for you: the asset's base price, times a price index built from scarcity, demand and depreciation, times its quality and wear, times any event that is moving the market.",
@@ -401,7 +401,7 @@ export const CODEX = [
     unlock: 'start',
   },
   {
-    id: 'asset-utility-score', title: 'Asset Utility Score', icon: '📊', category: 'Value',
+    id: 'asset-utility-score', title: 'Asset Utility Score', category: 'Value',
     summary: "Scarcity times demand, minus depreciation. A score that sets where an asset's price sits against its base.",
     body: [
       "Every asset has three numbers behind its price. Scarcity: how hard it is to find. Demand: how many people want it where you are standing. Depreciation: how fast it loses its edge. Multiply the first two, subtract the third, and you have the Utility Score, which runs from 0 to about 100 in normal conditions.",
@@ -423,7 +423,7 @@ export const CODEX = [
     unlock: 'start',
   },
   {
-    id: 'creativity-multiplier', title: 'Creativity Multiplier', icon: '💡', category: 'Strategy',
+    id: 'creativity-multiplier', title: 'Creativity Multiplier', category: 'Strategy',
     summary: "Rewards you for selling where few others sell. A crowded channel pays 0.40x and an untouched one up to 3.14x.",
     body: [
       "When you pitch an asset, the game looks at the last 48 hours of sales across your class. V_total counts every pitch of that asset in that district. V_niche counts the ones that went to the same type of buyer you are about to pitch. The more of the crowd sits in your niche, the less your pitch is worth.",
@@ -446,7 +446,7 @@ export const CODEX = [
     unlock: { event: 'pitch' },
   },
   {
-    id: 'market-saturation', title: 'Market Saturation', icon: '🌊', category: 'Markets',
+    id: 'market-saturation', title: 'Market Saturation', category: 'Markets',
     summary: "Saturation S is your niche's share of all recent pitches. The higher it climbs, the less each new pitch earns.",
     body: [
       "Market saturation measures how crowded a channel is. For a given asset in a given district, count every pitch in the last 48 hours (V_total), then count the ones that went to your buyer type (V_niche). S is the second divided by the first, capped at 1. A buyer type that took one pitch in ten has S = 0.10. One that took six in ten has S = 0.60.",
@@ -469,7 +469,7 @@ export const CODEX = [
     unlock: { event: 'pitch', match: { S: { gt: 0.3 } } },
   },
   {
-    id: 'persona-fit', title: 'Persona Fit', icon: '🎭', category: 'People',
+    id: 'persona-fit', title: 'Persona Fit', category: 'People',
     summary: "Every buyer responds to a certain angle: prestige, utility, scarcity, price or story. Match it and they pay more.",
     body: [
       "Two buyers can like the same tag and still want different things said. One wants to hear what an object says about them. Another wants to know what it does. The Pitch stage gives each buyer a bias, the angle they respond to: prestige, utility, scarcity, price or story. You choose two angles to lead with.",
@@ -491,7 +491,7 @@ export const CODEX = [
     unlock: 'start',
   },
   {
-    id: 'urgency-premium', title: 'Urgency Premium', icon: '⏰', category: 'Value',
+    id: 'urgency-premium', title: 'Urgency Premium', category: 'Value',
     summary: "A buyer in a hurry pays for the need, not for your cost. Urgent leads quote the price they will pay.",
     body: [
       "Some buyers arrive with a problem. A student's SIM tray jams. A mechanic needs one bolt before closing. They tell you what they would pay. For these urgent leads the game uses their stated budget as the reference price instead of your asset's fair value, because what matters to them is the fix, not the object.",
@@ -514,7 +514,7 @@ export const CODEX = [
     unlock: 'start',
   },
   {
-    id: 'margin', title: 'Margin and Markup', icon: '🧮', category: 'Finance',
+    id: 'margin', title: 'Margin and Markup', category: 'Finance',
     summary: "Margin is the share of a sale you keep as profit. Markup measures the same profit against your cost. They are not the same number.",
     body: [
       "You buy a pen for $9 and sell it for $12. You made $3. The question is what $3 means. Against what you paid, it is a 33% markup. Against what you sold for, it is a 25% margin. Both are right and they answer different questions: markup is how much you added to cost, and margin is how much of each sale dollar you keep.",
@@ -537,7 +537,7 @@ export const CODEX = [
     unlock: 'start',
   },
   {
-    id: 'depreciation', title: 'Depreciation', icon: '📉', category: 'Value',
+    id: 'depreciation', title: 'Depreciation', category: 'Value',
     summary: "Goods lose value as they age or fall out of style. Holding is never free, and some things melt faster than others.",
     body: [
       "Depreciation is the loss of value over time. In the game it shows up twice. It is subtracted from an asset's Utility Score, which lowers its price index at once, and it wears the asset down a little each day you hold it. Fast-fading goods like trend gadgets lose far more than a steady pen.",
@@ -560,7 +560,7 @@ export const CODEX = [
     unlock: 'start',
   },
   {
-    id: 'opportunity-cost', title: 'Opportunity Cost', icon: '🔀', category: 'Strategy',
+    id: 'opportunity-cost', title: 'Opportunity Cost', category: 'Strategy',
     summary: "What you give up by choosing one thing over the next best. A profit that does not beat the alternative is not really a profit.",
     body: [
       "Every dollar can only be in one place. Put it in a lot and it is not in a manager. Lock it in a manager and it cannot catch a bargain. The opportunity cost of a choice is the value of the best option you passed up. It never appears on a receipt, which is why it is easy to miss.",
@@ -582,7 +582,7 @@ export const CODEX = [
     unlock: 'start',
   },
   {
-    id: 'cash-flow-velocity', title: 'Cash Flow Velocity', icon: '💨', category: 'Finance',
+    id: 'cash-flow-velocity', title: 'Cash Flow Velocity', category: 'Finance',
     summary: "How fast your money goes round the loop. A thin return on a short cycle often beats a fat one on a long cycle.",
     body: [
       "Return per cycle is only half the story. The other half is how many cycles fit in a day. Cash flow velocity is the rate at which your capital completes the loop of buy, improve, sell and reinvest. Two lanes with different margins and different cycle lengths should be compared on return per day, not per cycle.",
@@ -606,7 +606,7 @@ export const CODEX = [
     unlock: 'start',
   },
   {
-    id: 'compounding', title: 'Compounding', icon: '🌱', category: 'Finance',
+    id: 'compounding', title: 'Compounding', category: 'Finance',
     summary: "Profit you reinvest earns profit of its own. Over many cycles the curve bends upward and outruns anything linear.",
     body: [
       "Each cycle you can pocket the profit or put it back in. Reinvested profit joins the stake, and next cycle's return is earned on a bigger base. That is compounding. For a long while it looks dull. Then the curve bends, because each step adds more than the one before.",
@@ -629,7 +629,7 @@ export const CODEX = [
     unlock: { event: 'cycle' },
   },
   {
-    id: 'interest-and-compounding', title: 'Interest on Debt', icon: '🧾', category: 'Finance',
+    id: 'interest-and-compounding', title: 'Interest on Debt', category: 'Finance',
     summary: "Debt grows by a rate, and the rate compounds on a schedule. The cost depends on the percentage and on how often it is added.",
     body: [
       "A loan has a price: a rate charged on what you still owe. In the default rules rates are quoted per 30 days, since a 90-day game would barely feel a yearly rate. Interest accrues every day on your principal and is added to the principal on the facility's schedule (daily for a micro line, weekly for a pipeline loan, monthly for enterprise credit). Once it is added, you pay interest on interest.",
@@ -652,7 +652,7 @@ export const CODEX = [
     unlock: { event: 'draw' },
   },
   {
-    id: 'debt-to-equity', title: 'Debt-to-Equity', icon: '🏋️', category: 'Finance',
+    id: 'debt-to-equity', title: 'Debt-to-Equity', category: 'Finance',
     summary: "Debt divided by what is yours. It tells the Bank, and you, how much of the business is borrowed.",
     body: [
       "Debt-to-equity (D/E) is the amount you owe divided by your net worth. Net worth already has debt subtracted, so it plays the part of equity. A D/E of 0.5 means you owe fifty cents for every dollar that is yours. At 3.0 you owe three dollars.",
@@ -675,7 +675,7 @@ export const CODEX = [
     unlock: { event: 'draw' },
   },
   {
-    id: 'margin-call', title: 'Margin Call', icon: '📞', category: 'Risk',
+    id: 'margin-call', title: 'Margin Call', category: 'Risk',
     summary: "When debt passes 4.5 times your net worth, the Bank sells your biggest assets at a 35% discount until it feels safe.",
     body: [
       "A margin call is a lender's demand for safety when the cushion under its loan gets too thin. In the game it fires when debt-to-equity passes 4.5. The Bank does not ask. It takes your highest-value pipelines, then your highest-value stock, sells them at a 35% fire-sale discount and repays your loans until D/E is back to 3.0.",
@@ -698,7 +698,7 @@ export const CODEX = [
     unlock: { event: 'margin-call' },
   },
   {
-    id: 'collateral', title: 'Collateral', icon: '🔒', category: 'Finance',
+    id: 'collateral', title: 'Collateral', category: 'Finance',
     summary: "Assets a lender can seize if you do not pay. The more you pledge, the more you can borrow, up to a limit.",
     body: [
       "Banks lend against things they can take. Collateral is the asset backing a loan: if you cannot repay, the lender sells it. Because the lender can recover its money from the collateral, it can charge a lower rate and lend more. A loan with nothing behind it costs more and is usually smaller.",
@@ -721,7 +721,7 @@ export const CODEX = [
     unlock: { event: 'zone', match: { id: 5 } },
   },
   {
-    id: 'cac-vs-ltv', title: 'CAC versus LTV', icon: '🧲', category: 'Markets',
+    id: 'cac-vs-ltv', title: 'CAC versus LTV', category: 'Markets',
     summary: "What it costs to win a customer against what they are worth over their lifetime. Aim for at least three to one.",
     body: [
       "A client account is not a sale. It is a stream. Customer acquisition cost (CAC) is what you pay to sign them. Lifetime value (LTV) is what they will pay you before the contract ends, after tax. A healthy business wins customers for much less than it later collects from them.",
@@ -744,7 +744,7 @@ export const CODEX = [
     unlock: { event: 'client' },
   },
   {
-    id: 'sla', title: 'Service Level Agreements', icon: '📜', category: 'Operations',
+    id: 'sla', title: 'Service Level Agreements', category: 'Operations',
     summary: "A promise about how reliably you will deliver, with penalties if you do not. Corporate clients pay well and forgive little.",
     body: [
       "A service level agreement (SLA) turns a client's expectations into terms. In the game it is a number of managers that must be running every day. Meet it and the client pays. Miss it and you pay twice the daily fee as a penalty, and a second miss ends the contract.",
@@ -767,7 +767,7 @@ export const CODEX = [
     unlock: { event: 'zone', match: { id: 9 } },
   },
   {
-    id: 'audit-compliance', title: 'Audits and Compliance', icon: '🔍', category: 'Risk',
+    id: 'audit-compliance', title: 'Audits and Compliance', category: 'Risk',
     summary: "At $25,000 net worth you start getting audited. Filing costs a little. Dodging costs a lot, and more each time.",
     body: [
       "Milestone 2 brings the regulators. Every 15 days an audit event asks for something specific: a filing, a list, some paperwork. You have 72 virtual hours to answer, and three paths: hire a compliance consultant ($1,200), put a manager on compliance for five days, or skip the filing and hope.",
@@ -790,7 +790,7 @@ export const CODEX = [
     unlock: { event: 'milestone', match: { n: 2 } },
   },
   {
-    id: 'tariffs', title: 'Tariffs', icon: '🛃', category: 'Markets',
+    id: 'tariffs', title: 'Tariffs', category: 'Markets',
     summary: "A tax on goods crossing a border. It adds to landed cost and shrinks the price gaps that make arbitrage worth doing.",
     body: [
       "A tariff is a tax charged when goods cross a border. The importer pays it first, and then buyers and sellers share the bill through prices. The game has no duty line, so its Cross-Border Tariff Lock shows the effect another way: international manager lanes slow by four days and repairs outside the four starter districts cost 45% more, while domestic lanes carry on untouched.",
@@ -813,7 +813,7 @@ export const CODEX = [
     unlock: { event: 'shock', match: { kind: 'tariff' } },
   },
   {
-    id: 'credit-crunch', title: 'Credit Crunch', icon: '🧊', category: 'Risk',
+    id: 'credit-crunch', title: 'Credit Crunch', category: 'Risk',
     summary: "When money gets scarce, rates and fees jump and new loans freeze. Floating-rate debt is where it hurts first.",
     body: [
       "A credit crunch is when the cost of borrowing leaps and lenders pull back. In the game's Fed Taper the base rate climbs from 2.5% to 8.5% (+600 bps), the fee on trades rises from 2.5% to 12%, pipeline overhead climbs 20%, and the Bank refuses new loans for 10 days.",
@@ -836,7 +836,7 @@ export const CODEX = [
     unlock: { event: 'shock', match: { kind: 'fed' } },
   },
   {
-    id: 'demand-shock', title: 'Demand Shocks', icon: '⚡', category: 'Markets',
+    id: 'demand-shock', title: 'Demand Shocks', category: 'Markets',
     summary: "A sudden swing in how much people want something. Surges are brief and often end with a hangover.",
     body: [
       "Demand shocks arrive with little notice: a product goes viral, a glut hits the shelves, a rule changes what people buy. The TikTok surge multiplies local demand for trend goods by five for 48 hours. Then fatigue sets in and trend stock loses half its value for 72 hours.",
@@ -859,7 +859,7 @@ export const CODEX = [
     unlock: { event: 'shock', match: { kind: { in: ['tiktok', 'viral', 'glut'] } } },
   },
   {
-    id: 'diversification', title: 'Diversification', icon: '🧺', category: 'Risk',
+    id: 'diversification', title: 'Diversification', category: 'Risk',
     summary: "Spread your bets so one bad thing cannot sink you. It only works when the bets do not move together.",
     body: [
       "Do not put all your eggs in one crate. When you split money across assets, buyers or districts, a loss in one is cushioned by the others. The arithmetic is friendly: with n independent bets of the same size and risk, the swing in your total falls by the square root of n.",
@@ -882,7 +882,7 @@ export const CODEX = [
     unlock: { event: 'hire' },
   },
   {
-    id: 'hedging', title: 'Hedging', icon: '🛡️', category: 'Risk',
+    id: 'hedging', title: 'Hedging', category: 'Risk',
     summary: "Pay a small, known cost to cap a large, uncertain loss. It is insurance, and it only makes sense if the odds justify the premium.",
     body: [
       "Hedging means taking a step now that protects you if something bad happens, at a price you accept either way. Selling part of a position before a shock, repaying floating-rate debt before a crunch and rerouting freight before a tariff are all hedges. You would rather not need them. That is what makes them hedges. (The game has no futures contracts, so every hedge here is an action you take.)",
@@ -905,7 +905,7 @@ export const CODEX = [
     unlock: { event: 'shock' },
   },
   {
-    id: 'anchoring', title: 'Anchoring', icon: '⚓', category: 'People',
+    id: 'anchoring', title: 'Anchoring', category: 'People',
     summary: "The first number on the table pulls everything after it. Open with a number you can defend and negotiate from there.",
     body: [
       "People judge a number by comparison, and the first number they hear becomes the comparison. In a negotiation that opening offer is an anchor: it sets the range that follows. Whoever speaks first usually moves the final price toward themselves.",
@@ -928,7 +928,7 @@ export const CODEX = [
     unlock: 'start',
   },
   {
-    id: 'batna-zopa', title: 'BATNA and ZOPA', icon: '🚪', category: 'People',
+    id: 'batna-zopa', title: 'BATNA and ZOPA', category: 'People',
     summary: "Your best alternative sets your walk-away price. The overlap with theirs is where a deal is possible.",
     body: [
       "BATNA is your Best Alternative To a Negotiated Agreement: what you would do if this talk fails. ZOPA is the Zone Of Possible Agreement: the range of prices both sides would accept. A seller's floor is their BATNA and a buyer's ceiling is theirs. A deal exists only where the two overlap.",
@@ -950,7 +950,7 @@ export const CODEX = [
     unlock: { event: 'haggle' },
   },
   {
-    id: 'adverse-selection', title: 'Adverse Selection', icon: '🍋', category: 'Risk',
+    id: 'adverse-selection', title: 'Adverse Selection', category: 'Risk',
     summary: "When bad deals are the ones most eager to find you, a bargain is a warning, not a gift.",
     body: [
       "Adverse selection happens when the people most likely to accept your terms are the ones you would least want. A seller with a counterfeit has every reason to price it low and move fast. A seller with the genuine article can wait. So among the lots that look cheapest, fakes turn up more often than their share.",
@@ -973,7 +973,7 @@ export const CODEX = [
     unlock: { event: 'buy', match: { fake: true } },
   },
   {
-    id: 'due-diligence', title: 'Due Diligence', icon: '🔬', category: 'Risk',
+    id: 'due-diligence', title: 'Due Diligence', category: 'Risk',
     summary: "Checking before you commit. Spend on information when the expected loss it avoids is bigger than its cost.",
     body: [
       "Due diligence is the work you do before you pay. In the Read stage each probe (look, serial, power-on, paperwork, expert) costs points and returns noisy evidence. The serial check is best at spotting fakes and power-on is best at judging quality. Your Ops skill sets your budget of points and the accuracy of what you learn.",
@@ -996,7 +996,7 @@ export const CODEX = [
     unlock: { event: 'inspect' },
   },
   {
-    id: 'comparative-advantage', title: 'Comparative Advantage', icon: '🧩', category: 'Strategy',
+    id: 'comparative-advantage', title: 'Comparative Advantage', category: 'Strategy',
     summary: "Do the task you give up the least to do, even if someone else is better at everything. Both sides end up with more.",
     body: [
       "Absolute advantage is being better at a task. Comparative advantage is being better relative to your other options: the task where your opportunity cost is lowest. Someone can be faster at both jobs and still gain by handing one of them over.",
@@ -1019,7 +1019,7 @@ export const CODEX = [
     unlock: { event: 'skill' },
   },
   {
-    id: 'specialization', title: 'Specialization', icon: '🎓', category: 'Strategy',
+    id: 'specialization', title: 'Specialization', category: 'Strategy',
     summary: "Focus your skill points and practice and you get very good at a few things. The cost is exposure.",
     body: [
       "Specialization is concentrating effort in a narrow area. Each skill level pays off most when your work flows through it. Ops lowers repair cost steeply (each level multiplies it by 0.42) and lifts restored quality from 0.50 to 1.00 by level 5. Growth gives you more hints about each buyer, which pays across every pitch.",
@@ -1042,7 +1042,7 @@ export const CODEX = [
     unlock: { event: 'skill', match: { level: { gte: 3 } } },
   },
   {
-    id: 'economies-of-scale', title: 'Economies of Scale', icon: '🏭', category: 'Operations',
+    id: 'economies-of-scale', title: 'Economies of Scale', category: 'Operations',
     summary: "Costs that do not grow with volume get spread thinner as you grow. Past a point, growing itself gets pricier.",
     body: [
       "Some costs are fixed: you pay them whether you move $100 or $1,000. A manager's overhead is mostly a flat amount per cycle plus a thin slice of the money allocated. Spread over more money, the flat part shrinks as a share of the cycle. That is an economy of scale: the average cost of each dollar processed falls as volume rises.",
@@ -1065,7 +1065,7 @@ export const CODEX = [
     unlock: { event: 'pipe-level' },
   },
   {
-    id: 'network-effects', title: 'Network Effects', icon: '🕸️', category: 'Strategy',
+    id: 'network-effects', title: 'Network Effects', category: 'Strategy',
     summary: "A network is worth more with each new member, because every member adds possible connections.",
     body: [
       "A telephone is useless alone. Add a second and there is one possible call. Add a tenth and there are forty-five. When a product, a market or a community gets more valuable as more people join, it has a network effect. The number of possible pairs grows far faster than the number of members, though in real networks not every pair is useful, so treat the count as an upper bound.",
@@ -1088,7 +1088,7 @@ export const CODEX = [
     unlock: { event: 'p2p' },
   },
   {
-    id: 'risk-of-ruin', title: 'Risk of Ruin', icon: '🎲', category: 'Risk',
+    id: 'risk-of-ruin', title: 'Risk of Ruin', category: 'Risk',
     summary: "The chance of losing so much that you cannot continue. Small risks repeated often are not small.",
     body: [
       "A bet with a good average can still end your run. Risk of ruin is the probability that a series of choices wipes you out. Ruin is special because there is no coming back: you cannot average out over many tries if an early loss takes you out.",
@@ -1111,7 +1111,7 @@ export const CODEX = [
     unlock: { event: 'streak', match: { n: { gte: 5 } } },
   },
   {
-    id: 'expected-value', title: 'Expected Value', icon: '🪙', category: 'Strategy',
+    id: 'expected-value', title: 'Expected Value', category: 'Strategy',
     summary: "The average outcome of a risky choice, weighting each result by its chance. It is how you compare gambles honestly.",
     body: [
       "Many choices have several possible results. Expected value (EV) multiplies each outcome by its probability and adds the products. It is the average you would get if you could make the same choice many times. A positive EV means the choice pays off on average.",
@@ -1134,7 +1134,7 @@ export const CODEX = [
     unlock: 'start',
   },
   {
-    id: 'eei-score', title: 'The EEI Score', icon: '🏆', category: 'Strategy',
+    id: 'eei-score', title: 'The EEI Score', category: 'Strategy',
     summary: "Your Economic Efficiency Index: how many times you grew your stake, with a bonus for finishing early.",
     body: [
       "The EEI is the game's scoreboard. It divides your final net worth by your starting stake, then multiplies by a time bonus: one plus the fraction of the 90 days still left when you finish. Growing a stake quickly is worth more than growing it slowly.",
@@ -1156,7 +1156,7 @@ export const CODEX = [
     unlock: { event: 'milestone', match: { n: 1 } },
   },
   {
-    id: 'reputation', title: 'Reputation', icon: '⭐', category: 'People',
+    id: 'reputation', title: 'Reputation', category: 'People',
     summary: "Goodwill that follows you from deal to deal. It is what turns one sale into a customer who comes back.",
     body: [
       "Reputation is what buyers, and later partners and clients, expect from you based on how you have dealt before. In a one-off trade you could squeeze every dollar. In a repeated game you cannot, because next time they will remember. A reputation meter from 0 to 100 on your player card keeps track.",
@@ -1179,7 +1179,7 @@ export const CODEX = [
     unlock: { event: 'haggle', match: { deal: true } },
   },
   {
-    id: 'exit-valuation', title: 'Exit Valuation', icon: '🏁', category: 'Finance',
+    id: 'exit-valuation', title: 'Exit Valuation', category: 'Finance',
     summary: "What the business sells for: hard assets plus a multiple of recent profit, less fees and debt.",
     body: [
       "At $250,000 net worth you can sell the business. A trade sale values it at its hard assets plus 6 times your average daily profit over the last 14 days. An IPO uses 10 times but needs a clean audit record. Either way the broker keeps 12%, debt is paid off and the money arrives 48 hours later. Once the Global Exchange is unlocked, exit multiples are 10% richer. (Real deals price years of earnings. The game uses days.)",
@@ -1203,7 +1203,7 @@ export const CODEX = [
   },
   // ------------------------------------------------------------------ four extras
   {
-    id: 'supply-and-demand', title: 'Supply and Demand', icon: '📈', category: 'Markets',
+    id: 'supply-and-demand', title: 'Supply and Demand', category: 'Markets',
     summary: "Price rises when more people want a thing than there is of it, and falls when the reverse is true.",
     body: [
       "Prices are a conversation between how much there is and how many want it. When demand outruns supply, buyers compete and prices rise. When supply outruns demand, sellers compete and prices fall. The game builds this into every asset: scarcity is the supply side, local demand is the other, and the price index moves with both.",
@@ -1226,7 +1226,7 @@ export const CODEX = [
     unlock: 'start',
   },
   {
-    id: 'net-worth', title: 'Net Worth', icon: '💰', category: 'Finance',
+    id: 'net-worth', title: 'Net Worth', category: 'Finance',
     summary: "Everything you own at today's fair value, minus everything you owe. It unlocks districts and drives your score.",
     body: [
       "Net worth is the number the game cares about most. Count your cash, your stock at fair value, the money your managers are working with (at cost), anything on a truck or waiting to settle, and subtract every dollar of debt, interest included. You begin with a paperclip worth five cents.",
@@ -1249,7 +1249,7 @@ export const CODEX = [
     unlock: 'start',
   },
   {
-    id: 'liquidity', title: 'Liquidity', icon: '💱', category: 'Markets',
+    id: 'liquidity', title: 'Liquidity', category: 'Markets',
     summary: "How quickly you can turn something into cash without losing value. The pool is always open, but it charges for speed.",
     body: [
       "An asset is liquid when you can sell it fast at close to its fair value. Cash is perfectly liquid. A van waiting for the right buyer is not. The liquidity pool buys almost anything at once, but it pays fair value minus its friction and fees, and it only has so much money to spend.",
@@ -1272,7 +1272,7 @@ export const CODEX = [
     unlock: { event: 'sell-pool' },
   },
   {
-    id: 'sunk-cost', title: 'Sunk Cost', icon: '🕳️', category: 'Strategy',
+    id: 'sunk-cost', title: 'Sunk Cost', category: 'Strategy',
     summary: "Money already spent is gone whatever you do next. Decide on what lies ahead, not on what you paid.",
     body: [
       "You paid $900 for a pallet. It is worth $620 today and sliding. You tell yourself you cannot sell it for $600 because you would lose $300. But the $900 is gone whether you sell or hold. The $300 loss is already there. Sunk cost is money you have spent and cannot get back.",

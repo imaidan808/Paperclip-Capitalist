@@ -10,7 +10,7 @@ import { FAKE_VALUE } from '../../market.js';
 import { esc } from '../common.js';
 import { benchQuote } from '../../deal.js';
 
-const UP = '▲', DOWN = '▼', FLAT = '▬';
+const UP = '▲', DOWN = '▼';
 
 // ---- the fold every drawer uses: the Codex's pattern (css/styles.css), closed until asked. The shell redraws a drawer whenever its text changes, and that would shut a bare <details> the
 // reader had opened, so the choice lives in ctx.U.fold and the summary is the control (data-act="<drawer>-fold"). A closed fold draws only its summary; `tip` is the same words as a hover.
@@ -69,15 +69,15 @@ function crateHTML(ctx, a, sel) {
   const dPct = paid > 0.0001 ? delta / paid : null;
   const flat = Math.abs(delta) < Math.max(0.005, paid * 0.005);
   const dir = flat ? 'flat' : delta > 0 ? 'up' : 'down';
-  const result = dir === 'flat' ? `<span class="mute"><span aria-hidden="true">${FLAT}</span> About even</span>`
+  const result = dir === 'flat' ? '<span class="mute">About even</span>'
     : `<span class="${dir === 'up' ? 'green' : 'red'}"><span aria-hidden="true">${dir === 'up' ? UP : DOWN}</span><span class="sr">${dir === 'up' ? 'Gain of' : 'Loss of'}</span> ${dir === 'up' ? '+' : '-'}${m(Math.abs(delta))}${dPct == null || Math.abs(dPct) < 0.01 ? '' : ` (${dir === 'up' ? '+' : '-'}${Math.round(Math.abs(dPct) * 100)}%)`}</span>`;
   const held = Number.isFinite(a.got) ? s.hour - a.got : null;
   const badge = fake ? '<span class="badge red">Counterfeit</span>' : broken ? '<span class="badge red">Broken</span>' : '<span class="badge cyan">Working</span>';
   const bel = !fake && !a.known ? beliefLine(ctx, a.belief) : null;
   let read;
-  if (fake) read = '<p class="stk-read stk-fake"><span aria-hidden="true">⚠</span> <b>Worth almost nothing.</b> The pool still takes it.</p>';
-  else if (a.known) read = '<p class="stk-read"><span aria-hidden="true">✓</span> Checked: genuine.</p>';
-  else if (bel) read = `<p class="stk-read${bel.fake ? ' stk-warnline' : ''}">${bel.fake ? '<span aria-hidden="true">⚠</span> ' : ''}${e(bel.text)}</p>`;
+  if (fake) read = '<p class="stk-read stk-fake"><b>Worth almost nothing.</b> The pool still takes it.</p>';
+  else if (a.known) read = '<p class="stk-read">Checked: genuine.</p>';
+  else if (bel) read = `<p class="stk-read${bel.fake ? ' stk-warnline' : ''}">${e(bel.text)}</p>`;
   else read = '<p class="stk-read mute">Not inspected.</p>';
   // small facts: quality, wear, and what the district's rule does to it
   const chips = [];
@@ -92,7 +92,7 @@ function crateHTML(ctx, a, sel) {
     // repair "for about $486" to a founder with $462 whom the bench then turns away.
     const bq = benchQuote(g, a.id);
     if (bq.ok) {
-      const net = bq.after - bq.before - bq.cost, why = bq.affordable ? '' : `<p class="stk-fixwhy small" id="st-fixwhy-${a.id}"><span aria-hidden="true">⚠</span> ${e(bq.blocker)} ${e(NEED_CASH)}</p>`;
+      const net = bq.after - bq.before - bq.cost, why = bq.affordable ? '' : `<p class="stk-fixwhy small" id="st-fixwhy-${a.id}">${e(bq.blocker)} ${e(NEED_CASH)}</p>`;
       fix = `<p class="stk-fix small">Repair costs about <b class="mono">${m(bq.cost)}</b>, up to <b class="mono">${m(bq.most)}</b> if the marker slips, and restores ${Math.round(bq.quality * 100)}% quality: worth <span class="mono">${m(bq.after)}</span>, now <span class="mono">${m(bq.before)}</span>. ${net >= 0 ? `<b class="green"><span aria-hidden="true">${UP}</span> Worth it: +${m(net)}</b>` : `<b class="red"><span aria-hidden="true">${DOWN}</span> Loses ${m(-net)}</b>`}</p>
         ${why}
         <button class="btn sm" data-act="stock-repair" data-id="${a.id}" data-fid="st-fix-${a.id}"${bq.affordable ? '' : ` aria-disabled="true" aria-describedby="st-fixwhy-${a.id}"`}>Repair ${e(def.name)}</button>`;
@@ -153,7 +153,6 @@ function selBarHTML(ctx, sel) {
 
 function emptyHTML() {
   return `<section class="stk-empty" aria-label="Nothing in stock">
-    <span class="stk-empty-ic" aria-hidden="true">📦</span>
     <h3>Your shelves are empty</h3>
     <p>A lot you buy in the Market arrives here as a crate.</p>
     <button class="btn big" data-act="stock-gomarket" data-fid="st-go">Buy your first lot</button>
