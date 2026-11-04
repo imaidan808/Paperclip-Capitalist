@@ -83,7 +83,7 @@ export const UPGRADES = {
   jit: { name: 'Just-In-Time (JIT) Inventory', cost: 2500, zone: 5, blurb: 'Manager cycles 20% shorter, stock decays half as fast, overhead 10% lower.' },
   seo: { name: 'SEO Pipeline Adjustments', cost: 1800, zone: 5, blurb: '+50% buyer arrivals, +8% manager margin, 15% cheaper clients.' },
   freight: { name: 'Bulk Freight Discounts', cost: 1200, zone: 5, blurb: 'Freight costs 40% less.' },
-  research: { name: 'Market Research Suite', cost: 4000, zone: 5, blurb: 'Shock warnings come a tier earlier, and a Radar tab lists the best gaps in your district.' },
+  research: { name: 'Market Research Suite', cost: 4000, zone: 5, blurb: 'Counts as +2 Capital Sourcing for shock warnings (7 days at most), and a Radar tab lists the best gaps in your district.' },
 };
 
 export const CLIENTS = {

@@ -23,7 +23,7 @@ export const PERKS = {
   immigrant: {
     id: 'immigrant', name: 'Immigrant Hustler', icon: '🧳', basis: 'Diaspora networks and informal credit.',
     gain: 'Cheap freight, better margins abroad', loss: 'No bank at first, more audits',
-    strength: 'International margin 1.4x instead of 1.3x, freight 25% cheaper, and a zero-interest Community Circle loan up to 15% of net worth.', cost: 'No bank until net worth reaches $5,000, and audits come 1.4x as often.',
+    strength: 'International lanes earn 1.4x the domestic margin instead of 1.3x, freight 25% cheaper, and a zero-interest Community Circle loan up to 15% of net worth.', cost: 'No bank until net worth reaches $5,000, and audits come 1.4x as often.',
     mods: { intlBonus: 0.10, freightMult: 0.75, circle: { pct: 0.15 }, bankMinNW: 5000, auditMult: 1.4 },
   },
   veteran: {
@@ -41,7 +41,7 @@ export const PERKS = {
   creator: {
     id: 'creator', name: 'Creator', icon: '📱', basis: 'Audience and virality.',
     gain: 'Trend goods sell 30% higher', loss: 'Demand swings, failed pitches hurt',
-    strength: 'Trend goods sell 30% higher, and trend buyers appear for anything you hold.', cost: 'Non-trend demand swings up to 15% every 3 days, and a failed pitch halves buyer arrivals for 2 days.',
+    strength: 'Trend goods sell 30% higher, and trend buyers appear for anything you hold.', cost: 'Non-trend demand swings up to 15% every 3 days. A rejected or no-gain pitch halves buyer arrivals for 2 days.',
     mods: { trendMult: 1.3, trendBuyers: 0.35, volatility: 0.15, flopRep: 8 },
   },
   gigger: {
@@ -59,7 +59,7 @@ export const PERKS = {
   native: {
     id: 'native', name: 'Digital Native', icon: '💻', basis: 'Online reach.',
     gain: 'Digital goods sell anywhere', loss: 'Fake buyers, subscription fees',
-    strength: 'Digital goods +10% value, digital buyers appear in any district, lots refresh 25% faster.', cost: '12% of buyers are fraudulent (checking one costs money), and tool subscriptions take 1.5% of your cash a month.',
+    strength: 'Digital goods +10% value, digital buyers appear in any district, lots refresh 25% faster.', cost: '12% of buyers are fraudulent (verifying costs 1% of their budget). Tool subscriptions take 1.5% of your cash a month.',
     mods: { digitalMult: 1.1, digitalBuyers: true, lotRefresh: 0.25, scamRate: 0.12, subscription: { rate: 0.015 } },
   },
   second: {

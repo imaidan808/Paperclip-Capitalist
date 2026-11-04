@@ -182,7 +182,7 @@ export function specHTML(st) {
   const off = noSpecialty(st.picks), who = st.picks.map((id) => PERKS[id]).find((p) => p.mods.noSpecialty);
   const why = off && who
     ? `${esc(who.name)} has no specialty: all three skills start at level 1. Your pick is kept if you swap it out.`
-    : 'One skill starts at level 3, the others at 1.';
+    : 'One skill starts at level 3, the others at 1. Each level you earn gives a point for any skill.';
   const cards = Object.values(SKILLS).map((k) => `<label class="card pick dr-skill"><input type="radio" name="spec" value="${k.id}" data-change="spec" data-fid="sp-${k.id}"${st.specialty === k.id && !off ? ' checked' : ''}${off ? ' disabled' : ''}> <b>${esc(k.name)}</b><span class="small mute dr-sd">${esc(k.blurb)}</span></label>`).join('');
   return `<fieldset class="dr-spec"${off ? ' disabled' : ''} aria-describedby="dr-spec-why"><legend>Specialty</legend><p class="small mute" id="dr-spec-why">${why}</p><div class="dr-skills">${cards}</div></fieldset>`;
 }

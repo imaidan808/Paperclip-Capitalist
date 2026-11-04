@@ -34,7 +34,7 @@ Pick **two** of twelve. All twelve are balanced against each other. The target i
 | `creator` | Creator | Audience and virality | Trend goods sell 30% higher; trend buyers appear for anything you hold | Algorithm whiplash: your non-trend demand swings +-15% every 3 days; a failed pitch costs buyers' goodwill for 2 days |
 | `gigger` | Side-Hustler | Gig-economy flexibility | Small lots 8% cheaper; +25% XP; pipeline cycles 10% shorter | No safety net: no bank until net worth $2,500; burnout costs you a day of buyers about every 20 days |
 | `roots` | Small-Town Roots | Local reputation | Loyal repeat buyers return with 20% bigger budgets and better trust; overhead -15% | Small pond: 30% fewer buyers in districts beyond tier 2; freight costs 30% more |
-| `native` | Digital Native | Online reach | Digital goods +10% value; digital buyers appear in any district; lots refresh 25% faster | Scam magnet: 12% of buyers are fraudulent unless you verify them; tool subscriptions cost 1.5% of your cash a month |
+| `native` | Digital Native | Online reach | Digital goods +10% value; digital buyers appear in any district; lots refresh 25% faster | 12% of buyers are fraudulent (verifying costs 1% of their budget); tool subscriptions cost 1.5% of your cash a month |
 | `second` | Second-Chance Hustler | Street smarts, but a record | Spots counterfeits (a free warning); +1 inspection probe; 12% cheaper lots in gray-market districts | A record follows you: no bank until net worth $8,000; audit fines are 1.5x |
 | `pro` | Seasoned Pro | Decades of experience and a mentor | Appraisal sense (+2 inspection accuracy); a mentor tip each week; steady hands in haggling | Old school: digital goods -15%; you learn 15% slower; managers cost 10% more |
 

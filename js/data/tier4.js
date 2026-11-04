@@ -23,7 +23,7 @@ export const zones = {
   },
   14: {
     id: 14, name: 'Financial District', short: 'Finance', icon: '💹',
-    blurb: 'Banks and funds buy paper, not products, and loans get cheaper.',
+    blurb: 'Banks and funds buy invoices, bonds and loan books, not products, and your loans get cheaper.',
     teaches: 'leverage-risk', theme: 'finance', tier: 4,
     gate: 500000, scale: 180000, tax: 0.1355, friction: 0.152, pool: 5000000, speed: 4.9, store: 32,
     leadEvery: 3, lotEvery: 4, urgent: 0.071, auto: true, plots: 4,
@@ -47,7 +47,7 @@ export const zones = {
   },
   16: {
     id: 16, name: 'Global Exchange', short: 'Exchange', icon: '🌐',
-    blurb: 'Gems, art and cargo sell at very different prices from district to district.',
+    blurb: 'Gems, watches and cargo sell at very different prices from district to district.',
     teaches: 'arbitrage-at-scale', theme: 'exchange', tier: 4,
     gate: 2500000, scale: 1000000, tax: 0.1545, friction: 0.16, pool: 25000000, speed: 5.5, store: 36,
     // Gray-market luxury is arbitrage by another name (parallel imports), so gray is on and counterfeits are common: a tenth of
