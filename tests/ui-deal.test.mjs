@@ -125,7 +125,7 @@ test('the result screen reveals what the lot really was, what Quick and an exper
   const lot = g.s.lots[4].find((l) => l.mode === 'fixed'); lot.truth = { q: 0.8137, fake: false, defects: [{ id: 'd0', label: 'SECRETFLAW-a' }] };
   const r = start(g, { kind: 'buy', zone: 4, lotId: lot.id }); r.quickAll(); r.finish();
   const h = html(r);
-  for (const want of ['81% condition, genuine', 'SECRETFLAW-a', 'Quick', 'Expert', 'You', 'Why', '+', 'XP', 'Lesson'.slice(0, 0) + 'lesson', 'Continue']) assert.ok(h.toLowerCase().includes(want.toLowerCase()), `result lacks ${want}`);
+  for (const want of ['81% of its described condition, genuine', 'SECRETFLAW-a', 'Quick', 'Expert', 'You', 'Why', '+', 'XP', 'Lesson'.slice(0, 0) + 'lesson', 'Continue']) assert.ok(h.toLowerCase().includes(want.toLowerCase()), `result lacks ${want}`);
   assert.match(h, /aria-label="How you compare"/); assert.match(h, /class="vs quick/); assert.match(h, /class="vs expert/); assert.match(h, /class="vs you/);
   assert.match(h, /<blockquote class="lesson">/);
   const s = start(g, sell(g)); s.quickAll(); s.finish(); const hs = html(s);
@@ -195,7 +195,7 @@ test('toggling Assist mid-deal reaches the game in progress (haggle advice, a wi
 test('Close: first the three openings, then the moves; only legal moves are enabled; the board shows both numbers and the read', { skip: !HAS }, () => {
   const g = world(), r = start(g, fixedLot(g)); r.quick(); r.next();
   let h = UI.closeHTML(model(r));
-  assert.equal((h.match(/data-deal="anchor"/g) || []).length, 3); assert.match(h, /Lowball/); assert.match(h, /Generous/); assert.ok(!/data-deal="hold"/.test(h)); assert.match(h, /Your read of their limit/);
+  assert.equal((h.match(/data-deal="anchor"/g) || []).length, 3); assert.match(h, /Lowball/); assert.match(h, /Generous/); assert.ok(!/data-deal="hold"/.test(h)); assert.match(h, /Your read of their lowest price/);
   r.act({ type: 'anchor', level: 'low' }); h = UI.closeHTML(model(r));
   for (const a of ['hold', 'concede', 'split', 'accept', 'walk']) assert.match(h, new RegExp(`data-deal="${a}"`));
   assert.match(h, /Raise your offer/); assert.match(h, /neg-track/); assert.match(h, /role="img" aria-label="\d+ rounds? left of \d+"/);
@@ -322,6 +322,41 @@ test('css/ui-deal.css uses tokens only: every var() exists, no hex colours, no !
   assert.ok(/@keyframes/.test(css) && /prefers-reduced-motion/.test(base), 'its animations are switched off by the global reduced-motion rule in styles.css');
   assert.match(css, /dialog\.deal/);
   const index = readFileSync(new URL('../index.html', import.meta.url), 'utf8'); assert.match(index, /css\/ui-deal\.css/);
+});
+
+test('css/ui-deal.css keeps the angle bars visible in forced colors: the bar is the only printed sign of how well the goods back an angle', () => {
+  const css = readFileSync(new URL('../css/ui-deal.css', import.meta.url), 'utf8');
+  assert.match(css, /@media \(forced-colors: active\) \{ \.angle \.abar i \{ forced-color-adjust: none; background-color: Highlight; background-image: none; \} \}/, 'a fill that forced colors would paint in the Canvas color is a system color instead');
+  assert.ok(css.indexOf('@media (forced-colors: active) { .angle .abar i') > css.indexOf('.angle .abar i { display: block'), 'and the rule comes after the fill it replaces');
+});
+
+test('the folds keep what the player opened across the sheet\'s paints, and each summary holds the keyboard (data-fid)', { skip: !HAS }, () => {
+  const g = world(), fold = (h, key) => new RegExp(`<details class="deal-(?:more|log)" data-fold="${key}"( open)?><summary data-fid="fold-${key}">`).exec(h);
+  const opened = (h, key) => { const m = fold(h, key); assert.ok(m, `${key}: a fold with a data-fid on its summary`); return !!m[1]; };
+  const reads = start(g, fixedLot(g)), picks = start(g, sell(g)), bids = start(g, auctionLot(g)); bids.quick(); bids.next(); assert.equal(bids.key, 'bid');
+  for (const [run, key, build] of [[reads, 'probes', UI.readHTML], [picks, 'angles', UI.pitchHTML], [bids, 'moods', UI.bidHTML]]) {
+    assert.equal(opened(build(model(run)), key), false, `${key}: shut until the player opens it`);
+    assert.equal(opened(build({ ...model(run), open: { [key]: true } }), key), true, `${key}: open when the session says so`);
+    assert.equal(opened(build({ ...model(run), open: { other: true } }), key), false, `${key}: and only for its own key`);
+  }
+  const done = start(g, fixedLot(g)); done.quick(); done.next(); done.quick(); done.finish();
+  assert.equal(opened(UI.resultHTML({ ...model(done), open: { why: true } }), 'why'), true, 'Why this result');
+  const talk = (open) => UI.castHTML({ cast: { name: 'Dev', role: 'buyer', icon: 'x', hello: 'hi', style: 'steady' }, says: ['one', 'two'], say: 'two', open });
+  assert.equal(opened(talk({ log: true }), 'log'), true, 'Talk so far'); assert.equal(opened(talk(undefined), 'log'), false);
+  const src = readFileSync(new URL('../js/ui/deal.js', import.meta.url), 'utf8');
+  assert.ok(!/<details class="deal-(more|log)">/.test(src), 'no fold is written by hand: each comes from foldHTML, which keeps its state and its data-fid');
+  assert.match(src, /m\.open = session\.open/); assert.match(src, /d\.addEventListener\('toggle', onToggle, true\)/); assert.match(src, /d\.removeEventListener\('toggle', onToggle, true\)/);
+  assert.match(src, /const onToggle = \(e\) => \{ const k = e\.target\?\.dataset\?\.fold; if \(k\) ses\.open\[k\] = !!e\.target\.open; \};/);
+});
+
+test('a paint keeps the fold the player opened: a probe, a pick, a bid and the Assist box do not shut it', { skip: !HAS }, () => {
+  const { g, ctx, last } = fresh(), ses = UI.openDeal(ctx, fixedLot(g));
+  assert.ok(/data-fold="probes"><summary data-fid="fold-probes">/.test(last()), 'the Read opens with its fold shut');
+  ses.open.probes = true; // what the sheet's toggle listener writes when the player opens it
+  ses.acts.probe({ dataset: { id: 'look' } }); assert.ok(/data-fold="probes" open>/.test(last()), 'a probe draws the sheet again, and the fold is as it was left');
+  ses.open.probes = false; ses.acts.probe({ dataset: { id: 'serial' } }); assert.ok(/data-fold="probes"><summary/.test(last()), 'and a fold the player shut stays shut');
+  const a = fresh(), as = UI.openDeal(a.ctx, auctionLot(a.g)); as.run.quick(); as.acts.next(); assert.equal(as.run.key, 'bid');
+  as.open.moods = true; as.acts.bid(); assert.ok(/data-fold="moods" open>/.test(a.last()), 'a bid does not shut the moods');
 });
 
 test('the keyboard: every control is a real button or input, Stop answers Space and Enter, and focus goes to the new stage', () => {

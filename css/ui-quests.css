@@ -46,6 +46,7 @@
 .qs-skill header { display: flex; gap: .5rem; align-items: center; flex-wrap: wrap; justify-content: space-between; }
 .qs-skill h4 { margin: 0; font-size: 1rem; }
 .qs-skill p { margin: 0; }
+.qs-skill .cx-more > :not(summary) { margin-inline: .75rem; } /* the same: the fold's paragraph keeps its inset */
 .qs-pips { display: flex; gap: .22rem; flex-wrap: wrap; align-items: center; }
 .qs-pip { width: 1.05rem; height: 1.05rem; display: inline-block; border: 2px solid var(--field); }
 .qs-pip.on { background: var(--gold); border-color: var(--gold); }

@@ -12,6 +12,7 @@ The voice is dignified and assured. It says what is true, in the fewest words, a
 6. **The player's words.** Name a control as the screen does (Look it over, Done reading, Quick deal). The tests read the screens' sources for those labels.
 7. **American spelling**, "district" never "zone", no em or en dashes, no emoji in prose.
 8. **Never "free"** in public copy (README, llms.txt, index.html, 404.html): the game is sold to universities.
+9. **A hover defines; the screen instructs.** Hover adds detail. What a choice turns on is printed, and a fact that changes what the reader does is also in a fold or a screen-reader span: a `title` is not shown on a keyboard or a touch screen.
 
 ## Where the words live
 
@@ -21,15 +22,18 @@ The voice is dignified and assured. It says what is true, in the fewest words, a
 | The Draft: Backgrounds, specialty | `js/data/perks.js` (`gain` and `loss` are the card's headlines; `strength` and `cost` are the exact claims, shown on hover and focus), `js/config.js` (SKILLS), `js/ui/draft.js` |
 | The Academy: scene, coach lines, hints, gist, why, math, question | `js/meta/academy.js` (the file's header lists what each field is for), `js/ui/academy.js` (cards), `css/ui-academy.css` |
 | The Codex | `js/meta/codex.js`, `js/ui/drawers/codex.js` (a page opens on its summary; explanation, math and mistakes fold) |
-| Drawers | `js/ui/drawers/*.js` |
+| Drawers | `js/ui/drawers/*.js`. A district's rule, reward and lesson are written once, from the data and the Codex's own titles, in `js/ui/drawers/districttext.js`: Travel and Market print them and nothing restates them. |
+| District rules, buyers' lines, the Backgrounds' exact claims, skills, upgrades, clients, loans | `js/data/*.js`, `js/config.js`. A district has no blurb: what makes it different is its rules, printed from the data. A buyer's line is the character's voice, short and in character. |
 | The Deal Room: stages, result | `js/ui/deal.js`, `js/deal.js`, `js/play/*.js` (a buyer's lines are the character's, not the game's voice) |
 | Quests and the Goal card | `js/meta/quests.js` |
 | Debrief, instructor | `js/ui/debrief.js`, `js/ui/instructor.js`, `docs/FACULTY_KIT.md` |
-| Engine notes and the ticker | `js/engine.js`, `js/config.js` (EVENTS, AUDIT_THEMES) |
+| Engine notes, refusals and the ticker | `js/engine.js`, `js/session.js`, `js/config.js` (EVENTS, AUDIT_THEMES). A note a sound depends on carries a `kind` (and `amt`, `z`): reword it freely, never drop the tag. One message for one action: a result that carries the facts writes no second note |
+| The Cash and Net worth windows, the settings dialog | `js/ui/shell.js` (`worthRows`), `js/ui/common.js`, `js/audio/settings.js`. What a row is for is its hover for a mouse and the same words in the fold under the section for a keyboard and a finger (a title reaches neither); the footnote folds |
 
 ## What holds it
 
 - `tests/copy.test.mjs`: the claims against the engine (net worth, exit), the Backgrounds' headlines against their full claims, the banned phrases, the folded result.
+- `tests/copy2-data.test.mjs`, `copy2-debrief.test.mjs` and `copy2-debrief-mount.test.mjs`, `copy2-deal.test.mjs`, `copy2-drawers.test.mjs`, `copy2-messages.test.mjs`: every claim the second pass corrected, recomputed from the engine or the config; each fails on the old text. The data, deal, Debrief and drawers files hold the figures in the words they print; the messages file: the sound of every note the engine writes is held by its kind, not its words; the figures in notes and refusals are recomputed from the engine and the config; the Breakdown adds up to the net worth.
 - `tests/meta-academy.test.mjs`: every number a lesson quotes, and the limits (scene 80 to 190 characters, a coach line 30 to 200, a gist 60 to 160).
 - `tests/meta-codex.test.mjs`: every figure a Codex page quotes.
 - `tests/page-budget.test.mjs`: the first screen has a limit (`BUDGET.firstKB`, 320 KB gzipped since 2026-11-03). Words cost bytes: the fold styles are written once in `css/styles.css`.

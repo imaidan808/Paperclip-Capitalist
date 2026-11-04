@@ -269,7 +269,7 @@ test('the markup names each reason: aria-describedby on the rows, no disabled op
   assert.ok(!/<option value="custom"[^>]*disabled/.test(audioSettingsHTML({ ...audioDefaults(), game: false, quiet: true }, 'running')), 'Custom is not "unavailable"');
   assert.ok(/<option value="custom" selected>/.test(audioSettingsHTML({ ...audioDefaults(), game: false, quiet: true }, 'running')));
   assert.ok(!/value="custom"/.test(audioSettingsHTML(audioDefaults(), 'running')));
-  assert.match(audioSettingsHTML(audioDefaults(), 'running'), /World sounds \(hover ticks and footsteps\)[\s\S]*Keyboard shortcut: M/);
+  assert.match(audioSettingsHTML(audioDefaults(), 'running'), /World sounds[\s\S]*Keyboard shortcut: M/);
 });
 test('the status line never says sound is on when nothing can be heard, and says what is off', () => {
   const a = audioDefaults();

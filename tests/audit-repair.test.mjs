@@ -137,7 +137,7 @@ test('Swap guardrail is not a free counterfeit detector: a refusal made on a hid
   assert.ok(A.createOffer({ to: 'BBB', giveIds: [good.id], want: { assets: [B.pub(want)], cash: 0 } }).ok, 'a genuine crate at the same price goes through');
   // the numbers a refusal DOES give are the ones the owner can already see: the described values
   const wild = A.createOffer({ to: 'BBB', giveIds: [put(A, 'bike', 1).id], giveCash: 0, want: { assets: [], cash: price * 3 } });
-  assert.equal(wild.ok, false); assert.match(wild.msg, /Extreme Asymmetric/); assert.ok(A.out.some((m) => m.t === 'flag'));
+  assert.equal(wild.ok, false); assert.match(wild.msg, /Blocked: the two sides are \d+% apart/); assert.ok(A.out.some((m) => m.t === 'flag'));
   // the acceptor, too: their own unknown counterfeit is refused without its worth
   const fake2 = put(B, 'bike', 1, { truth: { q: 1, fake: true, defects: [] } });
   const offer = { id: 'Of', from: 'AAA', fromHandle: 'A', to: 'BBB', give: { assets: [], cash: price, royalty: null }, want: { assets: [B.pub(fake2)], cash: 0 }, skills: {} };
@@ -853,7 +853,7 @@ test('Swap preview (low): a bid for a crate from a district the buyer has not op
   const o = { give: { assets: [], cash: Math.round(landing), royalty: null }, want: { assets: [pubX], cash: 0 } }, chk = A.checkOffer(o);
   assert.equal(chk.ok, false, 'the preview refuses it too'); assert.equal(chk.flagged, false, 'and does not call it extreme');
   const wild = A.checkOffer({ give: { assets: [], cash: 1, royalty: null }, want: { assets: [pubX], cash: 0 } }); assert.equal(wild.flagged, true, 'a real lopsided deal is extreme both ways');
-  const asked = A.createOffer({ to: 'BBB', giveCash: 1, want: { assets: [pubX], cash: 0 } }); assert.match(asked.msg, /Extreme Asymmetric/); assert.ok(A.out.some((m) => m.t === 'flag'));
+  const asked = A.createOffer({ to: 'BBB', giveCash: 1, want: { assets: [pubX], cash: 0 } }); assert.match(asked.msg, /Blocked: the two sides are \d+% apart/); assert.ok(A.out.some((m) => m.t === 'flag'));
   const src = readFileSync(new URL('../js/ui/drawers/market.js', import.meta.url), 'utf8'); assert.match(src, /chk\.flagged/);
   void market;
 });

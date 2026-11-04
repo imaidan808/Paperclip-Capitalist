@@ -96,7 +96,7 @@ function conceptsHTML(ctx) {
   const U = ctx.U, all = listOf(ctx), got = all.filter((e) => e.unlocked).length;
   const cats = CATEGORIES.filter((c) => all.some((e) => e.def.category === c));
   return `<div class="cx-bar2"><label class="sr" for="cx-q">Search the Codex</label><input id="cx-q" type="search" data-input="codex-search" data-fid="cx-q" placeholder="Search what you have unlocked" value="${esc(U.codexQ || '')}" autocomplete="off"></div>
-    <div class="dtabs cx-cats" role="group" aria-label="Categories"><button class="btn sm ghost" data-act="codex-cat" data-cat="" aria-pressed="${!U.codexCat}">All</button>${cats.map((c) => `<button class="btn sm ghost" data-act="codex-cat" data-cat="${esc(c)}" aria-pressed="${U.codexCat === c}">${esc(c)}</button>`).join('')}</div>
+    <div class="dtabs cx-cats" role="group" aria-label="Categories"><button class="btn sm ghost" data-fid="cx-cat-all" data-act="codex-cat" data-cat="" aria-pressed="${!U.codexCat}">All</button>${cats.map((c) => `<button class="btn sm ghost" data-fid="cx-cat-${esc(c)}" data-act="codex-cat" data-cat="${esc(c)}" aria-pressed="${U.codexCat === c}">${esc(c)}</button>`).join('')}</div>
     <p class="small mute cx-count">${got} of ${all.length} unlocked. Play to unlock the rest.</p>
     <div data-cx-results>${resultsHTML(ctx)}</div>`;
 }
@@ -148,7 +148,7 @@ export default {
     U.codexTab ||= 'concepts';
     if (!U.codexOpen) { U.codexOpen = true; const fresh = unseenIds(ctx); U.codexNew = new Set(fresh); markSeen(U, fresh); }
     const open = U.codexOpenId && listOf(ctx).find((e) => e.def.id === U.codexOpenId && e.unlocked);
-    const tabs = `<div class="dtabs cx-tabs" role="group" aria-label="Codex sections"><button class="btn sm ghost" data-act="codex-tab" data-tab="concepts" aria-pressed="${U.codexTab === 'concepts'}">Concepts</button><button class="btn sm ghost" data-act="codex-tab" data-tab="academy" aria-pressed="${U.codexTab === 'academy'}">Academy</button></div>`;
+    const tabs = `<div class="dtabs cx-tabs" role="group" aria-label="Codex sections"><button class="btn sm ghost" data-fid="cx-tab-concepts" data-act="codex-tab" data-tab="concepts" aria-pressed="${U.codexTab === 'concepts'}">Concepts</button><button class="btn sm ghost" data-fid="cx-tab-academy" data-act="codex-tab" data-tab="academy" aria-pressed="${U.codexTab === 'academy'}">Academy</button></div>`;
     if (U.codexTab === 'academy') return `${tabs}${academyHTML(ctx)}`;
     return `${tabs}${open ? entryHTML(ctx, open.def) : conceptsHTML(ctx)}`;
   },

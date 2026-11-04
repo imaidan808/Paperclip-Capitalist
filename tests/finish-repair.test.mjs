@@ -140,7 +140,7 @@ test('F6: the faculty kit\'s recovery flow names the controls the dashboard and 
 
 test('F7: the Ops blurb promises what Ops does: cheaper working lots, but a dearer wreck (and the rest of it is held in tests/leftovers.test.mjs)', () => {
   assert.doesNotMatch(SKILLS.ops.blurb, /lower sourcing prices/);
-  assert.match(SKILLS.ops.blurb, /cheaper working lots, but wrecks ask more as Ops rises/);
+  assert.match(SKILLS.ops.blurb, /cheaper working lots, but dearer wrecks/);
   // the engine: a sound lot gets cheaper with Ops (97% of its value at Ops 1, 2.5 points less each level, never under 84%), a wreck dearer (1.00 times its as-is value at Ops 1, 1.21 at Ops 2)
   const lot = (ops) => Math.max(ECON.lotDiscLo, ECON.lotDiscHi - 0.025 * (ops - 1)), wreck = (ops) => Math.max(ECON.brokenLo, 1 - ECON.brokenSlope * (ops - 1));
   assert.ok(lot(4) < lot(1) && wreck(4) > wreck(1), 'the two prices move opposite ways with Ops');
@@ -531,10 +531,9 @@ test('round 2 A2: the sale that is paid at the crate\'s real condition says what
     assert.equal(sm.ok, true, how);
     const line = sm.lines[0], paid = sm.numbers.you;
     assert.ok(Math.abs(paid / said - lot) < 0.01, `${how}: the price paid ${paid} is ${lot} of the price the Close agreed, ${said} (the lot's real condition)`);
-    assert.equal(line, `The talk closed at ${$(said)}. The buyer then checked the crate and found it at 90% of the condition it was described at, so the sale closed at ${$(paid)}.`, `${how}: the card says both prices and why`);
+    assert.equal(line, `The talk closed at ${$(said)}. The buyer checked the crate, found it at 90% of its described condition, and paid ${$(paid)}.`, `${how}: the card says both prices and why`);
     assert.ok(sm.headline.includes($(paid)), `${how}: and the headline's price is the second one`);
-    const cond = sm.reasons.find((r) => r.label === 'Condition'); assert.ok(cond, `${how}: the Why list has the reason`); assert.match(cond.text, /really 90% of the condition it was described at, so the buyer paid x0\.90 of the price the talk closed at\./);
-    assert.ok(sm.reasons.findIndex((r) => r.label === 'Haggle') + 1 === sm.reasons.indexOf(cond), `${how}: right after the Haggle reason`);
+    assert.ok(!sm.reasons.some((r) => r.label === 'Condition'), `${how}: the line says it, and the Why list does not say it a second time`);
   }
 });
 
@@ -562,7 +561,7 @@ test('round 2 A2: the Close stage tells a lot-bought crate\'s seller, once the p
   run.act({ type: 'anchor', level: 'high' }); run.act({ type: 'hold' }); run.act({ type: 'accept' });
   const callout = /<div class="callout good">(Agreed at [^<]*)<\/div>/.exec(html());
   assert.ok(callout, 'the stage\'s callout');
-  assert.match(callout[1], new RegExp(`^Agreed at ${$(run.res.close.price).replace(/\$/g, '\\$')}\\. The buyer checks the crate before paying, so the price you are paid follows its real condition and can come out below this\\.$`));
+  assert.match(callout[1], new RegExp(`^Agreed at ${$(run.res.close.price).replace(/\$/g, '\\$')}\\. The buyer checks the crate before paying, so its real condition moves the price\\.$`));
   const walk = D.startRun(dealDay(), { kind: 'sell', assetId: undefined, leadId: 'antique-dealer' }); assert.equal(walk.ok, false, 'a deal with no crate does not start');
 });
 
@@ -570,8 +569,8 @@ test('round 2 A2: the sale card says what "the crate\'s value" is: the market va
   for (const [id, cls, lead, prep] of [['m10', 'antiqueFurniture', 'antique-dealer', dealDay], ['m05', 'van', 'fleet-buyer', () => { const g = sandboxOf('m05'); const f = D.startRun(g, { kind: 'repair', assetId: assetOf(g, 'van').id }); f.act({ type: 'careful' }); f.finish(); return g; }]]) {
     const g = prep(), a = assetOf(g, cls), market = g.val(a);
     const run = D.startRun(g, { kind: 'sell', assetId: a.id, leadId: lead }); run.quickAll(); const sm = run.finish();
-    const vs = sm.lines.find((l) => /against the crate's value|times the crate's value/.test(l));
-    assert.ok(vs, `${id}: the comparison stays`); assert.ok(vs.includes(`of ${$(market)}, what the market values it at now`), `${id}: "${vs}" names the market value ${$(market)}`);
+    const vs = sm.lines.find((l) => /the crate's market value/.test(l));
+    assert.ok(vs, `${id}: the comparison stays`); assert.ok(vs.includes(`market value of ${$(market)}`), `${id}: "${vs}" names the market value ${$(market)}`);
     assert.equal(sm.title, 'Sold below market', `${id}: the verdict is the same, and now it is explained`);
   }
 });

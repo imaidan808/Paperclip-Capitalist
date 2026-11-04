@@ -15,26 +15,22 @@
 export const zones = {
   1: {
     id: 1, name: 'The Scrap Yard', short: 'Scrap Yard', icon: '🏭', theme: 'scrap', tier: 1,
-    blurb: 'You start here with one paperclip and no cash. Climb the barter ladder, and learn that an urgent buyer pays for what they need, not what it cost.',
     teaches: 'utility-fit', gate: 0, scale: 1, tax: 0, friction: 0.1, pool: 5000, speed: 1, store: 10, leadEvery: 3, lotEvery: 4, urgent: 0.45,
     auto: false, plots: 0, palette: ['#5b5b1f', '#b5651d'], rules: {}, bonus: {},
   },
   2: {
     id: 2, name: 'Flea Market Row', short: 'Flea Market', icon: '🎪', theme: 'market', tier: 1,
-    blurb: 'A bazaar of canvas stalls where every deal can be haggled and sealed boxes are a gamble on condition. Learn to anchor and to walk away.',
     teaches: 'negotiation', gate: 20, scale: 6, tax: 0.01, friction: 0.104, pool: 5000, speed: 1.3, store: 12, leadEvery: 3, lotEvery: 4, urgent: 0.3,
     auto: false, plots: 0, palette: ['#c4571a', '#ffc93c'], rules: { haggle: true }, bonus: {},
   },
   3: {
     id: 3, name: 'Campus Quad', short: 'Campus', icon: '🎓', theme: 'campus', tier: 1,
-    blurb: 'Books, notes and gadgets rise and fall on a 28-day semester wave, and cheap trends spread fast. Learn why the crowd favorite stops paying.',
     teaches: 'saturation-herd', gate: 80, scale: 25, tax: 0.02, friction: 0.108, pool: 5000, speed: 1.6, store: 13, leadEvery: 3, lotEvery: 4, urgent: 0.25,
     auto: false, plots: 0, palette: ['#9b3b2f', '#2f9e5b'],
     rules: { season: { period: 28, amp: 0.35, tags: ['paper', 'training', 'electronics'] } }, bonus: {},
   },
   4: {
     id: 4, name: 'Pawn District', short: 'Pawn', icon: '💍', theme: 'pawn', tier: 1,
-    blurb: 'About one lot in five is a fake and a third of the stock goes to auction. Inspect before you bid: the seller always knows more than you do.',
     teaches: 'information-asymmetry', gate: 250, scale: 90, tax: 0.03, friction: 0.112, pool: 5000, speed: 1.9, store: 15, leadEvery: 3, lotEvery: 5, urgent: 0.2,
     auto: false, plots: 0, palette: ['#0e6f6b', '#e3b341'], rules: { fakes: 0.22, auction: 0.35, gray: true }, bonus: {},
   },
@@ -108,32 +104,32 @@ export const buyers = {
   // ================================================================== The Scrap Yard
   student: {
     zone: 1, name: 'Wen, stressed student', icon: '🎒', pop: 0.9, like: { tool: 1, office: 0.7, paper: 0.7, prestige: 0.55 }, budget: [0.1, 8],
-    style: 'impulsive', patience: 4, bias: 'utility', hello: 'My thesis is due at nine and nothing is holding it together. Got a clip?',
+    style: 'impulsive', patience: 4, bias: 'utility', hello: 'Thesis due at nine, pages everywhere. Got a clip?',
     holds: [{ cls: 'pen' }, { cls: 'paperbacks' }, { cls: 'oddHardware' }],
   },
   mechanic: {
     zone: 1, name: 'Hector, yard mechanic', icon: '🔧', pop: 0.7, like: { vehicle: 0.9, scrap: 0.9, industrial: 0.85, tool: 0.6, electronics: 0.3 }, budget: [0.4, 14],
-    style: 'analytical', patience: 5, bias: 'utility', hello: "Everything on this lot runs if you know where to hit it. What've you got?",
+    style: 'analytical', patience: 5, bias: 'utility', hello: 'Everything runs if you know where to hit it. Got anything?',
     holds: [{ cls: 'bike', cond: 'broken' }, { cls: 'radio', cond: 'broken' }, { cls: 'oddHardware' }, { cls: 'scrap' }],
   },
   scrapper: {
     zone: 1, name: 'Big Lou, scrap broker', icon: '🏗️', pop: 0.8, like: { scrap: 1, industrial: 0.8, vehicle: 0.4, tool: 0.4 }, budget: [0.3, 12],
-    style: 'hard', patience: 4, bias: 'price', hello: "Weight is weight. Put it on the scale and we'll talk numbers.",
+    style: 'hard', patience: 4, bias: 'price', hello: 'Weight is weight. Put it on the scale.',
     holds: [{ cls: 'scrap' }, { cls: 'oddHardware' }],
   },
   marguerite: {
     zone: 1, name: 'Marguerite, retired seamstress', icon: '🧵', pop: 0.45, like: { home: 1, retro: 0.7, tool: 0.6, paper: 0.5 }, budget: [0.2, 7],
-    style: 'friendly', patience: 6, bias: 'story', hello: 'I keep a drawer of small useful things. Tell me where yours has been.',
+    style: 'friendly', patience: 6, bias: 'story', hello: 'A drawer of useful things. Tell me where yours has been.',
     holds: [{ cls: 'fleaRecords' }, { cls: 'pen' }, { cls: 'paperbacks' }],
   },
   barista: {
     zone: 1, name: 'Lucia, food-truck barista', icon: '☕', pop: 0.5, like: { office: 0.8, retro: 0.5, paper: 0.5, consumer: 0.4 }, budget: [0.2, 6],
-    style: 'friendly', patience: 5, bias: 'price', hello: 'Orders are piling up and my pen just died. Make me a fair offer?',
+    style: 'friendly', patience: 5, bias: 'price', hello: 'Pen died, orders piling up. Make me an offer.',
     holds: [{ cls: 'pen' }, { cls: 'paperbacks' }],
   },
   dmitri: {
     zone: 1, name: 'Dmitri, junk sculptor', icon: '🎨', pop: 0.3, like: { scrap: 0.8, collectible: 0.6, retro: 0.5, industrial: 0.5, tool: 0.4 }, budget: [0.3, 10],
-    style: 'impulsive', patience: 4, bias: 'scarcity', hello: 'I weld whatever the yard throws away. Show me something with a story.',
+    style: 'impulsive', patience: 4, bias: 'scarcity', hello: 'I weld what the yard throws away. Show me a story.',
     holds: [{ cls: 'fleaBox' }, { cls: 'scrap' }, { cls: 'oddHardware' }],
   },
 
@@ -145,17 +141,17 @@ export const buyers = {
   },
   dolores: {
     zone: 2, name: 'Dolores, apartment stager', icon: '🛋️', pop: 0.65, like: { home: 1, retro: 0.7, consumer: 0.4, paper: 0.4 }, budget: [1, 48],
-    style: 'friendly', patience: 6, bias: 'story', hello: 'Three shelves of charm by Friday. Charm costs extra, dear.',
+    style: 'friendly', patience: 6, bias: 'story', hello: 'Three shelves of charm by Friday. Nothing too new, dear.',
     holds: [{ cls: 'paperbacks' }, { cls: 'radio' }, { cls: 'dormFridge' }],
   },
   tariq: {
     zone: 2, name: 'Tariq, street busker', icon: '🎷', pop: 0.45, like: { media: 1, electronics: 0.6, retro: 0.5, tool: 0.3 }, budget: [0.8, 36],
-    style: 'impulsive', patience: 3, bias: 'utility', hello: 'My amp is dead and my crowd is already here. Anything with a speaker?',
+    style: 'impulsive', patience: 3, bias: 'utility', hello: "Amp's dead and the crowd is here. Anything with a speaker?",
     holds: [{ cls: 'fleaRecords' }, { cls: 'pen' }],
   },
   burt: {
     zone: 2, name: 'Burt, mystery-box gambler', icon: '🎲', pop: 0.7, like: { collectible: 0.9, consumer: 0.6, trend: 0.5 }, budget: [1, 55],
-    style: 'impulsive', patience: 3, bias: 'scarcity', hello: "Sealed means anything could be inside. That's why I love it.",
+    style: 'impulsive', patience: 3, bias: 'scarcity', hello: "Sealed means anything could be inside. That's the fun.",
     holds: [{ cls: 'fleaBox' }, { cls: 'enamelPins' }],
   },
   okonkwo: {
@@ -165,7 +161,7 @@ export const buyers = {
   },
   walt: {
     zone: 2, name: 'Walt, retired handyman', icon: '🛠️', pop: 0.4, like: { tool: 1, scrap: 0.7, electronics: 0.5, home: 0.4 }, budget: [0.8, 32],
-    style: 'analytical', patience: 5, bias: 'utility', hello: "If it has a screw, I can fix it. If it doesn't, I'll add one.",
+    style: 'analytical', patience: 5, bias: 'utility', hello: "Has a screw? I can fix it. No screw? I'll add one.",
     holds: [{ cls: 'oddHardware' }, { cls: 'radio', cond: 'broken' }, { cls: 'bike', cond: 'broken' }, { cls: 'dormFridge', cond: 'broken' }],
   },
 
@@ -187,7 +183,7 @@ export const buyers = {
   },
   bree: {
     zone: 3, name: 'Bree, campus thrift flipper', icon: '🤳', pop: 0.9, like: { trend: 1, fashion: 0.9, collectible: 0.6, consumer: 0.4 }, budget: [4, 140],
-    style: 'impulsive', patience: 3, bias: 'scarcity', hello: 'Everyone will be wearing it by Friday. I need it by Thursday.',
+    style: 'impulsive', patience: 3, bias: 'scarcity', hello: "Everyone's wearing it by Friday. I need it Thursday.",
     holds: [{ cls: 'spiritHoodies' }, { cls: 'enamelPins' }],
   },
   kenji: {
@@ -197,7 +193,7 @@ export const buyers = {
   },
   jonah: {
     zone: 3, name: 'Jonah, commuting grad student', icon: '🚌', pop: 0.55, like: { vehicle: 0.9, outdoor: 0.7, consumer: 0.5, home: 0.4 }, budget: [3, 110],
-    style: 'hard', patience: 4, bias: 'price', hello: 'Three buses to campus. A bike would give me an hour back every day.',
+    style: 'hard', patience: 4, bias: 'price', hello: 'Three buses to campus. A bike gives me an hour back.',
     holds: [{ cls: 'bike', cond: 'broken' }, { cls: 'graphCalc' }],
   },
 
@@ -219,17 +215,17 @@ export const buyers = {
   },
   hollis: {
     zone: 4, name: 'Hollis, gigging guitarist', icon: '🎤', pop: 0.55, like: { media: 1, retro: 0.8, collectible: 0.4, electronics: 0.3 }, budget: [20, 450],
-    style: 'friendly', patience: 6, bias: 'story', hello: 'A string snapped mid-song last night. I need something that sounds right.',
+    style: 'friendly', patience: 6, bias: 'story', hello: 'String snapped mid-song last night. I need one that sounds right.',
     holds: [{ cls: 'pawnGuitar', cond: 'broken' }],
   },
   dexCourier: {
     zone: 4, name: 'Dex, bike courier', icon: '🛵', pop: 0.6, like: { vehicle: 0.9, outdoor: 0.8, electronics: 0.5, tool: 0.4 }, budget: [12, 300],
-    style: 'impulsive', patience: 3, bias: 'utility', hello: "Forty drops a day. If it rolls and it's cheap, I'm listening.",
+    style: 'impulsive', patience: 3, bias: 'utility', hello: 'Forty drops a day. Cheap and rolling gets my money.',
     holds: [{ cls: 'bike' }],
   },
   ines: {
     zone: 4, name: 'Ines, freelance video editor', icon: '🎬', pop: 0.5, like: { electronics: 1, digital: 0.9, media: 0.6, training: 0.4 }, budget: [35, 800],
-    style: 'analytical', patience: 5, bias: 'utility', hello: 'Render deadline in two days and my laptop just died. Specs matter.',
+    style: 'analytical', patience: 5, bias: 'utility', hello: 'Render due in two days and my laptop died. Specs matter.',
     holds: [{ cls: 'pawnLaptop', cond: 'broken' }],
   },
 };

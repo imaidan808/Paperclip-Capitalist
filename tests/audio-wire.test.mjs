@@ -270,7 +270,7 @@ test('wireGame: a shock, its warning note and a margin call: at most two sentenc
   r.settle(60);
   assert.ok(r.played()['alert.shock'] >= 1); assert.ok(r.E.stats().maxSentences <= 2);
   r.clk.advance(6000); const before = r.played()['alert.margin-call'] || 0;
-  c.emit({ type: 'margin-call' }); c.S.emit('note', { h: 120, level: 'bad', text: 'MARGIN CALL: debt-to-equity passed 4.5. The bank is liquidating assets at a 35% fire-sale discount.', alert: { code: 'X', name: 'Margin Liquidation Protocol', level: 3 } }); c.emit({ type: 'insolvent' });
+  c.emit({ type: 'margin-call' }); c.S.emit('note', { h: 120, level: 'bad', text: 'Margin call: debt-to-equity passed 4.5. The bank is selling your assets at a 35% discount.', alert: { code: 'X', name: 'Margin call', level: 3 } }); c.emit({ type: 'insolvent' });
   r.settle(100);
   assert.equal(r.played()['alert.margin-call'] - before, 1);
   assert.ok(r.E._voices.length <= 12);

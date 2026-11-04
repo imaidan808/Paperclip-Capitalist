@@ -184,7 +184,7 @@ test('digital goods can be routed to the district that pays most', () => {
   ctx.confirmBox = (title, body, ok, fn) => { box = { title, body }; ctx._confirm = fn; };
   acts['stock-route']({ dataset: {} });
   assert.match(box.title, /Route/);
-  assert.match(box.body, /arrives after <b>48 virtual hours/);
+  assert.match(box.body, /arrives after <b>48 hours/);
   ctx._confirm();
   assert.ok(!g.s.assets.some((x) => x.id === a.id));
   assert.ok(g.s.settle.length >= 1, 'routed sales settle later');

@@ -47,7 +47,7 @@ function lotsAt(ops, seed, zone = 7) {
 
 test('L1: the Ops blurb says what Ops does, and each part of it is true in the engine', () => {
   const b = SKILLS.ops.blurb;
-  assert.equal(b, 'Cheaper, better repairs and cheaper working lots, but wrecks ask more as Ops rises. Less pipeline overhead.'); // (copy pass, 2026-11-03: the same four claims in fewer words; each is held below)
+  assert.equal(b, 'Cheaper, better repairs and cheaper working lots, but dearer wrecks. Less manager overhead.'); // (copy pass, 2026-11-03: the same four claims in fewer words, and the player's word, manager, for what the engine calls a pipeline; each is held below)
   assert.doesNotMatch(b, /sourcing/i, 'Ops does not lower every sourcing price');
   assert.doesNotMatch(b, /friction/i, 'friction is the pool haircut and the taxes, which Ops does not touch; what it lowers is a manager\'s overhead');
   assert.ok(b.length < 160, 'it fits a Draft card');
@@ -182,7 +182,7 @@ test('L3: V2_DESIGN section 11 quotes the managers-against-hand-play figures tha
 // ============================================================================================================================ L4. the faculty kit against the screens
 test('L4: every control and label the faculty kit names is one a screen really has', () => {
   const kit = read('docs/FACULTY_KIT.md'), ui = read('js/ui/instructor.js') + read('js/main.js') + read('js/ui/debrief.js');
-  const names = ['Create a room', 'Join a classroom', 'Copy student link', 'Access', 'Close room', 'Start simulation', 'Pause', 'Resume', 'Rewind 1 day', 'Pace preset', 'Deploy to cohort',
+  const names = ['Create a room', 'Join a classroom', 'Copy student link', 'Display and sound', 'Close room', 'Start simulation', 'Pause', 'Resume', 'Rewind 1 day', 'Pace preset', 'Deploy to cohort',
     'Transaction friction', 'Compliance audit frequency', 'Synthetic classmates filling the market', 'Demo students on this dashboard', 'EEI starting-capital floor', 'Algorithmic surprise events',
     'Inject Credit Crunch now', 'Export gradebook CSV', 'Keep this room', 'Show the recovery code', 'Copy the recovery code', 'Resume as instructor', 'Take the room back', 'Reopen room', 'Download workbook (.md)',
     'Global engine step controls', 'Manual black swan trigger', 'Asymmetric risk scaling', 'Live cohort metrics', 'Operational bottlenecks', 'Flagged peer trades', 'Roster and gradebook',
@@ -196,8 +196,9 @@ test('L4: every control and label the faculty kit names is one a screen really h
   // the gradebook's columns, in order, are the ones the kit lists
   const head = /const rows = \[\[([^\]]+)\]/.exec(read('js/ui/instructor.js'))[1].split(',').map((s) => s.trim().replace(/'/g, ''));
   assert.deepEqual(head.slice(0, 7), ['founder_id', 'alias', 'background_1', 'background_2', 'district_reached', 'level', 'net_worth']);
-  assert.equal(head.at(-1), 'virtual_days_played');
-  assert.equal(head.length, 17);
+  assert.equal(head.at(-2), 'virtual_days_played');
+  assert.equal(head.at(-1), 'adaptability_graded', 'the last column says whether the adaptability figure was graded or the neutral one');
+  assert.equal(head.length, 18);
 });
 
 // ============================================================================================================================ L5. rewind and inject while the room is taking itself back
@@ -236,8 +237,8 @@ test('L5: a room taken back refuses a rewind or a shock until it has heard the c
   r = back.rewind(2); assert.equal(r.ok, true); assert.ok(sent.some((m) => m.t === 'rewind' && m.toHour === 24 * 38), 'two days back from the class\'s own hour: ' + JSON.stringify(sent.find((m) => m.t === 'rewind')));
   r = back.inject('fed', { when: 0 }); assert.equal(r.ok, true); assert.ok(sent.some((m) => m.t === 'inject'));
   // the dashboard reports a refusal as one
-  assert.match(read('js/ui/instructor.js'), /rewind\(b\) \{ const r = S\.rewind\(\+b\.dataset\.d\); toast\(r && r\.ok === false \? r\.msg : 'Rewind sent to all students\.'/);
-  assert.match(read('js/ui/instructor.js'), /deploy\(\) \{ const r = S\.inject\([^\n]*toast\(r && r\.ok === false \? r\.msg : 'Event deployed to the cohort\.'/);
+  assert.match(read('js/ui/instructor.js'), /rewind\(b\) \{ const r = S\.rewind\(\+b\.dataset\.d\); toast\(r && r\.ok === false \? r\.msg : 'Rewind sent to the students who are online\.'/);
+  assert.match(read('js/ui/instructor.js'), /deploy\(\) \{ const r = S\.inject\([^\n]*toast\(r && r\.ok === false \? r\.msg : 'Event deployed to the students who are online\.'/);
 });
 
 // ============================================================================================================================ L7. Begin asks before it replaces a saved run

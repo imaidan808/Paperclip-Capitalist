@@ -162,11 +162,11 @@ test('A4: the words about the tone, for every state it can be in', () => {
   assert.match(dialInfo({ dial: true, mute: true }).why, /sound is off/); assert.match(dialInfo({ dial: true, master: 0 }).why, /volume is at 0/); assert.match(dialInfo({ dial: true, game: false }).why, /game sounds are off/);
   assert.equal(dialInfo({ dial: true, mute: true }).heard, false); assert.equal(dialInfo({ dial: true, mute: true }).on, true, 'it is on, and it is not heard');
   const off = dialEarText(dialInfo({}));
-  assert.match(off, /^Prefer to listen\? Turn on Repair dial tone with the Dial tone switch next to Sound, or in Display and sound\./); assert.match(off, /Careful: pay more, no timing/);
+  assert.match(off, /^To follow the marker by ear, turn on Dial tone next to Sound or in Display and sound\./); assert.match(off, /Careful needs no timing\./);
   assert.match(dialEarText(dialInfo({ dial: true })), /^Repair dial tone is on: low on the left, high on the right, and brighter inside the green zone\./);
   assert.match(dialEarText(dialInfo({ dial: true, mute: true })), /is on, but you will not hear it because sound is off \(press Sound\)\./);
   assert.match(dialEarText(dialInfo({ dial: true, quiet: true })), /^Repair dial tone is off in Classroom\./);
-  for (const i of [dialInfo({}), dialInfo({ dial: true }), dialInfo({ quiet: true }), dialInfo({ dial: true, mute: true })]) assert.match(dialEarText(i), /Careful: pay more, no timing/, 'the way that needs no timing is always named');
+  for (const i of [dialInfo({}), dialInfo({ dial: true }), dialInfo({ quiet: true }), dialInfo({ dial: true, mute: true })]) assert.match(dialEarText(i), /Careful needs no timing\./, 'the way that needs no timing is always named');
   assert.match(dialAnnounceText(dialInfo({})), /^Fix\. A marker moves across a bar by itself: press Stop when it is in the green zone\. If you cannot see it, choose Careful: pay more, no timing\. Or turn on Repair dial tone/);
   assert.ok(!/Repair dial tone/.test(dialAnnounceText(dialInfo({ quiet: true }))), 'in Classroom it does not offer what is not there');
   assert.match(dialAnnounceText(dialInfo({ dial: true })), /follow the marker by ear/);
@@ -206,15 +206,15 @@ const model = (run, extra = {}) => ({ ...D.modelOf(run, { reduced: !!extra.reduc
 test('A4: the animated Fix stage tells a player who cannot see the dial what to press, where the tone is, and that Careful needs no timing', { skip: !HAS }, () => {
   const g = world(), r = D.startRun(g, brokenCrate(g)), h = UI.fixHTML(model(r));
   assert.match(h, /<div class="dial" role="group" aria-label="Repair timing"><div class="dial-track" aria-hidden="true">/, 'the track is a picture; the group around it is named');
-  assert.match(h, /<p class="small mute" id="dial-ear">Prefer to listen\? Turn on Repair dial tone with the Dial tone switch next to Sound, or in Display and sound\. Prefer not to time it\? Choose Careful: pay more, no timing\.<\/p>/);
+  assert.match(h, /<p class="small mute" id="dial-ear">To follow the marker by ear, turn on Dial tone next to Sound or in Display and sound\. Careful needs no timing\.<\/p>/);
   assert.match(h, /<button class="btn big" data-deal="stop" data-snd data-fid="stop" aria-describedby="dial-short" autofocus>Stop<\/button>/, 'the cursor lands on Stop, which reads the SHORT line (fourth round, U9: forty words at every cursor stop of every step were too many)');
   assert.match(h, /<span class="sr" id="dial-short">Dial tone is off\. Careful needs no timing\.<\/span>/);
-  assert.match(h, /Watch the marker\. Press <b>Stop<\/b> \(or Space, or Enter\)/); assert.match(h, /data-deal="careful"[^>]*>Careful: pay more, no timing</);
+  assert.match(h, /Press <b>Stop<\/b>, Space or Enter when the marker is inside the green zone\./); assert.match(h, /data-deal="careful"[^>]*>Careful: pay more, no timing</);
   assert.equal([...h.matchAll(/ id="dial-ear"/g)].length, 1, 'one id');
   const on = UI.fixHTML(model(r, { dialInfo: dialInfo({ dial: true }) })), muted = UI.fixHTML(model(r, { dialInfo: dialInfo({ dial: true, mute: true }) })), cls = UI.fixHTML(model(r, { dialInfo: dialInfo({ dial: true, quiet: true }) }));
   assert.match(on, /Repair dial tone is on: low on the left/); assert.match(muted, /you will not hear it because sound is off/); assert.match(cls, /off in Classroom/);
   for (const x of [on, muted, cls]) assert.match(x, /Careful: pay more, no timing/);
-  assert.ok(!/dial-ear|Prefer to listen/.test(UI.fixHTML(model(r, { reduced: true }))), 'under reduced motion the dial is a slider with its own words and nobody is pushed');
+  assert.ok(!/dial-ear|follow the marker by ear/.test(UI.fixHTML(model(r, { reduced: true }))), 'under reduced motion the dial is a slider with its own words and nobody is pushed');
   assert.match(UI.fixHTML(model(r, { reduced: true })), /aria-valuetext="Dial at 20%/);
 });
 test('A4: a repair room has a Dial tone switch beside Sound; no other room has one, and neither has the result', { skip: !HAS }, () => {
@@ -364,9 +364,9 @@ test('U1: the tone is not started for a room whose dial is not running (reduced 
 test('U9: Stop is described by a short line, always; the long line is for the first repair of a run, and a later repair shows the short one under the dial', { skip: !HAS }, () => {
   const g = world(), r = D.startRun(g, brokenCrate(g));
   const first = UI.fixHTML(model(r, { dialLong: true })), later = UI.fixHTML(model(r, { dialLong: false })), unknown = UI.fixHTML(model(r));
-  assert.match(first, /aria-describedby="dial-short"/); assert.match(first, /id="dial-ear">Prefer to listen\?/, 'the first says it all, where it can be read');
+  assert.match(first, /aria-describedby="dial-short"/); assert.match(first, /id="dial-ear">To follow the marker by ear/, 'the first says it all, where it can be read');
   assert.match(later, /aria-describedby="dial-ear"/); assert.match(later, /id="dial-ear">Dial tone is off\. Careful needs no timing\.<\/p>/); assert.ok(!/id="dial-short"/.test(later), 'one line, not two');
-  assert.ok(!/Prefer to listen/.test(later), 'and the long one is not under every dial of every repair');
+  assert.ok(!/follow the marker by ear/.test(later), 'and the long one is not under every dial of every repair');
   assert.match(unknown, /aria-describedby="dial-short"/, 'a model that does not know is the first');
   assert.equal(dialShortText(dialInfo({ dial: true })), 'Dial tone is on. Careful needs no timing.'); assert.match(dialShortText(dialInfo({ dial: true, mute: true })), /you will not hear it/); assert.match(dialShortText(dialInfo({ dial: true, quiet: true })), /off in Classroom/);
   assert.ok(dialShortText(dialInfo({ dial: true })).split(/\s+/).length <= 12, 'a dozen words');

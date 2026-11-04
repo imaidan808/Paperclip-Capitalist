@@ -77,7 +77,8 @@ test('a same-browser classroom works as the dashboard says: the plain student li
     assert.deepEqual(rows, [{ pid: pidAda, handle: 'Ada', online: true }, { pid: pidGrace, handle: 'Grace', online: true }]);
     assert.match(await inst.eval(`document.querySelector('#igrade').innerText`), /Ada[\s\S]*Grace|Grace[\s\S]*Ada/);
     const head = await inst.eval(`document.querySelector('#ih .small').textContent`);
-    assert.match(head, /this browser only \(students join from other tabs of this browser with Copy student link; other devices need a relay\)/);
+    assert.match(head, /Room [A-Z0-9]{3,8} .{0,3} this browser only \(other devices need a relay\) .{0,3} 2 students online/); // (copy pass, part 2: who cannot join is in front, and what the room line means is on hover)
+    assert.match(await inst.eval(`document.querySelector('#ih .small [title]').title`), /^Students join from other tabs of this browser with Copy student link\.$/);
     assert.doesNotMatch(head, /\?room=|slot/);
 
     // ---- 4. a message each way, and between the students

@@ -18,6 +18,16 @@ const fin = (x, d) => (typeof x === 'number' && !Number.isNaN(x) ? x : d); // +-
 const own = (o, k) => typeof k === 'string' && Object.prototype.hasOwnProperty.call(o, k); // ids come from the UI and the network: never index a plain object by them unchecked
 const DE_CAP = 999; // a debt-to-equity figure that is logged or shown is finite: nothing left to divide by reads as 999, not Infinity (JSON writes Infinity as null)
 const money = (x) => (x < 0 && Math.abs(x) >= 0.005 ? '-' : '') + (Math.abs(x) < 100 ? '$' + Math.abs(x).toFixed(2) : '$' + Math.round(Math.abs(x)).toLocaleString('en-US')); // -$12.50, as the rest of the product writes it, not $-12.50
+// whole dollars from $100 up would hide a gap under a dollar: then both go to the cent, the cost up and the balance down
+const lack = (cost, have, thing) => {
+  const shown = (x) => Number(money(x).replace(/[$,]/g, ''));
+  let need = money(cost), got = money(have);
+  if (have >= 0 && shown(have) >= shown(cost)) {
+    const cents = (c) => '$' + (c / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), up = Math.max(1, Math.ceil(cost * 100 - 1e-6));
+    need = cents(up); got = cents(Math.min(Math.floor(have * 100 + 1e-6), up - 1));
+  }
+  return fail(`Need ${need} for ${thing}; you have ${got}.`);
+};
 const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`; // "1 day", "2 days"
 const uniq = (ids) => [...new Set(ids)]; // an id list from outside may repeat an id: one crate is one crate
 const isNum = (x) => typeof x === 'number' && Number.isFinite(x); // a real number: not NaN, not +-Infinity, not a string (JSON turns Infinity into null)
@@ -28,6 +38,8 @@ const ROYALTY_MSGS = 12; // messages (each a day's rate) one stream may send in 
 const UNTRADEABLE = 'This crate cannot be traded at that price.'; // the whole of what a refusal made on a crate's hidden truth may say
 const XP_CALL = 1e6, POINTS_CALL = 1000, XP_MAX = LEVEL_XP * 99 * 99; // what one grant may add (a corrupt or hostile amount), and the most XP a run can hold (level 100): the level loop below is bounded by it
 const ROYALTY_NW = 0.1; // a promised royalty is worth at most this share of what its promiser is worth
+const FULL = 'Storage is full here, counting trucks and open swaps. Sell something or ship it out.';
+const AUTO_LOCKED = 'Hiring and manager upgrades are locked until you answer your Regulatory Audit.';
 const SKILL_XP_DAY = 300; // the most experience one kind of skill game pays in a virtual day: more reads than that are practice, not progress (a Quick Read of every fresh lot in every district used to double a whole run's XP)
 
 export class Game {
@@ -96,6 +108,14 @@ export class Game {
   _evInstance(kind, start, extra = {}) {
     const d = EVENTS[kind];
     return { id: extra.id || `${kind}@${start}`, kind, name: d.name, start, phases: d.phases, level: d.level, alert: d.alert, short: d.short, warned: false, started: false, ...extra };
+  }
+
+  /** An event's alert with the days of this start: the config says "Day 45" (a shock that starts at midnight), and an instructor can deploy it on any day and hour, so the days move with the start and a start after midnight says its hour. */
+  _alert(ev) {
+    const a = ev.alert || {}, d = EVENTS[ev.kind]?.day, h = ev.start % 24, ok = (t) => d && typeof t === 'string';
+    const mv = (t) => (ok(t) ? t.replace(/Day (\d+)/g, (m, n) => 'Day ' + (+n + Math.floor(ev.start / 24) + 1 - d)) : t);
+    const hr = (t) => (ok(t) && h ? t.replace(/Day \d+/, (m) => `${m} at ${h < 10 ? '0' : ''}${h}:00`) : t);
+    return { ...a, name: ev.name, level: ev.level, start: ev.start, readout: hr(mv(a.readout)), vars: (a.vars || []).map(mv), enforcement: mv(a.enforcement) };
   }
 
   // ------------------------------------------------------------------ small helpers
@@ -343,7 +363,7 @@ export class Game {
     if (this.s.hour >= TOTAL_HOURS && !this.s.over) this._finish();
     return n;
   }
-  /** The clearing horizon. An exit that has not settled by now settles at the bell (the run must not end with its proceeds parked for ever); otherwise the score is struck here. */
+  /** The bell on day 90. An exit that has not settled by now settles at the bell (the run must not end with its proceeds parked for ever); otherwise the score is struck here. */
   _finish() {
     const s = this.s;
     if (s.exiting) this._finishExit();
@@ -352,7 +372,7 @@ export class Game {
       s.final = { nw, eei: eeiCalc(nw, s.startCapital, this.daysRemaining(), this.env.difficulty.eeiFloor), hour: s.hour };
       s.over = true;
     }
-    this.note('info', 'Day 90. The clearing horizon has closed. Open the debrief to see your Economic Efficiency Index.', { final: true });
+    this.note('info', 'Day 90. The run is complete. The debrief shows your Economic Efficiency Index.', { final: true });
   }
 
   stepHour() {
@@ -398,7 +418,7 @@ export class Game {
       const Z = ZONES[id];
       if (nw < Z.gate) break; // gates ascend
       this._openZone(id);
-      this.note('good', `${Z.name} is open. ${Z.blurb}`, { zone: id });
+      this.note('good', `${Z.name} is open.`, { zone: id });
       this.emit('zone', { id });
     }
     for (const [k, z] of Object.entries(MIL_ZONE)) {
@@ -407,9 +427,9 @@ export class Game {
       const n = +k.slice(1);
       if (k === 'm2') s.auditNext = s.hour;
       this.note(k === 'm2' ? 'warn' : 'good',
-        k === 'm1' ? `Milestone 1: ${money(MIL.m1)} net worth. Managers, clients and the Commercial Bank are open.`
-          : k === 'm2' ? `Milestone 2: ${money(MIL.m2)} net worth. A mandatory Regulatory Audit is coming. Automation expansion is locked until you file.`
-            : `Milestone 3: ${money(MIL.m3)} net worth. Enterprise clients, M&A and IPO preparation are open.`, { milestone: n });
+        k === 'm1' ? `Milestone 1 (${money(MIL.m1)} net worth): managers, clients and the Bank are open.`
+          : k === 'm2' ? `Milestone 2 (${money(MIL.m2)} net worth): the first audit begins. Hiring and manager upgrades wait until you answer it.`
+            : `Milestone 3 (${money(MIL.m3)} net worth): Enterprise accounts and a trade sale are open, and an IPO if your audit record is clean.`, { milestone: n });
       this.emit('milestone', { n });
     }
   }
@@ -424,17 +444,17 @@ export class Game {
       if (!ev.warned && h < ev.start && h >= ev.start - lead) {
         ev.warned = true; ev.warnedAt = h;
         const hrs = ev.start - h;
-        this.note('warn', `${ev.name}: effective in ${hrs >= 24 ? plural(Math.round(hrs / 24), 'day') : plural(hrs, 'hour')}.`, { alert: { ...ev.alert, name: ev.name, level: ev.level, start: ev.start } });
+        this.note('warn', `${ev.name}: effective in ${hrs >= 24 ? plural(Math.round(hrs / 24), 'day') : plural(hrs, 'hour')}.`, { kind: 'advance', alert: this._alert(ev) });
       }
       if (!ev.started && h >= ev.start) {
         ev.started = true;
-        if (!ev.warned) { ev.warned = true; ev.warnedAt = h; this.note('bad', `BREAKING: ${ev.name} is live now.`, { alert: { ...ev.alert, name: ev.name, level: ev.level, start: ev.start } }); }
+        if (!ev.warned) { ev.warned = true; ev.warnedAt = h; this.note('bad', `${ev.name} is now in effect, with no warning.`, { alert: this._alert(ev) }); }
         else this.note('bad', `${ev.name} is now in effect.`);
         this.emit('shock', { kind: ev.kind });
         s.shockLog.push({ id: ev.id, kind: ev.kind, name: ev.name, start: h, nw: this.netWorth(), cash: s.cash, debt: this.debt(), de: Math.min(this.deRatio(), DE_CAP), inv: this.invValue(), pipes: s.pipes.length, intl: s.pipes.filter((p) => p.channel === 'intl').length, pivot0: s.pivot, nwAfter: null, pivots: null, warnedHours: ev.start - (ev.warnedAt ?? ev.start) });
         this._m = null;
       }
-      if (ev.kind === 'tiktok' && h === ev.start + 48) this.note('bad', 'Market fatigue: trend goods lose half their value for 72 hours.');
+      if (ev.kind === 'tiktok' && h === ev.start + 48) this.note('bad', 'Market fatigue: trend goods lose half their value for 72 hours.', { kind: 'fatigue' });
     }
     for (const sh of s.shockLog) if (sh.nwAfter == null && h >= sh.start + 120) { sh.nwAfter = this.netWorth(); sh.pivots = s.pivot - sh.pivot0; }
   }
@@ -612,15 +632,15 @@ export class Game {
    */
   quotePitch(assetId, leadId, deal, opts = {}) {
     const s = this.s, a = s.assets.find((x) => x.id === assetId);
-    if (!a) return fail('Pick an asset from your inventory.');
+    if (!a) return fail('Pick a crate from your stock.');
     let lead = null;
     for (const z of s.zones) lead = lead || (s.leads[z] || []).find((l) => l.id === leadId);
     if (!lead) return fail('That buyer has left.');
     if (a.zone !== lead.zone) return fail(`Your ${ASSETS[a.cls].name} is in ${ZONES[a.zone].short}. Freight it to ${ZONES[lead.zone].short} first.`);
     const def = ASSETS[a.cls], z = lead.zone;
     if (demandOf(def, z) <= 0) return fail(`Nobody in ${ZONES[z].short} wants ${def.name}.`);
-    if (lead.scam && lead.verified) return fail('You verified this buyer: it is a fraud. Do not ship to them.');
-    if (a.cond === 'broken' && !this.acceptsBroken(lead.seg)) return fail('This buyer will not take a broken asset. Repair it first, or sell to someone who works with scrap and spares.');
+    if (lead.scam && lead.verified) return fail('Fraud confirmed. Skip this buyer.');
+    if (a.cond === 'broken' && !this.acceptsBroken(lead.seg)) return fail('This buyer will not take a broken crate. Repair it first, or find a scrap buyer.');
     let fit = fitOf(a.cls, lead.seg);
     if (lead.need) fit = def.tags.includes(lead.need) ? 1 : fit * 0.5;
     const ci = this.cmFor(z, a.cls, lead.seg);
@@ -675,13 +695,13 @@ export class Game {
       s.assets = s.assets.filter((x) => x.id !== a.id);
       s.streak = 0; s.rep = clamp(s.rep - 10, 0, 100);
       this.led('pitch', `${ASSETS[a.cls].name} went to a fraudulent buyer and was never paid for.`, -(a.basis || 0), { z });
-      this.note('bad', 'Scam: the payment bounced and the buyer vanished. Verify buyers before you ship (Digital Natives attract these).');
+      this.note('bad', 'Scam: the payment bounced and the buyer vanished. Verify a buyer before you sell.', { kind: 'scam' });
       evt('rejected', { gain: -1 });
       return ok('Scammed.', { ...q, outcome: 'scam' });
     }
     if (q.rejected) {
       s.streak = 0;
-      if (q.reason === 'counterfeit') { a.known = true; s.rep = clamp(s.rep - 3, 0, 100); this.note('bad', `The ${BUYERS[q.lead.seg].name} spotted a counterfeit. That ${ASSETS[a.cls].name} is worth almost nothing.`); }
+      if (q.reason === 'counterfeit') { a.known = true; s.rep = clamp(s.rep - 3, 0, 100); this.note('bad', `The ${BUYERS[q.lead.seg].name} spotted a counterfeit. That ${ASSETS[a.cls].name} is worth almost nothing.`, { kind: 'counterfeit' }); }
       if (this.P.flopRep) { s.rep = clamp(s.rep - this.P.flopRep, 0, 100); s.ps.goodwillUntil = s.hour + 48; }
       this.led('pitch', `Pitched ${ASSETS[a.cls].name} to ${BUYERS[q.lead.seg].name}: rejected (${q.reason === 'counterfeit' ? 'counterfeit' : 'no fit'}).`, 0, { z });
       evt('rejected', { gain: 0 });
@@ -722,7 +742,7 @@ export class Game {
     let cost = Math.max(0.01, Math.round(lead.budget * 0.01 * 100) / 100);
     // A founder down to the last crate with nothing to pay for the check is vouched for: a fraud taking that crate would leave $0, nothing to sell and no way back.
     if (s.cash < cost && s.assets.length <= 1 && !s.pipes.length) cost = 0;
-    if (s.cash < cost) return fail(`Verification costs ${money(cost)}.`);
+    if (s.cash < cost) return lack(cost, s.cash, 'verification');
     s.cash -= cost; lead.verified = true;
     this.led('verify', 'Checked a buyer\'s credentials', cost ? -cost : 0);
     return ok(lead.scam ? 'Fraud confirmed. Skip this buyer.' : 'Verified: this buyer is genuine.', { scam: !!lead.scam, cost });
@@ -833,9 +853,9 @@ export class Game {
     const s = this.s, q = this.buyQuote(zone, lotId, deal);
     if (!q.ok) return q;
     const lot = q.lot, price = q.price;
-    if (s.cash < price) return fail(`Need ${money(price)}; you have ${money(s.cash)}.`);
+    if (s.cash < price) return lack(price, s.cash, 'the lot');
     const held = s.assets.filter((a) => a.zone === zone).length + s.freight.reduce((n, f) => n + (f.to === zone ? f.items.length : 0), 0) + s.escrow.reduce((n, e) => n + e.assets.filter((a) => a.zone === zone).length, 0);
-    if (held >= this.storeCap(zone)) return fail('Storage is full here (crates in transit and in escrow count). Sell something or ship it out.');
+    if (held >= this.storeCap(zone)) return fail(FULL);
     s.cash -= price;
     s.lots[zone] = s.lots[zone].filter((l) => l.id !== lotId);
     this._settleRead(lot);
@@ -849,7 +869,7 @@ export class Game {
   repairMultFor(zone) { return (1 - (ZONES[zone].rules.repair || 0)) * (zone > 4 ? this.mods().repair : 1) * this.P.repairMult * this.B.repairMult; }
   repairQuote(assetId, deal) {
     const a = this.s.assets.find((x) => x.id === assetId);
-    if (!a) return fail('No such asset.');
+    if (!a) return fail('No such crate.');
     const def = ASSETS[a.cls];
     if (a.cond !== 'broken' || !def.repair) return fail('Nothing to repair.');
     const ops = this.lvl('ops');
@@ -867,7 +887,7 @@ export class Game {
   repair(assetId, deal) {
     const q = this.repairQuote(assetId, deal);
     if (!q.ok) return q;
-    if (this.s.cash < q.cost) return fail(`Repair costs ${money(q.cost)}.`);
+    if (this.s.cash < q.cost) return lack(q.cost, this.s.cash, 'the repair');
     this.s.cash -= q.cost;
     q.asset.cond = 'ok'; q.asset.quality = q.quality; q.asset.basis += q.cost;
     this.xp(20);
@@ -884,10 +904,10 @@ export class Game {
   /** Blind unless `opts.blind === false` (as quotePitch): a crate nobody has checked is valued as described. sellPool is the one caller that gets the truth, because the pool checks what it buys. */
   poolQuote(ids, route = false, opts = {}) {
     const s = this.s, items = ids.map((id) => s.assets.find((a) => a.id === id)).filter(Boolean), blind = opts?.blind !== false;
-    if (!items.length) return fail('Select assets to sell.');
-    if (route && (s.zones.length < 2 || items.some((a) => !ASSETS[a.cls].tags.includes('digital')))) return fail('Digital routing needs a second district and digital assets.');
+    if (!items.length) return fail('Select crates to sell.');
+    if (route && (s.zones.length < 2 || items.some((a) => !ASSETS[a.cls].tags.includes('digital')))) return fail('Digital routing needs a second district and digital crates.');
     const zone = route ? this.bestZone(items) : items[0].zone;
-    if (!route && items.some((a) => a.zone !== zone)) return fail('Sell assets from one district at a time.');
+    if (!route && items.some((a) => a.zone !== zone)) return fail('Sell crates from one district at a time.');
     const fric = route ? FEES.digitalRouting : ZONES[zone].friction + this.instFee('pool');
     const per = items.map((a) => ({ a, value: this.val(a, zone) * (1 - fric) * (a.known || blind ? 1 : truthMult(a)) }));
     const total = per.reduce((x, y) => x + y.value, 0);
@@ -897,7 +917,7 @@ export class Game {
     const q = this.poolQuote(ids, route, { blind: false });
     if (!q.ok) return q;
     const s = this.s;
-    if (q.total > s.pool[q.zone]) return fail(`The ${ZONES[q.zone].short} liquidity pool only has ${money(s.pool[q.zone])} left. It refills 35% a day.`, this.poolQuote(ids, route)); // the failure shows the blind quote, not the truth
+    if (q.total > s.pool[q.zone]) return fail(`The ${ZONES[q.zone].short} liquidity pool has only ${money(s.pool[q.zone])} left and refills 35% of its size a day. Sell fewer crates or wait.`, this.poolQuote(ids, route)); // the failure shows the blind quote, not the truth
     s.pool[q.zone] -= q.total;
     s.assets = s.assets.filter((a) => !ids.includes(a.id));
     for (const { a } of q.per) { this.logNiche(q.zone, a.cls, 'npc-pool', CM.ref); }
@@ -905,26 +925,26 @@ export class Game {
     if (q.delay) s.settle.push({ amt: q.total - this._garnishTake(profit, q.total), at: s.hour + q.delay, note: 'Liquidation settlement' }); // the garnishment comes out of the proceeds when they land
     else { s.cash += q.total; this.garnish(profit); }
     s.pivot++;
-    this.led('pool', `Sold ${q.per.length} asset(s) to the ${ZONES[q.zone].short} liquidity pool${q.delay ? ' (settles in ' + q.delay + 'h)' : ''}`, q.total, { z: q.zone });
+    this.led('pool', `Sold ${plural(q.per.length, 'crate')} to the ${ZONES[q.zone].short} liquidity pool${q.delay ? ' (settles in ' + q.delay + 'h)' : ''}`, q.total, { z: q.zone });
     this.emit('sell-pool', { zone: q.zone, total: q.total, count: q.per.length });
-    return ok(q.delay ? `Proceeds of ${money(q.total)} settle in ${q.delay} virtual hours.` : `Sold for ${money(q.total)}.`, q);
+    return ok(q.delay ? `Proceeds of ${money(q.total)} settle in ${q.delay} hours.` : `Sold for ${money(q.total)}.`, q);
   }
   _settlements() {
     const s = this.s;
     if (!s.settle.length) return;
     const due = s.settle.filter((x) => x.at <= s.hour);
     if (!due.length) return;
-    for (const d of due) { s.cash += d.amt; this.note('info', `${money(d.amt)} settled into cash.`); }
+    for (const d of due) { s.cash += d.amt; this.note('info', `${money(d.amt)} settled into cash.`, { kind: 'settle', amt: d.amt }); }
     s.settle = s.settle.filter((x) => x.at > s.hour);
   }
   freightQuote(ids, to) {
     const s = this.s;
-    if (!Array.isArray(ids)) return fail('Select assets to ship.');
+    if (!Array.isArray(ids)) return fail('Select crates to ship.');
     const items = uniq(ids).map((id) => s.assets.find((a) => a.id === id)).filter(Boolean);
-    if (!items.length) return fail('Select assets to ship.');
-    if (!s.zones.includes(to)) return fail('You do not have access to that district yet.');
+    if (!items.length) return fail('Select crates to ship.');
+    if (!s.zones.includes(to)) return fail('That district is not open yet.');
     const from = items[0].zone;
-    if (items.some((a) => a.zone !== from) || from === to) return fail('Pick assets from one district and a different destination.');
+    if (items.some((a) => a.zone !== from) || from === to) return fail('Pick crates from one district and a different destination.');
     const book = items.reduce((x, a) => x + this.val(a), 0);
     const hops = Math.abs(to - from);
     const hasLog = s.pipes.some((p) => p.kind === 'logistics');
@@ -939,15 +959,15 @@ export class Game {
     const q = this.freightQuote(ids, to);
     if (!q.ok) return q;
     const s = this.s;
-    if (q.items.length > q.room) return fail('The destination does not have room for all of that.');
-    if (s.cash < q.cost) return fail(`Freight costs ${money(q.cost)}.`);
+    if (q.items.length > q.room) return fail(`${ZONES[q.to].short} does not have room for all of that.`);
+    if (s.cash < q.cost) return lack(q.cost, s.cash, 'freight');
     s.cash -= q.cost;
     const going = new Set(q.items.map((a) => a.id));
     s.assets = s.assets.filter((a) => !going.has(a.id));
     s.freight.push({ id: 'F' + s.nid++, items: q.items, to, sent: s.hour, arrive: s.hour + q.hours, risk: q.risk, book: q.book, from: q.from });
-    this.led('freight', `Shipped ${q.items.length} asset(s) to ${ZONES[to].short}`, -q.cost, { z: to });
+    this.led('freight', `Shipped ${plural(q.items.length, 'crate')} to ${ZONES[to].short}`, -q.cost, { z: to });
     this.emit('ship', { from: q.from, to, count: q.items.length });
-    return ok(`In transit for ${q.hours} virtual hours.`, q);
+    return ok(`In transit for ${q.hours} hours.`, q);
   }
   _freight() {
     const s = this.s;
@@ -960,16 +980,16 @@ export class Game {
           const fee = Math.min(Math.max(0, s.cash), (f.book || 0) * 0.02);
           s.cash -= fee; f.arrive = s.hour + 12;
           this.led('customs', `Customs inspected freight bound for ${ZONES[f.to].short}`, fee ? -fee : 0, { z: f.to }); // (never -0: a broke founder's freight is inspected for nothing)
-          this.note('warn', `Customs inspected your freight in ${ZONES[f.to].short}: 12 hours' delay and a ${money(fee)} fee.`);
+          this.note('warn', `Customs inspected your freight in ${ZONES[f.to].short}: 12 hours' delay and a ${money(fee)} fee.`, { kind: 'customs', z: f.to });
           continue;
         }
       }
       for (const a of f.items) {
         a.zone = f.to;
-        if (this.rand() < f.risk) { a.quality *= 0.8; this.note('bad', `${ASSETS[a.cls].name} was damaged in transit (-20% quality). Higher Ops and a Logistics Agent cut this risk.`); }
+        if (this.rand() < f.risk) { a.quality *= 0.8; this.note('bad', `${ASSETS[a.cls].name} was damaged in transit (-20% quality).`, { kind: 'damage' }); }
         s.assets.push(a);
       }
-      this.note('info', `Freight arrived in ${ZONES[f.to].short}.`);
+      this.note('info', `Freight arrived in ${ZONES[f.to].short}.`, { kind: 'freight-arrive', z: f.to });
     }
     s.freight = s.freight.filter((x) => x.arrive > s.hour);
     // a crate on a truck ages with the rest of the stock: spoilage and depreciation are paid at midnight whether it is on a shelf or on the road (_dayTick ages s.assets only)
@@ -989,7 +1009,7 @@ export class Game {
     const s = this.s, l = own(s.skills, skill) ? s.skills[skill] : null;
     if (l == null) return fail('Unknown skill.');
     if (l >= SKILL_MAX) return fail('Already at mastery.');
-    if (s.points < 1) return fail('No skill points. Every level you earn gives one.');
+    if (s.points < 1) return fail('No skill points. Each level earns one.');
     s.points--; s.skills[skill]++;
     this.xp(10);
     this.led('train', `Raised ${SKILLS[skill].short} to level ${l + 1}`, 0);
@@ -1037,23 +1057,23 @@ export class Game {
     return { alloc, ci, rel, margin, gross, fee, tax, roy, overhead, net, len, perDay: net * 24 / len, cap: this.pipeCap(p) };
   }
   validLane(zone, cls, buyer) {
-    if (!cls || !buyer) return fail('Choose an asset class and a buyer segment.');
-    if (!ASSETS[cls] || demandOf(ASSETS[cls], zone) <= 0) return fail('That asset has no market in this district.');
+    if (!cls || !buyer) return fail('Choose a crate type and a buyer.');
+    if (!ASSETS[cls] || demandOf(ASSETS[cls], zone) <= 0) return fail('That crate has no market in this district.');
     if (!BUYERS[buyer] || BUYERS[buyer].zone !== zone) return fail('That buyer is not in this district.');
-    if (fitOf(cls, buyer) < 0.3) return fail('That buyer has almost no use for that asset.');
+    if (fitOf(cls, buyer) < 0.3) return fail('That buyer has almost no use for that crate.');
     return ok();
   }
   hirePipeline(kind, zone, cfg = {}) {
     const s = this.s;
     if (!own(PIPE, kind)) return fail('Unknown manager.');
     if (!ZONES[zone].auto) return fail('No managers can work in this district. Everything here is done by hand.');
-    if (!s.zones.includes(zone)) return fail('You do not have access to that district.');
-    if (this.autoLocked()) return fail('Gate 2: automation expansion is locked until you resolve your Regulatory Audit.');
+    if (!s.zones.includes(zone)) return fail('That district is not open yet.');
+    if (this.autoLocked()) return fail(AUTO_LOCKED);
     if (s.pipes.filter((p) => p.zone === zone).length >= ZONES[zone].plots) return fail('All management slots in this district are filled.');
     const lane = this.validLane(zone, cfg.cls, cfg.buyer);
     if (!lane.ok) return lane;
     const cost = this.pipeCost(kind, zone);
-    if (s.cash < cost) return fail(`Hiring costs ${money(cost)}.`);
+    if (s.cash < cost) return lack(cost, s.cash, 'hiring');
     s.cash -= cost;
     const p = { id: 'P' + s.nid++, kind, zone, level: 1, cls: cfg.cls, buyer: cfg.buyer, channel: cfg.channel === 'intl' ? 'intl' : 'dom', alloc: 0, prog: 0, len: 0, inflight: 0, cycles: 0, profit: 0, basis: cost, status: 'idle', pausedUntil: 0, starved: false };
     p.alloc = clamp(isNum(cfg.alloc) ? cfg.alloc : this.pipeCap(p), 0, this.pipeCap(p)); // a negative, NaN or text allocation is the cap, not a manager that pays you to run
@@ -1062,8 +1082,7 @@ export class Game {
     if (this._firstPlay('hire', `${kind}@${zone}#${plot}`)) this.xp(120); // paid once for each manager in each plot: hiring and releasing the same one again is a cash loss, not a way to buy levels
     this.led('hire', `Hired a ${PIPE[kind].name} in ${ZONES[zone].short}`, -cost, { z: zone });
     this.emit('hire', { kind, zone });
-    this.note('good', `${PIPE[kind].name} hired. Pipeline lane: ${ASSETS[cfg.cls].name} to ${BUYERS[cfg.buyer].name}.`);
-    return ok('Hired.', { pipe: p });
+    return ok(`${PIPE[kind].name} hired. Lane: ${ASSETS[cfg.cls].name} to ${BUYERS[cfg.buyer].name}.`, { pipe: p });
   }
   configure(pid, cfg) {
     const p = this.s.pipes.find((x) => x.id === pid);
@@ -1081,10 +1100,10 @@ export class Game {
   upgradePipeline(pid) {
     const s = this.s, p = s.pipes.find((x) => x.id === pid);
     if (!p) return fail('No such pipeline.');
-    if (this.autoLocked()) return fail('Gate 2: automation expansion is locked until you resolve your Regulatory Audit.');
+    if (this.autoLocked()) return fail(AUTO_LOCKED);
     if (p.level >= PIPE_RULES.maxLevel) return fail('Maximum level.');
     const c = this.pipeUpCost(p);
-    if (s.cash < c) return fail(`Upgrading costs ${money(c)}.`);
+    if (s.cash < c) return lack(c, s.cash, 'the upgrade');
     s.cash -= c; p.level++; p.basis += c;
     if (this._firstPlay('upgrade', `${p.kind}@${p.zone}#${s.pipes.filter((x) => x.zone === p.zone).indexOf(p)}@${p.level}`)) this.xp(80); // once for each level of each plot
     this.led('hire', `Upgraded ${PIPE[p.kind].name} to level ${p.level}`, -c, { z: p.zone });
@@ -1113,7 +1132,7 @@ export class Game {
     if (!U) return fail('Unknown upgrade.');
     if (s.upg[id]) return fail('Already installed.');
     if (!s.zones.includes(U.zone)) return fail('Unlocks at Metro Hub.');
-    if (s.cash < U.cost) return fail(`Costs ${money(U.cost)}.`);
+    if (s.cash < U.cost) return lack(U.cost, s.cash, 'this upgrade');
     s.cash -= U.cost; s.upg[id] = true; this.xp(100);
     this.led('upgrade', `Installed ${U.name}`, -U.cost);
     this.emit('upgrade', { id });
@@ -1172,10 +1191,10 @@ export class Game {
     if (!s.zones.includes(C.zone)) return fail('Not available in your districts yet.');
     if (C.needs && !s.mil[C.needs]) return fail(`Unlocks at Milestone ${C.needs.slice(1)}.`);
     if (this.liveClients(tier).length >= C.max) return fail('You already hold the maximum of these accounts.');
-    if (s.pipes.length < C.minRunning) return fail(`This account's SLA needs ${C.minRunning} pipeline${C.minRunning > 1 ? 's' : ''} running. Build the capacity first, then sign the client.`);
+    if (s.pipes.length < C.minRunning) return fail(`This account needs at least ${plural(C.minRunning, 'manager')}. Hire more first.`);
     const q = this.clientQuote(tier);
-    if (!q.worthwhile && !opts.force) return fail(`This contract could not earn back its ${money(q.cac)} before day 90: ${q.payDays} paying day${q.payDays === 1 ? '' : 's'} are left and it needs ${Math.ceil(q.payback)}.`, q);
-    if (s.cash < q.cac) return fail(`Acquisition costs ${money(q.cac)}.`);
+    if (!q.worthwhile && !opts.force) return fail(`This contract could not earn back its ${money(q.cac)} before day 90: ${plural(q.payDays, 'paying day')} left, and it needs ${Math.ceil(q.payback)}.`, q);
+    if (s.cash < q.cac) return lack(q.cac, s.cash, 'the account');
     s.cash -= q.cac;
     s.clients.push({ id: 'C' + s.nid++, tier, cac: q.cac, until: this._contract(C).until, earned: 0, breaches: 0 });
     this.xp(90);
@@ -1204,10 +1223,10 @@ export class Game {
     if (!own(LOANS, prod)) return 'Unknown loan product.';
     if (prod === 'circle') return this.P.circle ? '' : 'You are not part of a Community Circle.';
     if (!s.mil.m1) return 'The Commercial Bank opens at Metro Hub ($1,000 net worth).';
-    if (this.P.bankMinNW > 0 && this.netWorth() < this.P.bankMinNW) return `No bank will lend to you yet: your record asks for ${money(this.P.bankMinNW)} net worth first.`;
+    if (this.P.bankMinNW > 0 && this.netWorth() < this.P.bankMinNW) return `No bank will lend to you until your net worth reaches ${money(this.P.bankMinNW)}.`;
     if (this.mods().freeze) return 'Credit freeze: no new loans until the freeze lifts.';
-    if (LOANS[prod].zone && !s.zones.includes(LOANS[prod].zone)) return 'Needs Corporate Valley.';
-    if (s.insolvent) return 'Your account is insolvent.';
+    if (LOANS[prod].zone && !s.zones.includes(LOANS[prod].zone)) return 'Unlocks at Corporate Valley.';
+    if (s.insolvent) return 'Your net worth is at or below zero.';
     return '';
   }
   draw(prod, amount) {
@@ -1218,7 +1237,7 @@ export class Game {
     const r = this.loanRoom(prod);
     amount = Math.min(+amount || 0, r.room);
     if (!(amount >= 0.01)) { // less than a cent is no loan (and would only add an empty record); the reason is the limit that binds
-      return fail(r.limit - r.owed <= 0.01 ? `The ${L.name} is fully drawn (limit ${money(r.limit)}).` : 'Nothing available to draw. Your debt-to-equity ratio caps borrowing at 3.0.');
+      return fail(r.limit - r.owed <= 0.01 ? `The ${L.name} is fully drawn (limit ${money(r.limit)}).` : `Nothing to draw: debt-to-equity is capped at ${DEBT.maxDE.toFixed(1)}.`);
     }
     const fee = amount * L.fee;
     s.cash += amount - fee;
@@ -1227,8 +1246,7 @@ export class Game {
     if (prod === 'enterprise') s.entOpened = true;
     this.led('loan', `Drew ${money(amount)} on the ${L.name}`, amount - fee, { fee });
     this.emit('draw', { prod, amount });
-    this.note('warn', `Liability added: ${money(amount)} at ${(this.loanRate(prod) * 100).toFixed(1)}% per 30 days.`);
-    return ok(`Drew ${money(amount)} (fee ${money(fee)}).`);
+    return ok(`Drew ${money(amount)} at ${(this.loanRate(prod) * 100).toFixed(1)}% a month.${fee ? ` Fee ${money(fee)}.` : ''}`);
   }
   repay(loanId, amount) {
     const s = this.s, l = s.loans.find((x) => x.id === loanId);
@@ -1255,11 +1273,12 @@ export class Game {
       const frac = this.P.bailout.fraction;
       for (const l of s.loans) { l.principal *= 1 - frac; l.accr *= 1 - frac; }
       this.led('bailout', 'The family cleared part of your debt', 0);
-      this.note('good', `The family stepped in and cleared ${Math.round(frac * 100)}% of your debt. That safety net is now used up.`);
+      this.note('good', `The family cleared ${Math.round(frac * 100)}% of your debt. That help is used up.`);
       this.emit('perk', { id: 'heir', effect: 'bailout' });
       if (this.deRatio() <= DEBT.callDE) return;
     }
-    this.note('bad', 'MARGIN CALL: debt-to-equity passed 4.5. The bank is liquidating assets at a 35% fire-sale discount.', { alert: { code: 'BANK-MARGIN-LIQ', name: 'Margin Liquidation Protocol', level: 3, readout: 'Debt-to-equity exceeded 4.5. The bank is seizing your highest-value pipelines until the ratio is back to 3.0.', vars: [], enforcement: 'Automatic and immediate.' } });
+    const off = Math.round(DEBT.fireSale * 100);
+    this.note('bad', `Margin call: debt-to-equity passed ${DEBT.callDE}. The bank is selling your assets at a ${off}% discount.`, { alert: { code: 'BANK-MARGIN-LIQ', name: 'Margin call', level: 3, readout: `Debt-to-equity passed ${DEBT.callDE}. The bank sells your largest managers first, then your stock, at a ${off}% discount, until the ratio is back to ${DEBT.maxDE.toFixed(1)} or nothing is left to sell. Selling at a discount can push the ratio up, so a call can sell all your managers and stock.`, vars: [], enforcement: 'Automatic and immediate.' } });
     let guard = 0;
     while (this.deRatio() > DEBT.maxDE && guard++ < 40) {
       let proceeds = 0, what = '';
@@ -1305,7 +1324,7 @@ export class Game {
     const Pm = this.P;
     if (Pm.familyTax && s.hour % Pm.familyTax.everyHours === 0 && s.cash > 0) { const t = s.cash * Pm.familyTax.rate; s.cash -= t; dayProfit -= t; this.led('family', 'Family obligations', -t); }
     if (Pm.subscription && s.hour % 720 === 0 && s.cash > 0) { const t = s.cash * Pm.subscription.rate; s.cash -= t; dayProfit -= t; this.led('subscription', 'Tool subscriptions', -t); }
-    if (Pm.burnout && day % Pm.burnout.everyDays === 0) { s.ps.burnoutUntil = s.hour + 24; this.note('warn', 'Burnout: you take a day off and no new buyers come to you.'); }
+    if (Pm.burnout && day % Pm.burnout.everyDays === 0) { s.ps.burnoutUntil = s.hour + 24; this.note('warn', 'Burnout: you take a day off and no new buyers come to you.', { kind: 'burnout' }); }
     if (Pm.mentor && day % 7 === 0) this._mentorTip();
     // clients: the day's income is one row, each SLA penalty its own; a contract's closing row is a memo (its CAC was booked at signing, its income day by day)
     let clientIn = 0, clientN = 0;
@@ -1318,9 +1337,9 @@ export class Game {
       } else {
         const pen = C.perDay * 2;
         s.cash -= pen; c.breaches++; dayProfit -= pen;
-        this.led('client', `SLA breach on a ${C.name}: penalty`, -pen, { sla: true });
-        this.note('bad', `SLA breach on a ${C.name}: ${money(pen)} penalty. Keep ${C.minRunning} pipeline(s) running.`);
-        if (c.breaches >= 2) { c.done = true; this.note('bad', `The ${C.name} walked away after repeated SLA breaches.`); }
+        this.led('client', `SLA breach on your ${C.name}: penalty`, -pen, { sla: true });
+        this.note('bad', `SLA breach on your ${C.name}: ${money(pen)} penalty. Keep ${plural(C.minRunning, 'manager')} running.`, { kind: 'sla', amt: pen });
+        if (c.breaches >= 2) { c.done = true; this.note('bad', `The ${C.name} left after two SLA breaches.`); }
       }
     }
     if (clientIn > 0) this.led('client', `Client accounts paid for the day (${clientN})`, clientIn, { n: clientN });
@@ -1344,14 +1363,14 @@ export class Game {
         if (fee > 0) { ent[0].principal += fee; this.led('loan', 'Unused-commitment fee', 0, { fee, memo: true }); } // no cash moves: the fee is added to the loan and leaves with the repayment, which is the row that holds it
       }
     }
-    if (s.cash < 0) { const od = -s.cash * 0.005; s.cash -= od; s.overdraft += od; this.led('overdraft', 'Overdraft interest', -od); if (day % 3 === 0) this.note('bad', `Cash is negative (${money(s.cash)}). Overdraft interest is accruing.`); }
+    if (s.cash < 0) { const od = -s.cash * 0.005; s.cash -= od; s.overdraft += od; this.led('overdraft', 'Overdraft interest', -od); if (day % 3 === 0) this.note('bad', `Cash is negative (${money(s.cash)}). Overdraft interest is 0.5% a day.`, { kind: 'overdraft', amt: -s.cash }); }
     // p2p royalty streams you pay. The day's rate falls due and is paid from the cash there is; what cash cannot cover stays owed (`arrears`, a liability in netWorth() and in an exit's proceeds) and is paid first
     // from the next cash, a message of at most a day's rate at a time (the receiver takes no more than that at once). A stream whose receiver's run is over (the room says so) is ended: nothing could be received.
     for (const r of s.royalties) {
       if (r.dir !== 'pay') continue;
       const left = r.cap == null ? Infinity : Math.max(0, r.cap - (r.paid || 0)); // what the stream may still pay in all
       if (s.hour <= r.until) r.arrears = Math.min((r.arrears || 0) + r.perDay, left);
-      if (this.env.peerClosed?.(r.peer)) { if (r.arrears > 0) this.note('info', `A royalty stream you owed ended: the founder it was owed to has finished their run or is selling their business.`); r.arrears = 0; r.until = -1; continue; }
+      if (this.env.peerClosed?.(r.peer)) { if (r.arrears > 0) this.note('info', 'A royalty stream you owed has ended: its receiver finished their run or is selling their business.'); r.arrears = 0; r.until = -1; continue; }
       let pay = Math.min(r.arrears || 0, Math.max(0, s.cash), r.perDay * ROYALTY_MSGS); // a dozen messages a day at most: a long arrears is paid down over several days, not in one burst the relay's rate limit would drop (and the money with it)
       if (pay < 0.005) continue;
       s.cash -= pay; r.arrears -= pay; r.paid = (r.paid || 0) + pay;
@@ -1371,7 +1390,7 @@ export class Game {
   _mentorTip() {
     let best = null;
     for (const z of this.s.zones) { const r = this.radar(z, 1)[0]; if (r && (!best || r.score > best.score)) best = { ...r, zone: z }; }
-    if (best) this.note('info', `Your mentor says: look at ${ASSETS[best.cls].name} for ${BUYERS[best.seg].name} in ${ZONES[best.zone].short}. Few people are selling there, so it should pay well.`);
+    if (best) this.note('info', `Your mentor says: look at ${ASSETS[best.cls].name} for ${BUYERS[best.seg].name} in ${ZONES[best.zone].short}. Few others sell there.`, { kind: 'mentor' });
   }
   _audits() {
     const s = this.s;
@@ -1380,7 +1399,7 @@ export class Game {
       const t = AUDIT_THEMES[Math.floor(this.rand() * AUDIT_THEMES.length)];
       s.auditPending = { ...t, id: 'AU' + s.nid++, due: s.hour + AUDIT.deadlineHours, at: s.hour };
       s.auditNext = null;
-      this.note('warn', `Audit event: ${t.title}. You have 72 virtual hours to respond.`, { audit: true });
+      this.note('warn', `Regulatory Audit: ${t.title}. You have ${AUDIT.deadlineHours} hours to respond.`, { audit: true });
     }
     const a = s.auditPending;
     if (a && s.hour >= a.due) {
@@ -1394,35 +1413,35 @@ export class Game {
   _auditFail(ignored) {
     const s = this.s;
     let fine = this.auditFine();
-    if (s.ps.fineWaive > 0) { s.ps.fineWaive--; fine = 0; this.note('good', 'The family lawyer made the first audit fine disappear.'); this.emit('perk', { id: 'heir', effect: 'fine-waived' }); }
+    if (s.ps.fineWaive > 0) { s.ps.fineWaive--; fine = 0; this.note('good', 'The family lawyer waived the first audit fine.'); this.emit('perk', { id: 'heir', effect: 'fine-waived' }); }
     s.cash -= fine; s.auditFail++; s.velPenalty *= AUDIT.velocityHit;
     this.led('audit', ignored ? 'Ignored audit: automatic penalty' : 'Failed audit: fine and velocity penalty', fine ? -fine : 0); // (the Heir's family lawyer waives the first fine: 0, not -0)
-    this.note('bad', `${ignored ? 'You ignored the audit. ' : 'You were caught. '}Fine ${money(fine)} and a permanent -15% on pipeline velocity. Repeat failures compound.`);
+    this.note('bad', `${ignored ? 'You ignored the audit. ' : 'You were caught. '}${fine ? `Fine ${money(fine)}. ` : ''}Manager speed drops ${Math.round((1 - AUDIT.velocityHit) * 100)}% for good.`);
   }
   resolveAudit(choice, pipeId) {
     const s = this.s, a = s.auditPending;
     if (!a) return fail('No audit is pending.');
-    let msg = '';
+    let msg = '', caught = false;
     if (choice === 'A') {
       const fee = AUDIT.fee * Math.max(0.7, 1 - 0.03 * (this.lvl('fintech') - 1));
-      if (s.cash < fee) return fail(`The consultant costs ${money(fee)}.`);
+      if (s.cash < fee) return lack(fee, s.cash, 'the consultant');
       s.cash -= fee; s.auditPass++;
       this.led('audit', 'Filed with a compliance consultant', -fee);
-      msg = `Filed. ${money(fee)} paid, pipelines untouched.`;
+      msg = `Consultant hired for ${money(fee)}. Your managers keep running.`;
     } else if (choice === 'B') {
       const p = s.pipes.find((x) => x.id === pipeId) || s.pipes[0];
-      if (!p) return fail('You need a pipeline manager to dedicate. Choose another path.');
+      if (!p) return fail('You have no manager to spare. Choose another path.');
       p.pausedUntil = s.hour + AUDIT.pauseHours; s.auditPass++;
       this.led('audit', `Dedicated ${PIPE[p.kind].name} to compliance for 5 days`, 0);
-      msg = `${PIPE[p.kind].name} will do compliance for 5 virtual days.`;
+      msg = `${PIPE[p.kind].name} stops for ${AUDIT.pauseHours / 24} days to handle the filing.`;
     } else if (choice === 'C') {
-      if (this.rand() < AUDIT.passChance) { s.auditPass++; this.led('audit', 'Bypassed filing and got away with it', 0); msg = 'You slipped through. This time.'; }
-      else { this._auditFail(false); msg = 'Caught. Fine and velocity penalty applied.'; }
+      if (this.rand() < AUDIT.passChance) { s.auditPass++; this.led('audit', 'Bypassed filing and got away with it', 0); msg = 'Nobody noticed.'; }
+      else { this._auditFail(false); caught = true; } // (the note it writes is the message)
     } else return fail('Pick A, B or C.');
     s.auditPending = null; s.auditFirst = true;
     s.auditNext = s.hour + AUDIT.everyDays * 24 / this.env.difficulty.audit / this.P.auditMult;
     this.xp(70);
-    this.emit('audit', { choice, ok: choice !== 'C' || !String(msg).startsWith('Caught') });
+    this.emit('audit', { choice, ok: !caught });
     return ok(msg);
   }
 
@@ -1432,7 +1451,7 @@ export class Game {
     if (kind === 'sale') kind = 'trade'; // the Bank drawer says "sale"
     if (kind !== 'ipo' && kind !== 'trade') return fail('Choose a trade sale or an IPO.');
     if (!s.mil.m3) return fail('Exit options unlock at Corporate Valley ($250,000 net worth).');
-    if (kind === 'ipo' && s.auditFail > 0) return fail('IPO preparation needs a clean compliance record. Choose a trade sale.');
+    if (kind === 'ipo' && s.auditFail > 0) return fail('An IPO needs a clean audit record. Choose a trade sale.');
     const avg = s.dp.length ? s.dp.reduce((a, b) => a + b, 0) / s.dp.length : 0;
     const mult = (kind === 'ipo' ? 10 : 6) * this.B.exitMult;
     const premium = Math.max(0, avg) * mult * Math.max(0.3, 1 - 0.15 * s.auditFail);
@@ -1449,7 +1468,7 @@ export class Game {
     const pre = this.exitQuote(kind);
     if (!pre.ok) return pre; // refused before anything is touched
     const s = this.s;
-    if (s.escrow.some((e) => e.lockedBy && !e.lockLapsed)) return fail('A classmate is taking one of your swaps this very moment. Give it a few seconds, then sell.');
+    if (s.escrow.some((e) => e.lockedBy && !e.lockLapsed)) return fail('A classmate is accepting one of your swaps. Wait a few seconds, then sell.');
     // the swaps still waiting are withdrawn first, so their escrow is part of the sale and no classmate is left holding a stale offer
     for (const e of [...s.escrow]) { this.cancelOffer(e.offerId, 'Withdrawn: you are selling the business.'); this.out.push({ t: 'withdraw', offer: e.offerId, to: e.offer.to }); }
     const q = this.exitQuote(kind);
@@ -1457,10 +1476,9 @@ export class Game {
     s.assets = []; s.pipes = []; s.freight = []; s.clients = []; s.loans = []; s.settle = []; s.cash = 0;
     s.royalties = s.royalties.filter((r) => r.dir !== 'pay'); // what the sale owed on them was taken out of its proceeds (exitQuote)
     s.settle.push({ amt: q.proceeds, at: s.hour + 48, note: 'Exit' });
-    this.led('exit', `Began a ${kind === 'ipo' ? 'IPO' : 'trade sale'}: ${money(q.proceeds)} settles in 48 virtual hours`, 0, { proceeds: q.proceeds });
+    this.led('exit', `Began ${kind === 'ipo' ? 'an IPO' : 'a trade sale'}: ${money(q.proceeds)} settles in 48 hours`, 0, { proceeds: q.proceeds });
     this.emit('exit', { kind });
-    this.note('good', `${kind === 'ipo' ? 'IPO' : 'Trade sale'} launched. Governance drag: it settles in 48 virtual hours.`);
-    return ok('Exit under way.', q);
+    return ok(`${kind === 'ipo' ? 'IPO' : 'Trade sale'} launched. It settles in 48 hours.`, q);
   }
   _finishExit() {
     const s = this.s, proceeds = s.exiting.proceeds;
@@ -1469,7 +1487,7 @@ export class Game {
     s.exit = { kind: s.exiting.kind, hour: s.hour, nw, daysLeft: this.daysRemaining(), eei: eeiCalc(nw, s.startCapital, this.daysRemaining(), this.env.difficulty.eeiFloor) };
     s.exiting = null; s.over = true;
     this.led('exit', 'Exit completed', proceeds);
-    this.note('good', `Exit complete at ${money(nw)}. Score locked with ${plural(Math.round(this.daysRemaining()), 'day')} to spare.`, { final: true });
+    this.note('good', `Exit complete at ${money(nw)}. Score locked with ${plural(Math.round(this.daysRemaining()), 'day')} to spare.`, { final: true, exit: true });
   }
 
   // ------------------------------------------------------------------ peer-to-peer exchange
@@ -1630,8 +1648,8 @@ export class Game {
     if (!Array.isArray(giveIds) || giveIds.length > OFFER_MAX * 2) return fail('Offer something.');
     giveIds = uniq(giveIds);
     const assets = giveIds.map((id) => s.assets.find((a) => a.id === id));
-    if (assets.some((a) => !a)) return fail('You no longer own one of those assets.');
-    if (assets.length > OFFER_MAX) return fail('That is too many crates for one swap.');
+    if (assets.some((a) => !a)) return fail('You no longer own one of those crates.');
+    if (assets.length > OFFER_MAX) return fail(`A swap holds at most ${OFFER_MAX} crates.`);
     const sent = assets.map((a) => this._wire(this._disclosed(a)));
     if (sent.some((a) => !a)) return fail('One of those crates cannot be traded.');
     want = want && typeof want === 'object' ? want : {};
@@ -1659,7 +1677,7 @@ export class Game {
       skills: { ...s.skills },
     };
     // Three looks, and only the first may speak in numbers or reach the instructor. (1) The crates as the founder DESCRIBES them, each where it sits: what they could work out for themselves. A deal that is off by
-    // more than the band here is the Extreme Asymmetric Premium Warning and is flagged. (2) The same, with the crates asked for landing where this founder can hold them: a refusal that says so, never a flag
+    // more than the band here is blocked and flagged. (2) The same, with the crates asked for landing where this founder can hold them: a refusal that says so, never a flag
     // (an honest bid for a crate from a district they cannot enter is not misconduct). (3) The hidden truth of the founder's own crates: a counterfeit they have never inspected is refused with no number and no
     // flag, because a refusal that quoted what the crate is really worth would read its truth out to the one who holds it, for free.
     const asked = { ...offer, give: { ...offer.give, assets: assets.map((a) => this._described(a)) } };
@@ -1668,11 +1686,11 @@ export class Game {
     const lands = this.checkOffer(asked, 'offerer', { landing: true });
     if (!seen.ok) {
       // ...but a bid that is fair by what the crate is worth to this founder (it would land somewhere else) is not misconduct, however far it is from the price its owner sees: refused, and said so, with nobody told
-      if (lands.ok) return fail('Nobody can take that: a crate you asked for sits in a district you have not opened, where its owner values it far above what it would be worth to you. It was not sent.', { offer, chk: lands });
+      if (lands.ok) return fail('Cannot be sent: a crate you asked for sits in a district you have not opened, so its owner values it far above what it is worth to you. Ask for another crate.', { offer, chk: lands });
       this.out.push({ t: 'flag', offer: { id: offer.id, from: s.pid, to, variance: seen.variance, va: seen.va, vb: seen.vb } });
-      return fail(`Extreme Asymmetric Premium Warning: this deal deviates ${(seen.variance * 100).toFixed(0)}% from fair market value (limit ${FMV_BAND * 100}%). It was blocked and flagged for your instructor.`, { offer, chk: seen });
+      return fail(`Blocked: the two sides are ${(seen.variance * 100).toFixed(0)}% apart (limit ${FMV_BAND * 100}%). In a classroom, your instructor is told. Balance it with cash or another crate.`, { offer, chk: seen });
     }
-    if (!lands.ok) return fail(`This deal deviates ${(lands.variance * 100).toFixed(0)}% from fair market value once what you ask for lands in a district you can hold it in (limit ${FMV_BAND * 100}%). It was blocked.`, { offer, chk: lands });
+    if (!lands.ok) return fail(`Blocked: priced where you would hold the crates you ask for, the two sides are ${(lands.variance * 100).toFixed(0)}% apart (limit ${FMV_BAND * 100}%). Balance it with cash or another crate.`, { offer, chk: lands });
     if (!this.checkOffer(offer, 'offerer', { landing: true }).ok) { this._appraisal(seen.va); return fail(UNTRADEABLE); }
     if (giveCash > s.cash) return fail('You do not have that much cash.');
     const going = new Set(giveIds);
@@ -1722,10 +1740,10 @@ export class Game {
     // Two looks, as when proposing: first the crates as this founder DESCRIBES them (numbers are theirs to see), then as they truly are, which can only refuse, with no number (see createOffer).
     const sending = held ? mine.map((a) => this._wire(this._disclosed(a))) : o.want.assets;
     const seen = this.checkOffer({ ...o, want: { assets: held ? mine.map((a) => this._described(a)) : o.want.assets, cash: o.want.cash } }, 'acceptor');
-    if (!seen.ok) return fail(`Blocked: ${(seen.variance * 100).toFixed(0)}% off fair market value.`, { chk: seen });
+    if (!seen.ok) return fail(`Blocked: the two sides are ${(seen.variance * 100).toFixed(0)}% apart.`, { chk: seen });
     const chk = this.checkOffer({ ...o, want: { assets: sending, cash: o.want.cash } }, 'acceptor');
     if (!chk.ok) { this._appraisal(seen.vb); return fail(UNTRADEABLE); }
-    if (!held) return fail('You no longer hold the asset they asked for.');
+    if (!held) return fail('You no longer hold the crate they asked for.');
     if (o.want.cash > s.cash) return fail('You do not have the cash they asked for.');
     if (npc && o.give.royalty) return fail('The Practice Partner does not pay royalties.');
     const inbound = {}, outbound = {};
@@ -1897,12 +1915,12 @@ const ARGS = {
     a[0] = zoneArg(a[0]);
     if (!goodZone(a[0])) return fail('That lot is gone.');
     // storage counts what an open swap has asked for too (roomIn), which buyLot's own count does not know
-    if (g.s.lots[a[0]]?.some((l) => l.id === a[1]) && g.roomIn(a[0]) <= 0) return fail('Storage is full here (crates in transit, in escrow and promised to a swap count). Sell something or ship it out.');
+    if (g.s.lots[a[0]]?.some((l) => l.id === a[1]) && g.roomIn(a[0]) <= 0) return fail(FULL);
   },
   hirePipeline: (g, a) => { a[1] = zoneArg(a[1]); if (!goodZone(a[1])) return fail('That district does not exist.'); if (!a[2] || typeof a[2] !== 'object') a[2] = {}; },
   configure: (g, a) => { if (!a[1] || typeof a[1] !== 'object') a[1] = {}; },
-  poolQuote: (g, a) => { if (!Array.isArray(a[0])) return fail('Select assets to sell.'); a[0] = uniq(a[0]); },
-  sellPool: (g, a) => { if (!Array.isArray(a[0])) return fail('Select assets to sell.'); a[0] = uniq(a[0]); },
+  poolQuote: (g, a) => { if (!Array.isArray(a[0])) return fail('Select crates to sell.'); a[0] = uniq(a[0]); },
+  sellPool: (g, a) => { if (!Array.isArray(a[0])) return fail('Select crates to sell.'); a[0] = uniq(a[0]); },
 };
 /** Things to do with a method's result: realised trading profit is part of the day's profit, which the exit premium averages (it was fed by manager cycles alone). */
 const AFTER = {

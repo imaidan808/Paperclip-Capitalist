@@ -166,7 +166,8 @@ test('the tray shows both chosen cards and the build summary; Begin says what is
   assert.ok(!t2.includes('Open slot'));
   assert.match(t2, /Strong on .*weak on /);
   assert.match(actionsHTML(two), /aria-disabled="false"/);
-  assert.match(actionsHTML(two), /Ready: .*Veteran.* \+ .*Creator.*\. You start with one paperclip and \$0\./);
+  assert.match(actionsHTML(two), /Ready: .*Veteran.* \+ .*Creator.*\./);
+  assert.doesNotMatch(actionsHTML(two), /paperclip/, 'the bar does not say again what the lede says');
   assert.match(actionsHTML(draftInit()), /Pick 2 more Backgrounds to begin/);
   for (const st of [draftInit(), one, two]) assert.ok(!BAD.test(trayHTML(st) + actionsHTML(st)));
 });
@@ -400,7 +401,7 @@ test('the gradebook uses an overall percentile and the CSV has Backgrounds, dist
   assert.ok(lines.some((l) => l.includes('"trades","pro","3"')));
   assert.ok(lines.some((l) => l.includes('"heir","creator","9"')));
   assert.ok(lines.some((l) => l.startsWith('"PC-A","\'=cmd|calc<b>Zelda</b>"')), 'a formula in an alias is made text');
-  for (const l of lines) assert.equal(l.split('","').length, 17, 'every row has the 17 columns');
+  for (const l of lines) assert.equal(l.split('","').length, 18, 'every row has the 18 columns');
 });
 
 test('the dashboard builds with no students at all and with a room that is not connected', () => {

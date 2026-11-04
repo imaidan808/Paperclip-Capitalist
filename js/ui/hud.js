@@ -2,6 +2,7 @@
 // Pure builders: (ctx) -> HTML. Interaction is data-act attributes handled in shell.js.
 import { PERKS, TOTAL_DAYS, xpForLevel } from '../config.js';
 import { fmtMoney as money } from '../market.js';
+import { MONEY_SUMS } from '../meta/quests.js';
 import { esc, settings } from './common.js';
 import { audio, speakerState, audioDefaults } from '../audio/index.js';
 
@@ -51,11 +52,11 @@ export function hudHTML(ctx) {
 
 /** The current objective: an Academy mission while the player is learning, otherwise the lowest-district active quest. */
 export function trackerHTML(ctx) {
-  const t = ctx.U.tracker?.(ctx) ?? (() => { const q = ctx.progress?.current(); return q ? { title: q.def.title, desc: q.def.desc, icon: q.def.icon, p: q.p, n: q.n, drawer: 'quests' } : null; })();
+  const t = ctx.U.tracker?.(ctx) ?? (() => { const q = ctx.progress?.current(); return q ? { title: q.def.title, desc: q.def.desc, icon: q.def.icon, p: q.p, n: q.n, drawer: 'quests', money: !!(q.def.goal.sum && MONEY_SUMS.has(q.def.goal.sum)) } : null; })();
   if (!t) return '';
   const f = t.n ? Math.max(0, Math.min(1, t.p / t.n)) : 0;
   // Reading order is Goal, title, words, count; the stylesheet lays the count at the top right and, on a small screen, shows only title and bar (the rest is read out).
-  return `<button class="tracker" data-anchor="tracker" data-act="dock" data-d="${t.drawer || 'quests'}"><small class="tk-lb">Goal</small><b>${t.icon || '🎯'} ${esc(t.title)}</b><span class="tk-ds">${esc(t.desc || '')}</span>${t.n ? `<span class="bar green" role="progressbar" aria-valuemin="0" aria-valuemax="${t.n}" aria-valuenow="${Math.min(t.p, t.n)}" aria-label="Goal progress"><i style="width:${f * 100}%"></i></span><small class="mono tk-ct">${Math.min(+t.p.toFixed(1), t.n)} / ${t.n}</small>` : ''}</button>`;
+  return `<button class="tracker" data-anchor="tracker" data-act="dock" data-d="${t.drawer || 'quests'}"><small class="tk-lb">Goal</small><b>${t.icon || '🎯'} ${esc(t.title)}</b><span class="tk-ds">${esc(t.desc || '')}</span>${t.n ? `<span class="bar green" role="progressbar" aria-valuemin="0" aria-valuemax="${t.n}" aria-valuenow="${Math.min(t.p, t.n)}" aria-label="Goal progress"><i style="width:${f * 100}%"></i></span><small class="mono tk-ct">${t.money ? `${money(Math.min(t.p, t.n))} / ${money(t.n)}` : `${Math.min(+t.p.toFixed(1), t.n)} / ${t.n}`}</small>` : ''}</button>`;
 }
 
 export function tickerHTML(ctx) {
@@ -63,5 +64,5 @@ export function tickerHTML(ctx) {
   const n = list.find((x) => x.level !== 'info' || x.milestone) || list[0];
   if (!n) return '';
   const idx = all.indexOf(n);
-  return `<button class="tick ${n.level}" data-anchor="ticker" data-act="${n.alert ? 'alert' : 'dock'}" data-i="${idx}" data-d="quests"><small>Day ${Math.floor(n.h / 24) + 1}</small> <span class="tk-t">${esc(n.text)}</span></button>`;
+  return `<button class="tick ${n.level}" data-anchor="ticker" data-act="${n.alert ? 'alert' : 'dock'}" data-i="${idx}" data-d="quests"><small>Day ${Math.min(TOTAL_DAYS, Math.floor(n.h / 24) + 1)}</small> <span class="tk-t">${esc(n.text)}</span></button>`;
 }

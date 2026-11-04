@@ -3,7 +3,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { fakeCtx, checkHTML } from './helpers/ctx.mjs';
-import travel, { ruleText, rewardText, teachText, shipPlan, pickedCrates, keepScroll, scrollToTop, TIERS, TEACH } from '../js/ui/drawers/travel.js';
+import travel, { shipPlan, pickedCrates, keepScroll, scrollToTop, TIERS } from '../js/ui/drawers/travel.js';
+import { rulePhrases, rewardPhrases, lessonTitle, lessonGist } from '../js/ui/drawers/districttext.js';
+import { CODEX } from '../js/meta/codex.js';
 import { ZONES, ZONE_IDS } from '../js/config.js';
 import { TEACHES } from '../js/data/schema.js';
 
@@ -21,31 +23,36 @@ function addCrates(ctx, cls = ['radio', 'bike'], zone = 1) {
   return made;
 }
 
-test('ruleText and rewardText give every district plain words, never the word zone', () => {
+test('every district has a rule in plain words, never the word zone (the words are districttext.js, which the Market drawer reads too)', () => {
   for (const id of ZONE_IDS) {
-    const r = ruleText(ZONES[id]), w = rewardText(ZONES[id]);
-    assert.ok(r.length > 20 && r.endsWith('.') && !/undefined|NaN|\[object/.test(r), `district ${id}: ${r}`);
-    assert.ok(!/zone/i.test(r + w), `district ${id} says zone`);
-    assert.ok(w === '' || w.endsWith('.'), `district ${id} reward: ${w}`);
-    assert.equal(ruleText(id), r, 'accepts an id as well as a district');
+    const rules = rulePhrases(ZONES[id]), w = rewardPhrases(ZONES[id]);
+    assert.ok(rules.length >= 1 && rules.every((r) => r.length > 20 && r.endsWith('.') && !/undefined|NaN|\[object/.test(r)), `district ${id}: ${rules}`);
+    assert.ok(!/zone/i.test(rules.join(' ') + w.join(' ')), `district ${id} says zone`);
+    assert.ok(w.every((x) => x.endsWith('.')), `district ${id} reward: ${w}`);
+    assert.deepEqual(rulePhrases(id), rules, 'accepts an id as well as a district');
   }
-  assert.match(ruleText(6), /^Half the lots are auctions\.$/);
-  assert.match(ruleText(8), /inspected/);
-  assert.match(ruleText(10), /twice as fast/);
-  assert.match(ruleText(4), /counterfeit/);
-  assert.match(ruleText(4), /auctions/);
-  assert.match(ruleText(3), /28-day/);
-  assert.match(ruleText(1), /Barter/);
-  assert.match(rewardText(8), /Freight 30% cheaper everywhere/);
-  assert.match(rewardText(7), /Repairs 10% cheaper/);
-  assert.match(rewardText(5), /managers and the Bank unlock/i);
-  assert.equal(rewardText(1), '', 'the first districts give nothing but the lesson');
-  assert.equal(ruleText(99), '');
+  assert.equal(rulePhrases(6)[0], `${Math.round(ZONES[6].rules.auction * 100)}% of lots are auctions.`);
+  assert.match(rulePhrases(8)[0], /inspected/);
+  assert.match(rulePhrases(10)[0], /twice as fast/);
+  assert.match(rulePhrases(4).join(' '), /counterfeit/);
+  assert.match(rulePhrases(4).join(' '), /auctions/);
+  assert.match(rulePhrases(3)[0], /28-day/);
+  assert.match(rulePhrases(1).join(' '), /barter/i);
+  assert.match(rewardPhrases(8).join(' '), /Freight costs 30% less everywhere/);
+  assert.match(rewardPhrases(7).join(' '), /Repairs cost 10% less everywhere/);
+  assert.match(rulePhrases(5)[0], /Managers, clients, upgrades and the Bank open here/, 'a feature a district opens is its rule, said once: the reward lists only what it gives for good');
+  assert.deepEqual(rewardPhrases(5), []);
+  assert.deepEqual(rewardPhrases(1), [], 'the first districts give nothing but the lesson');
+  assert.deepEqual(rulePhrases(99), []);
 });
 
-test('the sixteen teaches ids are all turned into words, in four tiers of four', () => {
-  for (const id of TEACHES) { const t = teachText(id); assert.ok(TEACH[id] && t.title && t.line, `teaches ${id}`); assert.equal(ZONE_IDS.filter((z) => ZONES[z].teaches === id).length, 1); }
-  assert.equal(teachText('constructor').title, 'Constructor', 'an unknown id never reads the prototype');
+test('the sixteen lessons are named once, by the Codex, and read the same in Travel and the Market', () => {
+  for (const id of TEACHES) {
+    const entry = CODEX.find((c) => c.id === id);
+    assert.equal(lessonTitle(id), entry.title, `${id}: the Codex's title`); assert.equal(lessonGist(id), entry.summary);
+    assert.equal(ZONE_IDS.filter((z) => ZONES[z].teaches === id).length, 1);
+  }
+  assert.equal(lessonTitle('constructor'), 'Constructor', 'an unknown id never reads the prototype');
   assert.equal(TIERS.length, 4);
   for (const t of TIERS) assert.equal(ZONE_IDS.filter((z) => ZONES[z].tier === t.n).length, 4);
 });
@@ -66,8 +73,8 @@ for (const days of STATES) for (const perks of PAIRS) {
           assert.equal((h.match(/class="tv-d /g) || []).length, 16);
           assert.equal((h.match(/class="chip good">✓ Open/g) || []).length, s.zones.length, 'one Open chip per open district');
           assert.equal((h.match(/→ Next stop/g) || []).length, s.zones.length < 16 ? 1 : 0, 'exactly one next stop');
-          assert.equal((h.match(/🔒 Locked/g) || []).length, Math.max(0, 16 - s.zones.length - 1));
-          assert.equal((h.match(/data-act="travel-codex"/g) || []).length, 16, 'every district links to the Codex');
+          assert.equal((h.match(/class="chip">🔒 /g) || []).length, Math.max(0, 16 - s.zones.length - 1), 'a locked district is one line with its gate');
+          assert.equal((h.match(/data-act="travel-codex"/g) || []).length, s.zones.length, 'every open district links to its Codex page (a locked one has no page to read)');
           assert.equal((h.match(/data-act="travel-go"/g) || []).length, s.zones.length, 'a Go button on open districts only');
           assert.match(text(h), new RegExp(`${s.zones.length} of 16 districts open`));
         }
@@ -80,18 +87,45 @@ test('the next district shows a progress bar of net worth toward its gate and th
   const ctx = fakeCtx({ days: 0 }), h = travel.html(ctx), g = ctx.g();
   assert.match(h, /aria-label="Net worth toward Flea Market Row"/);
   assert.match(text(h), /to go/);
-  assert.match(text(h), /Opens when your net worth reaches \$80\.00|Opens when your net worth reaches \$80/, 'a locked district beyond the next states its gate');
+  const missing = ctx.money(Math.max(0, ZONES[2].gate - g.netWorth()));
+  assert.ok(text(h.slice(h.indexOf('class="tv-sum"'), h.indexOf('</section>', h.indexOf('class="tv-sum"')))).includes(`Next stop: Flea Market Row . ${missing} to go.`), 'the summary at the top says how far the next district is: a player decides what to do next there, and the card that says it too is a screen down the list');
+  assert.match(text(h), /Campus Quad 🔒 \$80\.00/, 'a locked district beyond the next is one line that states its gate');
+  assert.ok(!text(h).includes(rulePhrases(3)[0]), 'and keeps its rule, reward and lesson under the line');
   const pct = +h.match(/Net worth toward Flea Market Row" aria-valuemin="0" aria-valuemax="100" aria-valuenow="(\d+)"/)[1];
   assert.equal(pct, Math.floor(Math.min(1, g.netWorth() / ZONES[2].gate) * 100));
 });
 
-test('a district card carries its rule, reward, idea and the buttons', () => {
-  const ctx = fakeCtx({ days: 25 }), h = travel.html(ctx);
-  assert.match(text(h), /Half the lots are auctions\./);
-  assert.match(text(h), /Freight 30% cheaper everywhere/);
-  assert.match(text(h), /Teaches Supply chains/);
-  assert.match(h, /data-act="travel-codex" data-id="supply-chain"/);
+test('a district card carries its rule, the lesson as a button to its Codex page, and the way in; the next stop adds what opening it gives', () => {
+  const ctx = fakeCtx({ days: 25 }), h = travel.html(ctx), g = ctx.g(), next = ZONE_IDS.find((id) => !g.s.zones.includes(id));
+  assert.match(text(h), new RegExp(`${Math.round(ZONES[6].rules.auction * 100)}% of lots are auctions\\.`));
+  assert.match(text(h), /Teaches Supply Chains/);
+  assert.match(h, /data-act="travel-codex" data-id="supply-chain"[^>]*aria-label="Read about Supply Chains in the Codex"/);
+  assert.ok(h.includes(`title="${ctx.esc(lessonGist('supply-chain'))}"`), 'the lesson in a line is the button\'s hover');
+  assert.ok(h.includes('title="Opening it gave you: Freight costs 30% less everywhere."'), 'what an open district gave is the hover on its name');
+  assert.match(text(h), new RegExp(`${ZONES[next].name} → Next stop`));
+  assert.match(text(h), /Opening it: /, 'the next stop says what opening it gives');
+  assert.ok(text(h).includes(`of ${ctx.money(ZONES[next].gate)} net worth.`), 'and says what its gate measures');
   assert.match(h, /You are here/);
+  assert.doesNotMatch(text(h), /Reward you earned|In your Codex/, 'said once');
+});
+
+test('a locked district past the next is one line; its rule, reward and lesson open under it, and the same words are its hover', () => {
+  const ctx = fakeCtx({ days: 25 }), g = ctx.g(), acts = travel.acts(ctx), s = g.s;
+  const far = ZONE_IDS.filter((id) => !s.zones.includes(id)).at(-1), Z = ZONES[far];
+  let h = travel.html(ctx);
+  const row = (html) => { const at = html.lastIndexOf('<li class="tv-d locked"', html.indexOf(`<summary data-act="travel-fold" data-k="d${far}"`)); return at < 0 ? '' : html.slice(at, html.indexOf('</li>', at)); };
+  const reward = rewardPhrases(Z).join(' '), tip = `Opens at ${ctx.money(Z.gate)} net worth. ${rulePhrases(Z)[0]}${reward ? ` Opening it: ${reward}` : ''} Teaches ${lessonTitle(Z.teaches)}.`;
+  assert.ok(h.includes(`title="${ctx.esc(tip)}"`), 'the hover carries the rule, the reward and the lesson');
+  assert.ok(!text(h).includes(rulePhrases(Z)[0]), 'but the rule is not on the page until the line is opened');
+  assert.match(h, new RegExp(`<summary data-act="travel-fold" data-k="d${far}"`));
+  acts['travel-fold'](el({ k: `d${far}` }));
+  assert.equal(ctx.U.fold[`travel.d${far}`], true); assert.equal(ctx.calls.at(-1), 'render');
+  h = travel.html(ctx);
+  assert.match(h, /<details class="cx-more" open>/); assert.ok(text(h).includes(rulePhrases(Z)[0]), 'opened, the rule is there');
+  assert.match(text(h), new RegExp(`Teaches ${lessonTitle(Z.teaches).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`));
+  assert.ok(/<details class="cx-more" open>/.test(row(h)) && text(row(h)).includes(rulePhrases(Z)[0]), 'it opens inside its own line');
+  assert.ok(text(row(h)).includes(`Opens at ${ctx.money(Z.gate)} net worth.`), 'and says what its amount is');
+  acts['travel-fold'](el({ k: `d${far}` })); assert.ok(!text(travel.html(ctx)).includes(rulePhrases(Z)[0]), 'and shut again');
 });
 
 test('travel-go moves the player, aims the camera and closes the drawer; a locked district refuses', () => {
@@ -191,7 +225,7 @@ test('shipping runs through the engine: cash is paid, crates leave, a freight ca
   assert.ok(ids.every((id) => !s.assets.some((x) => x.id === id)), 'the crates left');
   assert.deepEqual(ctx.U.shipIds, []); assert.equal(ctx.U.sel.size, 0);
   assert.equal(ctx.toasts.at(-1)[1], 'good');
-  assert.match(ctx.toasts.at(-1)[0], /Shipped 2 crates to .+ arrive in about \d+ h|In transit for \d+ virtual hours/, 'the player is told, by the engine or by the drawer');
+  assert.match(ctx.toasts.at(-1)[0], /Shipped 2 crates to .+ arrive in about \d+ h|In transit for \d+ hours/, 'the player is told, by the engine or by the drawer');
   const h = travel.html(ctx), f = s.freight.at(-1);
   assert.match(h, /data-tab="freight"[^>]*aria-pressed="true"/, 'the player lands on the freight tab');
   assert.ok(h.includes(`<i data-bar="freight:${f.id}"></i>`), 'a live bar for the new shipment');

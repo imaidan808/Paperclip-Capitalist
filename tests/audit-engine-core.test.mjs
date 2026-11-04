@@ -92,7 +92,7 @@ test('a buyer confirmed as a fraud can never be paid, and cannot be shipped to e
   const l = lead(g, 1, 'student', { budget: 8, scam: true });
   assert.equal(g.verifyLead(l.id).scam, true);
   const a = g.s.assets[0], cash = g.s.cash;
-  for (const opts of [undefined, REAL, { blind: true }]) { const q = g.quotePitch(a.id, l.id, undefined, opts); assert.equal(q.ok, false); assert.match(q.msg, /fraud/); }
+  for (const opts of [undefined, REAL, { blind: true }]) { const q = g.quotePitch(a.id, l.id, undefined, opts); assert.equal(q.ok, false); assert.match(q.msg, /Fraud confirmed/); }
   const r = g.pitch(a.id, l.id); assert.equal(r.ok, false);
   assert.ok(g.s.assets.some((x) => x.id === a.id)); assert.equal(g.s.cash, cash);
 });

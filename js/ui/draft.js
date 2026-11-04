@@ -166,16 +166,16 @@ export function cardHTML(id, st) {
 export function trayHTML(st) {
   const slots = [0, 1].map((i) => {
     const id = st.picks[i];
-    if (!id) return `<li class="dr-slot dr-empty"><span class="dr-slotn" aria-hidden="true">${i + 1}</span><span class="dr-slotb"><b>Open slot</b><span class="small mute">Pick a card.</span></span></li>`;
+    if (!id) return `<li class="dr-slot dr-empty"><span class="dr-slotn" aria-hidden="true">${i + 1}</span><span class="dr-slotb"><b>Open slot</b></span></li>`;
     const p = PERKS[id];
     return `<li class="dr-slot dr-full${st.added === id ? ' popin' : ''}"><span class="dr-ic" aria-hidden="true">${p.icon}</span><span class="dr-slotb"><b>${esc(p.name)}</b>${lineHTML('+', p.strength)}${lineHTML('-', p.cost)}</span><button type="button" class="btn ghost sm" data-act="drop" data-id="${id}" data-fid="drop-${id}" aria-label="Remove ${esc(p.name)} from your build">Remove</button></li>`;
   }).join('');
   const sum = summaryOf(st.picks), done = st.picks.length === MAX_PICKS;
   return `<h2 id="dr-tray-h">Your build</h2>
     <ol class="dr-slots" role="list" aria-labelledby="dr-tray-h">${slots}</ol>
-    <p class="dr-sum"><b class="gold">${done ? 'In short' : st.picks.length ? 'So far' : 'In short'}</b> ${esc(sum.text)}</p>
+    ${st.picks.length ? `<p class="dr-sum"><b class="gold">${done ? 'In short' : 'So far'}</b> ${esc(sum.text)}</p>` : ''}
     <div class="row"><button type="button" class="btn ghost sm" data-act="reroll" data-fid="dr-reroll">Reroll suggestion</button>${st.picks.length ? '<button type="button" class="btn ghost sm" data-act="clear" data-fid="dr-clear">Clear</button>' : ''}</div>
-    <p class="small mute dr-why">${st.suggested ? 'Suggested for balance: one Background covers the other\'s weak spot. Keep it or swap a card.' : 'Not sure? Reroll for a balanced pair.'}</p>`;
+    <p class="small mute dr-why">${st.suggested ? 'Suggested for balance: one Background covers the other\'s weak spot.' : 'Reroll for a balanced pair.'}</p>`;
 }
 
 export function specHTML(st) {
@@ -190,7 +190,7 @@ export function specHTML(st) {
 export function actionsHTML(st) {
   const left = MAX_PICKS - st.picks.length, ok = left === 0;
   const chip = (id) => `<span aria-hidden="true">${PERKS[id].icon}</span> ${esc(PERKS[id].name)}`;
-  const text = ok ? `Ready: ${st.picks.map(chip).join(' + ')}. You start with one paperclip and $0.`
+  const text = ok ? `Ready: ${st.picks.map(chip).join(' + ')}.`
     : `${st.picks.length ? chip(st.picks[0]) + ' chosen. ' : ''}Pick ${plural(left, 'more Background')} to begin.`;
   return `<span class="small ${ok ? 'green' : 'mute'} dr-need" id="dr-need">${text}</span>
     ${st.notice ? `<span class="small gold dr-notice">${esc(st.notice)}</span>` : ''}
@@ -219,7 +219,7 @@ export function draftHTML(st) {
   return `<form class="panel dr" id="sf" novalidate aria-labelledby="dr-h" data-snd>
     <header class="dr-head">
       <h1 id="dr-h" tabindex="-1">Draft your build</h1>
-      <p class="dr-lede"><b class="gold">Everyone starts the same: one paperclip and $0.</b> Your build is the difference. Choose two Backgrounds: each has a real strength and a real cost.</p>
+      <p class="dr-lede"><b class="gold">Everyone starts with one paperclip and $0.</b> Your build is the only difference.</p>
       ${st.room ? `<div class="callout">Joining room <b class="mono">${esc(st.room.code)}</b>. Your run starts on the instructor's clock.</div>` : ''}
       <p class="dr-tools"><button class="btn ghost sm" type="button" data-act="settings" data-fid="dr-sound">Display and sound</button></p>
     </header>

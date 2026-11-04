@@ -40,8 +40,7 @@ export const markerAt = (s, t) => pos(t, s.step, s.seed);
 
 const summary = (s) => {
   const r = result(s);
-  return `Repair done at ${Math.round(r.precision * 100)}% precision: parts and labor ran x${r.costMult.toFixed(2)} of the quote `
-    + `and the item came back at x${r.qualityMult.toFixed(2)} quality. Repair pays when the value it adds beats the bill.`;
+  return `Repair done at ${Math.round(r.precision * 100)}% precision.`; // the cost and quality multipliers are printed once, by the stage and the result
 };
 
 export function act(s, a) {

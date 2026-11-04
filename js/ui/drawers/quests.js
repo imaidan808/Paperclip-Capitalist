@@ -1,23 +1,25 @@
 // Quests drawer: the progression game. Level, streak and reputation, the three skills, the quest chain, daily bounties and achievement badges
 // (docs/V2_DESIGN.md sections 8 and 12). Contract: see the header of ../shell.js. Quest, bounty and badge data come from ctx.progress (js/meta/progress.js);
 // with no progress tracker (tests) the sections that need it are left out. State kept on the shared UI object U:
-//   U.quests  { ach: 'all' | 'earned' | 'todo', achAll: boolean, doneOpen: boolean }   the badge filter, the long list and the folded "done" list
+//   U.quests  { ach: 'all' | 'earned' | 'todo', achAll: boolean, doneOpen: boolean }   the badge filter (the badges still to earn open first), the long list and the folded "done" list
+//   U.fold    the folds the reader opened or shut (stock.js fold): what each skill does (open by itself while a point can be spent on it), and the quests still to come
 // Every control is a real button with a stable data-fid, so the shell can give back focus after it redraws the drawer.
-import { SKILLS, SKILL_MAX, PERKS, ZONES, xpForLevel } from '../../config.js';
+import { SKILLS, SKILL_MAX, PERKS, ZONES, ECON, WARN_LEAD, xpForLevel } from '../../config.js';
 import { esc } from '../common.js';
 import { fmtMoney as money, restoreQuality } from '../../market.js';
 import { QUEST_BY_ID } from '../../meta/progress.js';
+import { MONEY_SUMS } from '../../meta/quests.js';
 import { goToDistrict, keepScroll, rememberScroll } from './travel.js';
+import { fold, flip } from './stock.js';
 
 const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
 const pctN = (x) => Math.round(x * 100);
 const plural = (n, one, many = one + 's') => `${n} ${n === 1 ? one : many}`;
 const lvlBase = xpForLevel; // the engine's level curve (config.js)
-const MONEY_SUMS = new Set(['amount', 'net', 'price', 'surplus', 'total', 'gain', 'cost']);
 const fmtN = (x) => (Number.isInteger(x) ? String(x) : x.toFixed(x < 10 ? 1 : 0));
 const fmtX = (x) => (x >= 10 ? String(Math.round(x)) : String(Math.round(x * 10) / 10));
 const RARITY = { common: ['●', 'Common'], rare: ['◆', 'Rare'], epic: ['★', 'Epic'] };
-const ACH_SHOWN = 12;
+const ACH_SHOWN = 6;
 
 const Q = (ctx) => ctx.U.quests || {};
 /** "3 / 5" for a goal; money for the goals that add up dollars. */
@@ -36,6 +38,9 @@ function rewardChips(ctx, r = {}) {
 }
 
 // ------------------------------------------------------------------ skills: what each level does, from the engine's own formulas
+const dayWord = (h) => (h >= 24 ? `${h / 24} days` : `${h} hours`);
+/** The shock warning at a Capital Sourcing level, as the engine reads it (warnLead): the Market Research Suite counts as two more levels. */
+const warnAt = (l, research) => { const f = l + (research ? 2 : 0); return dayWord(f >= 5 ? WARN_LEAD.adv : f >= 3 ? WARN_LEAD.mid : WARN_LEAD.novice); };
 const EFFECTS = {
   ops: [
     ['Repair bill', (l) => `${fmtX(100 * 0.42 ** (l - 1))}% of list`],
@@ -50,7 +55,7 @@ const EFFECTS = {
   fintech: [
     ['Trading fees', (l) => `-${pctN(1 - Math.max(0.5, 1 - 0.06 * (l - 1)))}%`],
     ['Loan interest', (l) => `-${pctN(1 - Math.max(0.45, 1 - 0.07 * (l - 1)))}%`],
-    ['Early warning of shocks', (l) => (l >= 5 ? '7 days' : l >= 3 ? '3 days' : '12 hours')],
+    ['Early warning of shocks', (l, research) => warnAt(l, research)],
   ],
 };
 const DEAL = {
@@ -60,6 +65,7 @@ const DEAL = {
 };
 const BONUS_KEY = { ops: 'opsBonus', growth: 'growthBonus', fintech: 'fintechBonus' };
 
+const canRaise = (s, k) => s.skills[k] < SKILL_MAX && s.points >= 1; // a point in hand and a level to put it on: the skill's fold opens by itself, because the spend cannot be undone
 function skillCard(ctx, k) {
   const g = ctx.g(), s = g.s, K = SKILLS[k], base = s.skills[k], eff = g.lvl(k), bonus = g.P[BONUS_KEY[k]] || 0, maxed = base >= SKILL_MAX;
   const from = s.perks.map((id) => [PERKS[id]?.name, PERKS[id]?.mods?.[BONUS_KEY[k]]]).filter(([n, v]) => n && v);
@@ -67,17 +73,17 @@ function skillCard(ctx, k) {
   const pips = Array.from({ length: SKILL_MAX }, (_, i) => `<span class="qs-pip${i < base ? ' on' : ''}"></span>`).join('')
     + (bonus > 0 ? Array.from({ length: bonus }, () => '<span class="qs-pip bonus"></span>').join('') : '');
   const rows = EFFECTS[k].map(([label, f]) => {
-    const now = f(eff), nx = f(nextEff);
+    const now = f(eff, s.upg.research), nx = f(nextEff, s.upg.research);
     return `<li><span class="lb">${esc(label)}</span><span class="now">${esc(now)}</span>${!maxed && nx !== now ? `<span class="nx"><span class="sr">At the next level: </span><span aria-hidden="true">→ </span>${esc(nx)}</span>` : ''}</li>`;
   }).join('');
-  const can = !maxed && s.points >= 1;
+  const can = canRaise(s, k);
   const label = maxed ? 'Mastered' : s.points >= 1 ? `Spend a point: level ${base} → ${base + 1}` : `Level ${base} → ${base + 1} needs a skill point`;
   return `<article class="qs-skill${can ? ' ready' : ''}" data-skill="${k}">
     <header><h4>${esc(K.name)}</h4>${s.specialty === k ? '<span class="chip warn">★ Specialty</span>' : ''}</header>
     <div class="qs-pips" role="img" aria-label="Level ${base} of ${SKILL_MAX}${bonus ? `, ${bonus > 0 ? 'plus' : 'minus'} ${Math.abs(bonus)} from your Backgrounds, effective level ${eff}` : ''}">${pips}</div>
-    <p class="small qs-lv">Level <b>${base}</b>${bonus ? ` ${bonus > 0 ? '+' : '-'} <b>${Math.abs(bonus)}</b> from ${esc(from.map(([n]) => n).join(' and ') || 'your Backgrounds')} = effective level <b>${eff}</b>` : ''}${maxed ? '. Mastery reached.' : ''}</p>
+    <p class="small qs-lv">Level <b>${base}</b>${bonus ? ` ${bonus > 0 ? '+' : '-'} <b>${Math.abs(bonus)}</b> from ${esc(from.map(([n]) => n).join(' and ') || 'your Backgrounds')} = effective level <b>${eff}</b>` : ''}</p>
     <ul class="qs-fx" aria-label="What this skill does at your level">${rows}</ul>
-    <p class="tiny mute">${esc(K.blurb)} ${esc(DEAL[k])}</p>
+    ${fold(ctx, 'quests', 'sk-' + k, 'What it does', `<p class="tiny mute">${esc(K.blurb)} ${esc(DEAL[k])}</p>`, `${K.blurb} ${DEAL[k]}`, can)}
     <button class="btn${can ? '' : ' ghost'}" data-act="quests-spend" data-k="${k}" data-fid="qs-sp-${k}"${can ? '' : ' aria-disabled="true"'}>${esc(label)}</button>
   </article>`;
 }
@@ -87,22 +93,24 @@ const REP_WORDS = [[80, 'Trusted'], [60, 'Respected'], [40, 'Known'], [20, 'Shak
 function heroHTML(ctx) {
   const g = ctx.g(), s = g.s, lv = g.level(), lo = lvlBase(lv), hi = lvlBase(lv + 1), into = Math.max(0, s.xp - lo), need = hi - lo;
   const p = Math.round(clamp(into / need, 0, 1) * 100), xm = g.P.xpMult ?? 1, rep = Math.round(clamp(s.rep, 0, 100));
-  const word = REP_WORDS.find(([min]) => rep >= min)[1], flow = 0.85 + 0.003 * rep;
+  const word = REP_WORDS.find(([min]) => rep >= min)[1], flow = 0.85 + 0.003 * rep; // flow: engine _spawnLead
+  const flop = g.P.flopRep || 0; // the Creator: a rejected pitch (a spotted counterfeit is one) costs this much reputation on top, a sale that is not a win half of it (engine pitch)
+  // a win pays 5 XP for each step of the streak it makes, up to 10 steps (engine pitch); a win is a sale that nets more than 2% over fair value, after the district's tax and the fee (received > fmv x 1.02), and anything less ends the streak
   const streakLine = s.streak > 0
-    ? `Your next win earns <b>+${5 * (s.streak + 1)} bonus XP</b>. A trade with no gain ends the streak.`
-    : 'Win a trade to start a streak. Every win in a row adds more bonus XP to the next one.';
+    ? `Next win: <b>+${xpOf(ctx, 5 * Math.min(s.streak + 1, 10))} bonus XP</b>. A win nets more than 2% over fair value, after tax and fees.`
+    : 'A win nets more than 2% over fair value, after tax and fees. Each win in a row pays more bonus XP.';
   return `<section class="qs-hero" aria-label="Your progress">
     <div class="qs-lvl"><div class="qs-ring" style="--p:${p}%" role="img" aria-label="Level ${lv}, ${p} percent of the way to level ${lv + 1}"><b>${lv}</b></div>
       <div class="qs-lvtx"><h3>Level ${lv}</h3>${bar(`XP toward level ${lv + 1}`, into, need, 'gold')}
-        <p class="small"><b>${into}</b> / ${need} XP. <b>${Math.max(0, need - into)}</b> to level ${lv + 1}, which earns a skill point.</p>
-        ${xm !== 1 ? `<p class="tiny mute">Your Backgrounds: all XP ${xm > 1 ? '+' : '-'}${pctN(Math.abs(xm - 1))}%.</p>` : ''}</div></div>
+        <p class="small"><b>${into}</b> / ${need} XP. <b>${Math.max(0, need - into)}</b> to level ${lv + 1}.</p>
+        ${xm !== 1 ? `<p class="tiny mute">All XP ${xm > 1 ? '+' : '-'}${pctN(Math.abs(xm - 1))}% from your Backgrounds.</p>` : ''}</div></div>
     <div class="qs-stats">
-      <div class="qs-stat pts${s.points ? ' on' : ''}"><span aria-hidden="true">🎓</span><div><b>${s.points}</b> skill point${s.points === 1 ? '' : 's'} to spend<small>${s.points ? 'Spend them on a skill below.' : 'Every level you earn gives one.'}</small></div></div>
+      <div class="qs-stat pts${s.points ? ' on' : ''}"><span aria-hidden="true">🎓</span><div><b>${s.points}</b> skill point${s.points === 1 ? '' : 's'} to spend<small>${s.points ? '' : g.pointRoom() > 0 ? 'Every level gives one.' : `Every skill is mastered: a level pays ${ECON.pointXp} XP.`}</small></div></div>
       <div class="qs-stat"><span aria-hidden="true">🔥</span><div>Win streak <b>${s.streak}</b> <span class="mute">(best ${s.bestStreak})</span><small>${streakLine}</small></div></div>
     </div>
     <div class="qs-rep"><div class="qs-reprow"><span>Reputation: <b>${word}</b></span><span class="mono">${rep} / 100</span></div>
       <div class="qs-meter" role="meter" aria-label="Reputation" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${rep}" aria-valuetext="${rep} of 100, ${word}"><i style="width:${rep}%"></i></div>
-      <p class="tiny mute">Buyers arrive at <b>${flow.toFixed(2)}x</b> speed at this reputation. Each win adds 1. A rejected pitch costs 10.</p></div>
+      <p class="tiny mute">Buyers arrive at <b>${flow.toFixed(2)}x</b> speed. A win adds 1. A scam costs 10 and a spotted counterfeit ${3 + flop}.${flop ? ` A pitch with no fit costs ${flop} and a sale that is not a win ${flop / 2}.` : ''}</p></div>
   </section>`;
 }
 
@@ -135,8 +143,8 @@ function questsHTML(ctx) {
   const byDist = (list) => { const m = new Map(); for (const v of list) { if (!m.has(v.def.zone)) m.set(v.def.zone, []); m.get(v.def.zone).push(v); } return [...m.entries()].sort((a, b) => a[0] - b[0]); };
   const doneOpen = !!Q(ctx).doneOpen, preview = new Set(later.slice(0, 2).map((v) => v.def.id)); // only the next two upcoming quests spell out their goal
   const nowHTML = now.length ? `<div class="qs-grp"><h4 class="qs-lab">Now</h4>${now.map((v) => questCard(ctx, v, 'active')).join('')}</div>`
-    : (all.length === done.length ? '<div class="callout good"><b>Every quest is done.</b> You walked the whole road.</div>' : '<div class="callout">No quest is waiting on you right now. The next one unlocks as you open more districts.</div>');
-  const laterHTML = later.length ? `<div class="qs-grp"><h4 class="qs-lab">Coming up</h4>${byDist(later).map(([z, l]) => `<div class="qs-dgrp">${distHead(z)}${l.map((v) => questCard(ctx, v, 'locked', preview.has(v.def.id))).join('')}</div>`).join('')}</div>` : '';
+    : (all.length === done.length ? '<div class="callout good"><b>Every quest is done.</b></div>' : '<div class="callout">No quest is waiting on you right now. The next one unlocks with the next district.</div>');
+  const laterHTML = later.length ? `<div class="qs-grp">${fold(ctx, 'quests', 'later', `Coming up (${later.length})`, byDist(later).map(([z, l]) => `<div class="qs-dgrp">${distHead(z)}${l.map((v) => questCard(ctx, v, 'locked', preview.has(v.def.id))).join('')}</div>`).join(''))}</div>` : '';
   const doneHTML = done.length ? `<div class="qs-grp"><button class="btn sm ghost qs-fold" data-act="quests-done" data-fid="qs-fold" aria-expanded="${doneOpen}">${doneOpen ? 'Hide' : 'Show'} completed quests (${done.length})</button>
     ${doneOpen ? byDist(done).map(([z, l]) => `<div class="qs-dgrp">${distHead(z, `${l.length} done`)}<ul class="qs-donel">${l.map((v) => `<li><span aria-hidden="true">✓</span> <span class="sr">Done: </span>${esc(v.def.title)} <small>+${xpOf(ctx, v.def.reward.xp)} XP${v.def.reward.points ? ` and ${plural(v.def.reward.points, 'point')}` : ''}</small></li>`).join('')}</ul></div>`).join('') : ''}</div>` : '';
   return `<section class="sect" data-qsect="quests"><h3 tabindex="-1"><span>Quests</span><span>${done.length} of ${all.length} done</span></h3>${nowHTML}${laterHTML}${doneHTML}</section>`;
@@ -149,24 +157,24 @@ function dailiesHTML(ctx) {
       <div><h4>${esc(d.title)}${d.done ? ' <span class="chip good">Done</span>' : ''}</h4><p class="small">${esc(d.desc)}</p>
       <div class="qs-prog">${bar(`${d.title} progress`, d.done ? d.goal.count : d.p, d.goal.count, d.done ? 'green' : 'gold')}<b class="mono">${progText(d.goal, d.done ? d.goal.count : d.p)}</b></div>
       <div class="qs-rw"><span class="mute">Reward</span> ${rewardChips(ctx, d.reward)}</div></div></article>`).join('')}</div>`
-    : '<p class="small mute">Three fresh bounties arrive with every new day. Check back soon.</p>';
+    : '<p class="small mute">Three new bounties arrive each day.</p>';
   return `<section class="sect" data-qsect="daily"><h3 tabindex="-1"><span>Daily bounties</span><span>${n} of ${list.length || 3} today</span></h3>${body}</section>`;
 }
 
 // ------------------------------------------------------------------ achievements
 function achievementsHTML(ctx) {
-  const all = ctx.progress.achievements(), q = Q(ctx), filt = q.ach === 'earned' || q.ach === 'todo' ? q.ach : 'all';
+  const all = ctx.progress.achievements(), q = Q(ctx), filt = q.ach === 'earned' || q.ach === 'all' ? q.ach : 'todo'; // the badges still to earn open first: the earned ones are a tap away
   const earned = all.filter((a) => a.done).length;
   const rar = (r) => { const l = all.filter((a) => a.def.rarity === r); return `<span class="qs-rarity ${r}"><span aria-hidden="true">${RARITY[r][0]}</span> ${RARITY[r][1]} ${l.filter((a) => a.done).length}/${l.length}</span>`; };
   const ratio = (a) => (a.n ? a.p / a.n : 0);
   let list = all.filter((a) => (filt === 'earned' ? a.done : filt === 'todo' ? !a.done : true));
-  list = [...list].sort((a, b) => (b.done - a.done) || (a.hidden - b.hidden) || (ratio(b) - ratio(a))); // earned first, then the nearest to done, secrets last
+  list = [...list].sort((a, b) => (b.done - a.done) || (a.hidden - b.hidden) || (ratio(b) - ratio(a))); // in the full list earned come first, then the nearest to done, secrets last
   const shown = q.achAll ? list : list.slice(0, ACH_SHOWN);
   const chip = (k, label) => `<button class="btn sm ${filt === k ? '' : 'ghost'}" data-act="quests-ach" data-k="${k}" data-fid="qs-af-${k}" aria-pressed="${filt === k}">${label}</button>`;
   const tile = (a) => {
     const d = a.def, [shape, word] = RARITY[d.rarity] || RARITY.common;
     const cls = a.done ? 'earned' : a.hidden ? 'secret' : 'todo';
-    const body = a.hidden ? '<p class="tiny mute">A secret badge. Keep playing and it will show itself.</p>'
+    const body = a.hidden ? '<p class="tiny mute">Revealed when earned.</p>'
       : `<p class="tiny">${esc(d.desc)}</p>${a.done ? '<p class="tiny qs-got"><b>✓ Earned</b></p>' : `<div class="qs-prog">${bar(`${d.title} progress`, a.p, a.n, 'gold')}<b class="mono tiny">${progText(d.goal, a.p)}</b></div>`}`;
     return `<li class="qs-ach ${d.rarity} ${cls}"><span class="qs-ic" aria-hidden="true">${a.hidden ? '?' : esc(d.icon)}</span>
       <div><h4>${a.hidden ? 'Secret badge' : esc(d.title)}</h4><span class="qs-rarity ${d.rarity}"><span aria-hidden="true">${shape}</span> ${word}${a.hidden ? ' · secret' : ''}</span>${body}
@@ -175,8 +183,8 @@ function achievementsHTML(ctx) {
   const more = list.length > ACH_SHOWN ? `<button class="btn sm ghost" data-act="quests-ach-all" data-fid="qs-ach-all" aria-expanded="${!!q.achAll}">${q.achAll ? 'Show fewer badges' : `Show all ${list.length} badges`}</button>` : '';
   return `<section class="sect" data-qsect="badges"><h3 tabindex="-1"><span>Achievements</span><span>${earned} of ${all.length} earned</span></h3>
     <p class="qs-rars">${rar('common')} ${rar('rare')} ${rar('epic')}</p>
-    <div class="dtabs qs-filter" role="group" aria-label="Show badges">${chip('all', 'All')}${chip('earned', 'Earned')}${chip('todo', 'To earn')}</div>
-    ${shown.length ? `<ul class="qs-achs">${shown.map(tile).join('')}</ul>` : '<p class="small mute k-empty-line">Nothing here yet. Badges you earn will hang in this case.</p>'}${more}</section>`;
+    <div class="dtabs qs-filter" role="group" aria-label="Show badges">${chip('todo', 'To earn')}${chip('earned', 'Earned')}${chip('all', 'All')}</div>
+    ${shown.length ? `<ul class="qs-achs">${shown.map(tile).join('')}</ul>` : '<p class="small mute k-empty-line">Nothing here yet.</p>'}${more}</section>`;
 }
 
 // ------------------------------------------------------------------ the drawer
@@ -207,7 +215,8 @@ function acts(ctx) {
     },
     'quests-go'(el) { goToDistrict(ctx, +el.dataset.dist); },
     'quests-done'() { set({ doneOpen: !Q(ctx).doneOpen }); },
-    'quests-ach'(el) { set({ ach: ['earned', 'todo'].includes(el.dataset.k) ? el.dataset.k : 'all', achAll: false }); },
+    'quests-ach'(el) { set({ ach: ['earned', 'all'].includes(el.dataset.k) ? el.dataset.k : 'todo', achAll: false }); },
+    'quests-fold'(el) { const k = el.dataset.k; flip(ctx, 'quests', k, /^sk-/.test(k) && canRaise(ctx.g().s, k.slice(3))); },
     'quests-ach-all'() { set({ achAll: !Q(ctx).achAll }); },
     'quests-jump'(el) {
       const sec = ctx.$?.(`[data-qsect="${el.dataset.to}"]`, ctx.el?.drawer);

@@ -87,12 +87,12 @@ test('bank: refusals are explained in one line each, including the Backgrounds\'
   let { ctx, s } = rich(10, ['immigrant', 'heir']);
   s.mil.m1 = true; assert.ok(ctx.g().netWorth() < 5000);
   let html = bank.html(ctx);
-  assert.match(html, /No bank will lend to you yet: your record asks for \$5,000 net worth first/);
+  assert.match(html, /No bank will lend to you until your net worth reaches \$5,000/);
   assert.ok(html.includes('Community Circle'), 'the circle is not a bank loan');
   assert.ok(!html.includes('data-act="bank-draw" data-p="micro"'), 'no draw button on a blocked line');
   // Second-Chance: $8,000
   ({ ctx, s } = rich(10, ['second', 'pro'])); s.mil.m1 = true;
-  assert.match(bank.html(ctx), /\$8,000 net worth first/);
+  assert.match(bank.html(ctx), /until your net worth reaches \$8,000/);
   // a credit freeze
   ({ ctx, s } = rich(25)); const g = ctx.g(); g.injectEvent('fed', s.hour);
   html = bank.html(ctx); assert.match(html, /Credit freeze/); assert.match(html, /no new loans until the freeze lifts/i);
@@ -162,7 +162,7 @@ test('bank: the audit offers three paths in plain words and each one works', () 
     assert.deepEqual(checkHTML(html, 'audit'), []); wired(html, acts, 'audit');
     assert.match(html, /Respond within/); assert.match(html, /Hire a consultant for \$/); assert.match(html, /Pull a manager off the line/); assert.match(html, /Skip the filing and hope/);
     assert.match(html, new RegExp(`${Math.round(AUDIT.passChance * 100)}% chance nobody notices`)); assert.match(html, /stops for 5 days/);
-    assert.match(html, /Who does the paperwork\?/);
+    assert.match(html, /Manager for the paperwork/);
     const pipe = s.pipes[1], cash = s.cash, passed = s.auditPass;
     if (choice === 'B') acts['bank-apipe'](el({}, pipe.id));
     acts['bank-audit'](el({ c: choice }));
@@ -193,7 +193,7 @@ test('bank: the exit shows both quotes, asks before it ends the run, and explain
   acts['bank-exit'](el({ k: 'sale' })); assert.equal(ctx.calls.at(-1)[0], 'confirm'); assert.equal(s.exiting, null, 'nothing happens until the player confirms');
   assert.match(ctx.calls.at(-1)[1], /Sell the business/);
   s.auditFail = 1;
-  assert.match(bank.html(ctx), /clean compliance record/);
+  assert.ok(bank.html(ctx).includes(ctx.esc(g.exitQuote('ipo').msg)), 'the IPO card shows the engine\'s own reason');
   const calls = ctx.calls.length; acts['bank-exit'](el({ k: 'ipo' })); assert.equal(ctx.calls.length, calls); assert.equal(ctx.toasts.at(-1)[1], 'bad');
   s.auditFail = 0; acts['bank-exit'](el({ k: 'sale' })); ctx._confirm();
   assert.ok(s.exiting); assert.equal(s.exiting.kind, 'trade'); // the Bank says "sale"; the engine's own name for it is a trade sale assert.match(bank.html(ctx), /Your exit is settling/);

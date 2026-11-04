@@ -74,6 +74,7 @@ test('D3: the check can fail: with the clip taken out of the page, the Market\'s
     await p.eval(`localStorage.setItem('pc.academyDone.${slot}', 'true')`);
     await newGame(p, { perks: 'trades,pro', days: 3 });
     await p.eval(`document.querySelector('.dock [data-d="market"]').click()`); await sleep(500);
+    await p.eval(`document.querySelector('#drawer [data-act="market-tab"][data-t="lots"]').click()`); await sleep(300); // the Lots tab: its buttons carry the screen-reader-only spans (the Buyers tab no longer has a button on every card that says there is nothing to sell)
     await p.eval(`(() => { const s = document.createElement('style'); s.id = 'noclip'; s.textContent = '#drawer { overflow: hidden !important; } #drawer .db { position: static !important; }'; document.head.append(s); })()`); await sleep(200);
     const r = await p.eval(`(() => { const d = document.querySelector('#drawer'), db = d.querySelector('.db'), last = [...db.querySelectorAll('button, a[href], input, select, summary')].filter((e) => e.getClientRects().length).pop(); last.scrollIntoView({ block: 'center' }); return { scrollTop: d.scrollTop, over: d.scrollHeight - d.clientHeight, sr: db.querySelectorAll('.sr').length }; })()`);
     assert.ok(r.sr > 0, 'the Market\'s list has screen-reader-only spans (what widens the drawer\'s own scroll area)');

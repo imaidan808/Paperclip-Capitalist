@@ -37,15 +37,23 @@ test('WebSocket relay forwards, isolates rooms, and replays the last snapshot an
     const seenS1 = [], seenX = [];
     s1.on((m) => seenS1.push(m)); stranger.on((m) => seenX.push(m));
     await until(() => teacher.state === 'open' && s1.state === 'open' && stranger.state === 'open');
+    // a rewind and a shock are live messages: the relay forwards them to whoever is connected and keeps neither, so a student who is offline is not rewound (the faculty kit and the dashboard say so; tests/copy2-debrief.test.mjs D7).
+    // They go first, as Session.rewind sends its rewind before its clock, so when s1 has heard the clock the relay has handled all three.
+    teacher.send({ t: 'rewind', toHour: 24 });
+    teacher.send({ t: 'inject', kind: 'fed', atHour: 200, id: 'inj-fed-200-1' });
     teacher.send({ t: 'clock', hour: 100, speed: 4, paused: false });
     s1.send({ t: 'snap', snap: { pid: 'S1', nw: 123 } });
     await until(() => seenS1.some((m) => m.t === 'clock'));
+    assert.ok(seenS1.some((m) => m.t === 'rewind') && seenS1.some((m) => m.t === 'inject'), 'a connected student is sent the rewind and the shock as they happen');
     assert.equal(seenX.length, 0, 'no leakage between rooms');
     const late = track(new Room({ code: 'CLASS', pid: 'S2', key: 'key-' + 'S2' + '-0000000000', handle: 's2', role: 'student', relay: url }));
     const seenLate = []; late.on((m) => seenLate.push(m));
     await until(() => seenLate.some((m) => m.t === 'clock') && seenLate.some((m) => m.t === 'snap'));
     assert.equal(seenLate.find((m) => m.t === 'clock').hour, 100);
     assert.equal(seenLate.find((m) => m.t === 'snap').snap.nw, 123);
+    // and nothing else: a frame the relay sent after the snapshot would still be on its way when the two above are in, hence the pause
+    await new Promise((r) => setTimeout(r, 200));
+    assert.deepEqual(seenLate.map((m) => m.t).sort(), ['clock', 'snap'], 'a late joiner (a student who was offline) is replayed the clock and the snapshots, not the rewind or the shock that came before it');
     // a student may not set the room clock for everyone
     s1.send({ t: 'clock', hour: 5, speed: 99, paused: true });
     const late2 = track(new Room({ code: 'CLASS', pid: 'S3', key: 'key-' + 'S3' + '-0000000000', handle: 's3', role: 'student', relay: url }));

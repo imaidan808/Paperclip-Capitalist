@@ -28,6 +28,7 @@ const pitch = (zone, extra = {}) => ({ type: 'pitch', day: 1, zone, cls: 'radio'
 for (const days of STATES) for (const perks of PAIRS) {
   test(`html at day ${days} with ${perks.join(' + ')}: valid, plain, every section there`, () => {
     const ctx = mk({ days, perks }), g = ctx.g();
+    ctx.U.fold = { 'quests.later': true }; // the quests still to come are a fold, opened here
     const h = quests.html(ctx), t = text(h);
     assert.deepEqual(checkHTML(h, `day ${days}`), []);
     assert.ok(!STALE.test(h), 'a stale v1 term');
@@ -53,13 +54,13 @@ test('the hero: level ring, XP to the next level, streak meaning and reputation 
   assert.match(t, new RegExp(`${s.xp - lo} / ${hi - lo} XP`));
   assert.match(t, new RegExp(`${hi - s.xp} to level ${lv + 1}`));
   assert.match(h, new RegExp(`aria-label="Level ${lv}, \\d+ percent of the way to level ${lv + 1}"`));
-  assert.match(t, /Win streak 3 \(best 7\)/); assert.match(t, /Your next win earns \+20 bonus XP/, 'the engine adds 5 XP per streak step to the next win');
+  assert.match(t, /Win streak 3 \(best 7\)/); assert.match(t, new RegExp(`Next win: \\+${Math.round(20 * g.P.xpMult)} bonus XP`), 'the engine adds 5 XP per streak step to the next win (the Backgrounds\' XP multiplier applies, as on a quest reward)');
   assert.match(t, /Reputation: Respected 72 \/ 100/);
   assert.match(t, new RegExp(`Buyers arrive at ${(0.85 + 0.003 * 72).toFixed(2)}x speed`));
-  s.streak = 0; assert.match(text(quests.html(ctx)), /Win a trade to start a streak/);
+  s.streak = 0; assert.match(text(quests.html(ctx)), /A win nets more than 2% over fair value, after tax and fees\./);
   s.rep = 5; assert.match(text(quests.html(ctx)), /Reputation: Doubtful/);
   // a Background that changes how fast you learn is stated
-  const heir = mk({ perks: ['gigger', 'pro'] }); assert.match(text(quests.html(heir)), /all XP \+25% -15%|all XP [+-]\d+%/);
+  const heir = mk({ perks: ['gigger', 'pro'] }); assert.match(text(quests.html(heir)), /All XP [+-]\d+% from your Backgrounds/);
 });
 
 test('skills: effective level, the Background bonus apart, and what the next level changes', () => {
@@ -83,7 +84,7 @@ test('skills: effective level, the Background bonus apart, and what the next lev
   assert.match(h0, /data-act="quests-spend" data-k="ops" data-fid="qs-sp-ops" aria-disabled="true"/); assert.match(text(h0), /needs a skill point/);
   // mastery
   s.skills.fintech = SKILL_MAX; s.points = 3;
-  const hm = quests.html(ctx); assert.match(text(hm), /Mastered/); assert.match(text(hm), /Mastery reached/);
+  const hm = quests.html(ctx); assert.match(text(hm), /Mastered/);
   assert.match(hm, /data-k="fintech" data-fid="qs-sp-fintech" aria-disabled="true"/);
 });
 
@@ -109,9 +110,12 @@ test('the dock badge shows the skill points waiting and nothing otherwise', () =
   assert.equal(quests.id, 'quests'); assert.equal(quests.icon, '🎯'); assert.equal(quests.label, 'Quests'); assert.equal(quests.visible(ctx), true);
 });
 
-test('quests: the active quest first with a progress bar and its reward, locked ones greyed and saying what unlocks them', () => {
+test('quests: the active quest first with a progress bar and its reward, locked ones in a fold, greyed and saying what unlocks them', () => {
   const ctx = mk(), pr = ctx.progress, g = ctx.g();
   let h = quests.html(ctx), t = text(h);
+  assert.doesNotMatch(h, /class="qs-q locked"/, 'the quests still to come are not drawn while their fold is shut');
+  assert.match(t, new RegExp(`Coming up \\(${QUESTS.filter((q) => q.zone <= 2).length - 1}\\)`), 'it says how many wait');
+  ctx.U.fold = { 'quests.later': true }; h = quests.html(ctx); t = text(h);
   assert.match(h, /class="qs-q active"/); assert.match(t, /Now \S+ First Swap/); assert.match(t, /0 \/ 1/);
   assert.match(h, /role="progressbar"[^>]*aria-label="First Swap progress"/);
   assert.match(t, new RegExp(`Reward \\+${Math.round(50 * g.P.xpMult)} XP`), 'the reward is shown after the Backgrounds\' XP multiplier');
@@ -180,7 +184,7 @@ test('daily bounties: three a day with bars, from the first morning on', () => {
   assert.equal(pr.dailies().length, 3, 'day 1 has its three bounties already');
   assert.match(text(quests.html(ctx)), /0 of 3 today/);
   pr.m.d = { day: 0, list: [] }; // a save from before bounties were rolled on day 1
-  assert.match(text(quests.html(ctx)), /Three fresh bounties arrive with every new day/);
+  assert.match(text(quests.html(ctx)), /Three new bounties arrive each day\./);
   pr.onEvent({ type: 'day', day: 2 });
   assert.equal(pr.dailies().length, 3);
   let h = quests.html(ctx); const t = text(h);
@@ -205,9 +209,10 @@ test('badges: rarity has a shape and a word, secrets are a question mark, progre
   assert.match(t, /Secret badge/); assert.match(t, /· secret/); assert.match(h, /aria-hidden="true">\?<\/span>/);
   // epic badges promise a skill point
   assert.match(t, /\+1 skill point/);
-  // earn a secret and an ordinary one
+  // earn a secret and an ordinary one (the badges still to earn open first, so the full list is asked for)
   const sec = secrets[0], plain = ACHIEVEMENTS.find((x) => !x.hidden && x.goal.count > 1);
   pr.m.a[sec.id] = { p: sec.goal.count, done: true, day: 3 }; pr.m.a[plain.id] = { p: 1, done: false };
+  a['quests-ach'](el({ k: 'all' })); a['quests-ach-all']();
   h = quests.html(ctx); t = text(h);
   assert.ok(t.includes(sec.title), 'an earned secret shows itself'); assert.match(t, /✓ Earned/);
   assert.match(t, new RegExp(`${plain.goal.count > 9 ? `1 / ${plain.goal.count}` : `1 / ${plain.goal.count}`}`), 'progress on an unfinished badge');
@@ -216,21 +221,25 @@ test('badges: rarity has a shape and a word, secrets are a question mark, progre
   assert.deepEqual(checkHTML(h), []);
 });
 
-test('badge filters and the long list: earned first, only twelve until Show all', () => {
+test('badge filters and the long list: what is still to earn opens first, only six until Show all, the earned ones a tap away', () => {
   const ctx = mk(), pr = ctx.progress, a = quests.acts(ctx);
   const rare = ACHIEVEMENTS.find((x) => x.rarity === 'rare' && !x.hidden); pr.m.a[rare.id] = { p: rare.goal.count, done: true };
   let h = quests.html(ctx);
-  assert.equal((h.match(/class="qs-ach /g) || []).length, 12);
-  assert.match(text(h), /Show all 78 badges/);
-  assert.ok(h.indexOf(rare.title) > -1 && h.indexOf(rare.title) < h.search(/class="qs-ach \w+ todo"/), 'earned badges come first');
+  assert.equal((h.match(/class="qs-ach /g) || []).length, 6);
+  assert.match(text(h), /Show all 77 badges/); assert.match(h, /data-k="todo"[^>]*aria-pressed="true"/);
+  assert.ok(!h.includes(rare.title) && !/class="qs-ach \w+ earned"/.test(h), 'an earned badge is not in front of the ones to earn');
+  assert.ok(h.indexOf('data-k="todo"') < h.indexOf('data-k="earned"') && h.indexOf('data-k="earned"') < h.indexOf('data-k="all"'), 'To earn, Earned, All');
   a['quests-ach'](el({ k: 'earned' }));
-  h = quests.html(ctx); assert.equal((h.match(/class="qs-ach /g) || []).length, 1); assert.match(h, /data-k="earned"[^>]*aria-pressed="true"/); assert.doesNotMatch(text(h), /Show all/);
+  h = quests.html(ctx); assert.equal((h.match(/class="qs-ach /g) || []).length, 1); assert.ok(h.includes(rare.title)); assert.match(h, /data-k="earned"[^>]*aria-pressed="true"/); assert.doesNotMatch(text(h), /Show all/);
+  a['quests-ach'](el({ k: 'all' }));
+  h = quests.html(ctx); assert.equal((h.match(/class="qs-ach /g) || []).length, 6);
+  assert.ok(h.indexOf(rare.title) > -1 && h.indexOf(rare.title) < h.search(/class="qs-ach \w+ todo"/), 'in the full list earned badges come first');
   a['quests-ach'](el({ k: 'todo' }));
   h = quests.html(ctx); assert.ok(!(h.match(/class="qs-ach \w+ earned"/g) || []).length);
   a['quests-ach-all'](); h = quests.html(ctx); assert.equal((h.match(/class="qs-ach /g) || []).length, 77); assert.match(text(h), /Show fewer badges/);
-  a['quests-ach'](el({ k: 'nonsense' })); assert.equal(ctx.U.quests.ach, 'all');
-  // nothing earned yet: a friendly empty state
-  const fresh = mk(); quests.acts(fresh)['quests-ach'](el({ k: 'earned' })); assert.match(text(quests.html(fresh)), /Nothing here yet/);
+  a['quests-ach'](el({ k: 'nonsense' })); assert.equal(ctx.U.quests.ach, 'todo');
+  // nothing earned yet: the empty state is one line
+  const fresh = mk(); quests.acts(fresh)['quests-ach'](el({ k: 'earned' })); assert.match(text(quests.html(fresh)), /Nothing here yet\./);
 });
 
 test('the jump bar scrolls to a section and moves focus to its heading', () => {

@@ -160,7 +160,7 @@ dialog.alert { border-color: var(--red); } dialog .x { float: right; }
 pre.ascii { background: var(--bg); border: 1px solid var(--line); padding: .6rem; overflow: auto; font-size: .78rem; margin: .4rem 0; white-space: pre-wrap; }
 
 /* title + setup */
-.hero { min-height: 70vh; display: grid; place-content: center; text-align: center; gap: .8rem; padding: 2rem 0; }
+.hero { min-height: 70vh; display: grid; grid-template-columns: minmax(0, 62rem); place-content: center; text-align: center; gap: .8rem; padding: 2rem 0; } /* one track of a fixed width: an auto track took the width of its content, so shorter panel text made 2 columns of 3 and a fold opening made the grid jump */
 .hero h1 { font-size: clamp(2rem, 6vw, 3.6rem); color: var(--gold); text-shadow: 4px 4px 0 #000; }
 .hero .sub { color: var(--mute); max-width: 40rem; margin: 0 auto; }
 .choices { display: grid; grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr)); gap: .8rem; text-align: left; margin-top: .8rem; }
@@ -188,8 +188,10 @@ label.pick input { float: right; }
 /* a fold: a summary that opens the detail (the Academy's result, a Codex page, the Deal Room's result) */
 :is(.ac-more, .cx-more, .deal-more) { border: 1px solid var(--line); background: var(--panel2); margin: .4rem 0; }
 :is(.ac-more, .cx-more, .deal-more) > summary { cursor: pointer; padding: .5rem .75rem; font-weight: 700; list-style: none; display: flex; align-items: center; gap: .5rem; }
-:is(.ac-more, .cx-more, .deal-more) > summary::-webkit-details-marker { display: none; }
-:is(.ac-more, .cx-more, .deal-more) > summary::before { content: "+"; display: inline-grid; place-items: center; flex: none; width: 1.1rem; height: 1.1rem; border: 1px solid var(--cyan); color: var(--cyan); font: 700 .8rem/1 ui-monospace, Menlo, monospace; }
-:is(.ac-more, .cx-more, .deal-more)[open] > summary::before { content: "\2212"; }
+/* the bare folds (the title's relay and recovery, the Debrief's and the dashboard's notes) take the marker and a target a finger can hit; what they hold is a form or a table that fills a card, so they have no box */
+:is(details.gap, details.in-code) > summary { cursor: pointer; padding-block: .6rem; font-weight: 700; list-style: none; display: flex; align-items: center; gap: .5rem; }
+:is(.ac-more, .cx-more, .deal-more, details.gap, details.in-code) > summary::-webkit-details-marker { display: none; }
+:is(.ac-more, .cx-more, .deal-more, details.gap, details.in-code) > summary::before { content: "+"; display: inline-grid; place-items: center; flex: none; width: 1.1rem; height: 1.1rem; border: 1px solid var(--cyan); color: var(--cyan); font: 700 .8rem/1 ui-monospace, Menlo, monospace; }
+:is(.ac-more, .cx-more, .deal-more, details.gap, details.in-code)[open] > summary::before { content: "\2212"; }
 :is(.ac-more, .cx-more, .deal-more) > :not(summary) { margin-inline: .75rem; }
 :is(.ac-more, .cx-more, .deal-more)[open] { padding-bottom: .55rem; }

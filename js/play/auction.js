@@ -91,7 +91,7 @@ export function legal(s) {
   return (s.budget == null || nextBid(s) <= s.budget + 1e-9 ? [{ type: 'bid' }] : []).concat([{ type: 'drop' }]);
 }
 
-const LINE = { bid: '%w bids %p.', jump: '%w jumps to %p!', drop: '%w drops out at %p.', wait: 'Someone is watching and says nothing.', sold: 'Sold to %w for %p.', nosale: 'No sale: nobody met the opening price.' };
+const LINE = { bid: '%w bids %p.', jump: '%w jumps to %p.', drop: '%w drops out at %p.', wait: 'Someone is watching and says nothing.', sold: 'Sold to %w for %p.', nosale: 'No sale: nobody met the opening price.' };
 export function act(state, action) {
   if (!state || !action || !legal(state).some((l) => l.type === action.type)) return { state, say: null, done: !!(state && state.done) };
   const s = JSON.parse(JSON.stringify(state)), rng = new RNG(s.rs), mark = s.events.length;
@@ -112,9 +112,9 @@ function pubOf(s) {
 export function ceiling(pub) { return pub.estimate * (1 - clamp(0.05 * (pub.rivals - 2), 0, 0.3)); }
 
 function advise(s) {
-  const p = pubOf(s), c = ceiling(p), over = p.budget != null && p.next > p.budget + 1e-9, ok = p.next <= c + 1e-9 && !over, curse = `With ${p.rivals} rival${p.rivals === 1 ? '' : 's'}, the winner is usually whoever guessed highest, and that guess is usually too high (the winner's curse).`;
-  const seen = p.drops.length ? ` ${p.drops.length} rival${p.drops.length === 1 ? '' : 's'} already dropped near ${money(Math.max(...p.drops))}; that is evidence.` : '';
-  return { action: { type: ok ? 'bid' : 'drop' }, ceiling: sig(c), concept: 'winners-curse', text: `${curse} Do not bid above your own estimate (${money(p.estimate)}) less a margin: stop near ${money(c)}.${seen} ${ok ? `The next bid, ${money(p.next)}, is still inside that.` : over ? `The next bid, ${money(p.next)}, is past your budget (${money(p.budget)}): drop.` : `The next bid, ${money(p.next)}, is past it: drop and keep your cash.`}` };
+  const p = pubOf(s), c = ceiling(p), over = p.budget != null && p.next > p.budget + 1e-9, ok = p.next <= c + 1e-9 && !over, n = p.drops.length;
+  const seen = n ? ` ${n === 1 ? 'A rival has' : 'Rivals have'} dropped near ${money(Math.max(...p.drops))}; that is evidence.` : ''; // what the room printed (the rivals, the estimate) is not told again: the stop, how the next bid stands to it, and what a drop shows
+  return { action: { type: ok ? 'bid' : 'drop' }, ceiling: sig(c), concept: 'winners-curse', text: `Stop near ${money(c)}: your estimate less a margin for the winner's curse. ${ok ? `The next bid, ${money(p.next)}, is inside that.` : over ? `The next bid, ${money(p.next)}, is past your limit (${money(p.budget)}): drop.` : `The next bid, ${money(p.next)}, is past that: drop.`}${seen}` };
 }
 
 export function view(s) { // never the rivals' limits, the true value or their styles, only moods and what they have done

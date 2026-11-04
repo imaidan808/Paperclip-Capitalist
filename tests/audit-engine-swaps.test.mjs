@@ -407,7 +407,7 @@ test('S5: the guardrail values what comes in where the receiver would hold it: a
   const price = Math.round(RICH.pub(van).fmv * 100) / 100;
   // POOR proposes: cash for the crate in district 7
   const mine = POOR.createOffer({ to: 'RICH', giveCash: price, want: { assets: [RICH.pub(van)], cash: 0 } });
-  assert.equal(mine.ok, false); assert.match(mine.msg, /once what you ask for lands/);
+  assert.equal(mine.ok, false); assert.match(mine.msg, /priced where you would hold the crates you ask for/);
   assert.ok(!POOR.out.some((m) => m.t === 'flag'), 'a bid for a crate from a district the buyer cannot enter is not misconduct: no flag for the instructor');
   // RICH proposes the same to POOR: the recipient is protected too
   const offer = { id: 'Ov', from: 'RICH', fromHandle: 'R', to: 'POOR', give: { assets: [{ ...RICH.pub(van) }], cash: 0, royalty: null }, want: { assets: [], cash: price }, skills: {} };

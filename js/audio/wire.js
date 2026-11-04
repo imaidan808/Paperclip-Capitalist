@@ -19,7 +19,7 @@ const SPEED_STEPS = [0.25, 1, 4, 16, 64];
  * for every level, every milestone, every epic achievement and the same loud alert on every laptop at the moment the instructor deployed a shock. With the rule on, those play the voice one tier
  * down that the sound map already has, so nothing new is composed and every level of the tiers is as measured: a level plays its everyday run (`level.up` s, never the full fanfare or the big one),
  * an epic achievement plays the rare one, a milestone the quest-complete run, and the three scheduled shocks play the medium shock voices (TikTok the bright one, the Fed and the tariff the sinking
- * one). The toast, the ledger row and the breaking-news dialog say what happened in words either way. `quiet` is `settings.audio.quiet`. Returns [id, opts]; with the rule off it is the request unchanged.
+ * one). The toast, the ledger row and the alert dialog say what happened in words either way. `quiet` is `settings.audio.quiet`. Returns [id, opts]; with the rule off it is the request unchanged.
  * Every call site that asks for one of these sounds goes through it (a source scan in tests/audio-r6-wire.test.mjs holds that): the wiring below, the shell's achievement request, the audition page.
  */
 const SOFT_SHOCK = { tiktok: 'viral', fed: 'glut', tariff: 'glut' };
@@ -116,7 +116,7 @@ export function eventCalls(ev, st = newWireState(), hooks = {}) {
   }
 }
 
-/** A note's meaning when the engine did not tag it with a `kind`: the texts are pinned by a test, so a copy edit cannot silently mute a sound. */
+/** A note's meaning: its `kind`, which the engine and the session write for every note a sound depends on (tests/copy2-messages.test.mjs), else its words. */
 export function noteKind(n) {
   if (n.kind) return n.kind;
   const t = String(n.text || '');
@@ -154,7 +154,7 @@ export function noteCalls(n, st = newWireState(), hooks = {}) {
   if (k === 'scam') { st.scamAt = now; return []; }
   if (k === 'counterfeit') { st.counterfeitAt = now; return []; }
   if (k === 'settle') return calls(['request', 'cash.in', { variant: 'settle', clock: true, meta: { amount: amt } }]);
-  const zoneOf = () => { const t = String(n.text), id = Object.keys(ZONES).find((z) => t.includes(' in ' + ZONES[z].short + '.') || t.includes(' in ' + ZONES[z].short + ':')); return id ? Number(id) : undefined; }; // "Freight arrived in Harbor.": pan from that district
+  const zoneOf = () => { if (Number.isInteger(n.z)) return n.z; const t = String(n.text), id = Object.keys(ZONES).find((z) => t.includes(' in ' + ZONES[z].short + '.') || t.includes(' in ' + ZONES[z].short + ':')); return id ? Number(id) : undefined; }; // `z` is the engine's; a hand-made note says "Freight arrived in Harbor."
   const where = () => { const z = zoneOf(), p = z != null && hooks.pan ? hooks.pan('zone', z) : undefined; return p === undefined ? {} : { pan: p }; };
   if (k === 'freight-arrive') return calls(['request', 'ship.arrive', { clock: true, ...where(), ...awayFrom(zoneOf(), hooks) }]);
   if (k === 'customs' || k === 'damage') return calls(['request', 'ship.trouble', { variant: k, state: 'trouble-' + k, ...(k === 'customs' ? { ...where(), ...awayFrom(zoneOf(), hooks) } : {}) }]);
@@ -166,7 +166,7 @@ export function noteCalls(n, st = newWireState(), hooks = {}) {
   if (k === 'swap') return calls(['request', 'swap.done', {}]);
   if (k === 'insolvent') return [];
   if (n.audit) return calls(['request', 'audit.notice', {}]);
-  if (n.alert && Number(n.alert.level) >= 1 && /effective in/.test(String(n.text))) return calls(['request', 'alert.advance', { variant: 'l' + Math.min(3, Math.max(1, Math.round(n.alert.level))) }]);
+  if (n.alert && Number(n.alert.level) >= 1 && (k === 'advance' || /effective in/.test(String(n.text)))) return calls(['request', 'alert.advance', { variant: 'l' + Math.min(3, Math.max(1, Math.round(n.alert.level))) }]);
   if (n.final) return calls(['request', 'run.end', { variant: n.exit || /^Exit complete/.test(String(n.text)) ? 'done' : 'horizon' }]);
   return [];
 }

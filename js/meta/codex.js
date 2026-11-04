@@ -817,7 +817,7 @@ export const CODEX = [
     summary: "When money gets scarce, rates and fees jump and new loans freeze. Floating-rate debt is where it hurts first.",
     body: [
       "A credit crunch is when the cost of borrowing leaps and lenders pull back. In the game's Fed Taper the base rate climbs from 2.5% to 8.5% (+600 bps), the fee on trades rises from 2.5% to 12%, pipeline overhead climbs 20%, and the Bank refuses new loans for 10 days.",
-      "Open loans re-price within a day. A loan that cost 7.0% per 30 days now costs 13.0%, so the daily interest on $2,000 goes from $4.67 to $8.67, up 86%. Every sale gets dearer too. A crunch is a test of working capital: those with a buffer pay the new price, and the rest sell stock into a falling market to raise cash.",
+      "Open loans re-price within a day. A loan that cost 7.0% per 30 days now costs 13.0%, so the daily interest on $2,000 goes from $4.67 to $8.67, up 86%. Every sale gets dearer too. A crunch is a test of working capital: those with a buffer pay the new price, and the rest sell stock at the 12% fee to raise cash.",
       "A warning arrives ahead of time and Fintech lengthens it. Use it to repay and build cash.",
     ],
     formula: "new rate = old rate + 6 points; daily interest = principal x rate / 30",
@@ -1069,7 +1069,7 @@ export const CODEX = [
     summary: "A network is worth more with each new member, because every member adds possible connections.",
     body: [
       "A telephone is useless alone. Add a second and there is one possible call. Add a tenth and there are forty-five. When a product, a market or a community gets more valuable as more people join, it has a network effect. The number of possible pairs grows far faster than the number of members, though in real networks not every pair is useful, so treat the count as an upper bound.",
-      "In the game, peer trades are your network. Each classmate who trades widens your choice of swaps, and offers more than 40% from fair value are blocked to keep them honest. But beware the opposite. The same crowd that makes a market useful can also saturate it. A network effect is positive when you gain from the others being there, and negative when you compete for the same buyers.",
+      "In the game, peer trades are your network. Each classmate who trades widens your choice of swaps, and offers whose two sides are more than 40% apart are blocked to keep them honest. But beware the opposite. The same crowd that makes a market useful can also saturate it. A network effect is positive when you gain from the others being there, and negative when you compete for the same buyers.",
       "Well-Connected players start with a head start here: buyers arrive faster and bring bigger budgets.",
     ],
     formula: "possible pairs = n x (n - 1) / 2",

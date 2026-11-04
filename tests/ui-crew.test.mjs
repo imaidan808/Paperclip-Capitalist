@@ -59,7 +59,7 @@ for (const perks of PAIRS) for (const days of STAGES) {
       if (tab === 'crew') {
         for (const p of s.pipes) assert.ok(html.includes(`data-bar="pipe:${p.id}"`), `a live bar for ${p.id}`);
         assert.equal((html.match(/data-pipe="/g) || []).length, s.pipes.length, 'one card per manager');
-        if (s.pipes.length) assert.match(html, /\d+ of \d+ recent pitches use this niche/, 'saturation in words');
+        if (s.pipes.length) assert.match(html, /\d+% of recent pitches use this niche/, 'saturation in words: the niche\'s share, as the Debrief says it');
         if (s.mil.m1) assert.match(html, /Hire a manager/);
       }
       if (tab === 'upgrades') for (const u of Object.values(UPGRADES)) assert.ok(html.includes(u.name));
@@ -85,8 +85,10 @@ test('crew: every manager card shows lane, status, level, per cycle and per day,
 test('crew: things that cannot be done say why, in the page', () => {
   const { ctx, g, s } = rich(25);
   s.cash = 1; const html = crew.html(ctx);
-  assert.match(html, /Upgrade:<\/b> Short by/);
-  assert.match(html, /Release:<\/b> opens when this cycle ends/);
+  assert.match(html, /<p class="cr-why small"><b>Level \d:<\/b> Short by \$[\d,.]+\.<\/p>/, 'the upgrade says what it lacks, once, and names the button it is about');
+  // a release that must wait says why on the button, in the page: a title is a hover, and a tap or a key on a shut control does nothing (common.js delegate), so a phone or a keyboard would see a dead button
+  const shut = s.pipes.filter((p) => p.inflight); assert.ok(shut.length >= 2);
+  for (const p of shut) assert.match(html, new RegExp(`data-act="crew-rel" data-id="${p.id}"[^>]*aria-disabled="true" title="[^"]+">Release: (mid-cycle|needs capital at 0|opens in \\d+ h)</button>`), `${p.id}: shut, and says what opens it on the button`);
   // an audit that has not been answered locks hiring and upgrading
   s.mil.m2 = true; s.auditFirst = false; s.auditPending = null;
   assert.ok(g.autoLocked());
@@ -95,6 +97,28 @@ test('crew: things that cannot be done say why, in the page', () => {
   assert.match(locked, /aria-disabled="true"[^>]*>Hire a manager|Hire a manager<\/button>\s*<p class="cr-why/);
   // a level-8 manager says so instead of offering more
   s.pipes[0].level = 8; assert.match(crew.html(ctx), /Top level/);
+});
+
+test('crew: the Release hover is the engine\'s: a funded manager starts its next cycle in the hour the last one ends, so only capital at 0 opens Release', () => {
+  const { ctx, g, s } = rich(25);
+  const card = (id) => { const h = crew.html(ctx); return h.slice(h.indexOf(`data-pipe="${id}"`)).split('</article>')[0]; };
+  const tip = (id) => card(id).match(/data-act="crew-rel"[^>]*title="([^"]*)"/)?.[1];
+  const label = (id) => card(id).match(/data-act="crew-rel"[^>]*>([^<]*)<\/button>/)?.[1];
+  const p = s.pipes.find((x) => x.status === 'running' && x.alloc > 0 && x.inflight), left = p.len - p.prog;
+  assert.equal(tip(p.id), `Its next cycle starts in the hour this one ends, cash permitting. Set capital to 0 in Edit lane to stop after this one, in ${left} h.`, 'a funded manager is told the way');
+  assert.equal(label(p.id), 'Release: needs capital at 0', 'and the button says it too: waiting never opens it, a title is a hover, and a tap on a shut button does nothing');
+  s.cash = 5e6; for (let i = 0; i < left; i++) g.advanceTo(s.hour + 1);
+  assert.ok(p.inflight > 0 && p.prog === 0, 'the next cycle began in the hour the last one ended'); assert.equal(g.releasePipeline(p.id).ok, false, 'so Release is still shut');
+  assert.ok(g.configure(p.id, { alloc: 0 }).ok);
+  const left2 = p.len - p.prog; assert.equal(tip(p.id), `Opens when this cycle ends, in ${left2} h.`, 'capital at 0: the cycle ending does open it');
+  assert.equal(label(p.id), `Release: opens in ${left2} h`, 'and the button counts the hours down');
+  for (let i = 0; i < left2; i++) g.advanceTo(s.hour + 1);
+  assert.equal(p.inflight, 0, 'the cycle ended and no other began');
+  const open = card(p.id).match(/<button[^>]*data-act="crew-rel"[^>]*>[^<]*<\/button>/)[0]; assert.ok(!/aria-disabled|title=/.test(open) && />Release<\/button>$/.test(open), 'between cycles Release is a plain button');
+  assert.equal(g.releasePipeline(p.id).ok, true, 'and the engine opens it');
+  const q = s.pipes.find((x) => x.inflight && x.status === 'running'); g.pausePipeline(q.id, true);
+  assert.equal(tip(q.id), 'Opens when the cycle has ended and no other begins.', 'paused: no countdown, the cycle is frozen');
+  assert.equal(label(q.id), 'Release: mid-cycle', 'and the button says only that it is mid-cycle');
 });
 
 test('crew: a manager in a crowded niche is pointed at a quieter lane', () => {
