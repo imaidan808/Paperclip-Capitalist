@@ -196,8 +196,9 @@ test('L4: every control and label the faculty kit names is one a screen really h
   // the gradebook's columns, in order, are the ones the kit lists
   const head = /const rows = \[\[([^\]]+)\]/.exec(read('js/ui/instructor.js'))[1].split(',').map((s) => s.trim().replace(/'/g, ''));
   assert.deepEqual(head.slice(0, 7), ['founder_id', 'alias', 'background_1', 'background_2', 'district_reached', 'level', 'net_worth']);
-  assert.equal(head.at(-1), 'virtual_days_played');
-  assert.equal(head.length, 17);
+  assert.equal(head.at(-2), 'virtual_days_played');
+  assert.equal(head.at(-1), 'adaptability_graded', 'the last column says whether the adaptability figure was graded or the neutral one');
+  assert.equal(head.length, 18);
 });
 
 // ============================================================================================================================ L5. rewind and inject while the room is taking itself back
@@ -236,8 +237,8 @@ test('L5: a room taken back refuses a rewind or a shock until it has heard the c
   r = back.rewind(2); assert.equal(r.ok, true); assert.ok(sent.some((m) => m.t === 'rewind' && m.toHour === 24 * 38), 'two days back from the class\'s own hour: ' + JSON.stringify(sent.find((m) => m.t === 'rewind')));
   r = back.inject('fed', { when: 0 }); assert.equal(r.ok, true); assert.ok(sent.some((m) => m.t === 'inject'));
   // the dashboard reports a refusal as one
-  assert.match(read('js/ui/instructor.js'), /rewind\(b\) \{ const r = S\.rewind\(\+b\.dataset\.d\); toast\(r && r\.ok === false \? r\.msg : 'Rewind sent to all students\.'/);
-  assert.match(read('js/ui/instructor.js'), /deploy\(\) \{ const r = S\.inject\([^\n]*toast\(r && r\.ok === false \? r\.msg : 'Event deployed to the cohort\.'/);
+  assert.match(read('js/ui/instructor.js'), /rewind\(b\) \{ const r = S\.rewind\(\+b\.dataset\.d\); toast\(r && r\.ok === false \? r\.msg : 'Rewind sent to the students who are online\.'/);
+  assert.match(read('js/ui/instructor.js'), /deploy\(\) \{ const r = S\.inject\([^\n]*toast\(r && r\.ok === false \? r\.msg : 'Event deployed to the students who are online\.'/);
 });
 
 // ============================================================================================================================ L7. Begin asks before it replaces a saved run

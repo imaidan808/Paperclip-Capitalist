@@ -377,8 +377,8 @@ test('the instructor stays the browser\'s founder across a refresh, and its room
 test('the words: the dashboard, the title screen, the faculty kit, the README and the site\'s notes say what works and where it stops', () => {
   const dash = read('js/ui/instructor.js'), main = read('js/main.js'), kit = read('docs/FACULTY_KIT.md'), readme = read('README.md'), arch = read('docs/ARCHITECTURE.md'), llms = read('llms.txt'), comp = read('docs/COMPLIANCE.md');
   assert.doesNotMatch(dash, /open other tabs with \?room=/, 'the hint no longer tells the instructor to open tabs by hand with a code in the address');
-  assert.match(dash, /<span title="Students join from other tabs of this browser with Copy student link\. Students on other devices need a relay\.">this browser only<\/span>/); // (copy pass, part 2: the line is "this browser only", and what it means is on hover)
-  assert.match(main, /title="Without a relay, students join from other tabs of this browser, each tab its own founder\.">Relay URL \(needed for other devices\)<\/label>/); // (the same fact on the title screen: the label says who needs a relay, the hover says what happens without one)
+  assert.match(dash, /<span title="Students join from other tabs of this browser with Copy student link\.">this browser only<\/span> \(other devices need a relay\)/); // (copy pass, part 2: what the room line means is on hover, and who cannot join is in front)
+  assert.match(main, /<label for="ir">Relay URL \(blank: other tabs of this browser only; other devices need one\)<\/label>/); // (the same fact on the title screen, in the label itself: what a blank box does and who needs a relay)
   assert.doesNotMatch(main, /as extra tabs/);
   assert.match(kit, /Copy student link/); assert.match(kit, /own tab/); assert.match(kit, /different browser/); assert.match(kit, /relay/);
   assert.doesNotMatch(readme, /use `\?slot=name` to keep saves apart\)/, 'the README no longer sends a classroom to ?slot');
