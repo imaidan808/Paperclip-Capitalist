@@ -5,7 +5,7 @@
 // the ground was made. The pictures and the cell counts are scripts/perf-holes.mjs.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { CHUNK_PX, scaleKey, chunkKey, cellsFor, cutParts, chunkCap } from '../js/world/chunks.js';
+import { CHUNK_PX, scaleKey, chunkKey, cellsFor, cutParts, chunkCap, OVERVIEW_A } from '../js/world/chunks.js';
 import { ChunkCache } from '../js/world/chunkcache.js';
 import { recCtx } from './helpers/recctx.mjs';
 
@@ -111,6 +111,15 @@ test('soften: a bare piece takes the nearest chunk of ANY scale that has its are
   assert.strictEqual(dI[0][1], near.img, 'the nearer scale'); assert.deepEqual(dI[0].slice(2).map((v) => Math.round(v)), [Math.round(-a / 0.9 * 0.5), Math.round(-a / 0.9 * 0.5), Math.round(CHUNK_PX * a / 0.9 + a / 0.9), Math.round(CHUNK_PX * a / 0.9 + a / 0.9)], 'scaled to this frame (a pixel larger than its cell, as a stand-in is)');
   assert.deepEqual(parts, [900, 900, 940, 940], 'the piece under no chunk is still bare'); assert.ok(r.log.clips >= 1, 'clipped to the piece');
   assert.ok(far && near);
+  store.release();
+});
+test('soften reads the overview bilinear, never bicubic: \'high\' smoothing of a chunk magnified 13 to 64 times is 25 to 32 ms of GPU hardware time a frame over the whole window (3 to 4 for \'low\'), the GPU saturates for as long as the soft picture shows and every frame and every readback behind it waits', () => {
+  const S = stand(), store = new ChunkCache('test.soft3', S.make), a = 2.1;
+  const ov = store.bake(() => {}, OVERVIEW_A, 0, 0, 2, false, true); assert.ok(ov && store.ov.size === 1, 'a chunk of the overview, in its own store');
+  const r = recCtx(), sets = []; Object.defineProperty(r.state, 'imageSmoothingQuality', { enumerable: true, configurable: true, get: () => 'low', set: (v) => sets.push(v) }); // (a context that has the property, and says what it is set to)
+  const parts = [10, 10, 60, 40]; assert.equal(store.soften(r.ctx, parts, a, 0, 0), 1, 'the overview is drawn into the bare piece'); assert.equal(parts.length, 0, 'and it covers it');
+  assert.equal(r.log.calls.filter((c) => c[0] === 'drawImage').length, 1);
+  assert.ok(sets.length >= 1 && sets.every((v) => v === 'low'), `smoothing quality set to ${JSON.stringify(sets)}: only 'low'`);
   store.release();
 });
 test('standIns lists the chunks outside the ratio window apart, nearest scale first; they are a last resort and are never in the list that is drawn', () => {

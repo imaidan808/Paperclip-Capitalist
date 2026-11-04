@@ -132,7 +132,7 @@ export class ChunkCache {
         if (qx1 - qx0 > 1e-3 && qy1 - qy0 > 1e-3) ctx.rect(qx0 * a + e, qy0 * a + f, (qx1 - qx0) * a, (qy1 - qy0) * a);
       }
       ctx.clip(); const k = a / c.a, sz = CHUNK_PX * k; ctx.imageSmoothingEnabled = true;
-      if (c.pin && 'imageSmoothingQuality' in ctx) ctx.imageSmoothingQuality = 'high'; // (the overview is magnified 16 to 64 times: a bicubic read turns the stairs of its coast into a curve; the state goes back with the restore)
+      if ('imageSmoothingQuality' in ctx) ctx.imageSmoothingQuality = 'low'; // (bilinear: the overview is magnified 13 to 64 times and was read bicubic ('high') to turn the stairs of its coast into a curve, which is 25 to 32 ms of GPU hardware time a frame over the whole window at every zoom, against 3 to 4 for 'low': a zoom out that shows it saturated the GPU for a second or two, and every frame and every readback behind it waited. It is a placeholder for a few frames; the state goes back with the restore)
       ctx.drawImage(c.img, c.i * CHUNK_PX * k + e - k * 0.5, c.j * CHUNK_PX * k + f - k * 0.5, sz + k, sz + k); ctx.restore(); drew = 1;
     }
     this.use(c); cutParts(parts, x0, y0, x1, y1);
