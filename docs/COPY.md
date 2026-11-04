@@ -35,6 +35,6 @@ The voice is dignified and assured. It says what is true, in the fewest words, a
 - `tests/copy2-messages.test.mjs`: the sound of every note the engine writes is held by its kind, not its words; the figures in notes and refusals are recomputed from the engine and the config; the Breakdown adds up to the net worth.
 - `tests/meta-academy.test.mjs`: every number a lesson quotes, and the limits (scene 80 to 190 characters, a coach line 30 to 200, a gist 60 to 160).
 - `tests/meta-codex.test.mjs`: every figure a Codex page quotes.
-- `tests/page-budget.test.mjs`: the first screen is 300 KB gzipped. Words cost bytes: the fold styles are written once in `css/styles.css`.
+- `tests/page-budget.test.mjs`: the first screen has a limit (`BUDGET.firstKB`, 320 KB gzipped since 2026-11-03). Words cost bytes: the fold styles are written once in `css/styles.css`.
 
 A test that pins a sentence is a claim about the engine or a label on a screen. Change the sentence and the pin together, and say why in the commit.
