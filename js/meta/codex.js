@@ -1069,7 +1069,7 @@ export const CODEX = [
     summary: "A network is worth more with each new member, because every member adds possible connections.",
     body: [
       "A telephone is useless alone. Add a second and there is one possible call. Add a tenth and there are forty-five. When a product, a market or a community gets more valuable as more people join, it has a network effect. The number of possible pairs grows far faster than the number of members, though in real networks not every pair is useful, so treat the count as an upper bound.",
-      "In the game, peer trades are your network. Each classmate who trades widens your choice of swaps, and offers more than 40% from fair value are blocked to keep them honest. But beware the opposite. The same crowd that makes a market useful can also saturate it. A network effect is positive when you gain from the others being there, and negative when you compete for the same buyers.",
+      "In the game, peer trades are your network. Each classmate who trades widens your choice of swaps, and offers whose two sides are more than 40% apart are blocked to keep them honest. But beware the opposite. The same crowd that makes a market useful can also saturate it. A network effect is positive when you gain from the others being there, and negative when you compete for the same buyers.",
       "Well-Connected players start with a head start here: buyers arrive faster and bring bigger budgets.",
     ],
     formula: "possible pairs = n x (n - 1) / 2",

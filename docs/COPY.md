@@ -12,6 +12,7 @@ The voice is dignified and assured. It says what is true, in the fewest words, a
 6. **The player's words.** Name a control as the screen does (Look it over, Done reading, Quick deal). The tests read the screens' sources for those labels.
 7. **American spelling**, "district" never "zone", no em or en dashes, no emoji in prose.
 8. **Never "free"** in public copy (README, llms.txt, index.html, 404.html): the game is sold to universities.
+9. **A hover defines; the screen instructs.** Hover adds detail. What a choice turns on is printed, and a fact that changes what the reader does is also in a fold or a screen-reader span: a `title` is not shown on a keyboard or a touch screen.
 
 ## Where the words live
 

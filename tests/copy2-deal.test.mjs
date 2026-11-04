@@ -823,6 +823,7 @@ test('D9: a fraud you verified and a full yard are refused in the engine\'s own 
   const h = sheet(run); assert.equal(h.split(FRAUD).length - 1, 1, 'the sheet says it once: not by the callout and again by the blocker'); assert.ok(/role="alert">Fraud confirmed\./.test(h), 'and an alert says it to a screen reader');
   const g2 = world(['grad', 'roots']); g2.storeCap = () => 0;
   const plan = D.planFor(g2, fixedLot(g2)); assert.equal(plan.blocker, FULL);
+  const spec2 = fixedLot(g2), asked = g2.buyLot(spec2.zone, spec2.lotId, {}); assert.equal(asked.ok, false); assert.equal(asked.msg, plan.blocker, 'the planner says what the engine says when it is asked to buy');
   assert.equal(visible(sheet(start(g2, fixedLot(g2)))).split(FULL).length - 1, 1, 'a full yard is said once');
   for (const f of ['js/deal.js', 'js/ui/deal.js']) { const src = read(f); assert.ok(src.includes(FRAUD), `${f} says the engine's fraud refusal`); assert.ok(!/Extreme Asymmetric|will not take a broken asset/.test(src), `${f} names no refusal the engine has reworded`); }
   assert.ok(read('js/deal.js').includes(FULL), 'and the planner says the engine\'s full-yard refusal');

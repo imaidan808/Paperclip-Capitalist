@@ -226,9 +226,8 @@ function planBuy(g, spec) {
   const s = g.s, lot = lotOf(g, spec.zone, spec.lotId);
   if (!lot) return fail('That lot is gone.');
   const seed = seedFor(g, spec), def = ASSETS[lot.cls], auction = lot.mode === 'auction' && !!GAMES.auction, name = `${def.name}${lot.cond === 'broken' ? ' (broken)' : ''}`;
-  const held = s.assets.filter((x) => x.zone === spec.zone).length + s.freight.reduce((n, f) => n + (f.to === spec.zone ? f.items.length : 0), 0) + s.escrow.reduce((n, e) => n + e.assets.filter((x) => x.zone === spec.zone).length, 0);
   const lowest = r2(lot.price * 0.6);
-  const blocker = s.cash < lowest ? `You need at least ${money(lowest)} to deal for this lot, and you have ${money(s.cash)}.` : held >= g.storeCap(spec.zone) ? 'Storage is full here, counting trucks and open swaps. Sell something or ship it out.' : ''; // the engine's own words for this refusal (engine.js FULL): `held` counts the same crates, in the yard, on trucks and held for a swap
+  const blocker = s.cash < lowest ? `You need at least ${money(lowest)} to deal for this lot, and you have ${money(s.cash)}.` : g.roomIn(spec.zone) <= 0 ? 'Storage is full here, counting trucks and open swaps. Sell something or ship it out.' : ''; // the engine's own words for this refusal (engine.js FULL), at the engine's own gate: roomIn counts the yard, the trucks and the places an open swap holds
   const seller = auction
     ? { style: 'steady', icon: '🔨', name: 'The auctioneer', patience: 5, hello: 'Lot up for bids.' } // the guide price and the opening bid are on the lot card, the scoreboard and the paddle
     : sellerFor(seed, name, lot.price);

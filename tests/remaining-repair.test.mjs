@@ -316,7 +316,7 @@ test('Academy words (S7 S8 S9 S11): the closing step says what closes the deal, 
   assert.ok(!/tagged trend/.test(M('m09').steps[0].say), 'Stock shows no tag'); assert.match(M('m09').steps[0].say, /same viral trend/);
   assert.match(M('m02').steps[2].hint, /Press Restart/, 'and the lesson that can lose its fake watch to a Quick buy says how to start again');
   assert.ok(!/first swap unlocked/i.test(M('m02').steps[0].say), 'the Codex does not claim a swap just unlocked its pages');
-  assert.match(M('m10').why.body[2], /result cards print others for it: its real condition and the auction's own "true value"/);
+  assert.match(M('m10').why.body[2], /the result card prints another, for its real condition/);
   assert.match(M('m07').why.example.setup, /1\.00 to 1\.18 times the asking price/);
   // the figures the cards print are the engine's: the auction's true value is the guide price over 0.8 at the real condition, the sale card's "fair price" is a perfect one's
   const g = Sandbox.makeSandboxSession({ ...M('m10').setup }, { id: 'm10', zone: 6 }).game;

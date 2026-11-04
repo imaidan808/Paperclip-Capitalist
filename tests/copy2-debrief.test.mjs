@@ -495,7 +495,7 @@ test('D7: what the rewind, the stalled list and the room line say is what the en
   assert.ok(kit.includes('no sale to a buyer and no manager cycle for more than three virtual days') && I.STALL_DAYS === 3);
 
   // the flagged-trades band, the Gini line, the room line
-  assert.ok(c2.includes(`outside +/-${FMV_BAND * 100}% of fair value`));
+  assert.ok(c2.includes(`more than ${FMV_BAND * 100}% apart`));
   const calm = instructorWith([['A', { nw: 100 }], ['B', { nw: 100 }]], 24 * 5), parts = I.instructorParts(calm, {});
   assert.equal(I.GINI_ALERT, 0.65);
   assert.ok(!/Inequality alert|alert line/.test(parts.c2) && titles(parts.c2).includes('The alert starts above 0.65.'), 'a calm room has no line about the alert, and the card says where it starts');

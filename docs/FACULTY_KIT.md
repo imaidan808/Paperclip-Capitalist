@@ -59,7 +59,7 @@ Instructor, Create a room opens it. It redraws about once a second.
 | | **What the controls do** | A fold under the controls that lists what each one does, in the words of its hover, for a keyboard or a touch screen. |
 | Live cohort metrics | Gini, median, where the class is, what was drafted, heat map | Wealth Gini with an alert above 0.65 and a one-click **Inject Credit Crunch now**, the median net worth, students by the highest district they have opened, the Backgrounds drafted, and a niche saturation heat map for any district (48 virtual hours of transactions by asset class and buyer). |
 | Operational bottlenecks | Stalled founders | Founders past the first milestone with no sale to a buyer and no manager cycle for more than three virtual days, with how long and their net worth. |
-| Flagged peer trades | Flags | A swap blocked for being outside +/-40% of fair value, with the variance. |
+| Flagged peer trades | Flags | A swap blocked because its two sides were more than 40% apart, with the variance. |
 | Roster and gradebook | **Export gradebook CSV**, Background filter | The pre-filled 60 points per founder. A founder with no graded shock shows 10.0 for adaptability, marked with a star: a neutral 50 of 100, the figure the subtotal counts. |
 
 The pace presets, and what a virtual day lasts at each:
@@ -77,7 +77,7 @@ The pace presets, and what a virtual day lasts at each:
 **The seat grace period.** If you cannot find the code, the relay's operator can set `SEAT_GRACE_MS` (milliseconds; 0 by default, which means never): once the seat's holder has been gone that long, another Founder ID that connects as the instructor is given the seat. Leave it at 0 unless you need a handover, because with a value set an instructor whose laptop lid stays shut for longer than that comes back to find someone else in the seat (the recovery code takes it back from them whatever the setting says). Without a relay (tabs of one browser) there is no seat to lose.
 
 ## Shocks
-Three shocks are scheduled; the dashboard can also deploy them at any time, and a shock deployed with Replace takes the place of the scheduled one of its kind. The days below are the scheduled ones; the debrief and its chart show the day a shock really hit. Higher **Capital Sourcing** skill buys earlier warnings: 12 hours' notice at first, 72 hours at level 3 and 7 days at level 5 (the Market Research Suite upgrade brings each a tier earlier).
+Three shocks are scheduled; the dashboard can also deploy them at any time, and a shock deployed with Replace takes the place of the scheduled one of its kind. The days below are the scheduled ones; the debrief and its chart show the day a shock really hit. Higher **Capital Sourcing** skill buys earlier warnings: 12 hours' notice at first, 72 hours at level 3 and 7 days at level 5. The Market Research Suite counts as two more levels for warnings only: 12 hours becomes 72, 72 becomes 7 days, and from level 5 up it adds nothing.
 
 | Shock | Scheduled day | What happens |
 |---|---|---|

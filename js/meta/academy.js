@@ -388,7 +388,7 @@ export const ACADEMY = [
       gist: "Debt multiplies gains and losses alike. Size a loan by the worst day, not the average one.",
       body: [
         "Leverage means using borrowed money to hold more than you own. When prices rise you keep all the gain on the extra stock and pay only the interest. When prices fall you still owe the whole loan. Same lever, both directions.",
-        "Debt-to-equity (D/E) is debt divided by net worth. The bank stops lending when D/E would reach 3.0, counted before its 3% fee, so the gauge reads about 3.3 right after a maximum draw. At 4.5 it forces a margin call, seizing your best assets at a 35% discount until D/E is back to 3.0.",
+        "Debt-to-equity (D/E) is debt divided by net worth. The bank stops lending when D/E would reach 3.0, counted before its 3% fee, so the gauge reads about 3.3 right after a maximum draw. At 4.5 it forces a margin call, seizing your best assets at a 35% discount until D/E is back to 3.0 or nothing is left to sell.",
         "The safe loan is the one you survive a crash with. Stay near D/E 1 and even a harsh fall in prices leaves a wide gap to 4.5. Interest matters too: about 11% per 30 days is roughly $2.23 a day on $600, so a loan only pays when the goods earn more than that while you hold them. Here the lots are worth 47% more than you pay.",
       ],
       formula: "D/E = debt / net worth. Net worth = cash + stock - debt. The loan fee is 3% upfront. Margin call when D/E > 4.5.",
@@ -538,7 +538,7 @@ export const ACADEMY = [
       body: [
         "You just used every skill. Read told you what the lot really was, your ceiling capped what you would pay, Repair added value for less than it cost, Pitch matched a buyer's bias and Close anchored the price. Each step protects the margin of the next.",
         "A run is scored by the Economic Efficiency Index: ending net worth divided by starting capital, times a time bonus of 1 plus days remaining over 90. A start worth pennies is floored at $1,000 so it is fair. Finishing early lifts the bonus, but only if net worth holds, and an early exit costs 12% brokerage.",
-        "The winner's curse: in an auction the highest bidder is usually the one who most overestimated the prize. As it stands the lot is worth about $490, the figure Stock shows (the result cards print others for it: its real condition and the auction's own \"true value\"). You can pay more only because you can fix and resell it, and your sale price is an estimate too, so stop short of $554.",
+        "The winner's curse: in an auction the highest bidder is usually the one who most overestimated the prize. As it stands the lot is worth about $490, the figure Stock shows (the result card prints another, for its real condition). You can pay more only because you can fix and resell it, and your sale price is an estimate too, so stop short of $554.",
       ],
       formula: "EEI = ending net worth / max(starting capital, $1,000) × (1 + days remaining / 90).",
       example: {

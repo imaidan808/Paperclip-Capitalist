@@ -939,7 +939,7 @@ export class Session {
     this._noteShock(id, at);
     this.room?.send({ t: 'inject', kind, atHour: at, id, replace, cls });
     this.emit('change');
-    return { ok: true, msg: 'Shock sent to the class.', id, atHour: at };
+    return { ok: true, msg: 'Shock sent to the students who are online.', id, atHour: at };
   }
   setDifficulty(patch) { Object.assign(this.difficulty, cleanDifficulty(patch)); this._sendClock(); this.emit('change'); }
   setGhosts(n) { this.ghosts = Math.round(num(+n, 0, 200, this.ghosts)); this.cohort.ghosts = this.ghosts; this.cohort.refresh(); this._sendClock(); this.emit('change'); } // refresh: the heat map must not keep showing the old herd
@@ -953,7 +953,7 @@ export class Session {
     this.clock.set({ hour: to });
     this._sendClock();
     this.emit('change');
-    return { ok: true, msg: 'Rewind sent to all students.', toHour: to };
+    return { ok: true, msg: 'Rewind sent to the students who are online.', toHour: to };
   }
   setDemo(n) {
     this.demo = n;
