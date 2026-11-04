@@ -22,7 +22,7 @@ export const zones = {
   },
   6: {
     id: 6, name: 'Estate Sales', short: 'Estates', icon: '🏺', tier: 2, theme: 'estate',
-    blurb: 'More than half the lots are auctions, and winners tend to overpay.',
+    blurb: 'More than half the lots are auctions, and winners often overpay.',
     teaches: 'winners-curse',
     gate: 2500, scale: 900, tax: 0.0595, friction: 0.12, pool: 25000, speed: 2.5, store: 19,
     leadEvery: 3, lotEvery: 5, urgent: 0.115, auto: true, plots: 4,

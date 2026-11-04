@@ -215,8 +215,10 @@ test('D1 Corporate Valley: enterprise clients and the exit, by trade sale or IPO
   assert.ok(g.s.mil.m3 && g.s.zones.includes(13)); assert.ok(g.exitQuote('sale').ok && g.exitQuote('ipo').ok, 'both exits are open');
 });
 
-test('D1 Financial District: banks and funds buy paper, and opening it makes loans cheaper', () => {
-  assert.match(ZONES[14].blurb, /buy paper, not products, and loans get cheaper/);
+test('D1 Financial District: banks and funds buy invoices, bonds and loan books, and opening it makes your loans cheaper', () => {
+  assert.match(ZONES[14].blurb, /buy invoices, bonds and loan books, not products, and your loans get cheaper/);
+  const top3 = Object.entries(ASSETS).map(([id, a]) => [id, a.dem[14] || 0]).sort((x, y) => y[1] - x[1]).slice(0, 3).map(([id]) => id).sort();
+  assert.deepEqual(top3, ['invoicePool', 'loanBook', 'muniBonds'], 'the invoices, bonds and loan books are the three goods the district wants most');
   assert.ok(Object.values(BUYERS).filter((b) => b.zone === 14).every((b) => b.like.finance > 0), 'every buyer here likes finance');
   const g = mk(); rich(g, 1e6); const before = g.loanRate('micro');
   g.s.zones = g.s.zones.filter((z) => z !== 14); g._bn = null; const without = g.loanRate('micro'); g.s.zones.push(14); g._bn = null; const withIt = g.loanRate('micro');
@@ -231,9 +233,9 @@ test('D1 Real Estate Row: property pays rent every day, and a quarter of the lot
   near(g.s.ledger.find((e) => e.type === 'rent').amt, g.val(a) * ASSETS.apartmentBlock.yield * g.B.rentMult, 1e-6);
 });
 
-test('D1 Global Exchange: gems, art and cargo are priced very differently from one district to the next', () => {
-  assert.match(ZONES[16].blurb, /Gems, art and cargo sell at very different prices from district to district/);
-  for (const cls of ['diamondParcel', 'postwarCanvas', 'copperCargo', 'watchVault']) {
+test('D1 Global Exchange: gems, watches and cargo are priced very differently from one district to the next', () => {
+  assert.match(ZONES[16].blurb, /Gems, watches and cargo sell at very different prices from district to district/);
+  for (const cls of ['diamondParcel', 'copperCargo', 'watchVault']) {
     const here = assetFMV({ cls, cond: 'ok', quality: 1, wear: 1 }, 16, {});
     const there = Object.keys(ZONES).map(Number).filter((z) => z !== 16).map((z) => assetFMV({ cls, cond: 'ok', quality: 1, wear: 1 }, z, {}));
     assert.ok(there.every((v) => v * 1.3 <= here), `${cls}: a district within 30% of its Global Exchange price`);
@@ -284,7 +286,7 @@ function figures(mods) {
 }
 test('D3: every percent a Background\'s claim quotes is a figure of its mods, and every dollar amount is its bank floor or its garnishment cap', () => {
   for (const [id, p] of Object.entries(PERKS)) {
-    const have = figures(p.mods);
+    const have = figures(p.mods); if (id === 'native') have.add(1); // a check's 1% is no mod: 'D3 native' recomputes it from the engine
     for (const [what, t] of [['strength', p.strength], ['cost', p.cost]]) {
       for (const n of nums(t, /(\d+(?:\.\d+)?)%/g)) assert.ok(have.has(n), `${id}.${what}: "${n}%" is no figure of the mods (${[...have].join(', ')})`);
       for (const d of nums(t, /\$([\d,]+)/g)) assert.ok(d === p.mods.bankMinNW || d === p.mods.garnish?.cap, `${id}.${what}: $${d}`);
@@ -303,7 +305,7 @@ test('D3: every percent a Background\'s claim quotes is a figure of its mods, an
 
 test('D3 immigrant: international lanes earn 1.4x the domestic margin, not 1.3x (the old "+10 points of margin" was a tenth of a multiplier)', () => {
   const s = PERKS.immigrant.strength;
-  assert.match(s, /International margin 1\.4x instead of 1\.3x/); assert.doesNotMatch(s, /points of margin/);
+  assert.match(s, /International lanes earn 1\.4x the domestic margin instead of 1\.3x/); assert.doesNotMatch(s, /points of margin/);
   const ratio = (perks) => { const g = mk(perks); g._openZone(5); const f = (channel) => g.forecast({ kind: 'broker', zone: 5, level: 1, alloc: 500, channel, cycles: 0 }).margin; return f('intl') / f('dom'); };
   near(ratio([]), 1.3, 1e-9); near(ratio(['immigrant']), 1.4, 1e-9);
   assert.ok(s.includes(`${pc(PERKS.immigrant.mods.circle.pct)}% of net worth`) && s.includes(`${pc(1 - PERKS.immigrant.mods.freightMult)}% cheaper`));
@@ -347,13 +349,14 @@ test('D3 roots: repeat buyers bring up to the loyalty share more, and the engine
   assert.ok(PERKS.roots.cost.includes('beyond district 8') && PERKS.roots.cost.includes(`${pc(1 - m.farLeadMult)}% fewer`) && PERKS.roots.cost.includes(`${pc(m.freightMult - 1)}% more`));
 });
 
-test('D3 native: a buyer is a fraud at the stated rate and checking one costs money', () => {
-  const c = PERKS.native.cost; assert.doesNotMatch(c, /unless you verify/); assert.match(c, /checking one costs money/);
+test('D3 native: a buyer is a fraud at the stated rate and verifying costs 1% of their budget', () => {
+  const c = PERKS.native.cost; assert.doesNotMatch(c, /unless you verify|checking/); assert.match(c, /\(verifying costs 1% of their budget\)/);
   const g = mk(['native']); g.s.trades = 5; let frauds = 0, n = 0;
   for (let i = 0; i < 1500; i++) { g.s.leads[1] = []; g._spawnLead(1); const l = g.s.leads[1][0]; if (l) { n++; if (l.scam) frauds++; } }
   assert.ok(Math.abs(frauds / n - PERKS.native.mods.scamRate) < 0.03, `${pc(frauds / n)}% of ${n} buyers`);
   const plan = (perks) => { const x = mk(perks), a = put(x, 'pen', 1); x.s.leads[1].push({ id: 'L9', zone: 1, seg: 'student', budget: 40, need: null, born: 0, exp: 999 }); return planFor(x, { kind: 'sell', assetId: a.id, leadId: 'L9' }); };
   assert.ok(plan(['native']).canVerify && !plan([]).canVerify, 'only a Digital Native can check a buyer'); near(plan(['native']).verifyCost, 0.4, 1e-9); // 1% of the buyer's budget
+  assert.ok(c.includes(`verifying costs ${pc(plan(['native']).verifyCost / 40)}% of their budget`), c); // the lead in this plan has a budget of 40
 });
 
 test('D3 second chance: most counterfeit lots carry a warning, and no honest lot does', () => {
@@ -405,7 +408,8 @@ test('D4: the three skill lines say what a level does', () => {
 test('D4: a Specialty starts at level 3 and the other skills at 1 (the Draft says so)', () => {
   assert.ok(D.specHTML(D.draftInit()).includes('One skill starts at level 3, the others at 1.'));
   const g = mk([], 1, { specialty: 'growth' }); assert.deepEqual(g.s.skills, { ops: 1, growth: 3, fintech: 1 });
-  assert.doesNotMatch(D.specHTML(D.draftInit()), /Each level you earn/, 'the point rule is told where the points are spent');
+  const lv = mk([], 1, { specialty: 'growth' }); lv.xp(C.LEVEL_XP); assert.equal(lv.level(), 2); assert.equal(lv.s.points, 1, 'a new level pays one point'); assert.ok(lv.spendPoint('ops').ok && lv.s.skills.ops === 2, 'and it raises a skill that is not the specialty');
+  assert.match(D.specHTML(D.draftInit()), /Each level you earn gives a point for any skill\./);
 });
 
 test('D4: the manager lines say what is not on the card below them, and each is true', () => {
@@ -433,11 +437,16 @@ test('D4: the upgrade lines say what the engine does', () => {
   // freight: 40% less
   const ship = (g) => { g._openZone(2); const a = put(g, 'pen', 1, { basis: 1 }); return g.freightQuote([a.id], 2).cost; }; near(ship(withUpg('freight')) / ship(mk()), 0.6, 1e-9);
   assert.equal(UPGRADES.freight.blurb, 'Freight costs 40% less.');
-  // research: warnings a tier earlier, and the Market grows a Radar tab (the engine reads the upgrade where the Grad's radar is read)
-  const r = withUpg('research'); assert.ok(g0.warnLead() < r.warnLead() && r.warnLead() === 72 && g0.warnLead() === 12, 'from the first tier to the second');
+  // research: the Suite counts as +2 Capital Sourcing for warnings only (7 days at most), and the Market grows a Radar tab (the engine reads the upgrade where the Grad's radar is read)
+  assert.equal(Math.max(...Object.values(C.WARN_LEAD)), 7 * 24, '"7 days at most"');
+  for (let lvl = 1; lvl <= C.SKILL_MAX; lvl++) {
+    const a = mk(), b = withUpg('research'), plus2 = mk(); a.s.skills.fintech = b.s.skills.fintech = lvl; plus2.s.skills.fintech = lvl + 2;
+    assert.equal(b.warnLead(), plus2.warnLead(), `level ${lvl}: the Suite counts as +2 Capital Sourcing for warnings`);
+    assert.equal(b.warnLead() > a.warnLead(), lvl <= 4, `level ${lvl}: the Suite lifts the notice a step below the longest one and not from level 5 up`);
+  }
   const ctx = fakeCtx({ days: 25, perks: ['trades', 'second'] }); assert.ok(!/data-t="radar"/.test(market.html(ctx)), 'no Radar tab without the suite');
   ctx.g().s.upg.research = true; assert.match(market.html(ctx), /data-t="radar"/, 'the Radar tab is the upgrade\'s');
-  assert.equal(UPGRADES.research.blurb, 'Shock warnings come a tier earlier, and a Radar tab lists the best gaps in your district.');
+  assert.equal(UPGRADES.research.blurb, 'Counts as +2 Capital Sourcing for shock warnings (7 days at most), and a Radar tab lists the best gaps in your district.');
   assert.doesNotMatch(UPGRADES.research.blurb, /every underserved market/, 'the Radar lists a district\'s best gaps, not every market');
   assert.ok(g0.radar(5, 8).length <= 8 && Object.keys(ASSETS).length * Object.keys(BUYERS).length > 8 * 20, 'a short list of the best, not every market');
 });
