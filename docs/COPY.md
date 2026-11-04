@@ -10,7 +10,7 @@ The voice is dignified and assured. It says what is true, in the fewest words, a
 4. **One idea per line.** A coach line is one action. A result opens on one idea and folds the rest.
 5. **Numbers are the engine's.** A figure in a lesson, a Codex page or a card is recomputed by a test from the engine. Where the text and the engine disagree, the text changes, or the code is flagged.
 6. **The player's words.** Name a control as the screen does (Look it over, Done reading, Quick deal). The tests read the screens' sources for those labels.
-7. **American spelling**, "district" never "zone", no em or en dashes, no emoji in prose.
+7. **American spelling**, "district" never "zone", no em or en dashes, no emoji: the interface draws its icons or goes without.
 8. **Never "free"** in public copy (README, llms.txt, index.html, 404.html): the game is sold to universities.
 9. **A hover defines; the screen instructs.** Hover adds detail. What a choice turns on is printed, and a fact that changes what the reader does is also in a fold or a screen-reader span: a `title` is not shown on a keyboard or a touch screen.
 
@@ -36,6 +36,7 @@ The voice is dignified and assured. It says what is true, in the fewest words, a
 - `tests/copy2-data.test.mjs`, `copy2-debrief.test.mjs` and `copy2-debrief-mount.test.mjs`, `copy2-deal.test.mjs`, `copy2-drawers.test.mjs`, `copy2-messages.test.mjs`: every claim the second pass corrected, recomputed from the engine or the config; each fails on the old text. The data, deal, Debrief and drawers files hold the figures in the words they print; the messages file: the sound of every note the engine writes is held by its kind, not its words; the figures in notes and refusals are recomputed from the engine and the config; the Breakdown adds up to the net worth.
 - `tests/meta-academy.test.mjs`: every number a lesson quotes, and the limits (scene 80 to 190 characters, a coach line 30 to 200, a gist 60 to 160).
 - `tests/meta-codex.test.mjs`: every figure a Codex page quotes.
+- `tests/guard-emoji.test.mjs`: no emoji and no icon symbol in anything the site ships, as a character, an escape or an entity. A ratchet: the count only goes down as the icons are drawn, and the last part of the icons work makes it zero. It also holds the classes that went without an icon (buyers, managers, clients, quests, badges, bounties, Codex pages, lessons) to none. `tests/ui-avatar.test.mjs`: the discs, their tones and the contrast of their initials.
 - `tests/page-budget.test.mjs`: the first screen has a limit (`BUDGET.firstKB`, 320 KB gzipped since 2026-11-03). Words cost bytes: the fold styles are written once in `css/styles.css`.
 
 A test that pins a sentence is a claim about the engine or a label on a screen. Change the sentence and the pin together, and say why in the commit.

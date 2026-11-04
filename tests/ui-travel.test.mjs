@@ -71,9 +71,9 @@ for (const days of STATES) for (const perks of PAIRS) {
         if (tab === 'path') {
           for (const id of ZONE_IDS) assert.ok(h.includes(ZONES[id].name.replace(/&/g, '&amp;')), `${ZONES[id].name} missing`);
           assert.equal((h.match(/class="tv-d /g) || []).length, 16);
-          assert.equal((h.match(/class="chip good">✓ Open/g) || []).length, s.zones.length, 'one Open chip per open district');
+          assert.equal((h.match(/class="chip good">Open</g) || []).length, s.zones.length, 'one Open chip per open district, in a word');
           assert.equal((h.match(/→ Next stop/g) || []).length, s.zones.length < 16 ? 1 : 0, 'exactly one next stop');
-          assert.equal((h.match(/class="chip">🔒 /g) || []).length, Math.max(0, 16 - s.zones.length - 1), 'a locked district is one line with its gate');
+          assert.equal((h.match(/class="chip">Opens at \$/g) || []).length, Math.max(0, 16 - s.zones.length - 1), 'a locked district is one line with its gate, in words');
           assert.equal((h.match(/data-act="travel-codex"/g) || []).length, s.zones.length, 'every open district links to its Codex page (a locked one has no page to read)');
           assert.equal((h.match(/data-act="travel-go"/g) || []).length, s.zones.length, 'a Go button on open districts only');
           assert.match(text(h), new RegExp(`${s.zones.length} of 16 districts open`));
@@ -89,7 +89,7 @@ test('the next district shows a progress bar of net worth toward its gate and th
   assert.match(text(h), /to go/);
   const missing = ctx.money(Math.max(0, ZONES[2].gate - g.netWorth()));
   assert.ok(text(h.slice(h.indexOf('class="tv-sum"'), h.indexOf('</section>', h.indexOf('class="tv-sum"')))).includes(`Next stop: Flea Market Row . ${missing} to go.`), 'the summary at the top says how far the next district is: a player decides what to do next there, and the card that says it too is a screen down the list');
-  assert.match(text(h), /Campus Quad 🔒 \$80\.00/, 'a locked district beyond the next is one line that states its gate');
+  assert.match(text(h), /Campus Quad Opens at \$80\.00/, 'a locked district beyond the next is one line that states its gate');
   assert.ok(!text(h).includes(rulePhrases(3)[0]), 'and keeps its rule, reward and lesson under the line');
   const pct = +h.match(/Net worth toward Flea Market Row" aria-valuemin="0" aria-valuemax="100" aria-valuenow="(\d+)"/)[1];
   assert.equal(pct, Math.floor(Math.min(1, g.netWorth() / ZONES[2].gate) * 100));
@@ -266,7 +266,7 @@ test('when no destination pays after freight the drawer says so', () => {
   assert.match(text(h), /Worth \$[\d.,]+ less there/);
   // and the Best price chip appears when a district does pay
   const ctx2 = fakeCtx({ days: 25 }); addCrates(ctx2);
-  const h2 = travel.html(ctx2); assert.match(h2, /★ Best price/); assert.doesNotMatch(text(h2), /No district pays more/);
+  const h2 = travel.html(ctx2); assert.match(h2, /class="chip good">Best price</); assert.ok(!/[★⚠]/.test(text(h2)), 'the chip and the warnings say it in words: no star, no warning sign'); assert.doesNotMatch(text(h2), /No district pays more/);
 });
 
 test('tabs: the choice sticks while the crates stay the same and the drawer falls back to the right tab when they change', () => {

@@ -8,6 +8,7 @@ import { openDeal } from '../js/ui/deal.js';
 import stock from '../js/ui/drawers/stock.js';
 import { readFileSync } from 'node:fs';
 import { ASSETS, BUYERS, ZONES, ZONE_IDS } from '../js/config.js';
+import { initialOf } from '../js/avatar.js';
 
 const PAIRS = [['native', 'grad'], ['second', 'trades']];
 const DAYS = [0, 10, 25, 60];
@@ -144,13 +145,14 @@ test('the district switcher lists the open districts and switching changes the f
   assert.equal(ctx.U.marketTab, 'lots');
 });
 
-test('buyers are characters: icon, name, their line in quotes, budget, a live time bar, and Urgent only when they need something', () => {
+test('buyers are characters: a disc with their initial in the tone of their style, name, their line in quotes, budget, a live time bar, and Urgent only when they need something', () => {
   const ctx = fakeCtx({ days: 10, perks: PAIRS[1] }), g = ctx.g();
   ctx.U.zone = 2;
   const html = market.html(ctx);
   for (const l of g.s.leads[2]) {
     const card = cardOf(html, `lead:${l.id}`), B = BUYERS[l.seg];
-    assert.ok(card.includes(B.icon) && card.includes(B.name), `${B.name} card`);
+    assert.ok(card.includes(`<span class="ava mkt-av" data-style="${B.style}" aria-hidden="true">${initialOf(B.name)}</span>`) && card.includes(B.name), `${B.name} card: a disc with the initial, tinted by the style`);
+    assert.ok(!('icon' in B), `${B.name}: a buyer has no emoji`);
     assert.ok(card.includes('“') && card.includes('”'), 'their line is quoted');
     assert.ok(card.includes(`<div class="bar ${l.need ? 'gold' : ''}" aria-hidden="true"><i data-bar="lead:${l.id}"></i></div>`), 'the time-left bar');
     assert.ok(card.includes(ctx.money(l.budget)), 'their budget');

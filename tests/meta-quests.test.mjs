@@ -64,13 +64,13 @@ test('counts, ids and shape', () => {
   const ids = ALL.map((x) => x.id);
   assert.equal(new Set(ids).size, ids.length, 'ids are unique across quests, achievements and dailies');
   assert.deepEqual(JSON.parse(JSON.stringify([QUESTS, ACHIEVEMENTS, DAILIES])), [QUESTS, ACHIEVEMENTS, DAILIES], 'plain JSON data: no functions, no undefined fields');
-  for (const q of QUESTS) assert.deepEqual(Object.keys(q).sort(), ['after', 'desc', 'goal', 'icon', 'id', 'reward', 'title', 'zone'].filter((k) => k !== 'after' || 'after' in q).sort(), `${q.id} keys`);
+  for (const q of QUESTS) assert.deepEqual(Object.keys(q).sort(), ['after', 'desc', 'goal', 'id', 'reward', 'title', 'zone'].filter((k) => k !== 'after' || 'after' in q).sort(), `${q.id} keys`);
   for (const a of ACHIEVEMENTS) {
-    const extra = Object.keys(a).filter((k) => !['id', 'title', 'desc', 'icon', 'rarity', 'goal', 'hidden', 'reward', 'bg'].includes(k));
+    const extra = Object.keys(a).filter((k) => !['id', 'title', 'desc', 'rarity', 'goal', 'hidden', 'reward', 'bg'].includes(k));
     assert.deepEqual(extra, [], `${a.id}: unexpected fields`);
     if ('hidden' in a) assert.equal(a.hidden, true, `${a.id}: hidden is true when present`);
   }
-  for (const d of DAILIES) assert.deepEqual(Object.keys(d).sort(), ['desc', 'goal', 'icon', 'id', 'reward', 'title'], `${d.id} keys`);
+  for (const d of DAILIES) assert.deepEqual(Object.keys(d).sort(), ['desc', 'goal', 'id', 'reward', 'title'], `${d.id} keys`);
   assert.ok(QUESTS.every((q) => /^q(0[1-9]|1[0-6])[ab]$/.test(q.id)), 'quest ids are qNNa / qNNb');
   assert.ok(ACHIEVEMENTS.every((a) => /^a-[a-z0-9-]+$/.test(a.id)), 'achievement ids start with a-');
   assert.ok(DAILIES.every((d) => /^d-[a-z0-9-]+$/.test(d.id)), 'daily ids start with d-');
@@ -100,26 +100,22 @@ test('after chains the story in order and has no cycle', () => {
   }
 });
 
-test('text: short playful titles, exact descriptions, one emoji icon, no em dashes', () => {
-  const seg = new Intl.Segmenter('en', { granularity: 'grapheme' });
+test('text: short playful titles, exact descriptions, no icon, no emoji, no em dashes', () => {
   for (const x of ALL) {
-    for (const k of ['id', 'title', 'desc', 'icon']) assert.ok(typeof x[k] === 'string' && x[k].trim() === x[k] && x[k].length > 0, `${x.id}.${k} is a trimmed non-empty string`);
+    for (const k of ['id', 'title', 'desc']) assert.ok(typeof x[k] === 'string' && x[k].trim() === x[k] && x[k].length > 0, `${x.id}.${k} is a trimmed non-empty string`);
     assert.ok(x.title.length <= 32, `${x.id}: title over 32 characters`);
     assert.ok(!/[.!?]$/.test(x.title), `${x.id}: title has no end punctuation`);
     assert.ok(x.desc.length >= 12 && x.desc.length <= 200, `${x.id}: desc length ${x.desc.length}`);
     assert.ok(/[.!?]$/.test(x.desc), `${x.id}: desc ends with a full stop`);
     assert.ok(!/ {2}/.test(x.desc + x.title), `${x.id}: no double spaces`);
-    assert.equal([...seg.segment(x.icon)].length, 1, `${x.id}: icon is one symbol`);
-    assert.ok(/\p{Extended_Pictographic}/u.test(x.icon), `${x.id}: icon is an emoji`);
+    assert.ok(!('icon' in x), `${x.id}: no icon field: the title says what it is`);
   }
   const strings = [];
   (function walk(v) { if (typeof v === 'string') strings.push(v); else if (v && typeof v === 'object') Object.values(v).forEach(walk); })(ALL);
-  for (const s of strings) assert.ok(!/—/.test(s), `em dash in "${s}"`);
+  for (const s of strings) { assert.ok(!/—/.test(s), `em dash in "${s}"`); assert.ok(!/\p{Extended_Pictographic}/u.test(s), `emoji in "${s}"`); }
   for (const list of [QUESTS, ACHIEVEMENTS, DAILIES]) {
-    for (const key of ['title', 'icon']) {
-      const vals = list.map((x) => x[key]);
-      assert.equal(new Set(vals).size, vals.length, `${key}s are distinct within a list`);
-    }
+    const vals = list.map((x) => x.title);
+    assert.equal(new Set(vals).size, vals.length, 'titles are distinct within a list');
   }
 });
 

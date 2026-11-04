@@ -3,7 +3,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { PERKS, PERK_IDS, SKILLS, ZONE_COUNT } from '../js/config.js';
+import { PERKS, PERK_IDS, SKILLS, ZONE_COUNT, BUYERS } from '../js/config.js';
+import { initialOf } from '../js/avatar.js';
 import { PERK_PAIRS } from '../js/data/perks.js';
 import { Session } from '../js/session.js';
 import { makeSynth } from '../js/cohort.js';
@@ -368,6 +369,18 @@ test('the dashboard shows the sixteen districts: class distribution, heat map se
   assert.ok(heatHTML(S, { zone: null }, S.students(), dist).includes(`<option value="${mode}" selected>`));
   assert.ok(heatHTML(S, { zone: 7 }, S.students(), dist).includes('<option value="7" selected>'));
   assert.ok(heatHTML(S, { zone: 999 }, S.students(), dist).includes(`<option value="${mode}" selected>`), 'a bad district falls back');
+  // the matrix's columns are buyers: each head is the buyer's disc with their initial (the name stays in the hover and for a screen reader), and the key under the matrix shows the same discs
+  const esc1 = (t) => t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  for (const z of [1, 7, 15]) {
+    const hm = heatHTML(S, { zone: z }, S.students(), dist), cols = Object.values(BUYERS).filter((b) => b.zone === z);
+    assert.ok(cols.length >= 5);
+    for (const b of cols) {
+      const disc = `<span class="ava sm" data-style="${b.style}" aria-hidden="true">${initialOf(b.name)}</span>`;
+      assert.ok(hm.includes(`<th scope="col" title="${esc1(b.name)}">${disc}<span class="sr">${esc1(b.name)}</span></th>`), `${b.name}: the column head is the disc and a name for a screen reader`);
+      assert.ok(hm.includes(`${disc} ${esc1(b.name)}`), `${b.name}: the key shows the disc beside the name`);
+    }
+    assert.ok(!/\p{Extended_Pictographic}/u.test(hm), `district ${z}: no emoji in the heat map`);
+  }
   // Backgrounds as two small icons with names for assistive technology, in the roster
   assert.match(p.grade, /<span class="in-bgs" role="img" aria-label="Licensed Tradesperson and Seasoned Pro"/);
   assert.ok(p.grade.includes('>District<'));

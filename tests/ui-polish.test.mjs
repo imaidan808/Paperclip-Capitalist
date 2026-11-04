@@ -77,7 +77,7 @@ test('one card system: the kit heads the first panel sheet (no @import, so no se
 });
 
 test('the Deal Room sheet keeps the structure the screen reader and the keyboard rely on after the staging', () => {
-  const m = { ...result({ you: 100 }), kind: 'sell', stage: 'result', zone: { name: 'The Scrap Yard', short: 'Scrap Yard', icon: 'S', palette: ['#112233', '#445566'] }, assistLocked: false, assist: false, steps: [], says: [], say: '', cast: { name: 'Wen', icon: 'W', role: 'buyer', hello: 'Hi', style: 'hard' }, plan: { kind: 'sell', asset: { name: 'Clip' }, buyer: { name: 'Wen' } } };
+  const m = { ...result({ you: 100 }), kind: 'sell', stage: 'result', zone: { name: 'The Scrap Yard', short: 'Scrap Yard', icon: 'S', palette: ['#112233', '#445566'] }, assistLocked: false, assist: false, steps: [], says: [], say: '', cast: { name: 'Wen', role: 'buyer', hello: 'Hi', style: 'hard' }, plan: { kind: 'sell', asset: { name: 'Clip' }, buyer: { name: 'Wen' } } };
   const h = UI.sheetHTML(m);
   assert.match(h, /<span class="deal-zone">/); assert.match(h, /class="cast-tag">Buyer</); assert.match(h, /class="cast-mood">hard</);
   assert.match(h, /aria-labelledby="ds-title"/); assert.match(h, /data-stage-head/);
@@ -143,7 +143,7 @@ test('the Deal Room keeps the scoreboard and the buttons in one band along the f
   const phone = css.slice(css.indexOf('@media (max-width: 760px)'));
   assert.match(phone, /\.deal-dock \{ display: contents; \}/);
   assert.match(phone, /\.deal-foot \.btn \{[^}]*white-space: nowrap;/, 'a short button label never breaks in two');
-  const m = { ...result({ you: 100 }), kind: 'sell', stage: 'read', zone: null, assistLocked: false, assist: false, steps: [], says: [], say: '', cast: { name: 'Wen', icon: 'W', role: 'buyer', hello: 'Hi', style: 'steady' }, plan: { kind: 'sell', asset: { name: 'Clip' }, buyer: { name: 'Wen' }, fair: 5, budget: 6 }, cash: 10, view: null, canQuick: true, first: true, stageDone: false };
+  const m = { ...result({ you: 100 }), kind: 'sell', stage: 'read', zone: null, assistLocked: false, assist: false, steps: [], says: [], say: '', cast: { name: 'Wen', role: 'buyer', hello: 'Hi', style: 'steady' }, plan: { kind: 'sell', asset: { name: 'Clip' }, buyer: { name: 'Wen' }, fair: 5, budget: 6 }, cash: 10, view: null, canQuick: true, first: true, stageDone: false };
   const h = UI.sheetHTML({ ...m, stage: 'result', plan: { kind: 'sell', asset: { name: 'Clip' }, buyer: { name: 'Wen' } } });
   assert.ok(!/deal-dock/.test(h), 'a result has neither a scoreboard nor buttons, so no band');
 });

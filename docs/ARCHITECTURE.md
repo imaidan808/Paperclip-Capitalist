@@ -10,6 +10,7 @@ js/data/            the content: sixteen districts, the asset classes, the buyer
 js/market.js        pure formulas: utility, Creativity Multiplier, EEI, variance, Gini, FMV
 js/engine.js        the simulation: one step = one virtual hour; deterministic; no DOM
 js/deal.js          the Deal Room's glue: plans a deal, runs its stages (Read, Pitch, Close, Bid, Fix) and hands the result to the engine
+js/avatar.js        a person's mark: the initial and the tone of a style (a flat disc), read by the screens and by the buyer's bubble over the world; not part of the first screen
 js/play/            the five skill games (inspect, pitch, haggle, auction, repair): pure, deterministic, each with an autoplay for Quick
 js/meta/            the Codex, quests, achievements and daily bounties, the Academy, and the Progress tracker that scores them from the engine's events
 js/cohort.js        ghost herd, synthetic students, peer aggregation (the "rest of the class")

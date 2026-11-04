@@ -15,7 +15,7 @@ const { kv } = await import('../js/session.js');
 
 // ---------------------------------------------------------------- hand-made pages
 const E = (id, category, unlock, extra = {}) => ({
-  id, title: 'Title of ' + id, icon: '🎯', category, summary: `Summary of ${id} in one line.`,
+  id, title: 'Title of ' + id, category, summary: `Summary of ${id} in one line.`,
   body: [`First paragraph about ${id}.`, `Second paragraph about ${id}, with a number: 0.4 + 0.95 x fit.`], formula: id === 'margin' ? 'margin = (price - cost) / price' : undefined,
   example: { setup: `Setup for ${id}.`, steps: ['Step one.', 'Step two.'], result: `Result for ${id}.` }, mistakes: ['A first mistake.', 'A second mistake.'], tryIt: `Try ${id} in the game.`, related: [], unlock, ...extra,
 });
@@ -30,9 +30,9 @@ const DEFS = [
   E('exit-valuation', 'Strategy', { event: 'exit' }, { summary: 'What <b>a company</b> is worth & why' }),
 ];
 const MISSIONS = [
-  { id: 'm01', title: 'First Swap', icon: '📎', zone: 1, concept: 'fair-market-value', minutes: 2 },
-  { id: 'm02', title: 'Read the Room', icon: '🔍', zone: 4, concept: 'persona-fit', minutes: 3 },
-  { id: 'm03', title: 'Know Your Buyer', icon: '🎯', zone: 3, concept: 'nope', minutes: 2 },
+  { id: 'm01', title: 'First Swap', zone: 1, concept: 'fair-market-value', minutes: 2 },
+  { id: 'm02', title: 'Read the Room', zone: 4, concept: 'persona-fit', minutes: 3 },
+  { id: 'm03', title: 'Know Your Buyer', zone: 3, concept: 'nope', minutes: 2 },
 ];
 const progressOf = (defs, cx) => ({ m: { cx }, codexList: () => defs.map((d) => ({ def: d, unlocked: cx[d.id] != null })), codexUnlocked: (id) => cx[id] != null, unlockCodex(id, day = 5) { if (cx[id] != null) return false; cx[id] = day; return true; } });
 function ctxOf(cx, { defs = DEFS, drawerOpen = true } = {}) {
@@ -174,11 +174,18 @@ test('a page opens in full: body, formula, worked example, mistakes, Try it, rel
 });
 
 test('every page of the schema draws cleanly even when its optional parts are missing', () => {
-  const bare = { id: 'bare', title: 'Bare', icon: '📘', category: 'Value', summary: 's', body: ['b'], unlock: 'start' };
+  const bare = { id: 'bare', title: 'Bare', category: 'Value', summary: 's', body: ['b'], unlock: 'start' };
   const ctx = ctxOf({ bare: 0 }, { defs: [bare] });
   const html = entryHTML(ctx, bare); assert.deepEqual(checkHTML(html, 'bare'), []); assert.ok(!/Worked example|Common mistakes|Try it|Related|Formula/.test(html));
   const hostile = { ...bare, id: 'h', title: '<b>"x"</b>', summary: '<i>', body: ['<u>'], formula: '<s>', example: { setup: '<q>', steps: ['<r>'], result: '<t>' }, mistakes: ['<v>'], tryIt: '<w>' };
   const h = entryHTML(ctx, hostile); assert.ok(!/<(b|i|u|s|q|r|t|v|w)>/.test(h.replace(/<\/?(b|ol|li|ul|p|pre|h4|section|span|div|header|button)[^>]*>/g, ''))); assert.deepEqual(checkHTML(h, 'hostile'), []);
+});
+
+test('a page has no picture: an icon an older build gave it is not printed, in the list, the page, the related links or the Academy tab', () => {
+  const old = { ...E('old-page', 'Value', 'start', { related: ['older'] }), icon: '🧪' }, older = { ...E('older', 'Value', 'start', { related: ['old-page'] }), icon: '🧫' };
+  const ctx = ctxOf({ 'old-page': 0, older: 0 }, { defs: [old, older] });
+  ctx.U.codexOpenId = 'old-page';
+  for (const h of [drawer.html(ctx), entryHTML(ctx, old), (ctx.U.codexOpenId = null, drawer.html(ctx)), academyHTML(ctx, { done: [], skipped: [], finished: false }, MISSIONS.map((m) => ({ ...m, icon: '🧬' })))]) { assert.ok(!/🧪|🧫|🧬/.test(h), 'no icon is printed'); assert.ok(!/cx-ic/.test(h), 'and no tile is left for one'); }
 });
 
 // ---------------------------------------------------------------- the Academy tab
