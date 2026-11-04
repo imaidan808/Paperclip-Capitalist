@@ -2,7 +2,7 @@
 // (docs/V2_DESIGN.md sections 8 and 12). Contract: see the header of ../shell.js. Quest, bounty and badge data come from ctx.progress (js/meta/progress.js);
 // with no progress tracker (tests) the sections that need it are left out. State kept on the shared UI object U:
 //   U.quests  { ach: 'all' | 'earned' | 'todo', achAll: boolean, doneOpen: boolean }   the badge filter (the badges still to earn open first), the long list and the folded "done" list
-//   U.fold    the folds the reader opened (stock.js fold): what each skill does, and the quests still to come
+//   U.fold    the folds the reader opened or shut (stock.js fold): what each skill does (open by itself while a point can be spent on it), and the quests still to come
 // Every control is a real button with a stable data-fid, so the shell can give back focus after it redraws the drawer.
 import { SKILLS, SKILL_MAX, PERKS, ZONES, ECON, WARN_LEAD, xpForLevel } from '../../config.js';
 import { esc } from '../common.js';
@@ -65,6 +65,7 @@ const DEAL = {
 };
 const BONUS_KEY = { ops: 'opsBonus', growth: 'growthBonus', fintech: 'fintechBonus' };
 
+const canRaise = (s, k) => s.skills[k] < SKILL_MAX && s.points >= 1; // a point in hand and a level to put it on: the skill's fold opens by itself, because the spend cannot be undone
 function skillCard(ctx, k) {
   const g = ctx.g(), s = g.s, K = SKILLS[k], base = s.skills[k], eff = g.lvl(k), bonus = g.P[BONUS_KEY[k]] || 0, maxed = base >= SKILL_MAX;
   const from = s.perks.map((id) => [PERKS[id]?.name, PERKS[id]?.mods?.[BONUS_KEY[k]]]).filter(([n, v]) => n && v);
@@ -75,14 +76,14 @@ function skillCard(ctx, k) {
     const now = f(eff, s.upg.research), nx = f(nextEff, s.upg.research);
     return `<li><span class="lb">${esc(label)}</span><span class="now">${esc(now)}</span>${!maxed && nx !== now ? `<span class="nx"><span class="sr">At the next level: </span><span aria-hidden="true">→ </span>${esc(nx)}</span>` : ''}</li>`;
   }).join('');
-  const can = !maxed && s.points >= 1;
+  const can = canRaise(s, k);
   const label = maxed ? 'Mastered' : s.points >= 1 ? `Spend a point: level ${base} → ${base + 1}` : `Level ${base} → ${base + 1} needs a skill point`;
   return `<article class="qs-skill${can ? ' ready' : ''}" data-skill="${k}">
     <header><h4>${esc(K.name)}</h4>${s.specialty === k ? '<span class="chip warn">★ Specialty</span>' : ''}</header>
     <div class="qs-pips" role="img" aria-label="Level ${base} of ${SKILL_MAX}${bonus ? `, ${bonus > 0 ? 'plus' : 'minus'} ${Math.abs(bonus)} from your Backgrounds, effective level ${eff}` : ''}">${pips}</div>
     <p class="small qs-lv">Level <b>${base}</b>${bonus ? ` ${bonus > 0 ? '+' : '-'} <b>${Math.abs(bonus)}</b> from ${esc(from.map(([n]) => n).join(' and ') || 'your Backgrounds')} = effective level <b>${eff}</b>` : ''}</p>
     <ul class="qs-fx" aria-label="What this skill does at your level">${rows}</ul>
-    ${fold(ctx, 'quests', 'sk-' + k, 'What it does', `<p class="tiny mute">${esc(K.blurb)} ${esc(DEAL[k])}</p>`, `${K.blurb} ${DEAL[k]}`)}
+    ${fold(ctx, 'quests', 'sk-' + k, 'What it does', `<p class="tiny mute">${esc(K.blurb)} ${esc(DEAL[k])}</p>`, `${K.blurb} ${DEAL[k]}`, can)}
     <button class="btn${can ? '' : ' ghost'}" data-act="quests-spend" data-k="${k}" data-fid="qs-sp-${k}"${can ? '' : ' aria-disabled="true"'}>${esc(label)}</button>
   </article>`;
 }
@@ -93,10 +94,11 @@ function heroHTML(ctx) {
   const g = ctx.g(), s = g.s, lv = g.level(), lo = lvlBase(lv), hi = lvlBase(lv + 1), into = Math.max(0, s.xp - lo), need = hi - lo;
   const p = Math.round(clamp(into / need, 0, 1) * 100), xm = g.P.xpMult ?? 1, rep = Math.round(clamp(s.rep, 0, 100));
   const word = REP_WORDS.find(([min]) => rep >= min)[1], flow = 0.85 + 0.003 * rep; // flow: engine _spawnLead
-  // a win pays 5 XP for each step of the streak it makes, up to 10 steps (engine pitch); a win is a sale more than 2% over fair value, and anything less ends the streak
+  const flop = g.P.flopRep || 0; // the Creator: a rejected pitch (a spotted counterfeit is one) costs this much reputation on top, a sale that is not a win half of it (engine pitch)
+  // a win pays 5 XP for each step of the streak it makes, up to 10 steps (engine pitch); a win is a sale that nets more than 2% over fair value, after the district's tax and the fee (received > fmv x 1.02), and anything less ends the streak
   const streakLine = s.streak > 0
-    ? `Next win: <b>+${xpOf(ctx, 5 * Math.min(s.streak + 1, 10))} bonus XP</b>. A win beats fair price by more than 2%.`
-    : 'A win beats fair price by more than 2%. Each win in a row pays more bonus XP.';
+    ? `Next win: <b>+${xpOf(ctx, 5 * Math.min(s.streak + 1, 10))} bonus XP</b>. A win nets more than 2% over fair value, after tax and fees.`
+    : 'A win nets more than 2% over fair value, after tax and fees. Each win in a row pays more bonus XP.';
   return `<section class="qs-hero" aria-label="Your progress">
     <div class="qs-lvl"><div class="qs-ring" style="--p:${p}%" role="img" aria-label="Level ${lv}, ${p} percent of the way to level ${lv + 1}"><b>${lv}</b></div>
       <div class="qs-lvtx"><h3>Level ${lv}</h3>${bar(`XP toward level ${lv + 1}`, into, need, 'gold')}
@@ -108,7 +110,7 @@ function heroHTML(ctx) {
     </div>
     <div class="qs-rep"><div class="qs-reprow"><span>Reputation: <b>${word}</b></span><span class="mono">${rep} / 100</span></div>
       <div class="qs-meter" role="meter" aria-label="Reputation" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${rep}" aria-valuetext="${rep} of 100, ${word}"><i style="width:${rep}%"></i></div>
-      <p class="tiny mute">Buyers arrive at <b>${flow.toFixed(2)}x</b> speed. A win adds 1. A scam costs 10 and a spotted counterfeit 3.</p></div>
+      <p class="tiny mute">Buyers arrive at <b>${flow.toFixed(2)}x</b> speed. A win adds 1. A scam costs 10 and a spotted counterfeit ${3 + flop}.${flop ? ` A pitch with no fit costs ${flop} and a sale that is not a win ${flop / 2}.` : ''}</p></div>
   </section>`;
 }
 
@@ -214,7 +216,7 @@ function acts(ctx) {
     'quests-go'(el) { goToDistrict(ctx, +el.dataset.dist); },
     'quests-done'() { set({ doneOpen: !Q(ctx).doneOpen }); },
     'quests-ach'(el) { set({ ach: ['earned', 'all'].includes(el.dataset.k) ? el.dataset.k : 'todo', achAll: false }); },
-    'quests-fold'(el) { flip(ctx, 'quests', el.dataset.k); },
+    'quests-fold'(el) { const k = el.dataset.k; flip(ctx, 'quests', k, /^sk-/.test(k) && canRaise(ctx.g().s, k.slice(3))); },
     'quests-ach-all'() { set({ achAll: !Q(ctx).achAll }); },
     'quests-jump'(el) {
       const sec = ctx.$?.(`[data-qsect="${el.dataset.to}"]`, ctx.el?.drawer);

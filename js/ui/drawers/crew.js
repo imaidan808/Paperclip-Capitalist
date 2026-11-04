@@ -30,7 +30,7 @@ const BANDS = {
 };
 const bandOf = (ci) => BANDS[ci.band.id] || BANDS.balanced;
 const cmChip = (ci) => `<span class="chip ${bandOf(ci).tone}" title="${esc(bandOf(ci).note)}"><span aria-hidden="true">${bandOf(ci).glyph}</span> ${esc(ci.band.label)} ${ci.cm.toFixed(2)}x</span>`;
-const crowdWords = (ci) => (ci.vT < 2 ? 'Almost nobody else is pitching this niche.' : `${Math.round(ci.vN)} of ${Math.round(ci.vT)} recent pitches use this niche.`);
+const crowdWords = (ci) => (ci.vT < 2 ? 'Almost nobody else is pitching this niche.' : `${Math.round(ci.S * 100)}% of recent pitches use this niche.`);
 const laneName = (cls, seg) => `${esc(ASSETS[cls]?.name || 'No lane yet')} to ${esc(BUYERS[seg]?.name || '?')}`;
 
 function statusOf(p) {
@@ -105,7 +105,12 @@ function pipeCard(v, p, cache) {
     : `<button class="btn" data-act="crew-up" data-id="${p.id}" data-fid="cu-${p.id}" ${up.why ? 'aria-disabled="true"' : ''}>Level ${p.level + 1} for ${m(up.cost)}</button>`;
   // what the next level is worth: its payback is the line, its capacity and daily gain are the hover (capacity doubles with each level, engine pipeCap)
   const upTip = up.maxed ? '' : `Capacity ${m(up.cap)} to ${m(up.nextCap)} per cycle${up.gain > 0 ? `, about ${sgn(v, up.gain)} a day when fully funded` : ''}.`;
-  const upLine = up.maxed ? '' : `<p class="cr-up small" title="${esc(upTip)}">${up.gain > 0 ? `Level ${p.level + 1} pays back in about ${Math.max(1, Math.round(up.payback))} days.` : `Level ${p.level + 1}: this lane cannot use more capital profitably yet.`}</p>`;
+  // Release is refused while a cycle is in progress (engine releasePipeline), and a manager with capital starts its next cycle in the very hour the last one ends (engine _pipelines): Release opens by itself only for a manager
+  // whose capital is 0. The label says why it is shut (a title is a hover, and a tap or a key on a shut control does nothing: common.js delegate); the hover says the way.
+  const left = Math.max(1, p.len - p.prog);
+  const relTip = stt.key !== 'running' ? 'Opens when the cycle has ended and no other begins.'
+    : alloc > 0 ? `Its next cycle starts in the hour this one ends, cash permitting. Set capital to 0 in Edit lane to stop after this one, in ${left} h.` : `Opens when this cycle ends, in ${left} h.`;
+  const upLine = up.maxed ? '' : `<p class="cr-up small" title="${esc(upTip)}">${up.gain > 0 ? `Level ${p.level + 1} pays back in about ${Math.max(1, Math.round(up.payback))} days once funded to ${m(up.nextCap)}.` : `Level ${p.level + 1}: this lane cannot use more capital profitably yet.`}</p>`;
   return `<article class="cr-card${flash ? ' cr-focus' : ''}" data-pipe="${p.id}" data-st="${stt.key}" tabindex="-1" aria-label="${esc(K.name)}, level ${p.level}, ${esc(Z.name)}, ${esc(stt.label)}">
     <header class="cr-top"><span class="cr-ic" aria-hidden="true">${K.icon}</span>
       <div class="cr-id"><h4 class="cr-name">${esc(K.name)} <span class="chip">Lv ${p.level} of ${PIPE_RULES.maxLevel}</span></h4>
@@ -122,7 +127,7 @@ function pipeCard(v, p, cache) {
       ${upBtn}
       ${alloc < cap - 0.5 ? `<button class="btn ghost" data-act="crew-fill" data-id="${p.id}" data-fid="cf-${p.id}">Fund full ${m(cap)}</button>` : ''}
       <button class="btn ghost" data-act="crew-pause" data-id="${p.id}" data-fid="cp-${p.id}">${p.status === 'paused' ? 'Resume' : 'Pause'}</button>
-      <button class="btn ghost danger-text" data-act="crew-rel" data-id="${p.id}" data-fid="cr-${p.id}" ${p.inflight ? `aria-disabled="true" title="Opens when this cycle ends, in ${Math.max(1, p.len - p.prog)} h."` : ''}>Release</button></div>
+      <button class="btn ghost danger-text" data-act="crew-rel" data-id="${p.id}" data-fid="cr-${p.id}" ${p.inflight ? `aria-disabled="true" title="${relTip}"` : ''}>Release${p.inflight ? ': mid-cycle' : ''}</button></div>
     ${upLine}
     ${up.why && !up.maxed ? `<p class="cr-why small">${up.why}</p>` : ''}
   </article>`;

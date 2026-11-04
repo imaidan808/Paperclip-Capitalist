@@ -41,7 +41,7 @@ export const QUESTS = [
     { event: 'pitch', match: { zone: 1, outcome: SOLD(), fit: { gte: 0.7 } }, count: 3 }, 100, 0, 'q01a'),
   quest('q02a', 2, 'Stall Crawler', '🧺', 'Buy 2 lots from the stalls at Flea Market Row.',
     { event: 'buy', match: { zone: 2 }, count: 2 }, 80, 0, 'q01b'),
-  quest('q02b', 2, 'Never Take the First Offer', '🗣️', 'Sell 3 goods in Flea Market Row at least 10% above fair price.',
+  quest('q02b', 2, 'Never Take the First Offer', '🗣️', 'Sell 3 goods in Flea Market Row at least 10% over fair value, net of tax and fees.',
     { event: 'pitch', match: { zone: 2, outcome: SOLD(), gain: { gte: 0.1 } }, count: 3 }, 160, 0, 'q02a'),
   quest('q03a', 3, 'Syllabus Week', '📚', 'Sell 2 goods on Campus Quad.',
     { event: 'pitch', match: { zone: 3, outcome: SOLD() }, count: 2 }, 110, 0, 'q02b'),
@@ -103,7 +103,7 @@ export const QUESTS = [
     { event: 'cycle', match: { zone: 15, net: { gt: 0 } }, count: 25000, sum: 'net' }, 2600, 0, 'q15a'),
   quest('q16a', 16, 'Opening Bell', '🔔', 'Sell 2 goods at Global Exchange.',
     { event: 'pitch', match: { zone: 16, outcome: SOLD() }, count: 2 }, 2000, 0, 'q15b'),
-  quest('q16b', 16, 'Close the Gap', '🌍', 'Sell 3 goods at Global Exchange at least 12% above fair price.',
+  quest('q16b', 16, 'Close the Gap', '🌍', 'Sell 3 goods at Global Exchange at least 12% over fair value, net of tax and fees.',
     { event: 'pitch', match: { zone: 16, outcome: SOLD(), gain: { gte: 0.12 } }, count: 3 }, 3500, 2, 'q16a'),
 ];
 
@@ -185,7 +185,7 @@ export const ACHIEVEMENTS = [
     { event: 'shock', count: 3 }, 250, { bg: 'veteran' }),
 
   // ---------------------------------------------------------------- the Creativity Engine
-  ach('a-closer', 'common', 'Closer', '💼', 'Win 10 pitches: sales over 2% above fair price, outside a herd.',
+  ach('a-closer', 'common', 'Closer', '💼', 'Win 10 pitches: sales that net more than 2% over fair value, outside a herd.',
     { event: 'pitch', match: { outcome: PROFIT() }, count: 10 }, 100),
   ach('a-rainmaker', 'rare', 'Rainmaker', '🌧️', 'Win 25 pitches.',
     { event: 'pitch', match: { outcome: PROFIT() }, count: 25 }, 280),
@@ -207,13 +207,13 @@ export const ACHIEVEMENTS = [
   // ---------------------------------------------------------------- the twelve Backgrounds
   ach('a-bg-connected', 'rare', 'Rolodex', '📇', 'Well-Connected: sign 3 clients.',
     { event: 'client', count: 3 }, 220, { bg: 'connected' }),
-  ach('a-bg-grad', 'rare', 'Textbook Case', '📖', 'Business-School Grad: close 5 sales into niches under 25% saturated at 10% or more above fair price.',
+  ach('a-bg-grad', 'rare', 'Textbook Case', '📖', 'Business-School Grad: close 5 sales into niches under 25% saturated at 10% or more over fair value, net of tax and fees.',
     { event: 'pitch', match: { outcome: SOLD(), S: { lte: 0.25 }, gain: { gte: 0.1 } }, count: 5 }, 260, { bg: 'grad' }),
   ach('a-bg-immigrant', 'rare', 'Diaspora Express', '✈️', 'Immigrant Hustler: ship 25 crates between districts.',
     { event: 'ship', count: 25, sum: 'count' }, 250, { bg: 'immigrant' }),
   ach('a-bg-heir', 'rare', 'Family Safety Net', '🪂', 'Legacy Heir: take a margin call and let the family catch you. Only the Heir has this safety net.',
     { event: 'perk', match: { id: 'heir', effect: 'bailout' }, count: 1 }, 250, { bg: 'heir', hidden: true }),
-  ach('a-bg-creator', 'rare', 'Gone Viral', '📱', 'Creator: close 3 pitches at 30% or more above fair price.',
+  ach('a-bg-creator', 'rare', 'Gone Viral', '📱', 'Creator: close 3 pitches at 30% or more over fair value, net of tax and fees.',
     { event: 'pitch', match: { outcome: SOLD(), gain: { gte: 0.3 } }, count: 3 }, 250, { bg: 'creator' }),
   ach('a-bg-gigger', 'common', 'Hustle Season', '🛵', 'Side-Hustler: complete 20 cycles, manager runs or paid days of rent and royalties.',
     { event: 'cycle', count: 20 }, 120, { bg: 'gigger' }),
@@ -305,7 +305,7 @@ export const ACHIEVEMENTS = [
 export const DAILIES = [
   { id: 'd-three-deals', title: 'Three Deals', desc: 'Close 3 trades today.', icon: '🤝',
     goal: { event: 'pitch', match: { outcome: SOLD() }, count: 3 }, reward: { xp: 40 } },
-  { id: 'd-above-fair', title: 'Above Fair', desc: 'Sell 2 goods for at least 5% above fair price.', icon: '📈',
+  { id: 'd-above-fair', title: 'Above Fair', desc: 'Sell 2 goods for at least 5% over fair value, net of tax and fees.', icon: '📈',
     goal: { event: 'pitch', match: { outcome: SOLD(), gain: { gte: 0.05 } }, count: 2 }, reward: { xp: 50 } },
   { id: 'd-restock', title: 'Restock', desc: 'Buy 3 lots today.', icon: '📦',
     goal: { event: 'buy', count: 3 }, reward: { xp: 40 } },
