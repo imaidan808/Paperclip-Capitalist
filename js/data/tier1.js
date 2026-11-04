@@ -15,26 +15,22 @@
 export const zones = {
   1: {
     id: 1, name: 'The Scrap Yard', short: 'Scrap Yard', icon: '🏭', theme: 'scrap', tier: 1,
-    blurb: 'Barter up from a paperclip: urgent buyers pay for need, not cost.',
     teaches: 'utility-fit', gate: 0, scale: 1, tax: 0, friction: 0.1, pool: 5000, speed: 1, store: 10, leadEvery: 3, lotEvery: 4, urgent: 0.45,
     auto: false, plots: 0, palette: ['#5b5b1f', '#b5651d'], rules: {}, bonus: {},
   },
   2: {
     id: 2, name: 'Flea Market Row', short: 'Flea Market', icon: '🎪', theme: 'market', tier: 1,
-    blurb: 'Haggles run one round longer, and a sealed box is a gamble on condition.',
     teaches: 'negotiation', gate: 20, scale: 6, tax: 0.01, friction: 0.104, pool: 5000, speed: 1.3, store: 12, leadEvery: 3, lotEvery: 4, urgent: 0.3,
     auto: false, plots: 0, palette: ['#c4571a', '#ffc93c'], rules: { haggle: true }, bonus: {},
   },
   3: {
     id: 3, name: 'Campus Quad', short: 'Campus', icon: '🎓', theme: 'campus', tier: 1,
-    blurb: 'Demand for books and gadgets swings 35% either way on a 28-day wave.',
     teaches: 'saturation-herd', gate: 80, scale: 25, tax: 0.02, friction: 0.108, pool: 5000, speed: 1.6, store: 13, leadEvery: 3, lotEvery: 4, urgent: 0.25,
     auto: false, plots: 0, palette: ['#9b3b2f', '#2f9e5b'],
     rules: { season: { period: 28, amp: 0.35, tags: ['paper', 'training', 'electronics'] } }, bonus: {},
   },
   4: {
     id: 4, name: 'Pawn District', short: 'Pawn', icon: '💍', theme: 'pawn', tier: 1,
-    blurb: 'About one lot in five is fake, and a third of the stock goes to auction.',
     teaches: 'information-asymmetry', gate: 250, scale: 90, tax: 0.03, friction: 0.112, pool: 5000, speed: 1.9, store: 15, leadEvery: 3, lotEvery: 5, urgent: 0.2,
     auto: false, plots: 0, palette: ['#0e6f6b', '#e3b341'], rules: { fakes: 0.22, auction: 0.35, gray: true }, bonus: {},
   },

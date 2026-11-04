@@ -12,7 +12,6 @@
 export const zones = {
   5: {
     id: 5, name: 'Metro Hub', short: 'Metro', icon: '🏙️', tier: 2, theme: 'metro',
-    blurb: 'The city: managers, clients, upgrades and the Bank open here.',
     teaches: 'working-capital',
     gate: 1000, scale: 400, tax: 0.05, friction: 0.116, pool: 10000, speed: 2.2, store: 17,
     leadEvery: 3, lotEvery: 4, urgent: 0.12, auto: true, plots: 4,
@@ -22,7 +21,6 @@ export const zones = {
   },
   6: {
     id: 6, name: 'Estate Sales', short: 'Estates', icon: '🏺', tier: 2, theme: 'estate',
-    blurb: 'More than half the lots are auctions, and winners often overpay.',
     teaches: 'winners-curse',
     gate: 2500, scale: 900, tax: 0.0595, friction: 0.12, pool: 25000, speed: 2.5, store: 19,
     leadEvery: 3, lotEvery: 5, urgent: 0.115, auto: true, plots: 4,
@@ -32,7 +30,6 @@ export const zones = {
   },
   7: {
     id: 7, name: 'Auto Row', short: 'Auto Row', icon: '🚘', tier: 2, theme: 'auto',
-    blurb: 'Six in ten lots are broken, and repairs here cost 25% less.',
     teaches: 'repair-roi',
     gate: 6000, scale: 2500, tax: 0.069, friction: 0.124, pool: 60000, speed: 2.8, store: 20,
     leadEvery: 3, lotEvery: 4, urgent: 0.11, auto: true, plots: 4,
@@ -42,7 +39,6 @@ export const zones = {
   },
   8: {
     id: 8, name: 'Harbor Docks', short: 'Harbor', icon: '🚢', tier: 2, theme: 'harbor',
-    blurb: 'Customs inspects one arriving shipment in four: a 12-hour delay and a 2% fee.',
     teaches: 'supply-chain',
     gate: 12000, scale: 5000, tax: 0.0785, friction: 0.128, pool: 120000, speed: 3.1, store: 22,
     leadEvery: 3, lotEvery: 4, urgent: 0.105, auto: true, plots: 4,

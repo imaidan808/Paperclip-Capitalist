@@ -1,6 +1,7 @@
-// Copy pass, part 2, package P5: the data text (district blurbs, buyer lines, the Backgrounds' claims, the skill, manager, upgrade, client, audit and shock lines) and the Draft's own words,
+// Copy pass, part 2, package P5: the data text (buyer lines, the Backgrounds' claims, the skill, manager, upgrade, client, audit and shock lines) and the Draft's own words,
 // held against the engine and the data. Every number a text states is recomputed here from the engine or the data, never copied from the text; a claim the engine does not make is a failure.
-//   D1  a district blurb is one short sentence, and each fact it states is the district's rule (the lot shares, the haggle, the wave, the decay, the customs, the audit, the rent, the price gaps)
+//   D1  the two engine facts a district's words lean on that no other test holds: an urgent buyer is quoted from their need, and the winner of an auction often pays more than the lot is worth (a district has no blurb now;
+//       the shares, customs, fads, spoilage, rent, season, haggle and rewards its rule prints are held by tests/audit-content.test.mjs and tests/copy2-drawers.test.mjs)
 //   D2  a buyer's line is short, in the buyer's voice, and the set is shorter than it was
 //   D3  a Background's claim names no figure the mods do not hold, and the claims that were wrong are right (the immigrant's margin, the trades' haggle, the creator's goodwill, the roots' trust, the pro's inspections, the second chance's warnings)
 //   D4  the skill, manager, upgrade and client lines say what the engine does; a manager is a manager, not a pipeline
@@ -9,19 +10,13 @@
 // Run: node --test tests/copy2-data.test.mjs
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
-import { join, dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
 
 const store = new Map();
 globalThis.localStorage = { getItem: (k) => (store.has(k) ? store.get(k) : null), setItem: (k, v) => { store.set(k, String(v)); }, removeItem: (k) => { store.delete(k); } };
-const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
-const read = (rel) => readFileSync(join(ROOT, rel), 'utf8');
 
 const { Game } = await import('../js/engine.js');
 const C = await import('../js/config.js');
-const { ZONES, ASSETS, BUYERS, PERKS, SKILLS, PIPE, UPGRADES, CLIENTS, LOANS, AUDIT_THEMES, EVENTS, AUDIT, FEES, BASE_RATE, ECON, MIL, MIL_ZONE } = C;
-const { assetFMV, seasonMult } = await import('../js/market.js');
+const { ZONES, ASSETS, BUYERS, PERKS, SKILLS, PIPE, UPGRADES, CLIENTS, LOANS, AUDIT_THEMES, EVENTS, AUDIT, FEES, BASE_RATE, ECON } = C;
 const { haggleParams, inspectParams, auctionParams, planFor, startRun } = await import('../js/deal.js');
 const haggle = await import('../js/play/haggle.js');
 const auction = await import('../js/play/auction.js');
@@ -36,10 +31,9 @@ const near = (a, b, eps = 1e-6) => assert.ok(Math.abs(a - b) <= eps, `${a} vs ${
 const words = (t) => t.trim().split(/\s+/).length;
 const mean = (xs) => xs.reduce((a, b) => a + b, 0) / xs.length;
 const pc = (x) => Math.round(x * 100);
-const WORD = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten'];
 const nums = (t, re) => [...t.matchAll(re)].map((m) => +m[1].replace(/,/g, ''));
 
-/** Lots made in a district: shares of broken, fake, auction and warned lots (the rates a blurb quotes are rates of LOTS). */
+/** Lots made in a district: shares of broken, fake, auction and warned lots (the rates a district's rules give are rates of LOTS). */
 function lotShares(zone, cash, perks = [], n = 4000) {
   const g = mk(perks, 11); g.s.cash = cash; g._unlock();
   if (!g.s.zones.includes(zone)) g._openZone(zone);
@@ -61,87 +55,21 @@ function arrivals(g, zone, hours = 300) {
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
-// D1. the district blurbs
+// D1. two engine facts a district's words lean on (the Scrap Yard's urgent buyers, the Estate Sales' winners)
 // ---------------------------------------------------------------------------------------------------------------------
-test('D1: a district blurb is one short sentence, a statement, with no lesson attached and no advice', () => {
-  assert.equal(Object.keys(ZONES).length, 16);
-  for (const [id, z] of Object.entries(ZONES)) {
-    assert.ok(z.blurb.length <= 100, `${id}: ${z.blurb.length} characters`);
-    assert.ok(words(z.blurb) <= 16, `${id}: ${words(z.blurb)} words`);
-    assert.equal((z.blurb.match(/[.!?](\s|$)/g) || []).length, 1, `${id}: one sentence`);
-    assert.ok(z.blurb.endsWith('.'), `${id}: it ends with a period`);
-    assert.doesNotMatch(z.blurb, /\blearn\b|\bthe lesson\b|\bwill teach\b/i, `${id}: "You will learn" is the badge's, not the blurb's`);
-    assert.doesNotMatch(z.blurb, /\b(you should|inspect before|bid below|price each|patience is)\b/i, `${id}: no advice`);
-    assert.doesNotMatch(z.blurb, /\?|!/, `${id}: a statement`);
-    assert.doesNotMatch(z.blurb, /treasure|junk|long (sales )?cycles|cycles are long/i, id);
-  }
-  const total = Object.values(ZONES).reduce((n, z) => n + words(z.blurb), 0);
-  assert.ok(total <= 210, `the sixteen blurbs hold ${total} words (they held 383)`);
-});
-
-test('D1 Scrap Yard: the barter ladder is real, and urgent buyers pay for their need, not for the crate\'s cost', () => {
-  assert.match(ZONES[1].blurb, /Barter up from a paperclip/);
-  assert.match(ZONES[1].blurb, /urgent buyers pay for need, not cost/);
-  // the ladder: buyers here hand goods back, and the paperclip is the bottom rung
-  assert.ok(Object.values(BUYERS).filter((b) => b.zone === 1 && b.holds?.length).length >= 4);
-  assert.ok(BUYERS.student.holds.some((h) => h.cls === 'pen'), 'the first buyer holds the next rung up');
-  assert.ok(Object.values(ZONES).every((z) => z.id === 1 || z.urgent < ZONES[1].urgent), 'no district has as many urgent buyers as the first');
-  // the price: a buyer in need is quoted from their budget, a buyer without one from the crate's fair value
+test('D1 Scrap Yard: an urgent buyer is quoted from their need, not from the crate\'s fair value and never from what it cost', () => {
   const g = mk(); const pen = put(g, 'pen', 1); pen.known = true;
   const budget = g.val(pen) * 6;
   const calm = { id: 'LC', zone: 1, seg: 'student', budget, need: null, born: 0, exp: 999 }, urgent = { id: 'LU', zone: 1, seg: 'student', budget, need: 'prestige', born: 0, exp: 999 };
   g.s.leads[1].push(calm, urgent);
   const pCalm = g.quotePitch(pen.id, 'LC', undefined, { blind: false }).price, pUrgent = g.quotePitch(pen.id, 'LU', undefined, { blind: false }).price;
   assert.ok(pUrgent > 2 * pCalm, `the buyer in need pays ${pUrgent.toFixed(2)}, the calm one ${pCalm.toFixed(2)}, for the same pen`);
+  // ...and the same pen, bought for next to nothing or for a fortune, is quoted alike
+  const quoteAt = (basis) => { const x = mk(), a = put(x, 'pen', 1, { basis }); a.known = true; x.s.leads[1].push({ id: 'LU', zone: 1, seg: 'student', budget, need: 'prestige', born: 0, exp: 999 }); return x.quotePitch(a.id, 'LU', undefined, { blind: false }).price; };
+  assert.equal(quoteAt(0.01), quoteAt(1000));
 });
 
-test('D1 Flea Market Row: a haggle runs one round longer here, and a sealed box hides its condition', () => {
-  const b = ZONES[2].blurb;
-  assert.match(b, /Haggles run one round longer/); assert.match(b, /gamble on condition/);
-  assert.doesNotMatch(b, /every deal can be haggled/i, 'a haggle is offered in every district; what this one adds is a round');
-  assert.deepEqual(Object.values(ZONES).filter((z) => z.rules.haggle).map((z) => z.id), [2], 'only the Flea Market has the rule');
-  const g = mk(), rounds = (zone) => haggle.create({ ...haggleParams(g, { role: 'sell', fair: 10, buyer: { style: 'friendly', patience: 4 }, lead: { budget: 100 }, zone, seed: 5 }), seed: 5 }).n;
-  assert.equal(rounds(2), rounds(3) + 1, 'one more round in the Flea Market than in the Campus Quad, for the same buyer');
-  const s = lotShares(2, 100, [], 3000);
-  assert.ok(s.q.length > 100 && Math.min(...s.q) >= 0.85 && Math.max(...s.q) <= 1.15, 'a sealed box is worth 85% to 115% of what it looks like');
-  assert.ok(Math.max(...s.q) - Math.min(...s.q) > 0.25, 'and the spread is real');
-  assert.equal(s.fake, 0, 'never a fake');
-});
-
-test('D1 Campus Quad: demand for books and gadgets swings by the rule\'s amplitude on the rule\'s period', () => {
-  const r = ZONES[3].rules.season;
-  assert.ok(ZONES[3].blurb.includes(`${pc(r.amp)}% either way on a ${r.period}-day wave`), ZONES[3].blurb);
-  assert.ok(r.tags.includes('paper') && r.tags.includes('training') && r.tags.includes('electronics'), 'books are paper and training, gadgets are electronics');
-  const mult = [...Array(r.period).keys()].map((d) => seasonMult(ASSETS.courseBooks, 3, d + 1));
-  near(Math.max(...mult), 1 + r.amp, 0.02); near(Math.min(...mult), 1 - r.amp, 0.02);
-  assert.equal(seasonMult(ASSETS.dormFridge, 3, 7), 1, 'a fridge is not on the wave');
-});
-
-test('D1 Pawn District: about one lot in five is fake and a third of the stock goes to auction', () => {
-  const r = ZONES[4].rules, b = ZONES[4].blurb;
-  assert.equal(Math.round(1 / r.fakes), 5); assert.ok(Math.abs(r.auction - 1 / 3) < 0.04);
-  assert.match(b, /About one lot in five is fake/); assert.match(b, /a third of the stock goes to auction/);
-  const s = lotShares(4, 1000);
-  assert.ok(Math.abs(s.fake / s.n - r.fakes) < 0.04, `${pc(s.fake / s.n)}% fake against a rule of ${pc(r.fakes)}%`);
-  assert.ok(Math.abs(s.auction / s.n - r.auction) < 0.04, `${pc(s.auction / s.n)}% at auction against a rule of ${pc(r.auction)}%`);
-});
-
-test('D1 Metro Hub: managers, clients, upgrades and the Bank open here', () => {
-  const b = ZONES[5].blurb;
-  for (const w of ['managers', 'clients', 'upgrades', 'Bank']) assert.ok(b.includes(w), w);
-  assert.ok(ZONES[5].rules.managers && ZONES[5].rules.bank && ZONES[5].auto && ZONES[5].plots > 0);
-  assert.equal(MIL_ZONE.m1, 5); assert.equal(MIL.m1, ZONES[5].gate);
-  assert.ok(CLIENTS.smb.zone === 5 && Object.values(UPGRADES).every((u) => u.zone === 5), 'the first clients and every upgrade are Metro Hub\'s');
-  const g = mk(); assert.match(g.loanBlock('micro'), /Commercial Bank opens at Metro Hub/); assert.ok(!g.s.mil.m1);
-  rich(g, ZONES[5].gate + 10);
-  assert.ok(g.s.mil.m1 && g.s.zones.includes(5)); assert.equal(g.loanBlock('micro'), '', 'the Bank is open');
-});
-
-test('D1 Estate Sales: more than half the lots are auctions, and a winner often pays more than the lot is worth', () => {
-  const r = ZONES[6].rules, b = ZONES[6].blurb;
-  assert.ok(r.auction > 0.5 && /More than half the lots are auctions/.test(b));
-  const s = lotShares(6, 3000);
-  assert.ok(s.auction / s.n > 0.5 && s.auction / s.n < 0.6, `${pc(s.auction / s.n)}% at auction`);
+test('D1 Estate Sales: a winner at auction often pays more than the lot is worth (the engine\'s side of the winner\'s curse)', () => {
   // "Overpay" is the price at the hammer against what the lot is worth, and the Deal Room has two worths for an auction lot: the auction's own true value (the lesson's surplus, the quests)
   // and the engine's value of the crate (DealRun.worth, which the card's "Paid a little too much" uses). Play each auction through, bidding up to your own estimate.
   const hammer = (p) => { let a = auction.create(p); for (let i = 0; i < 500 && !a.done; i++) { const v = auction.view(a); a = auction.act(a, { type: v.yourTurn && v.actions.some((x) => x.type === 'bid') && v.nextBid <= p.estimate + 1e-9 ? 'bid' : 'drop' }).state; } return auction.result(a); };
@@ -159,121 +87,11 @@ test('D1 Estate Sales: more than half the lots are auctions, and a winner often 
   }
   assert.ok(won.n > 1000 && won.fakes > 50 && won.fakesOver === won.fakes, 'winners enough to count, and whoever wins a counterfeit (worth 8% of what it looks) overpays by either worth');
   const shares = [won.overTrue / won.n, won.overWorth / won.n], low = Math.min(...shares);
-  const quantifier = low > 0.5 ? 'tend to' : low > 0.15 ? 'often' : null; // "tend to" is a majority, by both worths; a quarter is "often"
-  assert.ok(quantifier && b.includes(`winners ${quantifier} overpay`), `${pc(shares[0])}% of the winners paid more than the auction's true value, ${pc(shares[1])}% more than the crate's worth; the blurb says: ${b}`);
+  assert.ok(low > 0.15, `${pc(shares[0])}% of the winners paid more than the auction's true value, ${pc(shares[1])}% more than the crate's worth: "often" is more than one win in seven by both (a majority, "tend to", is not what the engine gives by the first)`);
   // the mechanism the Codex names, apart from the price: the highest estimate wins, and it runs high (the same on every lot, so the last one will do)
   const lot = g.s.lots[6][0], runs = Array.from({ length: 3000 }, (_, i) => { const p = auctionParams(g, 6, lot, { seed: i + 1 }); return { est: p.estimate, win: p.estimate > Math.max(...p.bidders.map((x) => x.limit)) }; });
   const top = runs.filter((x) => x.win);
   assert.ok(top.length > 20 && mean(top.map((x) => x.est)) > 1.02 * mean(runs.map((x) => x.est)), `the estimates that win average ${(mean(top.map((x) => x.est)) / mean(runs.map((x) => x.est))).toFixed(3)}x all of them`);
-});
-
-test('D1 Auto Row: six in ten lots are broken, and a repair here costs a quarter less', () => {
-  const r = ZONES[7].rules, b = ZONES[7].blurb;
-  assert.match(b, /Six in ten lots are broken/); assert.doesNotMatch(b, /\bcars\b/, 'the 60% is a share of every lot (the tool chest too), not of cars');
-  assert.ok(b.includes(`repairs here cost ${pc(r.repair)}% less`), b);
-  const s = lotShares(7, 8000);
-  assert.ok(Math.abs(s.broken / s.n - 0.6) < 0.05, `${pc(s.broken / s.n)}% of Auto Row's lots are broken`);
-  const h = mk(); h._openZone(7); h._openZone(4); // the district's own factor is the only one that differs between 7 and 4
-  near(h.repairMultFor(7) / h.repairMultFor(4), 1 - r.repair, 1e-9);
-});
-
-test('D1 Harbor Docks: customs inspects one arriving shipment in four, with a 12-hour delay and a 2% fee', () => {
-  const r = ZONES[8].rules, b = ZONES[8].blurb;
-  assert.ok(b.includes(`one arriving shipment in ${WORD[Math.round(1 / r.customs)]}`) && b.includes('12-hour delay') && b.includes('2% fee'), b);
-  const g = mk(); g._openZone(8); g.s.cash = 1e6; const n = 600, book = 1000, hour = g.s.hour;
-  for (let i = 0; i < n; i++) g.s.freight.push({ id: 'F' + g.s.nid++, items: [g._mk(g.s, 'pen', { zone: 7, basis: 1 })], to: 8, sent: hour, arrive: hour, risk: 0, book, from: 7 });
-  const cash0 = g.s.cash; g._freight();
-  const held = g.s.freight; // the inspected ones stay on the road
-  assert.ok(Math.abs(held.length / n - r.customs) < 0.06, `${pc(held.length / n)}% inspected against a rule of ${pc(r.customs)}%`);
-  assert.ok(held.every((f) => f.arrive === hour + 12), 'a 12-hour delay');
-  near(cash0 - g.s.cash, held.length * book * 0.02, 1e-6); // a 2% fee on what the crates are worth
-});
-
-test('D1 Industrial Park: the first compliance audit arrives when this district opens', () => {
-  assert.equal(MIL_ZONE.m2, 9); assert.equal(MIL.m2, ZONES[9].gate); assert.match(ZONES[9].blurb, /first compliance audit arrives here/);
-  const g = mk(); rich(g, ZONES[9].gate + 10);
-  assert.ok(g.s.mil.m2 && g.s.zones.includes(9), 'milestone two is this district');
-  assert.equal(g.s.auditPending, null, 'nothing yet'); g.advanceTo(g.s.hour + 1);
-  assert.ok(g.s.auditPending, 'the notice lands the hour the district opens');
-  const early = mk(); rich(early, ZONES[9].gate - 10); early.advanceTo(early.s.hour + 48); assert.equal(early.s.auditPending, null, 'and not before');
-});
-
-test('D1 Tech Corridor: digital goods lose value twice as fast here', () => {
-  assert.match(ZONES[10].blurb, /digital goods lose value twice as fast/);
-  const g = mk(), decay = (cls, zone) => { const a = put(g, cls, zone); g._age(a, zone); return 1 - a.wear; };
-  near(decay('saas', 10) / decay('saas', 9), 2, 1e-9);
-  near(decay('fleet', 10) / decay('fleet', 9), 1, 1e-9);
-});
-
-test('D1 Farmland Co-op: food spoils by the day, and food and farm demand follows a 30-day wave', () => {
-  const r = ZONES[11].rules.season, b = ZONES[11].blurb;
-  assert.ok(b.includes(`${r.period}-day harvest wave`) && /Food spoils by the day/.test(b), b);
-  assert.ok(r.tags.includes('food') && r.tags.includes('farm'));
-  const g = mk(), perishable = Object.entries(ASSETS).filter(([, a]) => a.perish);
-  assert.ok(perishable.length >= 3 && perishable.every(([, a]) => a.tags.includes('food') || a.tags.includes('farm')), 'what spoils is food or grain');
-  for (const [cls] of perishable) { const a = put(g, cls, 11); g._age(a, 11); assert.ok(1 - a.wear > 0.015, `${cls} loses ${pc(1 - a.wear)}% in a day`); }
-  const woolly = put(g, 'rowCropTractor', 11); g._age(woolly, 11); assert.ok(1 - woolly.wear < 0.01, 'a tractor does not spoil');
-});
-
-test('D1 Creative Quarter: catalogs and rights pay every day they are held', () => {
-  assert.match(ZONES[12].blurb, /pay you every day you hold them/);
-  const g = mk(); rich(g, 1e6); const cat = put(g, 'filmCatalog', 12); g._dayTick();
-  const row = g.s.ledger.find((e) => e.type === 'rent'); assert.ok(row, 'a row of royalties and rent');
-  near(row.amt, g.val(cat) * ASSETS.filmCatalog.yield, 1e-6);
-  assert.ok(Object.values(ASSETS).filter((a) => a.dem[12] >= 8 && a.yield).length >= 4, 'the district\'s signature goods are the ones that pay');
-});
-
-test('D1 Corporate Valley: enterprise clients and the exit, by trade sale or IPO, open here', () => {
-  assert.match(ZONES[13].blurb, /Enterprise clients and your exit, by trade sale or IPO, open here/);
-  assert.equal(CLIENTS.ent.zone, 13); assert.equal(CLIENTS.ent.needs, 'm3'); assert.equal(MIL_ZONE.m3, 13); assert.equal(MIL.m3, ZONES[13].gate);
-  const g = mk(); rich(g, ZONES[13].gate - 100);
-  assert.ok(!g.s.mil.m3 && g.exitQuote('sale').ok === false, 'no exit before the district');
-  g.s.cash = ZONES[13].gate + 100; g._unlock(); g.s.dp = [1000];
-  assert.ok(g.s.mil.m3 && g.s.zones.includes(13)); assert.ok(g.exitQuote('sale').ok && g.exitQuote('ipo').ok, 'both exits are open');
-});
-
-test('D1 Financial District: banks and funds buy invoices, bonds and loan books, and opening it makes your loans cheaper', () => {
-  assert.match(ZONES[14].blurb, /buy invoices, bonds and loan books, not products, and your loans get cheaper/);
-  const top3 = Object.entries(ASSETS).map(([id, a]) => [id, a.dem[14] || 0]).sort((x, y) => y[1] - x[1]).slice(0, 3).map(([id]) => id).sort();
-  assert.deepEqual(top3, ['invoicePool', 'loanBook', 'muniBonds'], 'the invoices, bonds and loan books are the three goods the district wants most');
-  assert.ok(Object.values(BUYERS).filter((b) => b.zone === 14).every((b) => b.like.finance > 0), 'every buyer here likes finance');
-  const g = mk(); rich(g, 1e6); const before = g.loanRate('micro');
-  g.s.zones = g.s.zones.filter((z) => z !== 14); g._bn = null; const without = g.loanRate('micro'); g.s.zones.push(14); g._bn = null; const withIt = g.loanRate('micro');
-  assert.ok(withIt < without); near(without - withIt, LOANS.micro.spread * (1 - ZONES[14].bonus.spreadMult), 1e-9); assert.ok(before === withIt);
-});
-
-test('D1 Real Estate Row: property pays rent every day, and a quarter of the lots are foreclosure auctions', () => {
-  const r = ZONES[15].rules;
-  assert.equal(r.auction, 0.25); assert.match(ZONES[15].blurb, /a quarter of the lots are foreclosure auctions/);
-  const s = lotShares(15, 1.1e6); assert.ok(Math.abs(s.auction / s.n - 0.25) < 0.05, `${pc(s.auction / s.n)}% at auction`);
-  const g = mk(); rich(g, 1e7); const a = put(g, 'apartmentBlock', 15); g._dayTick();
-  near(g.s.ledger.find((e) => e.type === 'rent').amt, g.val(a) * ASSETS.apartmentBlock.yield * g.B.rentMult, 1e-6);
-});
-
-test('D1 Global Exchange: gems, watches and cargo are priced very differently from one district to the next', () => {
-  assert.match(ZONES[16].blurb, /Gems, watches and cargo sell at very different prices from district to district/);
-  const g = rich(mk(), 1e7), others = Object.keys(ZONES).map(Number).filter((z) => z !== 16);
-  // what the best buyer in a district would pay for a crate of the good (each buyer at their top budget; 0 when no buyer there will take it)
-  const bestQuote = (cls, z) => {
-    const a = put(g, cls, z); a.known = true; let best = 0;
-    for (const [id, b] of Object.entries(BUYERS).filter(([, b]) => b.zone === z)) {
-      g.s.leads[z] = [{ id: 'LB' + id, zone: z, seg: id, budget: Math.max(...b.budget), need: null, born: 0, exp: 999 }];
-      const q = g.quotePitch(a.id, 'LB' + id, undefined, { blind: false }); if (q.ok && !q.rejected) best = Math.max(best, q.price);
-    }
-    g.s.leads[z] = []; g.s.assets = g.s.assets.filter((x) => x.id !== a.id); return best;
-  };
-  const gap = {};
-  for (const cls of ['diamondParcel', 'postwarCanvas', 'copperCargo', 'watchVault']) {
-    const here = assetFMV({ cls, cond: 'ok', quality: 1, wear: 1 }, 16, {});
-    const there = others.map((z) => assetFMV({ cls, cond: 'ok', quality: 1, wear: 1 }, z, {}));
-    assert.ok(there.every((v) => v * 1.3 <= here), `${cls}: a district within 30% of its Global Exchange price`);
-    // (no count of "districts worth under a third": a good with no demand in a district is marked at 15% of its base there, and nobody in that district will buy it)
-    const elsewhere = Math.max(...others.map((z) => bestQuote(cls, z))); gap[cls] = elsewhere > 0 ? bestQuote(cls, 16) / elsewhere : Infinity;
-  }
-  // what a player can trade on: the gem, the watches and the cargo each sell in one other district, where the Exchange pays 2.5, 2.3 and 1.5 times as much
-  for (const cls of ['diamondParcel', 'copperCargo', 'watchVault']) assert.ok(gap[cls] >= 1.3 && gap[cls] < Infinity, `${cls}: the Exchange pays ${gap[cls].toFixed(2)}x the best other district`);
-  // and the canvas sells nowhere else (district 13 wants it at 2 and no buyer there likes art), which is why the blurb names no art: a good with one market has no gap to trade
-  assert.equal(gap.postwarCanvas, Infinity, 'the canvas sells in the Exchange only');
 });
 
 // ---------------------------------------------------------------------------------------------------------------------
