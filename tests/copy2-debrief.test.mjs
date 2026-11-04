@@ -734,6 +734,17 @@ test('D12: every hover of the Debrief and of the dashboard\'s controls is said o
   assert.ok(text(controls).includes(`Sends every online student back ${days.slice(0, -1).join(', ')} or ${days.at(-1)} days to a daily checkpoint. A rewind reaches back ${I.CHECKPOINT_DAYS} days at most.`), 'the three rewinds are one line');
   assert.ok(I.instructorParts(dashboard(late), { open: { controls: true } }).c1.includes('<details class="gap" data-fold="controls" open>'), 'and the fold stays open once it is opened');
   assert.ok(read('docs/FACULTY_KIT.md').split('\n').some((l) => l.startsWith('| | **What the controls do** |')), 'the kit names the fold, as the screen does');
+  // a hover on a label is not read with its control (a slider in focus says only its name): each slider and box is aria-describedby a hidden span that holds the label's words
+  for (const [id, hd] of [['fr', 'fr'], ['au', 'au'], ['gh', 'gh'], ['dm', 'dm'], ['fl', 'fl']]) {
+    const tip = new RegExp(`<label for="${id}"[^>]* title="([^"]*)"`).exec(c1)?.[1], span = new RegExp(`<span class="sr" id="hd-${hd}">([^<]*)</span>`).exec(c1)?.[1];
+    assert.ok(tip && span === tip, `${id}: the hidden description is the label's hover`); assert.ok(new RegExp(`<input id="${id}"[^>]* aria-describedby="hd-${hd}"`).test(c1), `${id}: and the control points at it`);
+  }
+  const algoTip = /<label class="row gap" style="[^"]*" title="([^"]*)"><input type="checkbox" data-change="algo" data-fid="in-algo" aria-describedby="hd-al"/.exec(c1)?.[1];
+  assert.ok(algoTip && new RegExp(`<span class="sr" id="hd-al">${algoTip.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}</span>`).test(c1), 'the box of the algorithmic events is described by its label\'s words too');
+  // the panels are drawn again as the class clock runs (at most every 0.9 s), and common.js setHTML gives the keyboard back only to a control with a data-fid: the live ones have one, and no two share it
+  const fids = [...(parts.head + c1 + parts.c2 + parts.grade).matchAll(/data-fid="([^"]+)"/g)].map((m) => m[1]);
+  for (const f of ['in-copylink', 'in-settings', 'in-close', 'in-pause', 'in-speed-1', 'in-speed-4', 'in-speed-16', 'in-speed-64', 'in-rewind-1', 'in-rewind-3', 'in-rewind-7', 'in-deploy', 'in-evrep', 'in-algo', 'in-csv']) assert.ok(fids.includes(f), `${f}: a control of the dashboard keeps the keyboard when its panel is drawn again`);
+  assert.equal(new Set(fids).size, fids.length, 'and every data-fid on the dashboard is its own');
   // the sound choice's description is read by a screen reader through aria-describedby, which reads text and not a title
   const ls = parts.head.match(/<span class="tiny mute" id="ls-h" title="([^"]*)">([\s\S]*?)<\/span><\/fieldset>/);
   assert.ok(ls && ls[2].includes(`<span class="sr"> ${ls[1]}</span>`) && /aria-describedby="ls-h"/.test(parts.head), 'the description of the sound choice has a screen-reader twin');

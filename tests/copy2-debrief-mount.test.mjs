@@ -13,7 +13,7 @@ const el = () => ({ children: [], innerHTML: '', _l: {}, contains: () => false, 
   addEventListener(t, f) { (this._l[t] ||= []).push(f); }, removeEventListener(t, f) { this._l[t] = (this._l[t] || []).filter((x) => x !== f); } });
 const realTimeout = globalThis.setTimeout;
 globalThis.setTimeout = (f, ms, ...a) => (ms === 4200 ? 0 : realTimeout(f, ms, ...a));   // a toast takes its leave after 4.2 s, which would hold this process open for nothing
-const page = Object.fromEntries(['#ih', '#ikeep', '#icol1', '#icol2', '#igrade', '#dlg', '#wc'].map((id) => [id, el()]));
+const page = Object.fromEntries(['#ih', '#ikeep', '#icol1', '#icol2', '#igrade', '#dlg', '#wc', '#wc-say'].map((id) => [id, el()]));
 const toasts = [];                                                 // the messages the page shows (js/ui/common.js `toast`)
 page['#toasts'] = { children: [], appendChild(t) { this.children.push(t); toasts.push(t.textContent); } };
 globalThis.document = { querySelector: (s) => page[s], activeElement: null, createElement: () => ({ dataset: {}, classList: { add() {} }, remove() {}, className: '', textContent: '' }) };
@@ -108,4 +108,26 @@ test('M7: the debrief opens its folds for the print and shuts the ones it opened
   assert.equal(typed(1500), '1500 words <span class="green">in range</span>'); assert.equal(typed(1501), '1501 words <span class="gold">over target</span>');
   m.destroy();
   assert.deepEqual([win.beforeprint, win.afterprint], [[], []], 'leaving the screen takes both listeners off');
+});
+test('M7: the word count changes silently at every word and is said to a screen reader when the typing pauses or the box is left', () => {
+  const g = makeGame(['native', 'heir'], 'growth', 11); run(g, { days: 30 });
+  const S = new Session(); S.game = g; S.synth = C.makeSynth(11, 'test');
+  const root = { ...el(), querySelector: () => ({ focus() {} }), querySelectorAll: () => [] }, queued = [], realSet = globalThis.setTimeout, realClear = globalThis.clearTimeout;
+  globalThis.setTimeout = (f, ms) => { const t = { f, ms, off: false }; queued.push(t); return t; }; globalThis.clearTimeout = (t) => { if (t) t.off = true; };
+  try {
+    const m = D.mountDebrief(root, S, { onBack() {} }), say = () => page['#wc-say'].textContent, type = (n) => root._acts.notes({ value: Array(n).fill('w').join(' ') });
+    assert.match(root.innerHTML, /<span id="wc" class="mono small">\d+ words?(?: <span class="[a-z]+">[^<]*<\/span>)?<\/span><span id="wc-say" class="sr" aria-live="polite"><\/span>/, 'the count on the page is not a live region; a hidden one beside it is');
+    assert.ok(!/id="wc"[^>]*aria-live/.test(root.innerHTML));
+    assert.match(root.innerHTML, /<textarea id="notes"[^>]* data-input="notes" data-change="notes-end">/, 'and the box says when it is left');
+    page['#wc-say'].textContent = '';
+    type(1); assert.equal(page['#wc'].innerHTML, '1 word', 'one word is not "1 words"');
+    type(2); type(3); assert.equal(page['#wc'].innerHTML, '3 words', 'the page counts at every word'); assert.equal(say(), '', 'and says nothing while the typing goes on');
+    const live = queued.filter((t) => !t.off); assert.equal(live.length, 1, 'one pending announcement, the last: each word cancels the one before'); assert.equal(live[0].ms, D.COUNT_PAUSE_MS);
+    live[0].f(); assert.equal(say(), '3 words', 'a pause says the count');
+    type(1000); root._acts['notes-end'](); assert.equal(say(), '1000 words in range', 'leaving the box says it at once, in words (no markup)');
+    assert.equal(queued.filter((t) => !t.off).length, 0, 'and the pause that was waiting is cancelled');
+    type(1501); root._acts['notes-end'](); assert.equal(say(), '1501 words over target');
+    page['#wc-say'].textContent = 'changed by nobody'; root._acts['notes-end'](); assert.equal(say(), 'changed by nobody', 'the same count is not said twice');
+    type(5); assert.equal(queued.filter((t) => !t.off).length, 1); m.destroy(); assert.equal(queued.filter((t) => !t.off).length, 0, 'leaving the screen cancels a count that was waiting');
+  } finally { globalThis.setTimeout = realSet; globalThis.clearTimeout = realClear; }
 });

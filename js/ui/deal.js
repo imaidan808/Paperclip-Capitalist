@@ -38,6 +38,10 @@ const MOOD = { steady: 'steady', loud: 'loud', quiet: 'quiet' };
 const MOOD_TIP = { steady: 'Patient. Raises one step at a time.', loud: 'Aggressive or bluffing. You cannot tell which until it folds.', quiet: 'Waits, then bids late.' };
 const ESTIMATE_TIP = 'Rivals bid on estimates of their own, and the highest guess usually wins. Yours is a guess too, sharper with Capital Sourcing and a good read.'; // (the winner's curse: the page says "A guess: bid below it." where Assist does not, and this is why: on hover, and in the fold for a keyboard and a finger)
 
+// A fold of the sheet: the hover words for a keyboard, a finger and a screen reader, the talk so far, why a result came out as it did. The sheet is drawn again after every move and a <details> comes back shut,
+// so which folds are open is the session's (`m.open`, kept by the `toggle` it listens for), and the summary has a data-fid: that is how the keyboard stays on it across a paint (common.js setHTML).
+const foldHTML = (m, key, summary, body, cls = 'deal-more') => `<details class="${cls}" data-fold="${key}"${m.open && m.open[key] ? ' open' : ''}><summary data-fid="fold-${key}">${summary}</summary>${body}</details>`;
+
 // ------------------------------------------------------------------ the frame
 export const titleOf = (m) => {
   const p = m.plan;
@@ -49,7 +53,7 @@ export function stepperHTML(m) {
 }
 export function castHTML(m) {
   const c = m.cast, bubble = m.say || c.hello, role = { buyer: 'Buyer', seller: 'Seller', bench: 'Workbench' }[c.role] || '';
-  const talk = m.says.length > 1 ? `<details class="deal-log"><summary>Talk so far</summary><ol>${m.says.map((x) => `<li>${esc(x)}</li>`).join('')}</ol></details>` : '';
+  const talk = m.says.length > 1 ? foldHTML(m, 'log', 'Talk so far', `<ol>${m.says.map((x) => `<li>${esc(x)}</li>`).join('')}</ol>`, 'deal-log') : '';
   return `<section class="deal-cast" aria-label="${esc(c.name)}">
     <div class="cast-floor"><div class="cast-icon" aria-hidden="true">${c.icon}</div></div>
     <h3 class="cast-name">${esc(c.name)}</h3>
@@ -95,7 +99,7 @@ export function readHTML(m) {
   const pips = Array.from({ length: v.budget }, (_, i) => `<i class="${i < v.spent ? 'spent' : ''}"></i>`).join('');
   const expertNote = !m.stageDone && v.probes.some((x) => x.id === 'expert' && x.affordable) ? '<p class="small mute">The expert needs no skill of yours.</p>' : '';
   // The hover is the mouse's way to the blurbs; this fold is the keyboard's, the finger's and a screen reader's way to the same words (only the summary is on the page until it is asked for)
-  const key = m.stageDone ? '' : `<details class="deal-more"><summary>What the probes and the bar mean</summary><ul class="hints">${v.probes.map((x) => `<li><b>${esc(PROBE[x.id][1])}.</b> ${esc(PROBE[x.id][2])}</li>`).join('')}</ul><p class="small mute">The bar spans the likely range. The true condition is inside it about two times in three.</p></details>`;
+  const key = m.stageDone ? '' : foldHTML(m, 'probes', 'What the probes and the bar mean', `<ul class="hints">${v.probes.map((x) => `<li><b>${esc(PROBE[x.id][1])}.</b> ${esc(PROBE[x.id][2])}</li>`).join('')}</ul><p class="small mute">The bar spans the likely range. The true condition is inside it about two times in three.</p>`);
   const q = v.belief.quality, sd = v.doubt;
   const ev = v.evidence.map((e) => `<li><span><span class="evi" aria-hidden="true">${PROBE[e.id][0]}</span><b>${esc(PROBE[e.id][1])}.</b> ${esc(e.text)}</span></li>`).join('');
   const belief = `<div class="belief" aria-label="Your current read">
@@ -132,7 +136,7 @@ export function pitchHTML(m) {
   const hints = said.length ? `<ul class="hints">${said.map((h) => `<li>${esc(h.text)}</li>`).join('')}</ul>` : '';
   const needs = v.buyer.needs.length ? `<p class="small mute">Looking for: ${v.buyer.needs.map((t) => (t === p.need ? `<span class="chip warn" title="A crate with this tag is a perfect fit, and one without it halves the fit.">${esc(t)}, needed now</span>` : `<span class="chip">${esc(t)}</span>`)).join(' ')}</p>` : '';
   const out = v.outcome ? `<div class="callout ${v.outcome.fitDelta >= 0.05 ? 'good' : v.outcome.fitDelta <= -0.03 ? 'warn' : ''}" title="Fit stays within 0.30 either way, and keenness between 0.85x and 1.20x."><b>${v.outcome.fitDelta >= 0 ? '+' : ''}${v.outcome.fitDelta.toFixed(2)} fit.</b> The buyer is ${v.outcome.mult.toFixed(2)}x as keen.</div>` : '';
-  const key = m.stageDone ? '' : `<details class="deal-more"><summary>What the angles mean</summary><ul class="hints">${v.angles.map((a) => `<li><b>${ANGLE[a][1]}.</b> ${esc(ANGLE[a][2])}</li>`).join('')}</ul></details>`; // (the hover words, for a keyboard, a finger and a screen reader)
+  const key = m.stageDone ? '' : foldHTML(m, 'angles', 'What the angles mean', `<ul class="hints">${v.angles.map((a) => `<li><b>${ANGLE[a][1]}.</b> ${esc(ANGLE[a][2])}</li>`).join('')}</ul>`); // (the hover words, for a keyboard, a finger and a screen reader)
   const go = m.stageDone ? '' : `<div class="row"><button class="btn" data-deal="pitch-go" data-fid="pg" ${sel.length === 2 && !m.blocker ? '' : 'disabled'}>${sel.length === 2 ? `Pitch ${ANGLE[sel[0]][1]} and ${ANGLE[sel[1]][1]}` : `Pick ${2 - sel.length} more angle${sel.length === 1 ? '' : 's'}`}</button></div>`;
   return panel(pm, 'pitch', 'Pitch',
     `${head}${verify}${needs}${hints}<div class="angles" role="group" aria-label="Pitch angles, choose two">${btns}</div>${m.stageDone ? '' : `<p class="small mute">Bars show how well your goods back each angle. A claim they cannot back counts against you.</p>${key}${advice(m)}`}${out}${quickNote(m)}${go}`);
@@ -191,7 +195,7 @@ export function bidHTML(m) {
   const past = v.budget != null && v.nextBid > v.budget, hint = !m.stageDone && m.assist && m.advice; // with the Assist hint on the sheet it says this, with the figure
   const budget = past && !hint ? `<div class="callout warn" title="${LIMIT_TIP}">The next bid is past your limit. You can only drop out.</div>` : '';
   const seen = [...new Set(v.rivals.map((r) => r.mood))].filter((k) => MOOD_TIP[k]); // the hover on a mood (and on the estimate) is the mouse's way to its meaning; this fold is the keyboard's, the finger's and a screen reader's
-  const moods = m.stageDone ? '' : `<details class="deal-more"><summary>What the estimate${seen.length ? ' and the moods' : ''} mean${seen.length ? '' : 's'}</summary><ul class="hints"><li><b>Your estimate.</b> ${esc(ESTIMATE_TIP)}</li>${seen.map((k) => `<li><b>${MOOD[k]}.</b> ${esc(MOOD_TIP[k])}</li>`).join('')}</ul></details>`;
+  const moods = m.stageDone ? '' : foldHTML(m, 'moods', `What the estimate${seen.length ? ' and the moods' : ''} mean${seen.length ? '' : 's'}`, `<ul class="hints"><li><b>Your estimate.</b> ${esc(ESTIMATE_TIP)}</li>${seen.map((k) => `<li><b>${MOOD[k]}.</b> ${esc(MOOD_TIP[k])}</li>`).join('')}</ul>`);
   return panel(m, 'bid', 'Bid',
     `<p class="small" title="${esc(ESTIMATE_TIP)}">Your estimate: <b>${money(v.estimate)}</b>.${m.stageDone || hint ? '' : ' A guess: bid below it.'}</p>${ladder}<ul class="rivals">${riv}</ul>${moods}${ev ? `<ul class="evlog">${ev}</ul>` : ''}${budget}${m.stageDone ? '' : advice(m, '', past ? LIMIT_TIP : '')}${act}${quickNote(m)}${end}`);
 }
@@ -251,8 +255,8 @@ export function resultHTML(m) {
       ${kept ? `<p class="small kept" role="note">Quick's and the expert's figures are kept back until you have sat at the table: they would be its answers.</p>` : ''}<p class="small mute">${n.better === 'low' ? 'Lower is better.' : 'Higher is better.'}</p>${net}</div>
     ${rev}
     <p class="xp"><b data-count="${num(s.xp)}" data-fmt="int" data-pre="+" data-post=" XP">+${s.xp} XP</b>${m.plan.kind === 'sell' ? ` · deal streak ${s.streak}` : ''}</p>
-    <details class="deal-more"><summary>Why this result</summary><p class="small mute">Quick plays every stage at average skill. Expert plays the same deal, with the same luck, at full skill${n.expertVia ? ` (here by selling to ${esc(n.expertVia)})` : ''}.</p>${why}
-    <blockquote class="lesson"><b>${esc(labels[s.lesson.concept] || 'Lesson')}.</b> ${esc(s.lesson.text)}</blockquote></details>
+    ${foldHTML(m, 'why', 'Why this result', `<p class="small mute">Quick plays every stage at average skill. Expert plays the same deal, with the same luck, at full skill${n.expertVia ? ` (here by selling to ${esc(n.expertVia)})` : ''}.</p>${why}
+    <blockquote class="lesson"><b>${esc(labels[s.lesson.concept] || 'Lesson')}.</b> ${esc(s.lesson.text)}</blockquote>`)}
     <div class="row"><button class="btn big" data-close data-snd data-fid="done" autofocus>Continue</button></div></section>`;
 }
 const cap = (s) => String(s).charAt(0).toUpperCase() + String(s).slice(1);
@@ -278,10 +282,11 @@ export function sheetHTML(m) {
     <div class="deal-scene">${castHTML(m)}<div class="deal-main">${(BODY[m.stage] || resultHTML)(m)}</div></div>
     ${dockHTML(m)}</div>`;
 }
-/** modelOf plus the little the screen itself remembers (picked angles, the slider). */
+/** modelOf plus the little the screen itself remembers (picked angles, the slider, the folds that are open). */
 export function viewModel(session) {
   const m = modelOf(session.run, { reduced: session.reduced() });
   m.pick = session.pick; m.slider = session.slider;
+  m.open = session.open; // the folds the player opened stay open across a paint (foldHTML)
   m.revealed = !!session.revealed; // the result has been staged once: a later paint (Assist toggled) shows it at rest
   m.sound = session.sound ? session.sound() : true;
   m.tone = !!(session.toneWanted && session.toneWanted()); // the repair tone is on: the slider's own detents are silent (docs/AUDIO.md 4.5)
@@ -405,7 +410,7 @@ export function soundsFor(key, action, o = {}) {
 let active = null;
 export function createSession(ctx, run) {
   const S = ctx.S, doc = typeof document !== 'undefined' ? document : null;
-  const ses = { ctx, run, pick: [], slider: 0.2, shown: false, raf: 0, t0: 0, paused: false, disposed: false, reduced: () => !!(ctx.reduced && ctx.reduced()), focusHead: true };
+  const ses = { ctx, run, pick: [], slider: 0.2, open: {}, shown: false, raf: 0, t0: 0, paused: false, disposed: false, reduced: () => !!(ctx.reduced && ctx.reduced()), focusHead: true };
   const el = () => ctx.dlg.el;
   const live = !!(doc && el() && el().querySelector);
 
@@ -575,6 +580,7 @@ export function createSession(ctx, run) {
   const DOUBLE_MS = 350; // the same button pressed again this soon is a double-click, not a second decision (the stage under the pointer often changes to another button in the same place, which is a new move)
   const onClick = (e) => { const b = e.target.closest?.('[data-deal]'); if (b && !b.disabled && el().classList.contains('deal')) { e.preventDefault(); if (!run.over && run.gone?.()) { result(); return; } const name = b.dataset.deal, at = performance.now(); if (ses.lastAct && ses.lastAct.name === name && at - ses.lastAct.at < DOUBLE_MS) return; /* the second press of a double-click is not a second move: the same move again within a third of a second (a different button in the same place is another move) */ ses.lastAct = { name, at }; acts[name]?.(b, e); } };
   const onChange = (e) => { const b = e.target.closest?.('[data-change-deal]'); if (b) changes[b.dataset.changeDeal]?.(b, e); };
+  const onToggle = (e) => { const k = e.target?.dataset?.fold; if (k) ses.open[k] = !!e.target.open; }; // (a toggle does not bubble, so it is heard on the way down; it does not paint: the fold is already as the player left it)
   const onInput = (e) => { const b = e.target.closest?.('[data-deal-input]'); if (b) inputs[b.dataset.dealInput]?.(b, e); };
   const onKey = (e) => {
     if (e.repeat && e.target.closest?.('[data-deal]')) { e.preventDefault(); return; } // a key held on a button repeats its click: one press is one move
@@ -591,12 +597,12 @@ export function createSession(ctx, run) {
   function bind() {
     if (!live) return;
     const d = el();
-    d.addEventListener('click', onClick); d.addEventListener('change', onChange); d.addEventListener('input', onInput); d.addEventListener('keydown', onKey); d.addEventListener('close', onClose); d.addEventListener('focusin', onFocusIn);
+    d.addEventListener('click', onClick); d.addEventListener('change', onChange); d.addEventListener('input', onInput); d.addEventListener('keydown', onKey); d.addEventListener('close', onClose); d.addEventListener('focusin', onFocusIn); d.addEventListener('toggle', onToggle, true);
     window.addEventListener('resize', onResize);
   }
   function dispose() {
     if (ses.disposed) return; ses.disposed = true; stopDial(); stopSounds();
-    if (live) { const d = el(); d.removeEventListener('click', onClick); d.removeEventListener('change', onChange); d.removeEventListener('input', onInput); d.removeEventListener('keydown', onKey); d.removeEventListener('close', onClose); d.removeEventListener('focusin', onFocusIn); window.removeEventListener('resize', onResize); }
+    if (live) { const d = el(); d.removeEventListener('click', onClick); d.removeEventListener('change', onChange); d.removeEventListener('input', onInput); d.removeEventListener('keydown', onKey); d.removeEventListener('close', onClose); d.removeEventListener('focusin', onFocusIn); d.removeEventListener('toggle', onToggle, true); window.removeEventListener('resize', onResize); }
     if (ses.paused && S && S.clock && S.clock.paused) S.setPaused(false);
     if (active === ses) active = null;
     ctx.render?.();

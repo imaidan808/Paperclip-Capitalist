@@ -10,7 +10,7 @@ import { FOLLOW_NOTE, RECOVER_WAIT_SECONDS } from './ui/room-notes.js';
 import { pendingRoom } from './audio/index.js';
 
 // What the title screen and the Draft need is imported above; the screens that need the game (the world and its art, the Academy's sandbox, the instructor's dashboard, the debrief) are loaded the first time
-// they open, with import(): the page used to fetch all 135 modules (952 KB gzipped) before it could show a heading. `LOAD` names each by a literal path (scripts/preload.mjs reads them), and the staged page
+// they open, with import(). `LOAD` names each by a literal path (scripts/preload.mjs reads them), and the staged page
 // asks the browser to fetch the rest once it is idle (`prefetchRest`), so Begin does not wait for the network on a connection that has had a minute.
 const LOAD = {
   academy: () => import('./ui/academy.js'),
@@ -130,7 +130,7 @@ const screens = {
       resume() { if (tryResume()) enter(); else go('title'); },
       solo() { pending = { solo: true }; go('setup'); },
       academy() { openAcademy(() => go('title')); },
-      join() { const code = cleanCode($('#jc').value); if (code.length < 3) { toast('Enter the room code from your instructor.', 'warn'); return; } const rl = relayOf($('#jr').value); if (rl === null) return; kv.set('relay', rl); pending = { room: { code, relay: rl } }; go('setup'); },
+      join() { const code = cleanCode($('#jc').value); if (code.length < 3) { toast('Enter the room code from your instructor.', 'warn'); return; } const rl = relayOf($('#jr').value); if (rl === null) { $('#jr').closest('details').open = true; $('#jr').focus(); return; } kv.set('relay', rl); pending = { room: { code, relay: rl } }; go('setup'); },
       instr() { const rl = relayOf($('#ir').value); if (rl === null) return; kv.set('relay', rl); startInstructor(roomCode(), rl, true); },
       'instr-resume'() { startInstructor(instr.code, instr.relay, false, instr); },
       'instr-recover'() {

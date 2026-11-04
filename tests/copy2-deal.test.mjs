@@ -113,7 +113,7 @@ test('D1: what a choice turns on is printed and the detail is on hover: the five
 // and the words of every hover that says what a card or a bar is are also in a fold: only its summary is on the page until it is asked for.
 test('D1: the hover words are not on hover alone: a fold for the probes and the bar, one for the angles, one for the moods', () => {
   const g = world(), buy = start(g, fixedLot(g)), sale = start(g, sellSpec(g));
-  const fold = (h) => { const m = /<details class="deal-more"><summary>([^<]*)<\/summary>([\s\S]*?)<\/details>/.exec(h); return m ? { summary: m[1], body: visible(m[2]) } : null; };
+  const fold = (h) => { const m = /<details class="deal-more"[^>]*><summary[^>]*>([^<]*)<\/summary>([\s\S]*?)<\/details>/.exec(h); return m ? { summary: m[1], body: visible(m[2]) } : null; };
   const tip = (h, attr, id) => h.match(new RegExp(`${attr}="${id}"[^>]* title="([^"]*)"`))[1];
   const read = panel(buy), f1 = fold(read);
   assert.equal(f1.summary, 'What the probes and the bar mean');

@@ -200,9 +200,11 @@ export function instructorParts(S, U) {
   const recovering = S.recovering === true, off = recovering ? ' aria-disabled="true"' : '';
   const lobby = !recovering && S.clock.paused && hour < 1;
   const room = S.roomInfo || { code: '', relay: '' };
-  // every hover of the controls is made by `hint`, so that the fold "What the controls do" says the same words once more where a keyboard, a finger and a screen reader can read them (a title is shown to a mouse and to nothing else)
-  const notes = [];
-  const hint = (label, text, listed = text) => { if (!notes.some(([k]) => k === label)) notes.push([label, listed]); return ` title="${esc(text)}"`; };
+  // every hover of the controls is made by `hint`, so that the fold "What the controls do" says the same words once more where a keyboard, a finger and a screen reader can read them (a title is shown to a mouse and to nothing else).
+  // A hover on a label is not tied to its control (a slider in focus says only its name), so a control that is given an `id` is also `aria-describedby` a hidden span with the same words (`about`; the spans end the panel).
+  const notes = [], descs = [];
+  const hint = (label, text, { listed = text, id = '' } = {}) => { if (!notes.some(([k]) => k === label)) notes.push([label, listed]); if (id) descs.push([id, text]); return ` title="${esc(text)}"`; };
+  const about = (id) => ` aria-describedby="hd-${id}"`;
   const ls = LINK_SOUNDS.find((x) => x.id === U.linkSound) || LINK_SOUNDS[0];
   const link = `${typeof location !== 'undefined' ? location.origin + location.pathname : ''}?room=${room.code}${room.relay ? '&relay=' + encodeURIComponent(room.relay) : ''}${ls.query}`; // `sound=quiet` or `sound=off`: students who open it start in Classroom sound, or muted, while they are in the room (docs/AUDIO.md 7.1); never over a sound setting a student has chosen
   const dist = distribution(students), drafted = draftCounts(students), here = U.zone && ZONES[U.zone] ? U.zone : busiest(dist);
@@ -211,8 +213,8 @@ export function instructorParts(S, U) {
       <fieldset class="in-linksound" style="display:grid;gap:.15rem;max-width:15rem;margin:0;padding:0;border:0;min-width:0"><legend style="color:var(--ink);padding:0;font-size:.82rem">Sound in the student link</legend>
         <div class="row" style="gap:.15rem .35rem">${LINK_SOUNDS.map((x) => `<input type="radio" name="linksound" id="ls-${x.id}" value="${x.id}" data-change="linksound" data-fid="ls-${x.id}" aria-describedby="ls-h"${x.id === ls.id ? ' checked' : ''}><label for="ls-${x.id}" style="color:var(--ink);margin:0 .6rem 0 0">${x.label}</label>`).join('')}</div>
         <span class="tiny mute" id="ls-h" title="${esc(ls.more)}">${ls.hint}<span class="sr"> ${esc(ls.more)}</span></span></fieldset>
-      <button class="btn sm ghost" data-act="copylink" data-link="${esc(link)}"${ls.id === 'normal' ? '' : ` data-sound="${ls.id}"`}>Copy student link</button>
-      <button class="btn sm ghost" data-act="settings">Display and sound</button><button class="btn sm danger" data-act="close">Close room</button>`;
+      <button class="btn sm ghost" data-fid="in-copylink" data-act="copylink" data-link="${esc(link)}"${ls.id === 'normal' ? '' : ` data-sound="${ls.id}"`}>Copy student link</button>
+      <button class="btn sm ghost" data-fid="in-settings" data-act="settings">Display and sound</button><button class="btn sm danger" data-fid="in-close" data-act="close">Close room</button>`;
 
   const events = Object.values(EVENTS).map((e) => `<option value="${e.id}" ${U.ev === e.id ? 'selected' : ''}>${esc(e.name)}</option>`).join('') + Object.entries(ALGO_EVENTS).map(([k, e]) => `<option value="${k}" ${U.ev === k ? 'selected' : ''}>${esc(e.name)} (algorithmic)</option>`).join('');
   const c1 = `
@@ -221,26 +223,26 @@ export function instructorParts(S, U) {
         ${lobby ? `<div class="callout warn"><b>Lobby.</b> The clock is paused at Day 1 while students join. <button class="btn sm" data-act="start">Start simulation</button></div>` : ''}
         <div class="row"><div class="mono" style="font-size:1.6rem">Day ${day} <span class="mute" style="font-size:.9rem">/ ${TOTAL_DAYS}</span></div><span class="chip ${S.clock.paused ? 'warn' : 'good'}">${S.clock.paused ? 'Paused' : 'Running ' + (S.clock.speed < 0.1 ? S.clock.speed.toFixed(4) : S.clock.speed) + 'x'}</span><span class="small mute">1 virtual day = ${realPerDay(S.clock.speed)}</span></div>
         <div class="bar gap" role="progressbar" aria-label="Simulation progress" aria-valuemin="0" aria-valuemax="${TOTAL_DAYS}" aria-valuenow="${day}"><i style="width:${hour / 2160 * 100}%"></i></div>
-        <div class="row gap"><button class="btn sm" data-act="pause"${off}>${S.clock.paused ? 'Resume' : 'Pause'}</button>
-          ${[1, 4, 16, 64].map((v) => `<button class="btn sm ghost" data-act="speed" data-v="${v}" aria-pressed="${S.clock.speed === v}"${off}>${v}x</button>`).join('')}
-          <span class="grow"></span>${REWIND_DAYS.map((d) => `<button class="btn sm ghost" data-act="rewind" data-d="${d}"${hint('Rewind', rewindTip(d), REWIND_LIST)}${off}>${d === 1 ? 'Rewind 1 day' : d + ' days'}</button>`).join('')}</div>
+        <div class="row gap"><button class="btn sm" data-act="pause" data-fid="in-pause"${off}>${S.clock.paused ? 'Resume' : 'Pause'}</button>
+          ${[1, 4, 16, 64].map((v) => `<button class="btn sm ghost" data-act="speed" data-v="${v}" data-fid="in-speed-${v}" aria-pressed="${S.clock.speed === v}"${off}>${v}x</button>`).join('')}
+          <span class="grow"></span>${REWIND_DAYS.map((d) => `<button class="btn sm ghost" data-fid="in-rewind-${d}" data-act="rewind" data-d="${d}"${hint('Rewind', rewindTip(d), { listed: REWIND_LIST })}${off}>${d === 1 ? 'Rewind 1 day' : d + ' days'}</button>`).join('')}</div>
         <p class="tiny mute">A rewind reaches only the students who are online when you send it.</p>
         <label for="pace" class="gap">Pace preset</label><select id="pace" data-change="pace" data-fid="pace"${recovering ? ' disabled' : ''}><option value="">Choose a pace...</option>${PRESETS.map(([l], i) => `<option value="${i}">${esc(l)}</option>`).join('')}</select></section>
       <section class="panel"><h2>Manual black swan trigger</h2>
         <div class="grid g2"><div><label for="ev">Scenario</label><select id="ev" data-change="evsel" data-fid="ev">${events}</select></div>
         <div><label for="evw">When</label><select id="evw" data-change="evwhen" data-fid="evw"><option value="0" ${U.when === '0' ? 'selected' : ''}>Right now (breaking, no warning)</option><option value="24" ${U.when === '24' ? 'selected' : ''}>In 24 virtual hours</option><option value="72" ${U.when === '72' ? 'selected' : ''}>In 72 virtual hours</option></select></div></div>
-        <label class="row gap" style="color:var(--ink)"><input type="checkbox" data-change="evrep" ${U.replace ? 'checked' : ''}> Replace the scheduled copy (pull it forward instead of stacking)</label>
-        <button class="btn gap" data-act="deploy"${off}>Deploy to cohort</button>
+        <label class="row gap" style="color:var(--ink)"><input type="checkbox" data-change="evrep" data-fid="in-evrep" ${U.replace ? 'checked' : ''}> Replace the scheduled copy (pull it forward instead of stacking)</label>
+        <button class="btn gap" data-act="deploy" data-fid="in-deploy"${off}>Deploy to cohort</button>
         <p class="tiny mute">A shock reaches only the students who are online when you deploy it.</p>
         <p class="tiny mute"${hint('Warnings', warnTip)}>${esc(scheduleText(shockSchedule(S, hour, Array.isArray(U.sent) ? U.sent : []), S.algo))}</p></section>
       <section class="panel"><h2>Asymmetric risk scaling</h2>
-        <label for="fr"${hint('Transaction friction', TIP.friction)}>Transaction friction: <b class="mono" id="frv">${S.difficulty.friction.toFixed(2)}x</b></label><input id="fr" type="range" min="0.5" max="3" step="0.05" value="${S.difficulty.friction}" data-input="fr">
-        <label for="au" class="gap"${hint('Compliance audit frequency', TIP.audit)}>Compliance audit frequency: <b class="mono" id="auv">${S.difficulty.audit.toFixed(2)}x</b></label><input id="au" type="range" min="0.5" max="3" step="0.05" value="${S.difficulty.audit}" data-input="au">
-        <label for="gh" class="gap"${hint('Synthetic classmates filling the market', TIP.ghosts)}>Synthetic classmates filling the market: <b class="mono" id="ghv">${S.ghosts}</b></label><input id="gh" type="range" min="0" max="80" step="2" value="${S.ghosts}" data-input="gh">
-        <label for="dm" class="gap"${hint('Demo students on this dashboard', TIP.demo)}>Demo students on this dashboard: <b class="mono" id="dmv">${S.demo}</b></label><input id="dm" type="range" min="0" max="24" step="1" value="${S.demo}" data-input="dm">
-        <label for="fl" class="gap"${hint('EEI starting-capital floor', TIP.floor)}>EEI starting-capital floor</label><input id="fl" inputmode="numeric" value="${S.difficulty.eeiFloor}" data-change="floor">
-        <label class="row gap" style="color:var(--ink)"${hint('Algorithmic surprise events', TIP.algo)}><input type="checkbox" data-change="algo" ${S.algo ? 'checked' : ''}> Algorithmic surprise events</label>
-        ${fold(U, 'controls', 'What the controls do', `<ul class="small">${notes.map(([k, v]) => `<li><b>${esc(k)}</b>: ${esc(v)}</li>`).join('')}</ul>`)}</section>`;
+        <label for="fr"${hint('Transaction friction', TIP.friction, { id: 'fr' })}>Transaction friction: <b class="mono" id="frv">${S.difficulty.friction.toFixed(2)}x</b></label><input id="fr" type="range" min="0.5" max="3" step="0.05" value="${S.difficulty.friction}" data-input="fr"${about('fr')}>
+        <label for="au" class="gap"${hint('Compliance audit frequency', TIP.audit, { id: 'au' })}>Compliance audit frequency: <b class="mono" id="auv">${S.difficulty.audit.toFixed(2)}x</b></label><input id="au" type="range" min="0.5" max="3" step="0.05" value="${S.difficulty.audit}" data-input="au"${about('au')}>
+        <label for="gh" class="gap"${hint('Synthetic classmates filling the market', TIP.ghosts, { id: 'gh' })}>Synthetic classmates filling the market: <b class="mono" id="ghv">${S.ghosts}</b></label><input id="gh" type="range" min="0" max="80" step="2" value="${S.ghosts}" data-input="gh"${about('gh')}>
+        <label for="dm" class="gap"${hint('Demo students on this dashboard', TIP.demo, { id: 'dm' })}>Demo students on this dashboard: <b class="mono" id="dmv">${S.demo}</b></label><input id="dm" type="range" min="0" max="24" step="1" value="${S.demo}" data-input="dm"${about('dm')}>
+        <label for="fl" class="gap"${hint('EEI starting-capital floor', TIP.floor, { id: 'fl' })}>EEI starting-capital floor</label><input id="fl" inputmode="numeric" value="${S.difficulty.eeiFloor}" data-change="floor"${about('fl')}>
+        <label class="row gap" style="color:var(--ink)"${hint('Algorithmic surprise events', TIP.algo, { id: 'al' })}><input type="checkbox" data-change="algo" data-fid="in-algo"${about('al')} ${S.algo ? 'checked' : ''}> Algorithmic surprise events</label>
+        ${fold(U, 'controls', 'What the controls do', `<ul class="small">${notes.map(([k, v]) => `<li><b>${esc(k)}</b>: ${esc(v)}</li>`).join('')}</ul>`)}${descs.map(([id, t]) => `<span class="sr" id="hd-${id}">${esc(t)}</span>`).join('')}</section>`;
 
   const flags = S.flagsAll();
   const chips = PERK_IDS.filter((id) => drafted[id]).sort((a, b) => drafted[b] - drafted[a] || a.localeCompare(b));
@@ -258,7 +260,7 @@ export function instructorParts(S, U) {
   const bg = own(PERKS, U.bg) ? U.bg : 'all';
   const shown = gb.filter((r) => bg === 'all' || perksOf(r).includes(bg));
   const ungraded = shown.find((r) => r.adapt == null);
-  const grade = `<div class="row"><h2 class="grow">Roster and gradebook</h2><label class="sr" for="pf">Background</label><select id="pf" data-change="bgf" data-fid="pf"><option value="all">All Backgrounds</option>${PERK_IDS.map((id) => `<option value="${id}" ${bg === id ? 'selected' : ''}>${esc(PERKS[id].name)}</option>`).join('')}</select><button class="btn sm" data-act="gradecsv">Export gradebook CSV</button></div>
+  const grade = `<div class="row"><h2 class="grow">Roster and gradebook</h2><label class="sr" for="pf">Background</label><select id="pf" data-change="bgf" data-fid="pf"><option value="all">All Backgrounds</option>${PERK_IDS.map((id) => `<option value="${id}" ${bg === id ? 'selected' : ''}>${esc(PERKS[id].name)}</option>`).join('')}</select><button class="btn sm" data-act="gradecsv" data-fid="in-csv">Export gradebook CSV</button></div>
       <div class="scroll" style="max-height:26rem"><table class="tbl"><caption class="sr">Roster with automated grade components</caption><thead><tr><th scope="col">Founder</th><th scope="col">Backgrounds</th><th scope="col">District</th><th scope="col">Net worth</th><th scope="col">EEI</th><th scope="col">Economic (30)</th><th scope="col">Adaptability (20)</th><th scope="col">Peer market (10)</th><th scope="col">Auto subtotal / 60</th><th scope="col">Status</th></tr></thead><tbody>
       ${shown.map((r) => `<tr><td>${esc(r.handle)} <span class="tiny mute">${esc(r.pid)}</span>${r.rewind && !r.rewind.ok ? ` <span class="chip warn" title="Their run could not go all the way back: it has no checkpoint that old">rewind stopped at day ${Math.floor(r.rewind.hour / 24) + 1} (asked for day ${Math.floor(r.rewind.wanted / 24) + 1})</span>` : ''}</td><td>${bgIcons(r)}</td><td class="mono" title="${esc(ZONES[topZone(r)].name)}">${topZone(r)}</td><td class="mono">${money(r.nw)}</td><td class="mono">${r.eei >= 100 ? r.eei.toFixed(0) : r.eei.toFixed(2)}</td><td class="mono">${(r.econ * 0.3).toFixed(1)}</td><td class="mono">${adaptCell(r)}</td><td class="mono">${(r.engage * 0.1).toFixed(1)}</td><td class="mono"><b>${r.auto.toFixed(1)}</b></td><td>${r.synth ? '<span class="chip">demo</span>' : r.online ? '<span class="chip good">online</span>' : '<span class="chip warn">away</span>'}${r.flags?.insolvent ? ' <span class="chip bad">insolvent</span>' : ''}${r.flagged ? ` <span class="chip bad">${r.flagged} flagged</span>` : ''}</td></tr>`).join('') || '<tr><td colspan="10" class="mute">Waiting for students. Share the room code, or add demo students with the slider above.</td></tr>'}</tbody></table></div>
       ${ungraded ? `<p class="tiny mute">* No shock graded yet: counted as a neutral ${Math.round(adaptUsed(ungraded) / 0.2)} of 100, which is ${Math.round(adaptUsed(ungraded))} of the 20 points.</p>` : ''}

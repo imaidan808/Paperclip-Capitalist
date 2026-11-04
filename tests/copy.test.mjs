@@ -108,5 +108,5 @@ test('C4: the result sheet opens on the headline and the idea; the explanation, 
   }
   const cx = read('js/ui/drawers/codex.js');
   assert.ok(/<details class="cx-more"><summary>Explanation<\/summary>/.test(cx) && /<summary>The math<\/summary>/.test(cx) && /<summary>Common mistakes<\/summary>/.test(cx), 'a Codex page folds its explanation, its math and its mistakes');
-  assert.ok(/<details class="deal-more"><summary>Why this result<\/summary>/.test(read('js/ui/deal.js')), 'the Deal Room folds its reasons');
+  assert.ok(/foldHTML\(m, 'why', 'Why this result'/.test(read('js/ui/deal.js')) && /<details class="\$\{cls\}" data-fold="\$\{key\}"/.test(read('js/ui/deal.js')), 'the Deal Room folds its reasons, in a fold that keeps its state (tests/copy2-deal.test.mjs D1)');
 });

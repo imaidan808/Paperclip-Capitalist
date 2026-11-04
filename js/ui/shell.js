@@ -224,7 +224,8 @@ export function mountGame(root, S, hooks) {
       const ev = s.events.filter((e) => e.warned);
       body = `<dl class="kv">${row('Virtual day', `${game.day} of 90`)}${row('Virtual hour', s.hour + ' / ' + TOTAL_HOURS)}${row('Real time per virtual day', `${(24 * SEC_PER_HOUR / S.clock.speed).toFixed(0)} seconds at ${S.clock.speed}x`)}</dl><h3 class="gap">Known macro events</h3>${ev.length ? ev.map((e) => `<p class="small"><b>${esc(e.name)}</b>: ${e.start > s.hour ? 'in ' + Math.round((e.start - s.hour) / 24 * 10) / 10 + ' days' : 'started day ' + (Math.floor(e.start / 24) + 1)}</p>`).join('') : '<p class="small mute">No warnings yet. Capital Sourcing and the Market Research Suite give earlier notice.</p>'}`;
     }
-    dlg.open(`<button class="btn ghost sm x" data-close>Close</button><h2 tabindex="-1" autofocus>${{ cash: 'Cash', nw: 'Net worth', day: 'Clock' }[k] || 'Numbers'}</h2>${body}`, { label: 'Breakdown' });
+    const title = { cash: 'Cash', nw: 'Net worth', day: 'Clock' }[k] || 'Numbers'; // the window is named by its heading: a screen reader says "Cash", not "Breakdown", for the window that is headed Cash
+    dlg.open(`<button class="btn ghost sm x" data-close>Close</button><h2 tabindex="-1" autofocus>${title}</h2>${body}`, { label: title });
   }
   function menu() {
     const inRoom = !!S.roomInfo;
@@ -251,7 +252,7 @@ export function mountGame(root, S, hooks) {
       render();
     },
     speed(b) { S.setSpeed(+b.value); },
-    help() { dlg.open(`<button class="btn ghost sm x" data-close>Close</button><h2 tabindex="-1" autofocus>How to play</h2><ol class="small"><li>Click a <b>buyer</b> to sell, or a <b>booth</b> to buy. Play each deal (Read, Pitch, Close) or press <b>Quick</b>.</li><li>The <b>Goal</b> card says what to do next. The <b>Codex</b> says why it works.</li><li>Net worth opens districts. Each has a rule of its own.</li><li>Press <b>1</b> to <b>7</b> to open the panels, <b>Esc</b> to close them, <b>M</b> to mute.</li></ol>`, { label: 'Help' }); },
+    help() { dlg.open(`<button class="btn ghost sm x" data-close>Close</button><h2 tabindex="-1" autofocus>How to play</h2><ol class="small"><li>Click a <b>buyer</b> to sell, or a <b>booth</b> to buy. Play each deal (Read, Pitch, Close) or press <b>Quick</b>.</li><li>The <b>Goal</b> card says what to do next. The <b>Codex</b> says why it works.</li><li>Net worth opens districts. Each has a rule of its own.</li><li>Press <b>1</b> to <b>7</b> to open the panels, <b>Esc</b> to close them, <b>M</b> to mute.</li><li><b>Tab</b> moves, <b>Enter</b> or <b>Space</b> presses.</li></ol>`, { label: 'Help' }); },
     settings() { settingsDialog(() => render()); },
     menu,
     breakdown(b) { breakdown(b.dataset.k); },

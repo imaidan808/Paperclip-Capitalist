@@ -233,10 +233,12 @@ export function debriefHTML(S, notes = '') {
       ${fold('The formula', `<p class="small mono">${CM_FORMULA}</p><p class="small mute">V_total is the pitches of that asset in that district over the last 48 virtual hours, V_niche the ones to the same buyer (the class's expected pitches plus yours, so not whole numbers).</p>`)}</section>
     <section class="panel gap"><h2>Your analysis</h2>
       <p class="small mute">1,000 to 1,500 words, using exact numbers from your ledger. Saved in this browser as you type.</p>
-      <label for="notes">Reflection draft</label><textarea id="notes" rows="14" style="width:100%" data-input="notes">${esc(notes)}</textarea>
-      <div class="row gap"><span id="wc" class="mono small" aria-live="polite">${wordCountHTML(words(notes))}</span><span class="grow"></span><button class="btn" data-act="md">Download workbook (.md)</button></div></section>`;
+      <label for="notes">Reflection draft</label><textarea id="notes" rows="14" style="width:100%" data-input="notes" data-change="notes-end">${esc(notes)}</textarea>
+      <div class="row gap"><span id="wc" class="mono small">${wordCountHTML(words(notes))}</span><span id="wc-say" class="sr" aria-live="polite"></span><span class="grow"></span><button class="btn" data-act="md">Download workbook (.md)</button></div></section>`;
 }
-function wordCountHTML(n) { return `${n} words${n < 1000 ? '' : n <= 1500 ? ' <span class="green">in range</span>' : ' <span class="gold">over target</span>'}`; }
+function wordCountHTML(n) { return `${n} word${n === 1 ? '' : 's'}${n < 1000 ? '' : n <= 1500 ? ' <span class="green">in range</span>' : ' <span class="gold">over target</span>'}`; }
+/** How long the typing must pause before a screen reader is told the count (the count on the page changes at every word, silently: a live region written at every word speaks at every word). */
+export const COUNT_PAUSE_MS = 2000;
 
 export function mountDebrief(root, S, hooks) {
   const U = { notes: kv.get('reflection') || '' };
@@ -244,10 +246,14 @@ export function mountDebrief(root, S, hooks) {
   root.innerHTML = debriefHTML(S, U.notes);
   const words = (t) => (t.trim() ? t.trim().split(/\s+/).length : 0);
   const wc = () => { const el = $('#wc'); if (el) el.innerHTML = wordCountHTML(words(U.notes)); };
+  // The count is said when the typing pauses and when the box is left, never at every word: the visible count is not a live region, a hidden one is written to.
+  let quiet = null, told = '';
+  const say = () => { clearTimeout(quiet); quiet = null; const el = $('#wc-say'), t = wordCountHTML(words(U.notes)).replace(/<[^>]+>/g, ''); if (el && t !== told) { told = t; el.textContent = t; } };
   const acts = {
     back() { hooks.onBack(); },
     print() { window.print(); },
-    notes(b) { U.notes = b.value; kv.set('reflection', U.notes); wc(); },
+    notes(b) { U.notes = b.value; kv.set('reflection', U.notes); wc(); clearTimeout(quiet); quiet = setTimeout(say, COUNT_PAUSE_MS); },
+    'notes-end': say, // the box lost the keyboard (its `change`)
     md() { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([reflectionMD(S, U.notes)], { type: 'text/markdown' })); a.download = `reflection-${s.pid}.md`; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000); toast('Workbook downloaded.', 'good'); },
   };
   delegate(root, acts);
@@ -257,5 +263,5 @@ export function mountDebrief(root, S, hooks) {
   const shutAfterPrint = () => { for (const d of opened.splice(0)) d.open = false; };
   addEventListener('beforeprint', openForPrint); addEventListener('afterprint', shutAfterPrint);
   root.querySelector('h1')?.focus();
-  return { destroy() { removeEventListener('beforeprint', openForPrint); removeEventListener('afterprint', shutAfterPrint); } };
+  return { destroy() { clearTimeout(quiet); removeEventListener('beforeprint', openForPrint); removeEventListener('afterprint', shutAfterPrint); } };
 }

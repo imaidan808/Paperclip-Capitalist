@@ -30,6 +30,8 @@ test('H2: the relay address the page starts with is the link\'s, then the one th
   assert.equal(typeof DEFAULT_RELAY, 'string'); assert.equal(cleanRelay(DEFAULT_RELAY), DEFAULT_RELAY, 'a default relay is written as the address the browser needs (wss://...), or left empty');
   assert.match(read('js/main.js'), /params\.get\('relay'\) \|\| kv\.get\('relay'\) \|\| DEFAULT_RELAY/, 'the title screen falls back to the default relay');
   assert.match(read('js/main.js'), /relayOf\(\$\('#jr'\)\.value\)/, 'the join form cleans what is typed (and says so when it is not an address)'); assert.match(read('js/main.js'), /relayOf\(\$\('#ir'\)\.value\)/, 'so does the instructor\'s'); assert.match(read('js/ui/shell.js'), /relayOf\(/, 'and so does the dialog of a game in progress');
+  // a relay it refuses says so in a toast that names the field, and the field is in a fold that is shut: the title opens it and puts the cursor there, as the Menu opens its own (js/ui/shell.js joinroom)
+  assert.match(read('js/main.js'), /relayOf\(\$\('#jr'\)\.value\); if \(rl === null\) \{ \$\('#jr'\)\.closest\('details'\)\.open = true; \$\('#jr'\)\.focus\(\); return; \}/, 'the join form opens the relay fold and focuses the field when the address is refused');
   const s = new Session(); s.pid = 'PC-CLEAN'; s.joinRoom({ code: 'HOST1', relay: '', role: 'student', handle: 'x' }); assert.equal(s.roomInfo.relay, '', 'no relay: a room between the tabs of this browser');
   s.leaveRoom();
   const calls = []; const real = globalThis.WebSocket; globalThis.WebSocket = class { constructor(u) { calls.push(u); this.readyState = 0; } close() {} send() {} };

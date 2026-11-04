@@ -510,6 +510,14 @@ test('M4: the lines of the Cash and Net worth windows add up to the net worth, r
 // ---------------------------------------------------------------------------------------------------------------------
 // M5. The settings dialog opens on a few words
 // ---------------------------------------------------------------------------------------------------------------------
+test('M4: a window is named by its heading, and Help says how the keyboard drives the game', () => {
+  const src = read('js/ui/shell.js');
+  assert.match(src, /const title = \{ cash: 'Cash', nw: 'Net worth', day: 'Clock' \}\[k\] \|\| 'Numbers';/, 'the Cash, Net worth and Clock windows have one name, and it is their heading');
+  assert.match(src, /<h2 tabindex="-1" autofocus>\$\{title\}<\/h2>\$\{body\}`, \{ label: title \}\);/, 'and the dialog is labelled with it: a screen reader said "Breakdown" for a window headed Cash');
+  assert.ok(!/label: 'Breakdown'/.test(src));
+  assert.match(src, /<li><b>Tab<\/b> moves, <b>Enter<\/b> or <b>Space<\/b> presses\.<\/li><\/ol>`, \{ label: 'Help' \}\)/, 'Help names the keys that run the game besides the shortcuts: Tab, Enter and Space were documented nowhere');
+});
+
 test('M5: the settings dialog\'s default words are few: the WCAG note and the privacy line are gone, the rows explain themselves on hover, the rest folds', () => {
   const common = read('js/ui/common.js');
   assert.ok(!/WCAG|Settings are stored only in this browser/.test(common), 'no accessibility claim and no privacy line in front');

@@ -139,6 +139,18 @@ test('a category filter narrows the list and the search works inside it', () => 
   assert.deepEqual(groupByCategory([{ def: { category: 'Risk' } }, { def: { category: 'Mystery' } }, { def: { category: 'Value' } }]).map((g) => g.category), ['Value', 'Risk', 'Strategy'], 'an unknown category goes last, not missing');
 });
 
+test('the tabs and the category chips keep the keyboard when the drawer is drawn again: each has a data-fid of its own (common.js setHTML gives focus back to a data-fid)', () => {
+  const ctx = ctxOf({ ...START, 'persona-fit': 3 }), acts = drawer.acts(ctx), fids = (h) => [...h.matchAll(/data-fid="([^"]+)"/g)].map((m) => m[1]);
+  let html = drawer.html(ctx);
+  assert.match(html, /data-fid="cx-tab-concepts" data-act="codex-tab" data-tab="concepts" aria-pressed="true">Concepts/); assert.match(html, /data-fid="cx-tab-academy" data-act="codex-tab" data-tab="academy" aria-pressed="false">Academy/);
+  assert.match(html, /data-fid="cx-cat-all" data-act="codex-cat" data-cat="" aria-pressed="true"/);
+  const cats = [...html.matchAll(/data-fid="([^"]+)" data-act="codex-cat" data-cat="([^"]+)"/g)];
+  assert.ok(cats.length >= 2 && cats.every(([, f, c]) => f === `cx-cat-${c}`), 'a chip is named for its category');
+  assert.equal(new Set(fids(html)).size, fids(html).length, 'and no two controls share one');
+  acts['codex-tab']({ dataset: { tab: 'academy' } }); html = drawer.html(ctx);
+  assert.match(html, /data-fid="cx-tab-academy" data-act="codex-tab" data-tab="academy" aria-pressed="true"/, 'the Academy tab is there to keep it after it is pressed'); assert.equal(new Set(fids(html)).size, fids(html).length);
+});
+
 // ---------------------------------------------------------------- one page in full
 test('a page opens in full: body, formula, worked example, mistakes, Try it, related links; Back returns to the list', () => {
   const ctx = ctxOf({ ...START, 'persona-fit': 3 }), acts = drawer.acts(ctx);
