@@ -26,7 +26,7 @@ The voice is dignified and assured. It says what is true, in the fewest words, a
 | Quests and the Goal card | `js/meta/quests.js` |
 | Debrief, instructor | `js/ui/debrief.js`, `js/ui/instructor.js`, `docs/FACULTY_KIT.md` |
 | Engine notes, refusals and the ticker | `js/engine.js`, `js/session.js`, `js/config.js` (EVENTS, AUDIT_THEMES). A note a sound depends on carries a `kind` (and `amt`, `z`): reword it freely, never drop the tag. One message for one action: a result that carries the facts writes no second note |
-| The Cash and Net worth windows, the settings dialog | `js/ui/shell.js` (`worthRows`), `js/ui/common.js`, `js/audio/settings.js`. What a row is for is its hover; the footnote folds |
+| The Cash and Net worth windows, the settings dialog | `js/ui/shell.js` (`worthRows`), `js/ui/common.js`, `js/audio/settings.js`. What a row is for is its hover for a mouse and the same words in the fold under the section for a keyboard and a finger (a title reaches neither); the footnote folds |
 
 ## What holds it
 

@@ -2,7 +2,7 @@
 // (a bulleted-list glyph, so it is not taken for the HUD's menu); css/shell.css says where its panel opens.
 // Clicks on the world open the same Deal Room and drawers as the dock does (through ctx), so there is exactly one rulebook.
 import { World } from '../world/world.js';
-import { ZONES, ASSETS, BUYERS, PIPE } from '../config.js';
+import { ZONES, ASSETS, BUYERS, PIPE, MIL_ZONE } from '../config.js';
 import { fmtMoney as money, fitLabel } from '../market.js';
 import { esc, toast, fitStuck } from './common.js';
 import { createWorldSound } from './worldsound.js';
@@ -13,6 +13,8 @@ export function createWorldView(ctx) {
   const g = () => S.game;
   const unlocked = (z) => g().s.zones.includes(z);
   const gate = (z) => `${ZONES[z].name} opens at ${money(ZONES[z].gate)} net worth.`;
+  const at = (z) => `${ZONES[z].name} (${money(ZONES[z].gate)} net worth)`;
+  const shut = { bank: () => `The Commercial Bank opens at ${at(MIL_ZONE.m1)}.`, audit: () => `Audits begin at ${at(MIL_ZONE.m2)}.` }; // the doors of the bank and the audit office: the milestone's district and what it asks
   const pickIn = (zone) => g().s.assets.find((a) => U.sel.has(a.id) && a.zone === zone);
 
   function describe(h) {
@@ -30,9 +32,9 @@ export function createWorldView(ctx) {
     if (h.kind === 'zone') return unlocked(h.id) ? ZONES[h.id].name : gate(h.id);
     if (h.kind === 'static') {
       const id = h.id;
-      if (id === 'bank') return s.mil.m1 ? 'Commercial Bank: loans and your debt-to-equity ratio.' : 'The Commercial Bank opens in Metro Hub.';
-      if (id === 'audit') return s.mil.m2 ? 'Regulatory office. ' + (s.auditPending ? 'An audit is waiting.' : 'No audit pending.') : 'Audits begin in Industrial Park.';
-      if (id === 'ipo') return 'M&A and IPO tower.';
+      if (id === 'bank') return s.mil.m1 ? 'Commercial Bank: loans and your debt-to-equity ratio.' : shut.bank();
+      if (id === 'audit') return s.mil.m2 ? 'Regulatory office. ' + (s.auditPending ? 'An audit is waiting.' : 'No audit pending.') : shut.audit();
+      if (id === 'ipo') return 'IPO and M&A tower: sell the business or go public.';
       if (id.startsWith('hq')) return 'Your headquarters: skills, quests and the Codex.';
       if (id.startsWith('depot')) return 'Freight depot: ship crates to another district.';
       if (id.startsWith('board')) return 'Market board: everything for sale and everyone buying here.';
@@ -63,7 +65,7 @@ export function createWorldView(ctx) {
     if (h.kind === 'truck') { toast('That freight is on its way.', 'info'); return; }
     if (h.kind === 'static') {
       const id = h.id;
-      if (id === 'bank' || id === 'audit' || id === 'ipo') { if (id === 'bank' && !s.mil.m1) { sound?.locked(h); toast('The Commercial Bank opens in Metro Hub.', 'warn'); return; } if (id === 'audit' && !s.mil.m2) { sound?.locked(h); toast('Audits begin in Industrial Park.', 'warn'); return; } ctx.openDrawer(id === 'ipo' ? 'crew' : 'bank'); return; }
+      if (id === 'bank' || id === 'audit' || id === 'ipo') { if (id === 'bank' && !s.mil.m1) { sound?.locked(h); toast(shut.bank(), 'warn'); return; } if (id === 'audit' && !s.mil.m2) { sound?.locked(h); toast(shut.audit(), 'warn'); return; } ctx.openDrawer('bank'); return; }
       if (id === 'rent') { ctx.openDrawer('stock'); return; }
       if (id === 'exchange') { ctx.openDrawer('travel'); return; }
       if (id.startsWith('hq')) { ctx.openDrawer('quests'); return; }

@@ -108,7 +108,7 @@ S('cam', { bus: 'ui', tier: 'tiny', cd: 150, pan: 'center',
         : [...wood('D4', 0, 0.4, 0.07), gls('A5', 0.05, 0.22, 0.3), gls('D5', 0.12, 0.22, 0.35)] });
 
 S('world.locked', { bus: 'game', tier: 'tiny', cd: 400, pan: 'object x',
-  trigger: 'A locked gate, plot, board or district is clicked ("... opens at $x net worth", "Not open yet", "Resolve your audit")',
+  trigger: 'A locked gate, plot, board or district is clicked ("... opens at $x net worth", "Not open yet", "Answer your Regulatory Audit before expanding")',
   meaning: 'Shut. Not yet', recipe: 'chain rattle (4 noise bursts at 3.5 kHz, 35 ms apart) + two dull knocks D3 and A2 + a faint metal ting A5', visual: 'Warn toast with the gate\'s price in words',
   variants: { l: {} }, dur: 0.4, build: () => [...ticks(4, 0, 0.035, 0.32, 3500), ...wood('D3', 0.02, 0.5, 0.08), ...wood('A2', 0.15, 0.5, 0.1), gls('A5', 0.02, 0.1, 0.12), ...wood('D4', 0.02, 0.4, 0.08), ...body(0.15, 0.7, 'A4', 0.12, 'D5')] });
 
@@ -356,7 +356,7 @@ S('ship.trouble', { bus: 'game', tier: 'medium', cd: 1500, pan: 'destination dis
 
 S('bank.draw', { bus: 'game', tier: 'medium', cd: 800, pan: 'center',
   trigger: '`draw` event (a loan taken)',
-  meaning: 'Cash in, but it is owed: coins that end on a low note', recipe: 'vault door (low sine D2 + a sweeping noise 400 Hz) + bills counted (six paper flutters) + a stamp, ending on a held triangle D3', visual: 'Cash rises, Debt appears in the gauge, a "Liability added" toast',
+  meaning: 'Cash in, but it is owed: coins that end on a low note', recipe: 'vault door (low sine D2 + a sweeping noise 400 Hz) + bills counted (six paper flutters) + a stamp, ending on a held triangle D3', visual: 'Cash rises, Debt appears in the gauge, one toast with the rate',
   variants: { b: {} }, dur: 1.4, build: () => [{ k: 'tone', f: 'D2', a: 0.02, d: 0.4, g: 0.5 }, { k: 'noise', c: 'brown', a: 0.1, d: 0.3, g: 0.2, bp: [400, 1, 250] }, ...Array.from({ length: 6 }, (_, i) => paper(0.3 + i * 0.07, 0.07, 0.2)), ...stamp(0.75, 0.7), { k: 'tone', f: 'D3', type: 'triangle', t: 0.8, a: 0.02, d: 0.5, g: 0.28, lp: [800, 0.7] }, ...body(0.3, 1.0, 'A4', 0.16, 'D5')] });
 
 S('bank.repay', { bus: 'game', tier: 'medium', cd: 800, pan: 'center',
@@ -384,7 +384,7 @@ S('alert.advance', { bus: 'game', tier: 'medium', cd: 3000, pan: 'center',
 
 S('alert.shock', { bus: 'game', tier: 'loud', cd: 3000, pan: 'center',
   trigger: '`shock` event (it is live now). By kind: tiktok, fed, tariff (scheduled), viral, glut, scare (surprise events, quieter)',
-  meaning: 'tiktok: exciting; fed: ominous; tariff: heavy; viral: bright; glut: sinking; scare: nervous', recipe: 'tiktok: five-note bright arpeggio D5 to F#6 + confetti noise swell; fed: low brass A2 to D2 glide + rain-onset noise + rumble; tariff: gate slam + metal clang + horn A2; viral: glass D6 A6 D7; glut: marimba D5 A4 D4 falling; scare: the pair + a paper shake', visual: 'Breaking-news toast and dialog, rain or confetti in the world',
+  meaning: 'tiktok: exciting; fed: ominous; tariff: heavy; viral: bright; glut: sinking; scare: nervous', recipe: 'tiktok: five-note bright arpeggio D5 to F#6 + confetti noise swell; fed: low brass A2 to D2 glide + rain-onset noise + rumble; tariff: gate slam + metal clang + horn A2; viral: glass D6 A6 D7; glut: marimba D5 A4 D4 falling; scare: the pair + a paper shake', visual: 'Bad toast ("... is now in effect"), the alert dialog too when there was no warning, rain or confetti in the world',
   variants: { tiktok: { v: 'tiktok' }, fed: { v: 'fed' }, tariff: { v: 'tariff' }, viral: { v: 'viral', tier: 'medium' }, glut: { v: 'glut', tier: 'medium' }, scare: { v: 'scare', tier: 'medium' } }, dur: 2.2,
   build: (p) => ({ tiktok: () => [...arp(['D5', 'F#5', 'A5', 'D6', 'F#6'], 0.09, (n, t) => mar(n, t, 0.42, 0.3)), { k: 'noise', c: 'white', t: 0.1, a: 0.5, d: 0.6, g: 0.16, hp: [5000, 0.7] }, ...sparkle(5, 0.5, 0.14, 11, 0.07)], fed: () => [{ k: 'tone', f: 'A2', f2: 'D2', gl: 1.0, type: 'sawtooth', uni: [3, 8], a: 0.1, h: 0.5, d: 1.0, g: 0.5, lp: [380, 0.8] }, { k: 'noise', c: 'white', t: 0.3, a: 0.8, d: 0.9, g: 0.12, hp: [2500, 0.7] }, { k: 'noise', c: 'brown', a: 0.3, d: 1.2, g: 0.4, lp: [140, 0.7] }, ...body(0.1, 0.9, 'A4', 0.5, 'D5', 0.35)], tariff: () => [thump('D3', 'D2', 0, 0.3, 0.2), bellL('D3', 0.01, 0.3, 1.0), bellL('D4', 0.03, 0.22, 0.9), ...horn('A3', 'A3', 0.15, 0.4, 0.3, 0.5), ...body(0.05, 1.1, 'A4', 0.55, null, 0.2)], viral: () => [gls('D6', 0, 0.4, 0.4), gls('A6', 0.08, 0.4, 0.4), gls('D7', 0.16, 0.4, 0.6)], glut: () => arp(['D5', 'A4', 'D4'], 0.16, (n, t) => mar(n, t, 0.45, 0.35)), scare: () => [...pair('A4', 'F#4', 0, 0.13, 0.4, 0.3), paper(0.3, 0.12, 0.2)] })[p.v]() });
 
@@ -401,7 +401,7 @@ S('alert.insolvent', { bus: 'game', tier: 'loud', cd: 5000, pan: 'center', jitte
 
 S('perk.bailout', { bus: 'game', tier: 'loud', cd: 5000, pan: 'center',
   trigger: '`perk` event: `bailout` (the Legacy Heir\'s family clears your debt) or `fine-waived` (the family lawyer, medium)',
-  meaning: 'Rescue: relief that rises after a hard moment', recipe: 'bailout: rising brass swell A3 D4 A4 + a glass chord D5 F#5 A5 + an approved stamp + a long falling sigh (noise lowpassed); fine-waived: stamp + a glass tink', visual: 'Good toast ("The family stepped in")',
+  meaning: 'Rescue: relief that rises after a hard moment', recipe: 'bailout: rising brass swell A3 D4 A4 + a glass chord D5 F#5 A5 + an approved stamp + a long falling sigh (noise lowpassed); fine-waived: stamp + a glass tink', visual: 'Good toast ("The family cleared 60% of your debt")',
   variants: { bailout: { v: 'bailout' }, waived: { v: 'waived', tier: 'medium' } }, dur: 1.8,
   build: (p) => p.v === 'waived' ? [...stamp(0, 0.8), gls('A5', 0.12, 0.34, 0.5), gls('D6', 0.2, 0.3, 0.6)] : [...['A3', 'D4', 'A4'].map((n, i) => brass(n, i * 0.18, 0.3, 0.1, 0.6, 400, 1800)), ...['D5', 'F#5', 'A5'].map((n) => gls(n, 0.6, 0.26, 1.0)), ...stamp(0.55, 0.8), { k: 'noise', c: 'pink', t: 0.7, a: 0.1, d: 0.8, g: 0.08, lp: [900, 0.7, 300] }] });
 
@@ -496,7 +496,7 @@ S('draft.begin', { bus: 'game', tier: 'loud', cd: 5000, pan: 'center',
 
 S('run.end', { bus: 'game', tier: 'loud', cd: 8000, pan: 'center',
   trigger: 'Day 90 closes the run (`final` note); an exit launches (`exit` event: IPO or trade sale) and settles (note `final` with an exit)',
-  meaning: 'The end of something big', recipe: 'horizon: three slow bell tolls D3; exit start: a trading-floor bell (eight fast strikes A5 decaying) + brass; exit done: the grand fanfare, brass D3 A3 D4 F#4 + bells + a glass shower (2.8 s)', visual: 'The "simulation is complete" dialog with the EEI',
+  meaning: 'The end of something big', recipe: 'horizon: three slow bell tolls D3; exit start: a trading-floor bell (eight fast strikes A5 decaying) + brass; exit done: the grand fanfare, brass D3 A3 D4 F#4 + bells + a glass shower (2.8 s)', visual: 'The "Day 90: the run is complete" dialog with the EEI',
   variants: { horizon: { v: 'h' }, start: { v: 's' }, done: { v: 'd' } }, dur: 3.0,
   build: (p) => p.v === 'h' ? [bellL('D3', 0, 0.3, 2.0, { a: 0.03 }), bellL('D3', 0.85, 0.25, 1.8, { a: 0.03 }), bellL('D3', 1.7, 0.2, 1.6, { a: 0.03 }), bellL('D4', 0.04, 0.5, 1.8, { a: 0.03 }), bellL('D4', 0.89, 0.42, 1.6, { a: 0.03 }), bellL('D4', 1.74, 0.34, 1.4, { a: 0.03 }), gls('D5', 0.06, 0.3, 1.0, { a: 0.02 }), gls('D5', 0.91, 0.26, 0.9, { a: 0.02 }), gls('D5', 1.76, 0.22, 0.8, { a: 0.02 }), { k: 'tone', f: 'A4', t: 0.3, a: 0.6, h: 1.3, d: 0.8, g: 0.2 }, { k: 'tone', f: 'D4', t: 0.3, a: 0.6, h: 1.3, d: 0.8, g: 0.2 }] : p.v === 's' ? [...Array.from({ length: 8 }, (_, i) => bellL('A5', i * 0.08, 0.3 - i * 0.02, 0.3)), brass('D3', 0.3, 0.3, 0.2, 0.6, 400, 2000), ...stamp(0.7, 0.6)] : [...['D3', 'A3', 'D4', 'F#4'].map((n) => brass(n, 0, 0.3, 0.6, 1.0, 400, 2600)), ...['D5', 'A5', 'D6'].map((n, i) => bellL(n, 0.1 + i * 0.2, 0.3, 1.5)), ...arp(['D5', 'F#5', 'A5', 'D6', 'F#6', 'A6', 'D7'], 0.08, (n, t) => mar(n, 0.4 + t, 0.34, 0.6)), ...sparkle(14, 1.0, 0.12, 6, 0.07), ...coins(8, 0.8, 0.6, 0.2)] });
 

@@ -404,16 +404,18 @@ test('money sizes on the sale and the purchase, and the coin of a pool sale wait
   assert.equal(eventCalls({ type: 'repair', precision: 0.5, cost: 9000 }, newWireState(), h)[0][2].with.length, 1);
   const st = newWireState(); eventCalls({ type: 'perk', effect: 'fine-waived' }, st, { now: () => 5 }); assert.equal(eventCalls({ type: 'audit', ok: false }, st, { now: () => 6 })[0][2].noCoin, true, 'a fail after a waived fine plays no coin');
 });
-test('notes: the texts the engine writes are pinned, so a copy edit cannot silently mute a sound', () => {
-  const kinds = { 'Scam: the payment bounced and the buyer vanished. Verify buyers before you ship.': 'scam', 'The Hipster spotted a counterfeit. That Watch is worth less.': 'counterfeit', '$1,200 settled into cash.': 'settle', 'Freight arrived in Metro.': 'freight-arrive',
-    "Customs inspected your freight in Metro: 12 hours' delay and a $40 fee.": 'customs', 'Watch was damaged in transit (-20% quality).': 'damage', 'Your mentor says: look at Watch for Hipster in Metro.': 'mentor', 'SLA breach on a Retail contract: $200 penalty.': 'sla',
-    'Cash is negative ($50). Interest accrues.': 'overdraft', 'Market fatigue: trend goods lose half their value for 72 hours.': 'fatigue', 'Burnout: you take a day off and no new buyers come to you.': 'burnout', 'Swap completed with Sam.': 'swap', 'Your net worth has fallen to zero or below.': 'insolvent' };
+// The engine's own notes carry a kind and the sound of a note never reads its words: tests/copy2-messages.test.mjs (M1) drives each one through the real engine.
+// What is held here is what is left: a note with no kind (a hand-made one) is classified by its words, and a kind wins over them.
+test('notes: a note with no kind is classified by its words (the fallback, for hand-made notes); a kind wins', () => {
+  const kinds = { 'Scam: the payment bounced and the buyer vanished. Verify a buyer before you sell.': 'scam', 'The Hipster spotted a counterfeit. That Watch is worth almost nothing.': 'counterfeit', '$1,200 settled into cash.': 'settle', 'Freight arrived in Metro.': 'freight-arrive',
+    "Customs inspected your freight in Metro: 12 hours' delay and a $40 fee.": 'customs', 'Watch was damaged in transit (-20% quality).': 'damage', 'Your mentor says: look at Watch for Hipster in Metro. Few others sell there.': 'mentor', 'SLA breach on your Retail contract: $200 penalty. Keep 2 managers running.': 'sla',
+    'Cash is negative ($50). Overdraft interest is 0.5% a day.': 'overdraft', 'Market fatigue: trend goods lose half their value for 72 hours.': 'fatigue', 'Burnout: you take a day off and no new buyers come to you.': 'burnout', 'Swap completed with Sam.': 'swap', 'Your net worth has fallen to zero or below.': 'insolvent' };
   for (const [text, kind] of Object.entries(kinds)) { assert.equal(noteKind({ text }), kind, text); assert.equal(noteKind({ text: 'x', kind }), kind); }
   assert.equal(noteCalls({ level: 'info', text: '$1,200 settled into cash.' }, newWireState(), {})[0][1], 'cash.in');
   assert.equal(noteCalls({ level: 'warn', text: 'Fed raises rates: effective in 3 days.', alert: { level: 2, start: 99 } }, newWireState(), {})[0][2].variant, 'l2');
-  assert.deepEqual(noteCalls({ level: 'bad', text: 'BREAKING: Fed raises rates is live now.', alert: { level: 2 } }, newWireState(), {}), [], 'the live note is the shock event\'s');
-  assert.equal(noteCalls({ level: 'warn', text: 'Audit event: x. You have 72 virtual hours to respond.', audit: true }, newWireState(), {})[0][1], 'audit.notice');
-  assert.equal(noteCalls({ level: 'info', text: 'Day 90. The clearing horizon has closed.', final: true }, newWireState(), {})[0][2].variant, 'horizon');
+  assert.deepEqual(noteCalls({ level: 'bad', text: 'Fed raises rates is now in effect, with no warning.', alert: { level: 2 } }, newWireState(), {}), [], 'the live note is the shock event\'s');
+  assert.equal(noteCalls({ level: 'warn', text: 'Regulatory Audit: x. You have 72 hours to respond.', audit: true }, newWireState(), {})[0][1], 'audit.notice');
+  assert.equal(noteCalls({ level: 'info', text: 'Day 90. The run is complete. The debrief shows your Economic Efficiency Index.', final: true }, newWireState(), {})[0][2].variant, 'horizon');
   assert.equal(noteCalls({ level: 'good', text: 'Exit complete at $1.', final: true }, newWireState(), {})[0][2].variant, 'done');
   assert.deepEqual(noteCalls({ level: 'info', text: 'Something else.' }, newWireState(), {}), []); assert.deepEqual(noteCalls(null), []);
   assert.equal(noteCalls({ text: 'Cash is negative ($50).', amt: 50 }, newWireState(), {})[0][2].state, 'overdraft');

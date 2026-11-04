@@ -18,7 +18,16 @@ const fin = (x, d) => (typeof x === 'number' && !Number.isNaN(x) ? x : d); // +-
 const own = (o, k) => typeof k === 'string' && Object.prototype.hasOwnProperty.call(o, k); // ids come from the UI and the network: never index a plain object by them unchecked
 const DE_CAP = 999; // a debt-to-equity figure that is logged or shown is finite: nothing left to divide by reads as 999, not Infinity (JSON writes Infinity as null)
 const money = (x) => (x < 0 && Math.abs(x) >= 0.005 ? '-' : '') + (Math.abs(x) < 100 ? '$' + Math.abs(x).toFixed(2) : '$' + Math.round(Math.abs(x)).toLocaleString('en-US')); // -$12.50, as the rest of the product writes it, not $-12.50
-const lack = (cost, have, thing) => fail(`Need ${money(cost)} for ${thing}; you have ${money(have)}.`);
+// whole dollars from $100 up would hide a gap under a dollar: then both go to the cent, the cost up and the balance down
+const lack = (cost, have, thing) => {
+  const shown = (x) => Number(money(x).replace(/[$,]/g, ''));
+  let need = money(cost), got = money(have);
+  if (have >= 0 && shown(have) >= shown(cost)) {
+    const cents = (c) => '$' + (c / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), up = Math.max(1, Math.ceil(cost * 100 - 1e-6));
+    need = cents(up); got = cents(Math.min(Math.floor(have * 100 + 1e-6), up - 1));
+  }
+  return fail(`Need ${need} for ${thing}; you have ${got}.`);
+};
 const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`; // "1 day", "2 days"
 const uniq = (ids) => [...new Set(ids)]; // an id list from outside may repeat an id: one crate is one crate
 const isNum = (x) => typeof x === 'number' && Number.isFinite(x); // a real number: not NaN, not +-Infinity, not a string (JSON turns Infinity into null)
@@ -420,7 +429,7 @@ export class Game {
       this.note(k === 'm2' ? 'warn' : 'good',
         k === 'm1' ? `Milestone 1 (${money(MIL.m1)} net worth): managers, clients and the Bank are open.`
           : k === 'm2' ? `Milestone 2 (${money(MIL.m2)} net worth): the first audit begins. Hiring and manager upgrades wait until you answer it.`
-            : `Milestone 3 (${money(MIL.m3)} net worth): Enterprise accounts, a trade sale and an IPO are open.`, { milestone: n });
+            : `Milestone 3 (${money(MIL.m3)} net worth): Enterprise accounts and a trade sale are open, and an IPO if your audit record is clean.`, { milestone: n });
       this.emit('milestone', { n });
     }
   }
@@ -918,7 +927,7 @@ export class Game {
     s.pivot++;
     this.led('pool', `Sold ${plural(q.per.length, 'crate')} to the ${ZONES[q.zone].short} liquidity pool${q.delay ? ' (settles in ' + q.delay + 'h)' : ''}`, q.total, { z: q.zone });
     this.emit('sell-pool', { zone: q.zone, total: q.total, count: q.per.length });
-    return ok(q.delay ? `Proceeds of ${money(q.total)} settle in ${q.delay} virtual hours.` : `Sold for ${money(q.total)}.`, q);
+    return ok(q.delay ? `Proceeds of ${money(q.total)} settle in ${q.delay} hours.` : `Sold for ${money(q.total)}.`, q);
   }
   _settlements() {
     const s = this.s;
@@ -958,7 +967,7 @@ export class Game {
     s.freight.push({ id: 'F' + s.nid++, items: q.items, to, sent: s.hour, arrive: s.hour + q.hours, risk: q.risk, book: q.book, from: q.from });
     this.led('freight', `Shipped ${plural(q.items.length, 'crate')} to ${ZONES[to].short}`, -q.cost, { z: to });
     this.emit('ship', { from: q.from, to, count: q.items.length });
-    return ok(`In transit for ${q.hours} virtual hours.`, q);
+    return ok(`In transit for ${q.hours} hours.`, q);
   }
   _freight() {
     const s = this.s;
@@ -1269,7 +1278,7 @@ export class Game {
       if (this.deRatio() <= DEBT.callDE) return;
     }
     const off = Math.round(DEBT.fireSale * 100);
-    this.note('bad', `Margin call: debt-to-equity passed ${DEBT.callDE}. The bank is selling your assets at a ${off}% discount.`, { alert: { code: 'BANK-MARGIN-LIQ', name: 'Margin call', level: 3, readout: `Debt-to-equity passed ${DEBT.callDE}. The bank sells your largest managers first, then your stock, at a ${off}% discount, until the ratio is back to ${DEBT.maxDE.toFixed(1)}.`, vars: [], enforcement: 'Automatic and immediate.' } });
+    this.note('bad', `Margin call: debt-to-equity passed ${DEBT.callDE}. The bank is selling your assets at a ${off}% discount.`, { alert: { code: 'BANK-MARGIN-LIQ', name: 'Margin call', level: 3, readout: `Debt-to-equity passed ${DEBT.callDE}. The bank sells your largest managers first, then your stock, at a ${off}% discount, until the ratio is back to ${DEBT.maxDE.toFixed(1)} or nothing is left to sell. Selling at a discount can push the ratio up, so a call can sell all your managers and stock.`, vars: [], enforcement: 'Automatic and immediate.' } });
     let guard = 0;
     while (this.deRatio() > DEBT.maxDE && guard++ < 40) {
       let proceeds = 0, what = '';
@@ -1328,8 +1337,8 @@ export class Game {
       } else {
         const pen = C.perDay * 2;
         s.cash -= pen; c.breaches++; dayProfit -= pen;
-        this.led('client', `SLA breach on a ${C.name}: penalty`, -pen, { sla: true });
-        this.note('bad', `SLA breach on a ${C.name}: ${money(pen)} penalty. Keep ${plural(C.minRunning, 'manager')} running.`, { kind: 'sla', amt: pen });
+        this.led('client', `SLA breach on your ${C.name}: penalty`, -pen, { sla: true });
+        this.note('bad', `SLA breach on your ${C.name}: ${money(pen)} penalty. Keep ${plural(C.minRunning, 'manager')} running.`, { kind: 'sla', amt: pen });
         if (c.breaches >= 2) { c.done = true; this.note('bad', `The ${C.name} left after two SLA breaches.`); }
       }
     }
@@ -1412,7 +1421,7 @@ export class Game {
   resolveAudit(choice, pipeId) {
     const s = this.s, a = s.auditPending;
     if (!a) return fail('No audit is pending.');
-    let msg = '';
+    let msg = '', caught = false;
     if (choice === 'A') {
       const fee = AUDIT.fee * Math.max(0.7, 1 - 0.03 * (this.lvl('fintech') - 1));
       if (s.cash < fee) return lack(fee, s.cash, 'the consultant');
@@ -1427,12 +1436,12 @@ export class Game {
       msg = `${PIPE[p.kind].name} stops for ${AUDIT.pauseHours / 24} days to handle the filing.`;
     } else if (choice === 'C') {
       if (this.rand() < AUDIT.passChance) { s.auditPass++; this.led('audit', 'Bypassed filing and got away with it', 0); msg = 'Nobody noticed.'; }
-      else { this._auditFail(false); msg = 'Caught.'; }
+      else { this._auditFail(false); caught = true; } // (the note it writes is the message)
     } else return fail('Pick A, B or C.');
     s.auditPending = null; s.auditFirst = true;
     s.auditNext = s.hour + AUDIT.everyDays * 24 / this.env.difficulty.audit / this.P.auditMult;
     this.xp(70);
-    this.emit('audit', { choice, ok: choice !== 'C' || !String(msg).startsWith('Caught') });
+    this.emit('audit', { choice, ok: !caught });
     return ok(msg);
   }
 
@@ -1467,7 +1476,7 @@ export class Game {
     s.assets = []; s.pipes = []; s.freight = []; s.clients = []; s.loans = []; s.settle = []; s.cash = 0;
     s.royalties = s.royalties.filter((r) => r.dir !== 'pay'); // what the sale owed on them was taken out of its proceeds (exitQuote)
     s.settle.push({ amt: q.proceeds, at: s.hour + 48, note: 'Exit' });
-    this.led('exit', `Began a ${kind === 'ipo' ? 'IPO' : 'trade sale'}: ${money(q.proceeds)} settles in 48 virtual hours`, 0, { proceeds: q.proceeds });
+    this.led('exit', `Began ${kind === 'ipo' ? 'an IPO' : 'a trade sale'}: ${money(q.proceeds)} settles in 48 hours`, 0, { proceeds: q.proceeds });
     this.emit('exit', { kind });
     return ok(`${kind === 'ipo' ? 'IPO' : 'Trade sale'} launched. It settles in 48 hours.`, q);
   }
@@ -1679,9 +1688,9 @@ export class Game {
       // ...but a bid that is fair by what the crate is worth to this founder (it would land somewhere else) is not misconduct, however far it is from the price its owner sees: refused, and said so, with nobody told
       if (lands.ok) return fail('Cannot be sent: a crate you asked for sits in a district you have not opened, so its owner values it far above what it is worth to you. Ask for another crate.', { offer, chk: lands });
       this.out.push({ t: 'flag', offer: { id: offer.id, from: s.pid, to, variance: seen.variance, va: seen.va, vb: seen.vb } });
-      return fail(`Blocked: this deal is ${(seen.variance * 100).toFixed(0)}% from fair value (limit ${FMV_BAND * 100}%). Instructors are told of blocked deals. Balance it with cash or another crate.`, { offer, chk: seen });
+      return fail(`Blocked: the two sides are ${(seen.variance * 100).toFixed(0)}% apart (limit ${FMV_BAND * 100}%). In a classroom, your instructor is told. Balance it with cash or another crate.`, { offer, chk: seen });
     }
-    if (!lands.ok) return fail(`Blocked: priced where you would hold the crates you ask for, this deal is ${(lands.variance * 100).toFixed(0)}% from fair value (limit ${FMV_BAND * 100}%). Balance it with cash or another crate.`, { offer, chk: lands });
+    if (!lands.ok) return fail(`Blocked: priced where you would hold the crates you ask for, the two sides are ${(lands.variance * 100).toFixed(0)}% apart (limit ${FMV_BAND * 100}%). Balance it with cash or another crate.`, { offer, chk: lands });
     if (!this.checkOffer(offer, 'offerer', { landing: true }).ok) { this._appraisal(seen.va); return fail(UNTRADEABLE); }
     if (giveCash > s.cash) return fail('You do not have that much cash.');
     const going = new Set(giveIds);
@@ -1731,7 +1740,7 @@ export class Game {
     // Two looks, as when proposing: first the crates as this founder DESCRIBES them (numbers are theirs to see), then as they truly are, which can only refuse, with no number (see createOffer).
     const sending = held ? mine.map((a) => this._wire(this._disclosed(a))) : o.want.assets;
     const seen = this.checkOffer({ ...o, want: { assets: held ? mine.map((a) => this._described(a)) : o.want.assets, cash: o.want.cash } }, 'acceptor');
-    if (!seen.ok) return fail(`Blocked: ${(seen.variance * 100).toFixed(0)}% from fair value.`, { chk: seen });
+    if (!seen.ok) return fail(`Blocked: the two sides are ${(seen.variance * 100).toFixed(0)}% apart.`, { chk: seen });
     const chk = this.checkOffer({ ...o, want: { assets: sending, cash: o.want.cash } }, 'acceptor');
     if (!chk.ok) { this._appraisal(seen.vb); return fail(UNTRADEABLE); }
     if (!held) return fail('You no longer hold the crate they asked for.');

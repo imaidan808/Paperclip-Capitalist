@@ -193,7 +193,7 @@ test('bank: the exit shows both quotes, asks before it ends the run, and explain
   acts['bank-exit'](el({ k: 'sale' })); assert.equal(ctx.calls.at(-1)[0], 'confirm'); assert.equal(s.exiting, null, 'nothing happens until the player confirms');
   assert.match(ctx.calls.at(-1)[1], /Sell the business/);
   s.auditFail = 1;
-  assert.match(bank.html(ctx), /clean audit record/);
+  assert.ok(bank.html(ctx).includes(ctx.esc(g.exitQuote('ipo').msg)), 'the IPO card shows the engine\'s own reason');
   const calls = ctx.calls.length; acts['bank-exit'](el({ k: 'ipo' })); assert.equal(ctx.calls.length, calls); assert.equal(ctx.toasts.at(-1)[1], 'bad');
   s.auditFail = 0; acts['bank-exit'](el({ k: 'sale' })); ctx._confirm();
   assert.ok(s.exiting); assert.equal(s.exiting.kind, 'trade'); // the Bank says "sale"; the engine's own name for it is a trade sale assert.match(bank.html(ctx), /Your exit is settling/);
