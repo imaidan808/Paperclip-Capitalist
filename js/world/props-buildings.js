@@ -348,16 +348,16 @@ layer('rentrow', {
   body(ctx, p, env) {
     const n = 3, cw = p.w / n, hs = [p.h, p.h - 8, p.h + 4], cs = ['#d89a7a', '#c4785a', '#e0b090'], fine = !lite(env);
     shadow(ctx, p.gx, p.gy, p.w, p.d, p.h); contact(ctx, p.gx, p.gy, p.w, p.d);
-    let hf = null;
+    let hf = null; const hits = []; // the hot spot is the whole terrace (a click on any house), as the V2 drawer's is (bldg-small.js)
     for (let i = 0; i < n; i++) {
       const q = { gx: p.gx + i * cw + 0.05, gy: p.gy, w: cw - 0.1, d: p.d, h: hs[i], col: cs[i], roofCol: '#7a3a28' };
-      const f = solid(ctx, q.gx, q.gy, q.w, q.d, q.h, body(q.col, env), { mat: 'brick', lite: !fine }); windows(ctx, f.left, 2, 3, '#2a2540', glow(env) * 1.3, 0.1, undefined, 0, { fine }); windows(ctx, f.right, 2, 3, '#2a2540', glow(env), 0.1, undefined, 0, { fine });
+      const f = solid(ctx, q.gx, q.gy, q.w, q.d, q.h, body(q.col, env), { mat: 'brick', lite: !fine }); hits.push(f.left, f.right, f.top); windows(ctx, f.left, 2, 3, '#2a2540', glow(env) * 1.3, 0.1, undefined, 0, { fine }); windows(ctx, f.right, 2, 3, '#2a2540', glow(env), 0.1, undefined, 0, { fine });
       for (let j = 0; j < 3; j++) strip(ctx, f, 'L', 0.05, 0.95, 0.12 + j * 0.26, 0.145 + j * 0.26, tint('#f6e6d4', env));
       strip(ctx, f, 'L', 0.4, 0.6, 0, 0.3, '#3a2a30'); roof(ctx, q, f, env, 'gable'); if (i === 1) hf = f;
     }
     signLeft(ctx, hf.left, 'RENT', '#fff', 9, 0.6);
     const [kx, ky] = P(p.gx + p.w / 2, p.gy + p.d + 0.6, 6); ctx.strokeStyle = tint(p.acc, env); ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(kx - 5, ky, 3.2, 0, 7); ctx.moveTo(kx - 2, ky); ctx.lineTo(kx + 8, ky); ctx.moveTo(kx + 5, ky); ctx.lineTo(kx + 5, ky + 3); ctx.stroke();
-    return [hf.left, hf.right, hf.top];
+    return hits;
   },
 });
 

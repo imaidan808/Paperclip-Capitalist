@@ -220,7 +220,7 @@ kit('creative', {
   place(A) {
     const R = A.rest, v = A.pal[1];
     if (R) { A.add('bldg', R[0], R[1] + 0.3, Math.min(R[2], 6.4), 3.8, 40, { col: '#c8a6f6', trim: '#fff4de', roof: 'flat', roofCol: '#e8b8f0', win: [4, 2], sign: 'ON AIR', neon: '#ff4fa3', studio: 1, mat: 'metal', band: v }); }
-    A.add('billboard', 14.2, 5.7, 3.8, 0.3, 46, { col: v, text: 'NEW', ext: 14, anim: 1 });
+    A.add('billboard', 17.8, 5.7, 3.8, 0.3, 46, { col: v, text: 'NEW', ext: 14, anim: 1 }); // east of the market board (13.6 to 16.6), not against it: it stood at 14.2 and drew over the board's number
     A.add('spot', 20.2, 13.0, 0.6, 0.6, 40, { col: v });
     A.add('spot', 13.6, 13.0, 0.6, 0.6, 40, { col: '#ff4fa3' });
     A.add('gantry', 15.6, 13.1, 3.4, 0.9, 40, { col: v, ext: 20, label: 'Camera crane' });
@@ -251,8 +251,8 @@ kit('finance', {
   hq: { col: '#eef6ea', roof: 'pediment', roofCol: '#4f9a78', win: [3, 1], col2: '#1f4d34', sign: 'SKILLS' }, depot: '#58b68a', lamp: '#f0f7e8', tree: '#2f6a4a',
   place(A) {
     const R = A.rest;
-    if (R) A.add('hall', R[0], R[1] + 0.3, Math.min(R[2], 7), 4.1, 46, { col: '#eef6ea', acc: A.pal[1], roofCol: '#4f9a78', sign: 'BANK', globe: 0 });
-    A.add('ticker', 17.0, 5.8, 4.0, 0.45, 26, { acc: '#6df0a0', text: 'AAPL 182.4 MSFT 411.2 BRK 389.7 GOLD 2041 ' });
+    if (R) A.add('hall', R[0] + 1.6, R[1] - 0.3, Math.min(R[2], 7), 4.1, 46, { col: '#eef6ea', acc: A.pal[1], roofCol: '#4f9a78', sign: 'BANK', globe: 0 }); // 0.6 north and 1.6 east of where it stood (the plan is mirrored in this district, so the portico moves away from the market board): its steps end before the row of signs (y 5.8) and the board covers a sliver of its columns, not half of them
+    A.add('ticker', 18.8, 5.8, 2.8, 0.45, 26, { acc: '#6df0a0', text: 'AAPL 182.4 MSFT 411.2 BRK 389.7 GOLD 2041 ' }); // at the end of the row, clear of the portico (it stood at 17.0, 4 wide, on the steps)
     A.add('statue', 19.6, 12.8, 1.0, 1.0, 26, { col: '#c2a24a', bull: 1 });
     A.scatter(101, 4, A.SE, (i) => ({ t: i % 2 ? 'planter' : 'topiary', w: 0.6, d: 0.6, h: 26, sm: 1 }), 0.8);
     if (A.NW) { A.add('hall', 0.9, 0.8, 6.0, 3.6, 40, { col: '#eef6ea', acc: A.pal[1], roofCol: '#4f9a78', sign: 'TRUST' }); A.add('ticker', 1.0, 5.2, 4.6, 0.45, 26, { acc: '#6df0a0', text: 'BONDS 98.2 FX 1.09 OIL 78.4 ' }); }
@@ -266,7 +266,7 @@ kit('realty', {
   hq: { col: '#fff0d4', roof: 'gable', roofCol: '#e2704c', win: [3, 2], sign: 'SKILLS', mat: 'plaster' }, depot: '#e8795a', lamp: '#ffe9c0', tree: '#4a8a4a',
   place(A) {
     const R = A.rest;
-    A.add('forsale', 14.4, 12.9, 1.6, 0.4, 24, { col: A.pal[1] });
+    A.add('forsale', 14.4, 13.6, 1.6, 0.4, 24, { col: A.pal[1] }); // south of the lots' crates (their row is y 11.8), not over the first two: it stood at 12.9
     A.scatter(111, 5, A.SE, (i) => ({ t: i % 2 ? 'tree' : 'planter', w: 0.6, d: 0.6, h: 34, s: 0.8, c: '#4a8a4a', sm: 1 }), 0.8);
     for (const x of [2, 6, 14, 18]) A.deco('tree', x, 6.3, 0.4, 0.4, 34, { s: 0.7, c: '#4a8a4a' });
     if (A.NW) { for (let i = 0; i < 3; i++) A.add('bldg', 0.9 + i * 2.7, 0.8, 2.4, 3.2, 30 + (i % 2) * 8, { col: ['#fff0d4', '#cdeedc', '#e1d4f3'][i], trim: '#ffffff', roof: 'gable', roofCol: ['#e2704c', '#3fb9b2', '#a272c8'][i], win: [2, 3], balc: 1, door: 1 }); }
@@ -283,7 +283,7 @@ kit('exchange', {
   hq: { col: '#fffaf0', roof: 'pediment', roofCol: '#7a5a30', win: [3, 1], col2: '#2a2410', sign: 'SKILLS' }, depot: '#d8b24a', lamp: '#f5d36a', tree: '#6a6a3a', glow: 1,
   place(A) {
     const g = A.pal[1];
-    A.add('ticker', 17.0, 5.8, 4.0, 0.45, 26, { acc: g, text: 'LDN +1.2  NYC -0.4  TYO +0.8  HKG +2.1  FRA -0.3 ' });
+    A.add('ticker', 18.8, 5.8, 2.8, 0.45, 26, { acc: g, text: 'LDN +1.2  NYC -0.4  TYO +0.8  HKG +2.1  FRA -0.3 ' }); // at the end of the row, clear of the exchange's portico (it stood at 17.0, 4 wide, on the steps)
     A.scatter(121, 3, A.SE, () => ({ t: 'planter', w: 0.7, d: 0.7, h: 12, sm: 1 }), 0.6);
     for (let i = 0; i < 4; i++) A.deco('flag', 18.4 + i * 0.9, 13.3, 0.2, 0.2, 46, { col: g });
     if (A.NW) A.add('hall', 0.9, 0.8, 6.0, 3.6, 40, { col: '#fffaf0', acc: g, roofCol: '#7a5a30', sign: 'FX' });

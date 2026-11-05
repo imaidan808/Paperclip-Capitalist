@@ -106,10 +106,10 @@ reg('rentrow', {
   body(ctx, p, env) {
     const lv = detailFor(ctx, env), { gx, gy, w, d, h } = p, S = styleOf(p, env), seed = seedOf(p), C = S.C, n = 3, cw = w / n, hs = [h, h - 8, h + 4];
     stage(ctx, p, env, h + 14, { m: 0.2 });
-    let mid = null;
-    for (let i = 0; i < n; i++) { const q = { gx: gx + i * cw + 0.05, gy, w: cw - 0.1, d, h: hs[i] }, r = terraceHouse(ctx, q, env, S, lv, i, seed); if (i === 1) mid = { q, r }; }
+    let mid = null; const hits = []; // the hot spot is the whole terrace, a prism for each house (it was the middle house's only: a click on the red or the purple house found nothing)
+    for (let i = 0; i < n; i++) { const q = { gx: gx + i * cw + 0.05, gy, w: cw - 0.1, d, h: hs[i] }, r = terraceHouse(ctx, q, env, S, lv, i, seed); if (i === 1) mid = { q, r }; hits.push(...hitsOf(facesOf(q.gx, q.gy, q.w, q.d, q.h))); }
     plank(ctx, mid.r.L, 'TO LET', { x: mid.r.L.W * 0.5, up: mid.q.h * 0.62, font: 6.2, S: 'l', col: C('#e8795a'), ink: '#fffaf0', lv });
-    return hitsOf(facesOf(mid.q.gx, mid.q.gy, mid.q.w, mid.q.d, mid.q.h));
+    return hits;
   },
   live: (ctx, p, env) => windowGlow(env, p, leftFace(p), 1),
 });
