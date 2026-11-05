@@ -4,12 +4,16 @@
 // two or three fills of text. Presentation only. Where there is no OffscreenCanvas every method answers null and the world draws the label directly.
 import { roundRect, luma, mix } from './iso.js';
 import { Cache, surface, mono, sans } from './gfx.js';
+import { paint } from '../art/paint.js';
+import '../art/g-ui.js'; // the marks a label can carry (a lock, a dot): js/art/g-ui.js
 
 /** A zoom factor rounded to eighths: sprites are cached per size, so a continuous zoom must not make a new one every frame. */
 export const qs = (s) => Math.round(s * 8) / 8;
 /** A district's own colour, lifted until it reads on the dark label (some palettes are nearly black): text and rules use this, never the raw colour. */
 export const readable = (c) => (c && c[0] === '#' && c.length === 7 && luma(c) < 0.45 ? mix(c, '#ffffff', 0.62) : c);
 const PAD = 4;
+/** The room a card's lock takes before the name of a district that is not open: the mark (12 px) and a gap. mapmode.js measures with it when it draws the card directly. */
+export const LOCK = 15;
 
 export class Labels {
   constructor() { this.cache = new Cache(240); this.widths = new Cache(600); this.dpr = 0; this.scratch = null; }
@@ -48,15 +52,17 @@ export class Labels {
   lw(n = 1) { const d = this.dpr || 1; return Math.max(1, Math.round(n * (d >= 2 ? 1.5 : 1) * d)) / d; }
 
   // ------------------------------------------------------------------------------------------ the labels
-  /** A small rounded name chip centred on its anchor ("You", "+ Hire", "Opens at $500k", a district's tag). */
-  chip(text, color, s) {
+  /** A small rounded name chip centred on its anchor ("You", "+ Hire", "Opens at $500k", a district's tag). `mark` is the id of a glyph (js/art/g-ui.js: a lock, a dot) drawn before the text, in the chip's colour. */
+  chip(text, color, s, mark = '') {
     color = readable(color);
-    return this.sprite(`c|${text}|${color}|${s}|${this.dpr}`, () => {
-      const f = mono(700, 11 * s), w = Math.ceil(this.width(f, text) + 14 * s), h = Math.ceil(18 * s), lw = this.lw();
+    return this.sprite(`c|${text}|${color}|${s}|${mark}|${this.dpr}`, () => {
+      const f = mono(700, 11 * s), gs = mark ? Math.round(11 * s) : 0, gap = mark ? Math.round(3 * s) : 0, tw = this.width(f, text), w = Math.ceil(tw + 14 * s + gs + gap), h = Math.ceil(18 * s), lw = this.lw();
       return this.make(w, h, (g) => {
         roundRect(g, 0.5, 2.5, w, h, 5 * s); g.fillStyle = 'rgba(2,4,10,.4)'; g.fill();
         roundRect(g, lw / 2, lw / 2, w - lw, h - lw, 5 * s); g.fillStyle = 'rgba(16,20,28,.93)'; g.fill(); g.strokeStyle = color; g.lineWidth = lw; g.stroke();
-        g.font = f; g.fillStyle = color; g.textAlign = 'center'; g.textBaseline = 'middle'; this.text(g, text, w / 2, h / 2 + 0.5);
+        const x0 = (w - (gs + gap + tw)) / 2; // the mark and the text are one run, centred in the chip
+        if (mark) paint(g, mark, Math.round(x0 * (this.dpr || 1)) / (this.dpr || 1), h / 2 - gs / 2 + 0.5, gs, color);
+        g.font = f; g.fillStyle = color; g.textAlign = 'center'; g.textBaseline = 'middle'; this.text(g, text, x0 + gs + gap + tw / 2, h / 2 + 0.5);
       });
     });
   }
@@ -124,14 +130,16 @@ export class Labels {
   card(D, l1, l2, compact, open, cur, hov) {
     const pal = readable(D.pal[1]);
     return this.sprite(`m|${D.id ?? D.short}|${l1}|${l2}|${compact ? 1 : 0}|${open ? 1 : 0}|${cur ? 1 : 0}|${hov ? 1 : 0}|${this.dpr}`, () => {
-      const f1 = mono(800, 12), f2 = mono(600, 10), w = Math.ceil(Math.max(this.width(f1, l1), compact ? 0 : this.width(f2, l2)) + 34), h = compact ? 24 : 38, lw = this.lw(cur || hov ? 2 : 1.1);
+      const f1 = mono(800, 12), f2 = mono(600, 10), w = Math.ceil(Math.max(this.width(f1, l1) + (open ? 0 : LOCK), compact ? 0 : this.width(f2, l2)) + 34), h = compact ? 24 : 38, lw = this.lw(cur || hov ? 2 : 1.1);
       const sp = this.make(w, h, (g) => {
         g.globalAlpha = open ? 1 : 0.88;
         roundRect(g, 0.5, 2.5, w, h, 7); g.fillStyle = 'rgba(2,4,10,.4)'; g.fill();
         roundRect(g, lw / 2, lw / 2, w - lw, h - lw, 7); g.fillStyle = 'rgba(16,20,28,.95)'; g.fill(); g.strokeStyle = cur || hov ? '#ffd36e' : open ? pal : '#5b6b85'; g.lineWidth = lw; g.stroke();
         g.fillStyle = pal; g.fillRect(1, 6, 4, h - 12);
         g.font = sans(16); g.textAlign = 'left'; g.textBaseline = 'middle'; g.fillStyle = '#fff'; this.text(g, D.icon, 10, h / 2 + 1);
-        g.font = f1; g.fillStyle = open ? '#ffd36e' : '#a3b3c9'; this.text(g, l1, 30, compact ? h / 2 + 1 : 13);
+        const ly = compact ? h / 2 + 1 : 13;
+        if (!open) paint(g, 'mark-lock', 30, ly - 6, 12, '#a3b3c9'); // a district not open yet: a lock before its name (drawn, js/art/g-ui.js)
+        g.font = f1; g.fillStyle = open ? '#ffd36e' : '#a3b3c9'; this.text(g, l1, 30 + (open ? 0 : LOCK), ly);
         if (!compact) { g.font = f2; g.fillStyle = open ? '#e8eef6' : '#a3b3c9'; this.text(g, l2, 30, 27); }
       });
       if (sp) { sp.cw = w; sp.ch = h; }

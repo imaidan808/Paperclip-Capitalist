@@ -124,7 +124,10 @@ test('the real app: every module main.js reaches exists, the later screens are i
   for (const m of ['js/ui/shell.js', 'js/ui/academy.js', 'js/ui/instructor.js', 'js/ui/debrief.js', 'js/world/world.js', 'js/deal.js']) assert.ok(g.dynamic.includes(m) && !g.static.includes(m), `${m} is loaded when a screen opens, not before the first one`);
   assert.ok(g.dynamic.includes('js/play/haggle.js') && g.dynamic.includes('js/play/auction.js') && g.edges['js/deal.js'].statics.includes('js/play/haggle.js') && g.edges['js/ui/academy.js'].statics.includes('js/meta/academy.js'), 'the Deal Room\'s games are deal.js\'s static imports and the lessons the Academy\'s (tests/finish-repair.test.mjs V5): nothing waits on an import() while it evaluates');
   const all = walkDir(join(ROOT, 'js')).filter((f) => f.endsWith('.js')).map((f) => 'js/' + f);
-  assert.deepEqual(all.filter((f) => !g.modules.includes(f)), ['js/meta/ids.js'], 'a module nothing imports is either dead or the tests\' alone: say which in this list'); // (the audition page's helper, audition.js, was the second until the sixth round: it is dev/audition.js now, beside the one page that uses it, and is not in js/ at all)
+  // The glyph kit (js/art/) is wired in: the screens import the core and the sets through js/ui/glyphs.js, the world imports the painter. g-sample.js, the exemplars of the goods, a Background and a district, is imported by the style test and the sheet alone and stays until parts 3 and 4 draw the real ones and delete it.
+  const KIT = ['js/art/g-sample.js'];
+  assert.deepEqual(KIT.filter((f) => g.modules.includes(f)), [], 'a kit module that a screen imports now is no longer an exception: delete its line from KIT');
+  assert.deepEqual(all.filter((f) => !g.modules.includes(f) && !KIT.includes(f)), ['js/meta/ids.js'], 'a module nothing imports is either dead or the tests\' alone: say which in this list'); // (the audition page's helper, audition.js, was the second until the sixth round: it is dev/audition.js now, beside the one page that uses it, and is not in js/ at all)
   assert.ok(!/js\/meta\/ids\.js/.test(Object.values(g.edges).flatMap((e) => [...e.statics, ...e.dynamics]).join(' ')));
 });
 

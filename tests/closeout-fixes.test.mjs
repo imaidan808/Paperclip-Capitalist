@@ -14,7 +14,7 @@ test('A4: the clock anchor is the play button alone, so a lesson step that says 
   assert.equal(anchors.length, 1, 'one element carries it');
   assert.match(anchors[0][0], /^<button[^>]*data-act="pause"/, 'and it is the pause and play button');
   assert.doesNotMatch(html, /<div class="ctl"[^>]*data-anchor/, 'the cluster round the clock is no longer the anchor');
-  assert.match(html, /data-act="help"[^>]*>\?<\/button>/); assert.doesNotMatch(html.match(/<button[^>]*data-act="help"[^>]*>/)[0], /data-anchor/);
+  assert.match(html, /data-act="help" aria-label="Help"><svg class="gl"[^>]*aria-hidden="true">/, 'Help is a drawn question mark with a name'); assert.doesNotMatch(html.match(/<button[^>]*data-act="help"[^>]*>/)[0], /data-anchor/);
 });
 
 test('A5: a lesson shows no level, XP or skill point of its own, and its pretend level-up is not news; a real run shows both', () => {

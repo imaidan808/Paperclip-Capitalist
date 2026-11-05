@@ -184,7 +184,7 @@ Every mission must be completable by the scripted sandbox alone (all leads, lots
 **Quest / achievement** (`js/meta/quests.js`, `export const QUESTS`, `export const ACHIEVEMENTS`, `export const DAILIES`):
 `QUESTS`: at least 32 story quests (two per district: an *arrival* quest and a *mastery* quest that exercises the district's signature rule), `{ id, title, desc, zone, goal: { event, match?, count, sum? }, reward: { xp, points? }, after?: questId }`;
 `ACHIEVEMENTS`: at least 40, `{ id, title, desc, rarity: 'common'|'rare'|'epic', goal: { event, match?, count, sum? }, hidden?: true }` covering skill play (haggle, inspect, repair, auction), streaks, risk survived, each Background combination theme, and every district;
-`DAILIES`: at least 10 templates `{ id, title, desc, goal: { event, match?, count }, reward: { xp } }` that make sense in any district. None of these (nor a Codex page, a lesson, a buyer, a manager kind, a client or a loan) has an `icon`: the title says what it is, and a person is a disc with an initial (docs/ART_DIRECTION.md 3.6).
+`DAILIES`: at least 10 templates `{ id, title, desc, goal: { event, match?, count }, reward: { xp } }` that make sense in any district. None of these (nor a Codex page, a lesson, a buyer, a manager kind, a client or a loan) has an `icon`: the title says what it is; the screens draw one picture for a family of them, looked up by id in `js/ui/glyphs.js` (a Codex category, a badge family, a bounty's subject, a probe, an angle, a manager, a client, a loan), and a person is a disc with an initial (docs/ART_DIRECTION.md 3.6).
 `sum` names a numeric payload field to accumulate instead of counting events.
 
 ## 13. Content tiers: ownership and tier-local rules

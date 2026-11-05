@@ -6,6 +6,7 @@ import { ZONES, ASSETS, BUYERS, PIPE, PIPE_RULES, UPGRADES, CLIENTS, MIL_ZONE, E
 import { fitOf, fitLabel } from '../../market.js';
 import { esc } from '../common.js';
 import { moneySize } from '../../audio/palette.js';
+import { gl, tile } from '../glyphs.js';
 
 // ---------------------------------------------------------------- small helpers
 const ST = (ctx) => {
@@ -115,7 +116,7 @@ function pipeCard(v, p, cache) {
   const relWord = !p.inflight ? '' : stt.key !== 'running' ? ': mid-cycle' : alloc > 0 ? ': needs capital at 0' : `: opens in ${left} h`; // what opens it, on the button: a funded manager's wait never ends by itself (the hover has the detail)
   const upLine = up.maxed ? '' : `<p class="cr-up small" title="${esc(upTip)}">${up.gain > 0 ? `Level ${p.level + 1} pays back in about ${Math.max(1, Math.round(up.payback))} days once funded to ${m(up.nextCap)}.` : `Level ${p.level + 1}: this lane cannot use more capital profitably yet.`}</p>`;
   return `<article class="cr-card${flash ? ' cr-focus' : ''}" data-pipe="${p.id}" data-st="${stt.key}" tabindex="-1" aria-label="${esc(K.name)}, level ${p.level}, ${esc(Z.name)}, ${esc(stt.label)}">
-    <header class="cr-top">
+    <header class="cr-top has-gl">${tile('mgr-' + p.kind)}
       <div class="cr-id"><h4 class="cr-name">${esc(K.name)} <span class="chip">Lv ${p.level} of ${PIPE_RULES.maxLevel}</span></h4>
         <p class="cr-lane">${goodsMark(p.cls)}${laneName(p.cls, p.buyer)}${p.channel === 'intl' ? ' <span class="chip warn">International</span>' : ''}</p></div>
       <span class="chip ${stt.tone}">${esc(stt.label)}</span></header>
@@ -210,7 +211,7 @@ function clientCard(v, id) {
   const { g, s, m } = v, C = CLIENTS[id], q = g.clientQuote(id), n = g.liveClients(id).length, block = clientBlock(v, id);
   const run = g.runningPipes(), met = run >= C.minRunning, top = Math.max(q.cac, q.ltv, 1);
   const verdict = q.ratio >= 3 ? { t: 'good', w: 'Strong' } : q.ratio >= 1.5 ? { t: 'warn', w: 'Thin' } : { t: 'bad', w: 'Risky' };
-  return `<article class="cr-client"><div class="row"><div class="grow"><b title="${esc(C.blurb)}">${esc(C.name)}</b></div><span class="chip">${n} of ${C.max}</span></div>
+  return `<article class="cr-client"><div class="row">${tile('client-' + id)}<div class="grow"><b title="${esc(C.blurb)}">${esc(C.name)}</b></div><span class="chip">${n} of ${C.max}</span></div>
     <div class="cr-vs" role="group" aria-label="What it costs to win this client against what they pay you">
       <div class="cr-vsrow"><span class="cr-vsl">You pay to win them (CAC)</span><span class="cr-vsb" aria-hidden="true"><i class="cost" style="width:${(q.cac / top * 100).toFixed(1)}%"></i></span><b class="mono">${m(q.cac)}</b></div>
       <div class="cr-vsrow"><span class="cr-vsl">They pay you ${q.payDays < C.days ? `over the ${plural(q.payDays, 'day')} you have left` : `over ${C.days} days`} (LTV)</span><span class="cr-vsb" aria-hidden="true"><i class="ltv" style="width:${(q.ltv / top * 100).toFixed(1)}%"></i></span><b class="mono">${m(q.ltv)}</b></div></div>
@@ -221,7 +222,7 @@ function clientCard(v, id) {
 
 function clientsTab(v) {
   const { s, m, g } = v;
-  const live = g.liveClients().map((c) => { const C = CLIENTS[c.tier]; return `<article class="cr-active"><div class="row"><b class="grow">${esc(C.name)}</b><span class="mono green">${sgn(v, c.earned)} earned</span></div><div class="bar green" aria-hidden="true"><i data-bar="client:${c.id}"></i></div>
+  const live = g.liveClients().map((c) => { const C = CLIENTS[c.tier]; return `<article class="cr-active"><div class="row">${gl('client-' + c.tier, 'gl-sm')}<b class="grow">${esc(C.name)}</b><span class="mono green">${sgn(v, c.earned)} earned</span></div><div class="bar green" aria-hidden="true"><i data-bar="client:${c.id}"></i></div>
       <p class="small mute">${c.breaches ? `<span class="red">${c.breaches} of 2 SLA breaches.</span> ` : 'No SLA breaches. '}Ends in ${dur(c.until - s.hour)}.</p></article>`; }).join('');
   return `<p class="small mute">Clients pay every day while enough managers are running. A missed day costs twice the account's daily rate, and a second ends the contract.</p>
     <div class="cr-grid">${Object.keys(CLIENTS).map((id) => clientCard(v, id)).join('')}</div>
@@ -271,9 +272,9 @@ function hireBody(ctx) {
   const t = tmpPipe(v, H), cap = g.pipeCap(t), alloc = Math.min(+H.alloc || 0, cap), cost = edit ? 0 : g.pipeCost(H.kind, H.zone), left = s.cash - cost;
   const take = H.more ? 60 : g.P.radar || s.upg.research ? 8 : 5;
   const { rows, total } = lanesFor(v, H.zone, take, [{ cls: H.cls, seg: H.buyer }], H.edit || null);
-  const kinds = edit ? `<p class="small"><b>${esc(PIPE[edit.kind].name)}</b> <span class="chip">Lv ${edit.level} of ${PIPE_RULES.maxLevel}</span></p>`
+  const kinds = edit ? `<p class="small">${gl('mgr-' + edit.kind, 'gl-sm')} <b>${esc(PIPE[edit.kind].name)}</b> <span class="chip">Lv ${edit.level} of ${PIPE_RULES.maxLevel}</span></p>`
     : `<h3 class="cr-h3">1. Choose a manager</h3><div class="cr-kinds" role="group" aria-label="Manager type">${Object.entries(PIPE).map(([id, K]) => `<button class="cr-kind" aria-pressed="${H.kind === id}" data-act="crew-hkind" data-k="${id}" data-fid="hk-${id}" data-anchor="hire-${id}">
-        <b>${esc(K.name)}</b><span class="small">${esc(K.blurb)}</span>
+        ${tile('mgr-' + id)}<b>${esc(K.name)}</b><span class="small">${esc(K.blurb)}</span>
         <span class="small mono">${m(g.pipeCost(id, H.zone))} to hire</span><span class="small mute">Up to ${m(startCap(g, id, H.zone))} per cycle. ${K.cycle < 1 ? 'Fast' : K.cycle > 1 ? 'Slow' : 'Steady'} cycles. Royalty ${Math.round(K.royalty * 100)}%.</span></button>`).join('')}</div>`;
   const shown = locked ? rows.filter((r) => r.cls === H.cls && r.seg === H.buyer) : rows, intl = 1.3 + (g.P.intlBonus || 0);
   const why = !edit && s.cash < cost ? `You need ${m(cost - s.cash)} more to hire this manager.` : !H.cls ? 'Pick a lane first.' : '';
@@ -361,7 +362,7 @@ function keepScroll(ctx) {
 }
 
 export default {
-  id: 'crew', icon: '👥', label: 'Crew',
+  id: 'crew', label: 'Crew',
   visible: (ctx) => !!ctx.g().s.mil.m1,
   badge: (ctx) => { const n = ctx.g().s.pipes.filter((p) => p.starved || (!p.cls && p.status === 'idle')).length; return n || null; },
   html(ctx) {

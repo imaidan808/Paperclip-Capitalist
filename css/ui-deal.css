@@ -79,18 +79,19 @@ dialog.deal:focus-visible { outline-offset: -4px; } /* the sheet fills a phone's
 
 /* ---- Read: a case file. Probes are tools with a price, evidence is a log, the belief is two gauges. */
 .probes { display: grid; grid-template-columns: repeat(auto-fit, minmax(8.2rem, 1fr)); gap: .5rem; }
-.probe { position: relative; display: grid; grid-template-columns: minmax(0, 1fr); grid-template-areas: "pco" "pnm"; gap: .25rem .4rem; align-items: center; text-align: left; font: inherit; color: var(--ink); background: var(--panel); border: var(--bw) solid var(--field); padding: .5rem .55rem .55rem; cursor: pointer; border-radius: 2px; min-height: 4.6rem; transition: transform .12s ease-out, border-color .12s, box-shadow .12s; }
+.probe { position: relative; display: grid; grid-template-columns: auto minmax(0, 1fr); grid-template-areas: "pic pco" "pnm pnm"; gap: .25rem .4rem; align-items: center; text-align: left; font: inherit; color: var(--ink); background: var(--panel); border: var(--bw) solid var(--field); padding: .5rem .55rem .55rem; cursor: pointer; border-radius: 2px; min-height: 4.6rem; transition: transform .12s ease-out, border-color .12s, box-shadow .12s; }
 .probe:hover:not(:disabled) { border-color: var(--gold); transform: translateY(-2px); box-shadow: 0 4px 0 rgba(0, 0, 0, .35); }
 .probe:active:not(:disabled) { transform: translateY(0); box-shadow: none; }
 .probe:disabled { cursor: not-allowed; opacity: .55; }
 .probe.used { opacity: 1; border-color: var(--green); background: var(--good-bg); cursor: default; }
-.probe.used::after { content: "\2713"; position: absolute; top: -.5rem; right: -.4rem; display: grid; place-items: center; width: 1.2rem; height: 1.2rem; border-radius: 50%; background: var(--green); color: var(--on-gold); font-size: .75rem; font-weight: 900; }
+.probe .pic { grid-area: pic; display: grid; place-items: center; width: 2rem; height: 2rem; background: var(--panel2); border-radius: 50%; } .probe .pic .gl { width: 1.3rem; height: 1.3rem; } /* the probe's drawing (js/art/g-deal.js), 21 px, on the dark disc */
+.probe.used .pok { position: absolute; top: -.5rem; right: -.4rem; display: grid; place-items: center; width: 1.2rem; height: 1.2rem; border-radius: 50%; background: var(--green); color: var(--on-gold); } .pok .gl { width: .8rem; height: .8rem; }
 .probe.rec, .angle.rec, .move.rec { box-shadow: 0 0 0 2px var(--violet); }
 .probe .pnm { grid-area: pnm; font-weight: 700; font-size: .86rem; line-height: 1.25; overflow-wrap: anywhere; } .probe .pco { grid-area: pco; justify-self: end; font-family: ui-monospace, Menlo, monospace; font-size: .74rem; color: var(--gold); white-space: nowrap; }
 .evidence { list-style: none; margin: 0; padding: 0; display: grid; gap: .3rem; font-size: .86rem; counter-reset: ev; }
 .evidence li { counter-increment: ev; display: grid; grid-template-columns: 1.7rem minmax(0, 1fr); gap: .5rem; align-items: start; padding: .35rem .6rem; background: var(--panel); border: 1px solid var(--line); border-left: 3px solid var(--cyan); }
 .evidence li::before { content: counter(ev, decimal-leading-zero); font: 700 .74rem ui-monospace, Menlo, monospace; color: var(--cyan); padding-top: .12rem; }
-.evidence li > span { min-width: 0; overflow-wrap: anywhere; }
+.evidence li > span { min-width: 0; overflow-wrap: anywhere; } .evidence .evi { margin-right: .3rem; } .evidence .evi .gl { width: .9rem; height: .9rem; vertical-align: -.15em; } /* the probe that found it, 14 px, before its name */
 .belief { display: grid; grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr)); gap: .8rem; padding: .6rem .7rem; background: var(--panel); border: 1px solid var(--line); font-size: .86rem; }
 .belief .bl { display: block; font-size: .72rem; text-transform: uppercase; letter-spacing: .06em; color: var(--mute); }
 .belief b { font-size: 1.05rem; }
@@ -105,13 +106,14 @@ dialog.deal:focus-visible { outline-offset: -4px; } /* the sheet fills a phone's
 .angle:hover:not(:disabled) { border-color: var(--gold); transform: translateY(-4px) rotate(0deg); box-shadow: 0 6px 0 rgba(0, 0, 0, .35); }
 .angle:disabled { cursor: default; opacity: .78; }
 .angle.on { border-color: var(--gold); background: var(--warn-bg); box-shadow: inset 0 0 0 1px var(--gold), 0 6px 0 rgba(0, 0, 0, .4); transform: translateY(-6px) rotate(0deg); }
+.angle .aic { display: grid; place-items: center; width: 2.4rem; height: 2.4rem; border-radius: 50%; background: var(--panel2); border: 1px solid var(--line); } .angle .aic .gl { width: 1.5rem; height: 1.5rem; } /* the angle's drawing, 24 px; the disc stays dark when the card is played (gold would swallow the yellows of the drawings) */
+.angle.on .aic { border-color: var(--gold); }
 .angle .anm { font-weight: 700; font-size: .98rem; }
 .angle .apick { position: absolute; top: -.6rem; right: -.45rem; display: grid; place-items: center; width: 1.5rem; height: 1.5rem; border-radius: 50%; background: var(--gold); color: var(--on-gold); border: 2px solid var(--bg); font: 800 .8rem ui-monospace, Menlo, monospace; }
 .angle .abar { display: block; width: 100%; height: .5rem; margin-top: .25rem; background: var(--bg); border: 1px solid var(--line); }
 .angle .abar i { display: block; height: 100%; background: var(--green); background-image: repeating-linear-gradient(90deg, transparent 0 calc(20% - 2px), var(--bg) calc(20% - 2px) 20%); }
 @media (forced-colors: active) { .angle .abar i { forced-color-adjust: none; background-color: Highlight; background-image: none; } } /* the bar is the only sign of how well the goods back an angle: forced colors paint a fill in the Canvas color, so it stays a system color */
-.angle .ahint { margin-top: .15rem; padding: .02rem .45rem; font-size: .68rem; line-height: 1.35; color: var(--cyan); border: 1px solid var(--cyan); border-radius: 99px; }
-.angle .ahint::before { content: "\2605\00a0"; }
+.angle .ahint { margin-top: .15rem; padding: .02rem .45rem; font-size: .68rem; line-height: 1.35; color: var(--cyan); border: 1px solid var(--cyan); border-radius: 99px; } .angle .ahint .gl { width: .72rem; height: .72rem; margin-right: .25rem; vertical-align: -.1em; } /* the star (mark-star) before the buyer's lean: 11 px, in the chip's cyan */
 .hints { margin: 0; padding-left: 1.1rem; font-size: .84rem; } .hints li::marker { color: var(--cyan); }
 
 /* ---- Close (haggle) and Bid (auction): a price rail with your flag and theirs, then offers as cards */
@@ -127,12 +129,22 @@ dialog.deal:focus-visible { outline-offset: -4px; } /* the sheet fills a phone's
 .neg-scale { display: flex; justify-content: space-between; margin: 0 .4rem; font-size: .7rem; color: var(--mute); font-family: ui-monospace, Menlo, monospace; }
 .moves { display: grid; grid-template-columns: repeat(auto-fit, minmax(9.4rem, 1fr)); gap: .5rem; }
 .move { position: relative; display: grid; gap: .1rem; text-align: left; font: inherit; color: var(--ink); background: var(--panel); border: var(--bw) solid var(--field); padding: .5rem .65rem; cursor: pointer; border-radius: 2px; min-height: 3.3rem; transition: transform .12s ease-out, border-color .12s, box-shadow .12s; }
+.move span .gl { width: .8rem; height: .8rem; vertical-align: -.1em; } /* the up, level and down of an opening number */
 .move span { font-size: .78rem; color: var(--mute); } .move b { font-family: ui-monospace, Menlo, monospace; font-size: 1.1rem; } .move .mv-d { font-size: .72rem; color: var(--mute); }
 .move:hover:not(:disabled) { border-color: var(--gold); transform: translateY(-2px); box-shadow: 0 4px 0 rgba(0, 0, 0, .35); }
 .move:active:not(:disabled) { transform: translateY(0); box-shadow: none; }
 .move:disabled { opacity: .45; cursor: not-allowed; }
 .move.good { border-color: var(--green); background: var(--good-bg); } .move.bad { border-color: var(--red); }
-.move.good span::before { content: "\2713\00a0"; color: var(--green); } .move.bad span::before { content: "\2715\00a0"; color: var(--red); }
+/* The marks of this sheet are glyphs (js/art/g-ui.js): a box masked with the shape (--gl-*, css/styles.css) and painted in the text colour. A mask paints the element's background, which forced-colors mode turns to the
+   canvas colour, so there the box is painted in the system's text colour instead (tests/glyph-style.test.mjs holds the pair). Each rule below picks the mark in --gl and its colour in color. */
+.move.good span::before, .move.bad span::before, .fs.good > span::before, .fs.ok > span::before, .fs.miss > span::before, .fs.careful > span::before,
+.deal-result.good .rtitle::before, .deal-result.bad .rtitle::before, .deal-result.warn .rtitle::before, .deal-result.info .rtitle::before, .rver.win::before, .rver.lose::before, .rver.even::before,
+.vs.best dd::before, .deal-tog[aria-pressed="true"] .tb::before { content: ""; display: inline-block; width: 1em; height: 1em; margin-right: .3em; vertical-align: -.14em; background-color: currentColor; -webkit-mask: var(--gl) center / contain no-repeat; mask: var(--gl) center / contain no-repeat; }
+@media (forced-colors: active) {
+.move.good span::before, .move.bad span::before, .fs.good > span::before, .fs.ok > span::before, .fs.miss > span::before, .fs.careful > span::before,
+.deal-result.good .rtitle::before, .deal-result.bad .rtitle::before, .deal-result.warn .rtitle::before, .deal-result.info .rtitle::before, .rver.win::before, .rver.lose::before, .rver.even::before,
+.vs.best dd::before, .deal-tog[aria-pressed="true"] .tb::before { forced-color-adjust: none; background-color: CanvasText; } }
+.move.good span::before { --gl: var(--gl-tick); color: var(--green); } .move.bad span::before { --gl: var(--gl-cross); color: var(--red); }
 .anchors .move { padding-top: .6rem; } .anchors .move b { font-size: 1.25rem; }
 .rivals, .evlog { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: .4rem; font-size: .8rem; }
 .rivals li { display: inline-flex; align-items: center; gap: .35rem; padding: .15rem .65rem .15rem .35rem; border: 1px solid var(--line); border-radius: 99px; background: var(--panel); }
@@ -157,7 +169,7 @@ dialog.deal:focus-visible { outline-offset: -4px; } /* the sheet fills a phone's
 .fsteps { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .5rem; }
 .fs { display: grid; gap: .1rem; padding: .4rem .55rem; border: 1px solid var(--line); background: var(--panel); font-size: .8rem; } .fs span { color: var(--mute); font-size: .74rem; }
 .fs.now { border-color: var(--gold); box-shadow: inset 0 -3px 0 var(--gold); } .fs.good { border-color: var(--green); } .fs.ok { border-color: var(--cyan); } .fs.miss { border-color: var(--red); } .fs.careful { border-color: var(--violet); }
-.fs.good > span::before { content: "\2713\00a0"; color: var(--green); } .fs.ok > span::before { content: "\007e\00a0"; color: var(--cyan); } .fs.miss > span::before { content: "\2715\00a0"; color: var(--red); } .fs.careful > span::before { content: "\25c7\00a0"; color: var(--violet); }
+.fs.good > span::before { --gl: var(--gl-tick); color: var(--green); } .fs.ok > span::before { --gl: var(--gl-partial); color: var(--cyan); } .fs.miss > span::before { --gl: var(--gl-cross); color: var(--red); } .fs.careful > span::before { --gl: var(--gl-careful); color: var(--violet); }
 .dial { display: grid; gap: .5rem; padding-top: 1.3rem; }
 .dial-track { position: relative; height: 2.6rem; background: var(--bg); border: 2px solid var(--field); background-image: repeating-linear-gradient(90deg, transparent 0 calc(10% - 1px), var(--line) calc(10% - 1px) 10%); box-shadow: inset 0 3px 0 rgba(0, 0, 0, .4); }
 .dial-track .zone { position: absolute; top: 0; bottom: 0; background: color-mix(in srgb, var(--green) 40%, transparent); border-left: 2px solid var(--green); border-right: 2px solid var(--green); }
@@ -179,8 +191,8 @@ dialog.deal:focus-visible { outline-offset: -4px; } /* the sheet fills a phone's
 
 /* ---- the result: a banner for the verdict, then you against Quick and the expert, bars that grow in, then why and the lesson */
 .deal-result .rtitle { font-size: 1.45rem; letter-spacing: .03em; text-transform: none; border: 0; padding: 0; animation: pop .45s cubic-bezier(.2, 1.4, .4, 1) both; }
-.deal-result .rtitle::before { margin-right: .5rem; font-size: 1.2rem; vertical-align: .08em; }
-.deal-result.good .rtitle::before { content: "\2713"; } .deal-result.bad .rtitle::before { content: "\2715"; } .deal-result.warn .rtitle::before { content: "\25c6"; } .deal-result.info .rtitle::before { content: "\2139"; }
+.deal-result.good .rtitle::before, .deal-result.bad .rtitle::before, .deal-result.warn .rtitle::before, .deal-result.info .rtitle::before { margin-right: .5rem; font-size: 1.2rem; vertical-align: -.1em; } /* (the title's mark is 1.2 rem, as its character was) */
+.deal-result.good .rtitle::before { --gl: var(--gl-tick); } .deal-result.bad .rtitle::before { --gl: var(--gl-cross); } .deal-result.warn .rtitle::before { --gl: var(--gl-warn); } .deal-result.info .rtitle::before { --gl: var(--gl-info); }
 .deal-result.good { border-top-color: var(--green); background: linear-gradient(180deg, color-mix(in srgb, var(--green) 11%, var(--panel2)), var(--panel2) 9rem); } .deal-result.good .rtitle { color: var(--green); }
 .deal-result.bad { border-top-color: var(--red); background: linear-gradient(180deg, color-mix(in srgb, var(--red) 11%, var(--panel2)), var(--panel2) 9rem); } .deal-result.bad .rtitle { color: var(--red); }
 .deal-result.warn { border-top-color: var(--gold); } .deal-result.info { border-top-color: var(--cyan); } .deal-result.info .rtitle { color: var(--cyan); }
@@ -190,7 +202,8 @@ dialog.deal:focus-visible { outline-offset: -4px; } /* the sheet fills a phone's
 .vsbox, .why, .reveal { padding: .6rem .75rem; background: var(--panel); border: 1px solid var(--line); } .vsbox dl { margin: 0; display: grid; gap: .4rem; }
 .rver { margin: 0 0 .5rem; display: inline-flex; align-items: center; gap: .4rem; padding: .15rem .7rem; border: 2px solid var(--line); border-radius: 99px; font: 700 .82rem ui-monospace, Menlo, monospace; text-transform: uppercase; letter-spacing: .05em; animation: stamp .4s .85s cubic-bezier(.2, 1.5, .4, 1) both; }
 .rver.win { border-color: var(--green); color: var(--green); } .rver.lose { border-color: var(--gold); color: var(--gold); }
-.rver.win::before { content: "\25b2"; } .rver.lose::before { content: "\25bc"; } .rver.even::before { content: "\25a0"; }
+.rver.win::before, .rver.lose::before, .rver.even::before { margin-right: 0; } /* (the stamp is a flex row with its own gap) */
+.rver.win::before { --gl: var(--gl-up); } .rver.lose::before { --gl: var(--gl-down); } .rver.even::before { --gl: var(--gl-level); }
 @keyframes stamp { from { opacity: 0; transform: scale(1.6) rotate(-6deg); } to { opacity: 1; transform: none; } }
 .vs { display: grid; grid-template-columns: 4.6rem 10rem minmax(0, 1fr); align-items: center; gap: .6rem; }
 .vs dt { color: var(--mute); font-size: .84rem; } .vs dd { margin: 0; min-width: 0; font-family: ui-monospace, Menlo, monospace; font-weight: 700; font-size: 1.05rem; overflow-wrap: anywhere; }
@@ -198,8 +211,10 @@ dialog.deal:focus-visible { outline-offset: -4px; } /* the sheet fills a phone's
 @keyframes grow { from { transform: scaleX(0); } to { transform: scaleX(1); } }
 .vs.quick .vbar i { animation-delay: .25s; } .vs.expert .vbar i { animation-delay: .4s; } .vs.you .vbar i { animation-delay: .55s; }
 .vs.you .vbar i { background: var(--gold); } .vs.expert .vbar i { background: var(--cyan); }
-/* a hex escape takes up to six digits and one space after it: "\00a0be" would be U+A0BE, so the space after the last escape is the terminator and is not printed */
-.vs.best dd::after { content: "\00a0\2713\00a0 best"; font-size: .72rem; color: var(--green); font-weight: 700; }
+/* the best row: a tick (mask) before the figure, and the word after it as text, which a screen reader reads; every figure has the tick's room, so the column of figures stays aligned */
+.vs dd::before { content: ""; display: inline-block; width: 1em; height: 1em; margin-right: .3em; vertical-align: -.14em; }
+.vs.best dd::before { --gl: var(--gl-tick); color: var(--green); }
+.vs.best dd::after { content: " best"; font-size: .72rem; color: var(--green); font-weight: 700; }
 .vs { padding: .2rem .35rem; border-left: 3px solid transparent; } .vs.you { background: color-mix(in srgb, var(--gold) 12%, transparent); border-left-color: var(--gold); }
 .why ul { margin: 0; padding-left: 1.1rem; font-size: .86rem; display: grid; gap: .25rem; } .reveal p { margin: 0; font-size: .88rem; }
 .xp { margin: 0; color: var(--gold); font-size: 1.05rem; animation: rise .4s .7s ease-out both; }
@@ -224,7 +239,7 @@ dialog.deal:focus-visible { outline-offset: -4px; } /* the sheet fills a phone's
   .deal-cast { padding: .8rem .6rem .7rem; } .cast-floor { width: 7rem; height: 7rem; margin-bottom: .5rem; } .cast-ava { width: 4.8rem; height: 4.8rem; font-size: 2.3rem; }
   .angles { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: .4rem; padding: .3rem .1rem .1rem; }
   .angle { padding: .5rem .45rem .45rem; gap: .15rem; }
-  .angle .anm { font-size: .88rem; }
+  .angle .aic { width: 2rem; height: 2rem; } .angle .aic .gl { width: 1.2rem; height: 1.2rem; } .angle .anm { font-size: .88rem; }
   .angle .ahint { font-size: .64rem; border-radius: 6px; }
 }
 @media (min-width: 761px) and (max-width: 900px) { .angles { grid-template-columns: repeat(3, minmax(0, 1fr)); } } /* too narrow for five: a hand of three and two */
@@ -269,7 +284,7 @@ dialog.deal:focus-visible { outline-offset: -4px; } /* the sheet fills a phone's
   .auc-moves { gap: .5rem; } .paddle { width: 7rem; min-height: 8.6rem; } .paddle::before { width: 6.2rem; height: 6.2rem; margin-left: -3.1rem; } .paddle::after { top: 5.6rem; }
   .paddle span { margin-top: 1.2rem; }
 }
-@media (max-width: 520px) { .vs { grid-template-columns: 3.7rem 6.4rem minmax(0, 1fr); gap: .4rem; } .vs.best dd::after { content: "\00a0\2713"; } .fs { padding: .3rem .4rem; font-size: .74rem; } .fs span { font-size: .68rem; } .deal-top h2 { flex-basis: 100%; } }
+@media (max-width: 520px) { .vs { grid-template-columns: 3.7rem 6.4rem minmax(0, 1fr); gap: .4rem; } .vs:not(.best) dd::before { display: none; } .vs.best dd::after { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; } /* a phone has the tick alone; the word is kept for a screen reader */ .fs { padding: .3rem .4rem; font-size: .74rem; } .fs span { font-size: .68rem; } .deal-top h2 { flex-basis: 100%; } }
 
 /* ---- reduced motion: the global rules cut every duration, and these take the delayed reveals off by name so nothing waits hidden */
 @media (prefers-reduced-motion: reduce) {
@@ -284,4 +299,4 @@ dialog.deal:focus-visible { outline-offset: -4px; } /* the sheet fills a phone's
 .deal-tog .tb { margin-left: .2em; font-weight: 800; text-transform: uppercase; font-size: .78em; letter-spacing: .04em; opacity: .8; }
 .deal-tog[aria-pressed="true"] { border-color: var(--gold); box-shadow: inset 0 0 0 1px var(--gold); }
 .deal-tog[aria-pressed="true"] .tb { opacity: 1; color: var(--gold); }
-.deal-tog[aria-pressed="true"] .tb::before { content: "\2713\00a0"; }
+.deal-tog[aria-pressed="true"] .tb::before { --gl: var(--gl-tick); }

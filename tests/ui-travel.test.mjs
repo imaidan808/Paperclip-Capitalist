@@ -286,7 +286,7 @@ test('tabs: the choice sticks while the crates stay the same and the drawer fall
 });
 
 test('the dock icon: Travel shows from the second district, with no badge', () => {
-  assert.equal(travel.id, 'travel'); assert.equal(travel.icon, '🧭'); assert.equal(travel.label, 'Travel');
+  assert.equal(travel.id, 'travel'); assert.ok(!('icon' in travel), 'its picture is the glyph dock-travel'); assert.equal(travel.label, 'Travel');
   assert.equal(travel.visible(fakeCtx({ days: 0 })), false);
   assert.equal(travel.visible(fakeCtx({ days: 10 })), true);
   assert.equal(travel.badge(fakeCtx({ days: 10 })), null);

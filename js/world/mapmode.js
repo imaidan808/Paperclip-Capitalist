@@ -4,6 +4,9 @@ import { sx, sy, clamp, roundRect } from './iso.js';
 import { LAYOUT, DIST, PLOTS, EDGES, GW, GH, BW, REGIONS, zAt } from './layout.js';
 import { mono, sans } from './gfx.js';
 import { money, compact, PIP_ZOOM } from './common.js';
+import { LOCK } from './labels.js';
+import { paint } from '../art/paint.js';
+import '../art/g-ui.js'; // the lock before a district that is not open: js/art/g-ui.js
 
 const NAME_STEPS = [0, 24, -24, 48, -48, 72], NAME_SHIFT = [0, -120, 120, -240, 240]; // where a region's name may move on the map to clear a card
 export const mapMethods = {
@@ -40,10 +43,10 @@ export const mapMethods = {
       const D = DIST[id], open = this.unlocked.has(id), cur = id === this.api.ui.zone, hov = this.hover?.id === id && this.hover.kind === 'zone';
       const [cx, cy] = this.w2s(sx(D.cx, D.cy), sy(D.cx, D.cy, D.z) - 6);
       const stock = cnt[id] || 0, leads = (s.leads[id] || []).length;
-      const l1 = `${open ? '' : '\u{1F512} '}${id}  ${compact ? D.short : D.name}`, l2 = open ? `${leads} buyers  ${stock} crates` : `opens at ${money(D.gate)}`;
+      const l1 = `${id}  ${compact ? D.short : D.name}`, l2 = open ? `${leads} buyers  ${stock} crates` : `opens at ${money(D.gate)}`;
       const sp = this.labels.card(D, l1, l2, compact, open, cur, hov);
       let w, h;
-      if (sp) { w = sp.cw; h = sp.ch; } else { ctx.font = '800 12px ui-monospace, Menlo, monospace'; const w1 = ctx.measureText(l1).width; ctx.font = '600 10px ui-monospace, Menlo, monospace'; const w2 = ctx.measureText(l2).width; w = Math.max(w1, compact ? 0 : w2) + 34; h = compact ? 24 : 38; }
+      if (sp) { w = sp.cw; h = sp.ch; } else { ctx.font = '800 12px ui-monospace, Menlo, monospace'; const w1 = ctx.measureText(l1).width + (open ? 0 : LOCK); ctx.font = '600 10px ui-monospace, Menlo, monospace'; const w2 = ctx.measureText(l2).width; w = Math.max(w1, compact ? 0 : w2) + 34; h = compact ? 24 : 38; }
       const x = clamp(cx - w / 2, this.inset.l + 4, this.W - this.inset.r - w - 4), y = clamp(cy - h / 2, 4, this.H - h - 4);
       cards.push({ D, sp, l1, l2, open, cur, hov, x, y, w, h, cx, cy });
     }
@@ -79,7 +82,8 @@ export const mapMethods = {
       roundRect(ctx, x, y, w, h, 7); ctx.fillStyle = 'rgba(16,20,28,.94)'; ctx.fill(); ctx.strokeStyle = cur || hov ? '#ffd36e' : open ? D.pal[1] : '#5b6b85'; ctx.lineWidth = cur || hov ? 3 : 1.6; ctx.stroke();
       ctx.fillStyle = D.pal[1]; ctx.fillRect(x + 1, y + 6, 4, h - 12);
       ctx.font = '16px system-ui, sans-serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.fillStyle = '#fff'; ctx.fillText(D.icon, x + 10, y + h / 2 + 1);
-      ctx.font = '800 12px ui-monospace, Menlo, monospace'; ctx.fillStyle = open ? '#ffd36e' : '#a3b3c9'; ctx.fillText(l1, x + 30, y + (compact ? h / 2 + 1 : 13));
+      const ly = y + (compact ? h / 2 + 1 : 13); if (!open) paint(ctx, 'mark-lock', x + 30, ly - 6, 12, '#a3b3c9');
+      ctx.font = '800 12px ui-monospace, Menlo, monospace'; ctx.fillStyle = open ? '#ffd36e' : '#a3b3c9'; ctx.fillText(l1, x + 30 + (open ? 0 : LOCK), ly);
       if (!compact) { ctx.font = '600 10px ui-monospace, Menlo, monospace'; ctx.fillStyle = open ? '#e8eef6' : '#a3b3c9'; ctx.fillText(l2, x + 30, y + 27); }
       ctx.textBaseline = 'alphabetic'; ctx.globalAlpha = 1;
     }

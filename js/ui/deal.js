@@ -7,6 +7,7 @@
 //     plays the sounds. openDeal(ctx, spec) is the one function the shell calls.
 import { esc, keepInView } from './common.js';
 import { avatarHTML } from '../avatar.js';
+import { gl } from './glyphs.js';
 import { kv } from '../session.js';
 import { fmtMoney as money, fmtPct } from '../market.js';
 import { startRun, modelOf, tForPos, STAGE_LABEL } from '../deal.js';
@@ -50,7 +51,7 @@ export const titleOf = (m) => {
 };
 export function stepperHTML(m) {
   const word = { done: 'done', now: 'now', todo: 'to come', skipped: 'skipped' };
-  return `<ol class="deal-steps" aria-label="Deal stages">${m.steps.map((s, i) => `<li class="ds ${s.status}"${s.status === 'now' ? ' aria-current="step"' : ''}><span class="n" aria-hidden="true">${s.status === 'done' ? '✓' : i + 1}</span><span class="t">${esc(s.label)}</span><span class="sr"> (${word[s.status]})</span></li>`).join('')}</ol>`;
+  return `<ol class="deal-steps" aria-label="Deal stages">${m.steps.map((s, i) => `<li class="ds ${s.status}"${s.status === 'now' ? ' aria-current="step"' : ''}><span class="n" aria-hidden="true">${s.status === 'done' ? gl('mark-tick', 'gl-pip') : i + 1}</span><span class="t">${esc(s.label)}</span><span class="sr"> (${word[s.status]})</span></li>`).join('')}</ol>`;
 }
 export function castHTML(m) {
   const c = m.cast, bubble = m.say || c.hello, role = { buyer: 'Buyer', seller: 'Seller', bench: 'Workbench' }[c.role] || '';
@@ -95,14 +96,14 @@ export function readHTML(m) {
   if (!v) return panel(m, 'read', 'Read the lot', `${lot}${m.stageDone ? quickNote(m) : ''}`);
   const probes = v.probes.map((x) => {
     const [nm, why] = PROBE[x.id];
-    return `<button class="probe${x.used ? ' used' : ''}${m.advice && m.advice.probe === x.id ? ' rec' : ''}" data-deal="probe" data-snd data-id="${x.id}" data-fid="pr-${x.id}" title="${esc(why)}" ${x.affordable && !m.stageDone ? '' : 'disabled'}><span class="pnm">${esc(nm)}</span><span class="pco">${x.used ? 'done' : `${x.cost} pt${x.cost > 1 ? 's' : ''}`}</span></button>`;
+    return `<button class="probe${x.used ? ' used' : ''}${m.advice && m.advice.probe === x.id ? ' rec' : ''}" data-deal="probe" data-snd data-id="${x.id}" data-fid="pr-${x.id}" title="${esc(why)}" ${x.affordable && !m.stageDone ? '' : 'disabled'}><span class="pic" aria-hidden="true">${gl('probe-' + x.id)}</span><span class="pnm">${esc(nm)}</span><span class="pco">${x.used ? 'done' : `${x.cost} pt${x.cost > 1 ? 's' : ''}`}</span>${x.used ? `<span class="pok" aria-hidden="true">${gl('mark-tick')}</span>` : ''}</button>`;
   }).join('');
   const pips = Array.from({ length: v.budget }, (_, i) => `<i class="${i < v.spent ? 'spent' : ''}"></i>`).join('');
   const expertNote = !m.stageDone && v.probes.some((x) => x.id === 'expert' && x.affordable) ? '<p class="small mute">The expert needs no skill of yours.</p>' : '';
   // The hover is the mouse's way to the blurbs; this fold is the keyboard's, the finger's and a screen reader's way to the same words (only the summary is on the page until it is asked for)
   const key = m.stageDone ? '' : foldHTML(m, 'probes', 'What the probes and the bar mean', `<ul class="hints">${v.probes.map((x) => `<li><b>${esc(PROBE[x.id][0])}.</b> ${esc(PROBE[x.id][1])}</li>`).join('')}</ul><p class="small mute">The bar spans the likely range. The true condition is inside it about two times in three.</p>`);
   const q = v.belief.quality, sd = v.doubt;
-  const ev = v.evidence.map((e) => `<li><span><b>${esc(PROBE[e.id][0])}.</b> ${esc(e.text)}</span></li>`).join('');
+  const ev = v.evidence.map((e) => `<li><span><span class="evi" aria-hidden="true">${gl('probe-' + e.id)}</span><b>${esc(PROBE[e.id][0])}.</b> ${esc(e.text)}</span></li>`).join('');
   const belief = `<div class="belief" aria-label="Your current read">
       <div title="The bar spans the likely range. The true condition is inside it about two times in three."><span class="bl">Condition relative to the description</span><b>about ${pc(q)}</b> <span class="mute small">(${pc(q - sd)} to ${pc(q + sd)})</span>
         <div class="meter" aria-hidden="true"><i class="rng" style="left:${at(q - sd, 0.6, 1.2)};width:${at(q + sd, 0.6, 1.2) === at(q - sd, 0.6, 1.2) ? '2%' : `calc(${at(q + sd, 0.6, 1.2)} - ${at(q - sd, 0.6, 1.2)})`}"></i><i class="mk" style="left:${at(q, 0.6, 1.2)}"></i></div></div>
@@ -130,8 +131,8 @@ export function pitchHTML(m) {
   const btns = v.angles.map((a) => {
     const [nm, why] = ANGLE[a], on = sel.includes(a), rec = m.assist && m.advice && m.advice.angles.includes(a), backed = feat[a] >= 0.6 ? 'strongly' : feat[a] >= 0.3 ? 'somewhat' : 'barely';
     return `<button class="angle${on ? ' on' : ''}${rec ? ' rec' : ''}" data-deal="angle" data-snd data-angle="${a}" aria-pressed="${on}" data-fid="an-${a}" title="${esc(why)}" ${lock ? 'disabled' : ''}>
-      ${on ? `<span class="apick" aria-hidden="true">${sel.indexOf(a) + 1}</span>` : ''}<span class="anm">${nm}</span>
-      <span class="abar" role="img" aria-label="Your goods back this up: ${backed}"><i style="width:${pc(feat[a])}"></i></span>${hinted.has(a) ? `<span class="ahint">Buyer ${hinted.size > 1 ? 'may lean' : 'leans'} this way</span>` : ''}</button>`;
+      ${on ? `<span class="apick" aria-hidden="true">${sel.indexOf(a) + 1}</span>` : ''}<span class="aic" aria-hidden="true">${gl('angle-' + a)}</span><span class="anm">${nm}</span>
+      <span class="abar" role="img" aria-label="Your goods back this up: ${backed}"><i style="width:${pc(feat[a])}"></i></span>${hinted.has(a) ? `<span class="ahint">${gl('mark-star')}Buyer ${hinted.size > 1 ? 'may lean' : 'leans'} this way</span>` : ''}</button>`;
   }).join('');
   const said = v.hints.filter((h) => !(h.angles && h.kind !== 'temper')); // the hint that names the angles the buyer leans toward is what the stars say (view() builds `likely` from it): said on the cards, not again in the list
   const hints = said.length ? `<ul class="hints">${said.map((h) => `<li>${esc(h.text)}</li>`).join('')}</ul>` : '';
@@ -160,8 +161,8 @@ export function closeHTML(m) {
   let moves;
   if (m.stageDone) moves = '';
   else if (v.round === 0) {
-    const L = buy ? { high: ['Generous', 'offer'], fair: ['Fair', 'offer'], low: ['Lowball', 'offer'] } : { high: ['Aim high', 'ask'], fair: ['Fair', 'ask'], low: ['Quick sale', 'ask'] }, G = { high: '\u25b2', fair: '\u25c6', low: '\u25bc' };
-    moves = `<p class="small">Your opening ${buy ? 'offer' : 'ask'}. The first number pulls the whole talk toward it.</p><div class="moves anchors">${['high', 'fair', 'low'].map((lv) => `<button class="move${recIf('anchor', 'level', lv)}" data-deal="anchor" data-snd data-level="${lv}" data-fid="mv-${lv}" ${can(v, 'anchor', 'level', lv) ? '' : 'disabled'}><span><span aria-hidden="true">${G[lv]}</span> ${L[lv][0]}</span><b>${money(v.anchors[lv])}</b><small class="mv-d">${vsFair(v.anchors[lv], v.fair)}</small></button>`).join('')}</div>
+    const L = buy ? { high: ['Generous', 'offer'], fair: ['Fair', 'offer'], low: ['Lowball', 'offer'] } : { high: ['Aim high', 'ask'], fair: ['Fair', 'ask'], low: ['Quick sale', 'ask'] }, G = { high: 'mark-up', fair: 'mark-level', low: 'mark-down' };
+    moves = `<p class="small">Your opening ${buy ? 'offer' : 'ask'}. The first number pulls the whole talk toward it.</p><div class="moves anchors">${['high', 'fair', 'low'].map((lv) => `<button class="move${recIf('anchor', 'level', lv)}" data-deal="anchor" data-snd data-level="${lv}" data-fid="mv-${lv}" ${can(v, 'anchor', 'level', lv) ? '' : 'disabled'}><span>${gl(G[lv])} ${L[lv][0]}</span><b>${money(v.anchors[lv])}</b><small class="mv-d">${vsFair(v.anchors[lv], v.fair)}</small></button>`).join('')}</div>
       <div class="row"><button class="btn ghost sm" data-deal="walk" data-fid="walk">${buy ? 'Pass on this lot' : 'Walk away'}</button></div>`;
   } else {
     const verb = buy ? 'Raise your offer' : 'Come down', landNote = (w, k) => { const to = concedeTo(w, k), d = to == null ? '' : vsFair(to, w.fair); return d && `lands ${d}`; }, sz = (k) => `<button class="move${recIf('concede', 'size', k)}" data-deal="concede" data-snd data-size="${k}" data-fid="mv-${k}" ${can(v, 'concede', 'size', k) ? '' : 'disabled'}><span>${verb}</span><b>${money(v.steps[k])}</b><small class="mv-d">${landNote(v, k)}</small></button>`;

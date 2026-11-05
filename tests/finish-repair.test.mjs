@@ -643,7 +643,7 @@ test('browser A1, A5: lesson 7 stops its own clock when the glut lands, and its 
     if (await p.eval(`document.querySelector('dialog#dlg').open`)) await press(p, 'dialog#dlg button', '^Continue$');
     await until(p, `!document.querySelector('dialog#dlg').open`, 'the deal closed');
     assert.equal(await clockPaused(), 'true', 'the clock waits for the player at step 5 (the button says it is paused)');
-    await pressed(p, '[data-act="pause"]'); assert.equal(await clockPaused(), 'false', 'and runs when the player presses it'); await atStep(p, 6, 7);
+    await pressed(p, '[data-act="pause"]', '^', 'the clock button (a drawn glyph: no text of its own)'); assert.equal(await clockPaused(), 'false', 'and runs when the player presses it'); await atStep(p, 6, 7);
     await atStep(p, 7, 7); // the glut took hold: about 3 seconds at 16x
     assert.equal(await clockPaused(), 'true', 'and it stopped itself with the glut, so the Bank shows the stress the card asks about');
     assert.match(await p.eval(`document.querySelector('.ac-say').innerText`), /The glut is in and the clock has stopped\./);

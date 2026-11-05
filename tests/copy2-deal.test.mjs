@@ -284,7 +284,7 @@ test('D3: the buyer\'s lean is said once, by the stars on the cards, and not aga
   for (const growth of [0, 2, 4, 5, 8]) {
     const g = world(); g.s.skills.growth = growth;
     const run = start(g, sellSpec(g)), h = panel(run), lean = run.view().hints.filter((x) => x.angles && x.kind !== 'temper');
-    const stars = [...h.matchAll(/class="ahint">([^<]*)</g)].map((x) => x[1]);
+    const stars = [...h.matchAll(/class="ahint"><svg[^>]*aria-hidden="true">.*?<\/svg>([^<]*)</g)].map((x) => x[1]); // (the star is drawn: an svg before the words)
     assert.equal(stars.length, lean.length ? lean[lean.length - 1].angles.length : 0, `growth ${growth}: a star on each angle the hint names, none when it names none`);
     for (const x of lean) assert.ok(!visible(h).includes(x.text), `growth ${growth}: "${x.text}" is on the stars and not also in the list`);
     for (const st of stars) assert.equal(st, stars.length > 1 ? 'Buyer may lean this way' : 'Buyer leans this way', 'one angle outright, two as a maybe: only one of two is the bias');

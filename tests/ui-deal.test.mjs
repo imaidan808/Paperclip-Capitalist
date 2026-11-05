@@ -74,7 +74,7 @@ test('the stepper names the stages, marks the current one and what is done', { s
   const g = world(), r = start(g, fixedLot(g));
   let h = UI.stepperHTML(model(r)); assert.match(h, /aria-label="Deal stages"/); assert.match(h, /aria-current="step"/);
   assert.ok(h.indexOf('Read') < h.indexOf('Close') && /\(now\)/.test(h) && /\(to come\)/.test(h));
-  r.quick(); r.next(); h = UI.stepperHTML(model(r)); assert.match(h, /✓/); assert.match(h, /\(done\)/);
+  r.quick(); r.next(); h = UI.stepperHTML(model(r)); assert.match(h, /<span class="n" aria-hidden="true"><svg class="gl gl-pip" viewBox="0 0 24 24" aria-hidden="true">/, 'a stage done shows a drawn tick'); assert.doesNotMatch(h, /✓/); assert.match(h, /\(done\)/);
   assert.match(UI.stepperHTML(model(start(g, sell(g)))), /Pitch[\s\S]*Close/);
   const au = start(g, auctionLot(g)); au.quick(); au.next(); assert.match(UI.stepperHTML(model(au)), /Bid/); assert.match(UI.titleOf(model(au)), /^Bid on/);
   assert.match(UI.titleOf(model(start(g, brokenCrate(g)))), /^Repair /);
@@ -321,7 +321,7 @@ test('the session survives a game that changed under it: the buyer left, the cra
 // ------------------------------------------------------------------ the sheet's styles
 test('css/ui-deal.css uses tokens only: every var() exists, no hex colours, no !important, reduced motion is left to the global rule', () => {
   const css = readFileSync(new URL('../css/ui-deal.css', import.meta.url), 'utf8'), base = readFileSync(new URL('../css/styles.css', import.meta.url), 'utf8');
-  const defined = new Set([...base.matchAll(/--([\w-]+):/g)].map((m) => m[1])); defined.add('zg'); defined.add('za');
+  const defined = new Set([...base.matchAll(/--([\w-]+):/g)].map((m) => m[1])); defined.add('zg'); defined.add('za'); defined.add('gl'); // (--gl is the one a rule of this sheet sets for the mask of its mark; the marks themselves are --gl-* in styles.css)
   for (const [, name] of css.matchAll(/var\(--([\w-]+)/g)) assert.ok(defined.has(name), `--${name} is not a token`);
   assert.ok(!/#[0-9a-fA-F]{3,8}\b/.test(css), 'no hard-coded hex colours'); assert.ok(!/!important/.test(css));
   assert.ok(/@keyframes/.test(css) && /prefers-reduced-motion/.test(base), 'its animations are switched off by the global reduced-motion rule in styles.css');
