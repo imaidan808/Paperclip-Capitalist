@@ -571,9 +571,12 @@ export class World {
     // what stands on the ground: scenery, entities, the player and the traffic, depth-sorted back to front. The list and its records are reused every frame.
     const vz = this.vz; vz.clear(); this.itemN = 0;
     const seeBox = (b) => b[2] > view.x0 && b[0] < view.x1 && b[3] > view.y0 && b[1] < view.y1;
+    // A district's props are drawn while its box is on the screen. The props that say `own` (a gate on its road, the ferry's gate, a footpath's deck; layout.js) belong to the district but do not stand in its box: they are culled by their own box, whether
+    // the district's box is on the screen or not, and the deck of a footpath is not dropped in the lite tier (a path that ends in the air: the author's screenshots 4 and 6). The district itself (its entities, its cloud) is still decided by its own box.
+    const farOnly = this.env.farMix <= 0.001, liteSmall = this.lite && cam.z < 0.6;
     for (const id of LAYOUT.ids) {
-      const D = DIST[id]; if (!seeBox(D.bb)) continue; vz.add(id);
-      for (const p of D.props) { if (p.sm && (this.env.farMix <= 0.001 || this.lite && cam.z < 0.6)) continue; if (p.bb[2] > view.x0 && p.bb[0] < view.x1 && p.bb[3] > view.y0 && p.bb[1] < view.y1) this.push(p.key, 's', p); }
+      const D = DIST[id], here = seeBox(D.bb); if (here) vz.add(id);
+      for (const p of here ? D.props : D.free) { if (p.sm && (farOnly || (liteSmall && !p.own))) continue; if (p.bb[2] > view.x0 && p.bb[0] < view.x1 && p.bb[3] > view.y0 && p.bb[1] < view.y1) this.push(p.key, 's', p); }
     }
     for (const e of this.ents.values()) {
       if (e.type === 'truck') { const [gx, gy] = this.truckPos(e), x = sx(gx, gy), y = sy(gx, gy, zAt(gx, gy)); if (x > view.x0 && x < view.x1 && y > view.y0 && y < view.y1 + 60) this.push(gx + gy + 0.8, 'e', e); }

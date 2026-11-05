@@ -53,6 +53,42 @@ export function offsetPoly(pts, lane) {
 
 const OUT = { W: [-1, 0], E: [1, 0], N: [0, -1], S: [0, 1] };
 
+// ---- nothing stands on water: the pad's scenery is a hashed scatter placed while the districts are built, before the land exists (the bays and the lake are carved out of it afterwards), so a tree, a planter or a house could stand in the sea.
+/**
+ * The kinds of prop that belong on the water, the one exception to "nothing stands in the sea": docks, piers, jetties, boats, ships, barges and buoys (the district plans put them at a quay), and the ferry's gate, which is a boat with a plaque
+ * (type 'gate', gk 'ferry'). Their zone is a shore: a water prop stands in the sea at most WATER_REACH tiles from land, never in open water.
+ */
+export const WATER_PROPS = new Set(['dock', 'pier', 'jetty', 'boat', 'ship', 'barge', 'buoy']);
+export const WATER_REACH = 6;
+export const isWaterProp = (p) => WATER_PROPS.has(p.t) || (p.t === 'gate' && p.gk === 'ferry');
+/** Does any tile of the land mask under the prop's footprint hold water? A sliver of a tile counts; a footprint that ends on a tile's edge is not on the tile beyond it. `isLand(tx, ty)` is the layout's own. */
+export function standsOnWater(p, isLand) {
+  const E = 1e-6;
+  for (let i = Math.floor(p.gx + E); i <= Math.floor(p.gx + p.w - E); i++) for (let j = Math.floor(p.gy + E); j <= Math.floor(p.gy + p.d - E); j++) if (!isLand(i, j)) return true;
+  return false;
+}
+/** Is there land within WATER_REACH tiles (a square ring a tile wider at a time) of the middle of the prop? */
+function nearLand(p, isLand) {
+  const cx = Math.floor(p.gx + p.w / 2), cy = Math.floor(p.gy + p.d / 2);
+  for (let r = 0; r <= WATER_REACH; r++) for (let dx = -r; dx <= r; dx++) for (let dy = -r; dy <= r; dy++) if (Math.max(Math.abs(dx), Math.abs(dy)) === r && isLand(cx + dx, cy + dy)) return true;
+  return false;
+}
+/**
+ * Sort a district's props into those that may stay and those that are in the sea. What stays: everything dry, a prop of the water class that stands by a shore, and a hot spot wherever it is (the headquarters, the depot, the board and the district's
+ * feature are the game: a kit that put one in the sea is a failing test, tests/world-placement.test.mjs, not a building that quietly goes missing). What goes, REMOVED and not moved: the pad's scatter that fell on water, and a water prop out in open sea.
+ * Removing is deterministic, spends no random number and leaves every other prop where it was; a moved prop would need a free spot clear of the roads, the block, the others and the coast, and the pad's scenery is filler that the district plans retire.
+ * Answers { keep, drowned }, `drowned` being small records of what went (kind, place, size, zone and whether it was pad scenery).
+ */
+export function keepDry(props, isLand) {
+  const keep = [], drowned = [];
+  for (const p of props) {
+    const wet = standsOnWater(p, isLand);
+    if (isWaterProp(p) ? !wet || nearLand(p, isLand) : !wet || p.hot) keep.push(p);
+    else drowned.push({ t: p.t, gx: p.gx, gy: p.gy, w: p.w, d: p.d, zone: p.zone, pad: !!p.pad });
+  }
+  return { keep, drowned };
+}
+
 function mkProp(D, t, x, y, w, d, h, o, solid) {
   const p = { t, gx: x, gy: y, w, d, h, z: D.z, zone: D.id, key: x + w / 2 + y + d / 2, solid, ...o }, ext = o.ext || 0;
   p.bb = [(x - (y + d)) * 32 - 16 - ext, (x + y) * 16 - D.z - h - 46 - ext, (x + w - y) * 32 + 16 + ext, (x + w + y + d) * 16 - D.z + 14];
@@ -115,7 +151,7 @@ function buildDistrict(zones, id, roadSegs) {
   if (rules.audits) feat('audit', 'office', 13.2, 1.1, 3.4, 3.4, 46, { label: 'Regulatory office', color: '#8b93a8', sign: 'AUDIT' }, 16.9);
   if (rules.enterprise) feat('ipo', 'ipo', 13.4, 0.9, 4.2, 4.2, 186, { label: 'IPO and M&A tower' }, 18.3);
   if (rules.rent) feat('rent', 'rentrow', 13.0, 1.0, 8, 3.8, 40, { label: 'Property row', acc, ext: 4 }, null);
-  if (rules.arbitrage) feat('exchange', 'exchange', 13.1, 0.9, 7.4, 4.3, 56, { label: 'Exchange hall', acc, ext: 14 }, null);
+  if (rules.arbitrage) feat('exchange', 'exchange', 14.0, 0.3, 7.4, 4.3, 56, { label: 'Exchange hall', acc, ext: 14 }, null); // (0.6 north and 0.9 east of where it stood, 13.1 and 0.9: its portico's steps end before the row of signs at y 5.8, and the market board, which stands east of it in this mirrored district's picture, covers a sliver of its columns)
   A.rest = rest; if (rest && rest[2] > 7.5) A.rest = [rest[0], rest[1], 7.5, rest[3]];
   const hqs = kit.hq || {};
   A.add(hqs.t || 'bldg', ...T.hq, 36, { hot: 'hq:' + id, label: 'Training office', col: hqs.col || cols.accent, acc, win: [3, 2], ...hqs });
@@ -143,8 +179,8 @@ function buildDistrict(zones, id, roadSegs) {
   return D;
 }
 
-/** Build the whole island for a set of zones (the sixteen districts of js/data). Pure and deterministic. */
-export function buildLayout(zones = ZONES) {
+/** Build the whole island for a set of zones (the sixteen districts of js/data). Pure and deterministic. `water: false` leaves the props that fell on water where the districts put them (the island as it was; tests/world-placement.test.mjs diffs against it). */
+export function buildLayout(zones = ZONES, { water = true } = {}) {
   const ids = Object.keys(zones).map(Number).sort((a, b) => a - b);
   // ---- ports and roads first (the pads need to stay off the roads)
   const PORT = {};
@@ -189,6 +225,9 @@ export function buildLayout(zones = ZONES) {
   for (let j = 0; j < GH; j++) for (let i = 0; i < GW; i++) land[j * GW + i] = (FV[j * VW + i] + FV[j * VW + i + 1] + FV[(j + 1) * VW + i] + FV[(j + 1) * VW + i + 1]) / 4 > 0 ? 1 : 0;
   const isLand = (tx, ty) => tx >= 0 && ty >= 0 && tx < GW && ty < GH && land[ty * GW + tx] === 1;
   const lands = {}; for (const s of [2, 4, 8]) { const w = Math.ceil(GW / s), a = new Uint8Array(w * Math.ceil(GH / s)); for (let j = 0; j < GH; j++) for (let i = 0; i < GW; i++) if (land[j * GW + i]) a[Math.floor(j / s) * w + Math.floor(i / s)] = 1; lands[s] = { a, w }; }
+  // ---- nothing stands on water: the districts were built before the land existed, so the pad's scatter may have fallen in a bay or the lake; it is removed here (keepDry), and the list of what went is kept
+  const drowned = [];
+  if (water) for (const D of ds) { const r = keepDry(D.props, isLand); D.props = r.keep; D.drowned = r.drowned; drowned.push(...r.drowned); } else for (const D of ds) D.drowned = [];
   let maxZ = 0; for (let k = 0; k < ZV.length; k++) maxZ = Math.max(maxZ, ZV[k]);
   const core = new Uint8Array(GW * GH); for (const D of ds) for (let j = Math.floor(D.oy); j < D.oy + BD; j++) for (let i = Math.floor(D.ox); i < D.ox + BW; i++) core[j * GW + i] = 1;
   let bx0 = 1e9, bx1 = -1e9, by0 = 1e9, by1 = -1e9;
@@ -254,16 +293,18 @@ export function buildLayout(zones = ZONES) {
     const br = bridges.find((q) => q.edge === e), s = br ? (rev ? br.s0 - 1 : br.s1 + 1) : e.ferry ? (rev ? 3 : e.len - 3) : (rev ? e.len - 10 : 10);
     const q = polyAt(e, clamp(s, 0, e.len)), dir = rev ? 1 : -1, far = polyAt(e, rev ? e.len : 0);
     D.gateAt = { x: q.x, y: q.y, hx: q.dx * dir, hy: q.dy * dir, kind: D.gateKind, edge: e.n };
-    if (D.gateKind !== 'fog') { const p = mkProp(D, 'gate', q.x - 0.15, q.y - 0.15, 0.3, 0.3, 16, { gk: D.gateKind, hx: q.dx * dir, hy: q.dy * dir, fx: far.x, fy: far.y, label: D.name + ' (locked)', ext: 70 }, false); p.z = zAt(q.x, q.y); p.bb = [(q.x - q.y) * 32 - 90, (q.x + q.y) * 16 - p.z - 80, (q.x - q.y) * 32 + 90, (q.x + q.y) * 16 - p.z + 40]; D.props.sort((a1, b1) => a1.key - b1.key); }
+    if (D.gateKind !== 'fog') { const p = mkProp(D, 'gate', q.x - 0.15, q.y - 0.15, 0.3, 0.3, 16, { gk: D.gateKind, hx: q.dx * dir, hy: q.dy * dir, fx: far.x, fy: far.y, label: D.name + ' (locked)', ext: 70, own: 1 }, false); p.z = zAt(q.x, q.y); p.bb = [(q.x - q.y) * 32 - 90, (q.x + q.y) * 16 - p.z - 80, (q.x - q.y) * 32 + 90, (q.x + q.y) * 16 - p.z + 40]; D.props.sort((a1, b1) => a1.key - b1.key); }
   }
   // ---- lookouts at the ends of the footpaths
   for (const [name, [x, y]] of Object.entries(VIEWPOINTS)) {
     const e = edges.find((q) => q.b === name), D = districts[e?.gate]; if (!D) continue;
-    const p = mkProp(D, 'lookout', x - 0.5, y - 0.5, 1, 1, 14, { label: 'Lookout', sm: 1 }, false); p.z = zAt(x, y); p.bb = [(x - y - 1) * 32 - 20, (x + y) * 16 - p.z - 60, (x - y + 1) * 32 + 20, (x + y + 1) * 16 - p.z + 14]; D.props.sort((a1, b1) => a1.key - b1.key);
+    const p = mkProp(D, 'lookout', x - 0.5, y - 0.5, 1, 1, 14, { label: 'Lookout', sm: 1, own: 1 }, false); p.z = zAt(x, y); p.bb = [(x - y - 1) * 32 - 20, (x + y) * 16 - p.z - 60, (x - y + 1) * 32 + 20, (x + y + 1) * 16 - p.z + 14]; D.props.sort((a1, b1) => a1.key - b1.key);
   }
+  // a prop that belongs to a district's lock or paths but stands outside the district's box (a gate on its road, the ferry's gate in the strait, a lookout at the end of a footpath) says `own`: World.draw culls it by its own box, not its district's
+  for (const D of ds) D.free = D.props.filter((p) => p.own);
   const props = ids.flatMap((id) => districts[id].props).sort((a, b) => a.key - b.key);
   return {
-    districts, ids, edges, bridges, nodes, land, isLand, lands, ZV, VW, FV, tcol, owner, core, cliffs, props, maxZ, roadSegs, zAt, roadZ, zoneAt, footAt, route, deck, bounds,
+    districts, ids, edges, bridges, nodes, land, isLand, lands, ZV, VW, FV, tcol, owner, core, cliffs, props, drowned, maxZ, roadSegs, zAt, roadZ, zoneAt, footAt, route, deck, bounds,
     spots: Object.fromEntries(ids.map((id) => [id, districts[id].spots])),
     plots: Object.fromEntries(ids.map((id) => [id, districts[id].plots])),
     doors: Object.fromEntries(ids.map((id) => [id, districts[id].door])),

@@ -30,11 +30,11 @@ function rec(a = 1, log = { n: 0, calls: [], depth: 0 }) {
 const env = (o = {}) => ({ t: 1234, night: 0, wind: 1, dim: 0, far: false, lite: false, lights: [], zoff: 0, ...o });
 
 // ---------------------------------------------------------------- positions never change
-test('the scenery list is exactly the baseline: scenery art never moves, resizes or re-heights anything (the baseline was taken again when the ground under the roads was graded: roadshape.js, the heights near a road changed and nothing else)', () => {
+test('the scenery list is exactly the baseline: scenery art never moves, resizes or re-heights anything (the baseline was taken again when the ground under the roads was graded: roadshape.js, the heights near a road changed and nothing else; and again for the world pass WP02, on purpose: the 16 props that stood in the sea are gone (pad scenery of districts 2, 3, 5, 14 and 15: tests/world-placement.test.mjs lists them) and six were moved by hand (the NEW billboard of 12 east of the market board, the FOR SALE post of 15 a little south of the lots, the hall and the ticker of 14, the exchange and the ticker of 16: tests/world-overlaps.test.mjs), 714 props to 698; no other prop moved)', () => {
   const rows = SCENERY.map((p) => [p.t, p.gx, p.gy, p.w, p.d, p.h, p.z, p.zone, p.hot || '', p.key].join(','));
   const g = LAYOUT, extra = [g.edges.length, g.cliffs.length, g.bounds.x0, g.bounds.y1, g.props.length, Object.keys(g.districts).length].join(',');
-  assert.equal(createHash('sha1').update(rows.join('\n') + extra).digest('hex'), 'f8389aa4222d6a3b5e731fca86587570e055513c');
-  assert.equal(rows.length, 714);
+  assert.equal(createHash('sha1').update(rows.join('\n') + extra).digest('hex'), '7790d9ecf75988425e5a068aa914f02e865037a1'); // f8389aa4222d6a3b5e731fca86587570e055513c before WP02
+  assert.equal(rows.length, 698); // 714 before WP02
 });
 
 // ---------------------------------------------------------------- colour helpers
