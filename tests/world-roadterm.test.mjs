@@ -244,6 +244,31 @@ function points(r) {
   return out;
 }
 
+// ---- the heading of a prop that stands across a street (the verifier's D1): `hx, hy` is the way out of the block, and a heading is 0 as often as it is not. The defaults were `p.hx || 1`, which made every N and S port a diagonal (a boom seen end on at 8.N, a gate lying along
+// the screen at 6.S and 10.S): what is drawn is held to the picture, not to the kind: the pieces a street's perpendicular decides must be where the perpendicular puts them, for every one of the four ways a street can leave a block.
+const HEADINGS = { W: [-1, 0], E: [1, 0], N: [0, -1], S: [0, 1] };
+const { col: colOf } = await import('../js/world/toys.js'), { shade: shadeOf } = await import('../js/world/iso.js');
+/** Every fill a recording made as a path of exactly one shape: a quad (one moveTo, three lineTo, no curve) or an ellipse, in order, with the style and the alpha it was filled in. */
+function shapesOf(r) {
+  const quads = [], ellipses = []; let path = [], curved = 0, ell = null, k = 0;
+  for (const c of r.log.calls) {
+    if (c[0] === 'beginPath') { path = []; curved = 0; ell = null; }
+    else if (c[0] === 'moveTo' || c[0] === 'lineTo') path.push([c[1], c[2]]);
+    else if (c[0] === 'ellipse') { curved++; ell = { x: c[1], y: c[2], rx: c[3], ry: c[4] }; }
+    else if (c[0] === 'arc' || c[0] === 'arcTo' || c[0] === 'rect') curved++;
+    else if (c[0] === 'fill') { const f = r.log.fills[k++]; if (curved === 0 && path.length === 4) quads.push({ pts: path.slice(), style: f.style, alpha: f.alpha }); else if (curved === 1 && ell && path.length === 0) ellipses.push({ ...ell, style: f.style, alpha: f.alpha }); }
+    else if (c[0] === 'fillRect') k++;
+  }
+  return { quads, ellipses };
+}
+const xs = (pts) => pts.map((q) => q[0]), ys = (pts) => pts.map((q) => q[1]), reach = (a) => Math.max(...a) - Math.min(...a), centroid = (q) => [xs(q.pts).reduce((s, v) => s + v, 0) / 4, ys(q.pts).reduce((s, v) => s + v, 0) / 4];
+/** The screen direction of a way across a street whose way out is (hx, hy): the grid's perpendicular (-hy, hx) in the isometric projection (32 and 16 pixels a tile), as a slope (dy over dx). */
+const acrossSlope = (hx, hy) => { const nx = -hy, ny = hx; return ((nx + ny) * 16) / ((nx - ny) * 32); };
+/** The spots on the ground (grid, z = 0) that a screen point stands for. */
+const groundOf = (X, Y) => [(X / 32 + Y / 16) / 2, (Y / 16 - X / 32) / 2];
+const drawKind = (kind, o) => { const r = recCtx(), p = mk(kind, o); atlas.SHARED.get(kind).body(r.ctx, p, STILL); return { r, p }; };
+const same2 = (a, b, tol, what) => assert.ok(Math.abs(a - b) <= tol, `${what}: ${a.toFixed(2)} against ${b.toFixed(2)}`);
+
 test('RT9: the new kinds of prop are flat (no gradient, pattern, clip, stroke or blur; every translucent fill is a ground shadow), balanced, drawn twice the same, and everything they paint is inside the sprite\'s box', () => {
   for (const kind of NEW_KINDS) {
     const def = atlas.SHARED.get(kind); assert.ok(def, `${kind} is a shared prop (one sprite for every prop that looks alike)`); assert.ok(stack.propKindsV2().includes(kind), `${kind} has a V2 drawer`);
@@ -263,6 +288,51 @@ test('RT9: the new kinds of prop are flat (no gradient, pattern, clip, stroke or
   assert.ok(a.log.calls.length > 40, 'the closed barrier is drawn in a district that is open'); assert.equal(g.log.calls.length, 0, 'the padlock gate is not');
   const text = a.log.calls.filter((c) => c[0] === 'fillText').map((c) => c[1]); assert.deepEqual(text, ['ROAD CLOSED'], 'and its plate says what it is: ROAD CLOSED, not "Opens at"');
   assert.deepEqual(NEW_KINDS.filter((k) => !SAMPLE[k]), [], 'the sample table names every new kind');
+
+  // the verifier's D1: a boom, a gate and a pair of cones stand ACROSS the street whichever way it leaves its block (W, E, N, S). The boom has eight segments, none of them a line seen end on (zero wide), reaching the same
+  // way across the screen for every heading and running along the grid's perpendicular of it; its two posts stand as far apart; a heading left out is the street's way out to the east (the portal's, to the north)
+  const BOOM = new Set([pal.TOY.red, '#fffaf0'].map((c) => colOf(c, STILL)).flatMap((c) => [c, shadeOf(c, 0.78)]));
+  for (const open of [0, 1]) {
+    const spans = {}, seps = {};
+    for (const [side, [hx, hy]] of Object.entries(HEADINGS)) {
+      const { r } = drawKind('roadend', { hx, hy, open, plate: 'X' }), { quads, ellipses } = shapesOf(r), tag = `a ${open ? 'gate (the boom raised)' : 'barrier'} whose street leaves its block to the ${side}`;
+      const boom = quads.filter((q) => BOOM.has(q.style) && reach(ys(q.pts)) >= 4.5 && reach(ys(q.pts)) <= 24);
+      assert.equal(boom.length, 16, `${tag}: a boom of eight segments, each a dark step and its colour (${boom.length} quads found)`);
+      for (const q of boom) assert.ok(reach(xs(q.pts)) >= 4, `${tag}: a segment of the boom is ${reach(xs(q.pts)).toFixed(1)} px wide: a boom seen end on (or lying along the street) is no boom`);
+      spans[side] = reach(boom.flatMap((q) => xs(q.pts)));
+      const post = ellipses.filter((e) => e.alpha < 1).slice(0, 2); assert.equal(post.length, 2, `${tag}: a shadow under each of its two posts`); seps[side] = Math.hypot(post[1].x - post[0].x, post[1].y - post[0].y);
+      same2(Math.abs(post[1].x - post[0].x), open ? 2 * spans[side] : spans[side], 1.5, `${tag}: the boom runs from post to post (the posts' reach across the screen against the boom's${open ? ', which is raised from one post to the middle: half of it' : ''})`);
+      if (!open) { const [c0, c1] = [centroid(boom[1]), centroid(boom[15])]; same2((c1[1] - c0[1]) / (c1[0] - c0[0]), acrossSlope(hx, hy), 0.01, `${tag}: the boom runs along the perpendicular of the street, slope`); }
+    }
+    for (const [what, v] of [['reaches', spans], ['posts stand', seps]]) { const all = Object.values(v); assert.ok(Math.max(...all) - Math.min(...all) < 0.5, `${open ? 'a gate' : 'a barrier'}: the boom ${what} the same across the street whichever way the street goes (${Object.entries(v).map(([k, n]) => k + ' ' + n.toFixed(1)).join(', ')})`); }
+  }
+  { // the farm gate: four rails and a brace, each rail a dark step and its colour, across the track
+    const BAR = new Set([colOf('#f6eedc', STILL), shadeOf(colOf('#f6eedc', STILL), 0.78)]), spans = {};
+    for (const [side, [hx, hy]] of Object.entries(HEADINGS)) {
+      const { r } = drawKind('farmgate', { hx, hy }), bars = shapesOf(r).quads.filter((q) => BAR.has(q.style)), tag = `a farm gate whose track leaves its block to the ${side}`;
+      assert.equal(bars.length, 9, `${tag}: four rails (a dark step and a colour each) and a brace (${bars.length} bars found)`);
+      for (const q of bars) assert.ok(reach(xs(q.pts)) >= 4, `${tag}: a bar is ${reach(xs(q.pts)).toFixed(1)} px wide (seen end on, it is no gate)`);
+      for (const q of bars.slice(0, 8)) same2((q.pts[1][1] - q.pts[0][1]) / (q.pts[1][0] - q.pts[0][0]), acrossSlope(hx, hy), 0.01, `${tag}: a rail runs along the perpendicular of the track, slope`);
+      spans[side] = reach(bars.flatMap((q) => xs(q.pts)));
+    }
+    const all = Object.values(spans); assert.ok(Math.max(...all) - Math.min(...all) < 0.5, `a farm gate reaches the same across the screen whichever way its track goes (${Object.entries(spans).map(([k, n]) => k + ' ' + n.toFixed(1)).join(', ')})`);
+  }
+  { // the sealed portal: two cones stand on the street's side of the face, a tile and a bit to each side of the street's axis
+    const lens = {};
+    for (const [side, [hx, hy]] of Object.entries(HEADINGS)) {
+      const { r, p } = drawKind('portal', { hx, hy, w: hx ? 0.9 : 3.4, d: hx ? 3.4 : 0.9 }), tag = `a portal whose street leaves its block to the ${side}`, cones = shapesOf(r).ellipses.filter((e) => e.rx === 4.6 && e.ry === 1.9);
+      assert.equal(cones.length, 2, `${tag}: two cones`);
+      const [c0, c1] = cones.map((e) => groundOf(e.x, e.y)), mid = [(p.gx + p.w / 2), (p.gy + p.d / 2)], sep = [c1[0] - c0[0], c1[1] - c0[1]];
+      same2(Math.abs(sep[0] * hx + sep[1] * hy), 0, 0.02, `${tag}: the cones stand across the street (their line is square to its way out, off by)`);
+      for (const c of [c0, c1]) assert.ok((c[0] - mid[0]) * hx + (c[1] - mid[1]) * hy < -0.3, `${tag}: a cone stands on the street's side of the face (${((c[0] - mid[0]) * hx + (c[1] - mid[1]) * hy).toFixed(2)} tiles along the way out)`);
+      lens[side] = Math.hypot(sep[0], sep[1]);
+    }
+    const all = Object.values(lens); assert.ok(Math.max(...all) - Math.min(...all) < 0.05, `the cones stand as far apart whichever way the street goes (${Object.entries(lens).map(([k, n]) => k + ' ' + n.toFixed(2)).join(', ')})`);
+  }
+  for (const [kind, ways] of [['roadend', { open: 1, plate: 'X' }], ['farmgate', {}], ['portal', {}]]) { // a heading left out is the default heading, and the default is a heading (not a number to be "or"ed away)
+    const dflt = kind === 'portal' ? [0, -1] : [1, 0], bare = drawKind(kind, { ...ways, hx: undefined, hy: undefined }).r, named = drawKind(kind, { ...ways, hx: dflt[0], hy: dflt[1] }).r;
+    assert.deepEqual(bare.log.calls, named.log.calls, `${kind}: with no heading it is drawn as it is for the way out to the ${kind === 'portal' ? 'north' : 'east'}`);
+  }
 });
 
 // ---------------------------------------------------------------------------------------------------------------- the gates (WP11)

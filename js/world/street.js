@@ -224,7 +224,7 @@ const longFace = (F, w, d) => (w >= d ? F.left : F.right);
 
 shared('roadend', { // T3 (and the open boom of a T4 gate): posts either side of the street, a striped boom across it, a plate that says what it is, two cones; open: the boom raised and a booth beside it
   body(g, p, env) {
-    const cx = p.gx + p.w / 2, cy = p.gy + p.d / 2, hx = p.hx || 1, hy = p.hy || 0, nx = -hy, ny = hx, open = !!p.open, span = 1.35;
+    const cx = p.gx + p.w / 2, cy = p.gy + p.d / 2, hx = p.hx ?? 1, hy = p.hy ?? 0, nx = -hy, ny = hx, open = !!p.open, span = 1.35; // (a heading of 0 is a heading: `||` made every N and S port a diagonal)
     const a = P(cx - nx * span, cy - ny * span), b = P(cx + nx * span, cy + ny * span), red = col(TOY.red, env), cream = col('#fffaf0', env), steel = col(METAL.steelMid, env);
     for (const q of [a, b]) flatShadow(g, q[0] + 4, q[1] + 1.5, 7, 2.6);
     if (open) { // a booth beside the way in (on the side of b): a small flat prism with a window on its long face, a roof a little wider
@@ -271,7 +271,7 @@ shared('trough', { // a wooden water trough: a long flat box with the water in i
 });
 shared('farmgate', { // a five-bar field gate across a track: two posts and the bars, a brace on the diagonal
   body(g, p, env) {
-    const cx = p.gx + p.w / 2, cy = p.gy + p.d / 2, hx = p.hx || 1, hy = p.hy || 0, nx = -hy, ny = hx, span = 1.15, a = P(cx - nx * span, cy - ny * span), b = P(cx + nx * span, cy + ny * span), wood = col(WOOD.shade, env), bar = col('#f6eedc', env);
+    const cx = p.gx + p.w / 2, cy = p.gy + p.d / 2, hx = p.hx ?? 1, hy = p.hy ?? 0, nx = -hy, ny = hx, span = 1.15, a = P(cx - nx * span, cy - ny * span), b = P(cx + nx * span, cy + ny * span), wood = col(WOOD.shade, env), bar = col('#f6eedc', env);
     for (const q of [a, b]) flatShadow(g, q[0] + 3, q[1] + 1.2, 6, 2.2);
     const run = (t, z, h) => { const X = a[0] + (b[0] - a[0]) * t, Y = a[1] + (b[1] - a[1]) * t; return [X, Y - z - h / 2]; };
     for (const z of [3.5, 8.5, 13.5, 18.5]) { const p0 = run(0.06, z, 0), p1 = run(0.94, z, 0); poly(g, [[p0[0], p0[1] - 1.1 + 1.2], [p1[0], p1[1] - 1.1 + 1.2], [p1[0], p1[1] + 1.1 + 1.2], [p0[0], p0[1] + 1.1 + 1.2]], shade(bar, 0.78)); poly(g, [[p0[0], p0[1] - 1.1], [p1[0], p1[1] - 1.1], [p1[0], p1[1] + 1.1], [p0[0], p0[1] + 1.1]], bar); }
@@ -300,7 +300,7 @@ shared('portal', { // a tunnel mouth, sealed: a face of rock with an arch, board
     const plank = (u0, v0, u1, v1, c) => { const a = pt(u0, v0), b = pt(u1, v1); poly(g, [[a[0], a[1] - 2.2], [b[0], b[1] - 2.2], [b[0], b[1] + 2.2], [a[0], a[1] + 2.2]], c); };
     plank(0.16, 0.06, 0.84, 0.52, col(WOOD.mid, env)); plank(0.16, 0.52, 0.84, 0.06, col(WOOD.light, env)); plank(0.16, 0.3, 0.84, 0.3, col(WOOD.shade, env)); // the X of planks and the one across it
     const [sx, sy] = pt(0.5, 0.16); rr(g, sx - 12, sy - 6, 24, 11, 2.4, shade(col(TOY.red, env), 0.78)); rr(g, sx - 12.4, sy - 6.4, 23.6, 10.4, 2.4, col(TOY.red, env)); lettering(g, 'CLOSED', sx, sy - 1, 5.4, col('#fffaf0', env), face === F.left ? 0.5 : -0.5, null);
-    const hx = p.hx || 0, hy = p.hy || -1, nx = -hy, ny = hx, half = hx ? p.w / 2 : p.d / 2, bx = p.gx + p.w / 2 - hx * (half + 0.55), by = p.gy + p.d / 2 - hy * (half + 0.55); // two cones on the street's side of the face
+    const hx = p.hx ?? 0, hy = p.hy ?? -1, nx = -hy, ny = hx, half = hx ? p.w / 2 : p.d / 2, bx = p.gx + p.w / 2 - hx * (half + 0.55), by = p.gy + p.d / 2 - hy * (half + 0.55); // two cones on the street's side of the face
     for (const sd of [-1, 1]) { const [X, Y] = P(bx + nx * sd * 1.15, by + ny * sd * 1.15); cone(g, X, Y, env); }
     return null;
   }, vary: ['hx', 'hy'], ext: [34, 14, 34, 34],
