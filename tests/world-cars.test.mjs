@@ -5,18 +5,23 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { recCtx } from './helpers/recctx.mjs';
 
-const { actorMethods, CARS, CAR_SPEED } = await import('../js/world/ents-actors.js');
+const { actorMethods, CARS, CAR_SPEED, CAR_EDGES } = await import('../js/world/ents-actors.js');
 const { headingBucket, carSprite, HEADINGS, CAR_RECT } = await import('../js/world/vehicles.js');
 const { visibleFaces, footprint } = await import('../js/world/orient.js');
-const { EDGES } = await import('../js/world/layout.js');
 
-const CAR_EDGES = EDGES.filter((e) => !e.path && !e.ferry);
 const world = (open = Array.from({ length: 16 }, (_, i) => i + 1)) => ({ ...actorMethods, t: 0, unlocked: new Set(open), carList: Array.from({ length: CARS }, () => ({ gx: 0, gy: 0, i: 0, key: 0, horiz: true, fade: 1, ang: 0 })) });
 const at = (w, t) => { w.t = t; return w.cars().map((c) => ({ ...c })); };
 const edgeOf = (c) => CAR_EDGES[(c.i * 7) % CAR_EDGES.length];
 const nearest = (e, x, y) => { let best = Infinity, q = null, dir = null; for (let i = 0; i + 1 < e.pts.length; i++) { const [ax, ay] = e.pts[i], [bx, by] = e.pts[i + 1], l2 = (bx - ax) ** 2 + (by - ay) ** 2 || 1, k = Math.max(0, Math.min(1, ((x - ax) * (bx - ax) + (y - ay) * (by - ay)) / l2)), px = ax + (bx - ax) * k, py = ay + (by - ay) * k, d = Math.hypot(x - px, y - py); if (d < best) { best = d; q = [px, py]; dir = [bx - ax, by - ay]; } } return { d: best, q, dir }; };
 const deg = (a) => (a * 180) / Math.PI;
 const turn = (a, b) => { let d = Math.abs(a - b) % (2 * Math.PI); if (d > Math.PI) d = 2 * Math.PI - d; return deg(d); };
+
+test('one car to each of the eighteen roads: no footpath, no ferry and no fork\'s stem carries one (a fork is three edges now, and with them `(i * 7) % 21` would have put eighteen cars on three roads), and every car has a road of its own', () => {
+  assert.equal(CAR_EDGES.length, CARS, 'as many roads as cars');
+  assert.ok(CAR_EDGES.every((e) => !e.path && !e.ferry && !e.stem), 'the roads between districts, not the stem of a fork');
+  assert.equal(new Set(Array.from({ length: CARS }, (_, i) => (i * 7) % CAR_EDGES.length)).size, CARS, 'no two cars on one road: 7 and the number of roads share no factor');
+  const w = world(); w.t = 12345; assert.equal(new Set(w.cars().map((c) => edgeOf(c).n)).size, CARS, 'and eighteen roads are driven');
+});
 
 test('a car keeps to its lane through every bend: half a tile from the middle of the road, on the same side of its heading, whatever the road and the moment', () => {
   const w = world(), sides = new Set(); let worst = 0, n = 0;

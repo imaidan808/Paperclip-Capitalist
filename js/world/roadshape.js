@@ -5,6 +5,8 @@
 // So every corner is an arc (`fillet`) and the ground along every road is a smooth profile (`gradeProfile`, `gradeRoads`) that follows the land's large shape and none of its steps.
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 const smooth = (t) => { t = clamp(t, 0, 1); return t * t * (3 - 2 * t); };
+/** The tiles over which a branch of a fork rises or falls from the junction's height to its own profile (gradeRoads). */
+export const JUNCTION_LEVEL = 4.5;
 
 /**
  * Tidy a hand-drawn polyline: a point that repeats the one before it goes, and so does a point where the road runs out along a line and straight back along it (a spur: a waypoint that overshot a junction by a tile
@@ -76,15 +78,21 @@ export function gradeProfile(zs, wet = [], { sigma = 6, slope = 1.3 } = {}) {
 /**
  * Grade the ground under every road: for each edge (not the ferry) the height along it is the smooth profile of `gradeProfile`, and every land vertex of the height field `ZV` (width VW, a vertex a tile apart; FV is
  * the land field, positive on land) near the road is drawn toward the profile at the nearest point of the road: wholly within the road and half a tile of it, and less and less to `reach` tiles out. Water is left
- * alone. Changes `ZV` in place, and gives every edge its `zprof` ({ step, z }: the height along it every `step` tiles). `edges` are { pts, lens, len, w, ferry }.
+ * alone. Changes `ZV` in place, and gives every edge its `zprof` ({ step, z }: the height along it every `step` tiles). `edges` are { pts, lens, len, w, ferry, stem, ja, jb } (the edge starts, ends at a junction).
+ * The stem of a fork (the run from a port to the junction where two roads part) is graded last: the two branches are laid first, so the junction stands at one height for all three, and the stem then runs from the port's height to that
+ * one and the ground under it follows it (graded first, the branches' own corridors, which overlap it near the junction, took the ground from under it: 3 pixels off at the stem of 12).
  */
 export function gradeRoads(ZV, FV, VW, VH, edges, { step = 0.5, reach = 3.5 } = {}) {
   const at = (A, x, y) => { x = clamp(x, 0, VW - 1.001); y = clamp(y, 0, VH - 1.001); const i = Math.floor(x), j = Math.floor(y), tx = x - i, ty = y - j, k = j * VW + i; return (A[k] * (1 - tx) + A[k + 1] * tx) * (1 - ty) + (A[k + VW] * (1 - tx) + A[k + VW + 1] * tx) * ty; };
-  for (const e of edges) {
+  for (const e of [...edges].sort((a, b) => (a.stem ? 1 : 0) - (b.stem ? 1 : 0))) {
     if (e.ferry) continue;
     const P = e.pts, L = e.lens, len = e.len, hw = e.w / 2, S = [];
     for (let s = 0, i = 1; ; s = Math.min(s + step, len)) { while (i < L.length - 1 && L[i] < s) i++; const a = P[i - 1], b = P[i], l = L[i] - L[i - 1] || 1, k = (s - L[i - 1]) / l; S.push([a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k]); if (s >= len) break; }
     const zs = S.map(([x, y]) => at(ZV, x, y)), wet = S.map(([x, y]) => at(FV, x, y) <= 0), prof = gradeProfile(zs, wet);
+    if (!e.stem) for (const [last, on] of [[false, e.ja], [true, e.jb]]) if (on) { // a branch leaves its junction level: the three roads of a fork share the ground under it for the first tiles, so they share one height there, and their own slopes begin beyond it
+      const n = prof.length, z0 = prof[last ? n - 1 : 0];
+      for (let i = 0; i < n; i++) { const d = (last ? n - 1 - i : i) * step; if (d < JUNCTION_LEVEL) prof[i] = z0 + (prof[i] - z0) * smooth(d / JUNCTION_LEVEL); }
+    }
     e.zprof = { step, z: Float32Array.from(prof) }; // (the road's own height along its length: what the road is drawn at, where the ground at a bank dips to the water)
     let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9; for (const [x, y] of S) { x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y); }
     const R = hw + reach;
@@ -96,4 +104,45 @@ export function gradeRoads(ZV, FV, VW, VH, edges, { step = 0.5, reach = 3.5 } = 
       if (wgt > 0) ZV[v] = Math.max(0.5, ZV[v] + (prof[bk] - ZV[v]) * wgt);
     }
   }
+}
+
+
+// ---------------------------------------------------------------- the apron: where a block's street meets the road beyond it
+/**
+ * The numbers of an apron (tiles). A block is a stage with a street through it (asphalt 2 wide, a raised kerb bar and a tile of sidewalk each side, the stage's rim and lip across its end) and the road between districts is a plain ribbon
+ * (asphalt 1.6 wide in a flat kerb a fifth wide, no sidewalk): at a port the two met in one straight cut across the road, a step in the tone of the asphalt, a step in the width, a kerb that stopped and a sidewalk that stopped. The apron is the
+ * `len` tiles of road beyond the block's edge in which they become each other: the asphalt narrows from the street's half width to the road's and takes the road's tone, the kerb stays a fifth wide and flat, the sidewalk tapers to
+ * nothing. It also reaches `back` tiles under the block's edge, so the stage's lip and shadow do not cross the street's mouth. `slices` is how many bands a tone step is cut in (no band is wider than a third of a tile).
+ */
+export const APRON = Object.freeze({ len: 2, back: 0.1, slices: 6, streetHalf: 1, roadHalf: 0.8, kerb: 0.2, walk: 0.8 });
+/** The half width of the asphalt `u` tiles beyond the block's edge: the street's up to the edge, the road's at the end of the apron, a smooth step between. */
+export const apronHalf = (u, A = APRON) => A.streetHalf + (A.roadHalf - A.streetHalf) * smooth(u / A.len);
+/** The width of the sidewalk beyond the kerb `u` tiles beyond the edge: the block's at the edge, none at the end. */
+export const apronWalk = (u, A = APRON) => (u <= 0 ? A.walk : A.walk * (1 - smooth(u / A.len)));
+/**
+ * The pieces of an apron as polygons of [x, y, z] in the grid, from `frame(u)`, which answers the road's middle `u` tiles beyond the block's edge (u from -back to len) as [x, y, nx, ny, z] with the unit normal:
+ *   bands   `slices` + 1 of them, painted in order, each from its start to the END of the apron ({ u0, t, kerb: [left, right], asphalt }: the two kerb strips, which run a hair under the asphalt, and the asphalt over them), so a later
+ *           band covers the rest of the earlier ones and no hairline of what lies under shows where two meet (the kerb is two strips, not a ribbon under the asphalt: the asphalt is drawn a tenth of a pixel higher and the ribbon's
+ *           edge would show along its start); `t` (0 to 1) is the band's colour, how far along the change of tone it is (0: the block's own asphalt, 1: the road's)
+ *   walks   the two sidewalk wedges { left, right }: from the block's edge outwards, along the kerb, whole at the edge and none at the end
+ */
+export function apronPieces(frame, A = APRON) {
+  const us = [-A.back, ...Array.from({ length: A.slices + 1 }, (_, i) => (A.len * i) / A.slices)]; // the band edges: under the block's edge, then the slices
+  const at = (u, o) => { const f = frame(u); return [f[0] + f[2] * o, f[1] + f[3] * o, f[4]]; };
+  const outline = (k) => { // the asphalt from us[k] to the end: its left side out and its right side back, a point at every band edge
+    const L = [], R = [];
+    for (let i = k; i < us.length; i++) { const h = apronHalf(us[i], A); L.push(at(us[i], -h)); R.push(at(us[i], h)); }
+    return [...L, ...R.reverse()];
+  };
+  const strip = (k, sg) => { // a kerb strip: from a hair inside the asphalt's edge to a kerb beyond it
+    const out = [], inn = [];
+    for (let i = k; i < us.length; i++) { const h = apronHalf(us[i], A); out.push(at(us[i], sg * (h + A.kerb))); inn.push(at(us[i], sg * (h - 0.08))); }
+    return [...out, ...inn.reverse()];
+  };
+  const bands = []; for (let k = 0; k + 1 < us.length; k++) bands.push({ u0: us[k], t: us[k + 1] <= 0 ? 0 : smooth(us[k + 1] / A.len), kerb: [strip(k, -1), strip(k, 1)], asphalt: outline(k) });
+  const side = (sg) => { // the wedge: along the kerb from the edge out, then back along its outer side
+    const ws = Array.from({ length: A.slices * 2 + 1 }, (_, i) => (A.len * i) / (A.slices * 2));
+    return [...ws.map((u) => at(u, sg * (apronHalf(u, A) + A.kerb - 0.1))), ...ws.map((u) => at(u, sg * (apronHalf(u, A) + A.kerb + apronWalk(u, A)))).reverse()]; // (its inner side a hair under the kerb, which is painted over it)
+  };
+  return { bands, walks: { left: side(-1), right: side(1) } };
 }

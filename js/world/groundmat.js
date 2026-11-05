@@ -144,10 +144,10 @@ export function drawStage(ctx, view, D, S, k, detail, decal, zoom) {
   // ---- the streets
   for (const r of roads) fillQ(ctx, r.x, r.y, r.w, r.d, z, T.asph);
   if (mid > 0.05 && seen(view, D.bb[0], D.bb[1], D.bb[2], D.bb[3] + 200)) paintAsphalt(ctx, view, id, roads, z, T, mid, close);
-  // ---- the centre dashes and the crossing's bars (painted bands, 0.2 tile at the least)
+  // ---- the centre dashes and the crossing's bars (painted bands, 0.2 tile at the least). A dash ends 0.1 tile or more inside the block's edge, the cross street's too: the apron (groundart.js) starts 0.1 under the edge and covers what lies beyond it, so a dash that overhung the edge was left half a dash, cut across, or hung off the stage (the last of the cross street's did in 13 to 16 only: whether it was drawn depended on how the additions of 1.7 rounded)
   ctx.fillStyle = T.dash; ctx.beginPath();
   for (let x = ox + 0.4; x < ox + BW - 1; x += 1.7) { if (x > ox + 8.2 && x < ox + 13.4) continue; ctx.moveTo(px(x, oy + 8.88), py(x, oy + 8.88, z)); ctx.lineTo(px(x + 0.9, oy + 8.88), py(x + 0.9, oy + 8.88, z)); ctx.lineTo(px(x + 0.9, oy + 9.12), py(x + 0.9, oy + 9.12, z)); ctx.lineTo(px(x, oy + 9.12), py(x, oy + 9.12, z)); ctx.closePath(); }
-  for (let y = oy + 0.4; y < oy + BD - 0.6; y += 1.7) { if (y > oy + 6.4 && y < oy + 11.6) continue; ctx.moveTo(px(ox + 10.88, y), py(ox + 10.88, y, z)); ctx.lineTo(px(ox + 11.12, y), py(ox + 11.12, y, z)); ctx.lineTo(px(ox + 11.12, y + 0.9), py(ox + 11.12, y + 0.9, z)); ctx.lineTo(px(ox + 10.88, y + 0.9), py(ox + 10.88, y + 0.9, z)); ctx.closePath(); }
+  for (let y = oy + 0.4; y + 0.9 <= oy + BD - 0.1; y += 1.7) { if (y > oy + 6.4 && y < oy + 11.6) continue; ctx.moveTo(px(ox + 10.88, y), py(ox + 10.88, y, z)); ctx.lineTo(px(ox + 11.12, y), py(ox + 11.12, y, z)); ctx.lineTo(px(ox + 11.12, y + 0.9), py(ox + 11.12, y + 0.9, z)); ctx.lineTo(px(ox + 10.88, y + 0.9), py(ox + 10.88, y + 0.9, z)); ctx.closePath(); }
   ctx.fill();
   ctx.fillStyle = T.zebra; ctx.beginPath();
   for (let q = 0; q < 5; q++) {
@@ -160,9 +160,9 @@ export function drawStage(ctx, view, D, S, k, detail, decal, zoom) {
   for (const b of kerbBars(roads)) { if (!seen(view, px(b.x, b.y + b.d), py(b.x, b.y, z) - 4, px(b.x + b.w, b.y), py(b.x + b.w, b.y + b.d, z) + 4)) continue; bar(ctx, b, z, T.kerbTop, b.face === 'l' ? T.kerbL : T.kerbR); }
   // ---- the stash slab: a light concrete pad with a bright rim and a darker lip, so it reads as laid down and not as a shadow
   for (const g of pads) { fillRR(ctx, g.x - 0.08, g.y - 0.08, g.w + 0.16, g.d + 0.16, 0.5, z, T.padEdge, 0.55); fillRR(ctx, g.x, g.y, g.w, g.d, 0.45, z, T.padRim); fillRR(ctx, g.x + 0.16, g.y + 0.16, g.w - 0.32, g.d - 0.32, 0.34, z, T.pad); }
-  // ---- the kit's decals and the manholes
+  // ---- the kit's decals and the manholes (the pads' own, which lie under the roads that cross them, are the roads layer's: groundart.js drawPadDecals)
   const flat = walks.concat(roads, pads), onFlat = (d) => { const m = d.r * 0.5; for (const g of flat) if (d.x > g.x - m && d.x < g.x + g.w + m && d.y > g.y - m && d.y < g.y + g.d + m) return true; return false; };
-  for (const d of D.decals) if (zoom >= (d.min ?? 0.3) && seen(view, ...decalBox(d, z)) && !(d.k === 'ell' && onFlat(d))) decal(ctx, d); // only the decals the chunk can see; a puddle or a stain lies on the dirt, never across a street, a pavement or the stash's slab
+  for (const d of D.decals) if (!d.pad && zoom >= (d.min ?? 0.3) && seen(view, ...decalBox(d, z)) && !(d.k === 'ell' && onFlat(d))) decal(ctx, d); // only the decals the chunk can see; a puddle or a stain lies on the dirt, never across a street, a pavement or the stash's slab
   if (close > 0.2) for (const mx of [ox + 4.6, ox + 16.8]) { ctx.globalAlpha = close; ctx.fillStyle = T.manhole; ctx.beginPath(); disc(ctx, mx, oy + 8.5, z, 0.3 * HW * 1.42, 0.3 * HH * 1.42); ctx.fill(); ctx.fillStyle = T.manholeHi; ctx.beginPath(); disc(ctx, mx, oy + 8.5, z + 0.6, 0.2 * HW * 1.42, 0.2 * HH * 1.42); ctx.fill(); ctx.globalAlpha = 1; }
   if (near > 0.05) paintPlazaMarks(ctx, view, D, walks, roads, pads, z, T, near, close);
 }

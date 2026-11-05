@@ -116,10 +116,10 @@ test('the journey is geography: four regions climb from low crowded ground to th
 });
 
 test('roads bend, fork and rejoin, with side paths to lookouts', () => {
-  const main = LAYOUT.edges.filter((e) => !e.path && !e.ferry);
+  const main = LAYOUT.edges.filter((e) => !e.path && !e.ferry && !e.stem); // (the stem of a fork is the straight run from a port to the node where two roads part: a road is its stem and a branch, and the branch bends)
   assert.ok(main.every((e) => e.pts.length >= 4), 'every road bends'); assert.ok(main.some((e) => e.pts.some((p, i) => i && Math.abs(Math.abs(p[0] - e.pts[i - 1][0]) - Math.abs(p[1] - e.pts[i - 1][1])) > 2 && p[0] !== e.pts[i - 1][0] && p[1] !== e.pts[i - 1][1])), 'some run on a diagonal');
   const deg = {}; for (const e of LAYOUT.edges) { deg[e.a] = (deg[e.a] || 0) + 1; deg[e.b] = (deg[e.b] || 0) + 1; }
-  assert.ok(Object.values(deg).some((v) => v >= 3), 'forks: a junction with three roads');
+  assert.ok(Object.values(deg).some((v) => v >= 3), 'forks: a junction with three roads'); assert.ok(Object.entries(deg).filter(([k, v]) => v >= 3 && !/^\d+\./.test(k)).length === 3, 'three of them, and each a junction of its own (j4, j8, j12), none a port');
   assert.ok(LAYOUT.route(2, 3, new Set(ZONE_IDS)) && LAYOUT.route(4, 3, new Set(ZONE_IDS)) && LAYOUT.edges.filter((e) => e.gate === 4 || e.gate === 3).length >= 3, 'two ways between the starter districts: roads rejoin');
   assert.ok(LAYOUT.edges.filter((e) => e.path).length >= 4 && LAYOUT.nodes.size > 0);
   assert.ok(SCENERY.filter((p) => p.t === 'lookout').length >= 4, 'viewpoints at the ends of the paths');

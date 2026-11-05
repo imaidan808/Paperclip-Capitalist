@@ -42,35 +42,46 @@ export const CARVES = {
   rivers: [{ pts: [[92, 71], [96, 78], [100, 90], [106, 102], [108, 116], [110, 128], [112, 142]], r: 4.5 }, { pts: [[143, -2], [143, 14], [145, 28], [143, 45]], r: 4.2 }],
 };
 
-/** Roads between districts. a and b are ports ('5.W' = the west end of district 5's avenue; W E on the avenue, N S on the cross street) or junction names.
- *  via: waypoints the road bends through (otherwise it bends once, halfway). gate: the district that opens it. path: a narrow footpath. ferry: a water crossing. */
+/** Roads between districts. a and b are ports ('5.W' = the west end of district 5's avenue; W E on the avenue, N S on the cross street), junction names (JUNCTIONS) or, for a footpath, a path head (HEADS) and a lookout (VIEWPOINTS).
+ *  via: waypoints the road bends through (otherwise it bends once, halfway). gate: the district that opens it. path: a narrow footpath. ferry: a water crossing. stem: the run from a port to the fork where two roads part (it carries no car of its own).
+ *  A road that leaves a port runs straight out of it for three tiles (layout.js); one that leaves a junction, or a path head, starts where it stands. */
 export const ROADS = [
   { a: '1.E', b: '2.W', gate: 2, via: [[38, 114], [38, 122]] },
   { a: '2.N', b: '4.S', gate: 4, via: [] },
   { a: '2.E', b: '3.W', gate: 3, via: [[70, 122], [70, 112]] },
-  { a: '4.E', b: '3.N', gate: 4, via: [[76, 92]] },
+  { a: '4.E', b: 'j4', gate: 4, via: [], stem: true },
+  { a: 'j4', b: '3.N', gate: 4, via: [] },
   { a: '3.E', b: '5.S', gate: 5, via: [[104, 112], [126, 112]] },
   { a: '5.E', b: '6.W', gate: 6, via: [[146, 100], [150, 96]] },
   { a: '5.N', b: '7.S', gate: 7, via: [[126, 84], [140, 84]] },
   { a: '6.N', b: '7.E', gate: 7, via: [[168, 70], [158, 68]] },
-  { a: '7.N', b: '8.W', gate: 8, via: [[140, 55], [152, 55]] },
-  { a: '8.W', b: '9.E', gate: 9, via: [[152, 50], [135, 46]] },
+  { a: '8.W', b: 'j8', gate: 8, via: [], stem: true },
+  { a: '7.N', b: 'j8', gate: 8, via: [[140, 55], [152, 55]] },
+  { a: 'j8', b: '9.E', gate: 9, via: [[152, 50], [135, 46]] },
   { a: '9.W', b: '10.E', gate: 10, via: [[102, 46], [100, 40]] },
-  { a: '10.W', b: '11.E', gate: 11, via: [[64, 40], [60, 50], [55, 56]] },
-  { a: '11.S', b: '12.N', gate: 12, via: [[44, 70], [18, 70]] },
-  { a: '12.N', b: '13.S', gate: 13, via: [[12, 70], [12, 34], [50, 34]] },
+  { a: '10.W', b: '11.E', gate: 11, via: [[64, 40], [60, 50]] },
+  { a: '12.N', b: 'j12', gate: 12, via: [], stem: true },
+  { a: '11.S', b: 'j12', gate: 12, via: [[44, 70]] },
+  { a: 'j12', b: '13.S', gate: 13, via: [[12, 70], [12, 34], [50, 34]] },
   { a: '13.E', b: '14.W', gate: 14, via: [[66, 22], [66, 14], [72, 14]] },
   { a: '14.E', b: '15.W', gate: 15, via: [] },
   { a: '10.N', b: '14.S', gate: 14, via: [[84, 28], [86, 28]] },
-  { a: '4.E', b: '5.W', gate: 5, via: [[78, 92], [88, 92], [98, 96], [108, 98], [112, 100]] },
+  { a: 'j4', b: '5.W', gate: 5, via: [[78, 92], [88, 92], [98, 96], [112, 100]] },
   { a: '15.E', b: '16.W', gate: 16, via: [[136, 14], [146, 16]], ferry: true },
-  // footpaths to the lookouts
-  { a: '10.W', b: 'v1', gate: 10, via: [[66, 46], [70, 58]], path: true },
-  { a: '3.E', b: 'v2', gate: 5, via: [[102, 118], [98, 124]], path: true },
+  // footpaths to the lookouts (three of them leave a road from a path head, 2 tiles to its side)
+  { a: 'h1', b: 'v1', gate: 10, via: [[66, 46], [70, 58]], path: true },
+  { a: 'h2', b: 'v2', gate: 5, via: [[102, 118], [98, 124]], path: true },
   { a: '9.S', b: 'v3', gate: 9, via: [[116, 64]], path: true },
   { a: '12.E', b: 'v4', gate: 12, via: [[40, 84], [44, 76]], path: true },
   { a: '14.N', b: 'v5', gate: 14, via: [], path: true },
-  { a: '4.E', b: 'v6', gate: 4, via: [[74, 88]], path: true },
+  { a: 'h6', b: 'v6', gate: 4, via: [[74, 88]], path: true },
 ];
+/**
+ * Where a road forks: a junction is a node three tiles or more out on the stem the two roads share. A stem runs from the port to it, each of the two branches runs from it to the port it was drawn to. `port` is the stem's port
+ * and `at` the node (on the street's axis): layout.js and the road layer read them, and a gate stands where the road in is ten tiles from the port, so the stem counts in that length.
+ */
+export const JUNCTIONS = { j4: { at: [72, 94], port: '4.E' }, j8: { at: [156, 52], port: '8.W' }, j12: { at: [18, 70], port: '12.N' } };
+/** Where a footpath leaves a road: a path head, two tiles to the side of the road's middle line (so the path never lies on the asphalt: a path keeps 1.5 tiles from every road's middle line but within 2 of its head). `port` is the stem or road it stands beside. */
+export const HEADS = { h1: { at: [69, 42], port: '10.W' }, h2: { at: [101, 114], port: '3.E' }, h6: { at: [70, 92], port: '4.E' } };
 /** Lookouts at the ends of the footpaths: a bench, a telescope and a view. */
-export const VIEWPOINTS = { v1: [72, 60], v2: [98, 127], v3: [113.5, 65], v4: [48, 72], v5: [92, 4], v6: [76, 84] };
+export const VIEWPOINTS = { v1: [72, 60], v2: [98, 127], v3: [113.5, 65], v4: [48, 72], v5: [90, 1.2], v6: [76, 84] };

@@ -5,7 +5,7 @@
 import { ZONES } from '../data/index.js';
 import { h2, lerp, clamp, mix, shade, luma } from './iso.js';
 import { KITS, FILL } from './kits.js';
-import { GW, GH, BW, BD, ANCHORS, REGIONS, BLOBS, CARVES, ROADS, VIEWPOINTS } from './island.js';
+import { GW, GH, BW, BD, ANCHORS, REGIONS, BLOBS, CARVES, ROADS, JUNCTIONS, HEADS, VIEWPOINTS } from './island.js';
 import { tidy, fillet, gradeRoads } from './roadshape.js';
 
 /** The radius, in tiles, of the arc every corner of a road is rounded with (a footpath turns tighter): the cars follow it and the painted dashes bend with it (roadshape.js). */
@@ -15,6 +15,7 @@ export { GW, GH, BW, BD, REGIONS };
 export const LAND = { x0: 0, x1: GW, y0: 0, y1: GH };
 export const SEA = 34;                 // how far below the water line a cliff falls
 export const SKIRT = 5;                // tiles over which the ground rises or falls from a district's plateau to the hills around it
+export const BRIDGE_GAP = 1.5;         // the dry stretch, in tiles, that two wet runs of one road may have between them and still be one bridge
 
 // ---- the block template (local tiles, before the plan is mirrored for some districts): a core every district shares
 export const T = {
@@ -172,7 +173,7 @@ function buildDistrict(zones, id, roadSegs) {
       if (x + o.w > q[0] + q[2] || y + o.d > q[1] + q[3] || R.some((s) => ov(r, s, 0.6)) || roadSegs.some((s) => segDist(x + o.w / 2, y + o.d / 2, s[0], s[1], s[2], s[3]) < s[4] + Math.max(o.w, o.d) * 0.7 + 0.8)) continue;
       const { t, ...rst } = o; R.push({ ...r, t }); mkProp(D, t, x, y, o.w, o.d, rst.h ?? 20, { ...rst, pad: true }, true); placed++;
     }
-    if (kit.padDecal) for (const dc of kit.padDecal(q, qi, cols)) D.decals.push(dc);
+    if (kit.padDecal) for (const dc of kit.padDecal(q, qi, cols)) D.decals.push({ ...dc, pad: true }); // (a pad's ground treatment is painted under the roads that cross it: groundart.js)
   });
   D.props.sort((a, b) => a.key - b.key);
   D.bb = [(fp[0] - (fp[1] + fp[3])) * 32 - 40, (fp[0] + fp[1]) * 16 - z - 250, (fp[0] + fp[2] - fp[1]) * 32 + 40, (fp[0] + fp[2] + fp[1] + fp[3]) * 16 - z + 40];
@@ -185,7 +186,7 @@ export function buildLayout(zones = ZONES, { water = true } = {}) {
   // ---- ports and roads first (the pads need to stay off the roads)
   const PORT = {};
   for (const id of ids) { const an = ANCHORS[id], ox = an.cx - BW / 2, oy = an.cy - BD / 2; PORT[id + '.W'] = [ox, an.cy]; PORT[id + '.E'] = [ox + BW, an.cy]; PORT[id + '.N'] = [an.cx, oy]; PORT[id + '.S'] = [an.cx, oy + BD]; PORT[id + '.C'] = [an.cx, an.cy]; }
-  const node = (name) => PORT[name] || VIEWPOINTS[name] || null;
+  const node = (name) => PORT[name] || (JUNCTIONS[name] && JUNCTIONS[name].at) || (HEADS[name] && HEADS[name].at) || VIEWPOINTS[name] || null;
   const edges = [];
   for (const r of ROADS) {
     const A = node(r.a), B = node(r.b); if (!A || !B) continue;
@@ -194,7 +195,7 @@ export function buildLayout(zones = ZONES, { water = true } = {}) {
     for (const v of r.via || []) pts.push(v.slice());
     if (ob) pts.push([B[0] + ob[0] * 3, B[1] + ob[1] * 3]);
     pts.push(B.slice());
-    edges.push({ ...r, ...polyInfo(r.ferry ? pts : fillet(tidy(pts), r.path ? PATH_RADIUS : ROAD_RADIUS)), plan: pts, w: r.path ? 1 : 2, n: edges.length }); // (`plan`: the corners as drawn; the land and the scenery keep off those)
+    edges.push({ ...r, ...polyInfo(r.ferry ? pts : fillet(tidy(pts), r.path ? PATH_RADIUS : ROAD_RADIUS)), plan: pts, w: r.path ? 1 : 2, n: edges.length, ja: !!JUNCTIONS[r.a], jb: !!JUNCTIONS[r.b] }); // (`plan`: the corners as drawn; the land and the scenery keep off those; `ja`, `jb`: the edge starts, ends at a junction)
   }
   const roadSegs = []; for (const e of edges) if (!e.ferry) for (let i = 0; i + 1 < e.plan.length; i++) roadSegs.push([e.plan[i][0], e.plan[i][1], e.plan[i + 1][0], e.plan[i + 1][1], e.w / 2]);
   const districts = {}; for (const id of ids) districts[id] = buildDistrict(zones, id, roadSegs);
@@ -257,12 +258,14 @@ export function buildLayout(zones = ZONES, { water = true } = {}) {
   }
   // ---- heights (bilinear on the vertex grid; a bridge deck overrides the water under it)
   const bilin = (gx, gy) => { const x = clamp(gx, 0, GW - 1e-6), y = clamp(gy, 0, GH - 1e-6), i = x | 0, j = y | 0, fx = x - i, fy = y - j; return lerp(lerp(ZV[j * VW + i], ZV[j * VW + i + 1], fx), lerp(ZV[(j + 1) * VW + i], ZV[(j + 1) * VW + i + 1], fx), fy); };
-  const bridges = []; // the stretches of a road that cross water (the ferry sails instead)
+  const bridges = []; // the stretches of a road that cross water (the ferry sails instead): ONE run to a crossing, a sandbar of a tile or less in the middle of the water does not end the bridge and start another (8.W to 9.E was two bridges that touched)
   for (const e of edges) {
     if (e.ferry || e.path) continue;
-    let run = null;
-    for (let s = 0; s <= e.len + 0.01; s += 0.5) { const p = polyAt(e, s), wet = !isLand(Math.floor(p.x), Math.floor(p.y)); if (wet && !run) run = { s0: Math.max(0, s - 0.5), edge: e }; if (!wet && run) { run.s1 = s; bridges.push(run); run = null; } }
-    if (run) { run.s1 = e.len; bridges.push(run); }
+    let run = null, last = null;
+    const close = () => { if (last && run.s0 - last.s1 <= BRIDGE_GAP) { last.s1 = run.s1; } else { bridges.push(run); last = run; } run = null; };
+    // (the road is looked at every quarter tile and a run's ends are put out to the half tile, so a sliver of water between two samples half a tile apart is not missed and a bridge starts and ends where it always did)
+    for (let k = 0; k * 0.25 <= e.len + 0.01; k++) { const s = k * 0.25, p = polyAt(e, s), wet = !isLand(Math.floor(p.x), Math.floor(p.y)); if (wet && !run) run = { s0: Math.max(0, Math.floor((s - 0.5) * 2) / 2), edge: e }; if (!wet && run) { run.s1 = Math.ceil(s * 2) / 2; close(); } }
+    if (run) { run.s1 = e.len; close(); }
   }
   /** The height of a road's surface at arc length s (the graded profile of roadshape.js); NaN for an edge with none (the ferry). Over a bridge the deck's own height is `zAt`. */
   const roadZ = (e, s) => { const q = e.zprof; if (!q) return NaN; const k = clamp(s / q.step, 0, q.z.length - 1), i = Math.min(Math.floor(k), q.z.length - 2), f = k - i; return q.z[i] * (1 - f) + q.z[i + 1] * f; };
@@ -285,13 +288,17 @@ export function buildLayout(zones = ZONES, { water = true } = {}) {
   const assemble = (steps, start) => { const pts = [nodes.get(start).slice()]; for (const s of steps) { if (s.e) { const P = s.e.a === s.from ? s.e.pts : [...s.e.pts].reverse(); for (let i = 1; i < P.length; i++) pts.push(P[i].slice()); } else pts.push(nodes.get(s.to).slice()); } return pts; };
   const route = (a, b, open) => { const steps = walk(a + '.C', b + '.C', open); return steps ? assemble(steps, a + '.C') : null; };
   // ---- gates: each district's entry road is the one that opens with it; the barrier, bridge leaf or ferry stands where that road meets the near bank
+  // (a name stands for a port: a junction for the port its stem leaves, so a road that ends at the fork is a road into that district; the gate stands ten tiles from the port along the road in, the stem counted in that ten)
+  const portOf = (name) => (JUNCTIONS[name] ? JUNCTIONS[name].port : name), belongs = (name, id) => portOf(name).startsWith(id + '.');
+  const stemLen = (name) => { const st = edges.find((q) => q.stem && (q.a === name || q.b === name)); return st ? st.len : 0; };
   for (const D of ds) {
-    const e = edges.find((q) => q.gate === D.id && !q.path && (q.a.startsWith(D.id + '.') || q.b.startsWith(D.id + '.'))) || null, port = e ? (e.a.startsWith(D.id + '.') ? e.a : e.b) : D.id + '.W', P0 = node(port), out = OUT[port.split('.')[1]];
+    const e = edges.find((q) => q.gate === D.id && !q.path && !q.stem && (belongs(q.a, D.id) || belongs(q.b, D.id))) || null, port = e ? (belongs(e.a, D.id) ? portOf(e.a) : portOf(e.b)) : D.id + '.W', P0 = node(port), out = OUT[port.split('.')[1]];
     D.entry = [P0[0] - out[0] * 0.8, P0[1] - out[1] * 0.8]; D.entryPort = port; D.inEdge = e ? e.n : null;
     if (D.id === 1 || !e) continue;
-    const rev = !e.a.startsWith(D.id + '.');          // the edge is stored from the previous district to this one
-    const br = bridges.find((q) => q.edge === e), s = br ? (rev ? br.s0 - 1 : br.s1 + 1) : e.ferry ? (rev ? 3 : e.len - 3) : (rev ? e.len - 10 : 10);
-    const q = polyAt(e, clamp(s, 0, e.len)), dir = rev ? 1 : -1, far = polyAt(e, rev ? e.len : 0);
+    const rev = !belongs(e.a, D.id);          // the edge is stored from the previous district to this one
+    const lead = stemLen(rev ? e.b : e.a), run = Math.max(0, 10 - lead); // (the tiles of the ten that are the edge's own: a fork's stem is the rest)
+    const br = bridges.find((q) => q.edge === e), s = br ? (rev ? br.s0 - 1 : br.s1 + 1) : e.ferry ? (rev ? 3 : e.len - 3) : (rev ? e.len - run : run);
+    const q = polyAt(e, clamp(s, 0, e.len)), dir = rev ? 1 : -1, far = { x: P0[0], y: P0[1] };
     D.gateAt = { x: q.x, y: q.y, hx: q.dx * dir, hy: q.dy * dir, kind: D.gateKind, edge: e.n };
     if (D.gateKind !== 'fog') { const p = mkProp(D, 'gate', q.x - 0.15, q.y - 0.15, 0.3, 0.3, 16, { gk: D.gateKind, hx: q.dx * dir, hy: q.dy * dir, fx: far.x, fy: far.y, label: D.name + ' (locked)', ext: 70, own: 1 }, false); p.z = zAt(q.x, q.y); p.bb = [(q.x - q.y) * 32 - 90, (q.x + q.y) * 16 - p.z - 80, (q.x - q.y) * 32 + 90, (q.x + q.y) * 16 - p.z + 40]; D.props.sort((a1, b1) => a1.key - b1.key); }
   }

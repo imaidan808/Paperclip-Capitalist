@@ -9,7 +9,9 @@ import { mix, clamp } from './iso.js';
 import { smooth as smoothstep, vnoise, LATTICE, hz } from './noise.js';
 import { bakeBase } from './rasterbase.js';
 import { surface } from './gfx.js';
-import { drawStage, paintFringe, tonesOf, tuft, TUFT_TONES, gridRange, rrect } from './groundmat.js';
+import { drawStage, paintFringe, tonesOf, tuft, TUFT_TONES, gridRange, rrect, decalBox } from './groundmat.js';
+import { apronPieces, APRON } from './roadshape.js';
+import { JUNCTIONS, HEADS } from './island.js';
 import { plantTree, bush, rock } from './nature.js';
 import { decalV2, warmVeil } from './decalart.js';
 import { VEIL, liftGround } from './terrainfield.js';
@@ -142,6 +144,7 @@ function drawBlocks(ctx, view, env, w, a) {
     if (gp && detail[1] > 0.02) { ctx.fillStyle = gp; ctx.globalAlpha = Math.min(1, 0.35 + detail[1] * 0.65); ctx.beginPath(); rrect(ctx, D.ox, D.oy, BW, BD, 0.9, z); ctx.fill(); ctx.globalAlpha = 1; }
     paintFringe(ctx, view, D, z, detail, tonesOf(D, S, k), (gx, gy) => land[(gy | 0) * GW + (gx | 0)] === 1, free);
   }
+  drawAprons(ctx, view, env, w, a);
   drawPlants(ctx, view, env, w, a);
 }
 registerLayer('blocks', drawBlocks, 'inherit', () => 1);
@@ -176,34 +179,186 @@ function strip(ctx, d, o0, o1, lift, i0 = 0, i1 = d.length - 1) {
 }
 const at = (d, s) => { let i = 0; while (i < d.length - 2 && d[i + 1][5] < s) i++; const a = d[i], b = d[i + 1], t = clamp((s - a[5]) / ((b[5] - a[5]) || 1), 0, 1); return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t, a[3] + (b[3] - a[3]) * t, a[4] + (b[4] - a[4]) * t]; };
 const FOOT = mix(SAND.light, PAVE.cream, 0.5), FOOT_EDGE = mix(SAND.mid, PAVE.cobble, 0.5);
+/** The colours a road is painted in: an open road is grey asphalt in a cream kerb with yellow dashes; a locked one is paler, veiled, dashless; a footpath is sand in a darker sand edge. The kerb of a road is a tile's fifth wide, a path's its seventh. */
+export function roadTones(open, path = false) {
+  if (path) return { surface: FOOT, edge: FOOT_EDGE, kb: 0.14 };
+  return { surface: V(open ? mix(ROAD.mid, ROAD.light, 0.12) : mix(ROAD.light, ROAD.kerb, 0.2), open ? 0 : 0.5), edge: V(ROAD.kerb, open ? 0 : 0.5), kb: 0.2, dash: ROAD.dash };
+}
+/** The dashes down the middle of a road: [from, to] along it, 0.9 long, 0.8 apart, from 1.2 tiles in; none within DASH_SKIP of a junction (the three roads of a fork meet there and a dash of each would lie on the others). */
+export const DASH_SKIP = 2.0;
+export function dashSpans(e) {
+  const out = [];
+  for (let s = 1.2; s < e.len - 1; s += 1.7) { const s1 = Math.min(e.len, s + 0.9); if ((e.ja && s < DASH_SKIP) || (e.jb && s1 > e.len - DASH_SKIP)) continue; out.push([s, s1]); }
+  return out;
+}
+/** One centre dash: a band 0.35 tile wide from s to s1 along the road. */
+function dash(ctx, d, s, s1) {
+  const p = at(d, s), q = at(d, s1); ctx.beginPath();
+  for (const [pt, o] of [[p, -0.175], [q, -0.175], [q, 0.175], [p, 0.175]]) { const gx = pt[0] + pt[2] * o, gy = pt[1] + pt[3] * o; ctx.lineTo(px(gx, gy), py(gx, gy, pt[4] + 0.2)); }
+  ctx.closePath(); ctx.fill();
+}
+/** A junction: its place, the way its stem runs (a unit vector out of the node, along the stem's last stretch, away from the port) and the edges that meet there. Made from the layout, once. */
+let JUNC = null;
+/** How many tiles of a branch of another state than the stem's are painted again in its own tone, from the node out (the asphalt patch reaches 0.8 tile from the node along the grid's axes and 1.13 along its diagonal, and the kerb patch a tile more). */
+export const FORK_REPAINT = 1.2;
+export function junctions() {
+  if (JUNC) return JUNC;
+  JUNC = [];
+  for (const name of Object.keys(JUNCTIONS)) {
+    const es = EDGES.filter((e) => e.a === name || e.b === name), stem = es.find((e) => e.stem); if (!stem || es.length < 3) continue;
+    const [x, y] = LAYOUT.nodes.get(name), d = denseOf(stem), q = d[d.length - 1], tx = q[3], ty = -q[2]; // the stem ends here: its heading is the way the traveller goes on, which is away from the port
+    JUNC.push({ name, x, y, z: q[4], ux: tx, uy: ty, stem, edges: es });
+  }
+  return JUNC;
+}
+/** The samples of the first `len` tiles of a road from its junction, in the form `strip` takes, from the node outwards, with both ends exact. */
+function nodeRun(e, J, len) {
+  const d = denseOf(e), atA = e.a === J.name, out = [at(d, atA ? 0 : e.len)], ps = atA ? d : [...d].reverse();
+  for (const p of ps) { const s = atA ? p[5] : e.len - p[5]; if (s > 0.01 && s < len - 0.01) out.push(p); }
+  out.push(at(d, atA ? len : e.len - len));
+  return out;
+}
+/** The 2 by 2 patch that hides the fork where three roads meet: a square of the road's own width, a tile each way from the node, turned to the stem; `inset` shrinks it by a kerb (the asphalt's is the kerb's less 0.2 all round). */
+function patch(ctx, J, inset, lift) {
+  const h = 1 - inset, vx = -J.uy, vy = J.ux; ctx.beginPath();
+  [[-1, -1], [1, -1], [1, 1], [-1, 1]].forEach(([su, sv], i) => { const gx = J.x + J.ux * su * h + vx * sv * h, gy = J.y + J.uy * su * h + vy * sv * h, X = px(gx, gy), Y = py(gx, gy, J.z + lift); i ? ctx.lineTo(X, Y) : ctx.moveTo(X, Y); });
+  ctx.closePath(); ctx.fill();
+}
 
+/**
+ * The connectors of the path heads. A footpath that leaves a road starts at a path head (island.js HEADS), a point two tiles to the road's side, which keeps the path off the asphalt (the data: tests/world-roads.test.mjs); that left a tile of
+ * grass between the road's kerb and the bare square end of the sand, and the path floated. A connector is the path's own first stretch run back to the road: a strip of sand in the path's width and two tones, from the head along the way the path
+ * goes, backwards, to the first place that meets a road's middle line, so it comes out of the road at the angle the path leaves at. It is ground art, painted with the footpaths (under every kerb and every asphalt strip: the road lies over its end),
+ * and no edge changes (the detector, which reads edges, still finds the path two tiles from the road). The head's curb return and bollards are WP11's. { head, edge (the path), road (the edge it joins), d (two samples in the form `strip` takes), hw, len, hit (the road's middle line, where it ends) }.
+ */
+let HEADC = null;
+export function headConnectors() {
+  if (HEADC) return HEADC;
+  HEADC = [];
+  const roads = EDGES.filter((e) => !e.path && !e.ferry);
+  for (const e of EDGES) {
+    if (!e.path || !HEADS[e.a]) continue;
+    const d = denseOf(e), p = d[0], nx = p[2], ny = p[3], bx = -ny, by = nx; // (the way back: against the path's heading, which is (ny, -nx): the normal turned a quarter)
+    let best = null;
+    for (const r of roads) for (let i = 0; i + 1 < r.pts.length; i++) {
+      const ax = r.pts[i][0], ay = r.pts[i][1], cx = r.pts[i + 1][0] - ax, cy = r.pts[i + 1][1] - ay, den = bx * cy - by * cx; if (Math.abs(den) < 1e-9) continue;
+      const t = ((ax - p[0]) * cy - (ay - p[1]) * cx) / den, k = ((ax - p[0]) * by - (ay - p[1]) * bx) / den;
+      if (t > 0 && t < 6 && k >= 0 && k <= 1 && (!best || t < best.t)) best = { t, road: r, s: r.lens[i] + k * Math.hypot(cx, cy) };
+    }
+    if (!best) continue;
+    const q = [p[0] + bx * best.t, p[1] + by * best.t, nx, ny, at(denseOf(best.road), best.s)[4], best.t];
+    HEADC.push({ head: e.a, edge: e, road: best.road, d: [p, q], hw: e.w / 2, len: best.t, hit: [q[0], q[1]] });
+  }
+  return HEADC;
+}
+
+/**
+ * The aprons: one at every port a road leaves (not a footpath, not the ferry), where the block's street becomes the road beyond (roadshape.js APRON). { e, end (0: the edge starts at the port, 1: it ends there), port, D, pieces, bb }: the
+ * polygons are in the grid and made once, from the road's own middle line beyond the port and the straight run under the block's edge.
+ */
+let APR = null;
+export function aprons() {
+  if (APR) return APR;
+  APR = [];
+  for (const e of EDGES) {
+    if (e.path || e.ferry) continue;
+    for (const end of [0, 1]) {
+      const port = end ? e.b : e.a; if (!/^\d+\./.test(port)) continue;
+      const D = DIST[+port.split('.')[0]], d = denseOf(e), s0 = end ? e.len : 0, p0 = at(d, s0), sg = end ? -1 : 1, tx = p0[3] * sg, ty = -p0[2] * sg; // (the way out of the block: along the edge, or against it)
+      const frame = (u) => (u < 0 ? [p0[0] + tx * u, p0[1] + ty * u, p0[2], p0[3], p0[4]] : at(d, end ? e.len - u : u));
+      const pieces = apronPieces(frame); let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9;
+      for (const [x, y, z] of pieces.bands[0].kerb[0].concat(pieces.bands[0].kerb[1])) { x0 = Math.min(x0, px(x, y)); x1 = Math.max(x1, px(x, y)); y0 = Math.min(y0, py(x, y, z)); y1 = Math.max(y1, py(x, y, z)); }
+      for (const [x, y, z] of pieces.walks.left.concat(pieces.walks.right)) { x0 = Math.min(x0, px(x, y)); x1 = Math.max(x1, px(x, y)); y0 = Math.min(y0, py(x, y, z)); y1 = Math.max(y1, py(x, y, z)); }
+      APR.push({ e, end, port, D, pieces, bb: [x0 - 8, y0 - 8, x1 + 8, y1 + 8] });
+    }
+  }
+  return APR;
+}
+const poly = (ctx, pts, lift = 0) => { ctx.beginPath(); pts.forEach(([x, y, z], i) => { const X = px(x, y), Y = py(x, y, z + lift); i ? ctx.lineTo(X, Y) : ctx.moveTo(X, Y); }); ctx.closePath(); ctx.fill(); };
+/**
+ * Paint the aprons in view, over the stage (the blocks layer calls this once the stages are down: the apron covers the stage's lip and shadow where the street leaves it): the sidewalk's wedges, then each band of kerb and asphalt, which
+ * step from the block's own tones at its edge to the road's, then the road's dashes that lie in it (the road under it painted them, and the apron has covered them). Culled by its own box, so a chunk that holds only the end of one has it.
+ */
+function drawAprons(ctx, view, env, w, a) {
+  const zoom = a.zoom;
+  for (const A of aprons()) {
+    const bb = A.bb; if (!(bb[2] > view.x0 && bb[0] < view.x1 && bb[3] > view.y0 && bb[1] < view.y1)) continue;
+    const D = A.D, T = tonesOf(D, setOf(D), lockedOf(w, D.id) ? 1 : 0), open = w.unlocked ? w.unlocked.has(A.e.gate) : true, R = roadTones(open);
+    ctx.fillStyle = T.walk; poly(ctx, A.pieces.walks.left); poly(ctx, A.pieces.walks.right);
+    for (const b of A.pieces.bands) { ctx.fillStyle = mix(T.kerbTop, R.edge, b.t); poly(ctx, b.kerb[0]); poly(ctx, b.kerb[1]); }
+    for (const b of A.pieces.bands) { ctx.fillStyle = mix(T.asph, R.surface, b.t); poly(ctx, b.asphalt, 0.1); }
+    if (open && zoom >= 0.3) { const d = denseOf(A.e); ctx.fillStyle = R.dash; for (const [s, s1] of dashSpans(A.e)) if ((A.end ? A.e.len - s1 : s) <= APRON.len + 0.1) dash(ctx, d, s, s1); } // (the dashes that begin within the apron's length of the port)
+  }
+}
+
+/**
+ * The pads' ground treatment (the farm's stripes, a yard's pavers, the harbor's bands, the campus lawn): each is a rectangle over the whole of a pad quadrant, and a road crosses a pad, so it is painted FIRST, under the roads, and never
+ * reaches one (S16: the stripes of 11 lay over the asphalt of the road to 12, and the harbor's band over the road to 9). The blocks layer skips them.
+ */
+function drawPadDecals(ctx, view, env, w, a) {
+  const detail = env.lod ? env.lod.detail : [1, 1, 1, 1], zoom = a.zoom;
+  for (const id of LAYOUT.ids) {
+    const D = DIST[id], b = D.bb; if (!D.decals.some((d) => d.pad) || !(b[2] > view.x0 && b[0] < view.x1 && b[3] + 200 > view.y0 && b[1] < view.y1)) continue;
+    let S = null, k = 0;
+    for (const d of D.decals) {
+      if (!d.pad || zoom < (d.min ?? 0.3)) continue; const [x0, y0, x1, y1] = decalBox(d, D.z); if (!(x1 > view.x0 && x0 < view.x1 && y1 > view.y0 && y0 < view.y1)) continue;
+      if (!S) { S = setOf(D); k = lockedOf(w, id) ? 1 : 0; }
+      decalV2(ctx, d, D.z, k, S, detail);
+    }
+  }
+}
+
+/**
+ * The roads, in four passes, so no kerb is ever painted across another road's asphalt (the edges were painted one at a time, kerb then asphalt then dashes, so where two roads met the later one's kerb lay over the earlier one's asphalt:
+ * a fork was two ribbons with a cream line across them): the pads' decals; every footpath (under every road) with the strip of sand that joins each path head to its road; every kerb strip and the patch of kerb at each junction; every asphalt strip with its
+ * bend discs and the patch of asphalt at each junction (each patch is the stem's tone; a branch of another state, a locked road at an open fork, is painted again over the patch from the node out, FORK_REPAINT tiles, so it keeps its own tone right up to the node
+ * and the colour changes on one line across it, which is where its gate will stand); then the centre dashes (none
+ * within two tiles of a junction) and the bridges. The ferry's buoys are last. An edge is culled by its own box.
+ */
 function drawRoads(ctx, view, env, w, a) {
   const zoom = a.zoom;
+  drawPadDecals(ctx, view, env, w, a);
+  const vis = [];
   for (const e of EDGES) {
     if (!e.v2bb) { let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9; for (const [x, y] of e.pts) { x0 = Math.min(x0, px(x, y)); x1 = Math.max(x1, px(x, y)); y0 = Math.min(y0, py(x, y, 0)); y1 = Math.max(y1, py(x, y, 0)); } e.v2bb = [x0 - 80, y0 - LAYOUT.maxZ - 80, x1 + 80, y1 + 80]; e.br = LAYOUT.bridges.filter((b) => b.edge === e); }
     const bb = e.v2bb; if (!(bb[2] > view.x0 && bb[0] < view.x1 && bb[3] > view.y0 && bb[1] < view.y1)) continue;
     const open = w.unlocked ? w.unlocked.has(e.gate) : true, d = denseOf(e);
-    if (e.ferry) { // a line of buoys, red and cream: each a rounded cone with a white band, a lamp on its top, a foam ring where it meets the water and a soft shadow on the sea, so it reads as a thing and not as a speck
-      for (let s = 3, n = 0; s < e.len - 3; s += 1.5, n++) { const p = at(d, s); buoy(ctx, px(p[0], p[1]), py(p[0], p[1], 0), n % 2 ? PAVE.cream : TOY.red, open ? 1 : 0.7); }
-      ctx.globalAlpha = 1; continue;
-    }
-    const hw = e.w / 2, brokenBridge = !open && DIST[e.gate]?.gateKind === 'bridge', br = e.br[0];
-    const gap = brokenBridge && br ? [br.s0 + (br.s1 - br.s0) * 0.22, br.s1 - (br.s1 - br.s0) * 0.22] : null;
-    const col = e.path ? FOOT : V(open ? mix(ROAD.mid, ROAD.light, 0.12) : mix(ROAD.light, ROAD.kerb, 0.2), open ? 0 : 0.5), kerb = e.path ? FOOT_EDGE : V(ROAD.kerb, open ? 0 : 0.5), kb = e.path ? 0.14 : 0.2;
-    let i0 = 0, runs = [[0, d.length - 1]];
+    if (e.ferry) { vis.push({ e, d, open }); continue; }
+    const brokenBridge = !open && DIST[e.gate]?.gateKind === 'bridge', br = e.br[0], gap = brokenBridge && br ? [br.s0 + (br.s1 - br.s0) * 0.22, br.s1 - (br.s1 - br.s0) * 0.22] : null;
+    let runs = [[0, d.length - 1]];
     if (gap) { const ia = d.findIndex((p) => p[5] >= gap[0]), ib = d.findIndex((p) => p[5] >= gap[1]); runs = [[0, Math.max(0, ia - 1)], [ib, d.length - 1]]; }
-    const bends = (r0, r1, rad, lift) => { // rounded joins at every bend: a disc of the ground's own circle (an ellipse on the screen)
-      for (let q = r0 + 1; q < r1; q++) { const p = d[q], a2 = d[q - 1], b2 = d[q + 1], turn = Math.abs(a2[2] * b2[3] - a2[3] * b2[2]); if (turn > 0.15) { ctx.beginPath(); ctx.ellipse(px(p[0], p[1]), py(p[0], p[1], p[4] + lift), rad * HW * 1.4142, rad * HH * 1.4142, 0, 0, 6.2832); ctx.fill(); } }
-    };
-    for (const [r0, r1] of runs) { ctx.fillStyle = kerb; strip(ctx, d, -hw, hw, 0, r0, r1); bends(r0, r1, hw, 0); } // the kerb under everything, then the asphalt inside it
-    for (const [r0, r1] of runs) { ctx.fillStyle = col; strip(ctx, d, -hw + kb, hw - kb, 0.1, r0, r1); bends(r0, r1, hw - kb, 0.1); }
-    if (!e.path && open && zoom >= 0.3) { // the centre dashes: painted bands 0.35 tile wide, 0.9 long, 0.8 apart
-      ctx.fillStyle = ROAD.dash;
-      for (let s = 1.2; s < e.len - 1; s += 1.7) { if (gap && s > gap[0] - 1 && s < gap[1] + 1) continue; const p = at(d, s), q = at(d, Math.min(e.len, s + 0.9)); ctx.beginPath(); for (const [pt, o] of [[p, -0.175], [q, -0.175], [q, 0.175], [p, 0.175]]) { const gx = pt[0] + pt[2] * o, gy = pt[1] + pt[3] * o; ctx.lineTo(px(gx, gy), py(gx, gy, pt[4] + 0.2)); } ctx.closePath(); ctx.fill(); }
-    }
-    for (const b of e.br) drawBridge(ctx, b, brokenBridge, a.far, zoom);
+    vis.push({ e, d, open, gap, runs, brokenBridge, T: roadTones(open, e.path), hw: e.w / 2 });
   }
+  const bends = (d, r0, r1, rad, lift) => { // rounded joins at every bend: a disc of the ground's own circle (an ellipse on the screen)
+    for (let q = r0 + 1; q < r1; q++) { const p = d[q], a2 = d[q - 1], b2 = d[q + 1], turn = Math.abs(a2[2] * b2[3] - a2[3] * b2[2]); if (turn > 0.15) { ctx.beginPath(); ctx.ellipse(px(p[0], p[1]), py(p[0], p[1], p[4] + lift), rad * HW * 1.4142, rad * HH * 1.4142, 0, 0, 6.2832); ctx.fill(); } }
+  };
+  const ways = vis.filter((v) => !v.e.ferry), paths = ways.filter((v) => v.e.path), roads = ways.filter((v) => !v.e.path), forks = junctions().filter((J) => J.edges.some((e) => vis.some((v) => v.e === e)));
+  // 1. the footpaths, under everything: their edges, then their sand; each path head's strip of sand to the road goes with them (the road is painted over its end)
+  const joins = headConnectors().filter((c) => paths.some((v) => v.e === c.edge)), FP = roadTones(true, true);
+  for (const v of paths) { ctx.fillStyle = v.T.edge; for (const [r0, r1] of v.runs) { strip(ctx, v.d, -v.hw, v.hw, 0, r0, r1); bends(v.d, r0, r1, v.hw, 0); } }
+  ctx.fillStyle = FP.edge; for (const c of joins) strip(ctx, c.d, -c.hw, c.hw, 0);
+  for (const v of paths) { ctx.fillStyle = v.T.surface; for (const [r0, r1] of v.runs) { strip(ctx, v.d, -v.hw + v.T.kb, v.hw - v.T.kb, 0.1, r0, r1); bends(v.d, r0, r1, v.hw - v.T.kb, 0.1); } }
+  ctx.fillStyle = FP.surface; for (const c of joins) strip(ctx, c.d, -c.hw + FP.kb, c.hw - FP.kb, 0.1);
+  // 2. the kerb of every road: one strip each, and the patch of every junction (a locked road's own kerb is paler)
+  for (const v of roads) { ctx.fillStyle = v.T.edge; for (const [r0, r1] of v.runs) { strip(ctx, v.d, -v.hw, v.hw, 0, r0, r1); bends(v.d, r0, r1, v.hw, 0); } }
+  for (const J of forks) { ctx.fillStyle = roadTones(openOf(w, J)).edge; patch(ctx, J, 0, 0); }
+  const apart = (J) => J.edges.map((e) => vis.find((v) => v.e === e)).filter((v) => v && !v.e.stem && v.open !== openOf(w, J)); // (the branches that are not in the patch's state: a locked road at an open fork, an open road at a locked one)
+  for (const J of forks) for (const v of apart(J)) { ctx.fillStyle = v.T.edge; strip(ctx, nodeRun(v.e, J, FORK_REPAINT), -v.hw, v.hw, 0); } // the patch is the stem's tone and reaches a tile into a branch of another: the branch keeps its own from the node out, so the colour changes on one line across it
+  // 3. the asphalt of every road, inside its kerb, with the same patches (a tile's fifth smaller)
+  for (const v of roads) { ctx.fillStyle = v.T.surface; for (const [r0, r1] of v.runs) { strip(ctx, v.d, -v.hw + v.T.kb, v.hw - v.T.kb, 0.1, r0, r1); bends(v.d, r0, r1, v.hw - v.T.kb, 0.1); } }
+  for (const J of forks) { ctx.fillStyle = roadTones(openOf(w, J)).surface; patch(ctx, J, 0.2, 0.1); }
+  for (const J of forks) for (const v of apart(J)) { ctx.fillStyle = v.T.surface; strip(ctx, nodeRun(v.e, J, FORK_REPAINT), -v.hw + v.T.kb, v.hw - v.T.kb, 0.1); }
+  // 4. the centre dashes of the open roads (painted bands 0.35 tile wide, 0.9 long, 0.8 apart), then the bridges
+  if (zoom >= 0.3) for (const v of roads) {
+    if (!v.open) continue; ctx.fillStyle = v.T.dash;
+    for (const [s, s1] of dashSpans(v.e)) { if (v.gap && s > v.gap[0] - 1 && s < v.gap[1] + 1) continue; dash(ctx, v.d, s, s1); }
+  }
+  for (const v of roads) for (const b of v.e.br) drawBridge(ctx, b, v.brokenBridge, a.far, zoom);
+  // 5. the ferry: a line of buoys, red and cream: each a rounded cone with a white band, a lamp on its top, a foam ring where it meets the water and a soft shadow on the sea, so it reads as a thing and not as a speck
+  for (const { e, d, open } of vis) if (e.ferry) { for (let s = 3, n = 0; s < e.len - 3; s += 1.5, n++) { const p = at(d, s); buoy(ctx, px(p[0], p[1]), py(p[0], p[1], 0), n % 2 ? PAVE.cream : TOY.red, open ? 1 : 0.7); } ctx.globalAlpha = 1; }
 }
+/** Is the fork's stem open? (A fork is painted in its stem's state: the roads at it are open or locked by the district of each, and the patch takes the stem's.) */
+const openOf = (w, J) => (w.unlocked ? w.unlocked.has(J.stem.gate) : true);
 registerLayer('roads', drawRoads, 'inherit', () => 1);
 
 /** A buoy at (x, y) on the water: a soft shadow and a ring of foam on the sea, a cone of `col` (a little taller than wide) with a white band and a small yellow lamp, lit from the upper left. About 7 x 11 world pixels. */
