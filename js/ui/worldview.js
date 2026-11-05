@@ -6,6 +6,7 @@ import { ZONES, ASSETS, BUYERS, PIPE, MIL_ZONE } from '../config.js';
 import { fmtMoney as money, fitLabel } from '../market.js';
 import { esc, toast, fitStuck } from './common.js';
 import { createWorldSound } from './worldsound.js';
+import { gl } from './glyphs.js';
 
 export function createWorldView(ctx) {
   const { S, U } = ctx;
@@ -137,7 +138,7 @@ export function createWorldView(ctx) {
     mount(el) {
       host = el;
       el.innerHTML = `<div class="wvcv"></div>
-        <div class="wvctl" role="group" aria-label="Camera"><button class="ibtn" data-wv="zin" aria-label="Zoom in">+</button><button class="ibtn" data-wv="zout" aria-label="Zoom out">−</button><button class="ibtn" data-wv="fit" aria-label="Show the whole island">◎</button><button class="ibtn" data-wv="me" aria-label="Back to my district">⌂</button></div>
+        <div class="wvctl" role="group" aria-label="Camera"><button class="ibtn" data-wv="zin" aria-label="Zoom in">${gl('ctl-zoom-in')}</button><button class="ibtn" data-wv="zout" aria-label="Zoom out">${gl('ctl-zoom-out')}</button><button class="ibtn" data-wv="fit" aria-label="Show the whole island">${gl('ctl-fit')}</button><button class="ibtn" data-wv="me" aria-label="Back to my district">${gl('ctl-home')}</button></div>
         <div class="wvtip" hidden></div>
         <details class="wvlist"><summary data-stuck="top"><svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false"><path d="M6.5 4H14M6.5 8H14M6.5 12H14" fill="none" stroke="currentColor" stroke-width="2"/><path d="M2 4h1.6M2 8h1.6M2 12h1.6" fill="none" stroke="currentColor" stroke-width="2.4"/></svg><span class="wvl-t">List of everything in this district <span class="wvl-x">(for keyboard and screen readers)</span></span></summary><ul class="wvul"></ul></details>`;
       sound = createWorldSound(ctx, { world: () => world });

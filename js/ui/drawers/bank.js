@@ -3,6 +3,7 @@
 // The game teaches leverage here, so the rules of the margin call are always on the page, before the player ever feels one.
 import { LOANS, DEBT, AUDIT, BASE_RATE, FEES, PIPE, ZONES, ASSETS, BUYERS, MIL, TOTAL_DAYS } from '../../config.js';
 import { esc } from '../common.js';
+import { gl, tile } from '../glyphs.js';
 
 // ---------------------------------------------------------------- helpers
 const ST = (ctx) => {
@@ -81,7 +82,7 @@ function productCard(v, id) {
   const facts = [['Limit', m(r.limit)], ['Rate', id === 'circle' ? '0%' : `${(rate * 100).toFixed(1)}% per 30 days`, id === 'circle' ? '' : `Base rate ${base.toFixed(1)}% per 30 days${g.mods().rateBps ? ', raised by the credit crunch' : ''}, plus this line's spread. Capital Sourcing level ${lvl} cuts loan interest by ${cut}%.`], ['Fee', L.fee ? `${(L.fee * 100).toFixed(0)}% upfront` : L.commit ? 'None upfront' : 'None'], ['Compounds', id === 'circle' ? 'Never' : every(L.every)]];
   if (L.commit) facts.push(['Fee on unused part', `${(L.commit * 100).toFixed(1)}% a month`, 'Charged each month while you owe on this line, on the part of it you have not borrowed. It is added to what you owe.']);
   facts.push(['You can borrow', m(r.room)]);
-  return `<article class="bk-prod${why ? ' off' : ''}" aria-label="${esc(L.name)}"><header class="bk-ph"><div class="grow"><h4>${esc(L.name)}</h4><p class="small mute">${P.line}</p></div></header>
+  return `<article class="bk-prod${why ? ' off' : ''}" aria-label="${esc(L.name)}"><header class="bk-ph">${tile('loan-' + id)}<div class="grow"><h4>${esc(L.name)}</h4><p class="small mute">${P.line}</p></div></header>
     <dl class="bk-facts">${facts.map(([k, x, tip]) => `<div><dt>${k}</dt><dd class="mono"${tip ? ` title="${esc(tip)}"` : ''}>${x}</dd></div>`).join('')}</dl>
     ${why ? `<p class="bk-why small">${esc(why)}</p>` : `<label for="bk-amt-${id}">Borrow <output data-amt="${id}" class="mono">${m(amount)}</output> of ${m(r.room)}</label>
       <input id="bk-amt-${id}" type="range" min="0" max="100" step="5" value="${pct}" data-input="bank-amt" data-p="${id}" data-fid="ba-${id}">
@@ -96,7 +97,7 @@ function loansHTML(v) {
   const poor = s.cash <= 0;
   return `<section class="bk-sec" aria-label="Open loans"><h3 class="bk-h3">What you owe</h3><div class="bk-grid">${s.loans.map((l) => {
     const L = LOANS[l.prod], rate = g.loanRate(l.prod), owed = l.principal + l.accr;
-    return `<article class="bk-loan"><header class="row"><b class="grow">${esc(L.name)}</b><span class="chip">${l.prod === 'circle' ? '0%' : (rate * 100).toFixed(1) + '% per 30 days'}</span></header>
+    return `<article class="bk-loan"><header class="row">${tile('loan-' + l.prod)}<b class="grow">${esc(L.name)}</b><span class="chip">${l.prod === 'circle' ? '0%' : (rate * 100).toFixed(1) + '% per 30 days'}</span></header>
       <dl class="bk-facts"><div><dt>Balance</dt><dd class="mono">${m(l.principal)}</dd></div><div><dt>Interest so far</dt><dd class="mono ${l.accr > 0.005 ? 'red' : ''}">+${m(l.accr)}</dd></div><div><dt>Total owed</dt><dd class="mono"><b>${m(owed)}</b></dd></div></dl>
       <p class="small mute">${rate ? `Costs about ${m(l.principal * rate / 30)} a day. ` : ''}Interest joins the balance in ${dur(l.next - s.hour)}.</p>
       <div class="row"><button class="btn ghost" data-act="bank-repay" data-anchor="bank-repay" data-id="${l.id}" data-f="half" data-fid="rh-${l.id}" ${poor ? 'aria-disabled="true"' : ''}>Repay half</button><button class="btn" data-act="bank-repay" data-anchor="bank-repay" data-id="${l.id}" data-f="all" data-fid="ra-${l.id}" ${poor ? 'aria-disabled="true"' : ''}>${s.cash < owed && !poor ? `Repay ${m(s.cash)}` : 'Repay all'}</button></div>
@@ -154,7 +155,7 @@ function ledgerHTML(v) {
   const f = types.includes(B.logf) ? B.logf : 'all', head = s.ledger[0]?.type === 'summary' && (f === 'all' || f === 'summary') ? s.ledger[0] : null;
   // newest first, and the summary of what was folded away (the oldest line there is) is always at the foot of the list, never cut off by the forty
   const body = [...s.ledger].reverse().filter((e) => e !== head && (f === 'all' || e.type === f)).slice(0, 40), rows = head ? [...body, head] : body;
-  return `<section class="bk-sec" aria-label="Ledger"><button class="btn ghost bk-lt" data-act="bank-ledger" aria-expanded="${open}" data-fid="bk-ledger"><span aria-hidden="true">${open ? '▾' : '▸'}</span> Ledger: every gain and cost</button>
+  return `<section class="bk-sec" aria-label="Ledger"><button class="btn ghost bk-lt" data-act="bank-ledger" aria-expanded="${open}" data-fid="bk-ledger"><span aria-hidden="true">${gl(open ? 'mark-caret-down' : 'mark-caret-right', 'gl-xs')}</span> Ledger: every gain and cost</button>
     ${open ? `<div class="row bk-lf"><label for="bk-logf">Show</label><select id="bk-logf" data-change="bank-logf" data-fid="bk-logf">${types.map((t) => `<option value="${esc(t)}" ${t === f ? 'selected' : ''}>${esc(t)}</option>`).join('')}</select><span class="grow"></span><button class="btn ghost" data-act="bank-csv" data-fid="bk-csv">Download CSV</button></div>
       <p class="small mute">The last ${body.length} of ${plural(s.ledger.length, 'line')}. A line is a gain or a cost, not always cash (a sale is booked against its fair value), so the lines do not add up to your cash.${s.ledgerDropped ? ` The ${plural(s.ledgerDropped, 'oldest line')} ${s.ledgerDropped === 1 ? 'is' : 'are'} folded into one summary line at the foot of the list, with totals by type. The download holds every line.` : ' The download holds every line.'}</p>
       <div class="scroll bk-scroll"><table class="tbl"><thead><tr><th scope="col">Day</th><th scope="col">Type</th><th scope="col">What</th><th scope="col" class="right">Amount</th></tr></thead><tbody>${rows.map((e) => `<tr><td class="mono">${Math.floor(e.h / 24) + 1}</td><td>${esc(e.type)}</td><td>${esc(e.text)}</td><td class="right mono ${e.amt >= 0 ? 'green' : 'red'}">${e.amt ? m(e.amt, { plus: true }) : ''}</td></tr>`).join('') || '<tr><td colspan="4" class="mute">Nothing yet.</td></tr>'}</tbody></table></div>` : ''}</section>`;
@@ -169,7 +170,7 @@ function keepScroll(ctx) {
 }
 
 export default {
-  id: 'bank', icon: '🏦', label: 'Bank',
+  id: 'bank', label: 'Bank',
   visible: (ctx) => !!ctx.g().s.mil.m1,
   badge: (ctx) => { const g = ctx.g(), s = g.s; const n = (s.auditPending ? 1 : 0) + (g.debt() > 0 && g.deRatio() > DEBT.maxDE ? 1 : 0); return n || null; },
   html(ctx) {

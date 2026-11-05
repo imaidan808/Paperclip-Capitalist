@@ -3,11 +3,14 @@
 import { sx, sy, clamp, roundRect } from './iso.js';
 import { LAYOUT, DIST } from './layout.js';
 import { qs } from './labels.js';
-import { snap, sans } from './gfx.js';
+import { snap } from './gfx.js';
 import { money, PIP_ZOOM } from './common.js';
 import { AVATAR_TONE, initialOf } from '../avatar.js';
+import { paint } from '../art/paint.js';
+import '../art/g-ui.js'; // the marks drawn on the canvas (a dot, a lock, a pause, a warning, an audit): js/art/g-ui.js
 
 const TAG_SHIFT = [[0, 0], [0, -19], [0, 19], [-34, 0], [34, 0], [-34, -19], [34, -19], [-34, 19], [34, 19], [0, -38], [0, 38], [-34, -38], [34, -38], [-34, 38], [34, 38], [-68, 0], [68, 0], [-68, -19], [68, -19], [-68, 19], [68, 19]], TAG_PULL = 3, TAG_SHORT = 0.03; // where a name tag may stand off its district (x, y in px) to clear another tag (a tag is 18px high), and what a px of that costs against the area it would cover
+const MARK_W = 14;                                             // the room a tag's mark (the dot, the lock) takes before its name, in px: the glyph and a gap
 const NARROW = 500, CROWD = 4;                                 // a screen narrower than this (a phone) has no room for passing notes once this many name tags are on it (the whole-island view: sixteen)
 /** Does the rectangle touch any of the first `n` occupied rectangles in `R` (x0, y0, x1, y1 each)? */
 function hitsAny(R, n, x0, y0, x1, y1) { for (let r = 0; r < n; r++) if (x0 < R[r * 4 + 2] && x1 > R[r * 4] && y0 < R[r * 4 + 3] && y1 > R[r * 4 + 1]) return true; return false; }
@@ -70,7 +73,7 @@ export const overlayMethods = {
    * marker (a dot): where the "You" note has no room it is the only sign of where you are.
    */
   planZoneTags(R) {
-    const plan = this.tagPlan || (this.tagPlan = Array.from({ length: LAYOUT.ids.length }, () => ({ id: 0, x: 0, y: 0, text: '', color: '', pips: false, k: 0, over: 0, px: 0, py: 0 }))); // reused every frame
+    const plan = this.tagPlan || (this.tagPlan = Array.from({ length: LAYOUT.ids.length }, () => ({ id: 0, x: 0, y: 0, text: '', mk: '', color: '', pips: false, k: 0, over: 0, px: 0, py: 0 }))); // reused every frame
     const order = this.tagOrder || (this.tagOrder = LAYOUT.ids.slice()), pick = this.tagPick || (this.tagPick = { k: 0, over: 0, lo: 0, hi: 0 });
     const { W, H } = this, zp = this.zpip, pips = this.cam.z < PIP_ZOOM, at = this.player.zone, chosen = this.api.ui?.zone, openOf = (id) => this.unlocked?.has(id) ?? true;
     const rank = (id) => (id === at ? 0 : id === chosen ? 1 : openOf(id) ? 2 : 3) * 64 + id;
@@ -80,18 +83,18 @@ export const overlayMethods = {
     for (const id of order) {
       const D = DIST[id], [px, py] = this.w2s(sx(D.cx, D.cy), sy(D.cx, D.cy, D.z) - 70);
       if (px < -120 || px > W + 120 || py < -30 || py > H + 30) continue;
-      const open = openOf(id), mark = `${id === at ? '\u25CF ' : ''}${open ? '' : '\u{1F512} '}`, n = pips ? zp[id * 3] + zp[id * 3 + 1] + zp[id * 3 + 2] : 0;
+      const open = openOf(id), mk = id === at ? 'mark-dot' : open ? '' : 'mark-lock', mw = mk ? MARK_W : 0, n = pips ? zp[id * 3] + zp[id * 3 + 1] + zp[id * 3 + 2] : 0; // the dot (you are here) or the lock (not open yet): drawn before the name, never both (you stand in an open district)
       const below = n ? 20 : 9, pw = Math.min(n, 6) * 10 + 8;                                    // the footprint reaches below the tag when it carries a pips row
-      let text = `${mark}${id}  ${D.short}`, hw = Math.max(text.length * 6.7 + 14, pw) / 2;
+      let text = `${id}  ${D.short}`, hw = Math.max(text.length * 6.7 + 14 + mw, pw) / 2;
       this.tagSpan(px, hw, pick); bestSlot(R, nr, px, py, hw, below, pick);
       if (pick.over > hw * 2 * 18 * TAG_SHORT) {                                                  // still covers a good part of it: try the short form
-        const t2 = `${mark}${id}`, hw2 = Math.max(t2.length * 6.7 + 14, pw) / 2, k1 = pick.k, o1 = pick.over, lo1 = pick.lo, hi1 = pick.hi;
+        const t2 = `${id}`, hw2 = Math.max(t2.length * 6.7 + 14 + mw, pw) / 2, k1 = pick.k, o1 = pick.over, lo1 = pick.lo, hi1 = pick.hi;
         this.tagSpan(px, hw2, pick); bestSlot(R, nr, px, py, hw2, below, pick);
         if (pick.over < o1) { text = t2; hw = hw2; } else { pick.k = k1; pick.over = o1; pick.lo = lo1; pick.hi = hi1; }
       }
       const tx = clamp(px + TAG_SHIFT[pick.k][0], pick.lo, pick.hi), ty = py + TAG_SHIFT[pick.k][1];
       if (nr < 320) { R[nr * 4] = tx - hw; R[nr * 4 + 1] = ty - 9; R[nr * 4 + 2] = tx + hw; R[nr * 4 + 3] = ty + below; nr++; }
-      const t = plan[m++]; t.id = id; t.x = tx; t.y = ty; t.text = text; t.color = open ? D.pal[1] : '#a3b3c9'; t.pips = n > 0; t.k = pick.k; t.over = pick.over; t.px = px; t.py = py;
+      const t = plan[m++]; t.id = id; t.x = tx; t.y = ty; t.text = text; t.mk = mk; t.color = open ? D.pal[1] : '#a3b3c9'; t.pips = n > 0; t.k = pick.k; t.over = pick.over; t.px = px; t.py = py;
     }
     this.tagN = m;
     return nr;
@@ -103,7 +106,7 @@ export const overlayMethods = {
   /** Name tags over each visible district while zoomed out, so you always know where you are: draws what `planZoneTags` worked out. */
   drawZoneTags(ctx) {
     const plan = this.tagPlan; if (!plan) return;
-    for (let i = (this.tagN || 0) - 1; i >= 0; i--) { const t = plan[i]; this.chip(ctx, t.x, t.y, t.text, t.color, 1); if (t.pips) this.pips(ctx, t.id, t.x, t.y + 15); } // the first placed is drawn last, so where two still touch the more important one is on top
+    for (let i = (this.tagN || 0) - 1; i >= 0; i--) { const t = plan[i]; this.chip(ctx, t.x, t.y, t.text, t.color, 1, t.mk); if (t.pips) this.pips(ctx, t.id, t.x, t.y + 15); } // the first placed is drawn last, so where two still touch the more important one is on top
   },
 
   /** Count each district's pipelines by what they are doing (running, paused or under audit, starved) into `zpip`; read-only, the same states the building bars show. */
@@ -123,11 +126,12 @@ export const overlayMethods = {
     for (const [c, m] of [['#ffc247', run], ['#ff7d75', starved], ['#7a7f88', off]]) for (let i = 0; i < m; i++) { g.fillStyle = c; g.fillRect(px, y - 1.5, 8, 3); px += 10; }
   },
 
-  chip(g, x, y, text, color = '#ffd36e', s = 1) {
-    const sp = this.labels.chip(text, color, qs(s)); if (sp) { this.labels.blit(g, sp, x, y); return; } // a crisp sprite where there are offscreen surfaces; the direct drawing below otherwise
-    g.font = `700 ${Math.round(11 * s)}px ui-monospace, Menlo, monospace`; const w = g.measureText(text).width + 14 * s, h = 18 * s;
+  chip(g, x, y, text, color = '#ffd36e', s = 1, mark = '') {
+    const sp = this.labels.chip(text, color, qs(s), mark); if (sp) { this.labels.blit(g, sp, x, y); return; } // a crisp sprite where there are offscreen surfaces; the direct drawing below otherwise
+    g.font = `700 ${Math.round(11 * s)}px ui-monospace, Menlo, monospace`; const gs = mark ? Math.round(11 * s) : 0, gap = mark ? Math.round(3 * s) : 0, tw = g.measureText(text).width, w = tw + 14 * s + gs + gap, h = 18 * s;
     roundRect(g, x - w / 2, y - h / 2, w, h, 5 * s); g.fillStyle = 'rgba(16,20,28,.9)'; g.fill(); g.strokeStyle = color; g.lineWidth = 1.5; g.stroke();
-    g.fillStyle = color; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(text, x, y + 0.5); g.textBaseline = 'alphabetic';
+    const x0 = x - (gs + gap + tw) / 2; if (mark) paint(g, mark, x0, y - gs / 2 + 0.5, gs, color);
+    g.fillStyle = color; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(text, x0 + gs + gap + tw / 2, y + 0.5); g.textBaseline = 'alphabetic';
   },
 
   icon(g, x, y, s, icon, sel) {
@@ -163,6 +167,7 @@ export const overlayMethods = {
     const x0 = snap(x - w / 2, d), y0 = snap(y - h / 2, d);
     g.fillStyle = 'rgba(16,20,28,.92)'; roundRect(g, x0 - 2, y0 - 2, w + 4, h + 4, 3); g.fill();
     g.fillStyle = off ? '#7a7f88' : p.starved ? '#ff7d75' : '#ffc247'; g.fillRect(x0, y0, w * frac, h);
-    g.font = sans(12 * s); g.textAlign = 'center'; g.fillStyle = '#fff'; g.fillText(p.status === 'audit' ? '\u{1F4CB}' : p.status === 'paused' ? '\u23F8' : p.starved ? '\u2757' : '', x, y - 8 * s);
+    const mark = p.status === 'audit' ? 'status-audit' : p.status === 'paused' ? 'ctl-pause' : p.starved ? 'mark-warn' : '';  // what the manager is doing instead of working: on compliance duty, paused, waiting for cash (js/art/g-ui.js)
+    if (mark) { const r = 7.5 * s, cy = y - 15 * s; g.beginPath(); g.arc(x, cy, r, 0, 7); g.fillStyle = 'rgba(16,20,28,.92)'; g.fill(); paint(g, mark, x - 5 * s, cy - 5 * s, 10 * s, p.starved ? '#ff7d75' : '#ffffff'); } // a dark disc behind it: the world under it is any colour
   },
 };

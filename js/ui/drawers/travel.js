@@ -11,6 +11,7 @@ import { esc } from '../common.js';
 import { fmtMoney as money } from '../../market.js';
 import { lessonTitle, lessonGist, rulePhrases, rewardPhrases } from './districttext.js';
 import { fold, flip } from './stock.js';
+import { gl } from '../glyphs.js';
 
 export const TIERS = [
   { n: 1, name: 'The Streets', line: 'Barter, haggle and learn to read a buyer.' },
@@ -68,7 +69,7 @@ function distCard(ctx, id, nextId) {
   const state = open ? 'open' : next ? 'next' : 'locked';
   const rule = rulePhrases(Z)[0], reward = rewardPhrases(Z).join(' '), lesson = lessonTitle(Z.teaches), gist = lessonGist(Z.teaches);
   const pal = Array.isArray(Z.palette) && /^#[0-9a-f]{6}$/i.test(Z.palette[1]) ? ` style="--za:${Z.palette[1]}"` : '';
-  const node = `<span class="tv-node" aria-hidden="true">${open ? '✓' : id}</span>`;
+  const node = `<span class="tv-node" aria-hidden="true">${open ? gl('mark-tick', 'gl-pip') : id}</span>`;
   if (state === 'locked') {
     const body = `<p class="tv-meta">Opens at ${money(Z.gate)} net worth.</p><p class="tv-rule">${esc(rule)}</p>${reward ? `<p class="tv-meta">Opening it: ${esc(reward)}</p>` : ''}<p class="tv-meta">Teaches <b>${esc(lesson)}</b></p>`;
     const tip = `Opens at ${money(Z.gate)} net worth. ${rule}${reward ? ` Opening it: ${reward}` : ''} Teaches ${lesson}.`;
@@ -258,7 +259,7 @@ function acts(ctx) {
 }
 
 export default {
-  id: 'travel', icon: '🧭', label: 'Travel',
+  id: 'travel', label: 'Travel',
   visible: (ctx) => ctx.g().s.zones.length > 1,
   badge: () => null,
   html,

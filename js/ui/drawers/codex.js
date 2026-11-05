@@ -9,6 +9,7 @@ import { ZONES, MIL, EVENTS, ASSETS, PIPE, LOANS, CLIENTS, UPGRADES } from '../.
 import { esc } from '../common.js';
 import { readAcademy } from '../academy-sandbox.js';
 import { ACADEMY as MISSIONS } from '../../meta/academy.js';
+import { gl, tile, categoryGlyph } from '../glyphs.js';
 
 
 export const CATEGORIES = ['Value', 'Markets', 'Operations', 'Finance', 'Risk', 'People', 'Strategy'];
@@ -72,13 +73,13 @@ function markSeen(U, ids) { const s = seenOf(U); let ch = false; for (const id o
 const zoneChip = (d) => (d.zone && ZONES[d.zone] ? `<span class="chip">${esc(ZONES[d.zone].name)}</span>` : '');
 
 function cardHTML(ctx, e) {
-  const d = e.def;
+  const d = e.def, pic = tile(categoryGlyph(d.category)), has = pic ? ' has-gl' : ''; // the category's drawing, the same on a page and on its silhouette; a page of a category nobody drew has no column for one
   if (e.unlocked) {
     const isNew = ctx.U.codexNew?.has(d.id);
-    return `<li><button class="cx-card" data-act="codex-open" data-id="${esc(d.id)}" data-fid="cx-${esc(d.id)}"><span class="cx-tx"><b>${esc(d.title)}</b>${isNew ? ' <span class="chip info cx-new">New</span>' : ''}<small>${esc(d.summary)}</small></span></button></li>`;
+    return `<li><button class="cx-card${has}" data-act="codex-open" data-id="${esc(d.id)}" data-fid="cx-${esc(d.id)}">${pic}<span class="cx-tx"><b>${esc(d.title)}</b>${isNew ? ' <span class="chip info cx-new">New</span>' : ''}<small>${esc(d.summary)}</small></span></button></li>`;
   }
   const hint = unlockHint(d.unlock);
-  return `<li><div class="cx-card locked" role="group" aria-label="Locked concept. Unlocks when you: ${esc(hint)}"><span class="cx-tx"><b class="cx-bar" aria-hidden="true"></b><small>${esc(d.category)}${d.zone && ZONES[d.zone] ? ' &middot; ' + esc(ZONES[d.zone].name) : ''}</small><small class="cx-hint"><span class="sr">Unlocks when you: </span>${esc(hint)}</small></span></div></li>`;
+  return `<li><div class="cx-card locked${has}" role="group" aria-label="Locked concept. Unlocks when you: ${esc(hint)}">${pic}<span class="cx-tx"><b class="cx-bar" aria-hidden="true"></b><small>${esc(d.category)}${d.zone && ZONES[d.zone] ? ' &middot; ' + esc(ZONES[d.zone].name) : ''}</small><small class="cx-hint"><span class="sr">Unlocks when you: </span>${esc(hint)}</small></span></div></li>`;
 }
 /** The list under the search box: this is what typing replaces in place. */
 export function resultsHTML(ctx) {
@@ -89,14 +90,14 @@ export function resultsHTML(ctx) {
   if (!shown.length) return `<p class="mute cx-none k-empty-line" role="status">${q ? `Nothing unlocked matches &ldquo;${esc(q)}&rdquo;.` : 'Nothing here yet.'}${q ? ' Locked pages are not searched.' : ''}</p>`;
   return groups.map((g) => {
     const open = g.items.filter((e) => e.unlocked).length;
-    return `<section class="sect cx-group"><h3><span>${esc(g.category)}</span><span class="mono">${open} / ${g.items.length}</span></h3><ul class="cx-list">${g.items.map((e) => cardHTML(ctx, e)).join('')}</ul></section>`;
+    return `<section class="sect cx-group"><h3><span>${gl(categoryGlyph(g.category), 'gl-sm')} ${esc(g.category)}</span><span class="mono">${open} / ${g.items.length}</span></h3><ul class="cx-list">${g.items.map((e) => cardHTML(ctx, e)).join('')}</ul></section>`;
   }).join('');
 }
 function conceptsHTML(ctx) {
   const U = ctx.U, all = listOf(ctx), got = all.filter((e) => e.unlocked).length;
   const cats = CATEGORIES.filter((c) => all.some((e) => e.def.category === c));
   return `<div class="cx-bar2"><label class="sr" for="cx-q">Search the Codex</label><input id="cx-q" type="search" data-input="codex-search" data-fid="cx-q" placeholder="Search what you have unlocked" value="${esc(U.codexQ || '')}" autocomplete="off"></div>
-    <div class="dtabs cx-cats" role="group" aria-label="Categories"><button class="btn sm ghost" data-fid="cx-cat-all" data-act="codex-cat" data-cat="" aria-pressed="${!U.codexCat}">All</button>${cats.map((c) => `<button class="btn sm ghost" data-fid="cx-cat-${esc(c)}" data-act="codex-cat" data-cat="${esc(c)}" aria-pressed="${U.codexCat === c}">${esc(c)}</button>`).join('')}</div>
+    <div class="dtabs cx-cats" role="group" aria-label="Categories"><button class="btn sm ghost" data-fid="cx-cat-all" data-act="codex-cat" data-cat="" aria-pressed="${!U.codexCat}">All</button>${cats.map((c) => `<button class="btn sm ghost" data-fid="cx-cat-${esc(c)}" data-act="codex-cat" data-cat="${esc(c)}" aria-pressed="${U.codexCat === c}">${gl(categoryGlyph(c), 'gl-sm')} ${esc(c)}</button>`).join('')}</div>
     <p class="small mute cx-count">${got} of ${all.length} unlocked. Play to unlock the rest.</p>
     <div data-cx-results>${resultsHTML(ctx)}</div>`;
 }
@@ -104,7 +105,7 @@ function conceptsHTML(ctx) {
 function relatedHTML(ctx, d) {
   const by = Object.fromEntries(listOf(ctx).map((e) => [e.def.id, e]));
   const links = (d.related || []).filter((id) => by[id]).map((id) => (by[id].unlocked
-    ? `<button class="btn sm ghost cx-link" data-act="codex-open" data-id="${esc(id)}" data-fid="cxr-${esc(id)}">${esc(by[id].def.title)}</button>`
+    ? `<button class="btn sm ghost cx-link" data-act="codex-open" data-id="${esc(id)}" data-fid="cxr-${esc(id)}">${gl(categoryGlyph(by[id].def.category), 'gl-sm')} ${esc(by[id].def.title)}</button>`
     : `<span class="chip cx-lockchip" title="Locked">Locked: ${esc(unlockHint(by[id].def.unlock))}</span>`));
   return links.length ? `<section class="cx-sec"><h4>Related</h4><div class="cx-rel">${links.join('')}</div></section>` : '';
 }
@@ -112,7 +113,7 @@ function relatedHTML(ctx, d) {
 export function entryHTML(ctx, d) {
   const ex = d.example;
   return `<div class="cx-page"><button class="btn sm ghost" data-act="codex-back" data-fid="cx-back">&larr; All concepts</button>
-    <header class="cx-head"><div><h3 id="cx-t" tabindex="-1">${esc(d.title)}</h3><p class="cx-meta"><span class="chip">${esc(d.category)}</span> ${zoneChip(d)}</p></div></header>
+    <header class="cx-head">${gl(categoryGlyph(d.category), 'gl-lg')}<div><h3 id="cx-t" tabindex="-1">${esc(d.title)}</h3><p class="cx-meta"><span class="chip">${esc(d.category)}</span> ${zoneChip(d)}</p></div></header>
     <p class="cx-sum">${esc(d.summary)}</p>
     ${(d.body || []).length ? `<details class="cx-more"><summary>Explanation</summary>${d.body.map((p) => `<p>${esc(p)}</p>`).join('')}</details>` : ''}
     ${d.formula || ex ? `<details class="cx-more"><summary>The math</summary>${d.formula ? `<pre class="cx-formula mono" aria-label="Formula">${esc(d.formula)}</pre>` : ''}${ex ? `<section class="cx-sec cx-ex" aria-label="Worked example"><h4>Worked example</h4><p>${esc(ex.setup)}</p><ol>${(ex.steps || []).map((s) => `<li>${esc(s)}</li>`).join('')}</ol><p class="cx-result"><b>Result:</b> ${esc(ex.result)}</p></section>` : ''}</details>` : ''}
@@ -129,13 +130,14 @@ export function academyHTML(ctx, st = readAcademy(kv), missions = MISSIONS) {
   const rows = missions.map((m, i) => {
     const state = st.done.includes(m.id) ? 'done' : st.skipped.includes(m.id) ? 'skipped' : 'todo', chip = { done: '<span class="chip good">Done</span>', skipped: '<span class="chip warn">Skipped</span>', todo: '<span class="chip">Not played</span>' }[state];
     const teach = byId[m.concept] ? ` &middot; teaches ${esc(byId[m.concept].title)}` : '';
-    return `<li class="card cx-lesson"><div class="grow"><b>${i + 1}. ${esc(m.title)}</b><small class="mute">${ZONES[m.zone] ? esc(ZONES[m.zone].name) + ' &middot; ' : ''}about ${Math.max(1, Math.round(+m.minutes || 2))} min${teach}</small></div>${chip}<button class="btn sm ${state === 'todo' ? '' : 'ghost'}" data-act="codex-replay" data-id="${esc(m.id)}" data-fid="cx-ac-${esc(m.id)}" aria-label="${state === 'todo' ? 'Play' : 'Replay'} lesson ${i + 1}: ${esc(m.title)}">${state === 'todo' ? 'Play' : 'Replay'}</button></li>`;
+    const pic = tile(categoryGlyph(byId[m.concept]?.category));
+    return `<li class="card cx-lesson">${pic}<div class="grow"><b>${i + 1}. ${esc(m.title)}</b><small class="mute">${ZONES[m.zone] ? esc(ZONES[m.zone].name) + ' &middot; ' : ''}about ${Math.max(1, Math.round(+m.minutes || 2))} min${teach}</small></div>${chip}<button class="btn sm ${state === 'todo' ? '' : 'ghost'}" data-act="codex-replay" data-id="${esc(m.id)}" data-fid="cx-ac-${esc(m.id)}" aria-label="${state === 'todo' ? 'Play' : 'Replay'} lesson ${i + 1}: ${esc(m.title)}">${state === 'todo' ? 'Play' : 'Replay'}</button></li>`;
   }).join('');
   return `<div class="cx-ac"><p class="small">${done} of ${missions.length} lessons done. A replay pays no new XP.</p>${next ? `<button class="btn" data-act="codex-replay" data-id="">Continue with lesson ${missions.indexOf(next) + 1}</button>` : ''}<ol class="cx-lessons">${rows}</ol></div>`;
 }
 
 export default {
-  id: 'codex', icon: '📖', label: 'Codex',
+  id: 'codex', label: 'Codex',
   visible: () => true,
   /** A number while there are pages you have not been shown; nothing while the drawer is open (and opening it is what shows them). */
   badge(ctx) {
