@@ -76,6 +76,16 @@ test('RT3: every kind of the vocabulary is a shape: ground pieces with known rol
   }
   const yard = shapeOf('yard', { theme: 'harbor', side: 'S' }), dock = yard.props.find((q) => q.t === 'loaddock'), end = Math.max(...yard.pieces.filter((p) => p.role === 'slab' || p.role === 'asph').flatMap((p) => p.pts.map(([u]) => u)));
   assert.ok(dock && yard.door, 'a yard has a loading dock with a door'); assert.ok(Math.abs(yard.door.u - end) <= 0.5, `the door stands within half a tile of the end of the road's surface (${yard.door.u} against ${end})`);
+  // the verifier's D5: the doors of a loading dock are painted on the faces the camera sees (south and east), so the apron it serves must lie on that side of it, whichever way the street leaves its block: at 8.S and 12.S the street ran up to the BLIND back of the
+  // warehouse and its three bays pointed at a wall with no door. And the bays run square to the dock's wall, from the apron's middle to its doors.
+  for (const side of ['W', 'E', 'N', 'S']) {
+    const y = shapeOf('yard', { theme: 'harbor', side }), f = portFrame(side, 0, 0), dk = y.props.find((q) => q.t === 'loaddock'), slab = y.pieces.find((p) => p.role === 'slab'), at = (u, v) => framePoint(f, u, v), tag = `a yard whose street leaves its block to the ${side}`;
+    const dc = at(dk.u, dk.v), alongX = f.ux !== 0, w = alongX ? dk.a : dk.b, d = alongX ? dk.b : dk.a, east = !(w >= d), mid = slab.pts.map(([u, v]) => at(u, v)).reduce((a, q) => [a[0] + q[0] / slab.pts.length, a[1] + q[1] / slab.pts.length], [0, 0]);
+    assert.ok(east ? mid[0] > dc[0] + w / 2 : mid[1] > dc[1] + d / 2, `${tag}: the apron lies on the ${east ? 'east' : 'south'} side of the dock, the face its doors are painted on (the camera sees it)`);
+    const bays = y.pieces.filter((p) => p.role === 'bay'), ext = (p) => [Math.max(...p.pts.map((q) => q[0])) - Math.min(...p.pts.map((q) => q[0])), Math.max(...p.pts.map((q) => q[1])) - Math.min(...p.pts.map((q) => q[1]))];
+    assert.ok(bays.length >= 3, `${tag}: bay lines`); for (const b of bays) { const [du, dv] = ext(b); assert.ok(dk.a > dk.b ? dv > du : du > dv, `${tag}: a bay line runs square to the dock's wall (${du.toFixed(1)} along the street by ${dv.toFixed(1)} across it, the dock is long ${dk.a > dk.b ? 'along' : 'across'} it)`); }
+    const end = Math.max(...y.pieces.filter((p) => p.role === 'slab' || p.role === 'asph').flatMap((p) => p.pts.map(([u]) => u))); assert.ok(y.door && Math.abs(y.door.u - end) <= 0.5, `${tag}: its last door is within half a tile of the end of the road (${y.door && y.door.u} against ${end})`);
+  }
   const cap = shapeOf('barrier', { side: 'W' }), asph = cap.pieces.filter((p) => p.role === 'asph'), tip = Math.max(...asph.flatMap((p) => p.pts.map(([u]) => u))), atTip = asph.flatMap((p) => p.pts).filter(([u]) => u > tip - 0.3).map(([, v]) => Math.abs(v));
   assert.ok(atTip.length >= 3 && Math.min(...atTip) < 0.35, 'the asphalt ends in a rounded cap: the last 0.3 tile of it narrows to the middle (a raw cut would be 1.6 wide to the last point)');
   assert.ok(cap.props.some((q) => q.t === 'roadend'), 'with the ROAD CLOSED barrier across it');
@@ -108,6 +118,8 @@ test('RT4: the island: each of the 29 ports no road or ferry leaves has one term
   for (const t of LAYOUT.terms.filter((q) => q.kind === 'yard')) { // a loading end needs a door within half a tile of the end of its road
     const dock = t.props.find((p) => p.t === 'loaddock'); assert.ok(dock && t.door, `${t.port}: a yard has a dock and a door`);
     const dx = Math.max(dock.gx - t.door[0], 0, t.door[0] - (dock.gx + dock.w)), dy = Math.max(dock.gy - t.door[1], 0, t.door[1] - (dock.gy + dock.d)); assert.ok(Math.hypot(dx, dy) <= 0.5, `${t.port}: the dock's wall stands within half a tile of the end of the road (${Math.hypot(dx, dy).toFixed(2)})`);
+    const slab = t.pieces.find((q) => q.role === 'slab'), mid = [slab.pts.reduce((a, q) => a + q[0], 0) / slab.pts.length, slab.pts.reduce((a, q) => a + q[1], 0) / slab.pts.length], east = !(dock.w >= dock.d); // (the verifier's D5: the camera sees the east and the south face of a dock, and its doors are painted on them: the apron is on that side of it)
+    assert.ok(east ? mid[0] > dock.gx + dock.w : mid[1] > dock.gy + dock.d, `${t.port}: the apron lies on the ${east ? 'east' : 'south'} side of its loading dock, the face its doors are painted on and the camera sees`);
   }
   const by = {}; for (const t of LAYOUT.terms) (by[t.kind] ||= []).push(t.port);
   assert.deepEqual(Object.fromEntries(Object.entries(by).map(([k, v]) => [k, v.sort()])), PINNED, 'the island\'s ends, port by port (a change here is a decision to say in the commit)');

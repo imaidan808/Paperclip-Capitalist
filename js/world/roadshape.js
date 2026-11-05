@@ -300,6 +300,19 @@ function dressing(dress, c, R, bayed) {
 /** How far from the block's edge a ring of outer radius Ro (kerb included) stands: 0.3 tile (the street flares into it), less where the ground runs out, so that its far kerb stays HARD_KEEP short of the first sample that is not ground (0 at least: against the edge). */
 const fitGap = (o, Ro) => { const want = o.gap ?? 0.3; return o.lanes ? Math.max(0, Math.min(want, laneReach(o.lanes, -Ro, Ro) - HARD_KEEP - 2 * Ro)) : want; };
 
+/**
+ * T5 for a street that leaves its block to the south or the east (the verifier's D5): the doors of a loading dock are painted on the faces the camera sees, the south and the east ones, so the apron it serves has to lie on that side of it: a dock across the END of such a street
+ * showed its blind back to the street and three bays that pointed at a wall with no door (8.S and 12.S). The dock stands BESIDE the apron instead, along it on the side that is west of a street to the south and north of a street to the east, its doors on the face towards the slab, and the
+ * bays run square to it, from the middle of the apron to the doors; the street ends in the last of them (the door of the registry is the last one, within half a tile of the end of the slab). A street to the west or the north keeps the dock at its end: it arrives on the visible face already.
+ */
+function yardBeside(o) {
+  const sg = o.side === 'S' ? 1 : -1, u0 = 1.2, u1 = 5.4, hv = 2.2, room = 1.8; // sg: the side of the street (v) the dock stands on
+  const pieces = [...gravelRect(0, u1 + 0.4, sg > 0 ? -(hv + 0.4) : -(hv + 0.4 + room), sg > 0 ? hv + 0.4 + room : hv + 0.4), ...walks(), P('curb', rect(B0, u0, -HWK, HWK)), P('curb', rrect(u0 - 0.2, u1 + 0.2, -hv - 0.2, hv + 0.2, 0.6)), P('asph', rect(B0, u0 + 0.2, -TERM.hw, TERM.hw)), P('slab', rrect(u0, u1, -hv, hv, 0.5))];
+  for (const u of [1.8, 3.0, 4.2, 5.3]) pieces.push(P('bay', rect(u - 0.05, u + 0.05, sg > 0 ? -0.4 : -(hv - 0.1), sg > 0 ? hv - 0.1 : 0.4))); // (three bays, 1.2 wide, from the street's middle to the dock's wall)
+  const props = [bollard(0.7, HWK + 0.6), bollard(0.7, -HWK - 0.6), lamp(u0 + 0.4, -sg * (hv + 0.5)), prop('loaddock', 3.5, sg * (hv + 0.95), 3.6, 1.5, 24, { acc: '#ffd02e' }), prop('crates', 2.4, -sg * (hv + 0.6), 1.2, 1.2, 26, { n: 2 }), prop('barrel', 3.6, -sg * (hv + 0.5), 0.7, 0.7, 22, { color: '#b0493a' })];
+  return { pieces, props, door: { u: u1 - 0.4, v: sg * hv }, turn: { u: (u0 + u1) / 2, v: 0, r: 1.8, open: true }, foot: [{ u0: B0, u1: u1 + 0.6, v0: sg > 0 ? -(hv + 1.2) : -(hv + 0.4 + room + 0.1), v1: sg > 0 ? hv + 0.4 + room + 0.1 : hv + 1.2 }] };
+}
+
 const SHAPE = {
   /** T2: a turning bulb (a disc of asphalt radius 2.2, a kerb of a fifth, an island for a bus loop) a few tenths of a tile beyond the edge, the street flaring into it. A farmyard's is a disc of beaten earth, a bulb near a building has two parking bays. */
   bulb(o) {
@@ -323,6 +336,7 @@ const SHAPE = {
   yard(o) { return SHAPE.hammer({ ...o, dock: true }); },
   /** A hammerhead: the street ends in a bar across it that a lorry backs into to turn (industrial, harbor, auto); T5 when `dock` is set: the bar is an apron of concrete against a loading dock whose door is the end of the road. */
   hammer(o) {
+    if (o.dock && (o.side === 'S' || o.side === 'E')) return yardBeside(o);
     const dock = !!o.dock, dress = DRESS_OF[o.theme] || 'yard', auto = dress === 'auto' && !dock, u1 = dock ? 4.6 : 3.2, hv = dock ? 2.6 : 2.8, u0 = dock ? 1.2 : 1.0, bar = auto ? 'asph' : 'slab';
     const pieces = [...gravelRect(0, u1 + 0.4, -(hv + 0.4), hv + 0.4), ...walks(), P('curb', rect(B0, u0, -HWK, HWK)), P('curb', rrect(u0 - 0.2, u1 + 0.2, -hv - 0.2, hv + 0.2, 0.6)), P('asph', rect(B0, u0 + 0.2, -TERM.hw, TERM.hw)), P(bar, rrect(u0, u1, -hv, hv, 0.5))];
     const props = [bollard(0.7, HWK + 0.6), bollard(0.7, -HWK - 0.6), lamp(u0 + 0.4, hv + 0.5)];
