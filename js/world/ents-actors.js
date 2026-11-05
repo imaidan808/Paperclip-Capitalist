@@ -13,7 +13,8 @@ export const lookOf = (id) => personLook(strHash(String(id)));
 export const CARS = 18;
 /** Tiles a second a car travels, on every road (it was a share of the road's length a second: 8 tiles on the longest road, a crawl on the shortest), and how far from the middle of the road its lane is. */
 export const CAR_SPEED = 2.6, LANE = 0.5;
-const CAR_EDGES = EDGES.filter((e) => !e.path && !e.ferry);
+/** The roads that carry a car, in the order of the plan: not a footpath, not the ferry, and not a fork's stem (the few tiles from a port to the node where two roads part: the cars of its two branches are the traffic of it), so there is one car to each of the 18 roads of the island and `(i * 7) % 18` is a permutation. */
+export const CAR_EDGES = EDGES.filter((e) => !e.path && !e.ferry && !e.stem);
 const LANES = new WeakMap();
 /** The two lanes of a road: its middle line (the corners are arcs: roadshape.js) offset to the right of each direction of travel, so the cars of both directions keep the same hand and a bend is a curve, not a corner. */
 const lanesOf = (e) => { let L = LANES.get(e); if (!L) LANES.set(e, L = { fwd: polyInfo(offsetPoly(e.pts, LANE)), back: polyInfo(offsetPoly([...e.pts].reverse(), LANE)) }); return L; };

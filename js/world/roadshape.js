@@ -5,6 +5,8 @@
 // So every corner is an arc (`fillet`) and the ground along every road is a smooth profile (`gradeProfile`, `gradeRoads`) that follows the land's large shape and none of its steps.
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 const smooth = (t) => { t = clamp(t, 0, 1); return t * t * (3 - 2 * t); };
+/** The tiles over which a branch of a fork rises or falls from the junction's height to its own profile (gradeRoads). */
+export const JUNCTION_LEVEL = 4.5;
 
 /**
  * Tidy a hand-drawn polyline: a point that repeats the one before it goes, and so does a point where the road runs out along a line and straight back along it (a spur: a waypoint that overshot a junction by a tile
@@ -76,15 +78,21 @@ export function gradeProfile(zs, wet = [], { sigma = 6, slope = 1.3 } = {}) {
 /**
  * Grade the ground under every road: for each edge (not the ferry) the height along it is the smooth profile of `gradeProfile`, and every land vertex of the height field `ZV` (width VW, a vertex a tile apart; FV is
  * the land field, positive on land) near the road is drawn toward the profile at the nearest point of the road: wholly within the road and half a tile of it, and less and less to `reach` tiles out. Water is left
- * alone. Changes `ZV` in place, and gives every edge its `zprof` ({ step, z }: the height along it every `step` tiles). `edges` are { pts, lens, len, w, ferry }.
+ * alone. Changes `ZV` in place, and gives every edge its `zprof` ({ step, z }: the height along it every `step` tiles). `edges` are { pts, lens, len, w, ferry, stem, ja, jb } (the edge starts, ends at a junction).
+ * The stem of a fork (the run from a port to the junction where two roads part) is graded last: the two branches are laid first, so the junction stands at one height for all three, and the stem then runs from the port's height to that
+ * one and the ground under it follows it (graded first, the branches' own corridors, which overlap it near the junction, took the ground from under it: 3 pixels off at the stem of 12).
  */
 export function gradeRoads(ZV, FV, VW, VH, edges, { step = 0.5, reach = 3.5 } = {}) {
   const at = (A, x, y) => { x = clamp(x, 0, VW - 1.001); y = clamp(y, 0, VH - 1.001); const i = Math.floor(x), j = Math.floor(y), tx = x - i, ty = y - j, k = j * VW + i; return (A[k] * (1 - tx) + A[k + 1] * tx) * (1 - ty) + (A[k + VW] * (1 - tx) + A[k + VW + 1] * tx) * ty; };
-  for (const e of edges) {
+  for (const e of [...edges].sort((a, b) => (a.stem ? 1 : 0) - (b.stem ? 1 : 0))) {
     if (e.ferry) continue;
     const P = e.pts, L = e.lens, len = e.len, hw = e.w / 2, S = [];
     for (let s = 0, i = 1; ; s = Math.min(s + step, len)) { while (i < L.length - 1 && L[i] < s) i++; const a = P[i - 1], b = P[i], l = L[i] - L[i - 1] || 1, k = (s - L[i - 1]) / l; S.push([a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k]); if (s >= len) break; }
     const zs = S.map(([x, y]) => at(ZV, x, y)), wet = S.map(([x, y]) => at(FV, x, y) <= 0), prof = gradeProfile(zs, wet);
+    if (!e.stem) for (const [last, on] of [[false, e.ja], [true, e.jb]]) if (on) { // a branch leaves its junction level: the three roads of a fork share the ground under it for the first tiles, so they share one height there, and their own slopes begin beyond it
+      const n = prof.length, z0 = prof[last ? n - 1 : 0];
+      for (let i = 0; i < n; i++) { const d = (last ? n - 1 - i : i) * step; if (d < JUNCTION_LEVEL) prof[i] = z0 + (prof[i] - z0) * smooth(d / JUNCTION_LEVEL); }
+    }
     e.zprof = { step, z: Float32Array.from(prof) }; // (the road's own height along its length: what the road is drawn at, where the ground at a bank dips to the water)
     let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9; for (const [x, y] of S) { x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y); }
     const R = hw + reach;

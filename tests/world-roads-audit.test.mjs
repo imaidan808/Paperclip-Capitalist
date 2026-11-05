@@ -3,9 +3,10 @@
 // lies on top of asphalt, four locked roads carry no barrier. None of it was held by a test. Each pull request that fixes one LOWERS its constant below, in the same commit, and never raises it; this test fails on any count above its constant
 // and fails on a count BELOW it too, until the constant is lowered in the same commit (so the gain cannot come back unseen).
 //   RA1  the detector still looks at the whole island: floors on what it examined (ports, edges, pairs of edges, samples), so a count cannot fall because the detector looked at less
-//   RA2  the ratchet: every defect count equals its baseline: a worse count fails, and so does a better one until the constant is lowered (29 dead ends, 7 seam runs, 1 crossing without a junction, 13.8 tiles of footpath over asphalt, 4 locked roads without a barrier, 2 kinks, 1 split bridge, 1 road through another district)
+//   RA2  the ratchet: every defect count equals its baseline: a worse count fails, and so does a better one until the constant is lowered (29 dead ends, no seam run, no crossing without a junction, no footpath over asphalt, 4 locked roads without a barrier, no kink, no split bridge, 1 road through another district)
 //   RA3  the defect classes are all listed, with their ids, names, counts and causes, and the ratchet's counts are the classes' own
 //   RA4  the detector can see: on a world made worse in four ways (a road taken away, a road laid twice, a footpath laid on a road, a gate taken away) it finds each of the four, so an all-clear is not a blind detector's
+//   RA8  a junction is an exemption with edges: two roads that meet at one may overlap within 6 tiles of it and nowhere else (a second road laid along a branch is found), a crossing a long way from it is a crossing, and the stem of a fork is not a road into the district
 //   RA5  it is quick: under 2 s of CPU (it was 0.05 s when this was written; the whole catalog the CLI prints is 0.6 s)
 //   RA6  the whole catalog, with the plan's proposals, the district matrix and the traffic, is complete (what `node scripts/road-audit.mjs` prints)
 //   RA7  nothing of this is shipped to the site: scripts/ is never staged (scripts/stage.mjs), and no module of the app imports it
@@ -15,12 +16,19 @@ import { loadWorld, auditRoads, ratchetCounts } from '../scripts/lib/road-audit.
 import { walk } from '../scripts/preload.mjs';
 
 /**
- * What the detector found on main at 0ab9bf8 (the survey's own run, which this module reproduces exactly). LOWER a constant in the pull request that fixes the defect; the plan's WP numbers say which one does:
- *   deadEnds 29 (WP12 and each district's plan), seamRuns 7 and crossings 1 and kinks 2 and splitBridges 1 (WP10), pathTilesOverAsphalt 13.8 (WP10 and WP11), lockedWithoutBarrier 4 (WP11), footprintThroughRoads 1 (WP10 and WP22a).
+ * What the detector found on main at 0ab9bf8 (the survey's own run, which this module reproduces exactly): deadEnds 29, seamRuns 7, crossings 1, pathTilesOverAsphalt 13.8, lockedWithoutBarrier 4, kinks 2, splitBridges 1, footprintThroughRoads 1.
+ * LOWER a constant in the pull request that fixes the defect; the plan's WP numbers say which one does:
+ *   deadEnds 29 (WP12 and each district's plan), lockedWithoutBarrier 4 (WP11), footprintThroughRoads 1 (WP22a, when the island is laid again: 6.N to 7.E runs through the south pad of 8).
+ * WP10 (one road surface) took seamRuns 7 to 0 (a fork is a stem and two branches that meet at a junction: three forks, and the detector lets the edges of one overlap within 6 tiles of it and nowhere else), crossings 1 to 0 (the road of 4 to 3 no
+ * longer crosses the road of 4 to 5: it leaves the fork on its own side), pathTilesOverAsphalt 13.8 to 0 (the three footpaths that left a road start from path heads two tiles to its side), kinks 2 to 0 (10.W to 11.E arrives along the axis of
+ * 11's avenue, and the footpath of 14 starts outside its block) and splitBridges 1 to 0 (8.W to 9.E is one bridge).
  */
-const BASELINE = { deadEnds: 29, seamRuns: 7, crossings: 1, pathTilesOverAsphalt: 13.8, lockedWithoutBarrier: 4, kinks: 2, splitBridges: 1, footprintThroughRoads: 1 };
-/** What the detector must still examine. A plan that changes the island changes these on purpose: raise or lower them in that pull request, saying why. */
-const SCOPE_FLOOR = { districts: 16, ports: 64, edges: 25, roadEdges: 18, pathEdges: 6, ferryEdges: 1, edgePairs: 270, samples: 25000 };
+const BASELINE = { deadEnds: 29, seamRuns: 0, crossings: 0, pathTilesOverAsphalt: 0, lockedWithoutBarrier: 4, kinks: 0, splitBridges: 0, footprintThroughRoads: 1 };
+/**
+ * What the detector must still examine. A plan that changes the island changes these on purpose: raise or lower them in that pull request, saying why. WP10: three forks became three edges each (25 edges to 28: 21 roads, 6 footpaths, the ferry),
+ * so 351 pairs of edges and 30,000 samples, three junctions and three path heads.
+ */
+const SCOPE_FLOOR = { districts: 16, ports: 64, edges: 28, roadEdges: 21, pathEdges: 6, ferryEdges: 1, edgePairs: 351, samples: 30000, junctions: 3, heads: 3 };
 const CLASSES = ['R1', 'R2', 'R3', 'R4', 'R5', 'R6', 'R7', 'R8', 'R9', 'R10', 'R11', 'R12'];
 const CPU_BUDGET_MS = 2000;
 
@@ -73,6 +81,25 @@ test('RA4: the detector can see: a road taken away, a road laid twice, a footpat
   assert.ok(D2.gateAt && D2.gateKind !== 'fog', 'district 2 is locked behind a gate that stands on a road');
   assert.equal(run({ DIST: { ...Lay.DIST, 2: { ...D2, gateAt: undefined } } }).lockedWithoutBarrier, base.lockedWithoutBarrier + 1, 'district 2\'s gate taken away leaves its road with no barrier');
   assert.equal(run({ DIST: { ...Lay.DIST, 2: { ...D2, props: D2.props.filter((q) => q.t !== 'gate') } } }).lockedWithoutBarrier, base.lockedWithoutBarrier + 1, 'the gate PROP taken away (its recorded place kept) leaves the road with no barrier too: the detector does not trust the data alone');
+});
+
+test('RA8: a junction is an exemption with edges: roads that meet at one may overlap within 6 tiles of it and nowhere else, a crossing beyond it is a crossing, and the stem of a fork is no road into its district', () => {
+  const { Lay, Isl } = world, base = ratchetCounts(catalog), run = (changes) => ratchetCounts(auditRoads({ ...world, Lay: { ...Lay, ...changes } }, { full: false }));
+  assert.equal(Object.keys(Isl.JUNCTIONS).length, 3, 'three forks');
+  const branch = Lay.EDGES.find((e) => e.a === 'j4' && e.b === '3.N'), other = Lay.EDGES.find((e) => e.a === 'j4' && e.b === '5.W'), stem = Lay.EDGES.find((e) => e.stem && e.b === 'j4');
+  assert.ok(branch && other && stem, 'the fork of 4 is a stem and two branches');
+  // a branch laid again 0.3 tile beside itself, from the same junction: the two run together for 19 tiles, and only the first 6 are the fork's
+  const twin = { ...branch, b: 'x.N', pts: branch.pts.map(([x, y]) => [x + 0.2, y - 0.2]) };
+  assert.ok(run({ EDGES: [...Lay.EDGES, twin] }).seamRuns > base.seamRuns, 'a road that runs along a branch of a fork for 19 tiles is a seam beyond the first 6');
+  // two edges that meet at a junction and then cross a long way from it
+  const cross = { ...branch, a: 'j4', b: 'x.W', pts: [[72, 94], [78, 98], [82, 88]], lens: [0, 7.2, 18.8], len: 18.8, n: 99 };
+  assert.ok(run({ EDGES: [...Lay.EDGES, cross] }).crossings > base.crossings, 'two roads that leave a junction and cross each other further out are a crossing');
+  // the exemption is the junction's: the same overlap with no junction to share is a seam too
+  const noJ = { ...other, a: 'y.E' }, noJ2 = { ...noJ, a: 'z.E', pts: noJ.pts.map(([x, y]) => [x, y + 0.5]) };
+  assert.ok(run({ EDGES: [...Lay.EDGES, noJ, noJ2] }).seamRuns > base.seamRuns, 'the same overlap with no junction to share is a seam');
+  // a stem is no road into its district: the fork of 8 holds 3 edges and the gate counts only the road that comes to it
+  assert.equal(Lay.EDGES.filter((e) => !e.stem && !e.path && !e.ferry && e.gate === 8).length, 1, 'one road opens with 8 (the stem opens with it too, and is not counted)');
+  assert.equal(catalog.counts.total.lockedRoadsWithNoBarrier, BASELINE.lockedWithoutBarrier, 'the stems of the three forks are not locked roads without a barrier');
 });
 
 test('RA5: it is quick: the audit the ratchet runs is under 2 s of CPU', () => {

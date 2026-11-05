@@ -3,7 +3,7 @@
 // the guard found the same in 2, 3 and 5. A pad's scenery is a hashed scatter at 0.045 props a tile (layout.js, kits.js FILL): it knows the block's rectangles and the roads, not the coast.
 //   PL1  the whole island: in none of the sixteen districts does a prop stand on water, except the water class (docks, piers, jetties, boats, ships, barges, buoys, and the ferry's gate): sampled every quarter tile over each footprint (the test's own sampling, not the guard's tile loop)
 //   PL2  the water class is defined (WATER_PROPS, WATER_REACH, isWaterProp) and its one member today, the ferry's gate, stands on the strait and is kept; a water prop belongs to a shore: within WATER_REACH tiles of land
-//   PL3  what the guard does is REMOVE, and only the drowned: the island without the guard (buildLayout(zones, { water: false })) has sixteen props on water, all pad scenery; the guarded island is that one without exactly those sixteen, every other prop where it was; the list is pinned
+//   PL3  what the guard does is REMOVE, and only the drowned: the island without the guard (buildLayout(zones, { water: false })) has fourteen props on water (sixteen before WP10), all pad scenery; the guarded island is that one without exactly those sixteen, every other prop where it was; the list is pinned
 //   PL4  the guard is deterministic, and standsOnWater / keepDry do what they say on a made-up coast: a prop on the line between two tiles is not on the tile beyond it, a sliver counts, a hot prop is never removed, a water prop out in the open sea is
 // Why REMOVE and not move (the brief asks to say): the sixteen are all pad scenery (a tree, a crate, a planter), the filler the plans retire district by district (rule P3, no scatter); a moved one would be a new random placement that needs a free spot clear of the roads, the block and the other props
 // and the coast, and the search can fail or crowd the shore; removing one leaves every other prop exactly where it was, so the golden moves by those rows and nothing else (tests/world-static.test.mjs), and no new random number is spent.
@@ -39,20 +39,20 @@ test('PL2: the water class is defined, its one member today is the ferry\'s gate
   for (const p of LAYOUT.props.filter((q) => inWaterClass(q) && wet(q))) assert.ok(near(p), `${row(p)} is on water, within ${Lay.WATER_REACH} tiles of land`);
 });
 
-test('PL3: the guard REMOVES, and only the drowned: the island without it has sixteen props on water, the island with it is that one without them, and the list is pinned', () => {
+test('PL3: the guard REMOVES, and only the drowned: the island without it has fourteen props on water (sixteen until the world pass WP10 moved the roads at three forks and three footpaths, which reshuffled the scatter of the pads of 3 and 14), the island with it is that one without them, and the list is pinned', () => {
   const raw = buildLayout(undefined, { water: false }), rawWet = raw.props.filter((p) => !inWaterClass(p) && wet(p));
-  assert.equal(rawWet.length, 16, `the island as it was has sixteen props in the sea (${rawWet.length})`);
+  assert.equal(rawWet.length, 14, `the island as it was has fourteen props in the sea (${rawWet.length})`);
   assert.ok(rawWet.every((p) => p.pad && !p.hot), 'all of them pad scenery, none placed by a kit and none a hot spot');
   assert.deepEqual(rawWet.map(row).sort(), [ // district, kind and the footprint's corner (the survey's S01 and S02 name the centres: the planter (93.4, 1.8), the trees (103.4, 4.1), (106.2, 4.0), (111.3, 2.3), the teal house (109.6, 4.5))
-    '14 planter 93.1,1.5', '14 topiary 100.2,2.3', '14 topiary 101.7,1.6', '14 topiary 95.6,1.3',
+    '14 planter 93.1,1.5', '14 topiary 100.2,2.3', '14 topiary 101.7,1.6',
     '15 bldg 105.3,5.8', '15 bldg 108.4,3.2', '15 tree 103.1,3.8', '15 tree 106.0,3.7', '15 tree 111.1,2.0',
     '2 crates 37.9,131.0', '2 crates 39.5,130.7',
-    '3 bench 101.6,103.7', '3 tree 100.4,100.7', '3 tree 100.7,98.6', '3 tree 103.5,107.6', '5 planter 110.9,105.4',
+    '3 bench 102.5,109.0', '3 tree 100.4,100.7', '3 tree 101.6,103.7', '5 planter 110.9,105.4',
   ], 'the drowned, pinned');
   const key = (p) => [p.t, p.gx, p.gy, p.w, p.d, p.h, p.z, p.zone, p.hot || '', p.key].join(',');
   const kept = new Set(LAYOUT.props.map(key)), gone = raw.props.filter((p) => !kept.has(key(p)));
   assert.deepEqual(gone.map(key).sort(), rawWet.map(key).sort(), 'exactly the drowned are gone');
-  assert.equal(LAYOUT.props.length, raw.props.length - 16);
+  assert.equal(LAYOUT.props.length, raw.props.length - 14);
   assert.ok(LAYOUT.props.every((p) => raw.props.some((q) => key(q) === key(p))), 'and nothing was added or moved');
   assert.deepEqual(LAYOUT.drowned.map((r) => `${r.zone} ${r.t} ${r.gx.toFixed(1)},${r.gy.toFixed(1)}`).sort(), rawWet.map(row).sort(), 'the layout lists what the guard removed');
   assert.ok(!raw.drowned || raw.drowned.length === 0, 'with the guard off nothing is removed');
