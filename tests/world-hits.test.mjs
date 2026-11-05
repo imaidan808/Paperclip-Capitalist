@@ -1,8 +1,8 @@
 // Presentation work must not move what a click lands on (docs/RENDER_PLAN.md rule 1): world.pick() answers as it did at adcd991, at every point of a grid over the picture.
-// tests/fixtures/hits-adcd991.json holds those answers (it was made at adcd991 and taken again at f6692ac, on purpose, when the ground under the roads was graded: roadshape.js moved the outline of a district's zone by a few pixels, 19 of 33,107 points, and nothing else; 15 shots, every 24th css pixel, dsf 1, the rig's default seed and clock): made by serving a worktree of adcd991, shooting it with
+// tests/fixtures/hits-adcd991.json holds those answers (it was made at adcd991 and taken again at f6692ac, on purpose, when the ground under the roads was graded: roadshape.js moved the outline of a district's zone by a few pixels, 19 of 33,107 points, and nothing else; and again at 4f21a91, on purpose, for the world pass WP02: Property row is hot on all three of its houses and the exchange stands 0.6 tile north and 0.9 east, 34 of 33,300 points in two shots, bridge-or-ferry and island-far, and the six shots of the first version of this list did not move, bridge-or-ferry was added to it; 15 shots, every 24th css pixel, dsf 1, the rig's default seed and clock): made by serving a worktree of adcd991, shooting it with
 //   node scripts/world-shots.mjs --base http://localhost:8503 --out DIR --dsf 1 --hits 24     and packing it with     node scripts/world-hits.mjs --pack DIR --build adcd991 --skip tod- > tests/fixtures/hits-adcd991.json
 //   H1  the comparison: a grid against itself is the same, a moved point is one difference, kinds that only the game's state puts on the picture (buyers, lots, stock) can be left out, a different grid is not comparable
-//   H2  the golden file is what it says (from adcd991, 15 shots, step 24) and is not empty: it has the props, the district gates, the plots, and the buyers, lots and stock
+//   H2  the golden file is what it says (build 4f21a91, 15 shots, step 24) and is not empty: it has the props, the district gates, the plots, and the buyers, lots and stock
 //   H3  in Chrome: this build's shots, asked with the camera's own numbers (--exact-hits, as adcd991 asked), answer the same at every point; only the game's own state (a buyer, a lot) is left out
 //   H4  and asked as the page asks (from the drawn picture's origin, which is rounded to whole device pixels so a click lands on what is drawn) at most 0.5% of the points answer differently: a point within half a device pixel of
 //       a shape's edge. A shape that moved or changed size would flip far more.
@@ -23,7 +23,7 @@ import { BROWSER } from './helpers/lessonpage.mjs';
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const GOLD = JSON.parse(readFileSync(join(ROOT, 'tests/fixtures/hits-adcd991.json'), 'utf8'));
 const STATE_KINDS = ['lead', 'lot', 'asset'];
-const SHOTS = ['start-mid', 'start-close', 'city-close', 'island-mid', 'fog-near', 'fog-far'];
+const SHOTS = ['start-mid', 'start-close', 'city-close', 'island-mid', 'fog-near', 'fog-far', 'bridge-or-ferry']; // bridge-or-ferry is the ferry's strait with Property row and the exchange in it: the two hit shapes the world pass WP02 changed (the shots before it stand in the first district, the west coast and the fog of 3 and 10)
 
 /** A hit file from rows of text: '.' is nothing, letters are things. */
 const grid = (rows, step = 24) => { const legend = ['-']; const idx = new Map([['-', 0]]); const out = rows.map((r) => { const row = []; let last = -1, n = 0; for (const ch of r) { const k = ch === '.' ? '-' : 'static:' + ch; if (!idx.has(k)) { idx.set(k, legend.length); legend.push(k); } const i = idx.get(k); if (i === last) n++; else { if (n) row.push([last, n]); last = i; n = 1; } } if (n) row.push([last, n]); return row; }); return { step, w: rows[0].length * step, h: rows.length * step, legend, rows: out }; };
@@ -43,8 +43,8 @@ test('H1: compare() counts the points that answer differently, leaves out what t
   const p = pack(dir, 'abc1234', 'tod-'); assert.deepEqual(Object.keys(p.shots), ['one', 'three']); assert.equal(p.build, 'abc1234'); assert.equal(p.step, 24); assert.ok(!('exact' in p.shots.three), 'how the grid was asked is not part of the answers');
 });
 
-test('H2: the golden file is the answers of build f6692ac (adcd991\'s, taken again when the road grading moved 19 zone-edge points), 15 shots every 24th pixel, with the props, the gates, the plots and the game\'s own things in it', () => {
-  assert.equal(GOLD.build, 'f6692ac'); assert.equal(GOLD.step, 24);
+test('H2: the golden file is the answers of build 4f21a91 (adcd991\'s, taken again when the road grading moved 19 zone-edge points, and again for the world pass WP02), 15 shots every 24th pixel, with the props, the gates, the plots and the game\'s own things in it', () => {
+  assert.equal(GOLD.build, '4f21a91'); assert.equal(GOLD.step, 24);
   assert.equal(Object.keys(GOLD.shots).length, 15, Object.keys(GOLD.shots).join(' '));
   for (const [name, h] of Object.entries(GOLD.shots)) { assert.equal(h.step, 24, name); assert.equal(h.legend[0], '-', name); assert.equal(h.rows.length, Math.ceil((h.h - 12) / 24), `${name}: a row for every 24th pixel of the ${h.h} px picture`); }
   const kinds = {}; let points = 0;

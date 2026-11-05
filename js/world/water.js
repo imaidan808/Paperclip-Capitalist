@@ -133,7 +133,7 @@ const BEACH = new WeakMap();
 function beachFlags(ring) { let f = BEACH.get(ring); if (!f) { const n = ring.length / 2; f = new Uint8Array(n); for (let i = 0; i < n; i++) f[i] = zAt(ring[2 * i], ring[2 * i + 1]) < 2.5 ? 1 : 0; BEACH.set(ring, f); } return f; }
 const RUNS = new WeakMap();
 /**
- * The beaches of one ring as runs: { i0, i1, grid: Float32Array of the points (gx, gy), nrm: the sea-side unit normals (gx, gy), arc: the arc length of each point from the ring's start (tiles), bb: its world box }.
+ * The beaches of one ring as runs: { i0, i1, grid: Float32Array of the points (gx, gy), nrm: the sea-side unit normals (gx, gy), arc: the arc length of each point along the run from the ring's start (tiles; carried on past the ring's start, so it grows along the whole run), bb: its world box }.
  * A run is a stretch of consecutive beach points; one that wraps round the ring's start is joined, and a run of fewer than six points is dropped. Made once per ring.
  */
 export function beachRuns(ring) {
@@ -147,7 +147,7 @@ export function beachRuns(ring) {
       const grid = new Float32Array(len * 2), nrm = new Float32Array(len * 2), arc = new Float32Array(len); let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9;
       for (let q = 0; q < len; q++) {
         const j = (start + k + q) % n, jp = (j + n - 1) % n, jn = (j + 1) % n, tx = ring[2 * jn] - ring[2 * jp], ty = ring[2 * jn + 1] - ring[2 * jp + 1], tl = Math.hypot(tx, ty) || 1;
-        grid[2 * q] = ring[2 * j]; grid[2 * q + 1] = ring[2 * j + 1]; nrm[2 * q] = ty / tl; nrm[2 * q + 1] = -tx / tl; arc[q] = arcs[j];
+        grid[2 * q] = ring[2 * j]; grid[2 * q + 1] = ring[2 * j + 1]; nrm[2 * q] = ty / tl; nrm[2 * q + 1] = -tx / tl; arc[q] = arcs[j] + (j < i ? u : 0); // (past the ring's own start the arc goes on from the ring's length: along a run it only ever grows)
         const wx = (grid[2 * q] - grid[2 * q + 1]) * HWd, wy = (grid[2 * q] + grid[2 * q + 1]) * HHd; x0 = Math.min(x0, wx); x1 = Math.max(x1, wx); y0 = Math.min(y0, wy); y1 = Math.max(y1, wy);
       }
       runs.push({ n: len, grid, nrm, arc, bb: [x0 - 40, y0 - 40, x1 + 40, y1 + 40] });
@@ -156,7 +156,7 @@ export function beachRuns(ring) {
   }
   RUNS.set(ring, runs); return runs;
 }
-const RIB = new Float32Array(2 * 4096), RIBW = new Float32Array(2 * 4096);
+const RUN_CAP = 4096, RIB = new Float32Array(4 * RUN_CAP), RIBW = new Float32Array(RUN_CAP); // (a ribbon is the run's n points out and the same n back: 2n points, 4n numbers; a run is cut at RUN_CAP points. The buffer was 2 x 4096 numbers, which holds half of a run that long: a typed array drops a write past its end, and the far edge came out as NaN)
 /** The breath of the swash at a point of the coast `arc` tiles along it, 0..1: a period of 6.5 seconds whose phase runs along the beach (0.12 of a cycle a tile). */
 export const breathAt = (t, arc) => 0.5 + 0.5 * Math.sin(TAU * (t / 6.5 + arc * 0.12));
 /**
@@ -170,10 +170,10 @@ export function drawSwash(ctx, view, zoom, t, tier = 0) {
   ctx.save();
   for (const ring of coastOf().rings) for (const run of beachRuns(ring)) {
     const bb = run.bb; if (!(bb[2] > view.x0 && bb[0] < view.x1 && bb[3] > view.y0 && bb[1] < view.y1)) continue;
-    const n = Math.min(run.n, 4096), g = run.grid, nm = run.nrm, a0 = run.arc[0], aN = run.arc[n - 1];
+    const n = Math.min(run.n, RUN_CAP), g = run.grid, nm = run.nrm, a0 = run.arc[0], aN = run.arc[n - 1];
     for (let pass = 0; pass < 2; pass++) {
       const base = pass ? 0.06 : 0.16, amp = pass ? 0.08 : 0.15; let k = 0;
-      for (let i = 0; i < n; i++) { const s = run.arc[i] - a0, e = Math.min(1, Math.min(s, aN - run.arc[i]) / 0.8), breath = breathAt(t, run.arc[i]), w = (base + amp * breath) * e * e * (3 - 2 * e); RIBW[i] = w; }
+      for (let i = 0; i < n; i++) { const s = run.arc[i] - a0, e = Math.max(0, Math.min(1, Math.min(s, aN - run.arc[i]) / 0.8)), breath = breathAt(t, run.arc[i]), w = (base + amp * breath) * e * e * (3 - 2 * e); RIBW[i] = w; }
       for (let i = 0; i < n; i++) { RIB[k++] = (g[2 * i] - g[2 * i + 1]) * HWd; RIB[k++] = (g[2 * i] + g[2 * i + 1]) * HHd; }
       for (let i = n - 1; i >= 0; i--) { const gx = g[2 * i] + nm[2 * i] * RIBW[i], gy = g[2 * i + 1] + nm[2 * i + 1] * RIBW[i]; RIB[k++] = (gx - gy) * HWd; RIB[k++] = (gx + gy) * HHd; }
       ctx.beginPath(); ctx.moveTo(RIB[0], RIB[1]); for (let i = 1; i < 2 * n; i++) ctx.lineTo(RIB[2 * i], RIB[2 * i + 1]); ctx.closePath();
