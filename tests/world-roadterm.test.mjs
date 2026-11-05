@@ -264,7 +264,7 @@ function points(r) {
 // ---- the heading of a prop that stands across a street (the verifier's D1): `hx, hy` is the way out of the block, and a heading is 0 as often as it is not. The defaults were `p.hx || 1`, which made every N and S port a diagonal (a boom seen end on at 8.N, a gate lying along
 // the screen at 6.S and 10.S): what is drawn is held to the picture, not to the kind: the pieces a street's perpendicular decides must be where the perpendicular puts them, for every one of the four ways a street can leave a block.
 const HEADINGS = { W: [-1, 0], E: [1, 0], N: [0, -1], S: [0, 1] };
-const { col: colOf } = await import('../js/world/toys.js'), { shade: shadeOf } = await import('../js/world/iso.js');
+const { col: colOf } = await import('../js/world/toys.js'), { shade: shadeOf, tone: toneOf } = await import('../js/world/iso.js');
 /** Every fill a recording made as a path of exactly one shape: a quad (one moveTo, three lineTo, no curve) or an ellipse, in order, with the style and the alpha it was filled in. */
 function shapesOf(r) {
   const quads = [], ellipses = []; let path = [], curved = 0, ell = null, k = 0;
@@ -464,4 +464,24 @@ test('RT13: a rail where the plateau falls away: across the far side of an end w
   assert.equal(shapeOf('bulb', { theme: 'market', side: 'S' }).pieces.some((q) => q.role === 'rail'), false, 'a bulb has no rail of its own');
   const railedPorts = LAYOUT.terms.filter((t) => t.pieces.some((q) => q.role === 'rail') && !['belvedere'].includes(t.kind)).map((t) => t.port).sort(); assert.deepEqual(railedPorts, ['12.W', '15.S', '16.N', '2.S'], 'four ends on the island stand where the plateau falls away: a rail across each');
   for (const t of LAYOUT.terms.filter((q) => q.opt.rail)) { const [x, y, z] = t.pieces.find((q) => q.role === 'rail').pts[0], u = (x - t.frame.x) * t.frame.ux + (y - t.frame.y) * t.frame.uy; assert.ok(u < t.probe.flat, `${t.port}: its rail (${u.toFixed(1)} tiles out) stands on the level ground (${t.probe.flat})`); void z; }
+});
+
+test('RT14: at the island\'s zoom (the far view, the block of a footprint) the barrier is a short striped bar across its street, a loading dock is the tone of its walls whatever its accent, and the sealed portal is rock', () => {
+  const far = { ...STILL, far: true, farMix: 0, locked: false };
+  const drawn = (p) => { const r = recCtx(); props.drawProp(r.ctx, p, far); return r; };
+  // the verifier's D6: the new kinds fell back to the plain block of their footprint at the island view: the barrier a lone pillar, the loading dock a yellow bar (it took its accent), the portal a grey box
+  const RED = colOf(pal.TOY.red, far), CREAM = colOf('#fffaf0', far);
+  for (const open of [0, 1]) for (const [side, [hx, hy]] of Object.entries(HEADINGS)) {
+    const r = drawn(mk('roadend', { hx, hy, open, plate: 'X' })), { quads } = shapesOf(r), stripes = quads.filter((q) => q.style === RED || q.style === CREAM && reach(ys(q.pts)) >= 6), tag = `the ${open ? 'gate' : 'barrier'} of a street to the ${side}`;
+    assert.equal(stripes.length >= 6 && stripes.filter((q) => q.style === RED).length >= 3, true, `${tag}: a bar of red and cream stripes (${stripes.length} found), not a pillar`);
+    const bar = stripes.slice(0, 6); for (const q of bar) assert.ok(reach(xs(q.pts)) >= 4, `${tag}: a stripe is ${reach(xs(q.pts)).toFixed(1)} px wide`);
+    const w = reach(bar.flatMap((q) => xs(q.pts))); assert.ok(w >= (open ? 38 : 80) && w <= (open ? 50 : 92), `${tag}: it reaches ${w.toFixed(1)} px across the screen, as far as the street is wide${open ? ' (the boom of a gate, raised, from one post to the middle)' : ''}`);
+    if (!open) { const [c0, c1] = [centroid(bar[0]), centroid(bar[5])]; same2((c1[1] - c0[1]) / (c1[0] - c0[0]), acrossSlope(hx, hy), 0.01, `${tag}: the bar runs along the perpendicular of the street, slope`); }
+    const all = r.log.calls.filter((c) => c[0] === 'moveTo' || c[0] === 'lineTo' || c[0] === 'arc' || c[0] === 'ellipse'); assert.ok(all.length > 30, `${tag}: drawn`);
+  }
+  const fillsOf2 = (p) => new Set(drawn(p).log.fills.map((f) => f.style));
+  const dock = (acc) => mk('loaddock', { acc }), a = drawn(dock('#ffd02e')), b = drawn(dock('#9a6bff'));
+  assert.deepEqual(a.log.calls, b.log.calls, 'a loading dock\'s island view does not depend on its accent (its yellow is the frames of its doors)'); assert.ok(![...fillsOf2(dock('#ffd02e'))].some((s) => /^#ff[cd]/.test(s)), 'and there is no yellow in it');
+  const wall = new Set(['t', 'l', 'r'].map((k) => toneOf(pal.METAL.steelHi)[k])), seen = fillsOf2(dock('#ffd02e')); assert.deepEqual([...seen].sort(), [...wall].sort(), 'it is a block in the tone of its walls (the pale steel of the palette)');
+  const rock = new Set(['t', 'l', 'r'].map((k) => toneOf(pal.ROCK.mid)[k])), portal = fillsOf2(mk('portal')); assert.deepEqual([...portal].sort(), [...rock].sort(), 'the sealed portal is a block of the palette\'s rock');
 });

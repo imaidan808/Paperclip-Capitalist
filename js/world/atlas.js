@@ -118,7 +118,7 @@ export function shared(kind, def) {
   SHARED.set(kind, def);
   const vary = def.vary || [], ext = def.ext, vs = vary.includes('#') ? vseed : null;
   const memo = new WeakMap(); // prop -> { sig, key, rect, ax, ay }: a prop's look changes only with the veil and the lite flag, so its key and box are made once
-  registerProp(kind, (ctx, p, env) => {
+  const draw = (ctx, p, env) => {
     const sig = Math.round((env.dim || 0) * 16) * 100000 + Math.round((env.hz || 0) * 50) * 10 + (env.lite ? 1 : 0);
     let m = memo.get(p);
     if (!m || m.sig !== sig) { const a = P(p.gx, p.gy); m = { sig, key: lookKey(kind, p, vary, env, vs ? vs(p) : 0), rect: rectOf(p, ext), ax: a[0], ay: a[1], draw: null }; memo.set(p, m); }
@@ -128,5 +128,6 @@ export function shared(kind, def) {
     if (def.live) def.live(ctx, p, env);
     if (ATTEND !== null) ATTEND(ctx, p, env, kind);
     return def.hit ? def.hit(p) : null;
-  });
+  };
+  registerProp(kind, def.far ? { draw, far: def.far } : draw); // (`far(ctx, p, env)`: the kind's own drawing at the island's zoom, props.js farOf, instead of the plain block of its footprint)
 }

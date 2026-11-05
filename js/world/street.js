@@ -243,6 +243,14 @@ shared('roadend', { // T3 (and the open boom of a T4 gate): posts either side of
     if (!open) { cone(g, a[0] - 9, a[1] + 5, env); cone(g, b[0] + 9, b[1] + 5, env); }
     return null;
   }, vary: ['hx', 'hy', 'open', 'plate'], ext: [100, 52, 78, 46],
+  far(g, p, env) { // the island view (zoom under 0.45): the two posts and a short striped bar across the street, red and cream, not the lone pillar of the prop's footprint; a gate's boom is raised from the post beside its booth, a block with a blue roof
+    const cx = p.gx + p.w / 2, cy = p.gy + p.d / 2, hx = p.hx ?? 1, hy = p.hy ?? 0, nx = -hy, ny = hx, span = 1.35, red = col(TOY.red, env), cream = col('#fffaf0', env), at = (t, z) => P(cx + nx * span * (2 * t - 1), cy + ny * span * (2 * t - 1), z);
+    const a = at(0, 0), b = at(1, 0), open = !!p.open, steel = col(METAL.steelMid, env);
+    if (open) prism(g, cx + nx * 2.1 - 0.45, cy + ny * 2.1 - 0.45, 0.9, 0.9, 22, cream), prism(g, cx + nx * 2.1 - 0.58, cy + ny * 2.1 - 0.58, 1.16, 1.16, 3, col(TOY.blue, env), 22);
+    for (const q of a[1] <= b[1] ? [a, b] : [b, a]) upright(g, q[0], q[1], 19, 6, steel);
+    const from = open ? at(1, 14) : at(0, 14), to = open ? [(at(1, 14)[0] + at(0, 14)[0]) / 2, (at(1, 14)[1] + at(0, 14)[1]) / 2 - 30] : at(1, 14);
+    for (let i = 0; i < 6; i++) { const t0 = i / 6, t1 = (i + 1) / 6, X0 = from[0] + (to[0] - from[0]) * t0, Y0 = from[1] + (to[1] - from[1]) * t0, X1 = from[0] + (to[0] - from[0]) * t1, Y1 = from[1] + (to[1] - from[1]) * t1; poly(g, [[X0, Y0 - 4], [X1, Y1 - 4], [X1, Y1 + 4], [X0, Y0 + 4]], i % 2 ? cream : red); }
+  },
 });
 shared('busstop', { // a bus shelter: a flat roof on posts, a glass panel behind and a bench under it (the panel stands on the side the camera does not see)
   body(g, p, env) {
