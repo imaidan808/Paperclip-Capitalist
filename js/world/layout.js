@@ -6,7 +6,7 @@ import { ZONES } from '../data/index.js';
 import { h2, lerp, clamp, mix, shade, luma } from './iso.js';
 import { KITS, FILL } from './kits.js';
 import { GW, GH, BW, BD, ANCHORS, REGIONS, BLOBS, CARVES, ROADS, JUNCTIONS, HEADS, VIEWPOINTS, TERMS } from './island.js';
-import { tidy, fillet, gradeRoads, portFrame, framePoint, frameRect, chooseTerm, shapeOf, wantsRail, headShape, deckOf, LANE, DECK_KEEP } from './roadshape.js';
+import { tidy, fillet, gradeRoads, portFrame, framePoint, frameRect, chooseTerm, shapeOf, wantsRail, headShape, deckOf, propReach, LANE, DECK_KEEP } from './roadshape.js';
 
 /** The radius, in tiles, of the arc every corner of a road is rounded with (a footpath turns tighter): the cars follow it and the painted dashes bend with it (roadshape.js). */
 export const ROAD_RADIUS = 1.6, PATH_RADIUS = 1.2;
@@ -304,7 +304,7 @@ export function buildLayout(zones = ZONES, { water = true } = {}) {
   // ---- gates (WP11): a gate stands on EVERY road that opens with a locked district whose gate is not fog, at the road's OPEN end: 3 tiles along it from the port of the district the player already owns, just past the apron (2 beside the node of a fork it leaves), and not ten tiles
   // before the district it guards, which on an 84-tile road left 74 tiles of it looking open; the four roads that open with a later district (4.E to 3.N, 4.E to 5.W, 6.N to 7.E, 10.N to 14.S) have theirs now. The gate belongs to the district it guards
   // (it is locked and opens with it) and stands in the open neighbour's ground: it is `own` (culled by its own box) and takes the light and the veil of the district it stands in (`fz`). A bridge's leaf stands at the bank on the open side, a ferry's boat 3 tiles in.
-  const GATE_FIRST = 3, GATE_FORK = 2;
+  const GATE_FIRST = 3, GATE_FORK = 2, GATE_BOX = { barrier: [90, 80, 90, 40], bridge: [150, 110, 150, 66], ferry: [100, 80, 104, 58] }; // (the box a gate is culled by, [left, top, right, bottom] round its point: the leaf of a bridge paints 198 by 122 pixels and the ferry's boat 130 by 95, the barrier 155 by 101 at most; the verifier's D7)
   for (const e of edges) {
     if (e.stem || e.path) continue; const D = districts[e.gate]; if (!D || D.gateKind === 'fog') continue;
     const da = +portOf(e.a).split('.')[0], db = +portOf(e.b).split('.')[0], atA = da !== D.id ? (db !== D.id ? da < db : true) : false, open = atA ? da : db, from = atA ? e.a : e.b, far = node(atA ? e.b : e.a);
@@ -312,7 +312,7 @@ export function buildLayout(zones = ZONES, { water = true } = {}) {
     const sOpen = e.ferry ? 3 : D.gateKind === 'bridge' && br ? (atA ? br.s0 - 1 : br.s1 + 1) : JUNCTIONS[from] ? GATE_FORK : GATE_FIRST, s = atA ? sOpen : e.len - sOpen;
     const q = polyAt(e, clamp(s, 0.5, e.len - 0.5)), dir = atA ? 1 : -1, hx = q.dx * dir, hy = q.dy * dir;
     const p = mkProp(D, 'gate', q.x - 0.15, q.y - 0.15, 0.3, 0.3, 16, { gk: D.gateKind, hx, hy, fx: far[0], fy: far[1], label: D.name + ' (locked)', ext: 70, own: 1, fz: open, gi: D.gates.length }, false);
-    p.z = zAt(q.x, q.y); p.bb = [(q.x - q.y) * 32 - 90, (q.x + q.y) * 16 - p.z - 80, (q.x - q.y) * 32 + 90, (q.x + q.y) * 16 - p.z + 40];
+    const gb = GATE_BOX[D.gateKind] || GATE_BOX.barrier; p.z = zAt(q.x, q.y); p.bb = [(q.x - q.y) * 32 - gb[0], (q.x + q.y) * 16 - p.z - gb[1], (q.x - q.y) * 32 + gb[2], (q.x + q.y) * 16 - p.z + gb[3]];
     D.gates.push({ x: q.x, y: q.y, hx, hy, kind: D.gateKind, edge: e.n, open, from, s, prop: p });
   }
   for (const D of ds) D.gates.sort((a, b) => (b.edge === D.inEdge) - (a.edge === D.inEdge) || a.edge - b.edge); // (the road in first: its gate is the district's own)
@@ -355,9 +355,9 @@ export function buildLayout(zones = ZONES, { water = true } = {}) {
     return true;
   };
   const boxOf = (pieces) => { let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9; for (const q of pieces) for (const [x, y, zz] of q.pts) { x0 = Math.min(x0, (x - y) * 32); x1 = Math.max(x1, (x - y) * 32); y0 = Math.min(y0, (x + y) * 16 - zz); y1 = Math.max(y1, (x + y) * 16 - zz); } return [x0 - 10, y0 - 70, x1 + 10, y1 + 24]; }; // the box of a drawing on the screen: its ground and the room above it for a rail or a post
-  const rebox = (p, z) => { p.z = z; p.bb = [(p.gx - (p.gy + p.d)) * 32 - 16 - (p.ext || 0), (p.gx + p.gy) * 16 - z - p.h - 46 - (p.ext || 0), (p.gx + p.w - p.gy) * 32 + 16 + (p.ext || 0), (p.gx + p.w + p.gy + p.d) * 16 - z + 14]; };
+  const rebox = (p, z) => { p.z = z; p.bb = [(p.gx - (p.gy + p.d)) * 32 - 16 - (p.ext || 0), (p.gx + p.gy) * 16 - z - p.h - 46 - (p.ext || 0), (p.gx + p.w - p.gy) * 32 + 16 + (p.ext || 0), (p.gx + p.w + p.gy + p.d) * 16 - z + 14 + (p.ext || 0)]; }; // (`ext`: what a kind paints beyond its footprint: roadshape.js PROP_REACH)
   const mkEndProps = (D, f, specs, term) => specs.flatMap((sp) => { // the dressing: a spec is a place and a size in the frame of its port; the grid footprint is its axis-aligned box (a prop that would stand in the sea is left out: nothing stands on water)
-    const [cx, cy] = framePoint(f, sp.u, sp.v), alongX = f.ux !== 0, w = alongX ? sp.a : sp.b, d = alongX ? sp.b : sp.a, o = { ...sp.o, own: 1, term };
+    const [cx, cy] = framePoint(f, sp.u, sp.v), alongX = f.ux !== 0, w = alongX ? sp.a : sp.b, d = alongX ? sp.b : sp.a, o = { ...sp.o, own: 1, term }, reach = propReach(sp.t, sp.o); if (reach) o.ext = reach;
     if (standsOnWater({ gx: cx - w / 2, gy: cy - d / 2, w, d }, isLand)) return [];
     if (['roadend', 'farmgate', 'portal'].includes(sp.t)) { o.hx = f.ux; o.hy = f.uy; }
     if (sp.t === 'fence') { o.dirY = (sp.o.along === 'v') === alongX; delete o.along; }

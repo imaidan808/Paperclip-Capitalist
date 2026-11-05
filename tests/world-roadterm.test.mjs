@@ -438,6 +438,21 @@ test('RT12: the props of an end are culled by their own box: a camera over an en
     for (const p of t.props) if (see(p.bb)) assert.ok(w.items.some((it) => it.a === p), `${t.port}: the ${p.t} at ${p.gx.toFixed(1)},${p.gy.toFixed(1)} is drawn from a camera over the end`);
   }
   assert.ok(far >= 0, 'counted');
+  // the verifier's D7: the box a prop is culled by (p.bb) was its footprint and 16 px, and the barrier of 4.W paints 34 px beyond it, a sign board 26, the open gates of 6.S and 10.S 79: at the edge of the screen they vanished while part of them was still in view.
+  // Every point a prop of an end (or of a path head) paints lies inside its box now (recorded: the body of its shared sprite, the points as RT9 reads them, the box lifted to the ground the body is drawn on)
+  const over = [], kinds = new Set();
+  for (const [where, p] of [...LAYOUT.terms.flatMap((t) => t.props.map((q) => [t.port, q])), ...LAYOUT.heads.flatMap((h) => h.props.map((q) => [h.name, q]))]) {
+    const def = atlas.SHARED.get(p.t); if (!def) continue; const r = recCtx(); def.body(r.ctx, p, STILL); const pts = points(r); if (!pts.length) continue; kinds.add(p.t);
+    const bb = [p.bb[0], p.bb[1] + p.z, p.bb[2], p.bb[3] + p.z], xs = pts.map((q) => q[0]), ys = pts.map((q) => q[1]), out = [bb[0] - Math.min(...xs), bb[1] - Math.min(...ys), Math.max(...xs) - bb[2], Math.max(...ys) - bb[3]];
+    if (Math.max(...out) > 0.5) over.push(`${where} ${p.t}${p.open ? ' (open)' : ''}: ${['left', 'top', 'right', 'bottom'].map((n, i) => (out[i] > 0.5 ? `${Math.ceil(out[i])} px past the ${n}` : '')).filter(Boolean).join(', ')}`);
+  }
+  for (const id of LAYOUT.ids) for (const g of DIST[id].gates) { // and the gates of the locked roads (the leaf of a bridge paints 198 by 122 pixels), drawn the way the player sees them: through drawProp, in a locked district, on the ground it stands on
+    const p = g.prop, r = recCtx(); r.ctx.translate(0, -p.z); props.drawProp(r.ctx, p, { ...STILL, locked: true }); const pts = points(r); assert.ok(pts.length > 20, `${id}'s gate (${p.gk}) is drawn`); kinds.add('gate:' + p.gk);
+    const xs = pts.map((q) => q[0]), ys = pts.map((q) => q[1]), out = [p.bb[0] - Math.min(...xs), p.bb[1] - Math.min(...ys), Math.max(...xs) - p.bb[2], Math.max(...ys) - p.bb[3]];
+    if (Math.max(...out) > 0.5) over.push(`the gate of ${id} (${p.gk}): ${['left', 'top', 'right', 'bottom'].map((n, i) => (out[i] > 0.5 ? `${Math.ceil(out[i])} px past the ${n}` : '')).filter(Boolean).join(', ')}`);
+  }
+  assert.ok(kinds.size >= 12 && kinds.has('roadend') && kinds.has('polesign') && kinds.has('lamp') && kinds.has('gate:bridge') && kinds.has('gate:ferry') && kinds.has('gate:barrier'), `the check looked at the kinds that matter (${[...kinds].join(', ')})`);
+  assert.deepEqual(over, [], 'every prop of an end paints inside the box it is culled by');
 });
 
 test('RT13: a rail where the plateau falls away: across the far side of an end whose room stops within 1.6 tiles of a drop, when there is level ground to stand it on; not on a rise, not where the end has its own rail, slab, mouth, path, dock or pickets', () => {

@@ -190,6 +190,13 @@ export const TERM_KINDS = Object.freeze(['bulb', 'roundabout', 'hammer', 'yard',
 export const PIECE_ROLES = Object.freeze(['fringe', 'apron', 'walk', 'curb', 'asph', 'dash', 'lawn', 'plaza', 'slab', 'band', 'bay', 'dirt', 'rut', 'deck', 'deck2', 'rail', 'post', 'sand', 'sandedge', 'rock']);
 /** The kinds of static prop a termination may stand: the island's own (lamps, benches, signs, bollards, fences, planters, trees, hay, crates, barrels, a fountain, a statue, flags, a kiosk, topiary, the lookout's bench and telescope) and the new flat ones. */
 export const PROP_KINDS = Object.freeze(['lamp', 'bench', 'polesign', 'bollard', 'fence', 'planter', 'tree', 'topiary', 'hay', 'crates', 'barrel', 'fountain', 'statue', 'flag', 'kiosk', 'pillar', 'lookout', 'busstop', 'roadend', 'farmgate', 'trough', 'trailboard', 'portal', 'loaddock', 'dish']);
+/**
+ * What a kind of prop paints beyond the box of its footprint (its shadow, a boom, the board of a sign, a booth), in pixels: the margin the box it is culled by is made wider with (layout.js mkEndProps: `ext`). The verifier's D7: the cull box was the footprint and 16 px, and
+ * the barrier of 4.W paints 34 px beyond it, a sign board 26, the open gates of 6.S and 10.S 79 (a booth two tiles to the side): at the edge of the screen they vanished while part of them was still in view. Measured on the drawings, a few pixels over (tests/world-roadterm.test.mjs
+ * RT12 holds every prop of an end to its box, so a drawing that grows says so).
+ */
+export const PROP_REACH = Object.freeze({ roadend: 38, lamp: 14, crates: 10, polesign: 28, dish: 6, loaddock: 8 });
+export const propReach = (kind, o = {}) => (kind === 'roadend' && o.open ? 84 : PROP_REACH[kind] || 0);
 /** A district's dressing, by theme: what stands round the end of its street (bus loop, service turn, farmyard, garden, compound). */
 export const DRESS_OF = Object.freeze({ market: 'bus', campus: 'bus', pawn: 'bus', metro: 'bus', creative: 'bus', realty: 'bus', exchange: 'bus', corporate: 'bus', finance: 'bus', estate: 'garden', scrap: 'yard', auto: 'auto', harbor: 'yard', industrial: 'yard', tech: 'tech', farm: 'farm' });
 /** The kinds a theme prefers at the end of its street, in order, by the street: the first that fits is built (a bulb when none does, a barrier when not even that). */
