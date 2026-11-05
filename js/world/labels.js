@@ -6,6 +6,7 @@ import { roundRect, luma, mix } from './iso.js';
 import { Cache, surface, mono, sans } from './gfx.js';
 import { paint } from '../art/paint.js';
 import '../art/g-ui.js'; // the marks a label can carry (a lock, a dot): js/art/g-ui.js
+import '../art/g-places.js'; // a district's drawing on its card: zone-<theme>, js/art/g-places.js
 
 /** A zoom factor rounded to eighths: sprites are cached per size, so a continuous zoom must not make a new one every frame. */
 export const qs = (s) => Math.round(s * 8) / 8;
@@ -136,7 +137,8 @@ export class Labels {
         roundRect(g, 0.5, 2.5, w, h, 7); g.fillStyle = 'rgba(2,4,10,.4)'; g.fill();
         roundRect(g, lw / 2, lw / 2, w - lw, h - lw, 7); g.fillStyle = 'rgba(16,20,28,.95)'; g.fill(); g.strokeStyle = cur || hov ? '#ffd36e' : open ? pal : '#5b6b85'; g.lineWidth = lw; g.stroke();
         g.fillStyle = pal; g.fillRect(1, 6, 4, h - 12);
-        g.font = sans(16); g.textAlign = 'left'; g.textBaseline = 'middle'; g.fillStyle = '#fff'; this.text(g, D.icon, 10, h / 2 + 1);
+        paint(g, 'zone-' + D.theme, 8, h / 2 - 9, 18); // the district's own drawing (js/art/g-places.js) on the dark card, 18 px
+        g.textAlign = 'left'; g.textBaseline = 'middle'; // (the lines of text below)
         const ly = compact ? h / 2 + 1 : 13;
         if (!open) paint(g, 'mark-lock', 30, ly - 6, 12, '#a3b3c9'); // a district not open yet: a lock before its name (drawn, js/art/g-ui.js)
         g.font = f1; g.fillStyle = open ? '#ffd36e' : '#a3b3c9'; this.text(g, l1, 30 + (open ? 0 : LOCK), ly);

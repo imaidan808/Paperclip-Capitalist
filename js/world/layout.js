@@ -101,7 +101,7 @@ function buildDistrict(zones, id, roadSegs) {
   const g0 = Z.palette[0], acc = Z.palette[1], l = luma(g0), kit = KITS[Z.theme], ground = kit.ground ? kit.ground(g0) : mix(g0, '#ffffff', clamp((0.3 - l) * 1.5, 0.08, 0.5));
   const cols = { ground, alt: shade(ground, 0.92), road: mix('#2c323e', ground, 0.15), walk: mix(ground, '#cfd5df', 0.42), pad: shade(ground, 0.8), accent: acc, edge: mix(ground, '#000000', 0.4) };
   const fp = [ox - pad[0], oy - pad[1], BW + pad[0] + pad[2], BD + pad[1] + pad[3]];
-  const D = { id, name: Z.name, short: Z.short, icon: Z.icon, theme: Z.theme, tier: Z.tier, gate: Z.gate, region: REGIONS.find((r) => r.ids.includes(id))?.id, gateKind: an.gate, ox, oy, w: BW, d: BD, z, flip, cx: an.cx, cy: an.cy, fp, area: fp[2] * fp[3], pad, pal: Z.palette, cols, ground: [], decals: [], props: [], rejected: [], features: [], plots: [] };
+  const D = { id, name: Z.name, short: Z.short, theme: Z.theme, tier: Z.tier, gate: Z.gate, region: REGIONS.find((r) => r.ids.includes(id))?.id, gateKind: an.gate, ox, oy, w: BW, d: BD, z, flip, cx: an.cx, cy: an.cy, fp, area: fp[2] * fp[3], pad, pal: Z.palette, cols, ground: [], decals: [], props: [], rejected: [], features: [], plots: [] };
   D.ports = { W: [ox, an.cy], E: [ox + BW, an.cy], N: [an.cx, oy], S: [an.cx, oy + BD] };
   const px = (x, w = 0) => ox + (flip ? BW - x - w : x), rc = (x, y, w, d) => [px(x, w), oy + y, w, d], pt = (x, y) => [px(x), oy + y];
   D.pt = pt; D.rc = rc;

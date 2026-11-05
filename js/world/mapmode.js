@@ -7,6 +7,7 @@ import { money, compact, PIP_ZOOM } from './common.js';
 import { LOCK } from './labels.js';
 import { paint } from '../art/paint.js';
 import '../art/g-ui.js'; // the lock before a district that is not open: js/art/g-ui.js
+import '../art/g-places.js'; // a district's drawing on its card: js/art/g-places.js
 
 const NAME_STEPS = [0, 24, -24, 48, -48, 72], NAME_SHIFT = [0, -120, 120, -240, 240]; // where a region's name may move on the map to clear a card
 export const mapMethods = {
@@ -81,7 +82,7 @@ export const mapMethods = {
       ctx.globalAlpha = open ? 1 : 0.88;
       roundRect(ctx, x, y, w, h, 7); ctx.fillStyle = 'rgba(16,20,28,.94)'; ctx.fill(); ctx.strokeStyle = cur || hov ? '#ffd36e' : open ? D.pal[1] : '#5b6b85'; ctx.lineWidth = cur || hov ? 3 : 1.6; ctx.stroke();
       ctx.fillStyle = D.pal[1]; ctx.fillRect(x + 1, y + 6, 4, h - 12);
-      ctx.font = '16px system-ui, sans-serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.fillStyle = '#fff'; ctx.fillText(D.icon, x + 10, y + h / 2 + 1);
+      paint(ctx, 'zone-' + D.theme, x + 8, y + h / 2 - 9, 18); ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
       const ly = y + (compact ? h / 2 + 1 : 13); if (!open) paint(ctx, 'mark-lock', x + 30, ly - 6, 12, '#a3b3c9');
       ctx.font = '800 12px ui-monospace, Menlo, monospace'; ctx.fillStyle = open ? '#ffd36e' : '#a3b3c9'; ctx.fillText(l1, x + 30 + (open ? 0 : LOCK), ly);
       if (!compact) { ctx.font = '600 10px ui-monospace, Menlo, monospace'; ctx.fillStyle = open ? '#e8eef6' : '#a3b3c9'; ctx.fillText(l2, x + 30, y + 27); }
