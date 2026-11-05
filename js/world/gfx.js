@@ -8,16 +8,23 @@ export const hasOffscreen = () => typeof OffscreenCanvas === 'function';
 /** A running count of cache builds (a ground chunk baked, a sprite or an atlas entry made, a cloud chunk baked). The frame loop reads it before and after a frame: a frame that filled a cache paid a cost that is not repeated, and the governor does not judge it (governor.js BUILD_GRACE). */
 export const builds = { n: 0 };
 
+/** Is this code running in a worker? (A worker's canvases are made for the CPU: see `surface`.) Asked at each call, not once: it is a typeof and an instanceof, and a test can stand a worker up and take it down. */
+export const inWorker = () => typeof WorkerGlobalScope !== 'undefined' && typeof self !== 'undefined' && self instanceof WorkerGlobalScope;
+/** The options a surface is made with in a worker: a CPU canvas, whatever the caller asked for besides (its own `willReadFrequently` is kept if it gave one). */
+const CPU = Object.freeze({ willReadFrequently: true });
+
 /**
  * An offscreen 2D surface of w x h device pixels as { c, g } (canvas, context), or null when there is no OffscreenCanvas.
  * A surface is a bitmap in memory (tens of megabytes at window size): make one for a thing that lasts and paint it again in place when it changes. Never one per frame or per
  * step of the light (the sea did that: about 22 full-window bitmaps a day/night turn, each 8 to 10 ms to fill on a CPU-drawn canvas; it is one 1 x 256 strip now, see World.drawWater).
  * `opts` are the context's own options ({ willReadFrequently: true } makes a CPU-backed surface that getImageData reads without a GPU round trip: the ground chunks that are sealed after they are drawn).
+ * In a WORKER every surface is a CPU one: the chunk workers draw into CPU canvases and hand an ImageBitmap over, and a GPU-backed canvas drawn into (or used as a pattern on) a CPU one is a synchronous GPU
+ * readback that waits for the whole GPU queue (0.7 ms on an idle GPU, 37 to 53 ms behind a busy one: one per chunk, from the ground's grain pattern, stalled the GPU process's main thread and with it the page's frames).
  */
 export function surface(w, h, opts) {
   if (!hasOffscreen()) return null;
   try {
-    const c = new OffscreenCanvas(Math.max(1, Math.ceil(w)), Math.max(1, Math.ceil(h))), g = opts ? c.getContext('2d', opts) : c.getContext('2d');
+    const c = new OffscreenCanvas(Math.max(1, Math.ceil(w)), Math.max(1, Math.ceil(h))), o = inWorker() ? (opts ? { ...CPU, ...opts } : CPU) : opts, g = o ? c.getContext('2d', o) : c.getContext('2d');
     return g ? { c, g } : null;
   } catch { return null; }
 }
