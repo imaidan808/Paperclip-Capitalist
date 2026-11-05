@@ -170,6 +170,21 @@ export const TERM = Object.freeze({ hw: 1.0, kerb: 0.2, back: 0.1, flare: 0.5 })
 export const QUAY_DROP = 8;
 /** Water this many tiles beyond a port, or less, decides its end; a flat run under MIN_FLAT is a barrier; a quay needs QUAY_ROOM tiles of flat ground, a belvedere DECK_ROOM. */
 export const WATER_END = 5, MIN_FLAT = 1.5, QUAY_ROOM = 2, DECK_ROOM = 2.6;
+/**
+ * The lanes of an end (the verifier's D2: the ground pieces were kept on level land by the rectangle of room each shape asked for, not by what they paint: a belvedere's gravel hung over the rock face under its deck, a fringe lay over the sea at four ends).
+ * `lanes` is how far out the street's axis each lane of the port's frame, `n` of them a quarter tile apart from v = `v0`, stays on land within `lim` px of the block's height: the u of the first sample that does not (`cap` when none does), found to a twentieth of a tile;
+ * layout.js measures them on the ground. A shape given them (`o.lanes`) keeps every piece of its ground on them: the gravel stops GRAVEL_KEEP short of the first sample that is not ground, a ring or a kerb HARD_KEEP, and the slab of a quay, its
+ * cobbles and the deck of a belvedere DECK_KEEP (a third of a tile).
+ */
+export const LANE = Object.freeze({ v0: -4.5, step: 0.25, n: 37, lim: 12, cap: 10 });
+export const GRAVEL_KEEP = 0.15, HARD_KEEP = 0.1, DECK_KEEP = 0.35;
+/** The first of the lanes between v0 and v1 (the lanes either side included: the nearest ones outside the range) to run out: the u at which the ground stops being land and level somewhere across that width; Infinity when there are no lanes. */
+export function laneReach(lanes, v0, v1) {
+  if (!lanes) return Infinity;
+  const a = Math.max(0, Math.floor((v0 - LANE.v0) / LANE.step + 1e-9)), b = Math.min(lanes.length - 1, Math.ceil((v1 - LANE.v0) / LANE.step - 1e-9)); let m = LANE.cap;
+  for (let k = a; k <= b; k++) m = Math.min(m, lanes[k]);
+  return m;
+}
 export const TERM_KINDS = Object.freeze(['bulb', 'roundabout', 'hammer', 'yard', 'plaza', 'gate', 'farm', 'barrier', 'quay', 'belvedere', 'portal', 'head']);
 /** What a piece of ground is: groundart.js says the colour of each (the district's own tones, the palette's wood and lawn), tests read the roles. `rail` is a polyline, `post` a point, the rest are polygons. */
 export const PIECE_ROLES = Object.freeze(['fringe', 'apron', 'walk', 'curb', 'asph', 'dash', 'lawn', 'plaza', 'slab', 'band', 'bay', 'dirt', 'rut', 'deck', 'deck2', 'rail', 'post', 'sand', 'sandedge', 'rock']);
@@ -233,6 +248,26 @@ function clipU(pts, u0 = 0) {
   }
   return out;
 }
+/** Keep the part of a polygon at u <= u1: the same, from the other side (the gravel of an end stops where the ground does). */
+function clipUMax(pts, u1) {
+  const out = [];
+  for (let i = 0; i < pts.length; i++) {
+    const a = pts[i], b = pts[(i + 1) % pts.length], ia = a[0] <= u1, ib = b[0] <= u1;
+    if (ia) out.push(a);
+    if (ia !== ib) { const t = (u1 - a[0]) / (b[0] - a[0]); out.push([u1, a[1] + (b[1] - a[1]) * t]); }
+  }
+  return out;
+}
+const areaOf = (pts) => { let a = 0; for (let i = 0; i < pts.length; i++) { const p = pts[i], q = pts[(i + 1) % pts.length]; a += p[0] * q[1] - q[0] * p[1]; } return Math.abs(a) / 2; };
+/**
+ * The gravel of an end (its fringe and its apron) kept on the ground: cut at GRAVEL_KEEP short of the first sample, across the width of the widest of them, that is water or more than LANE.lim px off the block's height. One cut for both, so the apron never
+ * stands out beyond the fringe; what the cut leaves too small to see is dropped.
+ */
+function fitGravel(pieces, lanes) {
+  const gravel = pieces.filter((q) => q.role === 'apron' || q.role === 'fringe'); if (!gravel.length) return pieces;
+  const U = Math.min(...gravel.map((q) => { const vs = q.pts.map((p) => p[1]); return laneReach(lanes, Math.min(...vs), Math.max(...vs)) - GRAVEL_KEEP; }));
+  return pieces.flatMap((q) => { if (q.role !== 'apron' && q.role !== 'fringe') return [q]; if (Math.max(...q.pts.map((p) => p[0])) <= U) return [q]; const pts = clipUMax(q.pts, U); return pts.length >= 3 && areaOf(pts) > 0.05 ? [{ ...q, pts }] : []; });
+}
 const P = (role, pts) => ({ role, pts: role === 'apron' || role === 'fringe' ? clipU(pts) : pts });
 /** The gravel an end blends into the ground round it with, in two steps (a fringe half a tile wider, a shade nearer the ground, round the apron proper): a disc, or a rectangle. */
 const gravelDisc = (c, r, n = 32) => [P('fringe', circ(c, 0, r + 0.5, n)), P('apron', circ(c, 0, r, n))];
@@ -255,10 +290,13 @@ function dressing(dress, c, R, bayed) {
   return out;
 }
 
+/** How far from the block's edge a ring of outer radius Ro (kerb included) stands: 0.3 tile (the street flares into it), less where the ground runs out, so that its far kerb stays HARD_KEEP short of the first sample that is not ground (0 at least: against the edge). */
+const fitGap = (o, Ro) => { const want = o.gap ?? 0.3; return o.lanes ? Math.max(0, Math.min(want, laneReach(o.lanes, -Ro, Ro) - HARD_KEEP - 2 * Ro)) : want; };
+
 const SHAPE = {
   /** T2: a turning bulb (a disc of asphalt radius 2.2, a kerb of a fifth, an island for a bus loop) a few tenths of a tile beyond the edge, the street flaring into it. A farmyard's is a disc of beaten earth, a bulb near a building has two parking bays. */
   bulb(o) {
-    const R = 2.2, gap = o.gap ?? 0.3, c = gap + R + TERM.kerb, dress = DRESS_OF[o.theme] || 'bus', Ro = R + TERM.kerb, island = dress === 'bus' || dress === 'garden', earth = dress === 'farm', bayed = !!o.bays;
+    const R = 2.2, Ro = R + TERM.kerb, gap = fitGap(o, Ro), c = gap + Ro, dress = DRESS_OF[o.theme] || 'bus', island = dress === 'bus' || dress === 'garden', earth = dress === 'farm', bayed = !!o.bays;
     const pieces = [...gravelDisc(c, Ro + 0.4), ...gravelRect(0, c, -(HWK + 0.4), HWK + 0.4), ...walks()];
     if (earth) pieces.push(P('curb', rect(B0, 1.0, -HWK, HWK)), P('asph', rect(B0, 1.0, -TERM.hw, TERM.hw)), P('dirt', neck(c, Ro, HWK, 0.9)), P('dirt', circ(c, 0, Ro, 32)));
     else pieces.push(P('curb', neck(c, Ro, HWK)), P('curb', circ(c, 0, Ro, 32)), P('asph', neck(c, R, TERM.hw)), P('asph', circ(c, 0, R, 32)));
@@ -269,7 +307,7 @@ const SHAPE = {
   },
   /** T1: a roundabout: a ring of asphalt 1.3 to 3.1 round a lawn island of 1.1 (a kerb of a fifth), the street meeting it in a flare, a fountain on the island and a kiosk, benches and lamps round it. */
   roundabout(o) {
-    const R = 3.1, gap = o.gap ?? 0.3, Ro = R + TERM.kerb, c = gap + Ro, kn = 1.1;
+    const R = 3.1, Ro = R + TERM.kerb, gap = fitGap(o, Ro), c = gap + Ro, kn = 1.1;
     const pieces = [...gravelDisc(c, Ro + 0.4, 36), ...gravelRect(0, c, -(HWK + 0.4), HWK + 0.4), ...walks(), P('curb', neck(c, Ro, HWK)), P('curb', circ(c, 0, Ro, 36)), P('asph', neck(c, R, TERM.hw)), P('asph', circ(c, 0, R, 36)), P('curb', circ(c, 0, kn + 0.2, 24)), P('lawn', circ(c, 0, kn, 24))];
     const props = [prop('fountain', c, 0, 1.8, 1.8, 8), prop('kiosk', c + 1.0, Ro + 1.0, 1.1, 1.1, 22, { col: '#5fa8e8', sign: 'CAFE' }), prop('bench', c - 1.8, Ro + 0.6, 1.0, 0.4, 8), prop('bench', c + 0.4, -Ro - 0.6, 1.0, 0.4, 8), lamp(c - 2.6, -Ro - 0.3), lamp(0.9, HWK + 0.6), lamp(c + 2.9, Ro + 0.2), prop('tree', c + 1.4, -Ro - 0.9, 0.5, 0.5, 38, { s: 0.9 })];
     return { pieces, props, turn: { u: c, v: 0, r: 2.2, open: true, ring: true }, foot: [{ u0: B0, u1: c + Ro, v0: -Ro - 1.6, v1: Ro + 2.2 }] };
@@ -309,7 +347,7 @@ const SHAPE = {
   },
   /** T7: a quay (or, with `ramp`, a slipway): the street goes on as a slab 3.0 wide to 0.4 tile short of the water, a band of cobbles at its edge, bollards along both sides. */
   quay(o) {
-    const wet = o.water ?? 4.8, L = o.ramp ? Math.max(2.6, wet - 0.15) : Math.min(4.0, Math.max(2.6, wet - 0.4)), hs = 1.5, slabOf = (g) => [[B0, -HWK - g], [0.3, -HWK - g], [0.9, -hs - g], [L + g, -hs - g], [L + g, hs + g], [0.9, hs + g], [0.3, HWK + g], [B0, HWK + g]];
+    const hs = 1.5, wet = o.lanes ? laneReach(o.lanes, -hs - 0.15, hs + 0.15) : o.water ?? 4.8, L = o.ramp ? Math.max(2.6, wet - (o.lanes ? 0.2 : 0.15)) : Math.min(4.0, Math.max(2.6, wet - (o.lanes ? DECK_KEEP : 0.4))), slabOf = (g) => [[B0, -HWK - g], [0.3, -HWK - g], [0.9, -hs - g], [L + g, -hs - g], [L + g, hs + g], [0.9, hs + g], [0.3, HWK + g], [B0, HWK + g]];
     const pieces = [...gravelRect(0, L + 0.2, -hs - 0.3, hs + 0.3), ...walks(1.2), P('curb', slabOf(0.15)), P('slab', slabOf(0)), P('band', rect(L - 0.3, L, -hs, hs))];
     if (o.ramp) for (let k = 1; k <= 4; k++) pieces.push(P('bay', rect(1.0 + (k * (L - 1.5)) / 5 - 0.05, 1.0 + (k * (L - 1.5)) / 5 + 0.05, -hs + 0.2, hs - 0.2)));
     const props = [bollard(1.2, -hs - 0.1), bollard(1.2, hs + 0.1), bollard(L - 0.7, -hs - 0.1), bollard(L - 0.7, hs + 0.1), lamp(0.8, HWK + 1.0), prop('crates', 2.2, -hs - 0.9, 1.2, 1.2, 26, { n: 2 })];
@@ -317,7 +355,7 @@ const SHAPE = {
   },
   /** T11: a railed belvedere at the end of a street that stands above the sea: the street goes on as a short deck of planks with a rail on three sides, a bench and a telescope on it, flags and planters at the corners. */
   belvedere(o) {
-    const u0 = 0.8, u1 = Math.max(2.6, Math.min(3.6, (o.water ?? 4.6) - 0.9)), h = 1.8, pieces = [...gravelRect(0, u1 + 0.1, -h - 0.2, h + 0.2), ...walks(1.2), P('curb', rect(B0, u0, -HWK, HWK)), P('asph', rect(B0, u0, -TERM.hw, TERM.hw)), P('curb', rect(u0 - 0.1, u1 + 0.15, -h - 0.15, h + 0.15)), P('deck', rect(u0, u1, -h, h))];
+    const u0 = 0.8, h = 1.8, u1 = Math.max(2.6, Math.min(3.6, o.lanes ? laneReach(o.lanes, -h - 0.15, h + 0.15) - DECK_KEEP : (o.water ?? 4.6) - 0.9)), pieces = [...gravelRect(0, u1 + 0.1, -h - 0.2, h + 0.2), ...walks(1.2), P('curb', rect(B0, u0, -HWK, HWK)), P('asph', rect(B0, u0, -TERM.hw, TERM.hw)), P('curb', rect(u0 - 0.1, u1 + 0.15, -h - 0.15, h + 0.15)), P('deck', rect(u0, u1, -h, h))];
     for (let k = 1; k < 8; k += 2) pieces.push(P('deck2', rect(u0, u1, -h + k * 0.45, -h + (k + 1) * 0.45))); // (planks run along the street, in two tones)
     const rail = [P('rail', [[u0 + 0.2, -h + 0.06], [u1 - 0.06, -h + 0.06], [u1 - 0.06, h - 0.06], [u0 + 0.2, h - 0.06]])];
     for (const [pu, pv] of [[u0 + 0.2, -h + 0.06], [u0 + 0.2, h - 0.06], [u1 - 0.06, -h + 0.06], [u1 - 0.06, h - 0.06], [(u0 + u1) / 2, -h + 0.06], [(u0 + u1) / 2, h - 0.06], [u1 - 0.06, 0]]) rail.push(P('post', [[pu, pv]]));
@@ -351,6 +389,7 @@ const SHAPE = {
 export function shapeOf(kind, o = {}) {
   const make = SHAPE[kind]; if (!make) throw new RangeError('no termination of kind ' + kind);
   const s = make(kind === 'hammer' && o.dock === undefined ? { ...o, dock: false } : o);
+  if (o.lanes) s.pieces = fitGravel(s.pieces, o.lanes); // (the gravel stops where the ground does)
   const ur = o.rail && o.flat !== undefined ? railAt(kind, s, o.flat, true) : null;
   if (ur !== null) { // the plateau falls away just beyond the end: a rail across it, with a post at each end and in the middle (a street that turns round on a cliff top is railed)
     const h = 1.8; s.pieces = [...s.pieces, P('rail', [[ur, -h], [ur, h]]), ...[[ur, -h], [ur, 0], [ur, h]].map((q) => P('post', [q]))]; s.foot = [...s.foot, { u0: ur - 0.1, u1: ur + 0.1, v0: -h - 0.1, v1: h + 0.1 }];
@@ -380,12 +419,17 @@ export function headShape() {
 /**
  * The deck of a lookout (T11): a square of 2 by 2 tiles about the end of its footpath, planks in two tones that run the way the path comes in, a rail on the three sides it does not come in by with a post at every corner and every middle. `inSide` is the side of the
  * deck the path arrives at ('W', 'E', 'N' or 'S'); `zAt(x, y)` gives the ground's height. Pieces in the grid, points [x, y, z]: { rect: [x, y, w, d], pieces: [{ role, pts }] } (roles deck, deck2, rail, post).
+ * The verifier's D2: the footpath ends at the lip of the plateau, and a deck centred on its end had its edge ON the water's tile line (and, at the cliffs, a corner over the drop): `room(x0, y0, x1, y1)` says whether a square of the ground, with DECK_KEEP round it, is
+ * ground; the deck slides to the nearest place (a tenth of a tile at a time, 0.4 at most in each direction, so the bench and telescope of the lookout, a tile square about the end of the path, still stand on it) where it is. With no `room` it stays centred; where
+ * nothing within reach is ground it stays too. `slide` answers how far it moved: [dx, dy].
  */
-export function deckOf(cx, cy, inSide, zAt) {
-  const z = (x, y) => [x, y, zAt(x, y) + 0.4], x0 = cx - 1, x1 = cx + 1, y0 = cy - 1, y1 = cy + 1, alongX = inSide === 'W' || inSide === 'E', pieces = [{ role: 'deck', pts: [z(x0, y0), z(x1, y0), z(x1, y1), z(x0, y1)] }];
+export function deckOf(cx, cy, inSide, zAt, room = null) {
+  let sx = 0, sy = 0;
+  if (room) { let best = Infinity; for (let i = -4; i <= 4; i++) for (let j = -4; j <= 4; j++) { const d = i * i + j * j; if (d < best && room(cx + i / 10 - 1, cy + j / 10 - 1, cx + i / 10 + 1, cy + j / 10 + 1)) { best = d; sx = i / 10; sy = j / 10; } } if (best === Infinity) { sx = 0; sy = 0; } }
+  const z = (x, y) => [x, y, zAt(x, y) + 0.4], x0 = cx + sx - 1, x1 = cx + sx + 1, y0 = cy + sy - 1, y1 = cy + sy + 1, alongX = inSide === 'W' || inSide === 'E', pieces = [{ role: 'deck', pts: [z(x0, y0), z(x1, y0), z(x1, y1), z(x0, y1)] }];
   for (let k = 1; k < 4; k += 2) pieces.push({ role: 'deck2', pts: alongX ? [z(x0, y0 + k * 0.5), z(x1, y0 + k * 0.5), z(x1, y0 + (k + 1) * 0.5), z(x0, y0 + (k + 1) * 0.5)] : [z(x0 + k * 0.5, y0), z(x0 + (k + 1) * 0.5, y0), z(x0 + (k + 1) * 0.5, y1), z(x0 + k * 0.5, y1)] });
   const e = 0.07, a = x0 + e, b = x1 - e, c = y0 + e, d = y1 - e, rail = { W: [[x0 + 0.2, c], [b, c], [b, d], [x0 + 0.2, d]], E: [[x1 - 0.2, c], [a, c], [a, d], [x1 - 0.2, d]], N: [[a, y0 + 0.2], [a, d], [b, d], [b, y0 + 0.2]], S: [[a, y1 - 0.2], [a, c], [b, c], [b, y1 - 0.2]] }[inSide];
   pieces.push({ role: 'rail', pts: rail.map(([x, y]) => z(x, y)) });
   for (let i = 0; i < rail.length; i++) { pieces.push({ role: 'post', pts: [z(...rail[i])] }); if (i + 1 < rail.length) pieces.push({ role: 'post', pts: [z((rail[i][0] + rail[i + 1][0]) / 2, (rail[i][1] + rail[i + 1][1]) / 2)] }); }
-  return { rect: [x0, y0, 2, 2], pieces };
+  return { rect: [x0, y0, 2, 2], pieces, slide: [sx, sy] };
 }

@@ -113,7 +113,19 @@ test('RT4: the island: each of the 29 ports no road or ferry leaves has one term
   assert.deepEqual(Object.fromEntries(Object.entries(by).map(([k, v]) => [k, v.sort()])), PINNED, 'the island\'s ends, port by port (a change here is a decision to say in the commit)');
 });
 
-test('RT5: what a termination builds fits: on land, within 6 px of its block\'s height, outside every block and clear of every road (the frame\'s room), and a quay stops short of the water', () => {
+/** Is (x, y) inside the polygon of [x, y, ...] points? */
+const pip = (x, y, pts) => { let c = false; for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) { const [xi, yi] = pts[i], [xj, yj] = pts[j]; if ((yi > y) !== (yj > y) && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) c = !c; } return c; };
+/** What a piece of ground covers, sampled in the middle of every tenth of a tile inside its polygon: how many samples, how many stand on water, how many are more than `lim` px off the block's height (and the worst of them). */
+function coverOf(q, z0, lim = 12) {
+  const xs = q.pts.map((p) => p[0]), ys = q.pts.map((p) => p[1]); let n = 0, wet = 0, off = 0, worst = 0;
+  for (let x = Math.min(...xs) + 0.05; x < Math.max(...xs); x += 0.1) for (let y = Math.min(...ys) + 0.05; y < Math.max(...ys); y += 0.1) {
+    if (!pip(x, y, q.pts)) continue; n++;
+    if (!LAYOUT.isLand(Math.floor(x), Math.floor(y))) wet++; else { const dz = Math.abs(Lay.zAt(x, y) - z0); if (dz > lim) { off++; worst = Math.max(worst, dz); } }
+  }
+  return { n, wet, off, worst };
+}
+
+test('RT5: what a termination builds fits: on land, within 6 px of its block\'s height, outside every block and clear of every road (the frame\'s room), a quay stops short of the water, and no piece of its GROUND (a fringe of gravel, a kerb, a slab, a deck) lies on water or more than 12 px off the block\'s height', () => {
   for (const t of LAYOUT.terms) {
     const D = DIST[t.district], f = t.frame; if (t.kind === 'head') continue; // (a path head stands where a footpath begins: it has no room of its own to ask for)
     const bad = [];
@@ -124,6 +136,11 @@ test('RT5: what a termination builds fits: on land, within 6 px of its block\'s 
       if (u > 0.3 && t.kind !== 'quay') for (const sg of LAYOUT.roadSegs) if (Lay.segDist(x, y, sg[0], sg[1], sg[2], sg[3]) < sg[4] + 0.5) { bad.push(`on a road at ${u.toFixed(1)},${v.toFixed(1)}`); break; }
     }
     assert.deepEqual(bad.slice(0, 3), [], `${t.port} (${t.kind}): its room is on land and clear`);
+  }
+  { // the verifier's D2: the ground pieces themselves, sampled, not only the rectangles of room they asked for: the belvedere's gravel hung over the rock face under its deck (a sand-coloured lobe, 44 px of drop), a fringe lay over the sea at four ends, the cobbles of a slipway in it
+    const bad = [];
+    for (const t of LAYOUT.terms) for (const q of t.pieces) { if (q.role === 'rail' || q.role === 'post' || q.pts.length < 3) continue; const c = coverOf(q, DIST[t.district].z); if (c.wet || c.off) bad.push(`${t.port} ${t.kind}: the ${q.role} has ${c.wet} of ${c.n} samples on water and ${c.off} more than 12 px off the block's height (worst ${Math.round(c.worst)} px)`); }
+    assert.deepEqual(bad, [], 'no piece of ground of an end lies on water or on a drop or a rise of more than 12 px');
   }
   for (const t of LAYOUT.terms.filter((q) => q.kind === 'quay')) { const end = Math.max(...t.pieces.filter((p) => p.role === 'slab').flatMap((p) => p.pts.map(([x, y]) => (x - t.frame.x) * t.frame.ux + (y - t.frame.y) * t.frame.uy))); const [x, y] = framePoint(t.frame, end + 0.3, 0); assert.ok(LAYOUT.isLand(Math.floor(x), Math.floor(y)) || t.opt.ramp, `${t.port}: the slab stops short of the water`); }
 });
@@ -376,7 +393,14 @@ test('RT11: the lookouts\' decks and the path heads are ground art: a 2 by 2 dec
   const lookouts = LAYOUT.ids.flatMap((id) => DIST[id].props.filter((p) => p.t === 'lookout' && !p.term));
   for (const dk of LAYOUT.decks) {
     const [rx, ry, rw, rd] = dk.rect, e = LAYOUT.edges[dk.edge], end = Lay.polyAt(e, e.len), at = `the deck at ${dk.name}`;
-    assert.deepEqual([rw, rd], [2, 2], `${at} is 2 by 2 tiles`); assert.ok(Math.abs(rx + 1 - dk.x) < 1e-9 && Math.abs(ry + 1 - dk.y) < 1e-9, `${at} is centred on the end of its footpath`);
+    assert.deepEqual([rw, rd], [2, 2], `${at} is 2 by 2 tiles`);
+    // the verifier's D2: centred on the end of the footpath unless that put its edge on the water's tile line: it slides (a tenth of a tile at a time, 0.4 at most each way) to where it and a third of a tile round it are ground, so the end of the path, and the
+    // tile square of the bench and the telescope about it, always stand on it; the only deck that cannot is the one on a spit of land exactly two tiles wide (v6: its two edges ARE the water's), and no deck has a plank over water
+    assert.ok(Math.abs(dk.slide[0]) <= 0.4 + 1e-9 && Math.abs(dk.slide[1]) <= 0.4 + 1e-9 && Math.abs(rx + 1 - dk.slide[0] - dk.x) < 1e-9 && Math.abs(ry + 1 - dk.slide[1] - dk.y) < 1e-9, `${at} is the 2 by 2 about the end of its footpath, slid by ${dk.slide} at most`);
+    assert.ok(Math.min(dk.x - rx, rx + rw - dk.x, dk.y - ry, ry + rd - dk.y) >= 0.5 - 1e-9, `${at}: the end of the footpath is half a tile inside every edge: the bench and the telescope stand on the planks`);
+    { const D = DIST[dk.district], c = coverOf({ pts: dk.pieces.find((q) => q.role === 'deck').pts }, Lay.zAt(dk.x, dk.y)); assert.equal(c.wet + c.off, 0, `${at}: its planks are on land within 12 px of the path's end (${c.wet} samples on water, ${c.off} off the height)`); void D;
+      let ring = 0; for (let a = rx - 0.35; a < rx + rw + 0.35 - 1e-9; a += 0.1) for (let b = ry - 0.35; b < ry + rd + 0.35 - 1e-9; b += 0.1) if (!LAYOUT.isLand(Math.floor(a), Math.floor(b))) ring++;
+      if (dk.name === 'v6') assert.ok(ring > 0 && dk.slide.every((n) => n === 0), `${at} stands on a spit exactly two tiles wide: no slide gives it its margin (it has ${ring} samples of water within a third of a tile)`); else assert.equal(ring, 0, `${at}: a third of a tile round the planks is ground too (${ring} samples of water)`); }
     for (const q of dk.pieces) for (const [x, y] of q.pts) assert.ok(x >= rx - 1e-6 && x <= rx + rw + 1e-6 && y >= ry - 1e-6 && y <= ry + rd + 1e-6, `${at}: ${q.role} stays inside its 2 by 2`);
     assert.equal(dk.pieces.filter((q) => q.role === 'deck2').length, 2, `${at}: planks in two tones`);
     const rail = dk.pieces.find((q) => q.role === 'rail'), posts = dk.pieces.filter((q) => q.role === 'post'); assert.equal(rail.pts.length, 4, `${at}: a rail of three sides`); assert.equal(posts.length, 7, `${at}: a post at each corner and each middle`);

@@ -6,7 +6,7 @@ import { ZONES } from '../data/index.js';
 import { h2, lerp, clamp, mix, shade, luma } from './iso.js';
 import { KITS, FILL } from './kits.js';
 import { GW, GH, BW, BD, ANCHORS, REGIONS, BLOBS, CARVES, ROADS, JUNCTIONS, HEADS, VIEWPOINTS, TERMS } from './island.js';
-import { tidy, fillet, gradeRoads, portFrame, framePoint, frameRect, chooseTerm, shapeOf, wantsRail, headShape, deckOf } from './roadshape.js';
+import { tidy, fillet, gradeRoads, portFrame, framePoint, frameRect, chooseTerm, shapeOf, wantsRail, headShape, deckOf, LANE, DECK_KEEP } from './roadshape.js';
 
 /** The radius, in tiles, of the arc every corner of a road is rounded with (a footpath turns tighter): the cars follow it and the painted dashes bend with it (roadshape.js). */
 export const ROAD_RADIUS = 1.6, PATH_RADIUS = 1.2;
@@ -322,7 +322,8 @@ export function buildLayout(zones = ZONES, { water = true } = {}) {
     const e = edges.find((q) => q.b === name), D = districts[e?.gate]; if (!D) continue;
     const end = polyAt(e, e.len), inSide = Math.abs(end.dx) >= Math.abs(end.dy) ? (end.dx > 0 ? 'W' : 'E') : (end.dy > 0 ? 'N' : 'S'); // the side the path comes in by
     const p = mkProp(D, 'lookout', x - 0.5, y - 0.5, 1, 1, 14, { label: 'Lookout', sm: 1, own: 1, inSide }, false); p.z = zAt(x, y); p.bb = [(x - y - 1) * 32 - 20, (x + y) * 16 - p.z - 60, (x - y + 1) * 32 + 20, (x + y + 1) * 16 - p.z + 14];
-    decks.push({ name, edge: e.n, district: D.id, x, y, inSide, prop: p, ...deckOf(x, y, inSide, zAt) });
+    const onGround = (x0, y0, x1, y1) => { for (let a = x0 - DECK_KEEP; a < x1 + DECK_KEEP - 1e-9; a += 0.1) for (let b = y0 - DECK_KEEP; b < y1 + DECK_KEEP - 1e-9; b += 0.1) { if (!isLand(Math.floor(a), Math.floor(b))) return false; if (a >= x0 && a < x1 && b >= y0 && b < y1 && Math.abs(zAt(a, b) - zAt(x, y)) > LANE.lim) return false; } return true; }; // (the square is land within 12 px of the end of the path, and a third of a tile round it is land)
+    decks.push({ name, edge: e.n, district: D.id, x, y, inSide, prop: p, ...deckOf(x, y, inSide, zAt, onGround) });
   }
   // ---- terminations (WP12): a street that no road leaves ends in a place. Each is derived from the ground beyond its port and the district's theme (roadshape.js chooseTerm; the rule is in docs/ART_DIRECTION.md section 4.7) unless island.js TERMS chose it by hand; the
   // registry says what stands there (ground pieces, props, the room kept clear of the pad's scatter) and where a car would turn round (turnSpots, for the traffic work). Ground art: groundart.js drawTerms; props: the dressing of each shape.
@@ -333,10 +334,20 @@ export function buildLayout(zones = ZONES, { water = true } = {}) {
       const dz = zAt(x, y) - D.z; if (u <= 4) rise = Math.max(rise, dz); if (level) { if (Math.abs(dz) <= 6) flat = u; else { level = false; fall = dz < 0; } }
     }
     const [wx, wy] = water === null ? [0, 0] : framePoint(f, water - 0.25, 0);
-    return { flat, water, drop: water === null ? null : zAt(wx, wy), hill: rise >= 20, fall }; // (`fall`: the level ground ends in a drop or the sea, not a slope up)
+    return { flat, water, drop: water === null ? null : zAt(wx, wy), hill: rise >= 20, fall, lanes: lanesOf(D, f) }; // (`fall`: the level ground ends in a drop or the sea, not a slope up)
   };
-  const roomFor = (D, f, side, segs) => (kind, opt = {}) => { // does the shape of `kind` find its room here: land, level, outside every block, clear of every road (`segs`: the road legs within 18 tiles of the port, the only ones that can be in the way)?
-    const sh = shapeOf(kind, { theme: D.theme, side, ...opt });
+  const lanesOf = (D, f) => { // how far out each lane of the frame (v from -4.5 to 4.5, a quarter tile apart) stays on land within 12 px of the block's height: the u of the first sample that does not, found to a twentieth of a tile (the cap when none does): what keeps the ground pieces of an end on ground (roadshape.js LANE)
+    const bad = (u, v) => { const [x, y] = framePoint(f, u, v); return !isLand(Math.floor(x), Math.floor(y)) || Math.abs(zAt(x, y) - D.z) > LANE.lim; };
+    return Array.from({ length: LANE.n }, (_, k) => {
+      const v = LANE.v0 + k * LANE.step; let u = 0.25;
+      while (u <= LANE.cap && !bad(u, v)) u += 0.25;
+      if (u > LANE.cap) return LANE.cap;
+      for (let i = 1; i <= 4; i++) if (bad(u - 0.25 + i * 0.05, v)) return +(u - 0.25 + i * 0.05).toFixed(2);
+      return u;
+    });
+  };
+  const roomFor = (D, f, side, segs, lanes) => (kind, opt = {}) => { // does the shape of `kind` find its room here: land, level, outside every block, clear of every road (`segs`: the road legs within 18 tiles of the port, the only ones that can be in the way)? (the shape as the lanes of the ground let it be: it keeps off the sea and the drops)
+    const sh = shapeOf(kind, { theme: D.theme, side, lanes, ...opt });
     for (const r of sh.foot) for (let u = r.u0; u <= r.u1 + 1e-9; u += 0.5) for (let v = r.v0; v <= r.v1 + 1e-9; v += 0.5) {
       const [x, y] = framePoint(f, u, v); if (!isLand(Math.floor(x), Math.floor(y)) || Math.abs(zAt(x, y) - D.z) > 6) return false;
       if (u > 0.3) { if (zoneAt(x, y)) return false; for (const sg of segs) if (segDist(x, y, sg[0], sg[1], sg[2], sg[3]) < sg[4] + 0.5) return false; }
@@ -361,7 +372,7 @@ export function buildLayout(zones = ZONES, { water = true } = {}) {
   for (const D of ds) for (const side of ['W', 'E', 'N', 'S']) {
     const port = D.id + '.' + side; if (connectedPorts.has(port)) continue; // (a road or the ferry leaves it: the apron's)
     const [px, py] = D.ports[side], f = portFrame(side, px, py), street = side === 'W' || side === 'E' ? 'avenue' : 'cross', probe = probeEnd(D, f), authored = TERMS[port] || null;
-    const fitsHere = roomFor(D, f, side, roadSegs.filter((sg) => segDist(px, py, sg[0], sg[1], sg[2], sg[3]) < sg[4] + 18)), pick = chooseTerm({ side, theme: D.theme, street, ...probe, path: pathPorts.has(port), authored }, fitsHere), opt = { theme: D.theme, side, ...pick.opt, water: probe.water === null ? undefined : probe.water };
+    const fitsHere = roomFor(D, f, side, roadSegs.filter((sg) => segDist(px, py, sg[0], sg[1], sg[2], sg[3]) < sg[4] + 18), probe.lanes), pick = chooseTerm({ side, theme: D.theme, street, ...probe, path: pathPorts.has(port), authored }, fitsHere), opt = { theme: D.theme, side, lanes: probe.lanes, ...pick.opt, water: probe.water === null ? undefined : probe.water };
     if (pick.kind === 'bulb' && builtNear(framePoint(f, 2.7, 0)) && fitsHere('bulb', { bays: true })) opt.bays = true; // a building stands near the end: two parking bays off the turning circle
     if (wantsRail(pick.kind, shapeOf(pick.kind, opt), probe.flat, probe.fall)) { opt.rail = true; opt.flat = probe.flat; } // the plateau falls away just beyond it: a rail across the far side
     const sh = shapeOf(pick.kind, opt), to = (u, v) => framePoint(f, u, v), z = (x, y) => zAt(x, y) + 0.4;
