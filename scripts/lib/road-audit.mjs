@@ -9,10 +9,11 @@
 //   deadEnds      every port that no road or ferry leaves: the block street runs to the plateau's edge and stops. With world and screen coordinates, the district, the street, what lies beyond (land, slope, cliff, water, a prop in the way)
 //                 and whether anything TERMINATES it (a gate, a barrier, a bridge, a roundabout, a building) or nothing does.
 //   seams         places where two DIFFERENT edges lie within one road width of each other (their ribbons overlap, and each paints its own kerb across the other's asphalt), as runs, with the separation and the angle. Two edges that share a
-//                 JUNCTION (island.js JUNCTIONS: a fork is a node where a stem and two branches meet) may overlap within JUNCTION_REACH tiles of it, as a fork does; anything beyond that, or at no junction, is a seam.
+//                 JUNCTION (island.js JUNCTIONS: a fork is a node where a stem and two branches meet) may overlap within JUNCTION_REACH tiles of it, as a fork does (3.0 tiles at the most today); anything beyond that, or at no junction, is a seam.
 //   crossings     places where two different edges cross with no junction (the meeting of edges at a junction node is not a crossing).
 //   footpaths     the six footpaths: where each runs over asphalt (a tan ribbon over grey), where it ends (a lookout on the meadow, at a cliff, at a pier on the water), where it hugs a drop.
 //   joints        how every edge meets the block street at its port (heading error, lateral offset, grade); a kink is a joint more than 8 degrees or 0.1 tile off the street's axis.
+//   aprons        the ports where a road leaves and no apron is drawn (the ground art's own list: groundart.js aprons(); an apron with no band to paint is none): the block's street and the road beyond it meeting in one straight cut.
 //   lockedEntries roads that enter a locked district with no barrier, leaf or ferry standing on them, and roads that open with a later district but enter an earlier one with none.
 //   counts        the above per district and in total; `ratchet` is the handful of them a test holds (see ratchetCounts).
 //   scope         how much the detector looked at (ports, edges, pairs of edges, samples along them): a ratchet that can be "improved" by looking at less is held by floors on these (tests/world-roads-audit.test.mjs).
@@ -27,11 +28,11 @@ import { dirname, join } from 'node:path';
 /** The checkout this file belongs to. */
 export const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 
-/** The modules the detector reads, from a checkout's folder (a worktree of another commit can be audited the same way). */
+/** The modules the detector reads, from a checkout's folder (a worktree of another commit can be audited the same way). `Art` is the ground art (groundart.js): where it draws its aprons. */
 export async function loadWorld(root = ROOT) {
   const mod = (p) => import(pathToFileURL(join(root, p)).href);
-  const [Lay, Isl, Shape, Act] = await Promise.all([mod('js/world/layout.js'), mod('js/world/island.js'), mod('js/world/roadshape.js'), mod('js/world/ents-actors.js')]);
-  return { root, Lay, Isl, Shape, Act };
+  const [Lay, Isl, Shape, Act, Art] = await Promise.all([mod('js/world/layout.js'), mod('js/world/island.js'), mod('js/world/roadshape.js'), mod('js/world/ents-actors.js'), mod('js/world/groundart.js')]);
+  return { root, Lay, Isl, Shape, Act, Art };
 }
 
 /** The counts a test holds, named as the ratchet names them, out of a catalog (one place says what each one means). */
@@ -46,11 +47,12 @@ export function ratchetCounts(catalog) {
     kinks: catalog.jointsWithAKink.length,                             // edges that meet their block street off its axis
     splitBridges: catalog.defectClasses.find((c) => c.id === 'R9').count, // a bridge drawn as two runs that touch
     footprintThroughRoads: T.roadsThroughAnotherFootprint,             // roads that run through another district's ground
+    portsWithoutApron: catalog.defectClasses.find((c) => c.id === 'R7').count, // ports where a road leaves and the ground art draws no apron
   };
 }
 
-/** How far from a junction two of its edges may overlap (WORLD_PASS rule N4: a fork's roads share a node within 6 tiles). */
-export const JUNCTION_REACH = 6;
+/** How far from a junction two of its edges may overlap (WORLD_PASS rule N4 gave 6 tiles; the three forks overlap 3.0, 2.2 and 1.9 tiles from their nodes at the most, tests/world-roads.test.mjs holds them to 3.5, and so the exemption is 3.5: a road laid along a branch for 5 tiles is a seam). */
+export const JUNCTION_REACH = 3.5;
 /** Two bridges of one road that start within this many tiles of where the other ended are one crossing drawn twice. */
 const BRIDGE_TOUCH = 1.6;
 const r1 = (v) => Math.round(v * 10) / 10, r2 = (v) => Math.round(v * 100) / 100;
@@ -76,7 +78,7 @@ const runsOf = (flags, minLen) => { const runs = []; let a = -1; for (let i = 0;
 /** The point where two segments cross, with the angle they cross at (null when they do not). */
 const segX = (p, p2, q, q2) => { const d = (p2[0] - p[0]) * (q2[1] - q[1]) - (p2[1] - p[1]) * (q2[0] - q[0]); if (Math.abs(d) < 1e-9) return null; const t = ((q[0] - p[0]) * (q2[1] - q[1]) - (q[1] - p[1]) * (q2[0] - q[0])) / d, u = ((q[0] - p[0]) * (p2[1] - p[1]) - (q[1] - p[1]) * (p2[0] - p[0])) / d; return t >= 0 && t <= 1 && u >= 0 && u <= 1 ? { x: p[0] + (p2[0] - p[0]) * t, y: p[1] + (p2[1] - p[1]) * t, ang: axisAngle(p2[0] - p[0], p2[1] - p[1], q2[0] - q[0], q2[1] - q[1]) } : null; };
 
-export function auditRoads({ root, Lay, Isl, Shape, Act }, { full = true } = {}) {
+export function auditRoads({ root, Lay, Isl, Shape, Act, Art }, { full = true } = {}) {
   const { LAYOUT, EDGES, DIST, zAt, polyAt } = Lay;
   const { ROADS, ANCHORS, BW, BD, GW, GH } = Isl;
   const ids = LAYOUT.ids;
@@ -335,6 +337,8 @@ export function auditRoads({ root, Lay, Isl, Shape, Act }, { full = true } = {})
 
   // ---------------------------------------------------------------------------------------------- the defect classes, with where each lives in the code
   const T = counts.total, scatterInStrip = deadEnds.filter((d) => d.terminator === 'building-or-prop' || d.terminator === 'furniture-only').length;
+  // the ports a road leaves (not the ferry's: it ends in buoys) and which of them the ground art draws an apron at (its own list: an apron with no band to paint is none)
+  const connected = ports.filter((q) => q.status === 'road'), apronPorts = new Set((Art && typeof Art.aprons === 'function' ? Art.aprons() : []).filter((a) => a.pieces && a.pieces.bands && a.pieces.bands.length).map((a) => a.port)), noApron = connected.filter((q) => !apronPorts.has(q.id));
   const defectClasses = [
     { id: 'R1', name: 'a block street runs to the plateau edge and stops', count: T.deadEnds, of: T.ports, detail: `${T.deadEndsWithNothing} with nothing in the strip beyond the port (${T.deadEndsFootpathOnly} of them are the start of a footpath), ${scatterInStrip} where a scatter prop (tree, topiary, silo, hay, billboard, container, stack, dish, planter) happens to stand, and no gate, barrier, bridge or roundabout at any of the ${T.deadEnds}`, cause: 'js/world/layout.js (every block is the same plus of streets to its edge, a port on all four sides), js/world/island.js (only 18 roads, 1 ferry and 6 paths are authored)' },
     { id: 'R2', name: 'a fork is two full ribbons laid over each other', count: T.seamRuns, detail: `${T.seamRunsRoadRoad} road-road, ${T.seamRuns - T.seamRunsRoadRoad} road-footpath, at ${new Set(seams.filter((x) => x.kind !== 'coincident').map((x) => x.sharedPort)).size} ports; the longest is ${Math.max(0, ...seams.map((x) => x.lengthTiles))} tiles`, cause: 'js/world/groundart.js (until WP10 each edge painted its kerb strip and then its asphalt strip, in ROADS order, so the later road\'s kerb crossed the earlier road\'s asphalt); js/world/island.js (a fork is a stem and two branches that meet at a JUNCTIONS node)' },
@@ -342,7 +346,7 @@ export function auditRoads({ root, Lay, Isl, Shape, Act }, { full = true } = {})
     { id: 'R4', name: 'a footpath ends at a lookout that is a small prop', count: footpaths.length, detail: `${footpaths.filter((f) => f.end.kind === 'cliff-top').length} on a cliff top (${Math.min(...footpaths.filter((f) => f.end.kind === 'cliff-top').map((f) => f.end.z))} to ${Math.max(...footpaths.filter((f) => f.end.kind === 'cliff-top').map((f) => f.end.z))} px over the sea), ${footpaths.filter((f) => f.end.kind === 'meadow').length} on a meadow; the lookout is a 1 x 1 'sm' prop, not drawn in the far view below zoom 0.4 (and, until WP02, not drawn below 0.6 once the governor went lite: it says \`own\` now and is kept), a small prop at the end of a path where the plans want ground art`, cause: 'js/world/layout.js (the lookout), js/world/yard.js (its art), js/world/world.js (the skip)' },
     { id: 'R5', name: 'a road meets its block street off the axis', count: kinked.length, detail: kinked.map((k) => `${k.edge} at ${k.port}: ${k.headingErrorAt1_5} degrees at 1.5 tiles, ${k.lateralAt1} tile off the axis at 1 tile`).join('; '), cause: 'js/world/island.js (the via list of 10.W > 11.E contains its own port 11.E, so after tidy() the last leg arrives on a diagonal; the path 14.N > v5 starts inside the block)' },
     { id: 'R6', name: 'a locked road with no barrier on it', count: closedUnmarked.length, detail: closedUnmarked.map((c) => c.road).join(', '), cause: 'js/world/layout.js (a district gets ONE gate prop, on the first road whose gate is its id; the other roads into it, and every road that opens with a later district, stand open-looking)' },
-    { id: 'R7', name: 'the block street and the road beyond it do not match at the port', count: joints.filter((j) => j.kind === 'road').length, of: 'every road end at a port', detail: 'asphalt colour step (block: mix(ROAD.mid, ground, .1); road: ROAD.mid .12 toward ROAD.light), width step (the block has a 1 tile walk each side and raised kerb bars, KERB_H 2.2 px; the road has a flat 0.2 tile kerb and no walk), and the stage rim runs across: no taper, no kerb return, no stop line', cause: 'js/world/groundmat.js (drawStage, painted AFTER the roads: ground.js) against js/world/groundart.js' },
+    { id: 'R7', name: 'a road leaves a block with no apron at the port: the street and the road beyond it meet in one cut', count: noApron.length, of: connected.length, detail: noApron.length ? `${noApron.length} of the ${connected.length} ports where a road leaves have no apron (${noApron.map((q) => q.id).join(', ')}): the block's asphalt changes tone and width in one straight cut across the road, the sidewalk and the kerb stop, the stage's rim and shadow run across the mouth` : `every one of the ${connected.length} ports where a road leaves has its apron (roadshape.js APRON: 2 tiles beyond the block's edge in which the street's asphalt narrows from 2 to 1.6 and takes the road's tone, the sidewalk tapers to nothing, the kerb stays a flat fifth, the road's dashes go on; it starts 0.1 tile under the edge)`, cause: 'js/world/groundart.js (drawAprons: WP10; until then drawStage in js/world/groundmat.js painted over the road end), js/world/roadshape.js (apronPieces)' },
     { id: 'R8', name: 'cars vanish at the port, never enter a district, overlap at forks', count: T.roadEdges, detail: traffic ? `one car a road (${traffic.cars}), none in a block (0 of ${traffic.measuredTenMinutes.carSamples} samples), ${Math.round(traffic.measuredTenMinutes.shareOfCarFramesNotFullyVisible * 100)}% of car frames not fully visible, ${traffic.measuredTenMinutes.framesWithTwoVisibleCarsCloserThan1_1Tiles} frames in ten minutes with two visible cars within 1.1 tiles (at forks), none at all while only district 1 is open` : 'one car a road, none in a block, a fade over min(6, len/4) tiles at both ends of every road (measured in full mode)', cause: 'js/world/ents-actors.js (cars(): one car a road, a lane of the road\'s own polyline, a lap, a fade at both ends)' },
     { id: 'R9', name: 'a bridge in two runs', count: bridges.filter((b, i) => bridges.some((c, j) => j !== i && c.road === b.road && Math.abs(c.s0 - b.s1) < BRIDGE_TOUCH)).length, detail: 'a road that crosses the water in two runs with a sandbar of a tile or less between them is drawn as two bridges with their own posts and piers (8.W > 9.E was: 5.5 and 1.0 tiles, touching at s = 22); layout.js BRIDGE_GAP joins them', cause: 'js/world/layout.js (a run ended at the first dry half-tile sample)' },
     { id: 'R10', name: 'two roads cross with no junction', count: crossings.length, detail: crossings.map((c) => `${c.a} x ${c.b} at (${c.at.gx}, ${c.at.gy}), ${c.angle} degrees`).join('; '), cause: 'js/world/island.js (4.E > 3.N via (76, 92) and 4.E > 5.W via (78, 92) share a stem and then cross)' },

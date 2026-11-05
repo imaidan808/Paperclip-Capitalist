@@ -6,24 +6,26 @@
 //   RA2  the ratchet: every defect count equals its baseline: a worse count fails, and so does a better one until the constant is lowered (29 dead ends, no seam run, no crossing without a junction, no footpath over asphalt, 4 locked roads without a barrier, no kink, no split bridge, 1 road through another district)
 //   RA3  the defect classes are all listed, with their ids, names, counts and causes, and the ratchet's counts are the classes' own
 //   RA4  the detector can see: on a world made worse in four ways (a road taken away, a road laid twice, a footpath laid on a road, a gate taken away) it finds each of the four, so an all-clear is not a blind detector's
-//   RA8  a junction is an exemption with edges: two roads that meet at one may overlap within 6 tiles of it and nowhere else (a second road laid along a branch is found), a crossing a long way from it is a crossing, and the stem of a fork is not a road into the district
+//   RA8  a junction is an exemption with edges: two roads that meet at one may overlap within 3.5 tiles of it (the real overlap is at most 3.0) and nowhere else (a second road laid along a branch is found, even one that runs along it for 5 tiles), a crossing a long way from it is a crossing, and the stem of a fork is not a road into the district
+//   RA9  the detector sees an apron: a port where a road leaves and no apron is drawn is counted (R7), and an apron with nothing to paint is no apron
 //   RA5  it is quick: under 2 s of CPU (it was 0.05 s when this was written; the whole catalog the CLI prints is 0.6 s)
 //   RA6  the whole catalog, with the plan's proposals, the district matrix and the traffic, is complete (what `node scripts/road-audit.mjs` prints)
 //   RA7  nothing of this is shipped to the site: scripts/ is never staged (scripts/stage.mjs), and no module of the app imports it
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { loadWorld, auditRoads, ratchetCounts } from '../scripts/lib/road-audit.mjs';
+import { loadWorld, auditRoads, ratchetCounts, JUNCTION_REACH } from '../scripts/lib/road-audit.mjs';
 import { walk } from '../scripts/preload.mjs';
 
 /**
  * What the detector found on main at 0ab9bf8 (the survey's own run, which this module reproduces exactly): deadEnds 29, seamRuns 7, crossings 1, pathTilesOverAsphalt 13.8, lockedWithoutBarrier 4, kinks 2, splitBridges 1, footprintThroughRoads 1.
  * LOWER a constant in the pull request that fixes the defect; the plan's WP numbers say which one does:
  *   deadEnds 29 (WP12 and each district's plan), lockedWithoutBarrier 4 (WP11), footprintThroughRoads 1 (WP22a, when the island is laid again: 6.N to 7.E runs through the south pad of 8).
- * WP10 (one road surface) took seamRuns 7 to 0 (a fork is a stem and two branches that meet at a junction: three forks, and the detector lets the edges of one overlap within 6 tiles of it and nowhere else), crossings 1 to 0 (the road of 4 to 3 no
+ * WP10 (one road surface) took seamRuns 7 to 0 (a fork is a stem and two branches that meet at a junction: three forks, and the detector lets the edges of one overlap within 3.5 tiles of it and nowhere else: the real overlap is at most 3.0), crossings 1 to 0 (the road of 4 to 3 no
  * longer crosses the road of 4 to 5: it leaves the fork on its own side), pathTilesOverAsphalt 13.8 to 0 (the three footpaths that left a road start from path heads two tiles to its side), kinks 2 to 0 (10.W to 11.E arrives along the axis of
- * 11's avenue, and the footpath of 14 starts outside its block) and splitBridges 1 to 0 (8.W to 9.E is one bridge).
+ * 11's avenue, and the footpath of 14 starts outside its block) and splitBridges 1 to 0 (8.W to 9.E is one bridge), and it adds portsWithoutApron: the ports where a road leaves and no apron is drawn (R7, which counted all 33 connected ports until
+ * each got its apron; it is 0 and stays 0).
  */
-const BASELINE = { deadEnds: 29, seamRuns: 0, crossings: 0, pathTilesOverAsphalt: 0, lockedWithoutBarrier: 4, kinks: 0, splitBridges: 0, footprintThroughRoads: 1 };
+const BASELINE = { deadEnds: 29, seamRuns: 0, crossings: 0, pathTilesOverAsphalt: 0, lockedWithoutBarrier: 4, kinks: 0, splitBridges: 0, footprintThroughRoads: 1, portsWithoutApron: 0 };
 /**
  * What the detector must still examine. A plan that changes the island changes these on purpose: raise or lower them in that pull request, saying why. WP10: three forks became three edges each (25 edges to 28: 21 roads, 6 footpaths, the ferry),
  * so 351 pairs of edges and 30,000 samples, three junctions and three path heads.
@@ -59,7 +61,8 @@ test('RA3: the defect classes are listed with their ids, names, counts and cause
   assert.deepEqual(catalog.defectClasses.map((c) => c.id), CLASSES, 'R1 to R12, in order: a class does not disappear from the detector');
   for (const c of catalog.defectClasses) { assert.ok(c.name.length > 10, c.id + ' has a name'); assert.ok(Number.isFinite(c.count), c.id + ' has a count'); assert.ok(/js\/world\//.test(c.cause) || /ROADS|footpaths/.test(c.cause), c.id + ' says where it comes from'); }
   const by = Object.fromEntries(catalog.defectClasses.map((c) => [c.id, c.count])), r = ratchetCounts(catalog);
-  assert.equal(by.R1, r.deadEnds); assert.equal(by.R2, r.seamRuns); assert.equal(by.R5, r.kinks); assert.equal(by.R6, r.lockedWithoutBarrier); assert.equal(by.R9, r.splitBridges); assert.equal(by.R10, r.crossings); assert.equal(by.R11, r.footprintThroughRoads);
+  assert.equal(by.R1, r.deadEnds); assert.equal(by.R2, r.seamRuns); assert.equal(by.R5, r.kinks); assert.equal(by.R6, r.lockedWithoutBarrier); assert.equal(by.R9, r.splitBridges); assert.equal(by.R10, r.crossings); assert.equal(by.R11, r.footprintThroughRoads); assert.equal(by.R7, r.portsWithoutApron);
+  const R7 = catalog.defectClasses.find((c) => c.id === 'R7'); assert.ok(/apron/.test(R7.name + R7.detail), 'R7 says what it counts: a road that leaves a block with no apron at the port (it counted all 33 connected ports before each had one)'); assert.ok(R7.of === catalog.counts.total.portsWithRoad - 2, 'out of the 33 ports a road leaves (35 with the ferry\'s two)');
   assert.ok(by.R3 <= 3 && by.R3 >= 0, 'R3 counts footpaths that run over asphalt (3 of the 6), the ratchet counts the tiles');
   assert.equal(catalog.counts.total.roundabouts + catalog.counts.total.culDeSacs + catalog.counts.total.parkingLots, 0, 'the island has no roundabout, cul-de-sac or parking lot yet (the first one built raises these: WP12 and WP14)');
 });
@@ -83,14 +86,18 @@ test('RA4: the detector can see: a road taken away, a road laid twice, a footpat
   assert.equal(run({ DIST: { ...Lay.DIST, 2: { ...D2, props: D2.props.filter((q) => q.t !== 'gate') } } }).lockedWithoutBarrier, base.lockedWithoutBarrier + 1, 'the gate PROP taken away (its recorded place kept) leaves the road with no barrier too: the detector does not trust the data alone');
 });
 
-test('RA8: a junction is an exemption with edges: roads that meet at one may overlap within 6 tiles of it and nowhere else, a crossing beyond it is a crossing, and the stem of a fork is no road into its district', () => {
+test('RA8: a junction is an exemption with edges: roads that meet at one may overlap within 3.5 tiles of it (the real overlap is 3.0 at the most) and nowhere else, a crossing beyond it is a crossing, and the stem of a fork is no road into its district', () => {
   const { Lay, Isl } = world, base = ratchetCounts(catalog), run = (changes) => ratchetCounts(auditRoads({ ...world, Lay: { ...Lay, ...changes } }, { full: false }));
   assert.equal(Object.keys(Isl.JUNCTIONS).length, 3, 'three forks');
   const branch = Lay.EDGES.find((e) => e.a === 'j4' && e.b === '3.N'), other = Lay.EDGES.find((e) => e.a === 'j4' && e.b === '5.W'), stem = Lay.EDGES.find((e) => e.stem && e.b === 'j4');
   assert.ok(branch && other && stem, 'the fork of 4 is a stem and two branches');
-  // a branch laid again 0.3 tile beside itself, from the same junction: the two run together for 19 tiles, and only the first 6 are the fork's
+  assert.ok(JUNCTION_REACH >= 3.0 && JUNCTION_REACH <= 3.5, `the exemption is as long as the fork's own overlap (3.0 tiles at the most) and not much longer (${JUNCTION_REACH}; it was 6)`);
+  // a branch laid again 0.3 tile beside itself, from the same junction: the two run together for 19 tiles, and only the first 3.5 are the fork's
   const twin = { ...branch, b: 'x.N', pts: branch.pts.map(([x, y]) => [x + 0.2, y - 0.2]) };
-  assert.ok(run({ EDGES: [...Lay.EDGES, twin] }).seamRuns > base.seamRuns, 'a road that runs along a branch of a fork for 19 tiles is a seam beyond the first 6');
+  assert.ok(run({ EDGES: [...Lay.EDGES, twin] }).seamRuns > base.seamRuns, 'a road that runs along a branch of a fork for 19 tiles is a seam beyond the first 3.5');
+  // and one that runs along it for 5 tiles and leaves: the last 1.5 of them are past the node's reach (with the old 6 tiles it hid in the exemption)
+  const along = Array.from({ length: 11 }, (_, k) => { const p = Lay.polyAt(branch, k * 0.5); return [p.x + 0.2, p.y - 0.2]; }), spur = { ...branch, b: 'x.N', ...Lay.polyInfo(along) };
+  assert.ok(run({ EDGES: [...Lay.EDGES, spur] }).seamRuns > base.seamRuns, 'a road laid along a branch for 5 tiles is a seam from the 3.5th tile on');
   // two edges that meet at a junction and then cross a long way from it
   const cross = { ...branch, a: 'j4', b: 'x.W', pts: [[72, 94], [78, 98], [82, 88]], lens: [0, 7.2, 18.8], len: 18.8, n: 99 };
   assert.ok(run({ EDGES: [...Lay.EDGES, cross] }).crossings > base.crossings, 'two roads that leave a junction and cross each other further out are a crossing');
@@ -100,6 +107,16 @@ test('RA8: a junction is an exemption with edges: roads that meet at one may ove
   // a stem is no road into its district: the fork of 8 holds 3 edges and the gate counts only the road that comes to it
   assert.equal(Lay.EDGES.filter((e) => !e.stem && !e.path && !e.ferry && e.gate === 8).length, 1, 'one road opens with 8 (the stem opens with it too, and is not counted)');
   assert.equal(catalog.counts.total.lockedRoadsWithNoBarrier, BASELINE.lockedWithoutBarrier, 'the stems of the three forks are not locked roads without a barrier');
+});
+
+test('RA9: the detector sees an apron: a port where a road leaves and no apron is drawn is counted, all 33 when there are none, and an apron with nothing to paint is no apron', () => {
+  const { Art } = world, base = ratchetCounts(catalog), run = (aprons) => ratchetCounts(auditRoads({ ...world, Art: { ...Art, aprons } }, { full: false })).portsWithoutApron;
+  assert.equal(typeof Art.aprons, 'function', 'the ground art says where its aprons are'); const all = Art.aprons();
+  assert.equal(all.length, 33, 'a road leaves 33 ports'); assert.equal(base.portsWithoutApron, 0, 'and each has an apron');
+  assert.equal(run(() => all.filter((a) => a.port !== '12.N')), 1, 'the apron of 12.N taken away leaves one port with a road and none');
+  assert.equal(run(() => []), 33, 'and with none at all every connected port is one');
+  assert.equal(run(() => all.map((a) => ({ ...a, pieces: { ...a.pieces, bands: [] } }))), 33, 'an apron with no band to paint is not one');
+  assert.equal(ratchetCounts(auditRoads({ ...world, Art: {} }, { full: false })).portsWithoutApron, 33, 'a checkout whose ground art has no aprons (the commit before WP10) has 33 ports without one');
 });
 
 test('RA5: it is quick: the audit the ratchet runs is under 2 s of CPU', () => {
