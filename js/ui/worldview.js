@@ -143,7 +143,7 @@ export function createWorldView(ctx) {
       sound = createWorldSound(ctx, { world: () => world });
       world = new World({ session: S, ui: U, activate, hover, reveal: () => {}, insets });
       sound.camera(world);
-      if (window.pc) window.pc.world = world;
+      if (window.pc) { window.pc.world = world; window.pc.perf = (seconds) => (world ? import('../world/perfprobe.js').then((m) => m.perfProbe(world, seconds)) : Promise.reject(new Error('no world on screen'))); } // pc.perf(): what this machine does with the world, as one line to paste back when the game lags (js/world/perfprobe.js)
       world.attach(el.querySelector('.wvcv'));
       world.setMode?.('world');
       world.sync();
@@ -177,6 +177,7 @@ export function createWorldView(ctx) {
       sound?.destroy(); sound = null;
       world?.stop(); world?.detach?.(); // detach lets go of the bitmaps; the debugging handle must not keep the whole world reachable either
       if (window.pc && window.pc.world === world) window.pc.world = null;
+      if (window.pc && !window.pc.world) window.pc.perf = null; // (pc.perf belongs to the world on show)
       if (onResize) removeEventListener('resize', onResize);
       onResize = null; host = null; world = null;
     },

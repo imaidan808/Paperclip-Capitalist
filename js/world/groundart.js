@@ -123,7 +123,7 @@ function grainPattern(ctx) {
   if (GRAIN !== undefined) return GRAIN;
   GRAIN = null;
   try {
-    const f = surface(256, 256); if (!f || typeof ImageData !== 'function' || typeof ctx.createPattern !== 'function') return GRAIN;
+    const f = surface(256, 256, { willReadFrequently: true }); if (!f || typeof ImageData !== 'function' || typeof ctx.createPattern !== 'function') return GRAIN; // (a CPU tile: the pattern is filled into the chunks' CPU canvases, and a GPU-backed tile is read back from the GPU for every chunk that has a district block, which waits for the whole GPU queue: 37 to 53 ms behind a busy one)
     const img = f.g.createImageData(256, 256), d = img.data, m = mottleTile(256);
     for (let i = 0; i < 256 * 256; i++) { const v = (m[i] - 0.5) * 2.6, dark = v < 0, a = Math.min(1, Math.abs(v)); d[i * 4] = dark ? 74 : 255; d[i * 4 + 1] = dark ? 63 : 247; d[i * 4 + 2] = dark ? 136 : 220; d[i * 4 + 3] = Math.round(a * a * 36); }
     f.g.putImageData(img, 0, 0); GRAIN = ctx.createPattern(f.c, 'repeat') || null;
