@@ -29,7 +29,9 @@
 .dr-card:has(.dr-in:focus-visible) { outline: 3px solid var(--focus); outline-offset: 2px; }
 .dr-card > .dr-in { position: absolute; inset: 0; width: 100%; height: 100%; min-height: 0; margin: 0; opacity: 0; cursor: pointer; }
 .dr-top { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: .6rem; align-items: center; }
-.dr-ic { display: grid; place-items: center; width: 2.6rem; height: 2.6rem; font-size: 1.7rem; line-height: 1; border-radius: 50%; background: var(--bg); border: 1px solid var(--line); flex: none; }
+.dr-ic { display: grid; place-items: center; width: 2.6rem; height: 2.6rem; line-height: 1; border-radius: 50%; background: var(--bg); border: 1px solid var(--line); flex: none; }
+.dr-ic .gl { width: 1.6rem; height: 1.6rem; }
+.dr-ic:empty { visibility: hidden; } /* the drawings load after the Draft opens: no empty circle flashes */
 .dr-card[data-on="1"] .dr-ic { border-color: var(--gold); }
 .dr-nm { font-size: 1rem; line-height: 1.15; font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
 .dr-box { width: 1.35rem; height: 1.35rem; border: var(--bw) solid var(--field); border-radius: 2px; display: grid; place-items: center; background: var(--bg); }
@@ -80,7 +82,7 @@ body:has(.dr-actions) #toasts { bottom: calc(max(.5rem, env(safe-area-inset-bott
 
 @media (max-width: 640px) {
   .dr-card { padding: .6rem .65rem .65rem; gap: .35rem; } .dr-card:nth-child(n) { transform: none; } .dr-card:hover, .dr-card[data-on="1"] { transform: none; }
-  .dr-ic { width: 2.2rem; height: 2.2rem; font-size: 1.4rem; } .dr-line { font-size: .8rem; } .dr-grid { gap: .55rem; }
+  .dr-ic { width: 2.2rem; height: 2.2rem; } .dr-ic .gl { width: 1.35rem; height: 1.35rem; } .dr-line { font-size: .8rem; } .dr-grid { gap: .55rem; }
   .dr-actions { gap: .4rem .6rem; padding: .5rem .8rem; }
   .dr-need { flex: 1 1 100%; }
   .dr-actions .grow { display: none; }
@@ -112,7 +114,7 @@ body:has(.dr-actions) #toasts { bottom: calc(max(.5rem, env(safe-area-inset-bott
 .sc-build { display: grid; grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr)); gap: .7rem; }
 .sc-build .card { display: grid; gap: .35rem; }
 .sc-build .card > b { font-family: ui-monospace, Menlo, monospace; }
-.sc-ic { font-size: 1.5rem; margin-right: .35rem; }
+.sc-ic { margin-right: .35rem; } .sc-ic .gl { vertical-align: -.35em; }
 .sc-bg { white-space: nowrap; }
 .sc-plays dd { font-family: ui-monospace, Menlo, monospace; }
 
@@ -132,7 +134,7 @@ body:has(.dr-actions) #toasts { bottom: calc(max(.5rem, env(safe-area-inset-bott
 .in-dist .n { font-size: .68rem; font-family: ui-monospace, Menlo, monospace; color: var(--ink); min-height: 1em; }
 .in-dist .z { font-size: .66rem; font-family: ui-monospace, Menlo, monospace; color: var(--mute); }
 .in-dist li[data-here="1"] .z { color: var(--gold); font-weight: 700; }
-.in-bgs { display: inline-flex; gap: .15rem; font-size: 1.1rem; line-height: 1; vertical-align: middle; }
+.in-bgs { display: inline-flex; gap: .15rem; line-height: 1; vertical-align: middle; } .in-bgs .gl, .in-chips .gl { display: block; }
 .in-chips { display: flex; flex-wrap: wrap; gap: .35rem; margin: .4rem 0 0; padding: 0; list-style: none; }
 .in-chips li { display: inline-flex; gap: .3rem; align-items: center; border: 1px solid var(--line); border-radius: 99px; padding: .08rem .55rem; font-size: .76rem; background: var(--panel2); }
 @media (max-width: 640px) { .in-dist { height: 7rem; gap: 2px; } .in-dist .z { font-size: .58rem; } }

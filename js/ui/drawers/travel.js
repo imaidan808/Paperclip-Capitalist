@@ -11,7 +11,7 @@ import { esc } from '../common.js';
 import { fmtMoney as money } from '../../market.js';
 import { lessonTitle, lessonGist, rulePhrases, rewardPhrases } from './districttext.js';
 import { fold, flip } from './stock.js';
-import { gl } from '../glyphs.js';
+import { gl, zoneGl } from '../glyphs.js';
 
 export const TIERS = [
   { n: 1, name: 'The Streets', line: 'Barter, haggle and learn to read a buyer.' },
@@ -73,7 +73,7 @@ function distCard(ctx, id, nextId) {
   if (state === 'locked') {
     const body = `<p class="tv-meta">Opens at ${money(Z.gate)} net worth.</p><p class="tv-rule">${esc(rule)}</p>${reward ? `<p class="tv-meta">Opening it: ${esc(reward)}</p>` : ''}<p class="tv-meta">Teaches <b>${esc(lesson)}</b></p>`;
     const tip = `Opens at ${money(Z.gate)} net worth. ${rule}${reward ? ` Opening it: ${reward}` : ''} Teaches ${lesson}.`;
-    return `<li class="tv-d locked"${pal}>${node}${fold(ctx, 'travel', 'd' + id, `<span aria-hidden="true">${Z.icon}</span> <b>${esc(Z.name)}</b> <span class="chip">Opens at ${money(Z.gate)}</span>`, body, tip)}</li>`;
+    return `<li class="tv-d locked"${pal}>${node}${fold(ctx, 'travel', 'd' + id, `<span aria-hidden="true">${zoneGl(id, 'gl-sm')}</span> <b>${esc(Z.name)}</b> <span class="chip">Opens at ${money(Z.gate)}</span>`, body, tip)}</li>`;
   }
   const nw = g.netWorth(), frac = clamp(nw / Z.gate, 0, 1), missing = Math.max(0, Z.gate - nw);
   const chip = open ? '<span class="chip good">Open</span>' : '<span class="chip warn">→ Next stop</span>';
@@ -83,7 +83,7 @@ function distCard(ctx, id, nextId) {
   // an open district's lesson is a page the player has: its title opens it; the next one's is only named (the page is still locked in the Codex)
   const teach = open ? `<button class="btn ghost sm" data-act="travel-codex" data-id="${esc(Z.teaches)}" data-fid="tv-cx-${id}" title="${esc(gist)}" aria-label="Read about ${esc(lesson)} in the Codex">${esc(lesson)}</button>` : `<b>${esc(lesson)}</b>`;
   return `<li class="tv-d ${state}${here ? ' here' : ''}"${pal}>${node}
-    <header class="tv-dh"><span class="tv-ic" aria-hidden="true">${Z.icon}</span><h4${open && reward ? ` title="${esc(`Opening it gave you: ${reward}`)}"` : ''}>${esc(Z.name)}</h4>${chip}${here ? '<span class="chip info">You are here</span>' : ''}</header>
+    <header class="tv-dh"><span class="tv-ic" aria-hidden="true">${zoneGl(id)}</span><h4${open && reward ? ` title="${esc(`Opening it gave you: ${reward}`)}"` : ''}>${esc(Z.name)}</h4>${chip}${here ? '<span class="chip info">You are here</span>' : ''}</header>
     <p class="tv-rule">${esc(rule)}</p>
     ${gate}${open || !reward ? '' : `<p class="tv-meta">Opening it: ${esc(reward)}</p>`}
     <div class="tv-acts"><span class="tv-lsn"><span class="tv-meta">Teaches</span> ${teach}</span>${go}</div>
@@ -104,7 +104,7 @@ function summaryHTML(ctx) {
   const g = ctx.g(), s = g.s, here = ZONES[ctx.U.zone] || ZONES[Math.max(...s.zones)];
   const nextId = ZONE_IDS.find((id) => !s.zones.includes(id)), N = ZONE_IDS.length, open = s.zones.length;
   const pips = ZONE_IDS.map((id, i) => `<span class="tv-pip ${s.zones.includes(id) ? 'open' : id === nextId ? 'next' : 'locked'}${i && i % 4 === 0 ? ' gap' : ''}"></span>`).join('');
-  return `<section class="tv-sum"><div class="tv-here"><span class="tv-ic" aria-hidden="true">${here.icon}</span><div><small>You are in</small><b>${esc(here.name)}</b></div></div>
+  return `<section class="tv-sum"><div class="tv-here"><span class="tv-ic" aria-hidden="true">${zoneGl(here.id)}</span><div><small>You are in</small><b>${esc(here.name)}</b></div></div>
     <div class="tv-pips" role="img" aria-label="${open} of ${N} districts open">${pips}</div>
     <p class="tv-meta">${open} of ${N} districts open.${nextId ? ` Next stop: <b>${esc(ZONES[nextId].name)}</b>. <b>${money(Math.max(0, ZONES[nextId].gate - g.netWorth()))}</b> to go.` : ' Every district is open.'}</p></section>`;
 }
@@ -125,7 +125,7 @@ function destRow(ctx, r, plan) {
   if (!r.roomOk) warn.push(`Only room for ${plural(Math.max(0, q.room), 'more crate')} there.`);
   if (!r.cashOk) warn.push(`You need ${money(q.cost - ctx.g().s.cash)} more cash for freight.`);
   return `<button class="tv-dest${sel ? ' sel' : ''}" data-act="travel-pick" data-dist="${r.to}" data-fid="tv-pick-${r.to}" aria-pressed="${sel}">
-    <span class="tv-dn"><span aria-hidden="true">${Z.icon}</span> <b>${esc(Z.name)}</b> ${plan.best?.to === r.to && r.net > 0 ? '<span class="chip good">Best price</span>' : ''}${sel ? '<span class="chip info">Chosen</span>' : ''}</span>
+    <span class="tv-dn"><span aria-hidden="true">${zoneGl(r.to, 'gl-sm')}</span> <b>${esc(Z.name)}</b> ${plan.best?.to === r.to && r.net > 0 ? '<span class="chip good">Best price</span>' : ''}${sel ? '<span class="chip info">Chosen</span>' : ''}</span>
     <span class="tv-q">Freight <b>${money(q.cost)}</b> · ${hoursText(q.hours)} · <span title="Ops and a Logistics Agent lower the risk of damage.">damage risk <b>${pctN(q.risk)}%</b> (${riskWord})</span> · room for ${Math.max(0, q.room)}</span>
     <span class="tv-gap ${Math.abs(r.gap) < 0.005 ? '' : r.gap > 0 ? 'up' : 'down'}">${gapLine}</span>
     ${warn.map((w) => `<span class="tv-warn">${esc(w)}</span>`).join('')}

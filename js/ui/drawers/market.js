@@ -10,7 +10,7 @@ import { fitOf, fitMult, fitLabel, FAKE_VALUE } from '../../market.js';
 import { dur, nameOf, knownFake, focusZone, heldIn, beliefLine, fold, flip } from './stock.js';
 import { lessonTitle, lessonGist, rulePhrases, rewardPhrases, grayBreak } from './districttext.js';
 import { avatarHTML } from '../../avatar.js';
-import { gl } from '../glyphs.js';
+import { gl, zoneGl } from '../glyphs.js';
 
 const UP = '▲', DOWN = '▼';
 const TABS = ['buyers', 'lots', 'radar', 'exchange'];
@@ -58,7 +58,7 @@ function switcherHTML(ctx, z) {
   const next = ZONE_IDS.find((id) => !s.zones.includes(id));
   return `<nav class="mkt-zones" aria-label="Districts you can trade in">${[...s.zones].sort((a, b) => a - b).map((id) => {
     const Z = ZONES[id];
-    return `<button class="mkt-z" data-act="market-zone" data-z="${id}" data-fid="mk-z-${id}" aria-pressed="${id === z}" aria-label="${e(Z.name)}, district ${id}" title="${e(Z.name)}"><span aria-hidden="true">${Z.icon}</span><b>${id}</b></button>`;
+    return `<button class="mkt-z" data-act="market-zone" data-z="${id}" data-fid="mk-z-${id}" aria-pressed="${id === z}" aria-label="${e(Z.name)}, district ${id}" title="${e(Z.name)}"><span aria-hidden="true">${zoneGl(id, 'gl-sm')}</span><b>${id}</b></button>`;
   }).join('')}</nav>${next ? `<p class="tiny mute mkt-next">Next district: ${e(ZONES[next].name)}, at ${m(ZONES[next].gate)} net worth. ${m(Math.max(0, ZONES[next].gate - g.netWorth()))} to go.</p>` : ''}`;
 }
 function bannerHTML(ctx, z) {
@@ -69,7 +69,7 @@ function bannerHTML(ctx, z) {
   const body = `${lines.length ? `<ul>${lines.map((t) => `<li>${e(t)}</li>`).join('')}</ul>` : ''}${gave ? `<p>Opening it gave you: ${e(gave)}</p>` : ''}<p>Teaches <b>${e(lesson)}</b>${gist ? `: ${e(gist)}` : ''}</p>`;
   const tip = [...lines, gave && `Opening it gave you: ${gave}`, `Teaches ${lesson}.`].filter(Boolean).join(' ');
   return `<section class="mkt-banner" style="--zg:${e(Z.palette?.[0] || '#34445c')};--za:${e(Z.palette?.[1] || '#ffc247')}" aria-label="About ${e(Z.name)}">
-    <div class="mkt-bhead"><span class="mkt-bic" aria-hidden="true">${Z.icon}</span><div><b class="mkt-bname">${e(Z.name)}</b><span class="tiny mute">District ${z} of ${ZONE_IDS.length}, tier ${Z.tier}</span></div></div>
+    <div class="mkt-bhead"><span class="mkt-bic" aria-hidden="true">${zoneGl(z, 'gl-lg')}</span><div><b class="mkt-bname">${e(Z.name)}</b><span class="tiny mute">District ${z} of ${ZONE_IDS.length}, tier ${Z.tier}</span></div></div>
     ${head ? `<p class="mkt-rule"><b>The rule here:</b> ${e(head)}</p>` : ''}
     ${fold(ctx, 'market', 'about', 'About this district', body, tip)}
     <div class="row mkt-stats"><span class="chip" title="Tax on each sale in this district">Tax ${Math.round(tax * 1000) / 10}%</span>

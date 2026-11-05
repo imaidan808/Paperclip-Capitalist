@@ -5,6 +5,7 @@ import { gini, fmtMoney as money, nicheKey, demandOf } from '../market.js';
 import { median } from '../cohort.js';
 import { $, esc, setHTML, delegate, dlg, toast, settingsDialog } from './common.js';
 import { avatarHTML, marksOf } from '../avatar.js';
+import { bgGl } from './glyphs.js';
 import { FOLLOW_NOTE, RECOVER_WAIT_SECONDS } from './room-notes.js';
 
 export const PRESETS = [
@@ -77,7 +78,7 @@ export async function copyText(text, env = globalThis) {
 /** Two small icons for a student's Backgrounds, each named for assistive technology. */
 export const bgIcons = (st) => {
   const ids = perksOf(st);
-  return ids.length ? `<span class="in-bgs" role="img" aria-label="${esc(ids.map((id) => PERKS[id].name).join(' and '))}" title="${esc(ids.map((id) => PERKS[id].name).join(' + '))}">${ids.map((id) => `<span aria-hidden="true">${PERKS[id].icon}</span>`).join('')}</span>` : '<span class="mute">none</span>';
+  return ids.length ? `<span class="in-bgs" role="img" aria-label="${esc(ids.map((id) => PERKS[id].name).join(' and '))}" title="${esc(ids.map((id) => PERKS[id].name).join(' + '))}">${ids.map((id) => `<span aria-hidden="true">${bgGl(id, 'gl-sm')}</span>`).join('')}</span>` : '<span class="mute">none</span>';
 };
 
 // ---------------------------------------------------------------- keeping the room, and getting back into it
@@ -253,7 +254,7 @@ export function instructorParts(S, U) {
         <div class="grid g3"><div class="card" title="The alert starts above ${GINI_ALERT}."><div class="small mute">Wealth Gini</div><div class="mono ${gi > GINI_ALERT ? 'red' : 'green'}" style="font-size:1.5rem">${gi.toFixed(2)}</div></div><div class="card"><div class="small mute">Median net worth</div><div class="mono" style="font-size:1.2rem">${money(med)}</div></div><div class="card"><div class="small mute">Students</div><div class="mono" style="font-size:1.5rem">${students.length}</div></div></div>
         ${gi > GINI_ALERT ? `<div class="callout bad"><b>Inequality alert.</b> Gini is above ${GINI_ALERT}: a few founders are pulling away. <button class="btn sm" data-act="squeeze"${off}>Inject Credit Crunch now</button></div>` : ''}
         <h3 class="gap">Students by highest district reached</h3>${distributionHTML(dist, here)}
-        <h3 class="gap">What the class drafted</h3>${chips.length ? `<ul class="in-chips">${chips.map((id) => `<li><span aria-hidden="true">${PERKS[id].icon}</span> ${esc(PERKS[id].name)} <b class="mono">${drafted[id]}</b></li>`).join('')}</ul>` : '<p class="small mute">No Backgrounds yet.</p>'}
+        <h3 class="gap">What the class drafted</h3>${chips.length ? `<ul class="in-chips">${chips.map((id) => `<li><span aria-hidden="true">${bgGl(id, 'gl-sm')}</span> ${esc(PERKS[id].name)} <b class="mono">${drafted[id]}</b></li>`).join('')}</ul>` : '<p class="small mute">No Backgrounds yet.</p>'}
         <h3 class="gap">Niche saturation heat map</h3>${heatHTML(S, U, students, dist)}</section>
       <section class="panel"><h2>Operational bottlenecks</h2>${stuck.length ? `<table class="tbl"><thead><tr><th scope="col">Founder</th><th scope="col" title="Days since a sale to a buyer or a manager cycle last finished. A founder is listed after ${STALL_DAYS} days, once past the first milestone.">Static for</th><th scope="col">Net worth</th></tr></thead><tbody>${stuck.map((s) => `<tr><td>${esc(s.handle)} <span class="tiny mute">${esc(s.pid)}</span></td><td class="mono">${((hour - s.lastAutoHour) / 24).toFixed(1)} days</td><td class="mono">${money(s.nw)}</td></tr>`).join('')}</tbody></table>` : '<p class="small mute">No founder is stalled.</p>'}</section>
       <section class="panel"><h2>Flagged peer trades <span class="tiny mute">(more than ${Math.round(FMV_BAND * 100)}% apart)</span></h2>${flags.length ? `<table class="tbl"><thead><tr><th scope="col">Day</th><th scope="col">From</th><th scope="col">To</th><th scope="col">Variance</th></tr></thead><tbody>${flags.slice(-8).reverse().map((f) => `<tr><td class="mono">${Math.floor((f.hour ?? f.h ?? 0) / 24) + 1}</td><td>${esc(f.from || f.pid)}</td><td>${esc(f.to || f.peer || '')}</td><td class="mono red">${(f.variance * 100).toFixed(0)}%</td></tr>`).join('')}</tbody></table>` : '<p class="small mute">None. Extreme offers are blocked and logged.</p>'}</section>`;

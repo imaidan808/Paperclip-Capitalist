@@ -80,7 +80,7 @@ body:has(.stage) { background-image: none; overflow: hidden; overscroll-behavior
 .pcard { display: flex; align-items: center; gap: var(--sp-2); min-width: 0; max-width: 100%; padding: .3rem var(--sp-3) .3rem .3rem; background: var(--plate); border: var(--bw) solid var(--line); border-radius: var(--r-3); box-shadow: var(--elev-1); color: var(--ink); font: inherit; text-align: left; cursor: pointer; }
 .ring { --p: 0%; position: relative; width: 3rem; height: 3rem; border-radius: 50%; background: conic-gradient(var(--gold) var(--p), var(--line) 0); display: grid; place-items: center; flex: none; }
 .ring .av { width: 2.4rem; height: 2.4rem; border-radius: 50%; background: var(--panel2); display: flex; align-items: center; justify-content: center; font-size: 1rem; }
-.ring .av i { font-style: normal; margin: 0 -.15rem; }
+.ring .av i { display: flex; font-style: normal; margin: 0 -.15rem; }
 .ring .av .ini { margin: 0; font: 800 1.05rem/1 ui-monospace, Menlo, monospace; } /* no Background to show (a lesson): the initial of the player's name */
 .ring .lv { position: absolute; right: -.25rem; bottom: -.2rem; background: var(--gold); color: var(--on-gold); font-size: var(--t-micro); min-width: 1.2rem; height: 1.2rem; padding: 0 .2rem; display: grid; place-items: center; border-radius: var(--r-pill); font-family: ui-monospace, Menlo, monospace; line-height: 1; }
 .ring .pip { position: absolute; left: -.1rem; top: -.1rem; width: .7rem; height: .7rem; border-radius: 50%; background: var(--green); border: 2px solid var(--panel); display: none; } /* unspent skill points, where the words have no room */

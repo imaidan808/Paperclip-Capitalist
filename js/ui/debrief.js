@@ -5,6 +5,7 @@ import { ASSETS, BUYERS, EVENTS, SKILLS, PERKS, ZONES, ZONE_COUNT, TOTAL_DAYS, T
 import { fmtMoney as money, fmtPct as pct, creativityBand } from '../market.js';
 import { $, esc, delegate, toast } from './common.js';
 import { kv } from '../session.js';
+import { bgGl } from './glyphs.js';
 
 const day = (h) => Math.floor(h / 24) + 1;
 const num = (x, d = 2) => (Number.isFinite(x) ? x.toFixed(d) : 'n/a');
@@ -22,7 +23,8 @@ const TOP_NICHES = 5;
 
 /** The two Backgrounds this founder drafted, as definitions (unknown ids are dropped, never thrown on). */
 export const buildOf = (s) => (Array.isArray(s?.perks) ? s.perks.filter((id) => own(PERKS, id)).map((id) => PERKS[id]) : []);
-const buildLine = (s) => buildOf(s).map((p) => `${p.icon} ${p.name}`).join(' + ') || 'No Background';
+/** The build as a line of markup under the title: each Background's drawing and name, joined with a plus. */
+const buildLine = (s) => buildOf(s).map((p) => `${bgGl(p.id, 'gl-sm')} ${esc(p.name)}`).join(' + ') || 'No Background';
 
 /** Where this founder stands among everyone the room knows about (overall: everybody started with one paperclip and $0, so there is no group to compare within). */
 export function standing(lb, me) {
@@ -206,7 +208,7 @@ export function debriefHTML(S, notes = '') {
   const topNiches = E.niches.slice(0, TOP_NICHES), otherNiches = E.niches.slice(TOP_NICHES);
   const niches = topNiches.length ? `<p class="tiny mute">Sales and manager cycles below a creativity multiplier of ${CROWDED}, lowest first.</p>${nicheTable(topNiches)}${otherNiches.length ? fold(`The other ${plural(otherNiches.length, 'niche')}`, nicheTable(otherNiches)) : ''}` : `<div class="callout good">No sale or manager cycle fell below a creativity multiplier of ${CROWDED}. Describe what you did to avoid the herd.</div>`;
   return `
-    <header class="panel row no-print"><div class="grow"><h1 tabindex="-1" style="margin:0">Debrief</h1><span class="mute small">${esc(buildLine(s))} &middot; ${esc(s.handle)} &middot; Founder ID ${esc(s.pid)}</span></div><button class="btn ghost" data-act="back">Back to the game</button><button class="btn ghost" data-act="print">Print</button></header>
+    <header class="panel row no-print"><div class="grow"><h1 tabindex="-1" style="margin:0">Debrief</h1><span class="mute small">${buildLine(s)} &middot; ${esc(s.handle)} &middot; Founder ID ${esc(s.pid)}</span></div><button class="btn ghost" data-act="back">Back to the game</button><button class="btn ghost" data-act="print">Print</button></header>
     <section class="panel gap"><h2>Your ${TOTAL_DAYS} days</h2>
       <div class="grid g3 sc-stats">${grid}</div>
       ${meaning.length ? fold('What the figures mean', `<ul class="small">${meaning.map(([k, v]) => `<li><b>${esc(k)}</b>: ${esc(v)}</li>`).join('')}</ul>`) : ''}
@@ -215,7 +217,7 @@ export function debriefHTML(S, notes = '') {
     <section class="panel gap"><h2>Your build</h2>
       <p class="mute small">Specialty: ${esc(specialty)}. Skills at the end: ${skillsLine}.</p>
       ${costLines.length ? `<h3>Build costs in the ledger</h3><ul class="small">${costLines.map((c) => `<li>${c}</li>`).join('')}</ul>` : '<p class="small mute">Your Backgrounds work through prices, speed and limits rather than ledger lines. Compare with a classmate who drafted differently.</p>'}
-      ${build.length ? fold('Strength and cost of each Background', `<div class="sc-build">${build.map((p) => `<div class="card"><b><span class="sc-ic" aria-hidden="true">${p.icon}</span>${esc(p.name)}</b><em class="small mute">${esc(p.basis)}</em>${lineHTML('+', p.strength)}${lineHTML('-', p.cost)}</div>`).join('')}</div>`) : '<p class="mute">This run has no recorded Backgrounds.</p>'}
+      ${build.length ? fold('Strength and cost of each Background', `<div class="sc-build">${build.map((p) => `<div class="card"><b><span class="sc-ic" aria-hidden="true">${bgGl(p.id)}</span>${esc(p.name)}</b><em class="small mute">${esc(p.basis)}</em>${lineHTML('+', p.strength)}${lineHTML('-', p.cost)}</div>`).join('')}</div>`) : '<p class="mute">This run has no recorded Backgrounds.</p>'}
       <p class="small gap">Judge which Background earned its cost, and which pair you would draft next time.</p></section>
     <section class="panel gap"><h2>Deal Room play</h2>
       ${sk.rows.length ? `<div class="scroll"><table class="tbl"><caption class="sr">Skill games played</caption><thead><tr><th scope="col">Game</th><th scope="col">Stage</th><th scope="col">Played</th><th scope="col">Average score</th></tr></thead><tbody>${sk.rows.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.stage)}</td><td class="mono">${r.plays}</td><td class="mono">${esc(scoreText(r.avg)) || 'n/a'}</td></tr>`).join('')}</tbody></table></div>${perHand ? `<p class="small mute">${perHand}</p>` : ''}`

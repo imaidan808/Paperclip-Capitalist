@@ -191,7 +191,7 @@ export function planFor(g, spec) {
 }
 const leadOf = (g, id) => { for (const z of g.s.zones) { const l = (g.s.leads[z] || []).find((x) => x.id === id); if (l) return l; } return null; };
 const lotOf = (g, zone, id) => (g.s.lots[zone] || []).find((l) => l.id === id) || null;
-const zoneFace = (z) => ({ id: z, name: ZONES[z].name, short: ZONES[z].short, icon: ZONES[z].icon, palette: ZONES[z].palette, teaches: ZONES[z].teaches });
+const zoneFace = (z) => ({ id: z, name: ZONES[z].name, short: ZONES[z].short, palette: ZONES[z].palette, teaches: ZONES[z].teaches }); // (the screen draws the district's glyph by its id: js/ui/glyphs.js)
 const aName = (a) => `${ASSETS[a.cls].name}${a.cond === 'broken' ? ' (broken)' : ''}`;
 
 function planSell(g, spec) {

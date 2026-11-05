@@ -6,7 +6,7 @@ import { ZONES, ASSETS, BUYERS, PIPE, PIPE_RULES, UPGRADES, CLIENTS, MIL_ZONE, E
 import { fitOf, fitLabel } from '../../market.js';
 import { esc } from '../common.js';
 import { moneySize } from '../../audio/palette.js';
-import { gl, tile } from '../glyphs.js';
+import { gl, tile, zoneGl } from '../glyphs.js';
 
 // ---------------------------------------------------------------- small helpers
 const ST = (ctx) => {
@@ -157,7 +157,7 @@ function hireRow(v, zone) {
 function districtBlock(v, zone, cache) {
   const { s } = v, Z = ZONES[zone], pipes = s.pipes.filter((p) => p.zone === zone), used = pipes.length, free = Z.plots - used;
   const dots = Array.from({ length: Z.plots }, (_, i) => `<i class="${i < used ? 'on' : ''}"></i>`).join('');
-  return `<section class="cr-dist" aria-label="${esc(Z.name)} managers"><h3 class="cr-dh"><span aria-hidden="true">${Z.icon}</span> ${esc(Z.name)}
+  return `<section class="cr-dist" aria-label="${esc(Z.name)} managers"><h3 class="cr-dh"><span aria-hidden="true">${zoneGl(zone, 'gl-sm')}</span> ${esc(Z.name)}
       <span class="cr-plots" role="img" aria-label="${used} of ${Z.plots} plots staffed">${dots}</span><span class="small mute">${used} of ${Z.plots} plots</span></h3>
     ${pipes.map((p) => pipeCard(v, p, cache)).join('')}
     ${free > 0 ? (used ? hireRow(v, zone) : hireCard(v, zone)) : `<p class="small mute">All ${Z.plots} plots staffed.</p>`}</section>`;

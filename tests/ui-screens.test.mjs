@@ -112,7 +112,7 @@ test('every Background appears, each with a labelled checkbox, a strength and a 
     assert.ok(card.includes('<em class="dr-basis">'), `${id}: the real-world basis is one italic line`);
     assert.ok(card.includes('dr-plus') && card.includes('dr-minus'), `${id}: strength and cost lines`);
     assert.ok(card.includes('Strength: ') && card.includes('Cost: '), `${id}: the lines are named for screen readers, not only coloured`);
-    assert.ok(card.includes(p.icon), `${id}: icon`);
+    assert.ok(card.includes(`<span class="dr-ic" data-bg="${id}" aria-hidden="true">`), `${id}: the disc for its drawing (the drawing itself loads after the Draft opens: tests/ui-places.test.mjs)`);
   }
 });
 

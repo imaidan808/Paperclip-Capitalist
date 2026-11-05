@@ -4,10 +4,10 @@
 // an HTML entity (&#10003; or &check;) or String.fromCodePoint. Ordinary typography stays: the allowlist below is the whole list.
 //
 // It is a RATCHET. The count may not rise above BASELINE; each part of the icons work lowers BASELINE to what it leaves, and the last part makes the test strict (zero, ALLOW unchanged).
-// Where the rest are, and which part draws them (2026-11-04, after "Icons 1: remove the decorative emoji", which took the count from 535 to 148, and "Icons 2: the glyph kit", which took it from 148 to 102):
+// Where the rest are, and which part draws them (2026-11-05, after "Icons 1: remove the decorative emoji", which took the count from 535 to 148, "Icons 2: the glyph kit", which took it from 148 to 102, and "Icons 3", which took it from 102 to 74):
 //   Icons 2, done: the dock and the seven drawer tabs, the ticks, carets, play and pause, the menu, close and the camera, the Deal Room's verdict marks, the Draft's tick, the pressed toggles and the world's
 //   lock, "you are here" dot and manager status marks are glyphs (js/art/g-*.js, js/ui/glyphs.js), and so are the pictures part 1 took away (the Codex's categories, the badges and bounties, the probes and angles, the managers, clients and loans).
-//   Icons 3, the districts and the Backgrounds ................................... 28  the sixteen districts' icons 16, the twelve Backgrounds' 12
+//   Icons 3, done: the sixteen districts and the twelve Backgrounds are glyphs (js/art/g-places.js: zone-<theme> and bg-<id>), found by id through js/ui/glyphs.js; the data carries no icon for either, and the world's cards of the map paint them.
 //   Icons 4, the goods ........................................................... 74  the 72 goods' icons and the gavel on an auction lot's tag in the world, twice
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -19,7 +19,7 @@ import { QUESTS, ACHIEVEMENTS, DAILIES } from '../js/meta/quests.js';
 import { CODEX } from '../js/meta/codex.js';
 import { ACADEMY } from '../js/meta/academy.js';
 import { sellerFor } from '../js/deal.js';
-import { has } from '../js/ui/glyphs.js';
+import { has, zoneGlyph, bgGlyph } from '../js/ui/glyphs.js';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const read = (p) => readFileSync(join(ROOT, p), 'utf8');
@@ -29,7 +29,7 @@ const ALLOW = new Set(['←', '→', '×', '·', '−', '…', '▲', '▼']);
 /** The named entities that draw a symbol (the HTML ones that draw a letter, a quote or a space are not icons). */
 const NAMED = { larr: '←', rarr: '→', uarr: '↑', darr: '↓', harr: '↔', check: '✓', cross: '✗', star: '☆', starf: '★', bigstar: '★', hearts: '♥', diams: '♦', spades: '♠', clubs: '♣', phone: '☎', female: '♀', male: '♂', sung: '♪' };
 /** What the shipped sources hold today. A pull request may only lower it, and says so here. STRICT=1 asks for zero. */
-const BASELINE = 102;
+const BASELINE = 74;
 
 const PICTO = /\p{Extended_Pictographic}/u;
 const SYMBOL = /[←-⇿⌀-⏿■-◿☀-➿⬀-⯿⤀-⥿]/u; // arrows, technical, geometric shapes, miscellaneous symbols, dingbats
@@ -80,19 +80,22 @@ test('no emoji or icon symbol in anything the site ships, beyond what the icons 
   assert.ok(all.length >= BASELINE - 20 || process.env.STRICT, `${all.length} findings is far under the ratchet's ${BASELINE}: lower BASELINE to ${all.length}, so the next change cannot spend the difference`);
 });
 
-test('the emoji that were decoration are gone for good: buyers, managers, clients, quests, badges, bounties, Codex pages, Academy lessons and the Deal Room\'s cards and cast carry no icon', () => {
+test('the emoji that were decoration are gone for good: buyers, managers, clients, districts, Backgrounds, quests, badges, bounties, Codex pages, Academy lessons and the Deal Room\'s cards and cast carry no icon', () => {
   const has = (list, name) => { for (const x of Object.values(list)) assert.ok(!('icon' in x), `${name} ${x.id ?? x.name}: no icon field`); };
-  has(BUYERS, 'buyer'); has(PIPE, 'manager kind'); has(CLIENTS, 'client kind'); has(QUESTS, 'quest'); has(ACHIEVEMENTS, 'badge'); has(DAILIES, 'bounty'); has(CODEX, 'Codex page'); has(ACADEMY, 'Academy lesson');
-  assert.equal(Object.keys(BUYERS).length, 101); assert.equal(QUESTS.length, 32); assert.equal(ACHIEVEMENTS.length, 78); assert.equal(DAILIES.length, 12); assert.equal(CODEX.length, 56); assert.equal(ACADEMY.length, 10);
+  has(BUYERS, 'buyer'); has(PIPE, 'manager kind'); has(CLIENTS, 'client kind'); has(QUESTS, 'quest'); has(ACHIEVEMENTS, 'badge'); has(DAILIES, 'bounty'); has(CODEX, 'Codex page'); has(ACADEMY, 'Academy lesson'); has(ZONES, 'district'); has(PERKS, 'Background');
+  assert.equal(Object.keys(BUYERS).length, 101); assert.equal(QUESTS.length, 32); assert.equal(ACHIEVEMENTS.length, 78); assert.equal(DAILIES.length, 12); assert.equal(CODEX.length, 56); assert.equal(ACADEMY.length, 10); assert.equal(Object.keys(ZONES).length, 16); assert.equal(Object.keys(PERKS).length, 12);
   const seen = new Set(); for (let i = 0; i < 60; i++) { const sl = sellerFor('guard' + i, 'Clip', 10); seen.add(sl.style); assert.ok(!('icon' in sl), 'a seller has no icon'); } assert.equal(seen.size, 4, 'all four styles of seller were looked at');
   // the sources that build the rest: the Deal Room's seller kinds, auctioneer and bench, and the cards of the Read and Pitch stages; the Bank's loan products
-  assert.deepEqual([...read('js/deal.js').matchAll(/\bicon:\s*([^,}]+)/g)].map((m) => m[1].trim()).sort(), ['ASSETS[a.cls].icon', 'ASSETS[a.cls].icon', 'ZONES[z].icon', 'def.icon'], 'js/deal.js keeps an icon for goods and districts only');
-  assert.ok(!/\bicon\b/.test(read('js/ui/deal.js').replace(/\.icon\b/g, '').replace(/^\/\/.*$/gm, '')), 'js/ui/deal.js: the angle and probe cards have no icon (goods and districts are read as .icon)');
+  assert.deepEqual([...read('js/deal.js').matchAll(/\bicon:\s*([^,}]+)/g)].map((m) => m[1].trim()).sort(), ['ASSETS[a.cls].icon', 'ASSETS[a.cls].icon', 'def.icon'], 'js/deal.js keeps an icon for goods only (a district is drawn by its id: the zone face carries the id)');
+  assert.ok(!/\bicon\b/.test(read('js/ui/deal.js').replace(/\.icon\b/g, '').replace(/^\/\/.*$/gm, '')), 'js/ui/deal.js: the angle and probe cards have no icon (goods are read as .icon)');
   assert.deepEqual([...read('js/ui/drawers/bank.js').matchAll(/\bicon:\s*('[^']*')/g)].map((m) => m[1]), [], 'the Bank has no icon of its own: its tab is the glyph dock-bank, and its loan products are drawn by id (js/ui/glyphs.js)');
 });
 
-test('what the later parts draw is still there: goods, districts and Backgrounds keep their icon; every dock and drawer tab is a drawn glyph (dock-<id>) and no drawer carries an emoji', () => {
-  for (const [name, list] of [['good', ASSETS], ['district', ZONES], ['Background', PERKS]]) for (const [id, x] of Object.entries(list)) assert.ok(typeof x.icon === 'string' && x.icon.trim(), `${name} ${id}: icon`);
+test('what part 4 draws is still there: the goods keep their icon (72 of them); a district and a Background carry none, and each has its drawn glyph; every dock and drawer tab is a drawn glyph (dock-<id>) and no drawer carries an emoji', () => {
+  for (const [id, x] of Object.entries(ASSETS)) assert.ok(typeof x.icon === 'string' && x.icon.trim(), `good ${id}: icon`);
+  assert.equal(Object.keys(ASSETS).length, 72);
+  for (const id of Object.keys(ZONES)) assert.ok(zoneGlyph(id), `district ${id}: a drawn glyph (js/art/g-places.js)`);
+  for (const id of Object.keys(PERKS)) assert.ok(bgGlyph(id), `Background ${id}: a drawn glyph (js/art/g-places.js)`);
   for (const d of ['stock', 'market', 'crew', 'bank', 'travel', 'codex', 'quests']) {
     assert.match(read(`js/ui/drawers/${d}.js`), new RegExp(`id: '${d}', label:`), `${d}: the tab is its id and its label`);
     assert.doesNotMatch(read(`js/ui/drawers/${d}.js`), /\bicon:\s*'/, `${d}: no icon field (the picture is dock-${d} in js/art/g-ui.js)`);
