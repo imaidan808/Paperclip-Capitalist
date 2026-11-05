@@ -247,6 +247,8 @@ The author's words (2026-11-03): "remove emoji over-use where possible and if ic
 
 A person is a flat disc holding an initial, one matte tone per style (`--ava-*` in `css/styles.css`, `AVATAR_TONE` in `js/avatar.js` for the canvas), the same shape in the Market, the Deal Room, the instructor's heat map and the bubble over a buyer's head. Where the disc is all there is of a name (the heat map's column heads and its key), two buyers of a district who share a first letter get the shortest start of their names that tells them apart, two letters on a pill (`marksOf`). A lesson's rehearsal has no Background and its handle is "You": the player card's disc stays empty there rather than show a letter. Until a glyph is drawn its emoji stays as a placeholder (the goods, the districts and the Backgrounds, parts 3 and 4), and `tests/guard-emoji.test.mjs` counts it: the count only goes down (102 after part 2).
 
+On a phone the one-line goal chip clips its label, so the Goal card's family drawing shows on wider layouts only. A pressed (gold) chip, such as a Codex category, puts its drawing on a dark tile, because the drawings are tuned for dark surfaces; the dock's count badge sits in the corner of its tab on a phone, clear of the drawing.
+
 ## 4. Element-by-element redesign
 
 One entry per thing. Every entry keeps its footprint, hit shape and hot spot exactly as in `layout.js` and `kits.js`; only what is painted changes. "Sig" lists the two or three signature details that make it itself. Every prop gets the face model (2.1), a contact shadow, and the cast shadow of 2.3 unless it says otherwise. Entries marked (not placed) exist in `DRAW` but no kit places them today; they are specified so that a future kit, or a test that draws every kind, gets the right art.

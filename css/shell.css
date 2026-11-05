@@ -148,6 +148,7 @@ body:has(.stage) { background-image: none; overflow: hidden; overscroll-behavior
    common.js (fitStuck) writes how far they reach as --stuck-t and --stuck-b after the drawer is drawn and when the window changes size: a bar wraps, so its height is not a number to write here. */
 .db .sect > h3 { display: flex; justify-content: space-between; gap: var(--sp-2); border-bottom: 1px dashed var(--line); padding-bottom: var(--sp-1); margin-bottom: var(--sp-2); text-transform: uppercase; letter-spacing: .06em; font-size: var(--t-sm); color: var(--mute); }
 .dtabs { display: flex; gap: .3rem; flex-wrap: wrap; } .dtabs .btn[aria-pressed="true"] { background: var(--gold); color: var(--on-gold); border-color: var(--gold); }
+.dtabs .btn[aria-pressed="true"] .gl-c { box-sizing: content-box; padding: .1rem; background: var(--bg); border-radius: .3rem; } /* the drawings are tuned for dark surfaces: on a pressed (gold) chip they sit on a dark tile (silver and coins were 1.1:1 on gold) */
 .overlay { position: absolute; inset: 0; z-index: var(--z-overlay); pointer-events: none; } .overlay > * { pointer-events: auto; }
 /* While the drawer is a side panel the things that run along the bottom and the top left stop at its edge instead of running under it. */
 .stage[data-drawer]:not([data-drawer=""]) .tickerhost { right: calc(var(--edge-r) + var(--drawer-w) + var(--sp-2)); }
@@ -206,6 +207,7 @@ body:has(.stage[data-toasts="tight"]) #toasts .toast:nth-last-child(n+2) { displ
   .dock { left: var(--edge-l); right: var(--edge-r); transform: none; max-width: none; gap: 2px; padding: 3px; justify-content: space-between; }
   .dk { flex: 1 1 0; min-width: 0; padding-inline: .2rem; } /* seven buttons share the width: 44px each at 390px, and they never scroll at a big text size */
 }
+@media (max-width: 520px), (max-height: 520px) { .dk .bd { left: calc(100% - 1rem); min-width: 1rem; height: 1rem; padding: 0 .2rem; font-size: .6rem; } } /* a phone's tab is 49 px wide: the count sits in the button's top right corner, clear of the 22 px drawing (it covered 17% of it, 35% at the largest text) */
 @media (max-width: 520px) and (min-height: 521px) { .dk .lb { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; } } /* icon-only: 7 buttons do not fit with words, but the words stay in the button's name */
 
 /* ---- compact: a phone on its side. Everything shrinks to one slim row at the top and one at the bottom; the world gets the rest. ---- */
@@ -236,4 +238,4 @@ body:has(.stage[data-toasts="tight"]) #toasts .toast:nth-last-child(n+2) { displ
 
 @media (prefers-reduced-motion: reduce) { .drawer, .drawer.dragging { animation: none; transition: none; } }
 :root[data-motion="reduce"] .drawer { animation: none; transition: none; }
-@media (forced-colors: active) { .stage::before, .stage::after { display: none; } .ring { forced-color-adjust: none; } }
+@media (forced-colors: active) { .stage::before, .stage::after { display: none; } .ring { forced-color-adjust: none; } .ibtn { background-color: Canvas; } } /* the HUD and camera buttons drew their gradient and the browser's text backplate; a drawing needs a fill of the system's own under it */
