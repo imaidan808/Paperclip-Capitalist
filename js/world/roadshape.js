@@ -105,3 +105,44 @@ export function gradeRoads(ZV, FV, VW, VH, edges, { step = 0.5, reach = 3.5 } = 
     }
   }
 }
+
+
+// ---------------------------------------------------------------- the apron: where a block's street meets the road beyond it
+/**
+ * The numbers of an apron (tiles). A block is a stage with a street through it (asphalt 2 wide, a raised kerb bar and a tile of sidewalk each side, the stage's rim and lip across its end) and the road between districts is a plain ribbon
+ * (asphalt 1.6 wide in a flat kerb a fifth wide, no sidewalk): at a port the two met in one straight cut across the road, a step in the tone of the asphalt, a step in the width, a kerb that stopped and a sidewalk that stopped. The apron is the
+ * `len` tiles of road beyond the block's edge in which they become each other: the asphalt narrows from the street's half width to the road's and takes the road's tone, the kerb stays a fifth wide and flat, the sidewalk tapers to
+ * nothing. It also reaches `back` tiles under the block's edge, so the stage's lip and shadow do not cross the street's mouth. `slices` is how many bands a tone step is cut in (no band is wider than a third of a tile).
+ */
+export const APRON = Object.freeze({ len: 2, back: 0.1, slices: 6, streetHalf: 1, roadHalf: 0.8, kerb: 0.2, walk: 0.8 });
+/** The half width of the asphalt `u` tiles beyond the block's edge: the street's up to the edge, the road's at the end of the apron, a smooth step between. */
+export const apronHalf = (u, A = APRON) => A.streetHalf + (A.roadHalf - A.streetHalf) * smooth(u / A.len);
+/** The width of the sidewalk beyond the kerb `u` tiles beyond the edge: the block's at the edge, none at the end. */
+export const apronWalk = (u, A = APRON) => (u <= 0 ? A.walk : A.walk * (1 - smooth(u / A.len)));
+/**
+ * The pieces of an apron as polygons of [x, y, z] in the grid, from `frame(u)`, which answers the road's middle `u` tiles beyond the block's edge (u from -back to len) as [x, y, nx, ny, z] with the unit normal:
+ *   bands   `slices` + 1 of them, painted in order, each from its start to the END of the apron ({ u0, t, kerb: [left, right], asphalt }: the two kerb strips, which run a hair under the asphalt, and the asphalt over them), so a later
+ *           band covers the rest of the earlier ones and no hairline of what lies under shows where two meet (the kerb is two strips, not a ribbon under the asphalt: the asphalt is drawn a tenth of a pixel higher and the ribbon's
+ *           edge would show along its start); `t` (0 to 1) is the band's colour, how far along the change of tone it is (0: the block's own asphalt, 1: the road's)
+ *   walks   the two sidewalk wedges { left, right }: from the block's edge outwards, along the kerb, whole at the edge and none at the end
+ */
+export function apronPieces(frame, A = APRON) {
+  const us = [-A.back, ...Array.from({ length: A.slices + 1 }, (_, i) => (A.len * i) / A.slices)]; // the band edges: under the block's edge, then the slices
+  const at = (u, o) => { const f = frame(u); return [f[0] + f[2] * o, f[1] + f[3] * o, f[4]]; };
+  const outline = (k) => { // the asphalt from us[k] to the end: its left side out and its right side back, a point at every band edge
+    const L = [], R = [];
+    for (let i = k; i < us.length; i++) { const h = apronHalf(us[i], A); L.push(at(us[i], -h)); R.push(at(us[i], h)); }
+    return [...L, ...R.reverse()];
+  };
+  const strip = (k, sg) => { // a kerb strip: from a hair inside the asphalt's edge to a kerb beyond it
+    const out = [], inn = [];
+    for (let i = k; i < us.length; i++) { const h = apronHalf(us[i], A); out.push(at(us[i], sg * (h + A.kerb))); inn.push(at(us[i], sg * (h - 0.08))); }
+    return [...out, ...inn.reverse()];
+  };
+  const bands = []; for (let k = 0; k + 1 < us.length; k++) bands.push({ u0: us[k], t: us[k + 1] <= 0 ? 0 : smooth(us[k + 1] / A.len), kerb: [strip(k, -1), strip(k, 1)], asphalt: outline(k) });
+  const side = (sg) => { // the wedge: along the kerb from the edge out, then back along its outer side
+    const ws = Array.from({ length: A.slices * 2 + 1 }, (_, i) => (A.len * i) / (A.slices * 2));
+    return [...ws.map((u) => at(u, sg * (apronHalf(u, A) + A.kerb - 0.1))), ...ws.map((u) => at(u, sg * (apronHalf(u, A) + A.kerb + apronWalk(u, A)))).reverse()]; // (its inner side a hair under the kerb, which is painted over it)
+  };
+  return { bands, walks: { left: side(-1), right: side(1) } };
+}

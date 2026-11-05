@@ -173,7 +173,7 @@ function buildDistrict(zones, id, roadSegs) {
       if (x + o.w > q[0] + q[2] || y + o.d > q[1] + q[3] || R.some((s) => ov(r, s, 0.6)) || roadSegs.some((s) => segDist(x + o.w / 2, y + o.d / 2, s[0], s[1], s[2], s[3]) < s[4] + Math.max(o.w, o.d) * 0.7 + 0.8)) continue;
       const { t, ...rst } = o; R.push({ ...r, t }); mkProp(D, t, x, y, o.w, o.d, rst.h ?? 20, { ...rst, pad: true }, true); placed++;
     }
-    if (kit.padDecal) for (const dc of kit.padDecal(q, qi, cols)) D.decals.push(dc);
+    if (kit.padDecal) for (const dc of kit.padDecal(q, qi, cols)) D.decals.push({ ...dc, pad: true }); // (a pad's ground treatment is painted under the roads that cross it: groundart.js)
   });
   D.props.sort((a, b) => a.key - b.key);
   D.bb = [(fp[0] - (fp[1] + fp[3])) * 32 - 40, (fp[0] + fp[1]) * 16 - z - 250, (fp[0] + fp[2] - fp[1]) * 32 + 40, (fp[0] + fp[2] + fp[1] + fp[3]) * 16 - z + 40];

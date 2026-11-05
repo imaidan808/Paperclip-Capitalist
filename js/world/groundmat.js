@@ -160,9 +160,9 @@ export function drawStage(ctx, view, D, S, k, detail, decal, zoom) {
   for (const b of kerbBars(roads)) { if (!seen(view, px(b.x, b.y + b.d), py(b.x, b.y, z) - 4, px(b.x + b.w, b.y), py(b.x + b.w, b.y + b.d, z) + 4)) continue; bar(ctx, b, z, T.kerbTop, b.face === 'l' ? T.kerbL : T.kerbR); }
   // ---- the stash slab: a light concrete pad with a bright rim and a darker lip, so it reads as laid down and not as a shadow
   for (const g of pads) { fillRR(ctx, g.x - 0.08, g.y - 0.08, g.w + 0.16, g.d + 0.16, 0.5, z, T.padEdge, 0.55); fillRR(ctx, g.x, g.y, g.w, g.d, 0.45, z, T.padRim); fillRR(ctx, g.x + 0.16, g.y + 0.16, g.w - 0.32, g.d - 0.32, 0.34, z, T.pad); }
-  // ---- the kit's decals and the manholes
+  // ---- the kit's decals and the manholes (the pads' own, which lie under the roads that cross them, are the roads layer's: groundart.js drawPadDecals)
   const flat = walks.concat(roads, pads), onFlat = (d) => { const m = d.r * 0.5; for (const g of flat) if (d.x > g.x - m && d.x < g.x + g.w + m && d.y > g.y - m && d.y < g.y + g.d + m) return true; return false; };
-  for (const d of D.decals) if (zoom >= (d.min ?? 0.3) && seen(view, ...decalBox(d, z)) && !(d.k === 'ell' && onFlat(d))) decal(ctx, d); // only the decals the chunk can see; a puddle or a stain lies on the dirt, never across a street, a pavement or the stash's slab
+  for (const d of D.decals) if (!d.pad && zoom >= (d.min ?? 0.3) && seen(view, ...decalBox(d, z)) && !(d.k === 'ell' && onFlat(d))) decal(ctx, d); // only the decals the chunk can see; a puddle or a stain lies on the dirt, never across a street, a pavement or the stash's slab
   if (close > 0.2) for (const mx of [ox + 4.6, ox + 16.8]) { ctx.globalAlpha = close; ctx.fillStyle = T.manhole; ctx.beginPath(); disc(ctx, mx, oy + 8.5, z, 0.3 * HW * 1.42, 0.3 * HH * 1.42); ctx.fill(); ctx.fillStyle = T.manholeHi; ctx.beginPath(); disc(ctx, mx, oy + 8.5, z + 0.6, 0.2 * HW * 1.42, 0.2 * HH * 1.42); ctx.fill(); ctx.globalAlpha = 1; }
   if (near > 0.05) paintPlazaMarks(ctx, view, D, walks, roads, pads, z, T, near, close);
 }
