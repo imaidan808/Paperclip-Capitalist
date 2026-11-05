@@ -5,44 +5,63 @@
 //   RS3  the pads' stripes, grids, bands and lawns are painted under the roads (the road layer paints them first) and the blocks layer paints none of them: a decal never reaches a road
 //   RS4  an apron at every connected port (33: a road leaves it): the pure geometry (the street's width and tone become the road's over 2 tiles, the sidewalk tapers to nothing, nothing outside its own rectangle) and the picture (the blocks layer
 //        paints it over the stage: asphalt and kerb over the road's mouth at every port)
+//   RS5  the stage's own dashes stop before the block's edge: none of the 33 aprons cuts one in half (the last dash of the cross street overhung the edge at 13.S and 14.S, and the apron's asphalt covered half of it; at 15.S and 16.S, which have no road, it hung off the stage)
+//   RS6  a footpath that leaves a road is joined to it: a sand strip of the path's own width runs from each path head back along the path's first stretch to the road, under the kerb (ground art: no edge changes)
+//   RS7  at a fork whose branch is locked and whose stem is not (or the other way round), the branch keeps its own tone right up to the node, whichever way its road runs: the colour changes on one line across the branch, through the node; a fork whose roads
+//        are all open is as it was (nothing is painted after the patches)
 // The tones the layers paint in are worked out here from the palette, not read from the module under test, and the new exports are read as namespaces, so that on the commit before this one each test fails on what it asserts (the old code has no junction,
 // no path head, no apron and no `pad` on a decal) instead of failing to load.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { recCtx } from './helpers/recctx.mjs';
-import { LAYOUT, DIST, EDGES, T, polyAt } from '../js/world/layout.js';
+import { LAYOUT, DIST, EDGES, T, polyAt, roadZ } from '../js/world/layout.js';
 import * as ISL from '../js/world/island.js';
 import { lodOf } from '../js/world/lod.js';
 import { runLayer } from '../js/world/stack.js';
 import * as GA from '../js/world/groundart.js';
 import { drawStage, tonesOf } from '../js/world/groundmat.js';
-import { tone } from '../js/world/decalart.js';
+import { tone, warmVeil } from '../js/world/decalart.js';
+import { VEIL } from '../js/world/terrainfield.js';
 import { mix } from '../js/world/iso.js';
 import { ROAD, PAVE, SAND } from '../js/world/palette.js';
 import * as RS from '../js/world/roadshape.js';
+import { loadWorld, auditRoads, ratchetCounts } from '../scripts/lib/road-audit.mjs';
 
 const JUNCTIONS = ISL.JUNCTIONS || {};
 const px = (gx, gy) => (gx - gy) * 32, py = (gx, gy, z) => (gx + gy) * 16 - z;
 const OUT = { W: [-1, 0], E: [1, 0], N: [0, -1], S: [0, 1] };
 /** The colours of an open road, as the art direction has them: the kerb, the asphalt, the dashes, a footpath's sand and its edge. */
 const KERB = ROAD.kerb, ASPH = mix(ROAD.mid, ROAD.light, 0.12), DASH = ROAD.dash, FOOT = mix(SAND.light, PAVE.cream, 0.5), FOOT_EDGE = mix(SAND.mid, PAVE.cobble, 0.5);
-const fakeW = (open = LAYOUT.ids) => ({ unlocked: new Set(open), env: { lod: lodOf(1), t: 0 }, cam: { z: 1 }, toWorld() {}, toScreen() {} });
+/** The colours of a locked road: veiled (palette.js roadTones: the surface a paler grey, the kerb the same cream, both under half a veil). */
+const LOCKED_KERB = warmVeil(ROAD.kerb, 0.5 * VEIL), LOCKED_ASPH = warmVeil(mix(ROAD.light, ROAD.kerb, 0.2), 0.5 * VEIL);
+const fakeW = (open = LAYOUT.ids, zoom = 1, lite = false) => ({ unlocked: new Set(open), env: { lod: lodOf(zoom), t: 0, lite }, cam: { z: zoom }, toWorld() {}, toScreen() {} });
 /** The viewport (world pixels) round a grid point: `r` tiles each way, and the height of the ground up and down. */
 const around = (gx, gy, r = 9, z = 0) => ({ x0: px(gx - r, gy + r) - 40, x1: px(gx + r, gy - r) + 40, y0: py(gx - r, gy - r, z) - 120, y1: py(gx + r, gy + r, z) + 120 });
-/** What a layer paints into a view, as the fills it made in order: { style, alpha, pts (the path: moveTo and lineTo points, and an ellipse's four extremes) }. */
-function paint(id, view, open = LAYOUT.ids) {
-  const r = recCtx(), w = fakeW(open); runLayer(id, w, r.ctx, view, { zoom: 1, far: false, mode: 1, see: () => true });
-  const fills = []; let path = [], k = 0;
+const WHOLE = { x0: -6000, x1: 7000, y0: -500, y1: 6000 };
+/** The grid point a screen point shows at height z (the inverse of px and py). */
+const gridOf = (x, y, z) => { const a = (y + z) / 16, b = x / 32; return [(a + b) / 2, (a - b) / 2]; };
+/** The fills a recording made, in order: { style, alpha, pts (every point of the path: moveTo and lineTo points, and an ellipse's four extremes), polys (the same, a polygon to each subpath: a path of dashes holds one to a dash) }. */
+function fillsOf(r) {
+  const fills = []; let path = [], polys = [], cur = null, k = 0;
   for (const c of r.log.calls) {
-    if (c[0] === 'beginPath') path = [];
-    else if (c[0] === 'moveTo' || c[0] === 'lineTo') path.push([c[1], c[2]]);
-    else if (c[0] === 'ellipse') path.push([c[1] - c[3], c[2]], [c[1] + c[3], c[2]], [c[1], c[2] - c[4]], [c[1], c[2] + c[4]]);
-    else if (c[0] === 'fill') { const f = r.log.fills[k++]; fills.push({ style: f.style, alpha: f.alpha, pts: path.slice() }); }
+    if (c[0] === 'beginPath') { path = []; polys = []; cur = null; }
+    else if (c[0] === 'moveTo') { cur = [[c[1], c[2]]]; polys.push(cur); path.push([c[1], c[2]]); }
+    else if (c[0] === 'lineTo') { if (!cur) { cur = []; polys.push(cur); } cur.push([c[1], c[2]]); path.push([c[1], c[2]]); }
+    else if (c[0] === 'closePath') cur = null;
+    else if (c[0] === 'ellipse') { const e = [[c[1] - c[3], c[2]], [c[1] + c[3], c[2]], [c[1], c[2] - c[4]], [c[1], c[2] + c[4]]]; path.push(...e); polys.push(e); cur = null; }
+    else if (c[0] === 'fill') { const f = r.log.fills[k++]; fills.push({ style: f.style, alpha: f.alpha, pts: path.slice(), polys: polys.slice() }); }
     else if (c[0] === 'fillRect') k++;
   }
   return fills;
 }
+/** What a layer paints into a view at a zoom (the level of detail of that zoom, and the governor's lite tier if asked), as the fills it made in order. */
+function paint(id, view, open = LAYOUT.ids, zoom = 1, lite = false) {
+  const r = recCtx(), w = fakeW(open, zoom, lite); runLayer(id, w, r.ctx, view, { zoom, far: false, mode: 1, see: () => true });
+  return fillsOf(r);
+}
 const inside = (pts, x, y) => { let c = false; for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) { const [xi, yi] = pts[i], [xj, yj] = pts[j]; if ((yi > y) !== (yj > y) && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) c = !c; } return c; };
+/** The index of the last fill that covers the screen point, is opaque and was painted after `from` (-1 when none does). */
+const topmost = (f, x, y, from = 0) => { for (let i = f.length - 1; i >= from; i--) if (f[i].alpha >= 0.99 && f[i].polys.some((p) => inside(p, x, y))) return i; return -1; };
 const nearestOn = (e, x, y) => { let best = Infinity; for (let i = 0; i + 1 < e.pts.length; i++) { const [ax, ay] = e.pts[i], [bx, by] = e.pts[i + 1], dx = bx - ax, dy = by - ay, l2 = dx * dx + dy * dy || 1, t = Math.max(0, Math.min(1, ((x - ax) * dx + (y - ay) * dy) / l2)); best = Math.min(best, Math.hypot(x - ax - dx * t, y - ay - dy * t)); } return best; };
 const nameOf = (e) => `${e.a} > ${e.b}`;
 const indexes = (f, pred) => f.map((q, i) => (pred(q) ? i : -1)).filter((i) => i >= 0);
@@ -129,5 +148,110 @@ test('RS4b: the blocks layer paints an apron over the stage at each of the 33 co
       assert.ok(f.some((q) => q.style === T.walk && inside(q.pts, px(gx, gy), py(gx, gy, D.z + 0.4))), `${a.port}: the sidewalk goes on past the block's edge as a wedge (side ${sg})`);
     }
   }
+});
+
+test('RS5: the stage\'s own dashes stop before the block\'s edge: none of the 33 aprons cuts one (the last dash of the cross street overhung the edge by 0.3 tile at 13.S and 14.S, and the apron, which starts 0.1 under the edge, covered half of it and left it with a hard diagonal end)', () => {
+  const DASHES = new Map();
+  const dashesOf = (D) => { // the stage's centre dashes, each as a polygon in the grid
+    if (!DASHES.has(D.id)) { const r = recCtx(), S = { ground: D.cols.ground, walk: D.cols.walk, asphalt: D.cols.road }; drawStage(r.ctx, { x0: D.bb[0], x1: D.bb[2], y0: D.bb[1], y1: D.bb[3] + 200 }, D, S, 0, [1, 1, 1, 1], () => {}, 2); DASHES.set(D.id, fillsOf(r).filter((q) => q.style === DASH).flatMap((q) => q.polys.map((p) => p.map(([x, y]) => gridOf(x, y, D.z))))); }
+    return DASHES.get(D.id);
+  };
+  /** Does the apron's asphalt (from 0.1 under the edge outwards) lie over any part of the polygon (grid points)? The polygon is sampled at its corners and on a 7 by 3 lattice. */
+  const cutBy = (a, poly) => {
+    const apron = a.pieces.bands[0].asphalt.map(([x, y]) => [x, y]), [p0, p1, p2, p3] = poly;
+    for (let i = 0; i <= 6; i++) for (let j = 0; j <= 2; j++) { const x = p0[0] + (p1[0] - p0[0]) * (i / 6) + (p3[0] - p0[0]) * (j / 2), y = p0[1] + (p1[1] - p0[1]) * (i / 6) + (p3[1] - p0[1]) * (j / 2); if (inside(apron, x, y)) return true; }
+    return false;
+  };
+  let n = 0;
+  for (const a of GA.aprons()) {
+    const [id, side] = a.port.split('.'), D = DIST[+id], [ux, uy] = OUT[side], [x0, y0] = D.ports[side];
+    // the test can see a cut: a dash laid from 0.6 tile inside the edge to 0.3 beyond it (what the last dash of the cross street was at 13.S and 14.S) is cut by this port's apron
+    const lay = (u0, u1) => [[u0, -0.12], [u1, -0.12], [u1, 0.12], [u0, 0.12]].map(([u, o]) => [x0 + ux * u - uy * o, y0 + uy * u + ux * o]);
+    assert.ok(cutBy(a, lay(-0.6, 0.3)), `${a.port}: a dash that overhangs the edge is cut`); assert.ok(!cutBy(a, lay(-1.5, -0.6)), `${a.port}: and one wholly inside the block is not`);
+    for (const q of dashesOf(D)) { n++; assert.ok(!cutBy(a, q), `${a.port}: a stage dash at (${q[0][0].toFixed(2)}, ${q[0][1].toFixed(2)}) to (${q[2][0].toFixed(2)}, ${q[2][1].toFixed(2)}) is covered by the apron`); }
+  }
+  assert.ok(n >= 33 * 15, `the test looked at every dash of every stage for each of the ports (${n})`);
+  // and none lies beyond its block's edge anywhere (15.S and 16.S have no road: there the overhanging dash hung off the stage), and every stage has the same dashes whatever its place on the grid (which dash was the last depended on how the additions rounded)
+  for (const id of LAYOUT.ids) { const D = DIST[id]; for (const q of dashesOf(D)) for (const [x, y] of q) assert.ok(x >= D.ox - 1e-6 && x <= D.ox + D.w + 1e-6 && y >= D.oy - 1e-6 && y <= D.oy + D.d + 1e-6, `district ${id}: a stage dash reaches (${x.toFixed(2)}, ${y.toFixed(2)}), beyond its block`); }
+  const counts = LAYOUT.ids.map((id) => dashesOf(DIST[id]).length); assert.equal(new Set(counts).size, 1, `every stage has the same number of dashes (${counts.join(', ')})`);
+});
+
+test('RS6: a footpath that leaves a road is joined to it: from each path head a strip of sand in the path\'s own width and two tones runs back along the path\'s first stretch to the road, under the kerb and the asphalt (ground art: no edge changes, so the detector still finds the footpath 2 tiles from the road)', async () => {
+  assert.equal(typeof GA.headConnectors, 'function', 'groundart.js knows where each path head is joined to its road');
+  const C = GA.headConnectors(), heads = Object.entries(ISL.HEADS);
+  assert.deepEqual(C.map((c) => c.head).sort(), heads.map(([h]) => h).sort(), 'one connector to each path head: the three footpaths that leave a road');
+  const roads = EDGES.filter((e) => !e.path && !e.ferry), all = paint('roads', WHOLE), lite = paint('roads', WHOLE, LAYOUT.ids, 0.6, true), firstKerb = Math.min(...indexes(all, (q) => q.style === KERB));
+  for (const [h, { at }] of heads) {
+    const path = EDGES.find((e) => e.path && e.a === h), p1 = polyAt(path, 0.5), back = [-p1.dx, -p1.dy], lat = [-back[1], back[0]], z = roadZ(path, 0) + 0.4, c = C.find((q) => q.head === h);
+    assert.deepEqual(path.pts[0], at, `${h}: the footpath still starts where island.js puts its head (the connector is not data)`);
+    // the way back along the path's first stretch: how far to the road's kerb (1 tile from its middle line), and where it meets the middle line
+    const toRoad = (t) => Math.min(...roads.map((r) => nearestOn(r, at[0] + back[0] * t, at[1] + back[1] * t)));
+    let kerbAt = null; for (let t = 0.05; t < 6 && kerbAt === null; t += 0.05) if (toRoad(t) <= 1.0) kerbAt = t;
+    assert.ok(kerbAt !== null && kerbAt >= 0.8 && kerbAt <= 2, `${h}: the road's kerb is ${kerbAt && kerbAt.toFixed(2)} tiles back along the path from its head`);
+    assert.ok(c.len > kerbAt && c.len < kerbAt + 1.6, `${h}: the connector runs ${c.len.toFixed(2)} tiles, past the kerb (${kerbAt.toFixed(2)}), to the road's middle`);
+    const at2 = (t, o) => [at[0] + back[0] * t + lat[0] * o, at[1] + back[1] * t + lat[1] * o], covered = (style, t, o) => { const [gx, gy] = at2(t, o); return all.some((q) => q.style === style && q.polys.some((p) => inside(p, px(gx, gy), py(gx, gy, z)))); };
+    for (let t = 0.1; t <= kerbAt - 0.05; t += 0.1) {
+      assert.ok(covered(FOOT_EDGE, t, 0) && covered(FOOT, t, 0), `${h}: sand (edge and surface) lies ${t.toFixed(1)} tile from the head, on the way to the road`);
+      for (const o of [-0.8, 0.8]) assert.ok(!covered(FOOT_EDGE, t, o) && !covered(FOOT, t, o), `${h}: and no sand ${o} tile beside it (it is the path's width, ${t.toFixed(1)} tile from the head)`);
+    }
+    // and at zoom 0.6 with the governor's lite tier on, which is where the author's cameras 5 and 8 were taken: the same sand, on the way to the road
+    for (const t of [0.3, kerbAt - 0.1]) { const [gx, gy] = at2(t, 0); assert.ok(lite.some((q) => q.style === FOOT && q.polys.some((p) => inside(p, px(gx, gy), py(gx, gy, z)))), `${h}: at zoom 0.6, lite, the sand is there ${t.toFixed(1)} tile from the head`); }
+    // under the road: it is a footpath fill, so RS1 puts it before every kerb; and at the road's middle line the topmost fill is the road's
+    const [mx, my] = at2(c.len, 0), top = topmost(all, px(mx, my), py(mx, my, z));
+    assert.ok(top > firstKerb && [ASPH, DASH].includes(all[top].style), `${h}: at the road's middle the topmost fill is the road's asphalt (fill ${top}: ${all[top] && all[top].style})`);
+  }
+  // none of it is data
+  const world = await loadWorld(); assert.equal(ratchetCounts(auditRoads(world, { full: false })).pathTilesOverAsphalt, 0, 'the detector, which reads edges, still finds no footpath over asphalt');
+});
+
+test('RS7: at a fork where a branch is locked and the stem is not (4 before 5, 8 before 9, 12 before 13) the branch keeps its own tone right up to the node: the colour changes on one line across it, through the node, and the patch\'s corner does not poke into it, whichever way the road runs (from the node, or into it); a fork whose roads are all open is as it was (nothing is painted after the patches), and the same goes the other way round, an open branch of a locked stem', () => {
+  let checked = 0;
+  /** The index of the last fill that is a patch of the fork at `at` (a square of kerb or asphalt tone within 1.5 tiles of the node). */
+  const lastPatch = (f, at, zNode) => Math.max(...indexes(f, (q) => q.pts.length === 4 && [KERB, ASPH, LOCKED_KERB, LOCKED_ASPH].includes(q.style) && q.pts.every(([x, y]) => { const [gx, gy] = gridOf(x, y, zNode); return Math.hypot(gx - at[0], gy - at[1]) < 1.5; })));
+  /** The picture of fork `j` with the branch `b` in a state of its own: the branch's own tone along its first tile, the stem's behind the node line, the corners of the patch that lie in the branch's width, the kerb on the branch's outer side. */
+  const check = (j, b, open, stemOpen, label) => {
+    const { at } = JUNCTIONS[j.name], stem = EDGES.find((e) => e.stem && (e.a === j.name || e.b === j.name)), zNode = roadZ(stem, stem.len) + 0.4;
+    const [qa, qb] = stem.pts.slice(-2), hl = Math.hypot(qb[0] - qa[0], qb[1] - qa[1]), hx = (qb[0] - qa[0]) / hl, hy = (qb[1] - qa[1]) / hl; // the stem's own heading (u), and across it (v)
+    const f = paint('roads', around(at[0], at[1], 6, zNode), open), P = (gx, gy) => [px(gx, gy), py(gx, gy, zNode + 0.1)];
+    const out = b.a === j.name ? 1 : -1, pb = polyAt(b, b.a === j.name ? 0.01 : b.len - 0.01), dx = pb.dx * out, dy = pb.dy * out, nx = -dy, ny = dx; // the branch's heading away from the node, and across it
+    const branchTone = stemOpen ? [LOCKED_KERB, LOCKED_ASPH] : [KERB, ASPH], stemTone = stemOpen ? [KERB, ASPH] : [LOCKED_KERB, LOCKED_ASPH], at2 = (s, o) => [at[0] + dx * s + nx * o, at[1] + dy * s + ny * o];
+    const styleAt = (s, o) => { const i = topmost(f, ...P(...at2(s, o))); return i < 0 ? null : f[i].style; };
+    // along the branch from the node: its own asphalt, to 1.0 tile out; and the same row of points a little behind the node line is the stem's
+    for (const s of [0.15, 0.4, 0.7, 1.0]) for (const o of [-0.6, -0.3, 0, 0.3, 0.6]) assert.equal(styleAt(s, o), branchTone[1], `${label}: the asphalt ${s} tile along the branch and ${o} across it is the branch's own`);
+    for (const o of [-0.6, -0.3, 0, 0.3, 0.6]) assert.equal(styleAt(-0.15, o), stemTone[1], `${label}: and 0.15 tile behind the node line, ${o} across, it is the stem's: the change lies on one line across the branch, through the node`);
+    // the kerb of the branch on the side away from every other road, 0.9 from its middle: its own, from the node out
+    const away = [-0.9, 0.9].filter((o) => { const [x, y] = at2(0.6, o); return EDGES.filter((e) => e !== b && !e.path && !e.ferry).every((e) => nearestOn(e, x, y) > 1.15); });
+    for (const o of away) for (const s of [0.15, 0.5, 1.0]) assert.equal(styleAt(s, o), branchTone[0], `${label}: the kerb ${s} tile along the branch on its outer side is the branch's own`);
+    // the corners of the stem's patch that lie ahead of the node line and well inside the branch's width are the branch's too (the patch's asphalt reaches 1.13 tiles along a road that leaves at 45 degrees)
+    let corners = 0;
+    for (const [su, sv] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) {
+      const gx = at[0] + (hx * su - hy * sv) * 0.78, gy = at[1] + (hy * su + hx * sv) * 0.78, s = (gx - at[0]) * dx + (gy - at[1]) * dy, o = (gx - at[0]) * nx + (gy - at[1]) * ny;
+      if (s > 0.2 && Math.abs(o) < 0.7) { corners++; assert.equal(styleAt(s, o), branchTone[1], `${label}: the patch's corner ${s.toFixed(2)} along the branch and ${o.toFixed(2)} across it is the branch's, not a dark notch in it`); }
+    }
+    if (Math.abs(dx * hx + dy * hy) > 0.5) assert.ok(corners >= 1, `${label}: a branch that leaves at an angle (not square across the stem, as the T's does) has a corner of the patch inside its width (${corners})`);
+    // at zoom 0.6 with the governor's lite tier on (the author's cameras 1 and 3): the same
+    const g = paint('roads', around(at[0], at[1], 6, zNode), open, 0.6, true), gi = topmost(g, ...P(...at2(0.5, 0))); assert.ok(gi >= 0 && g[gi].style === branchTone[1], `${label}: at zoom 0.6, lite, the branch's own tone is there too (${gi >= 0 && g[gi].style})`);
+    // what is painted after the last patch, before the dashes, is the branch's own asphalt, its first tile and a bit and no more
+    const last = lastPatch(f, at, zNode), dash1 = f.findIndex((q, i) => i > last && q.style === DASH), between = f.slice(last + 1, dash1 < 0 ? f.length : dash1);
+    assert.ok(between.length >= 1 && between.every((q) => q.style === branchTone[1]), `${label}: the branch's own asphalt is painted again after the patch (${between.length} fills)`);
+    for (const q of between) for (const [x, y] of q.pts) { const [gx, gy] = gridOf(x, y, zNode + 0.1), d = Math.hypot(gx - at[0], gy - at[1]); assert.ok(d < 1.5, `${label}: and its first tile and a bit, no more: a corner of it lies ${d.toFixed(2)} tiles from the node`); }
+    checked++;
+  };
+  let forks = 0;
+  for (const j of GA.junctions()) {
+    const { at } = JUNCTIONS[j.name], es = EDGES.filter((e) => e.a === j.name || e.b === j.name), stem = es.find((e) => e.stem), differing = es.filter((e) => !e.stem && e.gate !== stem.gate), zNode = roadZ(stem, stem.len) + 0.4;
+    assert.equal(differing.length, 1, `${j.name}: one branch opens with another district than the stem does`);
+    check(j, differing[0], LAYOUT.ids.filter((i) => i !== differing[0].gate), true, `${j.name}, the stem open, the branch locked`);
+    check(j, differing[0], LAYOUT.ids.filter((i) => i !== stem.gate), false, `${j.name}, the stem locked, the branch open`);
+    // all open: nothing is painted between the last patch and the dashes
+    const all = paint('roads', around(at[0], at[1], 6, zNode)), afterAll = all.slice(lastPatch(all, at, zNode) + 1).findIndex((q) => q.style === DASH);
+    assert.ok(afterAll === 0, `${j.name}: with every road open the dashes come straight after the patch of asphalt (${afterAll} fills between)`);
+    forks++;
+  }
+  assert.equal(forks, 3);
+  // a road that runs INTO its node, not out of it (the road from 7 to 8 ends at the fork of 8; all three that part at a fork happen to be locked from the node outwards), is repainted the same way: make it a district's of its own for the length of the test
+  const into = EDGES.find((e) => e.a === '7.N' && e.b === 'j8'), j8 = GA.junctions().find((q) => q.name === 'j8'), was = into.gate;
+  try { into.gate = 99; check(j8, into, LAYOUT.ids, true, 'j8, the road in from 7 locked (a gate of its own, shut), the stem open'); check(j8, into, [...LAYOUT.ids.filter((i) => i !== 8 && i !== 9), 99], false, 'j8, the road in from 7 open, the stem and the road out to 9 locked'); } finally { into.gate = was; }
+  assert.equal(into.gate, 8); assert.ok(checked >= 8, `eight pictures were looked at (${checked})`);
 });
 
