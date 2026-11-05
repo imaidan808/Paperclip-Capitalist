@@ -66,6 +66,14 @@ The author: "f9 debug overlay with in-game map coordinates (for where viewport i
 
 F9 toggles a small corner panel, off by default and loaded only when first opened (no cost to the first screen). It shows the camera position in map coordinates and the district under the center, zoom and pixel density, fps and frame time (average, 95th percentile, worst), the cost of each draw pass (ground, props, people, lighting), the ground-chunk cache (ready, pending, holes, worker queue), memory against the 160 MB ledger, the quality governor's tier, and the sim hour and speed. A copy button puts the numbers on the clipboard for a bug report. It would also make the author's screen recordings diagnosable; the lag investigation had to rebuild these numbers by hand. **Needs:** a few lines to expose counters the renderer already keeps. The world pass (items 1 and 2) should be measured with it.
 
+### 7b. Player profile tab (new)
+
+The author (2026-11-04, asked for earlier as the player card, then clarified): "Add a player card/profile tab. Available clicking on the user card at the top left of the screen or from the bottom, should go to the right of quests. Features all of the player's information, level, stats, reputation, etc. Intuitive integration with multiplayer."
+
+Idea: a Profile tab in the dock, to the right of Quests, that the player card at the top left also opens (that card opens Quests today; Quests stays its own tab). It holds everything about the player in one place: the figure with what they wear, the alias, the two Backgrounds and the specialty; level, XP and skill points, with the skills they are in; reputation and what it does for them; the win streak; cash, net worth and the districts opened; achievements earned, quests done and Codex progress; and run stats (deals made, the best deal, repairs, audits passed, loans). Multiplayer: the card is also what classmates see of you (a "see my card as a classmate does" toggle shows exactly that), and tapping any classmate's name (the Exchange's "Trade with", the room roster, a team list, a ticker line) opens their card in the same tab with a back link and one-tap actions (trade, offer, team). A Room section lists who is here. Public by default: alias, Backgrounds, skills, look, achievements, reputation and streak. Private by default: net worth and rank, which students never see today and the instructor can switch on. It rides on the snapshot the relay already carries: three or four new fields (look, achievements, reputation, streak) on snapshots of about 3 KB against the relay's 16 KB cap, so no server change.
+
+Points to settle: the dock gets an eighth tab, and the seven it has take 49 px each on a 390 px phone, so it needs smaller tabs or a scroll; the top-left card is anchored by the Academy and pinned by a test (`data-anchor="player-card"`), so the click target and those pins change together; the dock needs a drawing for it (icons part 2 drew the other seven); the wardrobe (item 15) supplies the look. **Needs from the author:** what is public and what is private, and whether net worth ever shows on a card.
+
 ---
 
 ## 3. Economy and the loop
@@ -122,9 +130,9 @@ Surveyed (parts 4 and 5 of the plan above). Team value is the members' net worth
 
 ## 5. Wardrobe and the rest of the art
 
-### 15. Wardrobe, player card, shops, mounts, flat buildings, props and cars
+### 15. Wardrobe, shops, mounts, flat buildings, props and cars
 
-Surveyed, seven PRs: (1) a wear rig, (2) the catalog and engine (clothing as ordinary tradable assets, kept out of the lot draw), (3) six shops (districts 2, 4, 7, 10, 13, 15) and the Wardrobe dialog, (4) the player card and peers, (5) flat vehicles with mounts and a walk-speed setting (walks capped at 14 s), (6) flat buildings, (7) flat props. PRs 6 and 7 are now done district by district inside the world pass (item 2), the flat vehicles of PR 5 come with the traffic work (item 1), and `docs/ART_DIRECTION.md` needs a new section on flat buildings (3.1 and 3.2 still ask for gloss, shading and contours). The wardrobe PRs 1 to 4 and the mounts stay here. **Needs from the author:** wardrobe items as ordinary assets (recommended), whether gear gives any bonus beyond looks (and a cosmetics-only room switch), per run or permanent, net worth on cards (default off), shop names, walk speed default, aircraft, buildings with or without contour and ambient shading, sell-back markup.
+Surveyed, seven PRs: (1) a wear rig, (2) the catalog and engine (clothing as ordinary tradable assets, kept out of the lot draw), (3) six shops (districts 2, 4, 7, 10, 13, 15) and the Wardrobe dialog, (4) the look on the card and on peers (the card itself is item 7b), (5) flat vehicles with mounts and a walk-speed setting (walks capped at 14 s), (6) flat buildings, (7) flat props. PRs 6 and 7 are now done district by district inside the world pass (item 2), the flat vehicles of PR 5 come with the traffic work (item 1), and `docs/ART_DIRECTION.md` needs a new section on flat buildings (3.1 and 3.2 still ask for gloss, shading and contours). The wardrobe PRs 1 to 4 and the mounts stay here. **Needs from the author:** wardrobe items as ordinary assets (recommended), whether gear gives any bonus beyond looks (and a cosmetics-only room switch), per run or permanent, shop names, walk speed default, aircraft, buildings with or without contour and ambient shading, sell-back markup. Whether net worth shows on a card is item 7b's question.
 
 ---
 
@@ -192,4 +200,5 @@ The menu downloads a save but cannot load one. Read as: import the file "Downloa
 - Rare traders (item 12) need the catalog's rarity (item 9), the offers dialog (item 11) and connected roads (item 1).
 - The story (item 16) comes before the NPCs (item 17) and the island (item 18); the island fits endless mode (item 13).
 - The lottery (item 19) and the NPC rewards (item 17) must be seeded, not rolled at the click, so ranked runs can be replayed.
+- The profile tab (item 7b) needs a dock drawing and a phone layout for an eighth tab, changes the click target of the top-left card that the Academy anchors and a test pins, and rides on the peer snapshot; the look and the achievements on it come with item 15 and the icons.
 - First-screen budget: the icon kit adds 2 to 3 KB, the items catalog about 6.5 KB; everything else should load lazily.
