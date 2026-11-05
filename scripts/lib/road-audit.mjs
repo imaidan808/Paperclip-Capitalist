@@ -234,14 +234,16 @@ export function auditRoads({ root, Lay, Isl, Shape, Act }, { full = true } = {})
   const edgeTable = EDGES.map((e) => ({ n: e.n, a: e.a, b: e.b, kind: kindOf(e), gate: e.gate, lengthTiles: r1(e.len), width: e.w, points: e.pts.length, planPoints: e.plan.length, bridges: LAYOUT.bridges.filter((b) => b.edge === e).length }));
 
   // ---------------------------------------------------------------------------------------------- 7. gates: locked entries with nothing standing on them
+  // a gate counts only when its PROP stands where layout.js recorded it (D.gateAt is data; the prop is what the player sees): a kit that stopped making the prop must not pass
+  const hasGateProp = (D) => !!(D.gateAt && (D.props || []).some((q) => q.t === 'gate' && q.gk === D.gateKind && Math.hypot(q.gx + 0.15 - D.gateAt.x, q.gy + 0.15 - D.gateAt.y) < 1));
   const lockedEntries = [];
   for (const id of ids) {
     const D = DIST[id], entering = roads.concat(ferries).filter((e) => (e.a.startsWith(id + '.') || e.b.startsWith(id + '.')) && e.gate === id);
-    for (const e of entering) { const marked = D.gateAt && D.gateAt.edge === e.n; lockedEntries.push({ district: id, gateKind: D.gateKind, road: edgeName(e), edge: e.n, hasGateProp: !!marked, defect: D.gateKind !== 'fog' && !marked ? 'a locked road with no barrier, leaf or ferry on it' : null }); }
+    for (const e of entering) { const marked = hasGateProp(D) && D.gateAt.edge === e.n; lockedEntries.push({ district: id, gateKind: D.gateKind, road: edgeName(e), edge: e.n, hasGateProp: !!marked, defect: D.gateKind !== 'fog' && !marked ? 'a locked road with no barrier, leaf or ferry on it' : null }); }
   }
   // every district also holds roads of OTHER gates: a road that opens with district g but enters h < g is drawn closed with no gate prop either
   const closedUnmarked = [];
-  for (const e of roads) { const g = e.gate, D = DIST[g]; if (!D || D.gateKind === 'fog') continue; if (!(D.gateAt && D.gateAt.edge === e.n)) closedUnmarked.push({ road: edgeName(e), edge: e.n, opensWithDistrict: g, gateKind: D.gateKind, gatePropIsOnEdge: D.gateAt ? D.gateAt.edge : null }); }
+  for (const e of roads) { const g = e.gate, D = DIST[g]; if (!D || D.gateKind === 'fog') continue; if (!(hasGateProp(D) && D.gateAt.edge === e.n)) closedUnmarked.push({ road: edgeName(e), edge: e.n, opensWithDistrict: g, gateKind: D.gateKind, gatePropIsOnEdge: D.gateAt ? D.gateAt.edge : null }); }
 
   // ---------------------------------------------------------------------------------------------- 8. (full) connectivity
   const roadGraph = []; for (const e of roads.concat(ferries)) { const a = +e.a.split('.')[0], b = +e.b.split('.')[0]; if (a && b) roadGraph.push({ edge: e.n, a, b, ports: `${e.a} > ${e.b}`, gate: e.gate, kind: kindOf(e), lengthTiles: r1(e.len) }); }

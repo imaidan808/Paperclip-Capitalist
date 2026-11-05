@@ -1,9 +1,9 @@
 // The road detector as a ratchet: the island's road defects, as scripts/lib/road-audit.mjs reads them from js/world/layout.js, may only go down.
 // The survey of 2026-11-04 (docs/RENDER_PLAN.md, "The author's cameras") found that every district is the same 22 by 18 crossroads: 29 of the island's 64 street ends stop at nothing, a fork is two ribbons laid over each other, a footpath
 // lies on top of asphalt, four locked roads carry no barrier. None of it was held by a test. Each pull request that fixes one LOWERS its constant below, in the same commit, and never raises it; this test fails on any count above its constant
-// and says in a diagnostic when a count is below it (so the constant can be lowered and the gain cannot come back).
+// and fails on a count BELOW it too, until the constant is lowered in the same commit (so the gain cannot come back unseen).
 //   RA1  the detector still looks at the whole island: floors on what it examined (ports, edges, pairs of edges, samples), so a count cannot fall because the detector looked at less
-//   RA2  the ratchet: every defect count is at or under its baseline (29 dead ends, 7 seam runs, 1 crossing without a junction, 13.8 tiles of footpath over asphalt, 4 locked roads without a barrier, 2 kinks, 1 split bridge, 1 road through another district)
+//   RA2  the ratchet: every defect count equals its baseline: a worse count fails, and so does a better one until the constant is lowered (29 dead ends, 7 seam runs, 1 crossing without a junction, 13.8 tiles of footpath over asphalt, 4 locked roads without a barrier, 2 kinks, 1 split bridge, 1 road through another district)
 //   RA3  the defect classes are all listed, with their ids, names, counts and causes, and the ratchet's counts are the classes' own
 //   RA4  the detector can see: on a world made worse in four ways (a road taken away, a road laid twice, a footpath laid on a road, a gate taken away) it finds each of the four, so an all-clear is not a blind detector's
 //   RA5  it is quick: under 2 s of CPU (it was 0.05 s when this was written; the whole catalog the CLI prints is 0.6 s)
@@ -39,10 +39,11 @@ test('RA1: the detector still looks at the whole island: ports, edges, pairs of 
   assert.deepEqual(Object.keys(ratchetCounts(catalog)).sort(), Object.keys(BASELINE).sort(), 'the ratchet holds exactly the counts the baseline names');
 });
 
-test('RA2: the ratchet: no defect count is above its baseline (a count below it is an improvement to lock in: lower the constant)', (t) => {
+test('RA2: the ratchet: every defect count equals its baseline (a worse count fails; a better one fails until the constant is lowered in the same commit)', () => {
   const counts = ratchetCounts(catalog);
   assert.deepEqual(over(counts), [], `a road defect got worse: ${over(counts).map((k) => `${k} is ${counts[k]} (baseline ${BASELINE[k]})`).join(', ')}`);
-  for (const k of Object.keys(BASELINE)) if (counts[k] < BASELINE[k]) t.diagnostic(`${k} is ${counts[k]}, under its baseline ${BASELINE[k]}: lower BASELINE.${k} to ${counts[k]} in tests/world-roads-audit.test.mjs so it cannot come back`);
+  const better = Object.keys(BASELINE).filter((k) => counts[k] < BASELINE[k]);
+  assert.deepEqual(better, [], `a road defect was fixed: lower the constant in this file, in the same commit, so it cannot come back: ${better.map((k) => `BASELINE.${k} = ${counts[k]} (was ${BASELINE[k]})`).join(', ')}`);
   assert.ok(over({ ...counts, deadEnds: BASELINE.deadEnds + 1 }).includes('deadEnds') && over({ ...counts, pathTilesOverAsphalt: BASELINE.pathTilesOverAsphalt + 0.1 }).includes('pathTilesOverAsphalt'), 'the comparison itself fires on a count one over (and on a tenth of a tile over)');
 });
 
@@ -71,6 +72,7 @@ test('RA4: the detector can see: a road taken away, a road laid twice, a footpat
   const D2 = Lay.DIST[2];
   assert.ok(D2.gateAt && D2.gateKind !== 'fog', 'district 2 is locked behind a gate that stands on a road');
   assert.equal(run({ DIST: { ...Lay.DIST, 2: { ...D2, gateAt: undefined } } }).lockedWithoutBarrier, base.lockedWithoutBarrier + 1, 'district 2\'s gate taken away leaves its road with no barrier');
+  assert.equal(run({ DIST: { ...Lay.DIST, 2: { ...D2, props: D2.props.filter((q) => q.t !== 'gate') } } }).lockedWithoutBarrier, base.lockedWithoutBarrier + 1, 'the gate PROP taken away (its recorded place kept) leaves the road with no barrier too: the detector does not trust the data alone');
 });
 
 test('RA5: it is quick: the audit the ratchet runs is under 2 s of CPU', () => {

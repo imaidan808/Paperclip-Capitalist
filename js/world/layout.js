@@ -75,7 +75,7 @@ function nearLand(p, isLand) {
 }
 /**
  * Sort a district's props into those that may stay and those that are in the sea. What stays: everything dry, a prop of the water class that stands by a shore, and a hot spot wherever it is (the headquarters, the depot, the board and the district's
- * feature are the game: a kit that put one in the sea is a failing test, tests/world-placement.test.mjs, not a building that quietly goes missing). What goes, REMOVED and not moved: the pad's scatter that fell on water, and a water prop out in open sea.
+ * feature are the game: a kit that put one in the sea is a failing test, tests/world-placement.test.mjs, not a building that quietly goes missing). What goes, REMOVED and not moved: any prop that is not a hot spot and not of the water class and has a tile of its footprint on water (the pad's scatter that fell in a bay, and a kit-placed prop in the sea: tests/world-placement.test.mjs, PL3, fails on one), and a water prop out in open sea.
  * Removing is deterministic, spends no random number and leaves every other prop where it was; a moved prop would need a free spot clear of the roads, the block, the others and the coast, and the pad's scenery is filler that the district plans retire.
  * Answers { keep, drowned }, `drowned` being small records of what went (kind, place, size, zone and whether it was pad scenery).
  */

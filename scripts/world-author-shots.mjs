@@ -133,7 +133,7 @@ try {
   await quiet(p);
   await p.eval(PAGE);
   const o = { seed: FIXTURE.seed ^ 0x5bd1e995, dpr: Math.min(2, DSF), hour: HOUR ?? chosen[0]?.hour ?? 8, t: FIXTURE.t, maxDraws: 24 };
-  const manifest = { script: 'world-author-shots.mjs', startedAt: new Date().toISOString(), git: (() => { try { return execSync('git rev-parse --short HEAD', { cwd: REPO }).toString().trim() + (execSync('git status --porcelain js css index.html', { cwd: REPO }).toString().trim() ? '+changes' : ''); } catch { return null; } })(), options: { hour: HOUR, lite: LITE, dsf: DSF, window: [VW, VH], seed: FIXTURE.seed, t: FIXTURE.t, gameHours: FIXTURE.gameHours, open: OPEN }, shots: [] };
+  const manifest = { script: 'world-author-shots.mjs', startedAt: new Date().toISOString(), git: (() => { try { return execSync('git rev-parse --short HEAD', { cwd: REPO, stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim() + (execSync('git status --porcelain js css index.html', { cwd: REPO, stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim() ? '+changes' : ''); } catch { return null; } })(), options: { hour: HOUR, lite: LITE, dsf: DSF, window: [VW, VH], seed: FIXTURE.seed, t: FIXTURE.t, gameHours: FIXTURE.gameHours, open: OPEN }, shots: [] };
   manifest.world = await p.eval(`__rig.freeze(${JSON.stringify(o)})`);
   manifest.opened = await p.eval(`__rig.open(${JSON.stringify(OPEN)}, ${JSON.stringify(o)})`);
   manifest.world.unlockedAfter = await p.eval('[...pc.world.unlocked]');
