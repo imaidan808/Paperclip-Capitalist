@@ -29,14 +29,16 @@ import { walk } from '../scripts/preload.mjs';
  * (a gate stands on every road that opens with a locked district, at the road's open end) and added what they now hold at 0: scatterAtEnds (a hashed pad prop in front of a street end: 13 of the 29 before; R12), endsWithoutTurnSpot, bareEnds (a termination with fewer than three props and no
  * loading dock), gatesAwayFromOpenEnd (a gate more than 3.5 tiles from the open end of its road, a bridge's leaf at its bank excepted: 9 of the 16 stood ten tiles from the district they guard), pathEndsWithoutDeck (the six lookouts were small props, dropped in the lite tier before WP02; R4) and
  * pathStartsWithoutHead (the six footpaths began in a cut or at a bare strip of sand).
+ * The verifier's pass on WP11 and WP12 added what it found the nets blind to, held at 0: endsWithoutGround (a termination with no asphalt, slab or plaza), propsFarFromPort (a prop over 8 tiles from its port: the farthest today is 7.5), turnSpotsOffAxis (a turn spot not on its street's axis within 8
+ * tiles of the port), boxesTooSmall (a cull box that does not hold the end's ground) and kindsWithoutTheirParts (a yard with no slab, bays or dock, a barrier with no boom): each had a mutant or an in-memory canary the detector did not count (RA10 holds them now).
  */
-const BASELINE = { deadEnds: 0, seamRuns: 0, crossings: 0, pathTilesOverAsphalt: 0, lockedWithoutBarrier: 0, kinks: 0, splitBridges: 0, footprintThroughRoads: 1, portsWithoutApron: 0, scatterAtEnds: 0, endsWithoutTurnSpot: 0, bareEnds: 0, gatesAwayFromOpenEnd: 0, pathEndsWithoutDeck: 0, pathStartsWithoutHead: 0 };
+const BASELINE = { deadEnds: 0, seamRuns: 0, crossings: 0, pathTilesOverAsphalt: 0, lockedWithoutBarrier: 0, kinks: 0, splitBridges: 0, footprintThroughRoads: 1, portsWithoutApron: 0, scatterAtEnds: 0, endsWithoutTurnSpot: 0, bareEnds: 0, gatesAwayFromOpenEnd: 0, pathEndsWithoutDeck: 0, pathStartsWithoutHead: 0, endsWithoutGround: 0, propsFarFromPort: 0, turnSpotsOffAxis: 0, boxesTooSmall: 0, kindsWithoutTheirParts: 0 };
 /**
  * What the detector must still examine. A plan that changes the island changes these on purpose: raise or lower them in that pull request, saying why. WP10: three forks became three edges each (25 edges to 28: 21 roads, 6 footpaths, the ferry),
  * so 351 pairs of edges and 30,000 samples, three junctions and three path heads. WP12: 29 terminations, 6 decks, 3 side heads (the other three path heads are terminations) and 17 gates.
  */
 const SCOPE_FLOOR = { districts: 16, ports: 64, edges: 28, roadEdges: 21, pathEdges: 6, ferryEdges: 1, edgePairs: 351, samples: 30000, junctions: 3, heads: 3, terms: 29, decks: 6, pathHeads: 3 };
-const CLASSES = ['R1', 'R2', 'R3', 'R4', 'R5', 'R6', 'R7', 'R8', 'R9', 'R10', 'R11', 'R12'];
+const CLASSES = ['R1', 'R2', 'R3', 'R4', 'R5', 'R6', 'R7', 'R8', 'R9', 'R10', 'R11', 'R12', 'R13'];
 const CPU_BUDGET_MS = 2000;
 
 const cpu = () => { const u = process.cpuUsage(); return (u.user + u.system) / 1000; };
@@ -63,7 +65,7 @@ test('RA2: the ratchet: every defect count equals its baseline (a worse count fa
 });
 
 test('RA3: the defect classes are listed with their ids, names, counts and causes, and the ratchet counts are the classes\' own', () => {
-  assert.deepEqual(catalog.defectClasses.map((c) => c.id), CLASSES, 'R1 to R12, in order: a class does not disappear from the detector');
+  assert.deepEqual(catalog.defectClasses.map((c) => c.id), CLASSES, 'R1 to R13, in order: a class does not disappear from the detector');
   for (const c of catalog.defectClasses) { assert.ok(c.name.length > 10, c.id + ' has a name'); assert.ok(Number.isFinite(c.count), c.id + ' has a count'); assert.ok(/js\/world\//.test(c.cause) || /ROADS|footpaths/.test(c.cause), c.id + ' says where it comes from'); }
   const by = Object.fromEntries(catalog.defectClasses.map((c) => [c.id, c.count])), r = ratchetCounts(catalog);
   assert.equal(by.R1, r.deadEnds); assert.equal(by.R4, r.pathEndsWithoutDeck); assert.equal(by.R12, r.scatterAtEnds); assert.equal(by.R2, r.seamRuns); assert.equal(by.R5, r.kinks); assert.equal(by.R6, r.lockedWithoutBarrier); assert.equal(by.R9, r.splitBridges); assert.equal(by.R10, r.crossings); assert.equal(by.R11, r.footprintThroughRoads); assert.equal(by.R7, r.portsWithoutApron);
@@ -143,6 +145,18 @@ test('RA10: the detector sees the terminations: a termination taken away makes i
   const D13 = Lay.DIST[13], g = D13.gates[0], e = Lay.EDGES[g.edge], q = Lay.polyAt(e, e.len * 0.4), moved = { ...g, x: q.x, y: q.y }, prop = { ...g.prop, gx: q.x - 0.15, gy: q.y - 0.15 };
   assert.equal(ratchetCounts(auditRoads({ ...world, Lay: { ...Lay, DIST: { ...Lay.DIST, 13: { ...D13, gates: [moved], props: [...D13.props, prop] } } } }, { full: false })).gatesAwayFromOpenEnd, base.gatesAwayFromOpenEnd + 1, 'a gate at 40% of an 84-tile road is a road that looks open at its open end (screenshot 1)');
   void D;
+  // the verifier's D8: what the nets held was the structure of the registry, not what the picture shows. An end with no ground pieces, a prop moved 30 tiles off, a cull box the size of a point, a kind its pieces are not and a turn spot 40 tiles away were all counted as fine
+  const only = (port, f) => L.terms.map((t) => (t.port === port ? f(t) : t));
+  assert.equal(run({ terms: only('8.S', (t) => ({ ...t, pieces: [] })) }).endsWithoutGround, base.endsWithoutGround + 1, 'a yard with its ground pieces taken away has no asphalt, slab or plaza (its dock and its bay lines go with them)');
+  assert.equal(run({ terms: only('13.N', (t) => ({ ...t, pieces: t.pieces.filter((q) => q.role !== 'plaza' && q.role !== 'asph') })) }).endsWithoutGround, base.endsWithoutGround + 1, 'a plaza with its square and its drive taken away is the same');
+  assert.equal(run({ terms: only('13.W', (t) => ({ ...t, props: t.props.map((p) => ({ ...p, gx: p.gx + 30 })) })) }).propsFarFromPort, base.propsFarFromPort + 1, 'the dressing of a bulb moved 30 tiles away is a termination with props far from its port');
+  assert.equal(run({ terms: only('2.S', (t) => ({ ...t, bb: [0, 0, 1, 1] })) }).boxesTooSmall, base.boxesTooSmall + 1, 'a cull box shrunk to a point does not hold the ground of its end');
+  assert.equal(run({ terms: only('4.N', (t) => ({ ...t, kind: 'barrier' })) }).kindsWithoutTheirParts, base.kindsWithoutTheirParts + 1, 'a bulb called a barrier has no boom');
+  assert.equal(run({ terms: only('8.S', (t) => ({ ...t, props: t.props.filter((p) => p.t !== 'loaddock') })) }).kindsWithoutTheirParts, base.kindsWithoutTheirParts + 1, 'a yard whose dock is gone is a hammerhead called a yard');
+  assert.equal(run({ terms: only('12.S', (t) => ({ ...t, pieces: t.pieces.filter((q) => q.role !== 'bay') })) }).kindsWithoutTheirParts, base.kindsWithoutTheirParts + 1, 'and with no bay lines too');
+  assert.equal(run({ turnSpots: L.turnSpots.map((s) => (s.port === '3.S' ? { ...s, x: s.x + 40 } : s)) }).turnSpotsOffAxis, base.turnSpotsOffAxis + 1, 'a turn spot 40 tiles away is off the axis of its street');
+  assert.equal(run({ turnSpots: L.turnSpots.map((s) => (s.port === '6.E' ? { ...s, y: s.y + 0.4 } : s)) }).turnSpotsOffAxis, base.turnSpotsOffAxis + 1, 'and so is one 0.4 tile to the side');
+  const class13 = auditRoads({ ...world, Lay: { ...Lay, LAYOUT: { ...L, terms: only('8.S', (t) => ({ ...t, pieces: [] })) } } }, { full: false }).defectClasses.find((c) => c.id === 'R13'); assert.ok(class13.count >= 2 && /1 with no asphalt/.test(class13.detail), 'and the class says it: R13 counts them');
 });
 
 test('RA5: it is quick: the audit the ratchet runs is under 2 s of CPU', () => {

@@ -55,6 +55,11 @@ export function ratchetCounts(catalog) {
     gatesAwayFromOpenEnd: T.gatesAwayFromOpenEnd,                      // gates that stand more than 3.5 tiles from the open end of their road (a bridge's leaf at its bank excepted)
     pathEndsWithoutDeck: catalog.defectClasses.find((c) => c.id === 'R4').count, // footpaths whose end has no deck of ground art
     pathStartsWithoutHead: T.pathStartsWithoutHead,                    // footpaths whose start has no path head
+    endsWithoutGround: T.endsWithoutGround,                            // terminations with no asphalt, slab or plaza piece: nothing to drive or stand on
+    propsFarFromPort: T.propsFarFromPort,                              // terminations with a prop more than 8 tiles from their port
+    turnSpotsOffAxis: T.turnSpotsOffAxis,                              // terminations whose turn spot is not on their street's axis, within 8 tiles of the port
+    boxesTooSmall: T.boxesTooSmall,                                    // terminations whose cull box does not hold their ground
+    kindsWithoutTheirParts: T.kindsWithoutTheirParts,                  // terminations of a kind without the pieces of ground and the props that make it that kind
   };
 }
 
@@ -337,6 +342,16 @@ export function auditRoads({ root, Lay, Isl, Shape, Act, Art }, { full = true } 
   const endsWithoutTurnSpot = TERMS.filter((t) => !spotOf(t.port)).length, bareEnds = TERMS.filter((t) => t.props.length < 3 && !t.props.some((p) => p.t === 'loaddock')).length;
   const startHead = (e) => (HEADS[e.a] ? HEADS_.some((h) => h.edge === e.n) : /^\d+\./.test(e.a) ? termOf(e.a)?.kind === 'head' : false), pathStartsWithoutHead = paths.filter((e) => !startHead(e)).length;
   const pathEndsWithoutDeck = paths.filter((e) => !DECKS.some((d) => d.edge === e.n)).length, scatterAtEnds = ends.filter((d) => d.scatterInStrip.length).length;
+  // what an end is MADE of (the verifier's D8: the nets held the structure of the registry, not what is drawn: an end with no ground pieces, its props moved 30 tiles off, a cull box the size of a point, a kind that its pieces are not, a turn spot 40 tiles away were all fine)
+  const HARD = new Set(['asph', 'slab', 'plaza']), PARTS = { // by kind: the roles of ground (an array is `any of`) and the kinds of prop it is made of
+    bulb: [['curb'], []], roundabout: [['curb', 'lawn'], ['fountain']], hammer: [['curb', ['slab', 'asph']], []], yard: [['slab', 'bay'], ['loaddock']], plaza: [['plaza', 'lawn'], ['fountain']], gate: [['asph'], ['roadend']], farm: [['dirt', 'rut'], ['farmgate']], barrier: [['asph'], ['roadend']],
+    quay: [['slab', 'band'], []], belvedere: [['deck', 'rail'], ['lookout']], portal: [['asph'], ['portal']], head: [['sand'], ['trailboard']] };
+  const sideOf = (t) => t.side || t.port.split('.')[1], portOfEnd = (t) => DIST[t.district].ports[sideOf(t)];
+  const endsWithoutGround = TERMS.filter((t) => !t.pieces.some((q) => HARD.has(q.role))).length;
+  const propsFarFromPort = TERMS.filter((t) => { const [px, py] = portOfEnd(t); return t.props.some((p) => Math.hypot(p.gx + p.w / 2 - px, p.gy + p.d / 2 - py) > 8); }).length;
+  const turnSpotsOffAxis = TERMS.filter((t) => { const sp = spotOf(t.port); if (!sp) return false; const [px, py] = portOfEnd(t), [ux, uy] = OUT[sideOf(t)], along = (sp.x - px) * ux + (sp.y - py) * uy, lat = Math.abs((sp.x - px) * uy - (sp.y - py) * ux); return !(along > 0 && along < 8 && lat < 0.05); }).length; // (an end with no spot at all is endsWithoutTurnSpot's)
+  const boxesTooSmall = TERMS.filter((t) => t.pieces.some((q) => q.pts.some(([x, y, z]) => { const X = (x - y) * 32, Y = (x + y) * 16 - z; return !(X >= t.bb[0] - 1e-6 && X <= t.bb[2] + 1e-6 && Y >= t.bb[1] - 1e-6 && Y <= t.bb[3] + 1e-6); }))).length;
+  const kindsWithoutTheirParts = TERMS.filter((t) => { const need = PARTS[t.kind]; if (!need) return true; const roles = new Set(t.pieces.map((q) => q.role)); return !need[0].every((r) => (Array.isArray(r) ? r.some((x) => roles.has(x)) : roles.has(r))) || !need[1].every((k) => t.props.some((p) => p.t === k)); }).length;
 
   // ---------------------------------------------------------------------------------------------- 10. counts, per district and in total
   const counts = { perDistrict: {}, total: {} }, districtsGates = () => ids.reduce((n, id) => n + gatesOf(DIST[id]).length, 0);
@@ -357,7 +372,7 @@ export function auditRoads({ root, Lay, Isl, Shape, Act, Art }, { full = true } 
     roadEdges: roads.length, footpaths: paths.length, ferries: ferries.length, bridges: bridges.length, totalRoadTiles: r1(totalRoadTiles),
     roadTilesAlongADrop: r1(cliffEdgeRuns.reduce((a, r) => a + r.lengthTiles, 0)), seamRuns: seams.filter((s) => s.kind !== 'coincident').length, seamRunsRoadRoad: seams.filter((s) => s.kind !== 'coincident' && s.pair === 'road-road').length, coincidentStems: seams.filter((s) => s.kind === 'coincident').length, crossingsWithNoJunction: crossings.length,
     footpathTilesOverAsphalt: r1(footpaths.reduce((s, f) => s + f.tilesOverAsphalt, 0)), footpathsThatCrossOrRunOverAsphalt: footpaths.filter((f) => f.tilesOverAsphalt > 0).length, footpathEnds: { 'cliff-top': footpaths.filter((f) => f.end.kind === 'cliff-top').length, shore: footpaths.filter((f) => f.end.kind === 'shore').length, meadow: footpaths.filter((f) => f.end.kind === 'meadow').length },
-    lockedRoadsWithNoBarrier: closedUnmarked.length, roadsThroughAnotherFootprint: through.length, roundabouts: TERMS.filter((t) => t.kind === 'roundabout').length, culDeSacs: TERMS.filter((t) => t.kind === 'bulb').length, parkingLots: 0, terminations: TERMS.length, endsWithoutTurnSpot, bareEnds, gatesAwayFromOpenEnd: gatesFar.length, pathStartsWithoutHead, pathEndsWithoutDeck, scatterAtEnds, gates: districtsGates(), decks: DECKS.length, pathHeads: HEADS_.length + TERMS.filter((t) => t.kind === 'head').length, crosswalksOutsideBlockCentres: 0, trafficLightsOrStopSigns: 0, junctionsWithRoadMarkings: 0,
+    lockedRoadsWithNoBarrier: closedUnmarked.length, roadsThroughAnotherFootprint: through.length, roundabouts: TERMS.filter((t) => t.kind === 'roundabout').length, culDeSacs: TERMS.filter((t) => t.kind === 'bulb').length, parkingLots: 0, terminations: TERMS.length, endsWithoutTurnSpot, bareEnds, endsWithoutGround, propsFarFromPort, turnSpotsOffAxis, boxesTooSmall, kindsWithoutTheirParts, gatesAwayFromOpenEnd: gatesFar.length, pathStartsWithoutHead, pathEndsWithoutDeck, scatterAtEnds, gates: districtsGates(), decks: DECKS.length, pathHeads: HEADS_.length + TERMS.filter((t) => t.kind === 'head').length, crosswalksOutsideBlockCentres: 0, trafficLightsOrStopSigns: 0, junctionsWithRoadMarkings: 0,
     districtGraph: { edges: nDistEdges, independentCycles: cycles ?? nDistEdges - ids.length + comps(true).length, degrees: degree, leafDistricts: ids.filter((i) => (degree[i] || 0) <= 1) },
   };
 
@@ -378,6 +393,7 @@ export function auditRoads({ root, Lay, Isl, Shape, Act, Art }, { full = true } 
     { id: 'R10', name: 'two roads cross with no junction', count: crossings.length, detail: crossings.map((c) => `${c.a} x ${c.b} at (${c.at.gx}, ${c.at.gy}), ${c.angle} degrees`).join('; '), cause: 'js/world/island.js (4.E > 3.N via (76, 92) and 4.E > 5.W via (78, 92) share a stem and then cross)' },
     { id: 'R11', name: 'a road runs through another district\'s ground', count: through.length, detail: through.map((t) => `${t.road} through district ${t.district}'s footprint for ${t.tilesInFootprint} tiles`).join('; '), cause: 'js/world/island.js (6.N > 7.E via (168, 70) and (158, 68) follows the south pad of district 8)' },
     { id: 'R12', name: 'scatter props stand in front of a street end, unrelated to any street', count: scatterInStrip, of: ends.length, detail: 'the pad is filled by a per-theme hash scatter at 0.045 props a tile that keeps off roads but not off a street\'s extension (14 silos in the pad of Farmland, 12 LIVE billboards and 9 spotlights in the pad of Creative Quarter); a termination keeps its room clear of it (layout.js prunes the pad props that stand in a termination\'s room)', cause: 'js/world/layout.js (the pad scatter), js/world/kits.js (FILL)' },
+    { id: 'R13', name: 'an end is not made of what its kind says: no ground to drive on, props far from the port, a turn spot off the axis, a cull box smaller than its ground, a kind without its pieces', count: T.endsWithoutGround + T.propsFarFromPort + T.turnSpotsOffAxis + T.boxesTooSmall + T.kindsWithoutTheirParts, of: T.terminations, detail: `${T.endsWithoutGround} with no asphalt, slab or plaza, ${T.propsFarFromPort} with a prop over 8 tiles from the port, ${T.turnSpotsOffAxis} with a turn spot off the street's axis, ${T.boxesTooSmall} with a cull box that does not hold their ground, ${T.kindsWithoutTheirParts} of a kind without the roles of ground and the props that make it (a yard with no slab, bays or dock, a barrier with no boom)`, cause: 'js/world/layout.js (the registry of terminations: the pieces, props, box and turn spot of each end), js/world/roadshape.js (the shapes)' },
   ];
   defectClasses.sort((a, b) => +a.id.slice(1) - +b.id.slice(1));
 
