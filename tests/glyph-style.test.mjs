@@ -49,7 +49,7 @@ const everyGlyph = (rule, what) => { const bad = []; for (const id of ALL) for (
 // ================================================================================================ the sets
 test('the sets load and register without a clash: each js/art/g-*.js exports its table as GLYPHS, no id is drawn twice, an id is a word of letters, digits and hyphens, and every glyph has a drawing', () => {
   assert.deepEqual(loadErrors, [], 'a set that would not load (a clash of ids names the id):\n' + loadErrors.join('\n'));
-  for (const n of ['ui', 'codex', 'deal']) assert.ok(SETS.some((s) => s.name === n), `js/art/g-${n}.js is a set of this part`);
+  for (const n of ['ui', 'codex', 'deal', 'places']) assert.ok(SETS.some((s) => s.name === n), `js/art/g-${n}.js is a set of this part`);
   for (const s of SETS) {
     assert.ok(s.exports.GLYPHS && typeof s.exports.GLYPHS === 'object', `${s.file} exports GLYPHS`);
     assert.deepEqual(s.ids, Object.keys(s.exports.GLYPHS), `${s.file} registers its own table, all of it`);
