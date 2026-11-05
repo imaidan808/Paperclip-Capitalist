@@ -377,7 +377,7 @@ export function buildLayout(zones = ZONES, { water = true } = {}) {
     if (wantsRail(pick.kind, shapeOf(pick.kind, opt), probe.flat, probe.fall)) { opt.rail = true; opt.flat = probe.flat; } // the plateau falls away just beyond it: a rail across the far side
     const sh = shapeOf(pick.kind, opt), to = (u, v) => framePoint(f, u, v), z = (x, y) => zAt(x, y) + 0.4;
     const pieces = sh.pieces.map((q) => ({ role: q.role, pts: q.pts.map(([u, v]) => { const [x, y] = to(u, v); return [x, y, z(x, y)]; }) }));
-    const foot = sh.foot.map((r) => frameRect(f, r.u0, r.u1, r.v0, r.v1)), keep = sh.foot.map((r) => frameRect(f, r.u0 - 0.2, r.u1 + 0.5, r.v0 - 0.5, r.v1 + 0.5));
+    const foot = sh.foot.map((r) => frameRect(f, r.u0, r.u1, r.v0, r.v1)), keep = [...sh.foot.map((r) => frameRect(f, r.u0 - 0.2, r.u1 + 0.5, r.v0 - 0.5, r.v1 + 0.5)), ...sh.props.filter((q) => q.t === 'polesign').map((q) => frameRect(f, q.u - 1, q.u + 1, q.v - 1, q.v + 1))]; // (and a tile each way round every sign: whatever stands in front of or behind a pole looks like part of it, in the isometric view, the footprint's own margin does not say)
     const [tx, ty] = to(sh.turn.u, sh.turn.v);
     const T = { id: port, port, district: D.id, side, theme: D.theme, street, kind: pick.kind, why: pick.why, authored: !!authored, opt, probe, frame: f, pieces, foot: foot.map((r) => ({ ...r })), frameFoot: sh.foot, keep, door: sh.door ? to(sh.door.u, sh.door.v) : null, props: [], bb: boxOf(pieces), turn: sh.turn, specs: sh.props };
     terms.push(T); keeps.push(...keep);
@@ -399,14 +399,17 @@ export function buildLayout(zones = ZONES, { water = true } = {}) {
       for (const [du, dv] of [[0, 0], [0, -2 * sp.v], [-0.7, 0], [-0.7, -2 * sp.v]]) { const [cx, cy] = framePoint(f, sp.u + du, sp.v + dv); if (standsOnWater({ gx: cx - sq / 2, gy: cy - sq / 2, w: sq, d: sq }, isLand)) continue; const p = mkProp(D, sp.t, cx - sq / 2, cy - sq / 2, sq, sq, sp.h, o, false); rebox(p, zAt(cx, cy)); return [p]; }
       return [];
     });
-    keeps.push(...H2.props.map((p) => ({ x: p.gx - 0.4, y: p.gy - 0.4, w: p.w + 0.8, d: p.d + 0.8 })));
+    H2.keep = sh.foot.map((r) => frameRect(f, r.u0, r.u1, r.v0, r.v1)); // (the room of a head: the meadow's plants are kept out of it, as of every end's)
+    keeps.push(...H2.props.map((p) => ({ x: p.gx - 0.4, y: p.gy - 0.4, w: p.w + 0.8, d: p.d + 0.8 })), ...H2.keep);
     heads.push(H2);
   }
   for (const dk of decks) dk.bb = boxOf(dk.pieces);
+  const rooms = [...keeps, ...decks.map((dk) => ({ x: dk.rect[0] - 0.5, y: dk.rect[1] - 0.5, w: dk.rect[2] + 1, d: dk.rect[3] + 1 }))]; // the room of every end, path head and lookout deck, a little over: the meadow's trees, bushes and rocks (groundart.js plantOf) are painted after the ground and stand in none of it
+  const endAt = (gx, gy) => { for (const k of rooms) if (gx >= k.x && gx <= k.x + k.w && gy >= k.y && gy <= k.y + k.d) return true; return false; };
   for (const D of ds) { D.props.sort((a1, b1) => a1.key - b1.key); D.free = D.props.filter((p) => p.own); }
   const props = ids.flatMap((id) => districts[id].props).sort((a, b) => a.key - b.key);
   return {
-    districts, ids, edges, bridges, nodes, land, isLand, lands, ZV, VW, FV, tcol, owner, core, cliffs, props, drowned, maxZ, roadSegs, zAt, roadZ, zoneAt, footAt, route, deck, bounds, terms, turnSpots, heads, decks,
+    districts, ids, edges, bridges, nodes, land, isLand, lands, ZV, VW, FV, tcol, owner, core, cliffs, props, drowned, maxZ, roadSegs, zAt, roadZ, zoneAt, footAt, endAt, route, deck, bounds, terms, turnSpots, heads, decks,
     spots: Object.fromEntries(ids.map((id) => [id, districts[id].spots])),
     plots: Object.fromEntries(ids.map((id) => [id, districts[id].plots])),
     doors: Object.fromEntries(ids.map((id) => [id, districts[id].door])),

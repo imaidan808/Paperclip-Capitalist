@@ -167,6 +167,24 @@ test('RT7: no end is a bare disc: three props or a dock at each, real kinds all,
   // and a run of pickets that crossed the mouth of a street (the scrap yard's, along the foot of the hill, ran across 1.N) is open there
   for (const t of LAYOUT.terms) { const gap = frameRect(t.frame, -0.6, 1.8, -1.5, 1.5); for (const p of LAYOUT.props.filter((q) => q.t === 'fence' && !q.term)) assert.ok(!(p.gx < gap.x + gap.w && p.gx + p.w > gap.x && p.gy < gap.y + gap.d && p.gy + p.d > gap.y), `${t.port}: a run of pickets at ${p.gx.toFixed(1)},${p.gy.toFixed(1)} crosses the street's mouth`); }
   for (const t of LAYOUT.terms) for (const p of LAYOUT.props.filter((q) => q.pad)) for (const k of t.keep) assert.ok(!(p.gx < k.x + k.w && p.gx + p.w > k.x && p.gy < k.y + k.d && p.gy + p.d > k.y), `${t.port}: a ${p.t} of the pad's scatter stands in its room at ${p.gx.toFixed(1)},${p.gy.toFixed(1)}`);
+  // the verifier's D4: a tile each way round every sign is kept clear as well (in the isometric view whatever stands in front of or behind a pole looks like a part of it: the tree behind the AUTO sign of 7.W, the BUS sign of 13.W), the pad's scatter included
+  for (const t of LAYOUT.terms) for (const s of t.props.filter((q) => q.t === 'polesign')) {
+    const cx = s.gx + s.w / 2, cy = s.gy + s.d / 2; assert.ok(t.keep.some((k) => cx - 1 >= k.x - 1e-9 && cx + 1 <= k.x + k.w + 1e-9 && cy - 1 >= k.y - 1e-9 && cy + 1 <= k.y + k.d + 1e-9), `${t.port}: a tile each way round its ${s.text} sign is in the room kept clear`);
+    for (const p of LAYOUT.props.filter((q) => q.pad)) assert.ok(!(p.gx < cx + 1 && p.gx + p.w > cx - 1 && p.gy < cy + 1 && p.gy + p.d > cy - 1), `${t.port}: a ${p.t} of the pad's scatter stands within a tile of its ${s.text} sign`);
+  }
+});
+
+test('RT15: no tree, bush or rock of the meadow stands in the room of an end, in a path head\'s or within a tile of a sign or a lookout\'s deck (they are painted after the ground, over it)', async () => {
+  // the verifier's D4: "a pad-scatter tree grows out of the pole" at 7.W and 13.W. The tree was not the pad's (no prop of the pad stands within 1.4 tiles of any sign): it is a plant of the meadow, hashed by tile and painted by the blocks layer
+  // after the ground of the ends, over it: a pine on the ring of the roundabout at 6.E, bushes on the apron of the bulb at 13.W, the pine behind the AUTO sign (30 plants in the room of 11 ends)
+  const { sceneOf } = await import('../js/world/scene.js'), T = sceneOf([]).terr, free = [], all = [];
+  for (let j = 0; j < Lay.GH; j++) for (let i = 0; i < Lay.GW; i++) { const a = GA.plantOf(T, i, j, false), b = GA.plantOf(T, i, j); if (a) all.push(a); if (b) free.push(b); }
+  const inRoom = (p) => LAYOUT.terms.some((t) => t.keep.some((k) => p.gx >= k.x && p.gx <= k.x + k.w && p.gy >= k.y && p.gy <= k.y + k.d)) || LAYOUT.heads.some((h) => h.keep.some((k) => p.gx >= k.x && p.gx <= k.x + k.w && p.gy >= k.y && p.gy <= k.y + k.d)) || LAYOUT.decks.some((d) => p.gx >= d.rect[0] - 0.4 && p.gx <= d.rect[0] + d.rect[2] + 0.4 && p.gy >= d.rect[1] - 0.4 && p.gy <= d.rect[1] + d.rect[3] + 0.4);
+  const was = all.filter(inRoom); assert.ok(was.length >= 20 && was.some((p) => p.what === 3), `without the rule 30 plants stand in the rooms of the ends (${was.length}, trees among them): the check is not vacuous`);
+  assert.deepEqual(free.filter(inRoom).map((p) => `${['', 'bush', 'rock', 'tree'][p.what]} at ${p.gx.toFixed(1)},${p.gy.toFixed(1)}`), [], 'no plant of the meadow stands in the room of an end, a path head or a lookout');
+  for (const t of LAYOUT.terms) for (const s of t.props.filter((q) => q.t === 'polesign')) { const cx = s.gx + s.w / 2, cy = s.gy + s.d / 2; assert.deepEqual(free.filter((p) => Math.abs(p.gx - cx) < 1.2 && Math.abs(p.gy - cy) < 1.2).length, 0, `${t.port}: no plant within a tile of its ${s.text} sign (before, ${all.filter((p) => Math.abs(p.gx - cx) < 1.2 && Math.abs(p.gy - cy) < 1.2).length})`); }
+  assert.equal(typeof LAYOUT.endAt, 'function'); const t0 = LAYOUT.terms[0], k0 = t0.keep[0]; assert.ok(LAYOUT.endAt(k0.x + k0.w / 2, k0.y + k0.d / 2) && !LAYOUT.endAt(0.5, 0.5), 'LAYOUT.endAt says whether a point is in the room of an end');
+  for (const d of LAYOUT.decks) assert.ok(LAYOUT.endAt(d.x, d.y), `${d.name}: the end of a footpath, on its deck, is in a room`); for (const h of LAYOUT.heads) assert.ok(LAYOUT.endAt(h.frame.x + h.frame.ux * 2.2, h.frame.y + h.frame.uy * 2.2), `${h.name}: a path head's bollards stand in a room`);
 });
 
 // ---------------------------------------------------------------------------------------------------------------- the painted ends

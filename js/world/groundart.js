@@ -84,17 +84,26 @@ function openMeadow(T, i, j, VW, coast, rise) {
   const za = T.z[kv], zb = T.z[kv + 1], zc = T.z[kv + VW], zd = T.z[kv + VW + 1]; return Math.max(za, zb, zc, zd) - Math.min(za, zb, zc, zd) <= rise;
 }
 /**
+ * The plant of the meadow tile (i, j), or null: { gx, gy, what (3 a tree, 1 a bush, 2 a rock), hh (a hash that says how it looks) }. `T` is the terrain field of the scene (sceneOf(...).terr). A plant stands in open meadow (never on a block, a slope or within two and a
+ * half tiles of the coast) and not on a road, in a district's footprint or, since the verifier's D4, in the room of an end of a street (`ends` false: as it was): the plants are painted after the ground of the blocks, so a pine on the ring of a roundabout, on the apron of a
+ * bulb or behind the pole of a sign (it looked like the pole's own tree) stood over the end's asphalt and gravel.
+ */
+export function plantOf(T, i, j, ends = true) {
+  const { land, core } = LAYOUT, k = j * GW + i; if (!land[k] || core[k] || !openMeadow(T, i, j, LAYOUT.VW, -2.6, 4.5)) return null;
+  const grove = smoothstep(0.46, 0.74, vnoise(i * 0.075 + 5, j * 0.075 + 2)), what = dressingOf(i, j, grove); if (!what) return null;
+  const gx = i + 0.2 + hz(i, j, 11) * 0.6, gy = j + 0.2 + hz(i, j, 12) * 0.6; if (LAYOUT.footAt(gx, gy) || isRoad(gx, gy) || (ends && LAYOUT.endAt(gx, gy))) return null;
+  return { gx, gy, what, hh: hz(i, j, 13) };
+}
+/**
  * The meadows' bushes, rocks and trees, painted AFTER the districts' blocks (the `blocks` layer calls this at its end): a tree standing in front of a block is in front of its rim and its shadow, which a tree baked
  * under the block's layer was not (its crown was cut by the cream rim). Back to front, from the mid zoom, in grove and meadow, never on a road, a footprint's scenery or a slope or within two and a half tiles of the coast.
  */
 export function drawPlants(ctx, view, env, w, a) {
   const ch = a && a.chunk, lod = env.lod ? env.lod.detail : null; if (!ch || !lod || lod[1] < 0.03) return;
-  const T = ch.scene.terr, { land, core } = LAYOUT, VW = LAYOUT.VW, [i0, i1, j0, j1] = gridRange(view, 90, 1, [GW, GH]), mid = lod[1];
+  const T = ch.scene.terr, [i0, i1, j0, j1] = gridRange(view, 90, 1, [GW, GH]), mid = lod[1];
   for (let s = i0 + j0; s <= i1 + j1; s++) for (let j = Math.max(j0, s - i1); j <= Math.min(j1, s - i0); j++) {
-    const i = s - j, k = j * GW + i; if (!land[k] || core[k] || !openMeadow(T, i, j, VW, -2.6, 4.5)) continue;
-    const grove = smoothstep(0.46, 0.74, vnoise(i * 0.075 + 5, j * 0.075 + 2)), what = dressingOf(i, j, grove); if (!what) continue;
-    const gx = i + 0.2 + hz(i, j, 11) * 0.6, gy = j + 0.2 + hz(i, j, 12) * 0.6; if (LAYOUT.footAt(gx, gy) || isRoad(gx, gy)) continue;
-    const z = zOn(gx, gy), x = px(gx, gy), y = py(gx, gy, z), hh = hz(i, j, 13);
+    const i = s - j, pl = plantOf(T, i, j); if (!pl) continue;
+    const { gx, gy, what, hh } = pl, z = zOn(gx, gy), x = px(gx, gy), y = py(gx, gy, z);
     ctx.globalAlpha = mid;
     if (what === 3) plantTree(ctx, x, y, z > 26 || hh < 0.22 ? 'pine' : 'round', 0.78 + hh * 0.5, (hh * 997) | 0);
     else if (what === 1) bush(ctx, x, y, 7 + hh * 5, BUSH_GREENS[(hh * 31 | 0) % 4], hh > 0.7 ? BLOOM[['pink', 'butter', 'white', 'lilac'][(hh * 13 | 0) % 4]] : null);
