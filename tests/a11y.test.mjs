@@ -66,7 +66,8 @@ for (const [name, T] of [['standard', base], ['high contrast', high]]) {
 }
 test('the draft stylesheet uses only tokens that exist, in both themes', () => {
   const used = new Set([...draftCss.matchAll(/var\(--([\w-]+)/g)].map((m) => m[1]));
-  for (const t of used) { assert.ok(t in base, `--${t} is not a token of the base theme`); assert.ok(t in high, `--${t} is not a token of the high-contrast theme`); }
+  const marks = new Set([...readFileSync(new URL('../css/styles.css', import.meta.url), 'utf8').matchAll(/^\s*--(gl-[\w-]+): url\(/gm)].map((m) => m[1])); // the drawn marks (--gl-tick ...): data URIs, not colours, written in their own block of styles.css (scripts/glyph-css.mjs)
+  for (const t of used) { if (marks.has(t)) continue; assert.ok(t in base, `--${t} is not a token of the base theme`); assert.ok(t in high, `--${t} is not a token of the high-contrast theme`); }
   assert.ok(used.size >= 10);
 });
 test('the draft keeps a visible focus ring and 24px targets (WCAG 2.4.7, 2.5.8)', () => {

@@ -107,7 +107,7 @@ test('quests-spend raises the skill through the engine, plays the level sound an
 test('the dock badge shows the skill points waiting and nothing otherwise', () => {
   const ctx = mk(); assert.equal(quests.badge(ctx), null);
   ctx.g().s.points = 4; assert.equal(quests.badge(ctx), 4);
-  assert.equal(quests.id, 'quests'); assert.equal(quests.icon, '🎯'); assert.equal(quests.label, 'Quests'); assert.equal(quests.visible(ctx), true);
+  assert.equal(quests.id, 'quests'); assert.ok(!('icon' in quests), 'its picture is the glyph dock-quests'); assert.equal(quests.label, 'Quests'); assert.equal(quests.visible(ctx), true);
 });
 
 test('quests: the active quest first with a progress bar and its reward, locked ones in a fold, greyed and saying what unlocks them', () => {
@@ -192,20 +192,25 @@ test('daily bounties: three a day with bars, from the first morning on', () => {
   assert.match(t, /0 of 3 today/);
   // finish one
   const d = pr.dailies()[0]; d.p = d.goal.count; d.done = true;
-  h = quests.html(ctx); assert.match(text(h), /1 of 3 today/); assert.match(text(h), /Done/); assert.match(h, /class="qs-day done"/);
+  h = quests.html(ctx); assert.match(text(h), /1 of 3 today/); assert.match(text(h), /Done/); assert.match(h, /class="qs-day done has-gl"/);
+  assert.match(h, /<article class="qs-day done has-gl">\s*<span class="gl-tile"><svg class="gl"[^>]*aria-hidden="true">/, 'a bounty done shows the tick on its tile');
+  assert.equal((h.match(/<article class="qs-day has-gl">\s*<span class="gl-tile"><svg class="gl gl-c"/g) || []).length, 2, 'and the two still to do the drawing of what they ask for');
   assert.deepEqual(checkHTML(h), []);
 });
 
-test('badges: rarity is a word and a colour, secrets say so in words, progress shows, earned ones are marked, and none has a picture', () => {
+test('badges: rarity is a word, a drawn mark and a colour, secrets say so in words and in their own drawing, progress shows, earned ones are marked, and each family has its drawing', () => {
   const ctx = mk(), pr = ctx.progress, a = quests.acts(ctx);
   a['quests-ach-all']();
   let h = quests.html(ctx), t = text(h);
   assert.equal((h.match(/class="qs-ach /g) || []).length, 78, 'all badges once they are all shown');
   for (const word of ['Common', 'Rare', 'Epic']) assert.ok(t.includes(word) && h.includes(`qs-rarity ${word.toLowerCase()}`), word);
-  assert.ok(!/[●◆★✓]/.test(t) && !/qs-ic/.test(h), 'no shape before a rarity, no picture on a badge');
+  for (const r of ['common', 'rare', 'epic']) assert.match(h, new RegExp(`<span class="qs-rarity ${r}"><svg class="gl gl-xs"[^>]*aria-hidden="true">`), `${r}: a drawn mark before the word, in the word's colour`);
+  assert.ok(!/[●◆★✓]/.test(t) && !/qs-ic/.test(h), 'no text shape before a rarity (a drawing is an svg), no emoji tile on a badge');
+  assert.equal((h.match(/class="qs-ach [^"]*has-gl">\s*<span class="gl-tile"><svg/g) || []).length, 78, 'every badge has its family\'s drawing in its tile');
+  assert.equal((h.match(/class="qs-ach \w+ secret has-gl">\s*<span class="gl-tile"><svg class="gl gl-c"[^>]*><path d="M20\.8 12C20\.8 16\.86/g) || []).length, ACHIEVEMENTS.filter((x) => x.hidden).length, 'and a secret one the secret\'s: a keyhole, no word of what it is');
   const secrets = ACHIEVEMENTS.filter((x) => x.hidden);
   assert.ok(secrets.length >= 5);
-  assert.equal((h.match(/class="qs-ach \w+ secret"/g) || []).length, secrets.length);
+  assert.equal((h.match(/class="qs-ach \w+ secret[ "]/g) || []).length, secrets.length);
   for (const x of secrets) { assert.ok(!t.includes(x.title), `secret "${x.title}" leaked`); assert.ok(!t.includes(x.desc), `secret text of "${x.title}" leaked`); }
   assert.match(t, /Secret badge/); assert.match(t, /· secret/); assert.match(t, /Revealed when earned/);
   // epic badges promise a skill point
@@ -218,7 +223,7 @@ test('badges: rarity is a word and a colour, secrets say so in words, progress s
   assert.ok(t.includes(sec.title), 'an earned secret shows itself'); assert.match(t, /Earned/); assert.ok(!t.includes('✓'), 'and says it in a word, not a mark');
   assert.match(t, new RegExp(`${plain.goal.count > 9 ? `1 / ${plain.goal.count}` : `1 / ${plain.goal.count}`}`), 'progress on an unfinished badge');
   assert.match(t, /1 of 78 earned/);
-  assert.equal((h.match(/class="qs-ach \w+ earned"/g) || []).length, 1);
+  assert.equal((h.match(/class="qs-ach \w+ earned[ "]/g) || []).length, 1);
   assert.deepEqual(checkHTML(h), []);
 });
 
@@ -228,15 +233,15 @@ test('badge filters and the long list: what is still to earn opens first, only s
   let h = quests.html(ctx);
   assert.equal((h.match(/class="qs-ach /g) || []).length, 6);
   assert.match(text(h), /Show all 77 badges/); assert.match(h, /data-k="todo"[^>]*aria-pressed="true"/);
-  assert.ok(!h.includes(rare.title) && !/class="qs-ach \w+ earned"/.test(h), 'an earned badge is not in front of the ones to earn');
+  assert.ok(!h.includes(rare.title) && !/class="qs-ach \w+ earned[ "]/.test(h), 'an earned badge is not in front of the ones to earn');
   assert.ok(h.indexOf('data-k="todo"') < h.indexOf('data-k="earned"') && h.indexOf('data-k="earned"') < h.indexOf('data-k="all"'), 'To earn, Earned, All');
   a['quests-ach'](el({ k: 'earned' }));
   h = quests.html(ctx); assert.equal((h.match(/class="qs-ach /g) || []).length, 1); assert.ok(h.includes(rare.title)); assert.match(h, /data-k="earned"[^>]*aria-pressed="true"/); assert.doesNotMatch(text(h), /Show all/);
   a['quests-ach'](el({ k: 'all' }));
   h = quests.html(ctx); assert.equal((h.match(/class="qs-ach /g) || []).length, 6);
-  assert.ok(h.indexOf(rare.title) > -1 && h.indexOf(rare.title) < h.search(/class="qs-ach \w+ todo"/), 'in the full list earned badges come first');
+  assert.ok(h.indexOf(rare.title) > -1 && h.indexOf(rare.title) < h.search(/class="qs-ach \w+ todo[ "]/), 'in the full list earned badges come first');
   a['quests-ach'](el({ k: 'todo' }));
-  h = quests.html(ctx); assert.ok(!(h.match(/class="qs-ach \w+ earned"/g) || []).length);
+  h = quests.html(ctx); assert.ok(!(h.match(/class="qs-ach \w+ earned[ "]/g) || []).length);
   a['quests-ach-all'](); h = quests.html(ctx); assert.equal((h.match(/class="qs-ach /g) || []).length, 77); assert.match(text(h), /Show fewer badges/);
   a['quests-ach'](el({ k: 'nonsense' })); assert.equal(ctx.U.quests.ach, 'todo');
   // nothing earned yet: the empty state is one line

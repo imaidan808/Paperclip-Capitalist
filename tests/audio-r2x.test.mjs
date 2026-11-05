@@ -390,7 +390,8 @@ test('U10: the Deal Room\'s switches are named by the words on them; their state
     assert.match(b, /class="tb" aria-hidden="true">(on|off)</, 'the state is in a badge');
   }
   assert.match(src('css/ui-deal.css'), /\.deal-tog\[aria-pressed="true"\] \{ border-color: var\(--gold\); box-shadow: inset 0 0 0 1px var\(--gold\); \}/);
-  assert.match(src('css/ui-deal.css'), /\.deal-tog\[aria-pressed="true"\] \.tb::before \{ content: "\\2713/, 'a tick on the pressed one');
+  assert.match(src('css/ui-deal.css'), /\.deal-tog\[aria-pressed="true"\] \.tb::before \{ --gl: var\(--gl-tick\); \}/, 'a tick on the pressed one (a drawn mask: css/ui-deal.css, --gl-tick in styles.css)');
+  assert.match(src('css/ui-deal.css'), /\.deal-tog\[aria-pressed="true"\] \.tb::before \{ content: ""; display: inline-block;|\.deal-tog\[aria-pressed="true"\] \.tb::before \{ content: ""/, 'and the mask has its box');
 });
 test('U6: the dashboard\'s Sound in the student link comes before Copy student link, the copy says what it carries, and the link is the room\'s rule applied early (it is put back when the student leaves)', () => {
   const S = roomSession(), off = instructorParts(S, {}).head, on = instructorParts(S, { linkSound: 'quiet' }).head;

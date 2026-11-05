@@ -14,9 +14,9 @@ Updated 2026-11-04. The tasks that have no code yet, in the order I would take t
 
 ### 1. Icons parts 2 to 4
 
-The author's complaint of 2026-11-04: "The emojis are a big complaint throughout my recent image submissions." Part 1 takes the guard's count from 535 to 148; these draw what is left. Each part lowers the ratchet in `tests/guard-emoji.test.mjs`, and the last makes it strict (zero).
+The author's complaint of 2026-11-04: "The emojis are a big complaint throughout my recent image submissions." Part 1 took the guard's count from 535 to 148 and part 2 from 148 to 102; parts 3 and 4 draw what is left. Each part lowers the ratchet in `tests/guard-emoji.test.mjs`, and the last makes it strict (zero).
 
-- **Part 2, the glyph kit, the dock and the marks that are the only cue (46).** The dock and seven drawer tabs; the tick, caret, play, pause, menu, close and camera marks; the Deal Room's verdict marks; the lock and manager-status marks. First the 24 draft glyphs are redone for the bare tile the author chose (every part must read on the dark tile and in high-contrast mode), and a contact sheet goes to the author before anything is wired.
+- **Part 2, the glyph kit, the dock and the marks that are the only cue (46), done.** The kit (`js/art/`, docs/ART_DIRECTION.md 3.6), the dock and seven drawer tabs, the controls and marks (tick, cross, caret, play, pause, menu, help, camera, lock, dot, warning, audit, the Deal Room's verdicts) in JS, CSS masks and the world's canvas, and the pictures part 1 took away, back as a drawing for each family: the Codex's seven categories, the twelve badge families and the secret, the daily bounties, the three rarities, the Deal Room's probes and angles, the three managers, three clients and four loans. Quests wait for the districts' drawings (part 3): a quest card has no picture yet.
 - **Part 3, the 16 districts and the 12 Backgrounds (28).**
 - **Part 4, the 72 goods and the gavel on an auction tag (74).** The catalog's new goods (item 6) need drawings too.
 

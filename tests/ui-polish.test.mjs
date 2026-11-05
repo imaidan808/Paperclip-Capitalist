@@ -89,7 +89,8 @@ const contentOf = (css, selector) => { const i = css.indexOf(selector + ' {'); a
 
 test('the best marker prints "best" and nothing a hex escape swallowed', () => {
   const css = read('css/ui-deal.css');
-  assert.equal(contentOf(css, '.vs.best dd::after'), '\u00a0\u2713\u00a0best', 'a hex escape takes up to six digits: the letters after it must be kept apart');
+  assert.equal(contentOf(css, '.vs.best dd::after'), ' best', 'the word is text a screen reader reads; the tick before the figure is a drawn mask (--gl-tick), not a character');
+  assert.match(css, /\.vs\.best dd::before \{ --gl: var\(--gl-tick\); color: var\(--green\); \}/, 'the best row\'s tick is the drawn mark');
   // no generated string in the sheet holds a character from the far planes of Unicode (what a swallowed letter turns into)
   for (const [, raw] of css.matchAll(/content:\s*"([^"]*)"/g)) for (const ch of unescapeCss(raw)) assert.ok(ch.codePointAt(0) < 0x3000, `content "${raw}" holds U+${ch.codePointAt(0).toString(16)}`);
 });
