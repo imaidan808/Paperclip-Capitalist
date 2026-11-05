@@ -122,8 +122,8 @@ html.ac-strip .worldhost { --cam-top: min(max(calc(50% - var(--cam-h) / 2), calc
 .ac-rw { list-style: none; padding: 0; margin: .3rem 0; display: flex; gap: .6rem; flex-wrap: wrap; font-size: 1.1rem; }
 .ac-rw .chip { padding: .3rem .9rem; border-width: 2px; background: var(--good-bg); font: 700 1.1rem ui-monospace, Menlo, monospace; animation: ac-rise .4s .15s cubic-bezier(.2, 1.4, .4, 1) both; } .ac-rw .chip + .chip { animation-delay: .3s; }
 .ac-cx { list-style: none; padding: 0; margin: .3rem 0; display: grid; gap: .5rem; }
-.ac-cxcard { border-left: 4px solid var(--cyan); display: grid; grid-template-columns: 2.4rem 1fr; gap: .6rem; align-items: start; padding: .5rem .7rem; background: var(--panel2); border: 1px solid var(--line); }
-.ac-cxi { font-size: 1.6rem; text-align: center; line-height: 1.2; } .ac-cxcard p { margin: .1rem 0 0; }
+.ac-cxcard { border-left: 4px solid var(--cyan); padding: .5rem .7rem; background: var(--panel2); border: 1px solid var(--line); }
+.ac-cxcard p { margin: .1rem 0 0; }
 
 /* played first, read after: the tick on a finished step, the result's idea, the small rewards */
 .ac-pip.fresh { animation: ac-pop .6s cubic-bezier(.2, 1.5, .4, 1) both; }

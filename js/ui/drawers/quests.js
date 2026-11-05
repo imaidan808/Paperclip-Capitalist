@@ -18,7 +18,7 @@ const plural = (n, one, many = one + 's') => `${n} ${n === 1 ? one : many}`;
 const lvlBase = xpForLevel; // the engine's level curve (config.js)
 const fmtN = (x) => (Number.isInteger(x) ? String(x) : x.toFixed(x < 10 ? 1 : 0));
 const fmtX = (x) => (x >= 10 ? String(Math.round(x)) : String(Math.round(x * 10) / 10));
-const RARITY = { common: ['●', 'Common'], rare: ['◆', 'Rare'], epic: ['★', 'Epic'] };
+const RARITY = { common: 'Common', rare: 'Rare', epic: 'Epic' };
 const ACH_SHOWN = 6;
 
 const Q = (ctx) => ctx.U.quests || {};
@@ -79,7 +79,7 @@ function skillCard(ctx, k) {
   const can = canRaise(s, k);
   const label = maxed ? 'Mastered' : s.points >= 1 ? `Spend a point: level ${base} → ${base + 1}` : `Level ${base} → ${base + 1} needs a skill point`;
   return `<article class="qs-skill${can ? ' ready' : ''}" data-skill="${k}">
-    <header><h4>${esc(K.name)}</h4>${s.specialty === k ? '<span class="chip warn">★ Specialty</span>' : ''}</header>
+    <header><h4>${esc(K.name)}</h4>${s.specialty === k ? '<span class="chip warn">Specialty</span>' : ''}</header>
     <div class="qs-pips" role="img" aria-label="Level ${base} of ${SKILL_MAX}${bonus ? `, ${bonus > 0 ? 'plus' : 'minus'} ${Math.abs(bonus)} from your Backgrounds, effective level ${eff}` : ''}">${pips}</div>
     <p class="small qs-lv">Level <b>${base}</b>${bonus ? ` ${bonus > 0 ? '+' : '-'} <b>${Math.abs(bonus)}</b> from ${esc(from.map(([n]) => n).join(' and ') || 'your Backgrounds')} = effective level <b>${eff}</b>` : ''}</p>
     <ul class="qs-fx" aria-label="What this skill does at your level">${rows}</ul>
@@ -105,8 +105,8 @@ function heroHTML(ctx) {
         <p class="small"><b>${into}</b> / ${need} XP. <b>${Math.max(0, need - into)}</b> to level ${lv + 1}.</p>
         ${xm !== 1 ? `<p class="tiny mute">All XP ${xm > 1 ? '+' : '-'}${pctN(Math.abs(xm - 1))}% from your Backgrounds.</p>` : ''}</div></div>
     <div class="qs-stats">
-      <div class="qs-stat pts${s.points ? ' on' : ''}"><span aria-hidden="true">🎓</span><div><b>${s.points}</b> skill point${s.points === 1 ? '' : 's'} to spend<small>${s.points ? '' : g.pointRoom() > 0 ? 'Every level gives one.' : `Every skill is mastered: a level pays ${ECON.pointXp} XP.`}</small></div></div>
-      <div class="qs-stat"><span aria-hidden="true">🔥</span><div>Win streak <b>${s.streak}</b> <span class="mute">(best ${s.bestStreak})</span><small>${streakLine}</small></div></div>
+      <div class="qs-stat pts${s.points ? ' on' : ''}"><div><b>${s.points}</b> skill point${s.points === 1 ? '' : 's'} to spend<small>${s.points ? '' : g.pointRoom() > 0 ? 'Every level gives one.' : `Every skill is mastered: a level pays ${ECON.pointXp} XP.`}</small></div></div>
+      <div class="qs-stat"><div>Win streak <b>${s.streak}</b> <span class="mute">(best ${s.bestStreak})</span><small>${streakLine}</small></div></div>
     </div>
     <div class="qs-rep"><div class="qs-reprow"><span>Reputation: <b>${word}</b></span><span class="mono">${rep} / 100</span></div>
       <div class="qs-meter" role="meter" aria-label="Reputation" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${rep}" aria-valuetext="${rep} of 100, ${word}"><i style="width:${rep}%"></i></div>
@@ -120,14 +120,14 @@ function questCard(ctx, v, kind, full = true) {
   const where = `${Z?.icon || ''} ${esc(Z?.name || '')}`;
   if (kind === 'active') {
     const here = ctx.U.zone === d.zone, shut = !open && Z ? `Open ${Z.name} first: it needs ${money(Z.gate)} net worth (${money(Math.max(0, Z.gate - ctx.g().netWorth()))} to go).` : '';
-    return `<article class="qs-q active"><header><span class="qs-ic" aria-hidden="true">${esc(d.icon)}</span><div><h4>${esc(d.title)}</h4><small>${where}</small></div></header>
+    return `<article class="qs-q active"><header><div><h4>${esc(d.title)}</h4><small>${where}</small></div></header>
       <p class="small">${esc(d.desc)}</p>${shut ? `<p class="tiny qs-need">${esc(shut)}</p>` : ''}
       <div class="qs-prog">${bar(`${d.title} progress`, v.p, v.n)}<b class="mono">${progText(d.goal, v.p)}</b></div>
       <div class="qs-rw"><span class="mute">Reward</span> ${rewardChips(ctx, d.reward)}${here || !open ? '' : `<button class="btn sm ghost" data-act="quests-go" data-dist="${d.zone}" data-fid="qs-go-${d.id}">Go to ${esc(Z?.short || 'district')}</button>`}</div></article>`;
   }
   const need = d.after && QUEST_BY_ID[d.after] ? `Unlocks after “${QUEST_BY_ID[d.after].title}”.` : '';
   const gate = !open && Z ? `Open ${Z.name} first: it needs ${money(Z.gate)} net worth.` : '';
-  return `<article class="qs-q locked"><header><span class="qs-ic" aria-hidden="true">🔒</span><div><h4>${esc(d.title)}</h4><small>${where}</small></div></header>
+  return `<article class="qs-q locked"><header><div><h4>${esc(d.title)}</h4><small>${where}</small></div></header>
     ${full ? `<p class="small">${esc(d.desc)}</p>` : ''}<p class="tiny qs-need">${esc([need, gate].filter(Boolean).join(' '))}</p>
     <div class="qs-rw"><span class="mute">Reward</span> ${rewardChips(ctx, d.reward)}</div></article>`;
 }
@@ -146,14 +146,14 @@ function questsHTML(ctx) {
     : (all.length === done.length ? '<div class="callout good"><b>Every quest is done.</b></div>' : '<div class="callout">No quest is waiting on you right now. The next one unlocks with the next district.</div>');
   const laterHTML = later.length ? `<div class="qs-grp">${fold(ctx, 'quests', 'later', `Coming up (${later.length})`, byDist(later).map(([z, l]) => `<div class="qs-dgrp">${distHead(z)}${l.map((v) => questCard(ctx, v, 'locked', preview.has(v.def.id))).join('')}</div>`).join(''))}</div>` : '';
   const doneHTML = done.length ? `<div class="qs-grp"><button class="btn sm ghost qs-fold" data-act="quests-done" data-fid="qs-fold" aria-expanded="${doneOpen}">${doneOpen ? 'Hide' : 'Show'} completed quests (${done.length})</button>
-    ${doneOpen ? byDist(done).map(([z, l]) => `<div class="qs-dgrp">${distHead(z, `${l.length} done`)}<ul class="qs-donel">${l.map((v) => `<li><span aria-hidden="true">✓</span> <span class="sr">Done: </span>${esc(v.def.title)} <small>+${xpOf(ctx, v.def.reward.xp)} XP${v.def.reward.points ? ` and ${plural(v.def.reward.points, 'point')}` : ''}</small></li>`).join('')}</ul></div>`).join('') : ''}</div>` : '';
+    ${doneOpen ? byDist(done).map(([z, l]) => `<div class="qs-dgrp">${distHead(z, `${l.length} done`)}<ul class="qs-donel">${l.map((v) => `<li><span class="sr">Done: </span>${esc(v.def.title)} <small>+${xpOf(ctx, v.def.reward.xp)} XP${v.def.reward.points ? ` and ${plural(v.def.reward.points, 'point')}` : ''}</small></li>`).join('')}</ul></div>`).join('') : ''}</div>` : '';
   return `<section class="sect" data-qsect="quests"><h3 tabindex="-1"><span>Quests</span><span>${done.length} of ${all.length} done</span></h3>${nowHTML}${laterHTML}${doneHTML}</section>`;
 }
 
 // ------------------------------------------------------------------ daily bounties
 function dailiesHTML(ctx) {
   const list = ctx.progress.dailies() || [], n = list.filter((d) => d.done).length;
-  const body = list.length ? `<div class="qs-days">${list.map((d) => `<article class="qs-day${d.done ? ' done' : ''}"><span class="qs-ic" aria-hidden="true">${d.done ? '✓' : esc(d.icon)}</span>
+  const body = list.length ? `<div class="qs-days">${list.map((d) => `<article class="qs-day${d.done ? ' done' : ''}">
       <div><h4>${esc(d.title)}${d.done ? ' <span class="chip good">Done</span>' : ''}</h4><p class="small">${esc(d.desc)}</p>
       <div class="qs-prog">${bar(`${d.title} progress`, d.done ? d.goal.count : d.p, d.goal.count, d.done ? 'green' : 'gold')}<b class="mono">${progText(d.goal, d.done ? d.goal.count : d.p)}</b></div>
       <div class="qs-rw"><span class="mute">Reward</span> ${rewardChips(ctx, d.reward)}</div></div></article>`).join('')}</div>`
@@ -165,19 +165,19 @@ function dailiesHTML(ctx) {
 function achievementsHTML(ctx) {
   const all = ctx.progress.achievements(), q = Q(ctx), filt = q.ach === 'earned' || q.ach === 'all' ? q.ach : 'todo'; // the badges still to earn open first: the earned ones are a tap away
   const earned = all.filter((a) => a.done).length;
-  const rar = (r) => { const l = all.filter((a) => a.def.rarity === r); return `<span class="qs-rarity ${r}"><span aria-hidden="true">${RARITY[r][0]}</span> ${RARITY[r][1]} ${l.filter((a) => a.done).length}/${l.length}</span>`; };
+  const rar = (r) => { const l = all.filter((a) => a.def.rarity === r); return `<span class="qs-rarity ${r}">${RARITY[r]} ${l.filter((a) => a.done).length}/${l.length}</span>`; };
   const ratio = (a) => (a.n ? a.p / a.n : 0);
   let list = all.filter((a) => (filt === 'earned' ? a.done : filt === 'todo' ? !a.done : true));
   list = [...list].sort((a, b) => (b.done - a.done) || (a.hidden - b.hidden) || (ratio(b) - ratio(a))); // in the full list earned come first, then the nearest to done, secrets last
   const shown = q.achAll ? list : list.slice(0, ACH_SHOWN);
   const chip = (k, label) => `<button class="btn sm ${filt === k ? '' : 'ghost'}" data-act="quests-ach" data-k="${k}" data-fid="qs-af-${k}" aria-pressed="${filt === k}">${label}</button>`;
   const tile = (a) => {
-    const d = a.def, [shape, word] = RARITY[d.rarity] || RARITY.common;
+    const d = a.def, word = RARITY[d.rarity] || RARITY.common;
     const cls = a.done ? 'earned' : a.hidden ? 'secret' : 'todo';
     const body = a.hidden ? '<p class="tiny mute">Revealed when earned.</p>'
-      : `<p class="tiny">${esc(d.desc)}</p>${a.done ? '<p class="tiny qs-got"><b>✓ Earned</b></p>' : `<div class="qs-prog">${bar(`${d.title} progress`, a.p, a.n, 'gold')}<b class="mono tiny">${progText(d.goal, a.p)}</b></div>`}`;
-    return `<li class="qs-ach ${d.rarity} ${cls}"><span class="qs-ic" aria-hidden="true">${a.hidden ? '?' : esc(d.icon)}</span>
-      <div><h4>${a.hidden ? 'Secret badge' : esc(d.title)}</h4><span class="qs-rarity ${d.rarity}"><span aria-hidden="true">${shape}</span> ${word}${a.hidden ? ' · secret' : ''}</span>${body}
+      : `<p class="tiny">${esc(d.desc)}</p>${a.done ? '<p class="tiny qs-got"><b>Earned</b></p>' : `<div class="qs-prog">${bar(`${d.title} progress`, a.p, a.n, 'gold')}<b class="mono tiny">${progText(d.goal, a.p)}</b></div>`}`;
+    return `<li class="qs-ach ${d.rarity} ${cls}">
+      <div><h4>${a.hidden ? 'Secret badge' : esc(d.title)}</h4><span class="qs-rarity ${d.rarity}">${word}${a.hidden ? ' · secret' : ''}</span>${body}
       ${a.done ? '' : `<div class="qs-rw">${rewardChips(ctx, d.reward)}</div>`}</div></li>`;
   };
   const more = list.length > ACH_SHOWN ? `<button class="btn sm ghost" data-act="quests-ach-all" data-fid="qs-ach-all" aria-expanded="${!!q.achAll}">${q.achAll ? 'Show fewer badges' : `Show all ${list.length} badges`}</button>` : '';

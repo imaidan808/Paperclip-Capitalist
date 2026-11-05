@@ -29,7 +29,7 @@ export const BUDGET = {
 };
 
 /** Folders and modules that belong to a later screen. None may be in the static graph. */
-const LATER = [/^js\/world\//, /^js\/ui\/(shell|academy|academy-sandbox|instructor|debrief|worldview|deal|hud|polish)\.js$/, /^js\/ui\/drawers\//, /^js\/play\//, /^js\/deal\.js$/, /^js\/meta\/(academy|quests|progress|codex)\.js$/];
+const LATER = [/^js\/world\//, /^js\/ui\/(shell|academy|academy-sandbox|instructor|debrief|worldview|deal|hud|polish)\.js$/, /^js\/ui\/drawers\//, /^js\/play\//, /^js\/deal\.js$/, /^js\/avatar\.js$/, /^js\/meta\/(academy|quests|progress|codex)\.js$/];
 
 test('B1: the static graph of js/main.js holds nothing that only a later screen needs', () => {
   const g = walk(), early = g.static.filter((m) => LATER.some((re) => re.test(m)));

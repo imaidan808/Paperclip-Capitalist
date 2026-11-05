@@ -9,6 +9,10 @@ import { ZONES } from '../js/data/index.js';
 import { Game } from '../js/engine.js';
 import { DIST } from '../js/world/layout.js';
 import { FLAGS, setFlag, setFlags } from '../js/world/stack.js';
+import { overlayMethods } from '../js/world/overlay.js';
+import { money } from '../js/world/common.js';
+import { BUYERS } from '../js/config.js';
+import { AVATAR_TONE, initialOf } from '../js/avatar.js';
 // These tests pin the LEGACY ground and sea (the full-window ground cache, the sea's one strip): they run with every layer flagged legacy (?layers=all:legacy), a picture that is still supported.
 // The V2 ground (chunks, the sea in world space) is pinned by tests/world-chunks.test.mjs and tests/world-water.test.mjs.
 const withLegacy = async (fn) => { const was = { ...FLAGS }; setFlags('all:legacy'); try { await fn(); } finally { for (const [k, v] of Object.entries(was)) setFlag(k, v); } };
@@ -127,10 +131,30 @@ test('labels are sprites at the device pixel density, cached by their content, a
   assert.notStrictEqual(L.chip('Opens at $600k', '#ffd36e', 1), a); L.setDpr(1); assert.notStrictEqual(L.chip('Opens at $500k', '#ffd36e', 1), a, 'a change of density draws them again');
   assert.equal(qs(1.0625), 1.125); assert.equal(qs(0.93), 0.875); assert.equal(qs(1.0001), 1, 'a zoom is rounded to eighths so sprites are not made afresh at every frame of a zoom');
   assert.notEqual(readable('#0a0f14'), '#0a0f14', 'a near-black district colour is lifted'); assert.equal(readable('#ffd36e'), '#ffd36e', 'a light one is left alone'); assert.equal(readable('rgba(1,2,3,.5)'), 'rgba(1,2,3,.5)');
-  const tag = L.tag('📦', '$12', '#46e38e', false, 1), bub = L.bubble('🎓', '$40', true, false, 1);
-  assert.ok(tag.w > 40 && tag.h > 20, 'a tag has the size of its text'); assert.equal(bub.ay, 22, 'a bubble is anchored where its tail begins, on its lower edge'); assert.ok(bub.ax > 10 && bub.ax < bub.w / 2 + 1);
+  const tag = L.tag('📦', '$12', '#46e38e', false, 1), bub = L.bubble('W', '#d9785f', '$40', true, false, 1), bub2 = L.bubble('W', '#78bd93', '$40', true, false, 1);
+  assert.ok(tag.w > 40 && tag.h > 20, 'a tag has the size of its text'); assert.equal(bub.ay, 22, 'a bubble is anchored where its tail begins, on its lower edge'); assert.ok(bub.ax > 10 && bub.ax < bub.w / 2 + 1); assert.notStrictEqual(bub2, bub, 'a buyer of another style is another bubble: the disc is part of the sprite'); assert.strictEqual(L.bubble('W', '#d9785f', '$40', true, false, 1), bub, 'and the same buyer is the same sprite');
   delete globalThis.OffscreenCanvas;
   const L2 = new Labels(); L2.setDpr(1); assert.equal(L2.chip('x', '#fff', 1), null, 'without OffscreenCanvas a label is not a sprite: the world draws it directly');
+});
+
+test('a buyer\'s bubble holds the buyer\'s disc, the initial in ink on the style\'s tone, drawn as a sprite and drawn directly, and no emoji', () => {
+  // a recording canvas: every call is kept with the fill colour it was made under
+  const ops = [], rec = () => new Proxy({ measureText: (s) => ({ width: String(s).length * 6 }), fillStyle: '' }, {
+    get(o, k) { if (k in o) return o[k]; if (typeof k === 'symbol') return undefined; return (...a) => { ops.push([k, o.fillStyle, ...a]); }; }, set(o, k, v) { o[k] = v; return true; },
+  });
+  for (const [id, B] of Object.entries(BUYERS).filter(([, b], i) => i % 17 === 0)) {
+    const tone = AVATAR_TONE[B.style], ch = initialOf(B.name);
+    ops.length = 0; const g = rec(), w = { labels: { bubble: () => null }, reduced: () => true, vt: 0 };
+    overlayMethods.leadBubble.call(w, g, 100, 100, 1, B, { budget: 12.5, need: 'tool', born: 0 }, false);
+    const disc = ops.findIndex((o, i) => o[0] === 'arc' && ops[i + 1]?.[0] === 'fill' && ops[i + 1][1] === tone), letter = ops.findIndex((o) => o[0] === 'fillText' && o[2] === ch);
+    assert.ok(disc >= 0, `${id}: the direct drawing fills a disc in the ${B.style} tone`); assert.ok(letter > disc, `${id}: and writes ${ch} on it, after it`);
+    assert.ok(ops.filter((o) => o[0] === 'fillText').every((o) => !/\p{Extended_Pictographic}/u.test(String(o[2]))), `${id}: no emoji in the bubble`);
+    assert.ok(ops.some((o) => o[0] === 'fillText' && o[2] === money(12.5)), `${id}: the budget is still there`);
+  }
+  const log = stubDom(); installOffscreen(log); const L = new Labels(); L.setDpr(1);
+  const sprite = L.bubble('A', AVATAR_TONE.hard, '$9', false, false, 1), other = L.bubble('A', AVATAR_TONE.friendly, '$9', false, false, 1);
+  assert.ok(sprite && other && sprite !== other, 'a sprite per tone: the disc is in the picture');
+  delete globalThis.OffscreenCanvas;
 });
 
 test('price tags that pile up are nudged apart, nearest label first, and name tags stand clear of them', async () => {

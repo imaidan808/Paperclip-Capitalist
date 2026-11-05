@@ -31,7 +31,6 @@
 .bk-sec { display: grid; gap: .6rem; min-width: 0; }
 .bk-h3 { margin: 0; padding-bottom: .25rem; border-bottom: 1px dashed var(--line); text-transform: uppercase !important; letter-spacing: .06em; font-size: .78rem; color: var(--mute); }
 .bk-grid { display: grid; gap: .6rem; }
-.bk-ic { font-size: 1.5rem; line-height: 1; }
 .bk-prod, .bk-loan, .bk-exit { display: grid; gap: .5rem; background: var(--panel2); border: 1px solid var(--line); padding: .65rem .75rem; min-width: 0; }
 .bk-prod.off { border-style: dashed; }
 .bk-ph { display: flex; gap: .6rem; align-items: flex-start; }

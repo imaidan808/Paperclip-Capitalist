@@ -82,7 +82,7 @@ export class Progress {
     for (let i = 0; i < 3 && pool.length; i++) {
       const k = Math.floor(unit(seed + ':d' + day + ':' + i) * pool.length);
       const t = pool.splice(k, 1)[0];
-      list.push({ id: t.id, title: t.title, desc: t.desc, icon: t.icon, goal: t.goal, reward: t.reward, p: 0, done: false });
+      list.push({ id: t.id, title: t.title, desc: t.desc, goal: t.goal, reward: t.reward, p: 0, done: false });
     }
     m.d = { day, list };
   }

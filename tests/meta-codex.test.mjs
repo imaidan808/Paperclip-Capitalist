@@ -20,14 +20,14 @@ const OPS = ['gte', 'lte', 'gt', 'lt', 'eq', 'in'];
 const byId = new Map(CODEX.map((e) => [e.id, e]));
 const isStr = (x) => typeof x === 'string' && x.trim().length > 0;
 
-/** Every string in an entry except the icon, with a path for messages. */
+/** Every string in an entry, with a path for messages. */
 function* strings(entry) {
   const walk = function* (v, path) {
     if (typeof v === 'string') yield [path, v];
     else if (Array.isArray(v)) for (let i = 0; i < v.length; i++) yield* walk(v[i], `${path}[${i}]`);
     else if (v && typeof v === 'object') for (const [k, x] of Object.entries(v)) yield* walk(x, `${path}.${k}`);
   };
-  for (const [k, v] of Object.entries(entry)) if (k !== 'icon') yield* walk(v, `${entry.id}.${k}`);
+  for (const [k, v] of Object.entries(entry)) yield* walk(v, `${entry.id}.${k}`);
 }
 const firstSentence = (s) => s.split(/(?<=[.!?])\s/)[0].trim().toLowerCase();
 
@@ -45,7 +45,7 @@ test('every required id is defined exactly once, and extras are few and kebab-ca
 test('field types, counts and length limits', () => {
   for (const e of CODEX) {
     const w = e.id;
-    const allowed = ['id', 'title', 'icon', 'category', 'zone', 'summary', 'body', 'formula', 'example', 'mistakes', 'tryIt', 'related', 'unlock'];
+    const allowed = ['id', 'title', 'category', 'zone', 'summary', 'body', 'formula', 'example', 'mistakes', 'tryIt', 'related', 'unlock'];
     for (const k of Object.keys(e)) assert.ok(allowed.includes(k), `${w}: unexpected field ${k}`);
     assert.ok(isStr(e.title) && e.title.length <= 40, `${w}: title`);
     assert.ok(CATEGORIES.includes(e.category), `${w}: category ${e.category}`);
@@ -65,16 +65,8 @@ test('field types, counts and length limits', () => {
   }
 });
 
-test('icons are a single emoji and not repeated', () => {
-  const seg = new Intl.Segmenter('en', { granularity: 'grapheme' });
-  const seen = new Map();
-  for (const e of CODEX) {
-    assert.ok(isStr(e.icon), `${e.id}: icon`);
-    assert.equal([...seg.segment(e.icon)].length, 1, `${e.id}: icon must be one emoji`);
-    assert.match(e.icon, PICTO, `${e.id}: icon must be an emoji`);
-    assert.ok(!seen.has(e.icon), `${e.id} repeats the icon of ${seen.get(e.icon)}`);
-    seen.set(e.icon, e.id);
-  }
+test('a page has no icon: its title says what it is (the interface draws its icons or goes without)', () => {
+  for (const e of CODEX) assert.ok(!('icon' in e), `${e.id}: no icon field`);
 });
 
 test('related ids resolve, never point at themselves, and are symmetrical', () => {
@@ -152,7 +144,7 @@ test('no two entries open with the same sentence, and titles and summaries diffe
   assert.equal(new Set(paras.map(([, p]) => p)).size, paras.length, 'a paragraph is repeated');
 });
 
-test('text is clean: no em or en dashes, no emoji outside icons, no stray spacing, sentences finished', () => {
+test('text is clean: no em or en dashes, no emoji, no stray spacing, sentences finished', () => {
   for (const e of CODEX) {
     for (const [path, s] of strings(e)) {
       assert.ok(!EM_DASH.test(s), `${path} contains an em dash`);

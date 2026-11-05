@@ -34,7 +34,7 @@
 .mkt-lead.is-urgent { border-color: var(--gold); border-left: 6px solid var(--gold); }
 .mkt-lead.is-fraud { border-color: var(--red); border-style: dashed; }
 .mkt-who { display: flex; align-items: flex-start; gap: .65rem; }
-.mkt-av { flex: none; display: grid; place-items: center; width: 3.4rem; height: 3.4rem; font-size: 2.2rem; line-height: 1; background: var(--bg); border: 2px solid var(--line); border-radius: 50%; }
+.mkt-av { width: 3.2rem; height: 3.2rem; font-size: 1.45rem; } /* the buyer's disc (.ava in styles.css) at the size of a card's head */
 .mkt-id { min-width: 0; }
 .mkt-name { overflow-wrap: anywhere; }
 .mkt-say { margin: .3rem 0 0; padding: .35rem .55rem; font-style: italic; background: var(--bg); border: 1px solid var(--line); border-radius: 2px; }

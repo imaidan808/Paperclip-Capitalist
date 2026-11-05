@@ -8,12 +8,9 @@
 .cx-none { margin: .6rem 0; }
 
 /* cards */
-.cx-card { width: 100%; display: grid; grid-template-columns: 2.4rem minmax(0, 1fr); gap: .6rem; align-items: start; text-align: left; padding: .5rem .65rem; background: var(--panel2); border: 1px solid var(--line); color: var(--ink); font: inherit; border-radius: 2px; min-height: 3rem; }
+.cx-card { width: 100%; display: grid; grid-template-columns: minmax(0, 1fr); text-align: left; padding: .5rem .65rem; background: var(--panel2); border: 1px solid var(--line); color: var(--ink); font: inherit; border-radius: 2px; min-height: 3rem; }
 button.cx-card { cursor: pointer; } button.cx-card:hover { border-color: var(--gold); }
 .cx-card.locked { border-style: dashed; background: transparent; color: var(--mute); }
-.cx-ic { font-size: 1.5rem; line-height: 1.25; text-align: center; }
-.cx-ic.big { font-size: 2.5rem; }
-.cx-ic.sil { filter: brightness(0) invert(.55); }
 .cx-tx { min-width: 0; overflow-wrap: anywhere; }
 .cx-tx b { font-size: .95rem; } .cx-tx small { display: block; color: var(--mute); font-size: .78rem; line-height: 1.35; margin-top: .1rem; }
 .cx-tx .cx-hint { color: var(--gold); }

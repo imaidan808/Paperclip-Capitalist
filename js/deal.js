@@ -60,14 +60,14 @@ const needsOf = (seg, need) => {
 const SELLER_NAMES = ['Marek', 'Ines', 'Bo', 'Okafor', 'Rue', 'Kit', 'Dev', 'Marla'];
 const SELLER_BASE_PATIENCE = { hard: 4, friendly: 6, impulsive: 4, analytical: 5 };
 const SELLER_KIND = {
-  hard: { icon: '🧔', title: 'hard-nosed dealer', hello: 'The {a} is {p}. That is the price, and I have heard every trick.' },
-  friendly: { icon: '👵', title: 'friendly stallholder', hello: 'Ah, a customer! The {a} is {p}, and I am sure we can work something out.' },
-  impulsive: { icon: '🧒', title: 'excitable trader', hello: 'That {a}? {p}! I have a feeling about you. Make me an offer!' },
-  analytical: { icon: '🧐', title: 'careful appraiser', hello: 'Listed at {p}. I know what a {a} goes for, so do not expect a miracle.' },
+  hard: { title: 'hard-nosed dealer', hello: 'The {a} is {p}. That is the price, and I have heard every trick.' },
+  friendly: { title: 'friendly stallholder', hello: 'Ah, a customer! The {a} is {p}, and I am sure we can work something out.' },
+  impulsive: { title: 'excitable trader', hello: 'That {a}? {p}! I have a feeling about you. Make me an offer!' },
+  analytical: { title: 'careful appraiser', hello: 'Listed at {p}. I know what a {a} goes for, so do not expect a miracle.' },
 };
 export function sellerFor(seed, assetName, price) {
   const style = STYLES[hash(seed + '|style') % 4], k = SELLER_KIND[style];
-  return { style, icon: k.icon, name: `${SELLER_NAMES[hash(seed + '|name') % SELLER_NAMES.length]}, ${k.title}`, patience: SELLER_BASE_PATIENCE[style], hello: k.hello.replace('{a}', assetName).replace('{p}', money(price)) };
+  return { style, name: `${SELLER_NAMES[hash(seed + '|name') % SELLER_NAMES.length]}, ${k.title}`, patience: SELLER_BASE_PATIENCE[style], hello: k.hello.replace('{a}', assetName).replace('{p}', money(price)) };
 }
 
 // ------------------------------------------------------------------ parameter builders
@@ -215,7 +215,7 @@ function planSell(g, spec) {
     ok: true, kind: 'sell', seed, zone: lead.zone, zoneFace: zoneFace(lead.zone), stages, blocker, fair, raw, capped, budget: lead.budget, alt: alt || null,
     asset: { id: a.id, cls: a.cls, name: aName(a), icon: ASSETS[a.cls].icon, cond: a.cond, unchecked: !!(a.truth && !a.known) }, // unchecked: bought from a lot and never sold, so its real condition is not in the figures on the screen: the buyer checks it at the sale and the price follows it
     lead: { id: lead.id, seg: lead.seg, budget: lead.budget, need: lead.need || null, verified: !!lead.verified, ...(lead.verified ? { scam: !!lead.scam } : {}), exp: lead.exp },
-    cast: { icon: B.icon, name: B.name, hello: B.hello, style: B.style, role: 'buyer' }, // an urgent need is marked on its chip in the Pitch stage, not said twice
+    cast: { name: B.name, hello: B.hello, style: B.style, role: 'buyer' }, // an urgent need is marked on its chip in the Pitch stage, not said twice
     buyer: { id: lead.seg, name: B.name, style: B.style, patience: B.patience, bias: B.bias },
     quote: { fit: q.fit, fitLabel: fitLabel(q.fit), cm: q.ci.cm, band: { id: q.ci.band.id, label: q.ci.band.label }, S: q.ci.S, fmv: q.fmv },
     verifyCost: Math.max(0.01, r2(lead.budget * 0.01)), canVerify: !lead.verified && !!(g.P.scamRate || 0),
@@ -229,7 +229,7 @@ function planBuy(g, spec) {
   const lowest = r2(lot.price * 0.6);
   const blocker = s.cash < lowest ? `You need at least ${money(lowest)} to deal for this lot, and you have ${money(s.cash)}.` : g.roomIn(spec.zone) <= 0 ? 'Storage is full here, counting trucks and open swaps. Sell something or ship it out.' : ''; // the engine's own words for this refusal (engine.js FULL), at the engine's own gate: roomIn counts the yard, the trucks and the places an open swap holds
   const seller = auction
-    ? { style: 'steady', icon: '🔨', name: 'The auctioneer', patience: 5, hello: 'Lot up for bids.' } // the guide price and the opening bid are on the lot card, the scoreboard and the paddle
+    ? { style: 'steady', name: 'The auctioneer', patience: 5, hello: 'Lot up for bids.' } // the guide price and the opening bid are on the lot card, the scoreboard and the paddle
     : sellerFor(seed, name, lot.price);
   let alt = 0; // another lot of the same kind on the shelf is your alternative
   for (const l of s.lots[spec.zone] || []) if (l.id !== lot.id && l.cls === lot.cls && l.mode !== 'auction') alt = alt ? Math.min(alt, l.price) : l.price;
@@ -238,7 +238,7 @@ function planBuy(g, spec) {
   return {
     ok: true, kind: 'buy', seed, zone: spec.zone, zoneFace: zoneFace(spec.zone), stages, blocker, fair: lot.price, auction, lowest, alt: alt && alt <= lot.price * 1.3 ? alt : null,
     lot: { id: lot.id, cls: lot.cls, name, icon: def.icon, cond: lot.cond, price: lot.price, mode: auction ? 'auction' : 'fixed' },
-    cast: { icon: seller.icon, name: seller.name, hello: seller.hello, style: seller.style, role: 'seller' }, seller,
+    cast: { name: seller.name, hello: seller.hello, style: seller.style, role: 'seller' }, seller,
   };
 }
 
@@ -266,7 +266,7 @@ function planRepair(g, spec) {
     blocker: b.blocker,
     asset: { id: a.id, cls: a.cls, name: aName(a), icon: ASSETS[a.cls].icon, cond: a.cond },
     quote: { cost: b.cost, most: b.most, before: b.before, after: b.after, quality: b.quality },
-    cast: { icon: '🔧', name: 'The repair bench', hello: 'Three steps: strip, fit, tune. Steady hands cost less and return more.', style: 'steady', role: 'bench' },
+    cast: { name: 'The repair bench', hello: 'Three steps: strip, fit, tune. Steady hands cost less and return more.', style: 'steady', role: 'bench' },
   };
 }
 

@@ -16,22 +16,22 @@ const view = (ctx) => { const g = ctx.g(); return { ctx, g, s: g.s, m: ctx.money
 const tone = (x) => (x >= 0 ? 'green' : 'red');
 const SCALE = 6; // the gauge runs 0 to 6; anything higher pins to the right edge
 const PRODUCT = {
-  micro: { icon: '💳', line: 'Small, short-term credit.' },
-  pipeline: { icon: '🏗️', line: `Up to ${Math.round(LOANS.pipeline.limitPct * 100)}% of your stock plus your managers' hire fees and upgrades.` }, // engine loanRoom: limitPct x (stock value + each manager's basis: hire fee plus upgrades)
-  circle: { icon: '🤝', line: 'People who trust you lend with no interest and no fee.' },
-  enterprise: { icon: '🏛️', line: 'A large revolving credit line.' },
+  micro: { line: 'Small, short-term credit.' },
+  pipeline: { line: `Up to ${Math.round(LOANS.pipeline.limitPct * 100)}% of your stock plus your managers' hire fees and upgrades.` }, // engine loanRoom: limitPct x (stock value + each manager's basis: hire fee plus upgrades)
+  circle: { line: 'People who trust you lend with no interest and no fee.' },
+  enterprise: { line: 'A large revolving credit line.' },
 };
 const every = (h) => (h <= 24 ? 'daily' : h <= 168 ? 'weekly' : 'monthly');
 const products = (v) => Object.keys(LOANS).filter((id) => (id !== 'circle' || v.g.P.circle) && (id !== 'enterprise' || v.s.zones.includes(LOANS.enterprise.zone)));
 
 /** What the bank would show for a ratio, in words. */
 function zoneOf(de, debt) {
-  if (!isFinite(de)) return { key: 'call', glyph: '⛔', tone: 'bad', label: 'Insolvent', say: 'You owe more than you own.' };
-  if (!debt) return { key: 'none', glyph: '✓', tone: 'good', label: 'No debt', say: 'You are running on your own money.' };
-  if (de > DEBT.callDE) return { key: 'call', glyph: '⛔', tone: 'bad', label: 'Margin call', say: 'The bank is selling your managers, then your stock, to cover the loans.' };
-  if (de > DEBT.maxDE) return { key: 'cap', glyph: '⚠', tone: 'warn', label: 'Over the cap', say: 'No new loans until you repay or grow.' };
-  if (de > DEBT.maxDE * 0.75) return { key: 'near', glyph: '◐', tone: 'warn', label: 'Near the cap', say: 'A bad week could freeze your borrowing.' };
-  return { key: 'safe', glyph: '✓', tone: 'good', label: 'Safe', say: 'You can still borrow.' };
+  if (!isFinite(de)) return { key: 'call', tone: 'bad', label: 'Insolvent', say: 'You owe more than you own.' };
+  if (!debt) return { key: 'none', tone: 'good', label: 'No debt', say: 'You are running on your own money.' };
+  if (de > DEBT.callDE) return { key: 'call', tone: 'bad', label: 'Margin call', say: 'The bank is selling your managers, then your stock, to cover the loans.' };
+  if (de > DEBT.maxDE) return { key: 'cap', tone: 'warn', label: 'Over the cap', say: 'No new loans until you repay or grow.' };
+  if (de > DEBT.maxDE * 0.75) return { key: 'near', tone: 'warn', label: 'Near the cap', say: 'A bad week could freeze your borrowing.' };
+  return { key: 'safe', tone: 'good', label: 'Safe', say: 'You can still borrow.' };
 }
 
 // ---------------------------------------------------------------- the hero: the gauge
@@ -43,7 +43,7 @@ function gaugeHTML(v) {
   const stress = debt > 0 && nw > 0 ? debt / (nw * 0.7) : null;
   const shown = isFinite(de) ? de.toFixed(2) : 'over 6';
   const aria = `Debt to equity ${isFinite(de) ? de.toFixed(2) : 'above 6'}, ${z.label}. Safe up to ${DEBT.maxDE.toFixed(1)}, no new loans from ${DEBT.maxDE.toFixed(1)}, margin call above ${DEBT.callDE.toFixed(1)}.`;
-  return `<section class="bk-hero" aria-label="Debt-to-equity"><div class="bk-hero-h"><h3>Debt-to-equity</h3><span class="chip ${z.tone}"><span aria-hidden="true">${z.glyph}</span> ${z.label}</span></div>
+  return `<section class="bk-hero" aria-label="Debt-to-equity"><div class="bk-hero-h"><h3>Debt-to-equity</h3><span class="chip ${z.tone}">${z.label}</span></div>
     <p class="bk-big"><b class="mono">${shown}</b> <span class="small mute">${debt ? `You owe ${isFinite(de) ? '$' + de.toFixed(2) : 'more than $6'} for every $1 you own.` : 'No debt yet.'}</span></p>
     <div class="bk-gauge" role="img" aria-label="${esc(aria)}">
       <div class="bk-track"><span class="bk-seg safe" style="width:${DEBT.maxDE / SCALE * 100}%"></span><span class="bk-seg cap" style="width:${(DEBT.callDE - DEBT.maxDE) / SCALE * 100}%"></span><span class="bk-seg call" style="width:${(SCALE - DEBT.callDE) / SCALE * 100}%"></span>
@@ -81,9 +81,9 @@ function productCard(v, id) {
   const facts = [['Limit', m(r.limit)], ['Rate', id === 'circle' ? '0%' : `${(rate * 100).toFixed(1)}% per 30 days`, id === 'circle' ? '' : `Base rate ${base.toFixed(1)}% per 30 days${g.mods().rateBps ? ', raised by the credit crunch' : ''}, plus this line's spread. Capital Sourcing level ${lvl} cuts loan interest by ${cut}%.`], ['Fee', L.fee ? `${(L.fee * 100).toFixed(0)}% upfront` : L.commit ? 'None upfront' : 'None'], ['Compounds', id === 'circle' ? 'Never' : every(L.every)]];
   if (L.commit) facts.push(['Fee on unused part', `${(L.commit * 100).toFixed(1)}% a month`, 'Charged each month while you owe on this line, on the part of it you have not borrowed. It is added to what you owe.']);
   facts.push(['You can borrow', m(r.room)]);
-  return `<article class="bk-prod${why ? ' off' : ''}" aria-label="${esc(L.name)}"><header class="bk-ph"><span class="bk-ic" aria-hidden="true">${P.icon}</span><div class="grow"><h4>${esc(L.name)}</h4><p class="small mute">${P.line}</p></div></header>
+  return `<article class="bk-prod${why ? ' off' : ''}" aria-label="${esc(L.name)}"><header class="bk-ph"><div class="grow"><h4>${esc(L.name)}</h4><p class="small mute">${P.line}</p></div></header>
     <dl class="bk-facts">${facts.map(([k, x, tip]) => `<div><dt>${k}</dt><dd class="mono"${tip ? ` title="${esc(tip)}"` : ''}>${x}</dd></div>`).join('')}</dl>
-    ${why ? `<p class="bk-why small"><span aria-hidden="true">🔒</span> ${esc(why)}</p>` : `<label for="bk-amt-${id}">Borrow <output data-amt="${id}" class="mono">${m(amount)}</output> of ${m(r.room)}</label>
+    ${why ? `<p class="bk-why small">${esc(why)}</p>` : `<label for="bk-amt-${id}">Borrow <output data-amt="${id}" class="mono">${m(amount)}</output> of ${m(r.room)}</label>
       <input id="bk-amt-${id}" type="range" min="0" max="100" step="5" value="${pct}" data-input="bank-amt" data-p="${id}" data-fid="ba-${id}">
       <div class="row"><button class="btn ghost" data-act="bank-pct" data-p="${id}" data-v="25" data-fid="bq-${id}-25">25%</button><button class="btn ghost" data-act="bank-pct" data-p="${id}" data-v="50" data-fid="bq-${id}-50">Half</button><button class="btn ghost" data-act="bank-pct" data-p="${id}" data-v="100" data-fid="bq-${id}-100">All of it</button></div>
       <p class="small bk-out" data-out="${id}" aria-live="polite">${drawPreview(v, id, amount)}</p>
@@ -96,7 +96,7 @@ function loansHTML(v) {
   const poor = s.cash <= 0;
   return `<section class="bk-sec" aria-label="Open loans"><h3 class="bk-h3">What you owe</h3><div class="bk-grid">${s.loans.map((l) => {
     const L = LOANS[l.prod], rate = g.loanRate(l.prod), owed = l.principal + l.accr;
-    return `<article class="bk-loan"><header class="row"><span class="bk-ic" aria-hidden="true">${PRODUCT[l.prod].icon}</span><b class="grow">${esc(L.name)}</b><span class="chip">${l.prod === 'circle' ? '0%' : (rate * 100).toFixed(1) + '% per 30 days'}</span></header>
+    return `<article class="bk-loan"><header class="row"><b class="grow">${esc(L.name)}</b><span class="chip">${l.prod === 'circle' ? '0%' : (rate * 100).toFixed(1) + '% per 30 days'}</span></header>
       <dl class="bk-facts"><div><dt>Balance</dt><dd class="mono">${m(l.principal)}</dd></div><div><dt>Interest so far</dt><dd class="mono ${l.accr > 0.005 ? 'red' : ''}">+${m(l.accr)}</dd></div><div><dt>Total owed</dt><dd class="mono"><b>${m(owed)}</b></dd></div></dl>
       <p class="small mute">${rate ? `Costs about ${m(l.principal * rate / 30)} a day. ` : ''}Interest joins the balance in ${dur(l.next - s.hour)}.</p>
       <div class="row"><button class="btn ghost" data-act="bank-repay" data-anchor="bank-repay" data-id="${l.id}" data-f="half" data-fid="rh-${l.id}" ${poor ? 'aria-disabled="true"' : ''}>Repay half</button><button class="btn" data-act="bank-repay" data-anchor="bank-repay" data-id="${l.id}" data-f="all" data-fid="ra-${l.id}" ${poor ? 'aria-disabled="true"' : ''}>${s.cash < owed && !poor ? `Repay ${m(s.cash)}` : 'Repay all'}</button></div>

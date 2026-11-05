@@ -25,8 +25,7 @@
 .cr-card[data-st="paused"], .cr-card[data-st="audit"], .cr-card[data-st="nolane"] { border-left-color: var(--gold); border-left-style: dashed; }
 .cr-card[data-st="starved"] { border-left-color: var(--red); border-left-style: dotted; }
 .cr-card.cr-focus { border-color: var(--gold); box-shadow: inset 0 0 0 2px var(--gold); }
-.cr-top { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: .5rem; align-items: start; }
-.cr-ic { font-size: 1.6rem; line-height: 1; }
+.cr-top { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: .5rem; align-items: start; }
 .cr-name { margin: 0; font-size: .92rem; display: flex; flex-wrap: wrap; gap: .3rem; align-items: center; }
 .cr-lane { margin: .15rem 0 0; font-size: .85rem; overflow-wrap: anywhere; }
 .cr-bar { height: .6rem; }
@@ -97,5 +96,5 @@
 @media (max-width: 480px), (max-height: 520px) { .cr-sum { grid-template-columns: repeat(2, minmax(0, 1fr)); } } /* a phone, or a phone on its side: two and two, so a sum is never squeezed to a break in the middle of its digits */
 @media (max-width: 480px) {
   .cr-nums { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .cr-top { grid-template-columns: auto minmax(0, 1fr); } .cr-top > .chip { grid-column: 1 / -1; justify-self: start; }
+  .cr-top { grid-template-columns: minmax(0, 1fr); } .cr-top > .chip { justify-self: start; }
 }

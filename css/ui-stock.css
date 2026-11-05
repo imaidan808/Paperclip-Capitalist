@@ -32,7 +32,7 @@
 /* ---- icons share one rhythm: a small framed tile, goods a little larger than the rest.
    Many of the goods are dark emoji (a road bike, sunglasses, a black heart) that sink into any dark tile, and a lighter tile only makes that worse (the glyph and the tile
    meet in the middle), so the glyph carries its own thin light rim: it reads whatever its colour, and the tile stays the quiet frame it is. */
-:is(.db, dialog) :is(.stk-ic, .mkt-ic, .cr-ic, .bk-ic, .tv-ic, .qs-ic, .cx-card .cx-ic) { display: grid; place-items: center; flex: none; width: 2.4rem; height: 2.4rem; padding: 0; font-size: 1.35rem; line-height: 1; text-align: center; background: var(--bg); border: 1px solid var(--line); border-radius: 6px; text-shadow: 0 0 1px rgba(255, 255, 255, .85), 0 0 2px rgba(255, 255, 255, .3); }
+:is(.db, dialog) :is(.stk-ic, .mkt-ic, .tv-ic) { display: grid; place-items: center; flex: none; width: 2.4rem; height: 2.4rem; padding: 0; font-size: 1.35rem; line-height: 1; text-align: center; background: var(--bg); border: 1px solid var(--line); border-radius: 6px; text-shadow: 0 0 1px rgba(255, 255, 255, .85), 0 0 2px rgba(255, 255, 255, .3); }
 :is(.db, dialog) :is(.stk-ic, .mkt-ic) { width: 2.8rem; height: 2.8rem; font-size: 1.7rem; }
 
 /* ---- an interactive surface answers the pointer with a small lift; a disabled one does not */
@@ -63,7 +63,6 @@
 /* ---- an empty shelf: a symbol, a line that says what is missing and a line that says what comes next. Used wherever a list can be empty. */
 .k-empty { list-style: none; display: grid; justify-items: center; gap: .3rem; padding: 1.1rem 1rem; text-align: center; color: var(--mute); border: 2px dashed var(--line); background: var(--panel2); border-radius: 3px; }
 .k-empty > p { margin: 0; max-width: 24rem; overflow-wrap: anywhere; }
-.k-empty-ic { font-size: 2.2rem; line-height: 1; }
 .k-empty-line { padding: .8rem .9rem; border: 2px dashed var(--line); border-radius: 3px; text-align: center; }
 
 /* ---- the focus ring sits outside a card's edge so a lifted card never hides it */
@@ -117,6 +116,5 @@
 .stk-empty { display: grid; justify-items: center; gap: .45rem; padding: 1.4rem 1rem; text-align: center; border: 2px dashed var(--line); }
 .stk-empty h3 { margin: 0; font-size: 1.05rem; }
 .stk-empty p { margin: 0; max-width: 24rem; }
-.stk-empty-ic { font-size: 3rem; line-height: 1; }
 .stk-away { display: grid; gap: .3rem; padding: .5rem .7rem; background: var(--panel2); border: 1px solid var(--line); }
 .stk-away p { margin: 0; }

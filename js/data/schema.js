@@ -100,7 +100,7 @@ export function validateData(d, { partial = false } = {}) {
     const w = `buyer ${id}`;
     if (!ID.test(id)) add(`${w}: id must be camelCase ascii`);
     if (!(int(b.zone) && b.zone >= 1 && b.zone <= ZONE_COUNT)) add(`${w}: zone must be 1..16`);
-    for (const k of ['name', 'icon', 'hello']) if (typeof b[k] !== 'string' || !b[k].trim()) add(`${w}: ${k} must be a non-empty string`);
+    for (const k of ['name', 'hello']) if (typeof b[k] !== 'string' || !b[k].trim()) add(`${w}: ${k} must be a non-empty string`);
     if (typeof b.hello === 'string' && b.hello.length > 90) add(`${w}: hello over 90 characters`);
     if (!num(b.pop) || b.pop < 0.05 || b.pop > 1) add(`${w}: pop must be 0.05..1`);
     const likes = Object.entries(b.like || {});

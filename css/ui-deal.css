@@ -50,7 +50,7 @@ dialog.deal:focus-visible { outline-offset: -4px; } /* the sheet fills a phone's
   background: var(--panel); background: radial-gradient(circle at 50% 62%, color-mix(in srgb, var(--za, var(--gold)) 38%, transparent), transparent 68%), linear-gradient(180deg, color-mix(in srgb, var(--zg, var(--line)) 60%, var(--panel)), var(--panel));
   border: 3px solid color-mix(in srgb, var(--za, var(--gold)) 75%, var(--line)); box-shadow: 0 0 0 5px color-mix(in srgb, var(--za, var(--gold)) 18%, transparent), 0 14px 0 -8px rgba(0, 0, 0, .45); }
 .cast-floor::after { content: ""; position: absolute; left: 14%; right: 14%; bottom: -.7rem; height: .7rem; border-radius: 50%; background: radial-gradient(ellipse at 50% 50%, rgba(0, 0, 0, .5), transparent 70%); }
-.cast-icon { font-size: 4.6rem; line-height: 1; animation: cast-bob 2.8s ease-in-out infinite alternate; filter: drop-shadow(0 4px 0 rgba(0, 0, 0, .45)); }
+.cast-ava { width: 6.2rem; height: 6.2rem; font-size: 2.9rem; box-shadow: 0 4px 0 rgba(0, 0, 0, .45); animation: cast-bob 2.8s ease-in-out infinite alternate; } /* the character is a disc (.ava in styles.css) with their initial */
 @keyframes cast-bob { from { transform: translateY(0); } to { transform: translateY(-4px); } }
 .cast-name { margin: .35rem 0 0; font-size: .98rem; line-height: 1.2; overflow-wrap: anywhere; }
 .cast-role { margin: .1rem 0 0; display: inline-flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: .1rem .4rem; font-size: .72rem; text-transform: uppercase; letter-spacing: .08em; color: var(--mute); }
@@ -79,19 +79,18 @@ dialog.deal:focus-visible { outline-offset: -4px; } /* the sheet fills a phone's
 
 /* ---- Read: a case file. Probes are tools with a price, evidence is a log, the belief is two gauges. */
 .probes { display: grid; grid-template-columns: repeat(auto-fit, minmax(8.2rem, 1fr)); gap: .5rem; }
-.probe { position: relative; display: grid; grid-template-columns: auto minmax(0, 1fr); grid-template-areas: "pic pco" "pnm pnm"; gap: .25rem .4rem; align-items: center; text-align: left; font: inherit; color: var(--ink); background: var(--panel); border: var(--bw) solid var(--field); padding: .5rem .55rem .55rem; cursor: pointer; border-radius: 2px; min-height: 4.6rem; transition: transform .12s ease-out, border-color .12s, box-shadow .12s; }
+.probe { position: relative; display: grid; grid-template-columns: minmax(0, 1fr); grid-template-areas: "pco" "pnm"; gap: .25rem .4rem; align-items: center; text-align: left; font: inherit; color: var(--ink); background: var(--panel); border: var(--bw) solid var(--field); padding: .5rem .55rem .55rem; cursor: pointer; border-radius: 2px; min-height: 4.6rem; transition: transform .12s ease-out, border-color .12s, box-shadow .12s; }
 .probe:hover:not(:disabled) { border-color: var(--gold); transform: translateY(-2px); box-shadow: 0 4px 0 rgba(0, 0, 0, .35); }
 .probe:active:not(:disabled) { transform: translateY(0); box-shadow: none; }
 .probe:disabled { cursor: not-allowed; opacity: .55; }
 .probe.used { opacity: 1; border-color: var(--green); background: var(--good-bg); cursor: default; }
 .probe.used::after { content: "\2713"; position: absolute; top: -.5rem; right: -.4rem; display: grid; place-items: center; width: 1.2rem; height: 1.2rem; border-radius: 50%; background: var(--green); color: var(--on-gold); font-size: .75rem; font-weight: 900; }
 .probe.rec, .angle.rec, .move.rec { box-shadow: 0 0 0 2px var(--violet); }
-.probe .pic { grid-area: pic; display: grid; place-items: center; width: 2rem; height: 2rem; font-size: 1.3rem; background: var(--panel2); border-radius: 50%; }
 .probe .pnm { grid-area: pnm; font-weight: 700; font-size: .86rem; line-height: 1.25; overflow-wrap: anywhere; } .probe .pco { grid-area: pco; justify-self: end; font-family: ui-monospace, Menlo, monospace; font-size: .74rem; color: var(--gold); white-space: nowrap; }
 .evidence { list-style: none; margin: 0; padding: 0; display: grid; gap: .3rem; font-size: .86rem; counter-reset: ev; }
 .evidence li { counter-increment: ev; display: grid; grid-template-columns: 1.7rem minmax(0, 1fr); gap: .5rem; align-items: start; padding: .35rem .6rem; background: var(--panel); border: 1px solid var(--line); border-left: 3px solid var(--cyan); }
 .evidence li::before { content: counter(ev, decimal-leading-zero); font: 700 .74rem ui-monospace, Menlo, monospace; color: var(--cyan); padding-top: .12rem; }
-.evidence li > span { min-width: 0; overflow-wrap: anywhere; } .evidence .evi { margin-right: .25rem; }
+.evidence li > span { min-width: 0; overflow-wrap: anywhere; }
 .belief { display: grid; grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr)); gap: .8rem; padding: .6rem .7rem; background: var(--panel); border: 1px solid var(--line); font-size: .86rem; }
 .belief .bl { display: block; font-size: .72rem; text-transform: uppercase; letter-spacing: .06em; color: var(--mute); }
 .belief b { font-size: 1.05rem; }
@@ -106,8 +105,6 @@ dialog.deal:focus-visible { outline-offset: -4px; } /* the sheet fills a phone's
 .angle:hover:not(:disabled) { border-color: var(--gold); transform: translateY(-4px) rotate(0deg); box-shadow: 0 6px 0 rgba(0, 0, 0, .35); }
 .angle:disabled { cursor: default; opacity: .78; }
 .angle.on { border-color: var(--gold); background: var(--warn-bg); box-shadow: inset 0 0 0 1px var(--gold), 0 6px 0 rgba(0, 0, 0, .4); transform: translateY(-6px) rotate(0deg); }
-.angle .aic { display: grid; place-items: center; width: 2.4rem; height: 2.4rem; font-size: 1.5rem; line-height: 1; border-radius: 50%; background: var(--panel2); border: 1px solid var(--line); }
-.angle.on .aic { background: var(--gold); border-color: var(--gold); }
 .angle .anm { font-weight: 700; font-size: .98rem; }
 .angle .apick { position: absolute; top: -.6rem; right: -.45rem; display: grid; place-items: center; width: 1.5rem; height: 1.5rem; border-radius: 50%; background: var(--gold); color: var(--on-gold); border: 2px solid var(--bg); font: 800 .8rem ui-monospace, Menlo, monospace; }
 .angle .abar { display: block; width: 100%; height: .5rem; margin-top: .25rem; background: var(--bg); border: 1px solid var(--line); }
@@ -216,7 +213,7 @@ dialog.deal:focus-visible { outline-offset: -4px; } /* the sheet fills a phone's
 .deal-result.revealed :is(.rtitle, .rhead, .rlines, .rver, .vbar i, .xp, .lesson) { animation: none; }
 
 /* ---- big screens: a larger stage, so the scene keeps its weight on a wide monitor */
-@media (min-width: 1800px) { dialog.deal { width: min(82rem, 90vw); padding: 1.1rem 1.3rem 1.2rem; } .deal-scene { grid-template-columns: minmax(15rem, 18rem) minmax(0, 1fr); gap: 1.3rem; } .cast-floor { width: 10.5rem; height: 10.5rem; } .cast-icon { font-size: 5.4rem; } .deal-dock { margin: 0 -1.3rem -1.2rem; padding: .6rem 1.3rem .7rem; bottom: -1.2rem; } }
+@media (min-width: 1800px) { dialog.deal { width: min(82rem, 90vw); padding: 1.1rem 1.3rem 1.2rem; } .deal-scene { grid-template-columns: minmax(15rem, 18rem) minmax(0, 1fr); gap: 1.3rem; } .cast-floor { width: 10.5rem; height: 10.5rem; } .cast-ava { width: 7.2rem; height: 7.2rem; font-size: 3.4rem; } .deal-dock { margin: 0 -1.3rem -1.2rem; padding: .6rem 1.3rem .7rem; bottom: -1.2rem; } }
 
 /* ---- tablets and small laptops: a slimmer rail for the character and the five angle cards in one row, so the Pitch button is on the first screen at 1024 by 768 */
 @media (min-width: 761px) and (max-width: 1100px) {
@@ -224,10 +221,10 @@ dialog.deal:focus-visible { outline-offset: -4px; } /* the sheet fills a phone's
   .deal-scene { grid-template-columns: minmax(10.5rem, 12.5rem) minmax(0, 1fr); gap: .8rem; }
   .deal-stage, .deal-result { gap: .5rem; padding: .7rem .8rem; }
   .lotcard { padding: .4rem .6rem; } .lotcard .ic { width: 2.6rem; height: 2.6rem; font-size: 1.7rem; }
-  .deal-cast { padding: .8rem .6rem .7rem; } .cast-floor { width: 7rem; height: 7rem; margin-bottom: .5rem; } .cast-icon { font-size: 3.6rem; }
+  .deal-cast { padding: .8rem .6rem .7rem; } .cast-floor { width: 7rem; height: 7rem; margin-bottom: .5rem; } .cast-ava { width: 4.8rem; height: 4.8rem; font-size: 2.3rem; }
   .angles { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: .4rem; padding: .3rem .1rem .1rem; }
   .angle { padding: .5rem .45rem .45rem; gap: .15rem; }
-  .angle .aic { width: 2rem; height: 2rem; font-size: 1.2rem; } .angle .anm { font-size: .88rem; }
+  .angle .anm { font-size: .88rem; }
   .angle .ahint { font-size: .64rem; border-radius: 6px; }
 }
 @media (min-width: 761px) and (max-width: 900px) { .angles { grid-template-columns: repeat(3, minmax(0, 1fr)); } } /* too narrow for five: a hand of three and two */
@@ -241,7 +238,7 @@ dialog.deal:focus-visible { outline-offset: -4px; } /* the sheet fills a phone's
   .deal-top { gap: .25rem .6rem; padding-left: .6rem; } .deal-top h2 { flex-basis: 10rem; font-size: 1.02rem; }
   .deal-steps { gap: 1rem; padding: 0; } .deal-steps .ds { padding: .08rem .7rem .08rem .25rem; } .deal-steps .ds + .ds::before { width: 1rem; } .deal-steps .n { width: 1.3rem; height: 1.3rem; }
   .deal-stage, .deal-result { padding: .6rem .75rem; gap: .5rem; }
-  .deal-cast { padding: .6rem .6rem .6rem; } .cast-floor { width: 5.2rem; height: 5.2rem; margin-bottom: .4rem; } .cast-icon { font-size: 2.8rem; } .deal-cast::before { height: 6rem; }
+  .deal-cast { padding: .6rem .6rem .6rem; } .cast-floor { width: 5.2rem; height: 5.2rem; margin-bottom: .4rem; } .cast-ava { width: 3.6rem; height: 3.6rem; font-size: 1.75rem; } .deal-cast::before { height: 6rem; }
   .deal-dock { display: contents; }
   .deal-foot { position: sticky; bottom: 0; z-index: 1; margin: 0 -1rem; padding: .3rem 1rem .35rem; background: var(--panel); border-top: 1px dashed var(--line); }
 }
@@ -256,7 +253,7 @@ dialog.deal:focus-visible { outline-offset: -4px; } /* the sheet fills a phone's
   .deal-cast { grid-template-columns: 4.4rem minmax(0, 1fr); justify-items: start; align-items: center; text-align: left; column-gap: .75rem; padding: .6rem .7rem .7rem; }
   .deal-cast::before { height: 5rem; }
   .cast-floor { width: 4.4rem; height: 4.4rem; grid-row: span 2; margin: 0; box-shadow: 0 0 0 3px color-mix(in srgb, var(--za, var(--gold)) 18%, transparent); } .cast-floor::after { display: none; }
-  .cast-icon { font-size: 2.5rem; } .cast-name { margin: 0; font-size: .95rem; } .cast-role { justify-content: flex-start; }
+  .cast-ava { width: 3.1rem; height: 3.1rem; font-size: 1.5rem; } .cast-name { margin: 0; font-size: .95rem; } .cast-role { justify-content: flex-start; }
   .bubble { grid-column: 1 / -1; margin-top: .5rem; font-size: .84rem; } .bubble::before { left: 2rem; margin-left: 0; }
   .deal-log { grid-column: 1 / -1; margin-top: .2rem; } .deal-log summary { padding: .4rem 0; }
   .deal-stage, .deal-result { padding: .7rem .75rem; }

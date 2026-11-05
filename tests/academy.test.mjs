@@ -22,7 +22,7 @@ const fresh = () => { for (const k of [...mem.keys()]) if (k.startsWith('t.')) m
 // ---------------------------------------------------------------- hand-made lessons (valid against the schema in docs/V2_DESIGN.md section 12)
 const TB = (right = 1) => ({ q: 'Why did the first buyer pay more?', options: [0, 1, 2].map((i) => ({ text: `Option ${'ABC'[i]}`, correct: i === right, why: i === right ? 'Because need and fit set the price.' : `A tempting idea ${i}, and why it fails.` })) });
 const WHY = { title: 'Why it worked', body: ['Value is use to a particular buyer.', 'Fit is how well tags match.'], formula: 'fit = min(1, strongest + 0.15 x others)', example: { setup: 'A paperclip meets a student.', steps: ['Strongest like is 1.0.', 'Fit 1.00.'], result: 'About 1.35x.' } };
-const mk = (id, zone, setup, steps, win, extra = {}) => ({ id, title: 'Lesson ' + id, icon: '🎯', zone, concept: 'utility-fit', minutes: 2, intro: 'A scene for ' + id + '.', setup: { clock: 'paused', features: ['stock', 'market', 'codex'], ...setup }, steps, win, why: WHY, teachBack: TB(), reward: { xp: 120, codex: ['utility-fit'], points: 1 }, ...extra });
+const mk = (id, zone, setup, steps, win, extra = {}) => ({ id, title: 'Lesson ' + id, zone, concept: 'utility-fit', minutes: 2, intro: 'A scene for ' + id + '.', setup: { clock: 'paused', features: ['stock', 'market', 'codex'], ...setup }, steps, win, why: WHY, teachBack: TB(), reward: { xp: 120, codex: ['utility-fit'], points: 1 }, ...extra });
 const ui = (id) => ({ type: 'ui', ui: 'open-drawer', id });
 const ev = (event, match) => ({ type: 'event', event, ...(match ? { match } : {}) });
 const step = (id, anchor, wait) => ({ id, say: `Do ${id}.`, anchor, wait, hint: `Hint for ${id}.` });
@@ -335,7 +335,7 @@ test('saved state: done and skipped lessons, where to resume, and when the Acade
 // ---------------------------------------------------------------- the cards
 test('the cards are clean HTML: intro, coach, why, teach-back (before, after a miss, solved, revealed) and reward', () => {
   const m = LESSONS[0], st = { done: ['t01'], skipped: [], finished: false };
-  const lookup = (id) => ({ 'utility-fit': { id, title: 'Utility & Fit', icon: '🎯', summary: 'Value is <use> to a buyer.' } })[id];
+  const lookup = (id) => ({ 'utility-fit': { id, title: 'Utility & Fit', summary: 'Value is <use> to a buyer.' } })[id];
   const intro = D.introHTML(m, { index: 0, total: 8, st, concept: lookup('utility-fit'), replay: false, missions: LESSONS });
   const cards = {
     intro, introReplay: D.introHTML(m, { index: 0, total: 8, st, concept: null, replay: true, missions: LESSONS }),
@@ -386,9 +386,10 @@ test('the cards escape what lessons say', () => {
   const evil = mk('ev', 1, {}, [], { event: 'pitch' }, { title: '<evil1>', intro: '<evil2>', why: { title: '"><evil3>', body: ['<evil4>'], formula: 'a <evil5> b & c', example: { setup: '<evil6>', steps: ['<evil7>'], result: '<evil8>' } },
     teachBack: { q: '<evil9>', options: [{ text: '<evil10>', correct: true, why: '<evil11>' }, { text: 'b', correct: false, why: 'x' }, { text: 'c', correct: false, why: 'y' }] } });
   const html = [D.introHTML(evil, { index: 0, total: 1, st: { done: [], skipped: [] }, missions: [evil] }), D.whyHTML(evil, {}), D.teachHTML(evil, A.pickTeach(evil.teachBack, A.newTeach(), 0).state),
-    D.coachHTML({ index: 0, total: 1, say: '<evil12>', hint: '<evil13>' }, { hint: true, title: '<evil14>' }), D.rewardHTML(evil, { xp: 1, points: 0, newCodex: ['x'], knownCodex: [] }, () => ({ id: 'x', title: '<evil15>', icon: '<evil16>', summary: '<evil17>' }), {})].join('');
+    D.coachHTML({ index: 0, total: 1, say: '<evil12>', hint: '<evil13>' }, { hint: true, title: '<evil14>' }), D.rewardHTML(evil, { xp: 1, points: 0, newCodex: ['x'], knownCodex: [] }, () => ({ id: 'x', title: '<evil15>', icon: '<oldicon>', summary: '<evil16>' }), {})].join('');
   assert.ok(!/<evil/.test(html), 'nothing from a lesson is markup');
-  for (let i = 1; i <= 17; i++) assert.ok(html.includes(`&lt;evil${i}&gt;`), `evil${i} is shown as text`);
+  for (let i = 1; i <= 16; i++) assert.ok(html.includes(`&lt;evil${i}&gt;`), `evil${i} is shown as text`);
+  assert.ok(!/oldicon/.test(html), 'a page from an older build that still carries an icon prints none: the cards have no picture');
 });
 
 // ---------------------------------------------------------------- the driver's edges (no game screen needed)
