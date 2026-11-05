@@ -190,7 +190,7 @@ function poolConfirm(ctx, ids, route) {
 }
 
 export default {
-  id: 'stock', icon: '📦', label: 'Stock',
+  id: 'stock', label: 'Stock',
   visible: () => true,
   badge: (ctx) => ctx.g().s.assets.length || null,
 

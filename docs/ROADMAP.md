@@ -11,7 +11,7 @@ Updated 2026-11-04 (evening). The tasks that have no code yet, in the order I wo
 ## Priority now (the author's order, 2026-11-04)
 
 1. **The world pass** (items 1 and 2): the roads, paths, traffic and visual bugs first, then the zone environments themselves. The author: the visual bugs "need attention as a priority alongside UI".
-2. **Icons parts 2 to 4, with drawn replacements** for the pictures that were only removed (item 3).
+2. **Icons parts 3 and 4** (the districts, the Backgrounds and the goods); part 2 (the dock, the marks and the replacements by family) is done and waits for the author's merge (item 3).
 3. **UI polish and modernization for every menu** (item 4).
 
 The rest follow in the order below.
@@ -34,11 +34,11 @@ The author: "most are simply intersections with random decorations dotting the l
 
 Idea: each of the 16 districts gets its own street plan (not a crossroads with props), room for the buildings and infrastructure its theme needs (docks with quays, stacked containers and cranes; farms with barns, silos beside them and fields; a studio lot; a campus with a quad and a gate), parking lots, roads that connect or end by a proper termination, and components remade in the flat style where they are poorly drawn. The map grows (about half again as many blocks per district, to be tested against the ground cache, the overview and the 160 MB ledger), with scenery-only land (hills, forest, farmland, a lake, a coast) between and around the districts. The survey writes a spec and a plan schematic per district. A pilot of two or three districts goes to the author first; the rest follow in groups. It folds in the flat buildings and props of item 15. **Needs:** the survey's plan, approved by the author; the F9 overlay (item 7) to measure the ground cost.
 
-### 3. Icons parts 2 to 4, with replacements
+### 3. Icons parts 3 and 4 (part 2 is done: PR #36)
 
-The author, 2026-11-04: "The emojis are a big complaint throughout my recent image submissions." Later the same day: the dock has not been redrawn with original icons, and the removed emoji were "only removed", not replaced. Part 1 (#31, live) removed the decorative ones and took the guard's count from 535 to 148. Parts 2 to 4 draw what is left, and the replacements. Each part lowers the ratchet in `tests/guard-emoji.test.mjs`, and the last makes it strict (zero).
+The author's complaint of 2026-11-04: "The emojis are a big complaint throughout my recent image submissions." Part 1 took the guard's count from 535 to 148 and part 2 from 148 to 102; parts 3 and 4 draw what is left. Each part lowers the ratchet in `tests/guard-emoji.test.mjs`, and the last makes it strict (zero).
 
-- **Part 2, the glyph kit, the dock, the marks that are the only cue (46), and the replacements.** The dock and seven drawer tabs; the tick, caret, play, pause, menu, close and camera marks; the Deal Room's verdict marks; the lock and manager-status marks. Replacements are drawn by family rather than one drawing per item: a glyph for each of the seven Codex categories (on the list and the page), the achievement families, the five probes and five angles of the Deal Room, the manager, client and loan kinds, and the dailies; a quest shows its district's glyph (part 3). First the 24 draft glyphs are redone for the bare tile the author chose (every part must read on the dark tile and in high-contrast mode), and a contact sheet goes to the author before anything is wired.
+- **Part 2, the glyph kit, the dock and the marks that are the only cue (46), done.** The kit (`js/art/`, docs/ART_DIRECTION.md 3.6), the dock and seven drawer tabs, the controls and marks (tick, cross, caret, play, pause, menu, help, camera, lock, dot, warning, audit, the Deal Room's verdicts) in JS, CSS masks and the world's canvas, and the pictures part 1 took away, back as a drawing for each family: the Codex's seven categories, the twelve badge families and the secret, the daily bounties, the three rarities, the Deal Room's probes and angles, the three managers, three clients and four loans. Quests wait for the districts' drawings (part 3): a quest card has no picture yet.
 - **Part 3, the 16 districts and the 12 Backgrounds (28).**
 - **Part 4, the 72 goods and the gavel on an auction tag (74).** The catalog's new goods (item 9) need drawings too.
 

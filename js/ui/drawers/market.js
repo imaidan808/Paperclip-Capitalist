@@ -10,6 +10,7 @@ import { fitOf, fitMult, fitLabel, FAKE_VALUE } from '../../market.js';
 import { dur, nameOf, knownFake, focusZone, heldIn, beliefLine, fold, flip } from './stock.js';
 import { lessonTitle, lessonGist, rulePhrases, rewardPhrases, grayBreak } from './districttext.js';
 import { avatarHTML } from '../../avatar.js';
+import { gl } from '../glyphs.js';
 
 const UP = '▲', DOWN = '▼';
 const TABS = ['buyers', 'lots', 'radar', 'exchange'];
@@ -220,7 +221,7 @@ function exchangeHTML(ctx) {
   const incoming = (S.incoming || []).map(({ offer: o, handle }) => {
     const c = g.checkOffer(o);
     return `<li class="card small"><b>${e(handle || o.fromHandle || o.from)}</b> offers ${o.give.assets.map((a) => e(nameOf(a.cls, a.cond))).join(', ') || 'no crates'}${o.give.cash ? ' + ' + m(o.give.cash) : ''}${o.give.royalty ? ` + ${m(o.give.royalty.perDay)} a day for ${o.give.royalty.days} days` : ''} for ${o.want.assets.map((a) => e(nameOf(a.cls, a.cond))).join(', ') || 'nothing'}${o.want.cash ? ' + ' + m(o.want.cash) : ''}.
-      <span class="chip ${c.ok ? 'good' : 'bad'}"><span aria-hidden="true">${c.ok ? '✓' : '✕'}</span> ${(c.variance * 100).toFixed(0)}% apart</span>
+      <span class="chip ${c.ok ? 'good' : 'bad'}">${gl(c.ok ? 'mark-tick' : 'mark-cross', 'gl-xs')} ${(c.variance * 100).toFixed(0)}% apart</span>
       <div class="row gap"><button class="btn sm green" data-act="market-accept" data-id="${e(o.id)}" data-fid="mx-ok-${e(o.id)}">Approve</button><button class="btn sm ghost" data-act="market-decline" data-id="${e(o.id)}" data-fid="mx-no-${e(o.id)}">Reject</button></div></li>`;
   }).join('');
   const sent = S.sent ? [...S.sent.values()] : (S.outgoing || []);
@@ -255,7 +256,7 @@ function tabOf(ctx) {
 }
 
 export default {
-  id: 'market', icon: '🛒', label: 'Market',
+  id: 'market', label: 'Market',
   visible: () => true,
   /** Classmate offers waiting, plus urgent buyers in the district you are in that one of your crates can serve right now. */
   badge(ctx) {

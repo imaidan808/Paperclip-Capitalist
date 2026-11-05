@@ -4,10 +4,9 @@
 // an HTML entity (&#10003; or &check;) or String.fromCodePoint. Ordinary typography stays: the allowlist below is the whole list.
 //
 // It is a RATCHET. The count may not rise above BASELINE; each part of the icons work lowers BASELINE to what it leaves, and the last part makes the test strict (zero, ALLOW unchanged).
-// Where the rest are, and which part draws them (2026-11-04, after "Icons 1: remove the decorative emoji", which took the count from 535 to 148):
-//   Icons 2, the glyph kit, the dock and the marks that are the only cue ........ 46  the dock and the seven drawer tabs 7; ticks, carets, play and pause, the menu, close and the camera
-//                                                                                    in js/ 15; the Deal Room's verdict marks, the Draft's tick and the pressed toggles in css/ 18;
-//                                                                                    the world's lock, "you are here" dot and manager status marks 6
+// Where the rest are, and which part draws them (2026-11-04, after "Icons 1: remove the decorative emoji", which took the count from 535 to 148, and "Icons 2: the glyph kit", which took it from 148 to 102):
+//   Icons 2, done: the dock and the seven drawer tabs, the ticks, carets, play and pause, the menu, close and the camera, the Deal Room's verdict marks, the Draft's tick, the pressed toggles and the world's
+//   lock, "you are here" dot and manager status marks are glyphs (js/art/g-*.js, js/ui/glyphs.js), and so are the pictures part 1 took away (the Codex's categories, the badges and bounties, the probes and angles, the managers, clients and loans).
 //   Icons 3, the districts and the Backgrounds ................................... 28  the sixteen districts' icons 16, the twelve Backgrounds' 12
 //   Icons 4, the goods ........................................................... 74  the 72 goods' icons and the gavel on an auction lot's tag in the world, twice
 import test from 'node:test';
@@ -20,6 +19,7 @@ import { QUESTS, ACHIEVEMENTS, DAILIES } from '../js/meta/quests.js';
 import { CODEX } from '../js/meta/codex.js';
 import { ACADEMY } from '../js/meta/academy.js';
 import { sellerFor } from '../js/deal.js';
+import { has } from '../js/ui/glyphs.js';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const read = (p) => readFileSync(join(ROOT, p), 'utf8');
@@ -29,7 +29,7 @@ const ALLOW = new Set(['←', '→', '×', '·', '−', '…', '▲', '▼']);
 /** The named entities that draw a symbol (the HTML ones that draw a letter, a quote or a space are not icons). */
 const NAMED = { larr: '←', rarr: '→', uarr: '↑', darr: '↓', harr: '↔', check: '✓', cross: '✗', star: '☆', starf: '★', bigstar: '★', hearts: '♥', diams: '♦', spades: '♠', clubs: '♣', phone: '☎', female: '♀', male: '♂', sung: '♪' };
 /** What the shipped sources hold today. A pull request may only lower it, and says so here. STRICT=1 asks for zero. */
-const BASELINE = 148;
+const BASELINE = 102;
 
 const PICTO = /\p{Extended_Pictographic}/u;
 const SYMBOL = /[←-⇿⌀-⏿■-◿☀-➿⬀-⯿⤀-⥿]/u; // arrows, technical, geometric shapes, miscellaneous symbols, dingbats
@@ -88,10 +88,14 @@ test('the emoji that were decoration are gone for good: buyers, managers, client
   // the sources that build the rest: the Deal Room's seller kinds, auctioneer and bench, and the cards of the Read and Pitch stages; the Bank's loan products
   assert.deepEqual([...read('js/deal.js').matchAll(/\bicon:\s*([^,}]+)/g)].map((m) => m[1].trim()).sort(), ['ASSETS[a.cls].icon', 'ASSETS[a.cls].icon', 'ZONES[z].icon', 'def.icon'], 'js/deal.js keeps an icon for goods and districts only');
   assert.ok(!/\bicon\b/.test(read('js/ui/deal.js').replace(/\.icon\b/g, '').replace(/^\/\/.*$/gm, '')), 'js/ui/deal.js: the angle and probe cards have no icon (goods and districts are read as .icon)');
-  assert.deepEqual([...read('js/ui/drawers/bank.js').matchAll(/\bicon:\s*('[^']*')/g)].map((m) => m[1]), ["'🏦'"], 'the Bank keeps its dock icon and its loan products have none');
+  assert.deepEqual([...read('js/ui/drawers/bank.js').matchAll(/\bicon:\s*('[^']*')/g)].map((m) => m[1]), [], 'the Bank has no icon of its own: its tab is the glyph dock-bank, and its loan products are drawn by id (js/ui/glyphs.js)');
 });
 
-test('what the later parts draw is still there: goods, districts and Backgrounds keep their icon, and so does every dock and drawer tab', () => {
+test('what the later parts draw is still there: goods, districts and Backgrounds keep their icon; every dock and drawer tab is a drawn glyph (dock-<id>) and no drawer carries an emoji', () => {
   for (const [name, list] of [['good', ASSETS], ['district', ZONES], ['Background', PERKS]]) for (const [id, x] of Object.entries(list)) assert.ok(typeof x.icon === 'string' && x.icon.trim(), `${name} ${id}: icon`);
-  for (const d of ['stock', 'market', 'crew', 'bank', 'travel', 'codex', 'quests']) assert.match(read(`js/ui/drawers/${d}.js`), new RegExp(`id: '${d}', icon: '[^']+', label:`), `${d}: the tab keeps its icon until Icons 2`);
+  for (const d of ['stock', 'market', 'crew', 'bank', 'travel', 'codex', 'quests']) {
+    assert.match(read(`js/ui/drawers/${d}.js`), new RegExp(`id: '${d}', label:`), `${d}: the tab is its id and its label`);
+    assert.doesNotMatch(read(`js/ui/drawers/${d}.js`), /\bicon:\s*'/, `${d}: no icon field (the picture is dock-${d} in js/art/g-ui.js)`);
+    assert.ok(has('dock-' + d), `${d}: dock-${d} is drawn`);
+  }
 });

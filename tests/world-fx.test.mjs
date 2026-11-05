@@ -178,14 +178,15 @@ test('the whole-island view keeps every district\'s name tag, near its district 
     w.mode = 'world'; w.fit(false); w.draw(); assert.deepEqual(faults(w), []);
     assert.ok(w.cam.z < 0.45, 'the island is zoomed out past the pips: ' + w.cam.z);
     assert.equal(w.tagN, 16, `${W0}px: every district keeps its tag (none is left out)`);
-    const rects = []; for (let i = 0; i < w.tagN; i++) { const t = w.tagPlan[i], wd = t.text.length * 6.7 + 14; rects.push({ t, x0: t.x - wd / 2, x1: t.x + wd / 2, y0: t.y - 9, y1: t.y + 9 }); }
+    const rects = []; for (let i = 0; i < w.tagN; i++) { const t = w.tagPlan[i], wd = t.text.length * 6.7 + 14 + (t.mk ? 14 : 0); rects.push({ t, x0: t.x - wd / 2, x1: t.x + wd / 2, y0: t.y - 9, y1: t.y + 9 }); }
     for (const a of rects) {
       assert.ok(a.x0 >= 0 && a.x1 <= W0, `${W0}px: tag ${a.t.id} is whole on the screen`);
       assert.ok(Math.abs(a.t.y - a.t.py) <= 38 && Math.abs(a.t.x - a.t.px) <= 68 + 70, `${W0}px: tag ${a.t.id} stays near its district`);
       let covered = 0; for (const b of rects) if (b !== a) { const ow = Math.min(a.x1, b.x1) - Math.max(a.x0, b.x0), oh = Math.min(a.y1, b.y1) - Math.max(a.y0, b.y0); if (ow > 0 && oh > 0) covered += ow * oh; }
       assert.ok(covered <= 0.1 * (a.x1 - a.x0) * 18, `${W0}px: tag ${a.t.id} is covered ${Math.round(100 * covered / ((a.x1 - a.x0) * 18))}% by the others`);
     }
-    const here = w.tagPlan[0]; assert.equal(here.id, w.player.zone, 'the district you are in is placed first'); assert.equal(here.k, 0, 'and stands exactly over its district'); assert.ok(here.text.startsWith('●'), 'and carries the marker that says you are there');
+    const here = w.tagPlan[0]; assert.equal(here.id, w.player.zone, 'the district you are in is placed first'); assert.equal(here.k, 0, 'and stands exactly over its district'); assert.equal(here.mk, 'mark-dot', 'and carries the marker that says you are there (a drawn dot before its name, not a character in it)'); assert.match(here.text, /^\d+  /);
+    assert.equal(w.tagPlan.slice(0, w.tagN).filter((t) => t.mk === 'mark-lock').length, 15, 'the other fifteen are not open, and each carries a drawn lock'); assert.ok(w.tagPlan.slice(0, w.tagN).every((t) => !/[●\u{1F512}]/u.test(t.text)), 'and no tag has an emoji or a symbol in its text');
     const notes = w.overlay.filter((o) => o.lo); assert.ok(notes.length >= 10, 'the locked gates and the player each have a passing note: ' + notes.length);
     for (const o of notes.filter((n) => n.on)) { // a note that is shown never lies on a name tag
       const k = qs(Math.min(1.25, Math.max(0.75, w.cam.z))), wd = (o.n * 6.7 + 14) * k, x0 = o.px - wd / 2, x1 = o.px + wd / 2, y0 = o.py - 9 * k, y1 = o.py + 9 * k; // the size the placement works with
@@ -203,9 +204,9 @@ test('name tags that still touch are drawn shorter, never dropped, and the one p
   const { w } = await world(g, { zone: 1, sel: new Set() }, [390, 844]);
   w.mode = 'world'; w.fit(false); w.draw();
   assert.ok(w.tagPlan.slice(0, w.tagN).some((t) => !t.text.includes('  ')), 'on a phone some tags are drawn short (the lock and the number)');
-  const order = []; const chip = w.chip.bind(w); w.chip = (c, x, y, text, ...r) => { order.push(text); chip(c, x, y, text, ...r); };
-  w.draw(); const texts = order.filter((t) => /^(● |\u{1F512} )?\d+( |$)/u.test(t)); assert.equal(texts.length, 16, 'sixteen tags are drawn');
-  assert.ok(texts.at(-1).startsWith('●'), 'the tag placed first (where you are) is drawn last, on top of any that still touch it');
+  const order = []; const chip = w.chip.bind(w); w.chip = (c, x, y, text, ...r) => { order.push([text, r[2] || '']); chip(c, x, y, text, ...r); };
+  w.draw(); const texts = order.filter(([t]) => /^\d+( |$)/.test(t)); assert.equal(texts.length, 16, 'sixteen tags are drawn');
+  assert.equal(texts.at(-1)[1], 'mark-dot', 'the tag placed first (where you are) is drawn last, on top of any that still touch it');
   w.focusZone(1, false); w.draw(); assert.ok(w.tagN > 0 && w.tagN < 4, 'closed in on one district a phone has only a tag or two on it: ' + w.tagN);
   const [px, py] = w.s2w(330, 120), note = { k: 'chip', lo: 1, n: 14, wx: px, wy: py, draw: () => {} }; w.overlay.push(note); w.drawOverlay(w.ctx);
   assert.equal(note.on, true, 'with no crowd of tags a passing note shows again, even on a phone');

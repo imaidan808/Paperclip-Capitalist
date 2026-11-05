@@ -36,6 +36,7 @@ import {
 } from './academy-sandbox.js';
 import { academySounds } from './academy-sandbox.js';
 import { audio as engine } from '../audio/index.js';
+import { gl, tile, categoryGlyph } from './glyphs.js';
 
 export const missionList = () => MISSIONS;
 
@@ -50,6 +51,8 @@ const LETTERS = ['A', 'B', 'C', 'D'];
 const pretty = (id) => String(id).replace(/-/g, ' ').replace(/^./, (c) => c.toUpperCase());
 const para = (t) => `<p>${esc(t)}</p>`;
 const entryOf = (id, lookup) => lookup?.(id) || { id, title: pretty(id), summary: '' };
+/** The drawing of the Codex category a lesson's concept belongs to ('' when the concept is not a page): the lesson's own picture, the same one its page has in the Codex. */
+const lessonGlyph = (concept) => categoryGlyph(CODEX_BY_ID[concept]?.category);
 
 /**
  * The scene before a lesson: its title, one line of setting, one line of facts, the course's progress and Begin. What the lesson teaches is not said here: the player finds it out by playing,
@@ -58,11 +61,11 @@ const entryOf = (id, lookup) => lookup?.(id) || { id, title: pretty(id), summary
 export function introHTML(m, { index, total, st, replay, missions = [] }) {
   const state = (id, i) => (st.done.includes(id) ? 'done' : st.skipped.includes(id) ? 'skipped' : i === index ? 'now' : 'todo');
   const label = { done: 'done', skipped: 'skipped', now: 'this lesson', todo: 'not played yet' };
-  const pips = missions.map((x, i) => `<li class="ac-pip ${state(x.id, i)}${i === index - 1 && state(x.id, i) === 'done' ? ' fresh' : ''}" aria-label="Lesson ${i + 1} of ${total}, ${label[state(x.id, i)]}: ${esc(x.title)}"><span aria-hidden="true">${state(x.id, i) === 'done' ? '✓' : i + 1}</span></li>`).join('');
+  const pips = missions.map((x, i) => `<li class="ac-pip ${state(x.id, i)}${i === index - 1 && state(x.id, i) === 'done' ? ' fresh' : ''}" aria-label="Lesson ${i + 1} of ${total}, ${label[state(x.id, i)]}: ${esc(x.title)}"><span aria-hidden="true">${state(x.id, i) === 'done' ? gl('mark-tick', 'gl-pip') : i + 1}</span></li>`).join('');
   const facts = [`About ${Math.max(1, Math.round(+m.minutes || 2))} min`, ZONES[m.zone] ? ZONES[m.zone].name : ''].filter(Boolean).join(' · ');
   return `<section class="ac-intro panel" aria-labelledby="ac-h">
     <p class="ac-eyebrow mono">Academy &middot; Lesson ${index + 1} of ${total}${replay ? ' &middot; replay' : ''}</p>
-    <h1 id="ac-h" tabindex="-1">${esc(m.title)}</h1>
+    <h1 id="ac-h" tabindex="-1">${lessonGlyph(m.concept) ? `<span aria-hidden="true">${gl(lessonGlyph(m.concept))}</span>` : ''}${esc(m.title)}</h1>
     <p class="ac-scene">${esc(m.intro || '')}</p>
     <p class="ac-meta small mute">${esc(facts)}</p>
     <ol class="ac-pips" aria-label="Your lessons">${pips}</ol>
@@ -151,7 +154,7 @@ export function teachHTML(m, state) {
 export function rewardHTML(m, paid, lookup, { last, skipped, replay, index, total, only } = {}) {
   const ids = [...(paid.newCodex || []), ...(paid.knownCodex || [])];
   const chips = [paid.xp ? `<li class="chip good" data-count="${+paid.xp || 0}" data-fmt="int" data-pre="+" data-post=" XP">+${paid.xp} XP</li>` : '', paid.points ? `<li class="chip good">+${paid.points} skill point</li>` : ''].join('');
-  const cards = ids.map((id, n) => { const e = entryOf(id, lookup), fresh = (paid.newCodex || []).includes(id); return `<li class="ac-cxcard" style="--n:${n}"><div><b>${esc(e.title)}</b>${fresh ? ' <span class="chip info">New</span>' : ''}<p class="small mute">${esc(e.summary || '')}</p></div></li>`; }).join('');
+  const cards = ids.map((id, n) => { const e = entryOf(id, lookup), fresh = (paid.newCodex || []).includes(id); const pic = tile(categoryGlyph(e.category)); return `<li class="ac-cxcard${pic ? ' has-gl' : ''}" style="--n:${n}">${pic}<div><b>${esc(e.title)}</b>${fresh ? ' <span class="chip info">New</span>' : ''}<p class="small mute">${esc(e.summary || '')}</p></div></li>`; }).join('');
   const note = replay ? 'A replay pays nothing new. The pages stay in your Codex.' : skipped ? 'Play it from the Codex to earn its XP and skill point.' : paid.pending ? 'They arrive when your run begins.' : 'Added to your run.';
   return `<p class="ac-eyebrow mono">Lesson ${(index ?? 0) + 1} of ${total ?? ''} &middot; Complete</p>
     <h2 id="ac-sh" tabindex="-1">${esc(m.title)}: ${skipped ? 'explained' : 'done'}</h2>
@@ -234,7 +237,7 @@ export function mountAcademy(root, S, { onDone, onSkip, only, missions, store = 
 
     let layer = null, ringEl = null, cardEl = null, bodyEl = null, stripEl = null, stripOn = false; // the card is a frame with a caret on its edge; its text scrolls in bodyEl, so the caret is never clipped
 
-    U.tracker = () => { const c = stranded || coachFor(m, run); return { title: m.title, desc: shortSay(c.say), p: Math.min(run.i, steps.length), n: steps.length, drawer: null }; };
+    U.tracker = () => { const c = stranded || coachFor(m, run); return { title: m.title, desc: shortSay(c.say), glyph: lessonGlyph(m.concept), p: Math.min(run.i, steps.length), n: steps.length, drawer: null }; };
     sb.game.onEvent = (evt) => ctx.emit(evt);  // the sandbox feeds the steps, never quests, achievements or the Codex
     const emit0 = sb.emit.bind(sb);
     sb.emit = (type, data) => { if (type === 'note' && typeof data?.level === 'number') return; emit0(type, data); }; // a pretend level-up is not news
@@ -263,7 +266,7 @@ export function mountAcademy(root, S, { onDone, onSkip, only, missions, store = 
       if (layer && layer.isConnected) return;
       layer = document.createElement('div');
       layer.className = 'ac-layer'; layer.dataset.academy = ''; layer.dataset.keep = ''; // keep: the Deal Room repaints its sheet with innerHTML, and setHTML (common.js) leaves a child marked so where it is
-      layer.innerHTML = '<div class="ac-ring" aria-hidden="true" hidden></div><i class="ac-stripbox" aria-hidden="true"></i><section class="ac-coach" role="dialog" aria-modal="false" aria-labelledby="ac-say" tabindex="-1"><div class="ac-coach-in"></div><i class="ac-check" aria-hidden="true">&#10003;</i></section>';
+      layer.innerHTML = '<div class="ac-ring" aria-hidden="true" hidden></div><i class="ac-stripbox" aria-hidden="true"></i><section class="ac-coach" role="dialog" aria-modal="false" aria-labelledby="ac-say" tabindex="-1"><div class="ac-coach-in"></div><i class="ac-check" aria-hidden="true">' + gl('mark-tick') + '</i></section>';
       ringEl = layer.firstChild; stripEl = layer.children[1]; cardEl = layer.lastChild; bodyEl = cardEl.firstChild;
       ctx.el.overlay.appendChild(layer);
       lastKey = '';

@@ -1,7 +1,7 @@
 // The game screen, world first. The 2.5D world fills the window; over it sit the HUD, the mission tracker, a news ticker, a dock of icons and one drawer
 // at a time (docs/V2_DESIGN.md section 8). Everything a drawer needs is on `ctx`; drawers live in ./drawers/ and are listed in ./drawers/index.js.
 //
-// A drawer module default-exports { id, icon, label, visible(ctx), badge(ctx), html(ctx), acts(ctx) }:
+// A drawer module default-exports { id, label, visible(ctx), badge(ctx), html(ctx), acts(ctx) } (its picture, in the dock and in its header, is the glyph dock-<id> of js/art/g-ui.js):
 //   html(ctx)  -> the drawer body as an HTML string (pure; re-run on every refresh, never put state in the DOM)
 //   acts(ctx)  -> { actName(el, event) } delegated click/change/input handlers; prefix every name with the drawer id ("stock-sell")
 // ctx: S (session), g() (the Game), U (UI state), progress (quests/Codex), render(), toast(msg, level), say(result), queue(html, opts), confirmBox(...),
@@ -16,6 +16,7 @@ import { fitStuck, watchPress } from './common.js'; // its own line: the shell's
 import { kv } from '../session.js';
 import { stamp } from '../build.js';
 import { hudHTML, trackerHTML, tickerHTML } from './hud.js';
+import { gl } from './glyphs.js';
 import { DRAWERS } from './drawers/index.js';
 import { openDeal } from './deal.js';
 import { createWorldView } from './worldview.js';
@@ -73,13 +74,13 @@ export function mountGame(root, S, hooks) {
     const vis = visibleIds();
     return DRAWERS.filter((d) => vis.has(d.id)).map((d, i) => {
       const b = d.badge?.(ctx);
-      return `<button class="dk" data-anchor="dock-${d.id}" data-act="dock" data-d="${d.id}" data-fid="dk-${d.id}" aria-pressed="${U.drawer === d.id}" aria-keyshortcuts="${i + 1}"><span class="ic" aria-hidden="true">${d.icon}</span><span class="lb">${esc(d.label)}</span>${b ? `<span class="bd" aria-label="${esc(String(b))} waiting">${esc(String(b))}</span>` : ''}</button>`;
+      return `<button class="dk" data-anchor="dock-${d.id}" data-act="dock" data-d="${d.id}" data-fid="dk-${d.id}" aria-pressed="${U.drawer === d.id}" aria-keyshortcuts="${i + 1}"><span class="ic" aria-hidden="true">${gl('dock-' + d.id)}</span><span class="lb">${esc(d.label)}</span>${b ? `<span class="bd" aria-label="${esc(String(b))} waiting">${esc(String(b))}</span>` : ''}</button>`;
     }).join('');
   }
   function drawerHTML() {
     const d = drawerOf(U.drawer);
     if (!d) return '';
-    return `<header class="dh"><h2 tabindex="-1" id="dh-title"><span aria-hidden="true">${d.icon}</span> ${esc(d.label)}</h2><button class="ibtn" data-act="drawer-close" aria-label="Close ${esc(d.label)}">✕</button></header><div class="db" data-drawer="${d.id}">${d.html(ctx)}</div>`;
+    return `<header class="dh"><h2 tabindex="-1" id="dh-title">${gl('dock-' + d.id, 'gl-dh')} ${esc(d.label)}</h2><button class="ibtn" data-act="drawer-close" aria-label="Close ${esc(d.label)}">${gl('mark-cross', 'gl-sm')}</button></header><div class="db" data-drawer="${d.id}">${d.html(ctx)}</div>`;
   }
   function openDrawer(id, o = {}) {
     if (!drawerOf(id)) return;

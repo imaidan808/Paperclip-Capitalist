@@ -11,6 +11,7 @@ import { QUEST_BY_ID } from '../../meta/progress.js';
 import { MONEY_SUMS } from '../../meta/quests.js';
 import { goToDistrict, keepScroll, rememberScroll } from './travel.js';
 import { fold, flip } from './stock.js';
+import { gl, tile as glyphTile, badgeGlyph, dailyGlyph } from '../glyphs.js';
 
 const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
 const pctN = (x) => Math.round(x * 100);
@@ -105,8 +106,8 @@ function heroHTML(ctx) {
         <p class="small"><b>${into}</b> / ${need} XP. <b>${Math.max(0, need - into)}</b> to level ${lv + 1}.</p>
         ${xm !== 1 ? `<p class="tiny mute">All XP ${xm > 1 ? '+' : '-'}${pctN(Math.abs(xm - 1))}% from your Backgrounds.</p>` : ''}</div></div>
     <div class="qs-stats">
-      <div class="qs-stat pts${s.points ? ' on' : ''}"><div><b>${s.points}</b> skill point${s.points === 1 ? '' : 's'} to spend<small>${s.points ? '' : g.pointRoom() > 0 ? 'Every level gives one.' : `Every skill is mastered: a level pays ${ECON.pointXp} XP.`}</small></div></div>
-      <div class="qs-stat"><div>Win streak <b>${s.streak}</b> <span class="mute">(best ${s.bestStreak})</span><small>${streakLine}</small></div></div>
+      <div class="qs-stat pts${s.points ? ' on' : ''}">${gl('ach-rank')}<div><b>${s.points}</b> skill point${s.points === 1 ? '' : 's'} to spend<small>${s.points ? '' : g.pointRoom() > 0 ? 'Every level gives one.' : `Every skill is mastered: a level pays ${ECON.pointXp} XP.`}</small></div></div>
+      <div class="qs-stat">${gl('ach-streak')}<div>Win streak <b>${s.streak}</b> <span class="mute">(best ${s.bestStreak})</span><small>${streakLine}</small></div></div>
     </div>
     <div class="qs-rep"><div class="qs-reprow"><span>Reputation: <b>${word}</b></span><span class="mono">${rep} / 100</span></div>
       <div class="qs-meter" role="meter" aria-label="Reputation" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${rep}" aria-valuetext="${rep} of 100, ${word}"><i style="width:${rep}%"></i></div>
@@ -153,10 +154,10 @@ function questsHTML(ctx) {
 // ------------------------------------------------------------------ daily bounties
 function dailiesHTML(ctx) {
   const list = ctx.progress.dailies() || [], n = list.filter((d) => d.done).length;
-  const body = list.length ? `<div class="qs-days">${list.map((d) => `<article class="qs-day${d.done ? ' done' : ''}">
-      <div><h4>${esc(d.title)}${d.done ? ' <span class="chip good">Done</span>' : ''}</h4><p class="small">${esc(d.desc)}</p>
+  const body = list.length ? `<div class="qs-days">${list.map((d) => { const pic = d.done ? `<span class="gl-tile">${gl('mark-tick')}</span>` : glyphTile(dailyGlyph(d.id)); return `<article class="qs-day${d.done ? ' done' : ''}${pic ? ' has-gl' : ''}">
+      ${pic}<div><h4>${esc(d.title)}${d.done ? ' <span class="chip good">Done</span>' : ''}</h4><p class="small">${esc(d.desc)}</p>
       <div class="qs-prog">${bar(`${d.title} progress`, d.done ? d.goal.count : d.p, d.goal.count, d.done ? 'green' : 'gold')}<b class="mono">${progText(d.goal, d.done ? d.goal.count : d.p)}</b></div>
-      <div class="qs-rw"><span class="mute">Reward</span> ${rewardChips(ctx, d.reward)}</div></div></article>`).join('')}</div>`
+      <div class="qs-rw"><span class="mute">Reward</span> ${rewardChips(ctx, d.reward)}</div></div></article>`; }).join('')}</div>`
     : '<p class="small mute">Three new bounties arrive each day.</p>';
   return `<section class="sect" data-qsect="daily"><h3 tabindex="-1"><span>Daily bounties</span><span>${n} of ${list.length || 3} today</span></h3>${body}</section>`;
 }
@@ -165,7 +166,7 @@ function dailiesHTML(ctx) {
 function achievementsHTML(ctx) {
   const all = ctx.progress.achievements(), q = Q(ctx), filt = q.ach === 'earned' || q.ach === 'all' ? q.ach : 'todo'; // the badges still to earn open first: the earned ones are a tap away
   const earned = all.filter((a) => a.done).length;
-  const rar = (r) => { const l = all.filter((a) => a.def.rarity === r); return `<span class="qs-rarity ${r}">${RARITY[r]} ${l.filter((a) => a.done).length}/${l.length}</span>`; };
+  const rar = (r) => { const l = all.filter((a) => a.def.rarity === r); return `<span class="qs-rarity ${r}">${gl('rarity-' + r, 'gl-xs')}${RARITY[r]} ${l.filter((a) => a.done).length}/${l.length}</span>`; };
   const ratio = (a) => (a.n ? a.p / a.n : 0);
   let list = all.filter((a) => (filt === 'earned' ? a.done : filt === 'todo' ? !a.done : true));
   list = [...list].sort((a, b) => (b.done - a.done) || (a.hidden - b.hidden) || (ratio(b) - ratio(a))); // in the full list earned come first, then the nearest to done, secrets last
@@ -176,8 +177,9 @@ function achievementsHTML(ctx) {
     const cls = a.done ? 'earned' : a.hidden ? 'secret' : 'todo';
     const body = a.hidden ? '<p class="tiny mute">Revealed when earned.</p>'
       : `<p class="tiny">${esc(d.desc)}</p>${a.done ? '<p class="tiny qs-got"><b>Earned</b></p>' : `<div class="qs-prog">${bar(`${d.title} progress`, a.p, a.n, 'gold')}<b class="mono tiny">${progText(d.goal, a.p)}</b></div>`}`;
-    return `<li class="qs-ach ${d.rarity} ${cls}">
-      <div><h4>${a.hidden ? 'Secret badge' : esc(d.title)}</h4><span class="qs-rarity ${d.rarity}">${word}${a.hidden ? ' · secret' : ''}</span>${body}
+    const pic = glyphTile(badgeGlyph(d.id, a.hidden));
+    return `<li class="qs-ach ${d.rarity} ${cls}${pic ? ' has-gl' : ''}">
+      ${pic}<div><h4>${a.hidden ? 'Secret badge' : esc(d.title)}</h4><span class="qs-rarity ${d.rarity}">${gl('rarity-' + d.rarity, 'gl-xs')}${word}${a.hidden ? ' · secret' : ''}</span>${body}
       ${a.done ? '' : `<div class="qs-rw">${rewardChips(ctx, d.reward)}</div>`}</div></li>`;
   };
   const more = list.length > ACH_SHOWN ? `<button class="btn sm ghost" data-act="quests-ach-all" data-fid="qs-ach-all" aria-expanded="${!!q.achAll}">${q.achAll ? 'Show fewer badges' : `Show all ${list.length} badges`}</button>` : '';
@@ -238,7 +240,7 @@ function acts(ctx) {
 }
 
 export default {
-  id: 'quests', icon: '🎯', label: 'Quests',
+  id: 'quests', label: 'Quests',
   visible: () => true,
   badge: (ctx) => (ctx.g().s.points > 0 ? ctx.g().s.points : null),
   html,

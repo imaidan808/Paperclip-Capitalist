@@ -6,6 +6,7 @@ import { fmtMoney as money } from '../market.js';
 import { MONEY_SUMS } from '../meta/quests.js';
 import { esc, settings } from './common.js';
 import { audio, speakerState, audioDefaults } from '../audio/index.js';
+import { gl, questGlyph } from './glyphs.js';
 
 const lvlBase = xpForLevel; // the engine's level curve (config.js)
 
@@ -37,7 +38,7 @@ export function hudHTML(ctx) {
   const fl = (k, v) => (prev[k] == null || Math.abs(v - prev[k]) < 0.005 ? '' : v > prev[k] ? ' up' : ' down');
   U.prev = { cash: s.cash, nw };
   const clock = S.canSetClock()
-    ? `<button class="ibtn" data-anchor="hud-clock" data-act="pause" aria-pressed="${S.clock.paused}" aria-label="${S.clock.paused ? 'Resume the clock' : 'Pause the clock'}">${S.clock.paused ? '▶' : '⏸'}</button>
+    ? `<button class="ibtn" data-anchor="hud-clock" data-act="pause" aria-pressed="${S.clock.paused}" aria-label="${S.clock.paused ? 'Resume the clock' : 'Pause the clock'}">${gl(S.clock.paused ? 'ctl-play' : 'ctl-pause')}</button>
        <label class="sr" for="spd">Game speed</label><select id="spd" data-change="speed" data-fid="spd">${[0.25, 1, 4, 16, 64].map((v) => `<option value="${v}" ${S.clock.speed === v ? 'selected' : ''}>${v}x</option>`).join('')}</select>`
     : `<span class="chip info">Class clock ${S.clock.paused ? 'paused' : S.clock.speed + 'x'}</span>`;
   const refused = S.room?.state === 'refused';
@@ -48,16 +49,16 @@ export function hudHTML(ctx) {
       <button class="rs${fl('nw', nw)}${s.insolvent ? ' neg' : ''}" data-anchor="hud-networth" data-act="breakdown" data-k="nw" data-fid="r-nw"><small>Net worth</small><b class="mono">${money(nw)}</b></button>
       <button class="rs" data-anchor="hud-day" data-act="breakdown" data-k="day" data-fid="r-day"><small>Day</small><b class="mono">${g.day}<span class="mute">/${TOTAL_DAYS}</span></b><span class="bar" role="progressbar" aria-label="Game progress" aria-valuemin="0" aria-valuemax="${TOTAL_DAYS}" aria-valuenow="${g.day}"><i data-bar="day"></i></span></button>
     </div>
-    <div class="ctl">${room}${clock}${speakerHTML()}<button class="ibtn" data-act="help" aria-label="Help">?</button><button class="ibtn" data-act="menu" aria-label="Menu">☰</button></div>`;
+    <div class="ctl">${room}${clock}${speakerHTML()}<button class="ibtn" data-act="help" aria-label="Help">${gl('ctl-help')}</button><button class="ibtn" data-act="menu" aria-label="Menu">${gl('ctl-menu')}</button></div>`;
 }
 
 /** The current objective: an Academy mission while the player is learning, otherwise the lowest-district active quest. */
 export function trackerHTML(ctx) {
-  const t = ctx.U.tracker?.(ctx) ?? (() => { const q = ctx.progress?.current(); return q ? { title: q.def.title, desc: q.def.desc, p: q.p, n: q.n, drawer: 'quests', money: !!(q.def.goal.sum && MONEY_SUMS.has(q.def.goal.sum)) } : null; })();
+  const t = ctx.U.tracker?.(ctx) ?? (() => { const q = ctx.progress?.current(); return q ? { title: q.def.title, desc: q.def.desc, glyph: questGlyph(q.def.goal.event), p: q.p, n: q.n, drawer: 'quests', money: !!(q.def.goal.sum && MONEY_SUMS.has(q.def.goal.sum)) } : null; })();
   if (!t) return '';
   const f = t.n ? Math.max(0, Math.min(1, t.p / t.n)) : 0;
   // Reading order is Goal, title, words, count; the stylesheet lays the count at the top right and, on a small screen, shows only title and bar (the rest is read out).
-  return `<button class="tracker" data-anchor="tracker" data-act="dock" data-d="${t.drawer || 'quests'}"><small class="tk-lb">Goal</small><b>${esc(t.title)}</b><span class="tk-ds">${esc(t.desc || '')}</span>${t.n ? `<span class="bar green" role="progressbar" aria-valuemin="0" aria-valuemax="${t.n}" aria-valuenow="${Math.min(t.p, t.n)}" aria-label="Goal progress"><i style="width:${f * 100}%"></i></span><small class="mono tk-ct">${t.money ? `${money(Math.min(t.p, t.n))} / ${money(t.n)}` : `${Math.min(+t.p.toFixed(1), t.n)} / ${t.n}`}</small>` : ''}</button>`;
+  return `<button class="tracker" data-anchor="tracker" data-act="dock" data-d="${t.drawer || 'quests'}"><small class="tk-lb">${t.glyph ? gl(t.glyph) + ' ' : ''}Goal</small><b>${esc(t.title)}</b><span class="tk-ds">${esc(t.desc || '')}</span>${t.n ? `<span class="bar green" role="progressbar" aria-valuemin="0" aria-valuemax="${t.n}" aria-valuenow="${Math.min(t.p, t.n)}" aria-label="Goal progress"><i style="width:${f * 100}%"></i></span><small class="mono tk-ct">${t.money ? `${money(Math.min(t.p, t.n))} / ${money(t.n)}` : `${Math.min(+t.p.toFixed(1), t.n)} / ${t.n}`}</small>` : ''}</button>`;
 }
 
 export function tickerHTML(ctx) {

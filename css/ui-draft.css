@@ -34,7 +34,8 @@
 .dr-nm { font-size: 1rem; line-height: 1.15; font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
 .dr-box { width: 1.35rem; height: 1.35rem; border: var(--bw) solid var(--field); border-radius: 2px; display: grid; place-items: center; background: var(--bg); }
 .dr-card[data-on="1"] .dr-box { background: var(--gold); border-color: var(--gold); }
-.dr-card[data-on="1"] .dr-box::after { content: "\2713"; color: var(--on-gold); font-weight: 900; font-size: .95rem; line-height: 1; }
+.dr-card[data-on="1"] .dr-box::after { content: ""; width: .95rem; height: .95rem; background-color: var(--on-gold); -webkit-mask: var(--gl-tick) center / contain no-repeat; mask: var(--gl-tick) center / contain no-repeat; } /* the chosen Background: a tick (js/art/g-ui.js mark-tick, as a mask: the title screen has no glyph set) */
+@media (forced-colors: active) { .dr-card[data-on="1"] .dr-box::after { forced-color-adjust: none; background-color: CanvasText; } }
 .dr-body { display: grid; gap: .4rem; }
 .dr-basis { color: var(--mute); font-size: .82rem; }
 .dr-line { display: grid; grid-template-columns: 1.1rem minmax(0, 1fr); gap: .3rem; font-size: .84rem; line-height: 1.35; }

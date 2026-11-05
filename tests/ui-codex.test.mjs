@@ -48,7 +48,7 @@ const text = (html) => html.replace(/<[^>]+>/g, ' ').replace(/&[a-z]+;/g, ' ');
 
 // ---------------------------------------------------------------- the drawer's identity
 test('the drawer follows the contract in shell.js', () => {
-  assert.equal(drawer.id, 'codex'); assert.equal(drawer.icon, '📖'); assert.equal(drawer.label, 'Codex'); assert.equal(drawer.visible(), true);
+  assert.equal(drawer.id, 'codex'); assert.ok(!('icon' in drawer), 'its picture is the glyph dock-codex'); assert.equal(drawer.label, 'Codex'); assert.equal(drawer.visible(), true);
   for (const f of ['badge', 'html', 'acts']) assert.equal(typeof drawer[f], 'function', f);
   const acts = drawer.acts(ctxOf(START));
   for (const [name, fn] of Object.entries(acts)) { assert.match(name, /^codex-/, 'every action is named codex-...'); assert.equal(typeof fn, 'function'); }
@@ -61,7 +61,7 @@ test('a fresh Codex: the starting pages are open, the rest are silhouettes that 
   assert.deepEqual(checkHTML(html, 'fresh'), []);
   assert.match(html, /2 of 8 unlocked/);
   assert.equal((html.match(/data-act="codex-open"/g) || []).length, 2, 'two openable pages');
-  assert.equal((html.match(/class="cx-card locked"/g) || []).length, 6);
+  assert.equal((html.match(/class="cx-card locked[ "]/g) || []).length, 6);
   assert.match(html, /Reach The Scrap Yard|Reach Pawn District/, 'a district to reach, named');
   assert.match(html, /Reach Pawn District/); assert.match(html, /Win a pitch/); assert.match(html, /Take out a loan/); assert.match(html, /Reach Milestone 2 \(\$25,000 net worth\)/);
   assert.match(html, /Survive a margin call/); assert.match(html, /Exit your company/);
@@ -69,7 +69,8 @@ test('a fresh Codex: the starting pages are open, the rest are silhouettes that 
   for (const d of DEFS.filter((x) => x.unlock === 'start')) assert.ok(html.includes(d.title) && html.includes(d.summary));
   assert.ok(!/cx-new/.test(html), 'the starting pages are not "new"');
   assert.match(html, /aria-label="Locked concept\. Unlocks when you: Win a pitch"/);
-  assert.match(html, /<h3><span>Value<\/span><span class="mono">2 \/ 2<\/span><\/h3>/); assert.match(html, /<h3><span>Markets<\/span><span class="mono">0 \/ 1<\/span><\/h3>/);
+  assert.match(html, /<h3><span><svg[^>]*aria-hidden="true">.*?<\/svg> Value<\/span><span class="mono">2 \/ 2<\/span><\/h3>/); assert.match(html, /<h3><span><svg[^>]*aria-hidden="true">.*?<\/svg> Markets<\/span><span class="mono">0 \/ 1<\/span><\/h3>/);
+  assert.equal((html.match(/<span class="gl-tile"><svg/g) || []).length, 8, 'a drawing for each card, an open page and a silhouette alike: its category\'s');
   assert.equal(drawer.badge(ctxOf(START, { drawerOpen: false })), null, 'nothing new, no badge');
   assert.match(html, /aria-pressed="true">Concepts/); assert.match(html, /type="search"/); assert.match(html, /<label class="sr" for="cx-q">/);
   assert.ok(!/\bzone\b/i.test(text(html)), 'district, never zone');
@@ -85,8 +86,8 @@ test('a Codex with no pages at all still draws', () => {
 test('with most pages unlocked they are grouped by category in the Codex order and the new ones say so', () => {
   const cx = { ...START, 'persona-fit': 3, negotiation: 4, 'debt-to-equity': 9, tariffs: 12, 'risk-of-ruin': 20, 'exit-valuation': 31 };
   const ctx = ctxOf(cx), html = drawer.html(ctx);
-  assert.deepEqual(checkHTML(html, 'many'), []); assert.match(html, /8 of 8 unlocked/); assert.ok(!/class="cx-card locked"/.test(html));
-  const heads = [...html.matchAll(/<h3><span>([A-Za-z]+)<\/span>/g)].map((m) => m[1]);
+  assert.deepEqual(checkHTML(html, 'many'), []); assert.match(html, /8 of 8 unlocked/); assert.ok(!/class="cx-card locked[ "]/.test(html));
+  const heads = [...html.matchAll(/<h3><span>(?:<svg[^>]*>.*?<\/svg> )?([A-Za-z]+)<\/span>/g)].map((m) => m[1]);
   assert.deepEqual(heads, CATEGORIES.filter((c) => DEFS.some((d) => d.category === c)), 'Value, Markets, Operations, Finance, Risk, People, Strategy');
   assert.equal((html.match(/cx-new/g) || []).length, 6, 'six pages unlocked by play are new, the two starting pages are not');
   assert.match(html, /What &lt;b&gt;a company&lt;\/b&gt; is worth &amp; why/, 'summaries are text');
@@ -181,11 +182,18 @@ test('every page of the schema draws cleanly even when its optional parts are mi
   const h = entryHTML(ctx, hostile); assert.ok(!/<(b|i|u|s|q|r|t|v|w)>/.test(h.replace(/<\/?(b|ol|li|ul|p|pre|h4|section|span|div|header|button)[^>]*>/g, ''))); assert.deepEqual(checkHTML(h, 'hostile'), []);
 });
 
-test('a page has no picture: an icon an older build gave it is not printed, in the list, the page, the related links or the Academy tab', () => {
+test('a page\'s picture is its category\'s drawing: an icon an older build gave it is not printed, in the list, the page, the related links or the Academy tab', () => {
   const old = { ...E('old-page', 'Value', 'start', { related: ['older'] }), icon: '🧪' }, older = { ...E('older', 'Value', 'start', { related: ['old-page'] }), icon: '🧫' };
   const ctx = ctxOf({ 'old-page': 0, older: 0 }, { defs: [old, older] });
   ctx.U.codexOpenId = 'old-page';
   for (const h of [drawer.html(ctx), entryHTML(ctx, old), (ctx.U.codexOpenId = null, drawer.html(ctx)), academyHTML(ctx, { done: [], skipped: [], finished: false }, MISSIONS.map((m) => ({ ...m, icon: '🧬' })))]) { assert.ok(!/🧪|🧫|🧬/.test(h), 'no icon is printed'); assert.ok(!/cx-ic/.test(h), 'and no tile is left for one'); }
+  const page = entryHTML(ctx, old);
+  assert.match(page, /<header class="cx-head"><svg class="gl gl-c gl-lg" viewBox="0 0 24 24" aria-hidden="true">/, 'the page opens on the drawing of its category, 40 px');
+  assert.match(page, /class="btn sm ghost cx-link"[^>]*><svg class="gl gl-c gl-sm"[^>]*aria-hidden="true">[\s\S]*?<\/svg> Title of older<\/button>/, 'a related link has it at 16 px');
+  ctx.U.codexOpenId = null; const list = drawer.html(ctx);
+  assert.equal((list.match(/<span class="gl-tile"><svg class="gl gl-c"/g) || []).length, 2, 'a card for each page'); assert.match(list, /aria-pressed="false"><svg class="gl gl-c gl-sm"[^>]*aria-hidden="true">[\s\S]*?<\/svg> Value<\/button>/, 'the category chip too');
+  const ac = academyHTML(ctxOf(START), { done: [], skipped: [], finished: false }, MISSIONS);
+  assert.equal((ac.match(/<span class="gl-tile"><svg/g) || []).length, 2, 'a lesson row has the drawing of the page it teaches (the two lessons whose page the Codex knows; the third teaches "nope")');
 });
 
 // ---------------------------------------------------------------- the Academy tab
@@ -243,7 +251,8 @@ test('every real Codex page draws as a page, as a card and as a silhouette, with
   const cx = Object.fromEntries(REAL.map((d) => [d.id, 7]));
   const open = ctxOf(cx, { defs: REAL }), shut = ctxOf({}, { defs: REAL }), said = [];
   assert.deepEqual(checkHTML(drawer.html(open), 'all open'), []); assert.deepEqual(checkHTML(drawer.html(shut), 'all shut'), []);
-  assert.equal((drawer.html(shut).match(/class="cx-card locked"/g) || []).length, REAL.length);
+  assert.equal((drawer.html(shut).match(/class="cx-card locked[ "]/g) || []).length, REAL.length);
+  assert.equal((drawer.html(shut).match(/<span class="gl-tile"><svg/g) || []).length, REAL.length, 'every page, shut or open, has the drawing of its category');
   for (const d of REAL) {
     const page = entryHTML(open, d);
     assert.deepEqual(checkHTML(page, d.id), []);

@@ -24,12 +24,12 @@ const kb = (n) => n / 1024;
 export const BUDGET = {
   firstRequests: 45,   // the page, the 12 stylesheets and the static modules
   firstKB: 320,        // all of it gzipped: the page, the sheets, the modules; 300 until 2026-11-03: raised to 320 at the author's word, for the items catalog, the event plan and the wardrobe's hooks (docs/ARCHITECTURE.md, "The first screen, and the rest")
-  totalRequests: 165,  // everything the site ever fetches
+  totalRequests: 170,  // everything the site ever fetches; 165 until 2026-11-04: the glyph kit is six lazy modules (js/art/: the core, the painter, three sets; js/ui/glyphs.js, the screens' lookup), and parts 3 and 4 add their sets (docs/ARCHITECTURE.md, "The first screen, and the rest")
   totalKB: 1111,       // 1000 until 2026-11-03: raised to 1111 at the author's word for the packages after the ground's worker (docs/ARCHITECTURE.md, "The first screen, and the rest")
 };
 
 /** Folders and modules that belong to a later screen. None may be in the static graph. */
-const LATER = [/^js\/world\//, /^js\/ui\/(shell|academy|academy-sandbox|instructor|debrief|worldview|deal|hud|polish)\.js$/, /^js\/ui\/drawers\//, /^js\/play\//, /^js\/deal\.js$/, /^js\/avatar\.js$/, /^js\/meta\/(academy|quests|progress|codex)\.js$/];
+const LATER = [/^js\/world\//, /^js\/ui\/(shell|academy|academy-sandbox|instructor|debrief|worldview|deal|hud|polish|glyphs)\.js$/, /^js\/ui\/drawers\//, /^js\/play\//, /^js\/deal\.js$/, /^js\/avatar\.js$/, /^js\/meta\/(academy|quests|progress|codex)\.js$/, /^js\/art\/(paint|g-[\w-]+)\.js$/];
 
 test('B1: the static graph of js/main.js holds nothing that only a later screen needs', () => {
   const g = walk(), early = g.static.filter((m) => LATER.some((re) => re.test(m)));
