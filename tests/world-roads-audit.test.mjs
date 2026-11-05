@@ -3,9 +3,10 @@
 // lies on top of asphalt, four locked roads carry no barrier. None of it was held by a test. Each pull request that fixes one LOWERS its constant below, in the same commit, and never raises it; this test fails on any count above its constant
 // and fails on a count BELOW it too, until the constant is lowered in the same commit (so the gain cannot come back unseen).
 //   RA1  the detector still looks at the whole island: floors on what it examined (ports, edges, pairs of edges, samples), so a count cannot fall because the detector looked at less
-//   RA2  the ratchet: every defect count equals its baseline: a worse count fails, and so does a better one until the constant is lowered (29 dead ends, no seam run, no crossing without a junction, no footpath over asphalt, 4 locked roads without a barrier, no kink, no split bridge, 1 road through another district)
+//   RA2  the ratchet: every defect count equals its baseline: a worse count fails, and so does a better one until the constant is lowered (no dead end: every street end has a termination registered, no seam run, no crossing without a junction, no footpath over asphalt, no locked road without a gate at its open end, no kink, no split bridge, 1 road through another district, no scatter at a street end, no termination without a turn spot or a bare disc, no footpath without a head and a deck)
 //   RA3  the defect classes are all listed, with their ids, names, counts and causes, and the ratchet's counts are the classes' own
 //   RA4  the detector can see: on a world made worse in four ways (a road taken away, a road laid twice, a footpath laid on a road, a gate taken away) it finds each of the four, so an all-clear is not a blind detector's
+//   RA10 and it sees the terminations (WP12): a termination taken from the registry makes its port a dead end again, a turn spot taken away, a termination stripped of its props, a gate moved away from its road's open end, a deck or a head taken away, and a scatter prop put back in front of an end are each counted
 //   RA8  a junction is an exemption with edges: two roads that meet at one may overlap within 3.5 tiles of it (the real overlap is at most 3.0) and nowhere else (a second road laid along a branch is found, even one that runs along it for 5 tiles), a crossing a long way from it is a crossing, and the stem of a fork is not a road into the district
 //   RA9  the detector sees an apron: a port where a road leaves and no apron is drawn is counted (R7), and an apron with nothing to paint is no apron
 //   RA5  it is quick: under 2 s of CPU (it was 0.05 s when this was written; the whole catalog the CLI prints is 0.6 s)
@@ -19,18 +20,22 @@ import { walk } from '../scripts/preload.mjs';
 /**
  * What the detector found on main at 0ab9bf8 (the survey's own run, which this module reproduces exactly): deadEnds 29, seamRuns 7, crossings 1, pathTilesOverAsphalt 13.8, lockedWithoutBarrier 4, kinks 2, splitBridges 1, footprintThroughRoads 1.
  * LOWER a constant in the pull request that fixes the defect; the plan's WP numbers say which one does:
- *   deadEnds 29 (WP12 and each district's plan), lockedWithoutBarrier 4 (WP11), footprintThroughRoads 1 (WP22a, when the island is laid again: 6.N to 7.E runs through the south pad of 8).
+ *   footprintThroughRoads 1 (WP22a, when the island is laid again: 6.N to 7.E runs through the south pad of 8).
  * WP10 (one road surface) took seamRuns 7 to 0 (a fork is a stem and two branches that meet at a junction: three forks, and the detector lets the edges of one overlap within 3.5 tiles of it and nowhere else: the real overlap is at most 3.0), crossings 1 to 0 (the road of 4 to 3 no
  * longer crosses the road of 4 to 5: it leaves the fork on its own side), pathTilesOverAsphalt 13.8 to 0 (the three footpaths that left a road start from path heads two tiles to its side), kinks 2 to 0 (10.W to 11.E arrives along the axis of
- * 11's avenue, and the footpath of 14 starts outside its block) and splitBridges 1 to 0 (8.W to 9.E is one bridge), and it adds portsWithoutApron: the ports where a road leaves and no apron is drawn (R7, which counted all 33 connected ports until
+ * 11's avenue, and the footpath of 14 starts outside its block) and splitBridges 1 to 0 (8.W to 9.E is one bridge), and it added portsWithoutApron: the ports where a road leaves and no apron is drawn (R7, which counted all 33 connected ports until
  * each got its apron; it is 0 and stays 0).
+ * WP11 and WP12 (every road ends in a place) took deadEnds 29 to 0 (a dead end is now a port no road or ferry leaves and no termination is registered for: LAYOUT.terms, which layout.js derives from the ground and the theme and island.js TERMS chooses by hand), lockedWithoutBarrier 4 to 0
+ * (a gate stands on every road that opens with a locked district, at the road's open end) and added what they now hold at 0: scatterAtEnds (a hashed pad prop in front of a street end: 13 of the 29 before; R12), endsWithoutTurnSpot, bareEnds (a termination with fewer than three props and no
+ * loading dock), gatesAwayFromOpenEnd (a gate more than 3.5 tiles from the open end of its road, a bridge's leaf at its bank excepted: 9 of the 16 stood ten tiles from the district they guard), pathEndsWithoutDeck (the six lookouts were small props, dropped in the lite tier before WP02; R4) and
+ * pathStartsWithoutHead (the six footpaths began in a cut or at a bare strip of sand).
  */
-const BASELINE = { deadEnds: 29, seamRuns: 0, crossings: 0, pathTilesOverAsphalt: 0, lockedWithoutBarrier: 4, kinks: 0, splitBridges: 0, footprintThroughRoads: 1, portsWithoutApron: 0 };
+const BASELINE = { deadEnds: 0, seamRuns: 0, crossings: 0, pathTilesOverAsphalt: 0, lockedWithoutBarrier: 0, kinks: 0, splitBridges: 0, footprintThroughRoads: 1, portsWithoutApron: 0, scatterAtEnds: 0, endsWithoutTurnSpot: 0, bareEnds: 0, gatesAwayFromOpenEnd: 0, pathEndsWithoutDeck: 0, pathStartsWithoutHead: 0 };
 /**
  * What the detector must still examine. A plan that changes the island changes these on purpose: raise or lower them in that pull request, saying why. WP10: three forks became three edges each (25 edges to 28: 21 roads, 6 footpaths, the ferry),
- * so 351 pairs of edges and 30,000 samples, three junctions and three path heads.
+ * so 351 pairs of edges and 30,000 samples, three junctions and three path heads. WP12: 29 terminations, 6 decks, 3 side heads (the other three path heads are terminations) and 17 gates.
  */
-const SCOPE_FLOOR = { districts: 16, ports: 64, edges: 28, roadEdges: 21, pathEdges: 6, ferryEdges: 1, edgePairs: 351, samples: 30000, junctions: 3, heads: 3 };
+const SCOPE_FLOOR = { districts: 16, ports: 64, edges: 28, roadEdges: 21, pathEdges: 6, ferryEdges: 1, edgePairs: 351, samples: 30000, junctions: 3, heads: 3, terms: 29, decks: 6, pathHeads: 3 };
 const CLASSES = ['R1', 'R2', 'R3', 'R4', 'R5', 'R6', 'R7', 'R8', 'R9', 'R10', 'R11', 'R12'];
 const CPU_BUDGET_MS = 2000;
 
@@ -61,10 +66,11 @@ test('RA3: the defect classes are listed with their ids, names, counts and cause
   assert.deepEqual(catalog.defectClasses.map((c) => c.id), CLASSES, 'R1 to R12, in order: a class does not disappear from the detector');
   for (const c of catalog.defectClasses) { assert.ok(c.name.length > 10, c.id + ' has a name'); assert.ok(Number.isFinite(c.count), c.id + ' has a count'); assert.ok(/js\/world\//.test(c.cause) || /ROADS|footpaths/.test(c.cause), c.id + ' says where it comes from'); }
   const by = Object.fromEntries(catalog.defectClasses.map((c) => [c.id, c.count])), r = ratchetCounts(catalog);
-  assert.equal(by.R1, r.deadEnds); assert.equal(by.R2, r.seamRuns); assert.equal(by.R5, r.kinks); assert.equal(by.R6, r.lockedWithoutBarrier); assert.equal(by.R9, r.splitBridges); assert.equal(by.R10, r.crossings); assert.equal(by.R11, r.footprintThroughRoads); assert.equal(by.R7, r.portsWithoutApron);
+  assert.equal(by.R1, r.deadEnds); assert.equal(by.R4, r.pathEndsWithoutDeck); assert.equal(by.R12, r.scatterAtEnds); assert.equal(by.R2, r.seamRuns); assert.equal(by.R5, r.kinks); assert.equal(by.R6, r.lockedWithoutBarrier); assert.equal(by.R9, r.splitBridges); assert.equal(by.R10, r.crossings); assert.equal(by.R11, r.footprintThroughRoads); assert.equal(by.R7, r.portsWithoutApron);
   const R7 = catalog.defectClasses.find((c) => c.id === 'R7'); assert.ok(/apron/.test(R7.name + R7.detail), 'R7 says what it counts: a road that leaves a block with no apron at the port (it counted all 33 connected ports before each had one)'); assert.ok(R7.of === catalog.counts.total.portsWithRoad - 2, 'out of the 33 ports a road leaves (35 with the ferry\'s two)');
-  assert.ok(by.R3 <= 3 && by.R3 >= 0, 'R3 counts footpaths that run over asphalt (3 of the 6), the ratchet counts the tiles');
-  assert.equal(catalog.counts.total.roundabouts + catalog.counts.total.culDeSacs + catalog.counts.total.parkingLots, 0, 'the island has no roundabout, cul-de-sac or parking lot yet (the first one built raises these: WP12 and WP14)');
+  assert.ok(by.R3 <= 3 && by.R3 >= 0, 'R3 counts footpaths that run over asphalt, the ratchet counts the tiles');
+  assert.deepEqual([catalog.counts.total.roundabouts, catalog.counts.total.culDeSacs, catalog.counts.total.parkingLots], [2, 8, 0], 'the island has two roundabouts (3.S and 6.E), eight turning bulbs and no parking lot yet (a bay or two beside a bulb is not a lot: WP14)');
+  assert.equal(catalog.counts.total.terminations, 29); assert.equal(catalog.counts.total.gates, 17, 'a gate on every road that opens with a locked district: 16 of the 21 roads and the ferry (the roads of 2, 3, 4 twice, 5 twice, 6, 7 twice, 8, 9, 10, 12, 13, 14 twice and 16)');
 });
 
 test('RA4: the detector can see: a road taken away, a road laid twice, a footpath laid on a road and a gate taken away are each found', () => {
@@ -81,8 +87,8 @@ test('RA4: the detector can see: a road taken away, a road laid twice, a footpat
   assert.ok(run({ EDGES: [...Lay.EDGES, onRoad] }).pathTilesOverAsphalt > base.pathTilesOverAsphalt + roadE.len * 0.5, 'a footpath along a road is tiles over asphalt');
   // a gate taken away: a locked road with nothing on it
   const D2 = Lay.DIST[2];
-  assert.ok(D2.gateAt && D2.gateKind !== 'fog', 'district 2 is locked behind a gate that stands on a road');
-  assert.equal(run({ DIST: { ...Lay.DIST, 2: { ...D2, gateAt: undefined } } }).lockedWithoutBarrier, base.lockedWithoutBarrier + 1, 'district 2\'s gate taken away leaves its road with no barrier');
+  assert.ok(D2.gates && D2.gates.length === 1 && D2.gateKind !== 'fog', 'district 2 is locked behind a gate that stands on a road');
+  assert.equal(run({ DIST: { ...Lay.DIST, 2: { ...D2, gates: [] } } }).lockedWithoutBarrier, base.lockedWithoutBarrier + 1, 'district 2\'s gate taken away leaves its road with no barrier');
   assert.equal(run({ DIST: { ...Lay.DIST, 2: { ...D2, props: D2.props.filter((q) => q.t !== 'gate') } } }).lockedWithoutBarrier, base.lockedWithoutBarrier + 1, 'the gate PROP taken away (its recorded place kept) leaves the road with no barrier too: the detector does not trust the data alone');
 });
 
@@ -119,6 +125,26 @@ test('RA9: the detector sees an apron: a port where a road leaves and no apron i
   assert.equal(ratchetCounts(auditRoads({ ...world, Art: {} }, { full: false })).portsWithoutApron, 33, 'a checkout whose ground art has no aprons (the commit before WP10) has 33 ports without one');
 });
 
+test('RA10: the detector sees the terminations: a termination taken away makes its port a dead end, a turn spot taken away, a bare termination, a gate moved off its open end, a deck or a head taken away, and a scatter prop put back at an end are each counted', () => {
+  const { Lay } = world, base = ratchetCounts(catalog), L = Lay.LAYOUT, run = (changes) => ratchetCounts(auditRoads({ ...world, Lay: { ...Lay, LAYOUT: { ...L, ...changes } } }, { full: false }));
+  assert.equal(L.terms.length, 29, 'twenty-nine terminations');
+  assert.equal(run({ terms: L.terms.filter((t) => t.port !== '6.E') }).deadEnds, base.deadEnds + 1, 'the roundabout of 6.E taken from the registry leaves its port a dead end');
+  assert.equal(run({ terms: [] }).deadEnds, 29, 'with none registered (a checkout before WP12) every one of the 29 ends is a dead end');
+  assert.equal(run({ turnSpots: L.turnSpots.filter((s) => s.port !== '3.S') }).endsWithoutTurnSpot, base.endsWithoutTurnSpot + 1, 'a termination that registered no turn spot is counted');
+  assert.equal(run({ terms: L.terms.map((t) => (t.port === '13.N' ? { ...t, props: t.props.slice(0, 2) } : t)) }).bareEnds, base.bareEnds + 1, 'a plaza with two props is a bare disc: the end must read as a place');
+  assert.equal(run({ terms: L.terms.map((t) => (t.port === '8.S' ? { ...t, props: t.props.filter((p) => p.t === 'loaddock').slice(0, 1) } : t)) }).bareEnds, base.bareEnds, 'a yard with a loading dock is a place with one prop: the dock is the building');
+  assert.equal(run({ decks: L.decks.slice(1) }).pathEndsWithoutDeck, base.pathEndsWithoutDeck + 1, 'a lookout with no deck of ground art');
+  assert.equal(run({ heads: L.heads.slice(1) }).pathStartsWithoutHead, base.pathStartsWithoutHead + 1, 'a footpath that leaves a road with no path head');
+  assert.equal(run({ terms: L.terms.filter((t) => t.kind !== 'head') }).pathStartsWithoutHead, base.pathStartsWithoutHead + 3, 'and the three that leave a street\'s end');
+  // a scatter prop put back where a termination keeps it clear: the first end's strip, a crate of the pad
+  const D = Lay.DIST[8], strip = L.terms.find((t) => t.port === '8.S'), [x, y] = [strip.frame.x, strip.frame.y + 2.5], crate = { t: 'crates', gx: x - 0.5, gy: y, w: 1, d: 1, h: 20, zone: 8, pad: true, solid: true, key: x + y };
+  assert.equal(run({ props: [...L.props, crate] }).scatterAtEnds, base.scatterAtEnds + 1, 'a hashed pad prop in the strip beyond a port is counted again');
+  // a gate moved down its road, away from the open end (its prop with it: the detector finds the prop where the record says)
+  const D13 = Lay.DIST[13], g = D13.gates[0], e = Lay.EDGES[g.edge], q = Lay.polyAt(e, e.len * 0.4), moved = { ...g, x: q.x, y: q.y }, prop = { ...g.prop, gx: q.x - 0.15, gy: q.y - 0.15 };
+  assert.equal(ratchetCounts(auditRoads({ ...world, Lay: { ...Lay, DIST: { ...Lay.DIST, 13: { ...D13, gates: [moved], props: [...D13.props, prop] } } } }, { full: false })).gatesAwayFromOpenEnd, base.gatesAwayFromOpenEnd + 1, 'a gate at 40% of an 84-tile road is a road that looks open at its open end (screenshot 1)');
+  void D;
+});
+
 test('RA5: it is quick: the audit the ratchet runs is under 2 s of CPU', () => {
   assert.ok(fastMs < CPU_BUDGET_MS, `the audit took ${fastMs.toFixed(0)} ms of CPU (budget ${CPU_BUDGET_MS} ms; the machine's load does not count, only the work done)`);
 });
@@ -126,7 +152,7 @@ test('RA5: it is quick: the audit the ratchet runs is under 2 s of CPU', () => {
 test('RA6: the whole catalog is complete: a proposal for each dead end, a row of the matrix for each district, the cars and ten minutes of them', () => {
   const full = auditRoads(world), T = full.counts.total;
   assert.deepEqual(ratchetCounts(full), ratchetCounts(catalog), 'the full and the fast audit agree on every count the ratchet holds');
-  assert.equal(full.deadEnds.length, T.deadEnds); assert.ok(full.deadEnds.every((d) => d.proposal && d.proposal.kind && d.room && d.rects), 'each dead end has what could end it');
+  assert.equal(full.deadEnds.length, T.deadEnds); assert.equal(full.terminations.length, 29, 'the catalog lists the 29 terminations'); assert.ok(full.terminations.every((t) => t.kind && t.why && t.turnSpot && t.props.length >= 3), 'each says what it is, why, where a car turns, and what stands there');
   assert.equal(Object.keys(full.connectivity.matrix.tiles).length, 16, 'a row of the matrix for each district');
   assert.equal(Object.keys(full.connectivity.cutOffWhileLocked).length, 15, 'the cut-off test, districts 2 to 16');
   assert.ok(Object.values(full.connectivity.cutOffWhileLocked).every((c) => c.routeWhileLocked === 'none (cut off)' && c.routeWhenOpen === 'ok'), 'a locked district cannot be reached, an open one can');

@@ -9,7 +9,7 @@ import { money } from './common.js';
 
 export const staticMethods = {
   drawStatic(ctx, p) {
-    const fx = this.fxOf(p.zone), locked = this.unlocked ? !this.unlocked.has(p.zone) : false, z = p.z, env = this.env;
+    const fx = this.fxOf(p.fz ?? p.zone), locked = this.unlocked ? !this.unlocked.has(p.zone) : false, z = p.z, env = this.env;
     if (p.t === 'gate' && !locked && p.gk !== 'ferry') return;
     ctx.save(); ctx.translate(0, -z);
     env.dim = fx.dim; env.night = Math.max(this.night, fx.lights); env.zoff = z; env.locked = locked;
@@ -21,7 +21,7 @@ export const staticMethods = {
     if (p.t === 'gate') {
       if (!locked) return;
       const x = sx(p.gx + 0.15, p.gy + 0.15), y = sy(p.gx + 0.15, p.gy + 0.15, z);
-      this.hits.push({ kind: 'zone', id: p.zone, eid: 'gate:' + p.zone, label: p.label, zone: p.zone, locked: true, gate: DIST[p.zone].gate, circle: [x, y - 20, 26] });
+      this.hits.push({ kind: 'zone', id: p.zone, eid: 'gate:' + p.zone + (p.gi ? ':' + p.gi : ''), label: p.label, zone: p.zone, locked: true, gate: DIST[p.zone].gate, circle: [x, y - 20, 26] });
       if (this.mode !== 'map') this.overlay.push({ k: 'chip', lo: 1, n: 14, wx: x, wy: y - (p.gk === 'ferry' ? 60 : 44), draw: (g, px, py, s) => this.chip(g, px, py, `Opens at ${money(DIST[p.zone].gate)}`, '#ffd36e', s) }); // the map's own cards already say what opens it; the ferry's plaque stands 16 px taller than a barrier's sign, so its chip rides above it instead of over its words (the first judge pass: "NOT RUNNING" half hidden)
       return;
     }

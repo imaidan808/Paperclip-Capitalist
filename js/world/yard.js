@@ -10,7 +10,8 @@ import { WOOD, METAL, TOY, SEA, ROAD, PAVE, BLOOM, GRASS, LIGHT, INK, TILE } fro
 import { roundedBox, roundedPoly } from './solids.js';
 import { stampGlow } from './gfx.js';
 import { plankBox } from './stock.js';
-import { P, col, lifted, toyOf, hi, shd, ball, disc, rr, poly, bar, post, drum, stand, stampSoft, castShadow, lettering, fq, facePoint, mix, shade, clamp, seedOf, vs, vseed, fade } from './toys.js';
+import { P, col, lifted, toyOf, hi, shd, ball, disc, rr, poly, bar, post, drum, stand, stampSoft, castShadow, lettering, fq, facePoint, capsule, mix, shade, clamp, seedOf, vs, vseed, fade } from './toys.js';
+import { prism, flatShadow, upright } from './street.js';
 import { h2 } from './iso.js';
 
 const glowAt = (ctx, rgb, x, y, r, a) => { if (a > 0.02) { const pa = ctx.globalAlpha; ctx.globalCompositeOperation = 'lighter'; stampGlow(ctx, rgb, x, y, r, a); ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = pa; } };
@@ -129,18 +130,17 @@ registerProp('gate', {
 });
 
 // ---------------------------------------------------------------- the lookout, the bull, the fountain, the helipad
-shared('lookout', {
+shared('lookout', { // the bench and the telescope of a lookout (T11), flat: the deck under them (planks, three rails) is ground art, groundart.js, so a footpath ends on a deck in every tier and these two are the small props that may be dropped
   body(g, p, env) {
-    const [x, y] = P(p.gx + 0.5, p.gy + 0.5), wood = col(WOOD.mid, env);
-    stampSoft(g, x + 6, y + 4, 40, 15, 0.2);
-    roundedBox(g, p.gx, p.gy, 1, 1, 3.4, wood, { r: 2.6 });
-    for (const [u, v] of [[0.06, 0.06], [0.94, 0.06], [0.06, 0.94], [0.94, 0.94]]) { const [px, py] = P(p.gx + u, p.gy + v, 3.4); post(g, px, py, 13, 4.2, col(WOOD.shade, env), true); }
-    const A = P(p.gx + 0.06, p.gy + 0.94, 13), B = P(p.gx + 0.94, p.gy + 0.94, 13), C = P(p.gx + 0.94, p.gy + 0.06, 13); bar(g, A[0], A[1] - 1.5, B[0], B[1] - 1.5, 3.2, col(WOOD.light, env)); bar(g, B[0], B[1] - 1.5, C[0], C[1] - 1.5, 3.2, col(shade(WOOD.light, 0.86), env));
-    roundedBox(g, p.gx + 0.16, p.gy + 0.62, 0.68, 0.2, 5, col(WOOD.light, env), { z: 3.4, r: 1.8, edge: false }); roundedBox(g, p.gx + 0.16, p.gy + 0.8, 0.68, 0.08, 6, col(WOOD.mid, env), { z: 8.4, r: 1.4, edge: false });
-    const [tx, ty] = P(p.gx + 0.62, p.gy + 0.3, 3.4), brass = col(METAL.brass, env);
-    for (const dx of [-5, 0, 5]) bar(g, tx, ty - 8, tx + dx, ty, 2.4, col(METAL.steelMid, env)); g.save(); g.translate(tx, ty - 9); g.rotate(-0.55); rr(g, -8, -2.6, 15, 5.2, 2.6, shade(brass, 0.85)); rr(g, -8, -2.6, 14, 4, 2.6, brass); rr(g, 4, -3.4, 4.4, 6.8, 2.2, col(METAL.steelHi, env)); g.restore();
+    const wood = col(WOOD.light, env), woodD = col(WOOD.shade, env), steel = col(METAL.steelMid, env), brass = col(METAL.brass, env), [cx, cy] = P(p.gx + 0.5, p.gy + 0.5);
+    flatShadow(g, cx + 5, cy + 3, 21, 8, 0.17);
+    for (const u of [0.18, 0.82]) { const q = P(p.gx + u, p.gy + 0.2); upright(g, q[0], q[1], 4.6, 2.8, woodD); }
+    prism(g, p.gx + 0.08, p.gy + 0.08, 0.84, 0.1, 5.4, wood, 8.2); prism(g, p.gx + 0.08, p.gy + 0.1, 0.84, 0.3, 3.2, wood, 4.6); // a bench against the back: its backrest, then its seat
+    const [tx, ty] = P(p.gx + 0.66, p.gy + 0.7);
+    for (const [dx, dy] of [[-4.2, 1.2], [4.2, 1.2], [0, 3.4]]) capsule(g, tx + dx * 0.2, ty - 10, tx + dx, ty + dy, 2.2, steel);
+    capsule(g, tx - 7.4, ty - 8.2, tx + 5.6, ty - 14.2, 4.4, shade(steel, 0.78)); capsule(g, tx - 7.6, ty - 8.6, tx + 5.4, ty - 14.6, 3.4, steel); capsule(g, tx - 2.6, ty - 10.4, tx - 1.4, ty - 11, 5, brass); capsule(g, tx + 5, ty - 14, tx + 8, ty - 15.6, 3, shade(steel, 0.7));
     return null;
-  }, vary: [], ext: [6, 6, 6, 6],
+  }, vary: [], ext: [8, 8, 8, 6],
 });
 shared('statue', {
   body(g, p, env) {

@@ -83,5 +83,17 @@ export const ROADS = [
 export const JUNCTIONS = { j4: { at: [72, 94], port: '4.E' }, j8: { at: [156, 52], port: '8.W' }, j12: { at: [18, 70], port: '12.N' } };
 /** Where a footpath leaves a road: a path head, two tiles to the side of the road's middle line (so the path never lies on the asphalt: a path keeps 1.5 tiles from every road's middle line but within 2 of its head). `port` is the stem or road it stands beside. */
 export const HEADS = { h1: { at: [69, 42], port: '10.W' }, h2: { at: [101, 114], port: '3.E' }, h6: { at: [70, 92], port: '4.E' } };
+/**
+ * How a street that no road leaves ends, where it is chosen by hand (the rest are derived at build time from the ground and the district's theme: roadshape.js chooseTerm; layout.js registers them as LAYOUT.terms). A record is { kind, ...options }:
+ * a barrier (the street is closed and says so), a quay (water 8 px or less below the ground; `ramp`: a slipway into it) and a sealed tunnel mouth (the mouth of the hill north of the scrap yard, made for the link to the Creative Quarter that the island does not build yet).
+ * Paths heads need no record: a footpath that leaves a port makes one. 1.W is a boat slipway and 1.S a quay: the yard stands on a point of land with the sea on two sides; 4.W faces a gully, and 8.N a cliff over the strait.
+ */
+export const TERMS = {
+  '1.W': { kind: 'quay', ramp: true },
+  '1.S': { kind: 'quay' },
+  '1.N': { kind: 'portal' },
+  '4.W': { kind: 'barrier' },
+  '8.N': { kind: 'barrier' },
+};
 /** Lookouts at the ends of the footpaths: a bench, a telescope and a view. */
 export const VIEWPOINTS = { v1: [72, 60], v2: [98, 127], v3: [113.5, 65], v4: [48, 72], v5: [90, 1.2], v6: [76, 84] };

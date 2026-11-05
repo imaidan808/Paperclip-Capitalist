@@ -5,8 +5,8 @@
 import { ZONES } from '../data/index.js';
 import { h2, lerp, clamp, mix, shade, luma } from './iso.js';
 import { KITS, FILL } from './kits.js';
-import { GW, GH, BW, BD, ANCHORS, REGIONS, BLOBS, CARVES, ROADS, JUNCTIONS, HEADS, VIEWPOINTS } from './island.js';
-import { tidy, fillet, gradeRoads } from './roadshape.js';
+import { GW, GH, BW, BD, ANCHORS, REGIONS, BLOBS, CARVES, ROADS, JUNCTIONS, HEADS, VIEWPOINTS, TERMS } from './island.js';
+import { tidy, fillet, gradeRoads, portFrame, framePoint, frameRect, chooseTerm, shapeOf, wantsRail, headShape, deckOf } from './roadshape.js';
 
 /** The radius, in tiles, of the arc every corner of a road is rounded with (a footpath turns tighter): the cars follow it and the painted dashes bend with it (roadshape.js). */
 export const ROAD_RADIUS = 1.6, PATH_RADIUS = 1.2;
@@ -228,7 +228,7 @@ export function buildLayout(zones = ZONES, { water = true } = {}) {
   const lands = {}; for (const s of [2, 4, 8]) { const w = Math.ceil(GW / s), a = new Uint8Array(w * Math.ceil(GH / s)); for (let j = 0; j < GH; j++) for (let i = 0; i < GW; i++) if (land[j * GW + i]) a[Math.floor(j / s) * w + Math.floor(i / s)] = 1; lands[s] = { a, w }; }
   // ---- nothing stands on water: the districts were built before the land existed, so the pad's scatter may have fallen in a bay or the lake; it is removed here (keepDry), and the list of what went is kept
   const drowned = [];
-  if (water) for (const D of ds) { const r = keepDry(D.props, isLand); D.props = r.keep; D.drowned = r.drowned; drowned.push(...r.drowned); } else for (const D of ds) D.drowned = [];
+  // (the guard runs after the terminations have kept the pad's scatter off the ends of the streets: what stood where an end is built is gone from both islands, with the guard and without it)
   let maxZ = 0; for (let k = 0; k < ZV.length; k++) maxZ = Math.max(maxZ, ZV[k]);
   const core = new Uint8Array(GW * GH); for (const D of ds) for (let j = Math.floor(D.oy); j < D.oy + BD; j++) for (let i = Math.floor(D.ox); i < D.ox + BW; i++) core[j * GW + i] = 1;
   let bx0 = 1e9, bx1 = -1e9, by0 = 1e9, by1 = -1e9;
@@ -287,31 +287,115 @@ export function buildLayout(zones = ZONES, { water = true } = {}) {
   };
   const assemble = (steps, start) => { const pts = [nodes.get(start).slice()]; for (const s of steps) { if (s.e) { const P = s.e.a === s.from ? s.e.pts : [...s.e.pts].reverse(); for (let i = 1; i < P.length; i++) pts.push(P[i].slice()); } else pts.push(nodes.get(s.to).slice()); } return pts; };
   const route = (a, b, open) => { const steps = walk(a + '.C', b + '.C', open); return steps ? assemble(steps, a + '.C') : null; };
-  // ---- gates: each district's entry road is the one that opens with it; the barrier, bridge leaf or ferry stands where that road meets the near bank
-  // (a name stands for a port: a junction for the port its stem leaves, so a road that ends at the fork is a road into that district; the gate stands ten tiles from the port along the road in, the stem counted in that ten)
+  // ---- the entry of each district: the road that opens with it, and where that road meets it (the notch of the district's cloud: its gate used to stand here, ten tiles out; the gates stand at the open ends now, below)
+  // (a name stands for a port: a junction for the port its stem leaves, so a road that ends at the fork is a road into that district; the point is ten tiles from the port along the road in, the stem counted in that ten)
   const portOf = (name) => (JUNCTIONS[name] ? JUNCTIONS[name].port : name), belongs = (name, id) => portOf(name).startsWith(id + '.');
   const stemLen = (name) => { const st = edges.find((q) => q.stem && (q.a === name || q.b === name)); return st ? st.len : 0; };
   for (const D of ds) {
     const e = edges.find((q) => q.gate === D.id && !q.path && !q.stem && (belongs(q.a, D.id) || belongs(q.b, D.id))) || null, port = e ? (belongs(e.a, D.id) ? portOf(e.a) : portOf(e.b)) : D.id + '.W', P0 = node(port), out = OUT[port.split('.')[1]];
-    D.entry = [P0[0] - out[0] * 0.8, P0[1] - out[1] * 0.8]; D.entryPort = port; D.inEdge = e ? e.n : null;
+    D.entry = [P0[0] - out[0] * 0.8, P0[1] - out[1] * 0.8]; D.entryPort = port; D.inEdge = e ? e.n : null; D.gates = [];
     if (D.id === 1 || !e) continue;
     const rev = !belongs(e.a, D.id);          // the edge is stored from the previous district to this one
     const lead = stemLen(rev ? e.b : e.a), run = Math.max(0, 10 - lead); // (the tiles of the ten that are the edge's own: a fork's stem is the rest)
     const br = bridges.find((q) => q.edge === e), s = br ? (rev ? br.s0 - 1 : br.s1 + 1) : e.ferry ? (rev ? 3 : e.len - 3) : (rev ? e.len - run : run);
-    const q = polyAt(e, clamp(s, 0, e.len)), dir = rev ? 1 : -1, far = { x: P0[0], y: P0[1] };
+    const q = polyAt(e, clamp(s, 0, e.len)), dir = rev ? 1 : -1;
     D.gateAt = { x: q.x, y: q.y, hx: q.dx * dir, hy: q.dy * dir, kind: D.gateKind, edge: e.n };
-    if (D.gateKind !== 'fog') { const p = mkProp(D, 'gate', q.x - 0.15, q.y - 0.15, 0.3, 0.3, 16, { gk: D.gateKind, hx: q.dx * dir, hy: q.dy * dir, fx: far.x, fy: far.y, label: D.name + ' (locked)', ext: 70, own: 1 }, false); p.z = zAt(q.x, q.y); p.bb = [(q.x - q.y) * 32 - 90, (q.x + q.y) * 16 - p.z - 80, (q.x - q.y) * 32 + 90, (q.x + q.y) * 16 - p.z + 40]; D.props.sort((a1, b1) => a1.key - b1.key); }
   }
-  // ---- lookouts at the ends of the footpaths
+  // ---- gates (WP11): a gate stands on EVERY road that opens with a locked district whose gate is not fog, at the road's OPEN end: 3 tiles along it from the port of the district the player already owns, just past the apron (2 beside the node of a fork it leaves), and not ten tiles
+  // before the district it guards, which on an 84-tile road left 74 tiles of it looking open; the four roads that open with a later district (4.E to 3.N, 4.E to 5.W, 6.N to 7.E, 10.N to 14.S) have theirs now. The gate belongs to the district it guards
+  // (it is locked and opens with it) and stands in the open neighbour's ground: it is `own` (culled by its own box) and takes the light and the veil of the district it stands in (`fz`). A bridge's leaf stands at the bank on the open side, a ferry's boat 3 tiles in.
+  const GATE_FIRST = 3, GATE_FORK = 2;
+  for (const e of edges) {
+    if (e.stem || e.path) continue; const D = districts[e.gate]; if (!D || D.gateKind === 'fog') continue;
+    const da = +portOf(e.a).split('.')[0], db = +portOf(e.b).split('.')[0], atA = da !== D.id ? (db !== D.id ? da < db : true) : false, open = atA ? da : db, from = atA ? e.a : e.b, far = node(atA ? e.b : e.a);
+    const bs = bridges.filter((q) => q.edge === e), br = bs.length ? bs.reduce((m, q) => ((atA ? q.s0 < m.s0 : q.s1 > m.s1) ? q : m)) : null;
+    const sOpen = e.ferry ? 3 : D.gateKind === 'bridge' && br ? (atA ? br.s0 - 1 : br.s1 + 1) : JUNCTIONS[from] ? GATE_FORK : GATE_FIRST, s = atA ? sOpen : e.len - sOpen;
+    const q = polyAt(e, clamp(s, 0.5, e.len - 0.5)), dir = atA ? 1 : -1, hx = q.dx * dir, hy = q.dy * dir;
+    const p = mkProp(D, 'gate', q.x - 0.15, q.y - 0.15, 0.3, 0.3, 16, { gk: D.gateKind, hx, hy, fx: far[0], fy: far[1], label: D.name + ' (locked)', ext: 70, own: 1, fz: open, gi: D.gates.length }, false);
+    p.z = zAt(q.x, q.y); p.bb = [(q.x - q.y) * 32 - 90, (q.x + q.y) * 16 - p.z - 80, (q.x - q.y) * 32 + 90, (q.x + q.y) * 16 - p.z + 40];
+    D.gates.push({ x: q.x, y: q.y, hx, hy, kind: D.gateKind, edge: e.n, open, from, s, prop: p });
+  }
+  for (const D of ds) D.gates.sort((a, b) => (b.edge === D.inEdge) - (a.edge === D.inEdge) || a.edge - b.edge); // (the road in first: its gate is the district's own)
+  // ---- lookouts at the ends of the footpaths: a deck of 2 by 2 tiles (ground art, drawn in every tier: groundart.js) with a rail on the three sides the path does not come in by, and on it, as a small prop, a bench and a telescope
+  const decks = [];
   for (const [name, [x, y]] of Object.entries(VIEWPOINTS)) {
     const e = edges.find((q) => q.b === name), D = districts[e?.gate]; if (!D) continue;
-    const p = mkProp(D, 'lookout', x - 0.5, y - 0.5, 1, 1, 14, { label: 'Lookout', sm: 1, own: 1 }, false); p.z = zAt(x, y); p.bb = [(x - y - 1) * 32 - 20, (x + y) * 16 - p.z - 60, (x - y + 1) * 32 + 20, (x + y + 1) * 16 - p.z + 14]; D.props.sort((a1, b1) => a1.key - b1.key);
+    const end = polyAt(e, e.len), inSide = Math.abs(end.dx) >= Math.abs(end.dy) ? (end.dx > 0 ? 'W' : 'E') : (end.dy > 0 ? 'N' : 'S'); // the side the path comes in by
+    const p = mkProp(D, 'lookout', x - 0.5, y - 0.5, 1, 1, 14, { label: 'Lookout', sm: 1, own: 1, inSide }, false); p.z = zAt(x, y); p.bb = [(x - y - 1) * 32 - 20, (x + y) * 16 - p.z - 60, (x - y + 1) * 32 + 20, (x + y + 1) * 16 - p.z + 14];
+    decks.push({ name, edge: e.n, district: D.id, x, y, inSide, prop: p, ...deckOf(x, y, inSide, zAt) });
   }
-  // a prop that belongs to a district's lock or paths but stands outside the district's box (a gate on its road, the ferry's gate in the strait, a lookout at the end of a footpath) says `own`: World.draw culls it by its own box, not its district's
-  for (const D of ds) D.free = D.props.filter((p) => p.own);
+  // ---- terminations (WP12): a street that no road leaves ends in a place. Each is derived from the ground beyond its port and the district's theme (roadshape.js chooseTerm; the rule is in docs/ART_DIRECTION.md section 4.7) unless island.js TERMS chose it by hand; the
+  // registry says what stands there (ground pieces, props, the room kept clear of the pad's scatter) and where a car would turn round (turnSpots, for the traffic work). Ground art: groundart.js drawTerms; props: the dressing of each shape.
+  const probeEnd = (D, f) => { // what lies beyond a port on its street's axis: the tiles of level ground (land within 6 px of the block's height), the tile where the sea begins and how far the ground stands above it, and whether a wall of rock rises within 4 tiles
+    let flat = 0, water = null, rise = 0, level = true, fall = false;
+    for (let u = 0.25; u <= 14; u += 0.25) {
+      const [x, y] = framePoint(f, u, 0); if (!isLand(Math.floor(x), Math.floor(y))) { water = u; if (level) fall = true; break; }
+      const dz = zAt(x, y) - D.z; if (u <= 4) rise = Math.max(rise, dz); if (level) { if (Math.abs(dz) <= 6) flat = u; else { level = false; fall = dz < 0; } }
+    }
+    const [wx, wy] = water === null ? [0, 0] : framePoint(f, water - 0.25, 0);
+    return { flat, water, drop: water === null ? null : zAt(wx, wy), hill: rise >= 20, fall }; // (`fall`: the level ground ends in a drop or the sea, not a slope up)
+  };
+  const roomFor = (D, f, side, segs) => (kind, opt = {}) => { // does the shape of `kind` find its room here: land, level, outside every block, clear of every road (`segs`: the road legs within 18 tiles of the port, the only ones that can be in the way)?
+    const sh = shapeOf(kind, { theme: D.theme, side, ...opt });
+    for (const r of sh.foot) for (let u = r.u0; u <= r.u1 + 1e-9; u += 0.5) for (let v = r.v0; v <= r.v1 + 1e-9; v += 0.5) {
+      const [x, y] = framePoint(f, u, v); if (!isLand(Math.floor(x), Math.floor(y)) || Math.abs(zAt(x, y) - D.z) > 6) return false;
+      if (u > 0.3) { if (zoneAt(x, y)) return false; for (const sg of segs) if (segDist(x, y, sg[0], sg[1], sg[2], sg[3]) < sg[4] + 0.5) return false; }
+    }
+    return true;
+  };
+  const boxOf = (pieces) => { let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9; for (const q of pieces) for (const [x, y, zz] of q.pts) { x0 = Math.min(x0, (x - y) * 32); x1 = Math.max(x1, (x - y) * 32); y0 = Math.min(y0, (x + y) * 16 - zz); y1 = Math.max(y1, (x + y) * 16 - zz); } return [x0 - 10, y0 - 70, x1 + 10, y1 + 24]; }; // the box of a drawing on the screen: its ground and the room above it for a rail or a post
+  const rebox = (p, z) => { p.z = z; p.bb = [(p.gx - (p.gy + p.d)) * 32 - 16 - (p.ext || 0), (p.gx + p.gy) * 16 - z - p.h - 46 - (p.ext || 0), (p.gx + p.w - p.gy) * 32 + 16 + (p.ext || 0), (p.gx + p.w + p.gy + p.d) * 16 - z + 14]; };
+  const mkEndProps = (D, f, specs, term) => specs.flatMap((sp) => { // the dressing: a spec is a place and a size in the frame of its port; the grid footprint is its axis-aligned box (a prop that would stand in the sea is left out: nothing stands on water)
+    const [cx, cy] = framePoint(f, sp.u, sp.v), alongX = f.ux !== 0, w = alongX ? sp.a : sp.b, d = alongX ? sp.b : sp.a, o = { ...sp.o, own: 1, term };
+    if (standsOnWater({ gx: cx - w / 2, gy: cy - d / 2, w, d }, isLand)) return [];
+    if (['roadend', 'farmgate', 'portal'].includes(sp.t)) { o.hx = f.ux; o.hy = f.uy; }
+    if (sp.t === 'fence') { o.dirY = (sp.o.along === 'v') === alongX; delete o.along; }
+    if (sp.t === 'lamp') o.col = KITS[D.theme].lamp;
+    if (['lamp', 'bench', 'bollard', 'planter', 'hay', 'trough', 'crates', 'barrel', 'polesign', 'trailboard', 'flag', 'tree'].includes(sp.t)) o.sm = 1;
+    const p = mkProp(D, sp.t, cx - w / 2, cy - d / 2, w, d, sp.h, o, false); rebox(p, zAt(cx, cy)); return [p];
+  });
+  const BUILT = new Set(['bldg', 'shop', 'depot', 'factory', 'barn', 'hall', 'office', 'bank', 'shack', 'stall', 'kiosk', 'tower', 'manor', 'rack', 'rentrow', 'exchange', 'ipo']);
+  const builtNear = (pt) => ds.some((D) => D.props.some((p) => p.solid && BUILT.has(p.t) && Math.hypot(p.gx + p.w / 2 - pt[0], p.gy + p.d / 2 - pt[1]) < 6.5));
+  const connectedPorts = new Set(edges.filter((e) => !e.path).flatMap((e) => [e.a, e.b])), pathPorts = new Set(edges.filter((e) => e.path).map((e) => e.a));
+  const terms = [], turnSpots = [], keeps = [];
+  for (const D of ds) for (const side of ['W', 'E', 'N', 'S']) {
+    const port = D.id + '.' + side; if (connectedPorts.has(port)) continue; // (a road or the ferry leaves it: the apron's)
+    const [px, py] = D.ports[side], f = portFrame(side, px, py), street = side === 'W' || side === 'E' ? 'avenue' : 'cross', probe = probeEnd(D, f), authored = TERMS[port] || null;
+    const fitsHere = roomFor(D, f, side, roadSegs.filter((sg) => segDist(px, py, sg[0], sg[1], sg[2], sg[3]) < sg[4] + 18)), pick = chooseTerm({ side, theme: D.theme, street, ...probe, path: pathPorts.has(port), authored }, fitsHere), opt = { theme: D.theme, side, ...pick.opt, water: probe.water === null ? undefined : probe.water };
+    if (pick.kind === 'bulb' && builtNear(framePoint(f, 2.7, 0)) && fitsHere('bulb', { bays: true })) opt.bays = true; // a building stands near the end: two parking bays off the turning circle
+    if (wantsRail(pick.kind, shapeOf(pick.kind, opt), probe.flat, probe.fall)) { opt.rail = true; opt.flat = probe.flat; } // the plateau falls away just beyond it: a rail across the far side
+    const sh = shapeOf(pick.kind, opt), to = (u, v) => framePoint(f, u, v), z = (x, y) => zAt(x, y) + 0.4;
+    const pieces = sh.pieces.map((q) => ({ role: q.role, pts: q.pts.map(([u, v]) => { const [x, y] = to(u, v); return [x, y, z(x, y)]; }) }));
+    const foot = sh.foot.map((r) => frameRect(f, r.u0, r.u1, r.v0, r.v1)), keep = sh.foot.map((r) => frameRect(f, r.u0 - 0.2, r.u1 + 0.5, r.v0 - 0.5, r.v1 + 0.5));
+    const [tx, ty] = to(sh.turn.u, sh.turn.v);
+    const T = { id: port, port, district: D.id, side, theme: D.theme, street, kind: pick.kind, why: pick.why, authored: !!authored, opt, probe, frame: f, pieces, foot: foot.map((r) => ({ ...r })), frameFoot: sh.foot, keep, door: sh.door ? to(sh.door.u, sh.door.v) : null, props: [], bb: boxOf(pieces), turn: sh.turn, specs: sh.props };
+    terms.push(T); keeps.push(...keep);
+    turnSpots.push({ id: port, port, district: D.id, kind: pick.kind, x: tx, y: ty, r: sh.turn.r, hx: f.ux, hy: f.uy, open: sh.turn.open, ring: !!sh.turn.ring });
+  }
+  const hits = (p, k) => p.gx < k.x + k.w && p.gx + p.w > k.x && p.gy < k.y + k.d && p.gy + p.d > k.y;
+  const gaps = terms.map((T) => frameRect(T.frame, -0.6, 1.8, -1.5, 1.5)); // (and a run of pickets that crossed the street's mouth, the scrap yard's along the hill, is open there: the street goes through)
+  for (const D of ds) D.props = D.props.filter((p) => !(p.pad && keeps.some((k) => hits(p, k))) && !(p.t === 'fence' && gaps.some((k) => hits(p, k)))); // the pad's scatter is kept off every end (it is hashed: it knows the roads, not what a street's end needs)
+  if (water) for (const D of ds) { const r = keepDry(D.props, isLand); D.props = r.keep; D.drowned = r.drowned; drowned.push(...r.drowned); } else for (const D of ds) D.drowned = [];
+  for (const T of terms) T.props = mkEndProps(districts[T.district], T.frame, T.specs, T.port);
+  const heads = []; // a path head beside a road (island.js HEADS): the dropped kerb over the road's kerb, two bollards across the path, a board and a bench
+  for (const [name, H] of Object.entries(HEADS)) {
+    const path = edges.find((q) => q.b !== undefined && q.a === name && q.path), D = path && districts[path.gate]; if (!D) continue;
+    const a = path.pts[0], b = path.pts[1], l = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1, ux = (b[0] - a[0]) / l, uy = (b[1] - a[1]) / l, f = { x: a[0] - ux * 2, y: a[1] - uy * 2, ux, uy, vx: -uy, vy: ux }, sh = headShape();
+    const pieces = sh.pieces.map((q) => ({ role: q.role, pts: q.pts.map(([u, v]) => { const [x, y] = framePoint(f, u, v); return [x, y, zAt(x, y) + 0.4]; }) }));
+    const H2 = { name, district: D.id, edge: path.n, port: H.port, kind: 'sidehead', frame: f, pieces, specs: sh.props, props: [], bb: boxOf(pieces) };
+    H2.props = sh.props.flatMap((sp) => { // (a board or a bench that would stand in the water is tried on the other side of the path, then nearer the road, and left out when there is no dry place for it)
+      const sq = Math.max(sp.a, sp.b, 0.3), o = { ...sp.o, own: 1, term: name, sm: 1 };
+      for (const [du, dv] of [[0, 0], [0, -2 * sp.v], [-0.7, 0], [-0.7, -2 * sp.v]]) { const [cx, cy] = framePoint(f, sp.u + du, sp.v + dv); if (standsOnWater({ gx: cx - sq / 2, gy: cy - sq / 2, w: sq, d: sq }, isLand)) continue; const p = mkProp(D, sp.t, cx - sq / 2, cy - sq / 2, sq, sq, sp.h, o, false); rebox(p, zAt(cx, cy)); return [p]; }
+      return [];
+    });
+    keeps.push(...H2.props.map((p) => ({ x: p.gx - 0.4, y: p.gy - 0.4, w: p.w + 0.8, d: p.d + 0.8 })));
+    heads.push(H2);
+  }
+  for (const dk of decks) dk.bb = boxOf(dk.pieces);
+  for (const D of ds) { D.props.sort((a1, b1) => a1.key - b1.key); D.free = D.props.filter((p) => p.own); }
   const props = ids.flatMap((id) => districts[id].props).sort((a, b) => a.key - b.key);
   return {
-    districts, ids, edges, bridges, nodes, land, isLand, lands, ZV, VW, FV, tcol, owner, core, cliffs, props, drowned, maxZ, roadSegs, zAt, roadZ, zoneAt, footAt, route, deck, bounds,
+    districts, ids, edges, bridges, nodes, land, isLand, lands, ZV, VW, FV, tcol, owner, core, cliffs, props, drowned, maxZ, roadSegs, zAt, roadZ, zoneAt, footAt, route, deck, bounds, terms, turnSpots, heads, decks,
     spots: Object.fromEntries(ids.map((id) => [id, districts[id].spots])),
     plots: Object.fromEntries(ids.map((id) => [id, districts[id].plots])),
     doors: Object.fromEntries(ids.map((id) => [id, districts[id].door])),
