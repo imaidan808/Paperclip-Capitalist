@@ -377,7 +377,8 @@ Why the splits fall where they do. `kits.js` is T3's because it names the buildi
     "crisp.js",
     "veil.js",
     "basework.js",
-    "baseclient.js"
+    "baseclient.js",
+    "perfprobe.js"
   ],
   "later": {
     "camera-input.js": "T5"
