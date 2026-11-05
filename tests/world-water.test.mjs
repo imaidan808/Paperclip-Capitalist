@@ -101,7 +101,7 @@ test('a ribbon is one polygon: the run\'s own points out, the same points pushed
   assert.equal(k, 8); assert.deepEqual([...out.slice(0, 8)], [0, 0, 10, 0, 20, 0, 30, 0]); assert.deepEqual([...out.slice(8, 16)], [30, 0, 20, 3, 10, 3, 0, 0], 'the far edge comes back, pinched at both ends');
 });
 
-test('the beaches of a ring are runs of consecutive beach points with sea-side normals that point to the water, and none wraps the ring\'s start', () => {
+test('the beaches of a ring are runs of at least six consecutive beach points with sea-side normals that point to the water (the arcs of a run are held by the two tests at the end of this file)', () => {
   let runs = 0, pts = 0, away = 0;
   for (const ring of coastOf().rings) for (const run of beachRuns(ring)) { runs++; assert.ok(run.n >= 6); for (let i = 0; i < run.n; i += 4) { pts++; const gx = run.grid[2 * i], gy = run.grid[2 * i + 1], d = coast.dist(gx + run.nrm[2 * i] * 0.3, gy + run.nrm[2 * i + 1] * 0.3); if (!(d > 0)) away++; } }
   assert.ok(runs >= 6 && pts > 40, `${runs} runs, ${pts} points`); assert.ok(away <= pts * 0.04, `${away} of ${pts} normals point at the land`);
@@ -143,4 +143,31 @@ test('the swash breathes on the beaches only while motion is on: nothing at rest
   // the run's two ends are pinched: the far edge meets the coast edge at the first and last point
   for (const p of polys.slice(0, 2)) { const n = p.length / 2; assert.ok(Math.hypot(p[0][0] - p[2 * n - 1][0], p[0][1] - p[2 * n - 1][1]) < 0.01, 'the first coast point is the last far point: the width is 0 at the start'); assert.ok(Math.hypot(p[n - 1][0] - p[n][0], p[n - 1][1] - p[n][1]) < 0.01, 'and at the end'); }
   const a = sw(2.5).log.fills.map((s) => s.alpha.toFixed(3)).join(), b = sw(2.5 + 6.5).log.fills.map((s) => s.alpha.toFixed(3)).join(); assert.equal(a, b, 'the breath has a period of 6.5 seconds');
+});
+
+test('the swash of a beach stays on its beach: the arc grows along a run even where the beach crosses its ring\'s start (it ran backwards there, the ribbon came out tens of thousands of tiles wide and washed a translucent sheet over the island), and no ribbon strays from its run\'s box', () => {
+  const runs = []; for (const ring of coastOf().rings) for (const run of beachRuns(ring)) runs.push(run);
+  assert.ok(runs.length >= 100, `${runs.length} runs`);
+  for (const run of runs) for (let i = 1; i < run.n; i++) assert.ok(run.arc[i] >= run.arc[i - 1], `the arc of a run of ${run.n} points (from ${run.arc[0].toFixed(1)} tiles) goes back at point ${i}: past its ring's start it must carry on from the ring's length`);
+  const all = { x0: -9000, x1: 9000, y0: -3000, y1: 9000 };
+  for (const t of [0.4, 2.5, 4.1, 5.7]) {
+    const r = recCtx(); drawSwash(r.ctx, all, 1, t, 0); const polys = polygons(r);
+    assert.equal(polys.length, 2 * runs.length, 'two ribbons (shoal, foam) for each beach of the island');
+    polys.forEach((p, k) => { const bb = runs[k >> 1].bb; for (const [x, y] of p) assert.ok(x > bb[0] - 16 && x < bb[2] + 16 && y > bb[1] - 16 && y < bb[3] + 16, `ribbon ${k} of beach ${k >> 1} reaches (${Math.round(x)}, ${Math.round(y)}), outside its box ${bb.map(Math.round)}`); });
+  }
+});
+
+test('a beach is one beach wherever its ring happens to start: a ring turned round to start somewhere else gives the same runs, each with an arc that only grows and spans the same number of tiles (a run across the start went back before: see above)', () => {
+  const span = (r) => r.arc[r.n - 1] - r.arc[0]; let turned = 0;
+  for (const ring of coast.rings) {
+    const n = ring.length / 2, want = beachRuns(ring).map(span).sort((a, b) => a - b); if (!want.length) continue;
+    for (const o of [Math.floor(n * 0.13), Math.floor(n * 0.5), Math.floor(n * 0.87) + 1]) {
+      const rot = new Float64Array(ring.length); for (let q = 0; q < n; q++) { const j = (q + o) % n; rot[2 * q] = ring[2 * j]; rot[2 * q + 1] = ring[2 * j + 1]; }
+      const got = beachRuns(rot); turned++;
+      for (const run of got) for (let i = 1; i < run.n; i++) assert.ok(run.arc[i] >= run.arc[i - 1], `turned by ${o} of ${n} points, a run of ${run.n} points goes back at point ${i}`);
+      const spans = got.map(span).sort((a, b) => a - b); assert.equal(spans.length, want.length, `turned by ${o} of ${n} points: ${spans.length} runs, not ${want.length}`);
+      spans.forEach((s, k) => assert.ok(Math.abs(s - want[k]) < 0.01, `turned by ${o} of ${n} points: a run spans ${s.toFixed(3)} tiles, not ${want[k].toFixed(3)}`));
+    }
+  }
+  assert.ok(turned >= 12, `${turned} turned rings`);
 });

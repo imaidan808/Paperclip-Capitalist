@@ -111,16 +111,16 @@ export class ChunkCache {
   /**
    * The last resort for the pieces `parts` (world rectangles, flat quadruples) that no stand-in covers: the chunks of the scales the ratio window refuses, the nearest scale first, are drawn into them (scaled to this
    * frame's scale `a`, from the translation e, f, clipped to the piece, and a pixel larger than their cell as a stand-in is), and what a chunk covers is cut from `parts`. Soft, but it is the picture, and the sea is not.
-   * What is left in `parts` is what nothing covers. Answers how many chunks were drawn.
+   * What is left in `parts` is what nothing covers. Answers how many chunks were drawn. `smooth` is false for a frame that cannot afford a smoothed blit (a CPU-drawn canvas while the scale changes: groundcache.js).
    */
-  soften(ctx, parts, a, e, f) {
+  soften(ctx, parts, a, e, f, smooth = true) {
     let draws = 0;
-    for (const c of this.soft) { if (!parts.length) break; draws += this.paintSoft(ctx, c, parts, a, e, f); }
-    if (parts.length && this.ov.size) for (const c of this.ov.values()) { if (!parts.length) break; draws += this.paintSoft(ctx, c, parts, a, e, f); } // (and what even those leave is what the overview, the very coarse picture of the whole island, holds; what it does not hold is open sea)
+    for (const c of this.soft) { if (!parts.length) break; draws += this.paintSoft(ctx, c, parts, a, e, f, smooth); }
+    if (parts.length && this.ov.size) for (const c of this.ov.values()) { if (!parts.length) break; draws += this.paintSoft(ctx, c, parts, a, e, f, smooth); } // (and what even those leave is what the overview, the very coarse picture of the whole island, holds; what it does not hold is open sea)
     return draws;
   }
   /** One chunk drawn into the pieces `parts` it overlaps, scaled to this frame's scale, and cut from them. Answers 1 when it drew (a cell of open sea has nothing to draw: it still covers). */
-  paintSoft(ctx, c, parts, a, e, f) {
+  paintSoft(ctx, c, parts, a, e, f, smooth = true) {
     const s0 = CHUNK_PX / c.a, x0 = c.i * s0, y0 = c.j * s0, x1 = x0 + s0, y1 = y0 + s0;
     let hit = false; for (let p = 0; p < parts.length; p += 4) if (x0 < parts[p + 2] - 1e-3 && x1 > parts[p] + 1e-3 && y0 < parts[p + 3] - 1e-3 && y1 > parts[p + 1] + 1e-3) { hit = true; break; }
     if (!hit) return 0;
@@ -131,8 +131,8 @@ export class ChunkCache {
         const qx0 = Math.max(x0, parts[p]), qy0 = Math.max(y0, parts[p + 1]), qx1 = Math.min(x1, parts[p + 2]), qy1 = Math.min(y1, parts[p + 3]);
         if (qx1 - qx0 > 1e-3 && qy1 - qy0 > 1e-3) ctx.rect(qx0 * a + e, qy0 * a + f, (qx1 - qx0) * a, (qy1 - qy0) * a);
       }
-      ctx.clip(); const k = a / c.a, sz = CHUNK_PX * k; ctx.imageSmoothingEnabled = true;
-      if (c.pin && 'imageSmoothingQuality' in ctx) ctx.imageSmoothingQuality = 'high'; // (the overview is magnified 16 to 64 times: a bicubic read turns the stairs of its coast into a curve; the state goes back with the restore)
+      ctx.clip(); const k = a / c.a, sz = CHUNK_PX * k; ctx.imageSmoothingEnabled = smooth;
+      if (smooth && 'imageSmoothingQuality' in ctx) ctx.imageSmoothingQuality = 'low'; // (bilinear: the overview is magnified 13 to 64 times and was read bicubic ('high') to turn the stairs of its coast into a curve, which is 25 to 32 ms of GPU hardware time a frame over the whole window at every zoom, against 3 to 4 for 'low': a zoom out that shows it saturated the GPU for a second or two, and every frame and every readback behind it waited. It is a placeholder for a few frames; the state goes back with the restore)
       ctx.drawImage(c.img, c.i * CHUNK_PX * k + e - k * 0.5, c.j * CHUNK_PX * k + f - k * 0.5, sz + k, sz + k); ctx.restore(); drew = 1;
     }
     this.use(c); cutParts(parts, x0, y0, x1, y1);
