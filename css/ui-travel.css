@@ -29,7 +29,7 @@
 .tv-path::before { content: ""; position: absolute; left: calc(.8rem - 1.5px); top: 1rem; bottom: 1rem; border-left: 3px dotted var(--line); }
 .tv-d { position: relative; min-width: 0; background: var(--panel2); border: 1px solid var(--line); border-left: 6px solid var(--za, var(--line)); padding: .6rem .75rem; display: grid; gap: .4rem; }
 .tv-node { position: absolute; left: -2.1rem; top: .55rem; width: 1.6rem; height: 1.6rem; border-radius: 50%; display: grid; place-items: center; background: var(--bg); border: 2px solid var(--line); color: var(--mute); font: 700 .7rem ui-monospace, Menlo, monospace; }
-.tv-d.open .tv-node { background: var(--green); border-color: var(--green); color: #04210f; }
+.tv-d.open .tv-node { background: var(--green); border-color: var(--green); color: #04210f; } .tv-node .gl { width: .9rem; height: .9rem; }
 .tv-d.next { border-color: var(--gold); border-left-color: var(--za, var(--gold)); }
 .tv-d.next .tv-node { border-color: var(--gold); color: var(--gold); }
 .tv-d.locked { background: var(--panel); border-style: dashed; border-left-style: solid; }

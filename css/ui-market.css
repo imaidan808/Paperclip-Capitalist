@@ -64,6 +64,7 @@
 .mkt-want { display: grid; grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr)); gap: .4rem; }
 .mkt-wcrate { text-align: left; text-transform: none; letter-spacing: 0; }
 .mkt-wcrate[aria-pressed="true"] { border-color: var(--gold); background: var(--warn-bg); }
-.mkt-wcrate[aria-pressed="true"]::before { content: "✓ "; color: var(--gold); font-weight: 800; }
+.mkt-wcrate[aria-pressed="true"]::before { content: ""; display: inline-block; width: 1em; height: 1em; margin-right: .3em; vertical-align: -.14em; color: var(--gold); background-color: currentColor; -webkit-mask: var(--gl-tick) center / contain no-repeat; mask: var(--gl-tick) center / contain no-repeat; } /* the crate you chose: a tick (js/art/g-ui.js mark-tick) in the gold of its edge */
+@media (forced-colors: active) { .mkt-wcrate[aria-pressed="true"]::before { forced-color-adjust: none; background-color: ButtonText; } }
 .mkt-matrix { font-size: .8rem; }
 
