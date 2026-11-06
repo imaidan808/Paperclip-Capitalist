@@ -219,6 +219,13 @@ test('the instructor dashboard draws the Backgrounds: two small drawings in a st
   assert.deepEqual(decorative(p.c2 + p.grade), []);
 });
 
+test('the player card\'s disc holds its two drawings side by side, not on top of each other: no negative margin between them, and the two fit the disc (the emoji overlapped by a third of their width; two drawings of 16 px do not need to, and in forced colors the second\'s dark chip hid a third of the first: the green cuff of the handshake, the bit of the key)', () => {
+  const shell = src('css/shell.css'), styles = src('css/styles.css'), av = shell.match(/\.ring \.av \{([^}]*)\}/)[1], item = shell.match(/\.ring \.av i \{([^}]*)\}/)[1];
+  assert.doesNotMatch(item, /margin:[^;]*-/, 'each drawing keeps its own box');
+  const disc = parseFloat(/width:\s*([\d.]+)rem/.exec(av)[1]), glyph = parseFloat(/\.gl-sm:not\(\[width\]\) \{ width: ([\d.]+)rem/.exec(styles)[1]);
+  assert.ok(2 * glyph <= disc, `two drawings of ${glyph} rem fit a disc of ${disc} rem`);
+});
+
 // ---------------------------------------------------------------------------------------------------- the sheets
 test('the sheets size the drawings of a place: 26 px on a Draft disc (22 on a phone), 24 px on the debrief\'s card, 16 px in a row and on the player card\'s disc, 24 px in the Travel tile, 40 px in the Market\'s banner; nothing is left of an emoji\'s font-size', () => {
   const draft = src('css/ui-draft.css'), shell = src('css/shell.css'), market = src('css/ui-market.css');
