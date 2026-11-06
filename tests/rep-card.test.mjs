@@ -319,7 +319,9 @@ function taps(p, log, label) {
     assert.ok(m.inV, `${where}: the middle of the control is in the window`);
     assert.ok(m.lands && !m.byCard, `${where}: a tap at the middle lands on the control${m.byCard ? ' (it lands on the card)' : ` (it lands on ${m.hit}; control and card ${m.box})`}`);
     // the card covers none of the control, unless the sheet is nothing but buttons at this position of it (no place in the window, even for the tab, is clear of them): then some button is covered, and a tap at the middle still lands
-    assert.ok(m.cover === 0 || (!m.room && m.cover <= 0.5), `${where}: the card covers ${Math.round(m.cover * 100)}% of the control${m.room ? ' though a place for the tab is clear of every control' : ''}`);
+    // (a sliver is not covering: under 1% of the control's area is a pixel or two of overlap, which a runner's font metrics and the settle's last frame move from run to run; a tap at the middle landing on the control is asserted above, and
+    //  this check failed three times in two days on the CI runner at 0% rounded, which is the sliver: "the card covers 0% of the control though a place for the tab is clear")
+    assert.ok(m.cover <= 0.01 || (!m.room && m.cover <= 0.5), `${where}: the card covers ${(m.cover * 100).toFixed(2)}% of the control${m.room ? ' though a place for the tab is clear of every control' : ''}`);
     return m;
   };
   // `then` (an expression) is what the press should bring about; a press the page has not answered in 6 seconds is made again (the page repaints between measuring and pressing, and a loaded machine is slow), up to 3 times
