@@ -18,6 +18,8 @@ import { demandOf, fitTags } from '../js/data/schema.js';
 import * as haggle from '../js/play/haggle.js';
 import * as pitchGame from '../js/play/pitch.js';
 import { makeGame } from './bot.mjs';
+import { goodGlyph } from '../js/ui/glyphs.js';
+import { shapesOf } from '../js/art/glyph.js';
 import { parsePerks, DEFAULT_PERKS } from './calibrate.mjs';
 import { DEFAULT_SEEDS, balance, wipedOut } from './balance.mjs';
 
@@ -571,10 +573,12 @@ test('the flagship goods can be bought at their district\'s gate and have a buye
   }
 });
 
-test('no two goods on one market share an icon, no two districts share a glyph (tests/ui-glyphs.test.mjs), and the names that sit side by side differ', () => {
-  const icons = Object.entries(ASSETS).map(([id, a]) => [a.icon, id]);
-  const dup = {}; for (const [i, id] of icons) (dup[i] ||= []).push(id);
-  assert.deepEqual(Object.entries(dup).filter(([, ids]) => ids.length > 1), [], 'every asset has its own icon');
+test('no two goods share a drawing (a good is its own glyph, good-<id>: a pair that shares one on purpose is declared in SHARED with its reason), no two districts share a glyph (tests/ui-glyphs.test.mjs), and the names that sit side by side differ', () => {
+  const SHARED = {}; // glyph id -> the goods that share it on purpose and why (none: every good has a drawing of its own)
+  const dup = {}; for (const id of Object.keys(ASSETS)) { assert.ok(goodGlyph(id), `${id} has a drawn glyph`); (dup[goodGlyph(id)] ||= []).push(id); }
+  assert.deepEqual(Object.entries(dup).filter(([glyph, ids]) => ids.length > 1 && !SHARED[glyph]), [], 'every asset has its own glyph');
+  const shapes = {}; for (const id of Object.keys(ASSETS)) (shapes[JSON.stringify(shapesOf(goodGlyph(id)))] ||= []).push(id);
+  assert.deepEqual(Object.values(shapes).filter((ids) => ids.length > 1), [], 'and no two glyphs are the same drawing');
   assert.equal(ZONES[4].short, 'Pawn', 'the short name is a shortening of the name');
   assert.ok(ZONES[4].name.startsWith(ZONES[4].short));
   for (const z of Object.values(ZONES)) assert.ok(z.name.replace(/^The /, '').startsWith(z.short) || z.name.includes(z.short.split(' ')[0]) || z.short.length <= z.name.length, z.name);
@@ -599,8 +603,7 @@ test('content spells in American English throughout (district names are Harbor a
   assert.ok(Object.values(ASSETS).some((a) => /License/.test(a.name)) && Object.values(ASSETS).some((a) => /Catalog\b/.test(a.name)));
   // the data files' comments too: one spelling inside one file
   for (const f of ['js/data/tier1.js', 'js/data/tier2.js', 'js/data/tier3.js', 'js/data/tier4.js']) assert.doesNotMatch(text(f), /\b(Catalogue|Licence|Instalment|fibre|favourite|jewellery|pyjamas|modelled|Harbourline|Grey-market)\b/, f);
-  for (const [id, a] of Object.entries(ASSETS)) assert.ok(!(id === 'winterWheat' && a.icon === '🌽'), 'Winter Wheat is not an ear of corn, and the Co-op\'s own icon is the sheaf');
-  assert.notEqual(ASSETS.gpuServer.icon, '🖲️');
+  assert.ok(goodGlyph('winterWheat') === 'good-winterWheat' && goodGlyph('gpuServer') === 'good-gpuServer', 'Winter Wheat is the sheaf of the Co-op and the GPU server a card of its own: each has its drawing, found by its id');
 });
 
 // ===================================================================================================================================
