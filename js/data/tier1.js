@@ -39,64 +39,64 @@ export const zones = {
 export const assets = {
   // ------------------------------------------------------------------ The Scrap Yard (fair value $0.05 - $3)
   paperclip: {
-    name: 'Rusty Paperclip', icon: '📎', base: 0.08, sc: 2, dep: 1, tags: ['tool', 'office'], dem: { 1: 7, 2: 2 },
+    name: 'Rusty Paperclip', base: 0.08, sc: 2, dep: 1, tags: ['tool', 'office'], dem: { 1: 7, 2: 2 },
   },
   oddHardware: {
-    name: 'Coffee Can of Odd Hardware', icon: '🧰', base: 0.7, sc: 3, dep: 1, tags: ['tool', 'scrap', 'home'], dem: { 1: 8, 2: 4, 3: 2 },
+    name: 'Coffee Can of Odd Hardware', base: 0.7, sc: 3, dep: 1, tags: ['tool', 'scrap', 'home'], dem: { 1: 8, 2: 4, 3: 2 },
   },
   paperbacks: {
-    name: 'Box of Water-Stained Paperbacks', icon: '📕', base: 1.6, sc: 3, dep: 3, tags: ['paper', 'home'], dem: { 1: 6, 2: 7, 3: 3 },
+    name: 'Box of Water-Stained Paperbacks', base: 1.6, sc: 3, dep: 3, tags: ['paper', 'home'], dem: { 1: 6, 2: 7, 3: 3 },
   },
   scrap: {
-    name: 'Bucket of Scrap Metal', icon: '🔩', base: 3, sc: 3, dep: 1, tags: ['scrap', 'industrial'], dem: { 1: 9, 2: 3 },
+    name: 'Bucket of Scrap Metal', base: 3, sc: 3, dep: 1, tags: ['scrap', 'industrial'], dem: { 1: 9, 2: 3 },
   },
   pen: {
-    name: 'Vintage Fountain Pen', icon: '🖋️', base: 3.2, sc: 5, dep: 1, tags: ['prestige', 'office', 'retro'], dem: { 1: 8, 2: 7, 3: 3, 4: 2 }, fakeRisk: 0.35,
+    name: 'Vintage Fountain Pen', base: 3.2, sc: 5, dep: 1, tags: ['prestige', 'office', 'retro'], dem: { 1: 8, 2: 7, 3: 3, 4: 2 }, fakeRisk: 0.35,
   },
 
   // ------------------------------------------------------------------ Flea Market Row (fair value $3 - $20)
   radio: {
-    name: 'Vintage Tube Radio', icon: '📻', base: 12, sc: 6, dep: 2, tags: ['retro', 'electronics', 'home'], dem: { 1: 3, 2: 8, 3: 3, 4: 3 }, repair: 4.2,
+    name: 'Vintage Tube Radio', base: 12, sc: 6, dep: 2, tags: ['retro', 'electronics', 'home'], dem: { 1: 3, 2: 8, 3: 3, 4: 3 }, repair: 4.2,
   },
   fleaRecords: {
-    name: 'Crate of Vinyl Records', icon: '🎶', base: 9, sc: 5, dep: 2, tags: ['retro', 'collectible', 'media'], dem: { 1: 2, 2: 8, 4: 3 }, fakeRisk: 0.5,
+    name: 'Crate of Vinyl Records', base: 9, sc: 5, dep: 2, tags: ['retro', 'collectible', 'media'], dem: { 1: 2, 2: 8, 4: 3 }, fakeRisk: 0.5,
   },
   fleaBox: {
-    name: 'Sealed Mystery Box', icon: '🎁', base: 7, sc: 9, dep: 2, tags: ['collectible', 'consumer'], dem: { 1: 2, 2: 9, 3: 3, 4: 3 },
+    name: 'Sealed Mystery Box', base: 7, sc: 9, dep: 2, tags: ['collectible', 'consumer'], dem: { 1: 2, 2: 9, 3: 3, 4: 3 },
   },
 
   // ------------------------------------------------------------------ Campus Quad (fair value $8 - $60)
   bike: {
-    name: 'Road Bike', icon: '🚲', base: 34, sc: 5, dep: 3, tags: ['outdoor', 'vehicle'], dem: { 1: 3, 2: 4, 3: 9, 4: 5 }, repair: 12, fakeRisk: 0.5,
+    name: 'Road Bike', base: 34, sc: 5, dep: 3, tags: ['outdoor', 'vehicle'], dem: { 1: 3, 2: 4, 3: 9, 4: 5 }, repair: 12, fakeRisk: 0.5,
   },
   courseBooks: {
-    name: 'Used Textbook Set', icon: '📚', base: 28, sc: 4, dep: 4, tags: ['paper', 'training'], dem: { 2: 2, 3: 9, 4: 2 },
+    name: 'Used Textbook Set', base: 28, sc: 4, dep: 4, tags: ['paper', 'training'], dem: { 2: 2, 3: 9, 4: 2 },
   },
   graphCalc: {
-    name: 'Graphing Calculator', icon: '🧮', base: 42, sc: 5, dep: 3, tags: ['training', 'electronics', 'office'], dem: { 2: 2, 3: 8, 4: 3 },
+    name: 'Graphing Calculator', base: 42, sc: 5, dep: 3, tags: ['training', 'electronics', 'office'], dem: { 2: 2, 3: 8, 4: 3 },
   },
   dormFridge: {
-    name: 'Dorm Mini-Fridge', icon: '🧊', base: 52, sc: 4, dep: 3, tags: ['home', 'consumer'], dem: { 2: 3, 3: 8, 4: 3 }, repair: 17,
+    name: 'Dorm Mini-Fridge', base: 52, sc: 4, dep: 3, tags: ['home', 'consumer'], dem: { 2: 3, 3: 8, 4: 3 }, repair: 17,
   },
   spiritHoodies: {
-    name: 'Crate of Spirit-Week Hoodies', icon: '🧥', base: 20, sc: 3, dep: 6, tags: ['fashion', 'trend'], dem: { 2: 3, 3: 9 },
+    name: 'Crate of Spirit-Week Hoodies', base: 20, sc: 3, dep: 6, tags: ['fashion', 'trend'], dem: { 2: 3, 3: 9 },
   },
   enamelPins: {
-    name: 'Blind-Bag Enamel Pin Set', icon: '📌', base: 8, sc: 3, dep: 7, tags: ['trend', 'collectible'], dem: { 2: 3, 3: 8 },
+    name: 'Blind-Bag Enamel Pin Set', base: 8, sc: 3, dep: 7, tags: ['trend', 'collectible'], dem: { 2: 3, 3: 8 },
   },
 
   // ------------------------------------------------------------------ Pawn District (fair value $60 - $330)
   pawnLaptop: {
-    name: 'Refurbished Student Laptop', icon: '💻', base: 140, sc: 6, dep: 4, tags: ['electronics', 'digital'], dem: { 3: 5, 4: 8 }, repair: 48, fakeRisk: 0.8,
+    name: 'Refurbished Student Laptop', base: 140, sc: 6, dep: 4, tags: ['electronics', 'digital'], dem: { 3: 5, 4: 8 }, repair: 48, fakeRisk: 0.8,
   },
   pawnGuitar: {
-    name: 'Acoustic Guitar, Some Wear', icon: '🎸', base: 120, sc: 5, dep: 2, tags: ['media', 'retro'], dem: { 3: 4, 4: 9 }, repair: 34, fakeRisk: 0.9,
+    name: 'Acoustic Guitar, Some Wear', base: 120, sc: 5, dep: 2, tags: ['media', 'retro'], dem: { 3: 4, 4: 9 }, repair: 34, fakeRisk: 0.9,
   },
   pawnWatch: {
-    name: 'Pawn-Shop Wristwatch', icon: '⌚', base: 260, sc: 8, dep: 1, tags: ['prestige', 'luxury', 'collectible'], dem: { 3: 2, 4: 9 }, fakeRisk: 1,
+    name: 'Pawn-Shop Wristwatch', base: 260, sc: 8, dep: 1, tags: ['prestige', 'luxury', 'collectible'], dem: { 3: 2, 4: 9 }, fakeRisk: 1,
   },
   signedBall: {
-    name: 'Signed Game-Used Baseball', icon: '⚾', base: 150, sc: 7, dep: 1, tags: ['collectible', 'prestige'], dem: { 3: 3, 4: 7 }, fakeRisk: 1,
+    name: 'Signed Game-Used Baseball', base: 150, sc: 7, dep: 1, tags: ['collectible', 'prestige'], dem: { 3: 3, 4: 7 }, fakeRisk: 1,
   },
 };
 

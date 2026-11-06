@@ -22,7 +22,7 @@ export const stockMethods = {
     if (l.cond === 'broken') { ctx.strokeStyle = 'rgba(0,0,0,.55)'; ctx.lineWidth = 1.4; const a = facePoint(f.left, 0.2, 0.9), b = facePoint(f.left, 0.55, 0.25), c = facePoint(f.left, 0.8, 0.6); ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.lineTo(c[0], c[1]); ctx.stroke(); }
     ctx.restore();
     this.hits.push({ eid: e.id, kind: 'lot', id: e.id.slice(4), zone: e.zone, label: `${ASSETS[l.cls].name}${l.cond === 'broken' ? ' (broken)' : ''}${auction ? ' at auction' : ' for sale'}`, polys: [[[x - 18, y - 26], [x + 18, y - 26], [x + 18, y + 4], [x - 18, y + 4]]], lot: l });
-    if (this.cam.z > 0.5) this.overlay.push({ k: 'tag', n: 6, wx: x, wy: y - 32, draw: (g, px, py, s) => this.tag(g, px, py, s, auction ? '🔨' : ASSETS[l.cls].icon, money(l.price), auction ? '#ffd36e' : '#46e38e', hov) });
+    if (this.cam.z > 0.5) this.overlay.push({ k: 'tag', n: 6, wx: x, wy: y - 32, draw: (g, px, py, s) => this.tag(g, px, py, s, auction ? 'mark-gavel' : 'good-' + l.cls, money(l.price), auction ? '#ffd36e' : '#46e38e', hov) });
   },
 
   drawAsset(ctx, e) {
@@ -40,6 +40,6 @@ export const stockMethods = {
     if (a.cond === 'broken') { ctx.strokeStyle = 'rgba(0,0,0,.6)'; ctx.lineWidth = 1.4; const p1 = facePoint(f.left, 0.15, 0.85), p2 = facePoint(f.left, 0.5, 0.3), p3 = facePoint(f.left, 0.85, 0.7); ctx.beginPath(); ctx.moveTo(p1[0], p1[1]); ctx.lineTo(p2[0], p2[1]); ctx.lineTo(p3[0], p3[1]); ctx.stroke(); if (!this.reduced() && !this.far) { const [sx0, sy0] = P(gx, gy, 18); for (let i = 0; i < 2; i++) { const k = ((this.vt / 900) + i / 2) % 1; ctx.fillStyle = `rgba(200,200,210,${0.4 * (1 - k)})`; ctx.beginPath(); ctx.arc(sx0 + k * 6, sy0 - k * 16, 2 + k * 4, 0, 7); ctx.fill(); } } }
     ctx.restore();
     this.hits.push({ eid: e.id, kind: 'asset', id: a.id, zone: e.zone, label: `${ASSETS[a.cls].name}${a.cond === 'broken' ? ' (broken)' : ''}, in your stock`, polys: [[[x - 16, y - 32 - bob], [x + 16, y - 32 - bob], [x + 16, y + 4], [x - 16, y + 4]]], asset: a });
-    if (this.cam.z > 0.6 || sel || hov) this.overlay.push({ k: 'icon', n: 0, wx: x, wy: y - 36 - bob, draw: (g, px, py, s) => this.icon(g, px, py, s, ASSETS[a.cls].icon, sel) });
+    if (this.cam.z > 0.6 || sel || hov) this.overlay.push({ k: 'icon', n: 0, wx: x, wy: y - 36 - bob, draw: (g, px, py, s) => this.icon(g, px, py, s, 'good-' + a.cls, sel) });
   },
 };

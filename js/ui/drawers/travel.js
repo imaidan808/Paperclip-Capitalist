@@ -11,7 +11,7 @@ import { esc } from '../common.js';
 import { fmtMoney as money } from '../../market.js';
 import { lessonTitle, lessonGist, rulePhrases, rewardPhrases } from './districttext.js';
 import { fold, flip } from './stock.js';
-import { gl, zoneGl } from '../glyphs.js';
+import { gl, zoneGl, goodGl, goodGlyph } from '../glyphs.js';
 
 export const TIERS = [
   { n: 1, name: 'The Streets', line: 'Barter, haggle and learn to read a buyer.' },
@@ -109,8 +109,9 @@ function summaryHTML(ctx) {
     <p class="tv-meta">${open} of ${N} districts open.${nextId ? ` Next stop: <b>${esc(ZONES[nextId].name)}</b>. <b>${money(Math.max(0, ZONES[nextId].gate - g.netWorth()))}</b> to go.` : ' Every district is open.'}</p></section>`;
 }
 
+/** The crates named, three at most, each with its drawing before its name (markup: every name is escaped here; a good nobody drew is named without a mark). */
 function crateNames(items) {
-  const names = items.map((a) => (ASSETS[a.cls] ? `${ASSETS[a.cls].icon} ${ASSETS[a.cls].name}` : a.cls));
+  const names = items.map((a) => (ASSETS[a.cls] ? `${goodGlyph(a.cls) ? `<span aria-hidden="true">${goodGl(a.cls, 'gl-sm')}</span> ` : ''}${esc(ASSETS[a.cls].name)}` : esc(a.cls)));
   return names.length > 3 ? `${names.slice(0, 3).join(', ')} and ${names.length - 3} more` : list(names);
 }
 
@@ -140,7 +141,7 @@ function shipHTML(ctx) {
       <button class="btn" data-act="travel-stock" data-fid="tv-stock">Pick crates in Stock</button></div></section>`;
   }
   const from = ZONES[plan.from];
-  const head = `<div class="tv-crates"><p class="small"><b>${plural(plan.items.length, 'crate')}</b> in ${esc(from?.name || 'your district')}: ${esc(crateNames(plan.items))}.</p>
+  const head = `<div class="tv-crates"><p class="small"><b>${plural(plan.items.length, 'crate')}</b> in ${esc(from?.name || 'your district')}: ${crateNames(plan.items)}.</p>
     <div class="tv-acts"><button class="btn ghost" data-act="travel-stock" data-fid="tv-stock">Change crates</button><button class="btn ghost" data-act="travel-clear" data-fid="tv-clear">Clear</button></div></div>`;
   if (plan.mixed) {
     return `<section class="sect"><h3><span>Ship crates</span></h3>${head}<div class="callout warn"><b>These crates sit in different districts.</b> Pick crates from one district in Stock.</div></section>`;
@@ -172,7 +173,7 @@ function transitHTML(ctx) {
     const note = f.checked ? '<p class="tv-warn">Held at customs: the inspection added 12 hours.</p>'
       : cu ? `<p class="tv-warn">Customs may inspect it on arrival (${pctN(cu)}% chance).</p>` : '';
     return `<article class="tv-fr"><header><h4>${plural(f.items.length, 'crate')} to ${esc(to?.name || 'a district')}</h4><span class="chip info">Arrives in ${hoursText(left)}</span></header>
-      <p class="tv-meta">${esc(crateNames(f.items))}. From ${esc(from?.name || 'another district')}, worth about ${money(worth)} on arrival.</p>
+      <p class="tv-meta">${crateNames(f.items)}. From ${esc(from?.name || 'another district')}, worth about ${money(worth)} on arrival.</p>
       <span class="bar green" role="progressbar" aria-label="Freight to ${esc(to?.name || 'a district')}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${now}" aria-valuetext="${now} percent of the way, arrives in ${hoursText(left)}"><i data-bar="freight:${esc(f.id)}"></i></span>
       ${note}</article>`;
   }).join('');

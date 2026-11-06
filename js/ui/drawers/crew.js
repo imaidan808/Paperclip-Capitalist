@@ -6,7 +6,7 @@ import { ZONES, ASSETS, BUYERS, PIPE, PIPE_RULES, UPGRADES, CLIENTS, MIL_ZONE, E
 import { fitOf, fitLabel } from '../../market.js';
 import { esc } from '../common.js';
 import { moneySize } from '../../audio/palette.js';
-import { gl, tile, zoneGl } from '../glyphs.js';
+import { gl, tile, zoneGl, goodGl, goodGlyph } from '../glyphs.js';
 
 // ---------------------------------------------------------------- small helpers
 const ST = (ctx) => {
@@ -32,8 +32,8 @@ const BANDS = {
 const bandOf = (ci) => BANDS[ci.band.id] || BANDS.balanced;
 const cmChip = (ci) => `<span class="chip ${bandOf(ci).tone}" title="${esc(bandOf(ci).note)}">${esc(ci.band.label)} ${ci.cm.toFixed(2)}x</span>`;
 const crowdWords = (ci) => (ci.vT < 2 ? 'Almost nobody else is pitching this niche.' : `${Math.round(ci.S * 100)}% of recent pitches use this niche.`);
-/** The goods' icon before a lane's name, when the lane has goods (a manager with no lane yet has none). */
-const goodsMark = (cls) => (ASSETS[cls] ? `<span aria-hidden="true">${ASSETS[cls].icon}</span> ` : '');
+/** The good's drawing before a lane's name, when the lane has goods and somebody drew them (a manager with no lane yet has none). */
+const goodsMark = (cls) => (goodGlyph(cls) ? `<span aria-hidden="true">${goodGl(cls, 'gl-sm')}</span> ` : '');
 const laneName = (cls, seg) => `${esc(ASSETS[cls]?.name || 'No lane yet')} to ${esc(BUYERS[seg]?.name || '?')}`;
 
 function statusOf(p) {
