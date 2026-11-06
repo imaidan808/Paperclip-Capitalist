@@ -13,11 +13,11 @@ import { spawn } from 'node:child_process';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { open } from './cdp.mjs';
-import { findChrome, chromeReady } from './chrome.mjs';
+import { findChrome, chromeReady, QUIET_ARGS } from './chrome.mjs';
 
 const o = { base: 'http://localhost:8791/Paperclip-Capitalist', w: 1024, h: 768, dsf: 2, mode: 'gpu', cpu: 1, idle: 1500, observe: 12000, perks: 2, profile: false, port: 9478, json: false, ...JSON.parse(process.argv[2] || '{}') };
 const dir = mkdtempSync(tmpdir() + '/pl-perf-');
-const proc = spawn(findChrome(), ['--headless=new', ...(o.mode === 'soft' ? ['--disable-gpu'] : []), '--hide-scrollbars', '--no-first-run', '--mute-audio', `--remote-debugging-port=${o.port}`, `--user-data-dir=${dir}`, 'about:blank'], { stdio: ['ignore', 'ignore', 'pipe'] });
+const proc = spawn(findChrome(), ['--headless=new', ...(o.mode === 'soft' ? ['--disable-gpu'] : []), '--hide-scrollbars', '--no-first-run', '--mute-audio', ...QUIET_ARGS, `--remote-debugging-port=${o.port}`, `--user-data-dir=${dir}`, 'about:blank'], { stdio: ['ignore', 'ignore', 'pipe'] });
 const done = () => { try { proc.kill('SIGKILL'); } catch { /* gone */ } setTimeout(() => { try { rmSync(dir, { recursive: true, force: true }); } catch { /* gone */ } }, 700); };
 
 // In the page: the title, the draft; stops at the Begin button.

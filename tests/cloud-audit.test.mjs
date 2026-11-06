@@ -413,6 +413,20 @@ test('M1: the headless Chrome that the tests and scripts start is muted: a run o
   for (const f of ['scripts/cdp.mjs', 'scripts/diag/lib.mjs']) assert.match(readFileSync(join(ROOT, f), 'utf8'), /\.\.\.chromeArgs\(\)/, f + ' builds its flags from chromeArgs()');
 });
 
+test('M1b: the headless Chrome that the tests and scripts start stays off the network: no background fetches, no secure-DNS probes, every name but this machine\'s resolves to nothing', async () => {
+  // measured on 2026-11-06 with the flags of M1 only: one headless Chrome on a fresh profile held 54 connections to the outside (Google's and Cloudflare's resolvers, component and hint servers) within 20 seconds, for as long as it lived (an instance
+  // left behind by a killed test run lived for hours); with these flags it held none. A person's own machine and router cannot take dozens of them. Every page the rig opens is on localhost or 127.0.0.1.
+  const { chromeArgs, QUIET_ARGS } = await import('../scripts/chrome.mjs');
+  const args = chromeArgs();
+  for (const f of ['--disable-background-networking', '--disable-component-update', '--disable-sync', '--disable-domain-reliability', '--no-pings']) assert.ok(args.includes(f), `chromeArgs() has ${f}`);
+  assert.ok(args.some((a) => /^--disable-features=.*\bDnsOverHttps\b/.test(a)), 'secure DNS is off (its probes are the connections to 8.8.8.8, 8.8.4.4 and Cloudflare)');
+  assert.ok(args.includes('--host-resolver-rules=MAP * ~NOTFOUND , EXCLUDE localhost , EXCLUDE 127.0.0.1'), 'every name but localhost and 127.0.0.1 resolves to nothing');
+  assert.equal(args.filter((a) => a.startsWith('--disable-features=')).length, 1, 'one --disable-features (Chrome keeps only the last)');
+  for (const a of QUIET_ARGS) assert.ok(args.includes(a), `${a} is in chromeArgs()`);
+  // and the launchers that build their own list take the same flags
+  for (const f of ['npc-opacity', 'perf-holes', 'perf-load', 'perf-moves', 'perf-transitions']) { const src = readFileSync(join(ROOT, `scripts/${f}.mjs`), 'utf8'); assert.match(src, /\.\.\.QUIET_ARGS/, `scripts/${f}.mjs starts Chrome with QUIET_ARGS`); assert.match(src, /QUIET_ARGS \} from '\.\/chrome\.mjs'/, `scripts/${f}.mjs imports it`); }
+});
+
 test('X5: an Academy lesson\'s sandbox is a scripted world: a Read there tells the lesson the truth, because its steps wait for it (Read the Room)', () => {
   // m02 reads a fake watch (the step waits for inspect with fake: true) and then says which was which; nothing in a lesson\'s lots is a secret worth keeping from the lesson
   const fake = readOnce(true, 0.8, { hidden: true }, true), genuine = readOnce(false, 0.8, { hidden: true }, true);

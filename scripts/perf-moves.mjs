@@ -16,11 +16,11 @@ import { spawn } from 'node:child_process';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { open } from './cdp.mjs';
-import { findChrome, chromeReady } from './chrome.mjs';
+import { findChrome, chromeReady, QUIET_ARGS } from './chrome.mjs';
 
 const o = { base: 'http://localhost:8801/Paperclip-Capitalist', w: 1512, h: 860, dsf: 2, cpu: 1, port: 9760, only: '', shots: '', json: false, settle: 5000, at: [150, 400, 800, 1400, 2200, 3500], ...JSON.parse(process.argv[2] || '{}') };
 const dir = mkdtempSync(tmpdir() + '/pl-moves-');
-const proc = spawn(findChrome(), ['--headless=new', '--hide-scrollbars', '--no-first-run', '--mute-audio', `--remote-debugging-port=${o.port}`, `--user-data-dir=${dir}`, 'about:blank'], { stdio: ['ignore', 'ignore', 'pipe'] });
+const proc = spawn(findChrome(), ['--headless=new', '--hide-scrollbars', '--no-first-run', '--mute-audio', ...QUIET_ARGS, `--remote-debugging-port=${o.port}`, `--user-data-dir=${dir}`, 'about:blank'], { stdio: ['ignore', 'ignore', 'pipe'] });
 const q = (a, p) => { const s = [...a].sort((x, y) => x - y); return s.length ? s[Math.min(s.length - 1, Math.floor(p * s.length))] : 0; };
 const r0 = (x) => Math.round(x);
 

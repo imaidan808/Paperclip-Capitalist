@@ -33,7 +33,12 @@ export const CHROME = findChrome();
 export const BROWSER = !process.env.PC_NO_BROWSER && !!CHROME;
 /** Flags for a headless launch: the sandbox cannot start for root (a container), a container's small /dev/shm is not used, and the GPU never is. It is muted: new-style headless Chrome is the whole browser and plays the game's sound layer
  *  (a click through a lesson makes the cues), which on a person's own machine came out of the speakers; a muted page still runs its AudioContext, so what the tests read from it is the same. */
-export const chromeArgs = () => ['--headless=new', '--disable-gpu', '--hide-scrollbars', '--no-first-run', '--mute-audio', ...(process.platform === 'linux' ? ['--disable-dev-shm-usage'] : []), ...(typeof process.getuid === 'function' && process.getuid() === 0 ? ['--no-sandbox'] : [])];
+export const chromeArgs = () => ['--headless=new', '--disable-gpu', '--hide-scrollbars', '--no-first-run', '--mute-audio', ...QUIET_ARGS, ...(process.platform === 'linux' ? ['--disable-dev-shm-usage'] : []), ...(typeof process.getuid === 'function' && process.getuid() === 0 ? ['--no-sandbox'] : [])];
+/** Flags that keep a headless Chrome off the network. Every launch uses a fresh profile, which is a first run for Chrome: it asks Google for components, optimization hints and a variations seed, probes secure DNS at 8.8.8.8, 8.8.4.4 and
+ *  Cloudflare, and holds about fifty connections open, for as long as it lives (an instance that outlives its parent, after a killed test run, lives for hours). On a person's own machine and router, dozens of them are a struggling network.
+ *  Every page the tests and scripts open is on this machine (localhost or 127.0.0.1), so every other name resolves to nothing and nothing is asked of the internet. */
+export const QUIET_ARGS = ['--disable-background-networking', '--disable-component-update', '--disable-sync', '--disable-default-apps', '--disable-domain-reliability', '--no-pings', '--metrics-recording-only',
+  '--disable-features=DnsOverHttps,OptimizationHints,OptimizationGuideModelDownloading,Translate,MediaRouter,AutofillServerCommunication,CertificateTransparencyComponentUpdater', '--host-resolver-rules=MAP * ~NOTFOUND , EXCLUDE localhost , EXCLUDE 127.0.0.1'];
 
 /**
  * Waits for a Chrome started with a debugging port to answer on it, and when it does not, says why. The launchers started it with its stderr thrown away and went on after nine seconds whether it answered or not, so a Chrome
