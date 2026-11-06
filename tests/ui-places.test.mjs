@@ -12,7 +12,8 @@ globalThis.localStorage = { getItem: (k) => (mem.has(k) ? mem.get(k) : null), se
 
 const src = (p) => readFileSync(new URL('../' + p, import.meta.url), 'utf8');
 const G = await import('../js/ui/glyphs.js');
-const { idsOf } = await import('../js/art/glyph.js');
+const { idsOf, shapesOf } = await import('../js/art/glyph.js');
+const { unionBox } = await import('./helpers/glyph-rules.mjs');
 const { ZONES, ZONE_IDS, PERKS, PERK_IDS } = await import('../js/config.js');
 const { fakeCtx, checkHTML } = await import('./helpers/ctx.mjs');
 const { esc } = await import('../js/ui/common.js');
@@ -30,6 +31,14 @@ test('the sixteen districts and the twelve Backgrounds have one drawing each, na
   assert.equal(new Set(ZONE_IDS.map((z) => G.zoneGlyph(z))).size, 16); assert.equal(new Set(PERK_IDS.map((p) => G.bgGlyph(p))).size, 12);
   for (const z of ZONE_IDS) assert.ok(!('icon' in ZONES[z]), `${ZONES[z].name}: the data carries no icon, its drawing is found by its theme`);
   for (const p of PERK_IDS) assert.ok(!('icon' in PERKS[p]), `${PERKS[p].name}: the data carries no icon, its drawing is found by its id`);
+});
+
+
+test('a Background is read alone: on the player card\'s 16 px disc its drawing is the only name there is, so none is a flat strip (each stands at least 12 units tall and 12 wide on the 24 grid: the first handshake was a pill 10 units tall between two cuffs, and is a clasp on a slant, 16 tall)', () => {
+  const bad = [], size = {};
+  for (const p of PERK_IDS) { const [x0, y0, x1, y1] = unionBox(shapesOf(G.bgGlyph(p))), w = x1 - x0, h = y1 - y0; size[p] = [w, h]; if (Math.min(w, h) < 12) bad.push(`${PERKS[p].name}: ${w.toFixed(1)} x ${h.toFixed(1)}`); }
+  assert.deepEqual(bad, [], 'a Background that is a thin strip cannot be read at 16 px with no word beside it: draw it taller');
+  assert.ok(size.connected[1] >= 15, `the handshake of Well-Connected stands ${size.connected[1].toFixed(1)} units tall (15 at least): it is the Background hardest to tell from a blur`);
 });
 
 
