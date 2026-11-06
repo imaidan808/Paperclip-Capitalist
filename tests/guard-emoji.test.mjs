@@ -86,7 +86,7 @@ test('the emoji that were decoration are gone for good: buyers, managers, client
   assert.equal(Object.keys(BUYERS).length, 101); assert.equal(QUESTS.length, 32); assert.equal(ACHIEVEMENTS.length, 78); assert.equal(DAILIES.length, 12); assert.equal(CODEX.length, 56); assert.equal(ACADEMY.length, 10); assert.equal(Object.keys(ZONES).length, 16); assert.equal(Object.keys(PERKS).length, 12);
   const seen = new Set(); for (let i = 0; i < 60; i++) { const sl = sellerFor('guard' + i, 'Clip', 10); seen.add(sl.style); assert.ok(!('icon' in sl), 'a seller has no icon'); } assert.equal(seen.size, 4, 'all four styles of seller were looked at');
   // the sources that build the rest: the Deal Room's seller kinds, auctioneer and bench, and the cards of the Read and Pitch stages; the Bank's loan products
-  assert.deepEqual([...read('js/deal.js').matchAll(/\bicon:\s*([^,}]+)/g)].map((m) => m[1].trim()).sort(), ['ASSETS[a.cls].icon', 'ASSETS[a.cls].icon', 'def.icon'], 'js/deal.js keeps an icon for goods only (a district is drawn by its id: the zone face carries the id)');
+  assert.doesNotMatch(read('js/deal.js').replace(/^\s*\/\/.*$/gm, ''), /\bicon\b/, 'js/deal.js: the model of a deal carries the good\'s class and a district\'s id, no picture (the screens look the drawing up: js/ui/glyphs.js)');
   assert.ok(!/\bicon\b/.test(read('js/ui/deal.js').replace(/\.icon\b/g, '').replace(/^\/\/.*$/gm, '')), 'js/ui/deal.js: the angle and probe cards have no icon (goods are read as .icon)');
   assert.deepEqual([...read('js/ui/drawers/bank.js').matchAll(/\bicon:\s*('[^']*')/g)].map((m) => m[1]), [], 'the Bank has no icon of its own: its tab is the glyph dock-bank, and its loan products are drawn by id (js/ui/glyphs.js)');
 });

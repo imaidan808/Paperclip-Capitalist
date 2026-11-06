@@ -29,11 +29,10 @@
   box-shadow: inset 0 1px 0 color-mix(in srgb, var(--ink) 9%, transparent);
 }
 
-/* ---- icons share one rhythm: a small framed tile, goods a little larger than the rest.
-   Many of the goods are dark emoji (a road bike, sunglasses, a black heart) that sink into any dark tile, and a lighter tile only makes that worse (the glyph and the tile
-   meet in the middle), so the glyph carries its own thin light rim: it reads whatever its colour, and the tile stays the quiet frame it is. */
-:is(.db, dialog) :is(.stk-ic, .mkt-ic, .tv-ic) { display: grid; place-items: center; flex: none; width: 2.4rem; height: 2.4rem; padding: 0; font-size: 1.35rem; line-height: 1; text-align: center; background: var(--bg); border: 1px solid var(--line); border-radius: 6px; text-shadow: 0 0 1px rgba(255, 255, 255, .85), 0 0 2px rgba(255, 255, 255, .3); }
-:is(.db, dialog) :is(.stk-ic, .mkt-ic) { width: 2.8rem; height: 2.8rem; font-size: 1.7rem; }
+/* ---- icons share one rhythm: a small framed tile, goods a little larger than the rest. A good is drawn (js/art/g-goods.js: flat tones made for the dark tile, 3:1 on it and on black), so the tile
+   is only the quiet frame it was and the picture needs no light rim; the sheet of each drawer sizes the drawing in its tile (.stk-ic .gl here, .mkt-ic .gl in ui-market.css, .lotcard .ic .gl in ui-deal.css). */
+:is(.db, dialog) :is(.stk-ic, .mkt-ic, .tv-ic) { display: grid; place-items: center; flex: none; width: 2.4rem; height: 2.4rem; padding: 0; line-height: 1; text-align: center; background: var(--bg); border: 1px solid var(--line); border-radius: 6px; }
+:is(.db, dialog) :is(.stk-ic, .mkt-ic) { width: 2.8rem; height: 2.8rem; }
 
 /* ---- an interactive surface answers the pointer with a small lift; a disabled one does not */
 :is(.db, dialog) :is(button.cx-card, .tv-dest, .cr-kind, .cr-lc, .mkt-z, .asset, .pick) { transition: transform .12s ease-out, border-color .12s, box-shadow .12s; }
@@ -91,7 +90,7 @@
 
 /* one crate */
 .stk-crate { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: .2rem .7rem; padding: .6rem .7rem; background: var(--panel2); border: 2px solid var(--line); min-width: 0; }
-.stk-ic { font-size: 2.2rem; line-height: 1; padding-top: .15rem; }
+.stk-ic { line-height: 1; } .stk-ic .gl { width: 2.25rem; height: 2.25rem; }
 .stk-body { min-width: 0; display: grid; gap: .4rem; }
 .stk-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .3rem .5rem; }
 .stk-name { display: inline-flex; align-items: center; gap: .5rem; margin: 0; font-size: .95rem; font-weight: 700; color: var(--ink); cursor: pointer; overflow-wrap: anywhere; }
