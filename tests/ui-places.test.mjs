@@ -220,10 +220,11 @@ test('the instructor dashboard draws the Backgrounds: two small drawings in a st
 });
 
 test('the player card\'s disc holds its two drawings side by side, not on top of each other: no negative margin between them, and the two fit the disc (the emoji overlapped by a third of their width; two drawings of 16 px do not need to, and in forced colors the second\'s dark chip hid a third of the first: the green cuff of the handshake, the bit of the key)', () => {
-  const shell = src('css/shell.css'), styles = src('css/styles.css'), av = shell.match(/\.ring \.av \{([^}]*)\}/)[1], item = shell.match(/\.ring \.av i \{([^}]*)\}/)[1];
+  const shell = src('css/shell.css'), styles = src('css/styles.css'), item = shell.match(/\.ring \.av i \{([^}]*)\}/)[1];
   assert.doesNotMatch(item, /margin:[^;]*-/, 'each drawing keeps its own box');
-  const disc = parseFloat(/width:\s*([\d.]+)rem/.exec(av)[1]), glyph = parseFloat(/\.gl-sm:not\(\[width\]\) \{ width: ([\d.]+)rem/.exec(styles)[1]);
-  assert.ok(2 * glyph <= disc, `two drawings of ${glyph} rem fit a disc of ${disc} rem`);
+  const discs = [...shell.matchAll(/\.ring \.av \{([^}]*)\}/g)].map((m) => parseFloat(/width:\s*([\d.]+)rem/.exec(m[1])[1])), glyph = parseFloat(/\.gl-sm:not\(\[width\]\) \{ width: ([\d.]+)rem/.exec(styles)[1]);
+  assert.ok(discs.length >= 2, 'the disc has its size, and a smaller one on a phone');
+  for (const disc of discs) assert.ok(2 * glyph <= disc, `two drawings of ${glyph} rem fit a disc of ${disc} rem`);
 });
 
 // ---------------------------------------------------------------------------------------------------- the sheets
