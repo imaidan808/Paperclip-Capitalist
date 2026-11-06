@@ -40,6 +40,9 @@ try {
       'port with apron (4.E, a fork)': [67, 94, 15],
       'farm pad with a road (11 west)': [28, 70, 49],
       'harbor pad band (8 west)': [157, 52, 18],
+      // the ends of the streets (WP12: layout.js LAYOUT.terms; a checkout before it has none, so these are the same chunks without them) and a lookout's deck (WP11)
+      'end: quay (1.S)': [22, 126, 3], 'end: bulb and bus loop (2.S)': [52, 133, 6], 'end: barrier (4.W)': [42, 94, 15], 'end: roundabout (6.E)': [182, 96, 31], 'end: hammerhead (7.W)': [126, 68, 37], 'end: yard and dock (8.S)': [172, 64, 18],
+      'end: path head (9.S)': [116, 58, 46], 'end: gate (10.S)': [84, 52, 54], 'end: farm gate (11.W)': [30, 56, 49], 'end: plaza (13.N)': [50, 10, 84], 'end: belvedere (16.S)': [170, 30, 70], 'lookout deck (v1)': [72, 60, 54],
     };
     const out = {};
     for (const [name, [gx, gy, z]] of Object.entries(places)) {

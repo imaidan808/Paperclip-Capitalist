@@ -12,12 +12,12 @@ import assert from 'node:assert/strict';
 import { LAYOUT, DIST } from '../js/world/layout.js';
 import { newWorld } from './helpers/worldstub.mjs';
 
-/** The props that are culled by their own box: a gate or a lookout today; a barrier or a portal later says `own` (layout.js). */
+/** The props that are culled by their own box: a gate or a lookout; a termination's props say `own` too (WP12: tests/world-roadterm.test.mjs RT12 draws those). */
 const OWN = (p) => p.own || p.t === 'gate' || p.t === 'lookout';
-const ownProps = LAYOUT.ids.flatMap((id) => DIST[id].props.filter(OWN).map((p) => ({ id, p })));
+const ownProps = LAYOUT.ids.flatMap((id) => DIST[id].props.filter((p) => OWN(p) && !p.term).map((p) => ({ id, p })));
 const centre = (b) => [(b[0] + b[2]) / 2, (b[1] + b[3]) / 2];
 const sees = (view, b) => b[2] > view.x0 && b[0] < view.x1 && b[3] > view.y0 && b[1] < view.y1;
-const drawn = (w, p) => w.items.some((it) => it.k === 's' && it.a === p);
+const drawn = (w, p) => w.items.some((it) => (it.k === 's' || it.k === 'g') && it.a === p); // ('g': a gate, which is drawn after the clouds)
 /**
  * The camera of a visitor at the open neighbour: the prop's box is on the screen and its district's box is not. Starts over the prop and slides the camera away from the district, a little at a time, until the district's box leaves the screen
  * (a view is the screen and 80 px round it, a district's box is its footprint and 40 px round it); null when the prop stands so far inside the district's box that no view has one and not the other.
@@ -30,7 +30,7 @@ function fromTheNeighbour(w, id, p, z = 1.0) {
 
 test('CU1: at the view from the open neighbour (the prop on the screen, its district\'s box off it) the prop is in the draw list, and so it is at a camera over it', async () => {
   const { w } = await newWorld({ size: [800, 520] });
-  assert.ok(ownProps.length >= 16, `the island's gates and lookouts (${ownProps.length})`);
+  assert.ok(ownProps.length >= 23, `the island's gates and lookouts (${ownProps.length}: 17 gates and 6 lookouts)`);
   let from = 0; const missed = [];
   for (const { id, p } of ownProps) {
     const name = `${p.t}${p.gk ? ' (' + p.gk + ')' : ''} of district ${id} at ${p.gx.toFixed(1)},${p.gy.toFixed(1)}`;
@@ -47,7 +47,7 @@ test('CU2: the guarded district is still culled by its own box: with only its ga
   for (const { id, p } of ownProps) {
     if (fromTheNeighbour(w, id, p) === null) continue; n++;
     assert.ok(!w.vz.has(id), `district ${id} is not in view (its box is off the screen): its entities and its cloud stay culled`);
-    assert.deepEqual(w.items.filter((it) => it.k === 's' && it.a.zone === id && !OWN(it.a)).map((it) => it.a.t), [], `nothing else of district ${id} is drawn`);
+    assert.deepEqual(w.items.filter((it) => (it.k === 's' || it.k === 'g') && it.a.zone === id && !OWN(it.a)).map((it) => it.a.t), [], `nothing else of district ${id} is drawn`);
   }
   assert.ok(n >= 6, 'six or more such views');
 });
@@ -56,9 +56,9 @@ test('CU3: in the lite tier the path-end decks are still drawn below zoom 0.6, a
   const { w } = await newWorld({ size: [800, 520] });
   w.slow = 3; w.lite = true;
   const decks = ownProps.filter(({ p }) => p.t === 'lookout');
-  assert.equal(decks.length, 6, 'six footpaths, six decks');
+  assert.equal(decks.length, 6, 'six footpaths, six lookouts (the bench and the telescope on each deck; the deck itself is ground art: tests/world-roadterm.test.mjs RT11)');
   for (const { id, p } of decks) { const [x, y] = centre(p.bb); w.goTo(x, y, 0.57, false); w.draw(); assert.ok(w.env.lite && w.cam.z < 0.6, 'lite, below 0.6'); assert.ok(drawn(w, p), `the deck of district ${id} at ${p.gx.toFixed(1)},${p.gy.toFixed(1)} is drawn in lite at zoom ${w.cam.z.toFixed(2)}`); }
-  const lamp = DIST[1].props.find((p) => p.t === 'lamp' && p.sm); assert.ok(lamp, 'the first district has lamps (small props)');
+  const lamp = DIST[1].props.find((p) => p.t === 'lamp' && p.sm && !p.own); assert.ok(lamp, 'the first district has lamps of its own (small props; the lamps of a termination are `own`, always drawn: they stand where a street ends)');
   const [lx, ly] = centre(lamp.bb); w.goTo(lx, ly, 0.57, false); w.draw();
   assert.ok(!drawn(w, lamp), 'a lamp is a small prop: not drawn in lite below zoom 0.6'); assert.ok(w.items.some((it) => it.k === 's' && it.a.t !== 'lamp'), 'and the rest of the district is');
   w.lite = false; w.slow = 0; w.draw(); assert.ok(drawn(w, lamp), 'out of lite it is drawn');
