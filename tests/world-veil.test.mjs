@@ -22,6 +22,9 @@ async function attached({ motion = false, rig = false } = {}) {
   const session = { game: g, clock: { now: () => g.s.hour, paused: true, speed: 1 } };
   const w = new World({ session, ui: { zone: 1, sel: new Set() }, activate: noop, hover: noop }), host = document.createElement('div');
   w.attach(host); w.draw = () => {}; // (the frames below are about the veil: what they draw is not)
+  // the clock the frames are given starts a second ahead of the real one, counted from NOW: the world's first frame is skipped when its time is before the world's own `last` (the real time at attach), and the module's top-level
+  // base below was taken before the import of world.js, which took 1.4 s on a loaded CI runner (the deploy of 2026-11-06 failed on it, twice in this file): the frames were then in the past and the veil never stepped
+  ts = Math.max(ts, Math.ceil(performance.now()) + 1000);
   return { w, cv: w.cv };
 }
 let ts = Math.ceil(performance.now()) + 1000; const tick = (w, ms) => { ts += ms; w.frame(ts); }; // (whole milliseconds: the veil's ages are compared with 2500 and 5000, and with a fraction in the base "first + 4900 + 100 - first" can come out one ulp short of 5000: one run in three failed)
