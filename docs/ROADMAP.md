@@ -1,6 +1,6 @@
 # Paperclip Capitalist: what is not built yet
 
-Updated 2026-11-05. The tasks that have no code yet, in the order I would take them, with the author's priorities of 2026-11-04 first. Items marked **(new)** were added by the author on 2026-11-04; their descriptions are first ideas, not designs. Where a survey or a design already exists it is named. "Needs" lines say what a task waits on.
+Updated 2026-11-06. The tasks that have no code yet, in the order I would take them, with the author's priorities of 2026-11-04 first. Items marked **(new)** were added by the author on 2026-11-04; their descriptions are first ideas, not designs. Where a survey or a design already exists it is named. "Needs" lines say what a task waits on.
 
 ## Where things stand
 
@@ -97,6 +97,16 @@ Designed (60 goods, 13 buyers, a rules checker), nothing built. The author's lis
 - **PR 3:** the other 39 goods.
 
 Known problem: as drafted it makes repair too profitable (day-90 median about 1.4x against a 1.3x bound), so the repairable share is cut and vehicles and machinery move up a district first. First-screen cost about 6.5 KB gzipped. **Needs from the author:** generic names or real brands (default generic), which goods to hold back (late-90s coupe line, flagship electric sedans, sailboats, pontoon boats, larger fishing boats, a mid-engine coupe), the rule changes (25% cap on new goods in districts 5, 6, 7, 11; a fake-risk floor; reach against the district's fair value).
+
+### 9b. Item classes: what an item is decides what you can do with it (new)
+
+The author: "Items need to be classified better so that their options for examination, trading, selling etc. can determine the proper game, include proper details, etc. As things currently can show the 'power it on' option if the item is a food. This is a minor example, but having more specific item categorization and utility would vastly improve realism and ux."
+
+Today a good has a name, an icon, a base value, a demand per district and one to three of 32 buyer-taste tags (`js/data/tier*.js`: `tool`, `retro`, `electronics`, `vehicle` and so on). The tags say who likes a good, not what it is, so nothing can tell a radio from a bag of food: all 72 goods get the same five Read probes at the same costs (`PROBES` in `js/play/inspect.js`: Look it over, Check the serial, Power it up, Read the paperwork, Hire an expert), the same defect wording and the same repair and quality details. That is why a food can be offered "Power it up".
+
+Idea: give every good a **kind** (a small closed list: electronics, appliance or machine, vehicle, tool or hardware, apparel, jewelry or watch, collectible or toy or game, book or media, furniture or home, food or perishable, art or antique, raw material or scrap) and a few **traits** (powered, numbered, sealed, perishable, wearable, repairable, gradable). The kind and traits then decide which probes are offered (power only for powered goods, the serial only for numbered ones, a date and smell check for food, a grade for a card, a test drive for a vehicle), which defects can turn up and how they read (rust on a tool, a stale date, a cracked screen), whether repair is offered and what it costs, which Deal Room game runs, what the lot card and the Stock row show (expiry, mileage, size, condition), what storage and shipping allow (perishables spoil, vehicles need a big lot), and the buyers' tags, derived from kind and traits instead of picked by hand. The same field tells the offers dialog (item 11) and the traders (item 12) what a person may ask for, the Codex what to teach, and the catalog's "the more specific the item, the rarer" rule where to apply.
+
+Order: data first (a `kind` and `traits` for the 72 goods, checked by `validateData` so a new good cannot ship without them, and a test that no probe is offered that the kind cannot use), then the probe, defect and repair tables keyed by kind and trait, then the cards. It belongs with the items catalog (item 9): its engine PR 1 is the place for the field and the checker, and its new goods need a kind from day one. It changes what the Deal Room offers, so the balance runs at 2, 4 and 8 hours and the bot-diff harness are re-run (probes cost points, and hiding the wrong ones changes how much a player learns); saves and peers stay safe because they carry ids, not texts. **Needs from the author:** the list of kinds (the draft above), whether a probe that does not fit is hidden (the default) or offered and fails, and whether kind-specific games wait for the skill-based minigames (Deferred).
 
 ### 10. Milestone ladder (new)
 
@@ -199,6 +209,7 @@ The menu downloads a save but cannot load one. Read as: import the file "Downloa
 - Icons part 1 has merged, so the Codex pass (item 6) and the quest sentences can start; the icon replacements (item 3) touch the Codex list and the quest cards, not their text.
 - Quick on low (item 5) moves the balance bounds, the Academy's figures and the Codex wording.
 - Zone pools (item 8) belong in the items catalog's first PR (item 9), which builds the weighted draw.
+- Item classes (item 9b) ride on the same first PR and change what the Deal Room offers: re-run the balance at 2, 4 and 8 hours and the bot-diff harness, and expect the icons for new goods (item 3) and the skill-based minigames (Deferred) to follow the kinds.
 - Rare traders (item 12) need the catalog's rarity (item 9), the offers dialog (item 11) and connected roads (item 1).
 - The story (item 16) comes before the NPCs (item 17) and the island (item 18); the island fits endless mode (item 13).
 - The lottery (item 19) and the NPC rewards (item 17) must be seeded, not rolled at the click, so ranked runs can be replayed.
