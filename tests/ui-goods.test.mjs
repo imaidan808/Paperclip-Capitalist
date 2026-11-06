@@ -46,7 +46,7 @@ test('no two goods look alike: on the dark tile, in their own tones, any two goo
 
 test('the set has a grammar a player can see: every asset of tier 4 wears gold, a good the data names a pallet stands on the same pallet strip (and nothing else does but the crate of four engines), and every vehicle rolls on slate wheels with the tile showing through the hub', () => {
   const gold = (id) => tonesOf(shapesOf('good-' + id)).some((t) => t === 'y' || t === 'yd');
-  assert.deepEqual(Object.keys(tiers[3].assets).filter((id) => !gold(id)), [], 'tier 4: gold on every asset (a seal, a rim, a coin, a lit window, a ribbon)');
+  assert.deepEqual(Object.keys(tiers[3].assets).filter((id) => !gold(id)), [], 'tier 4: gold on every asset (a seal, a rim, a coin, a lit window, a ribbon). The rule is what tier 4 always has, not that no other tier has gold: a lower good wears it where its own colour, a coin, a clasp or a handle asks for it');
   const strip = (id) => shapesOf('good-' + id).some((s) => s[0] === 'p' && s[1] === 'nd' && s.length === 26 && Math.abs(Math.max(...s.slice(2).filter((_, i) => i % 2)) - Math.min(...s.slice(2).filter((_, i) => i % 2)) - 3.4) < 0.11);
   const pallets = IDS.filter((id) => /\bPallet\b/.test(ASSETS[id].name));
   assert.deepEqual(pallets, ['gadgets', 'textbooks', 'laptops'], 'the data names three pallets');
@@ -156,11 +156,14 @@ test('the Deal Room\'s lot card carries the good\'s drawing in its tile (Read, P
 });
 
 // ---------------------------------------------------------------------------------------------------- the sheets
-test('the sheets size a good\'s drawing in the tile each already has: 36 px in a crate\'s and a booth\'s (2.8 rem), 38 px on the Deal Room\'s lot card (3 rem; 34 px in 2.6 rem on a phone), 16 px in a row; nothing is left of an emoji\'s font-size, rim or text shadow', () => {
+test('the sheets size a good\'s drawing in the tile each already has: 36 px in a crate\'s and a booth\'s (2.8 rem), 38 px on the Deal Room\'s lot card (3 rem; 34 px in 2.6 rem in a window 761 to 1100 px wide, a tablet or a small laptop: a phone keeps the 38), 16 px in a row; nothing is left of an emoji\'s font-size, rim or text shadow', () => {
   const stock = src('css/ui-stock.css'), market = src('css/ui-market.css'), deal = src('css/ui-deal.css');
   assert.doesNotMatch(stock, /\.stk-ic \{[^}]*font-size/, 'a crate\'s tile holds a drawing, not a character'); assert.doesNotMatch(market, /\.mkt-ic \{[^}]*font-size/); assert.doesNotMatch(deal, /\.lotcard \.ic \{[^}]*font-size/);
   assert.doesNotMatch(stock, /text-shadow: 0 0 1px rgba\(255, 255, 255/, 'no light rim round a character: the drawings are made for the dark tile');
   assert.match(stock, /\.stk-ic \.gl \{ width: 2\.25rem; height: 2\.25rem; \}/, 'a crate\'s drawing is 36 px in its 44.8 px tile'); assert.match(market, /\.mkt-ic \.gl \{ width: 2\.25rem; height: 2\.25rem; \}/);
-  assert.match(deal, /\.lotcard \.ic \.gl \{ width: 2\.4rem; height: 2\.4rem; \}/, 'the lot card\'s is 38 px in its 48 px tile'); assert.match(deal, /\.lotcard \.ic \.gl \{ width: 2\.1rem; height: 2\.1rem; \}/, 'and 34 px in the 41.6 px tile of a phone');
+  assert.match(deal, /\.lotcard \.ic \.gl \{ width: 2\.4rem; height: 2\.4rem; \}/, 'the lot card\'s is 38 px in its 48 px tile');
+  const tablet = deal.match(/@media \(min-width: 761px\) and \(max-width: 1100px\) \{[\s\S]*?\n\}/)?.[0] || '', phone = deal.match(/@media \(max-width: 760px\) \{[\s\S]*?\n\}/)?.[0] || '';
+  assert.match(tablet, /\.lotcard \.ic \.gl \{ width: 2\.1rem; height: 2\.1rem; \}/, 'and 34 px in the 41.6 px tile of a window 761 to 1100 px wide (a tablet or a small laptop: the media query of those windows)');
+  assert.ok(phone.length > 500 && !/\.lotcard/.test(phone), 'a phone (760 px or less) keeps the 38 px drawing in its 48 px tile: its media query has no lot card rule');
   assert.match(market, /\.mkt-use \.btn\[aria-pressed="true"\] \.gl-c \{[^}]*background: var\(--bg\)/, 'a pressed (gold) "selling with" button puts the drawing on a dark tile: the drawings are made for dark surfaces');
 });
