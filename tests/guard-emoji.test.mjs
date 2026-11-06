@@ -8,7 +8,8 @@
 //   Icons 2, done: the dock and the seven drawer tabs, the ticks, carets, play and pause, the menu, close and the camera, the Deal Room's verdict marks, the Draft's tick, the pressed toggles and the world's
 //   lock, "you are here" dot and manager status marks are glyphs (js/art/g-*.js, js/ui/glyphs.js), and so are the pictures part 1 took away (the Codex's categories, the badges and bounties, the probes and angles, the managers, clients and loans).
 //   Icons 3, done: the sixteen districts and the twelve Backgrounds are glyphs (js/art/g-places.js: zone-<theme> and bg-<id>), found by id through js/ui/glyphs.js; the data carries no icon for either, and the world's cards of the map paint them.
-//   Icons 4, the goods ........................................................... 74  the 72 goods' icons and the gavel on an auction lot's tag in the world, twice
+//   Icons 4, part, done: the gavel on an auction lot's tag in the world is a drawn mark (mark-gavel, js/art/g-ui.js), twice (js/world/stock.js and ents-stock.js).
+//   Icons 4, the goods .......................................................... 72  the 72 goods' icons
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
@@ -29,7 +30,7 @@ const ALLOW = new Set(['←', '→', '×', '·', '−', '…', '▲', '▼']);
 /** The named entities that draw a symbol (the HTML ones that draw a letter, a quote or a space are not icons). */
 const NAMED = { larr: '←', rarr: '→', uarr: '↑', darr: '↓', harr: '↔', check: '✓', cross: '✗', star: '☆', starf: '★', bigstar: '★', hearts: '♥', diams: '♦', spades: '♠', clubs: '♣', phone: '☎', female: '♀', male: '♂', sung: '♪' };
 /** What the shipped sources hold today. A pull request may only lower it, and says so here. STRICT=1 asks for zero. */
-const BASELINE = 74;
+const BASELINE = 72;
 
 const PICTO = /\p{Extended_Pictographic}/u;
 const SYMBOL = /[←-⇿⌀-⏿■-◿☀-➿⬀-⯿⤀-⥿]/u; // arrows, technical, geometric shapes, miscellaneous symbols, dingbats

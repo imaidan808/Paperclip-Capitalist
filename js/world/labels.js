@@ -1,12 +1,13 @@
-// Crisp labels for the world: name chips, price tags, buyer bubbles, crate icons and the map's district cards.
+// Crisp labels for the world: name chips, price tags, buyer bubbles, crate icons and the map's district cards. A picture on a label is a drawn glyph (js/art/), painted with paint() and cached by its id.
 // Each label is drawn once into a small surface at the device's own pixel density (so text and 1px rules are sharp on a 2x screen) and then
 // stamped with drawImage on whole device pixels. A label that did not change costs one blit a frame instead of a measure, a rounded rect and
 // two or three fills of text. Presentation only. Where there is no OffscreenCanvas every method answers null and the world draws the label directly.
 import { roundRect, luma, mix } from './iso.js';
-import { Cache, surface, mono, sans } from './gfx.js';
+import { Cache, surface, mono } from './gfx.js';
 import { paint } from '../art/paint.js';
 import '../art/g-ui.js'; // the marks a label can carry (a lock, a dot): js/art/g-ui.js
 import '../art/g-places.js'; // a district's drawing on its card: zone-<theme>, js/art/g-places.js
+import '../art/g-goods.js'; // a good's drawing on its crate icon and its price tag: good-<id>, js/art/g-goods.js
 
 /** A zoom factor rounded to eighths: sprites are cached per size, so a continuous zoom must not make a new one every frame. */
 export const qs = (s) => Math.round(s * 8) / 8;
@@ -68,28 +69,28 @@ export class Labels {
     });
   }
 
-  /** A round crate icon (an emoji), gold when selected. */
-  icon(icon, sel, s) {
-    return this.sprite(`i|${icon}|${sel ? 1 : 0}|${s}|${this.dpr}`, () => {
-      const r = Math.round(12 * s), lw = this.lw(), d = r * 2;
+  /** A round crate icon: the good's drawing (`glyph` is its id, good-<id>, js/art/g-goods.js) on a dark disc, cached by that id. A selected crate keeps the dark disc, because the drawings are made for it, and takes a thick gold rim. */
+  icon(glyph, sel, s) {
+    return this.sprite(`i|${glyph}|${sel ? 1 : 0}|${s}|${this.dpr}`, () => {
+      const r = Math.round(12 * s), lw = this.lw(sel ? 2 : 1), d = r * 2, gs = Math.round(16 * s);
       return this.make(d, d, (g) => {
         g.beginPath(); g.arc(r + 0.5, r + 2.5, r, 0, 7); g.fillStyle = 'rgba(2,4,10,.4)'; g.fill();
-        g.beginPath(); g.arc(r, r, r - lw / 2, 0, 7); g.fillStyle = sel ? '#ffd36e' : 'rgba(16,20,28,.93)'; g.fill(); g.strokeStyle = sel ? '#ffffff' : '#5b6b85'; g.lineWidth = lw; g.stroke();
-        g.font = sans(14 * s); g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillStyle = '#fff'; this.text(g, icon, r, r + 1);
+        g.beginPath(); g.arc(r, r, r - lw / 2, 0, 7); g.fillStyle = 'rgba(16,20,28,.93)'; g.fill(); g.strokeStyle = sel ? '#ffd36e' : '#5b6b85'; g.lineWidth = lw; g.stroke();
+        paint(g, glyph, r - gs / 2, r - gs / 2, gs);
       });
     });
   }
 
-  /** A for-sale price tag: a small icon on the left, the price in the tag's colour. */
-  tag(icon, text, color, hov, s) {
+  /** A for-sale price tag: a small drawing on the left (`glyph` is the id of the good's, or of mark-gavel at an auction, a mark painted in the tag's colour), the price in the tag's colour. */
+  tag(glyph, text, color, hov, s) {
     color = readable(color);
-    return this.sprite(`t|${icon}|${text}|${color}|${hov ? 1 : 0}|${s}|${this.dpr}`, () => {
-      const f = mono(800, 11 * s), w = Math.ceil(this.width(f, text) + 30 * s), h = Math.ceil(20 * s), lw = this.lw();
+    return this.sprite(`t|${glyph}|${text}|${color}|${hov ? 1 : 0}|${s}|${this.dpr}`, () => {
+      const f = mono(800, 11 * s), w = Math.ceil(this.width(f, text) + 30 * s), h = Math.ceil(20 * s), lw = this.lw(), gs = Math.round(14 * s);
       return this.make(w, h, (g) => {
         roundRect(g, 0.5, 2.5, w, h, 6 * s); g.fillStyle = 'rgba(2,4,10,.4)'; g.fill();
         roundRect(g, lw / 2, lw / 2, w - lw, h - lw, 6 * s); g.fillStyle = 'rgba(16,20,28,.94)'; g.fill(); g.strokeStyle = hov ? '#ffffff' : color; g.lineWidth = lw; g.stroke();
-        g.textAlign = 'left'; g.textBaseline = 'middle'; g.font = sans(13 * s); g.fillStyle = '#fff'; this.text(g, icon, 5 * s, h / 2 + 1);
-        g.font = f; g.fillStyle = color; this.text(g, text, 22 * s, h / 2 + 1);
+        paint(g, glyph, Math.round(4 * s), h / 2 - gs / 2 + 0.5, gs, color);
+        g.textAlign = 'left'; g.textBaseline = 'middle'; g.font = f; g.fillStyle = color; this.text(g, text, 22 * s, h / 2 + 1);
       });
     });
   }

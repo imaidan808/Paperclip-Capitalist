@@ -85,7 +85,7 @@ test('the dock: the seven tabs are drawn in the dock and in the drawer\'s header
 test('every glyph id a screen writes is registered, and every glyph of the interface sets is used by a screen, a stylesheet or a table', () => {
   const all = new Set(ids()), literals = new Map(), prefixes = new Set();
   for (const [f, src] of SOURCES) {
-    for (const line of src.split('\n').filter((l) => /\b(?:gl|tile|svg|paint)\(|\bmk = |\bconst mark = |\bG = \{/.test(l))) for (const m of line.matchAll(/'((?:dock|mark|ctl|status|ach|probe|angle|mgr|client|loan|rarity|cat|zone|bg|good)-[A-Za-z0-9-]+)'/g)) { if (!literals.has(m[1])) literals.set(m[1], f); }
+    for (const line of src.split('\n').filter((l) => /\b(?:gl|tile|svg|paint)\(|\.tag\(|\bmk = |\bconst mark = |\bG = \{/.test(l))) for (const m of line.matchAll(/'((?:dock|mark|ctl|status|ach|probe|angle|mgr|client|loan|rarity|cat|zone|bg|good)-[A-Za-z0-9-]+)'/g)) { if (!literals.has(m[1])) literals.set(m[1], f); }
     for (const m of src.matchAll(/\b(?:gl|tile|svg)\(\s*'([a-z]+-)'\s*\+/g)) prefixes.add(m[1]);
   }
   const bad = [...literals].filter(([id]) => !all.has(id)).map(([id, f]) => `${f}: ${id} is not a glyph`);

@@ -7,7 +7,8 @@ import { snap } from './gfx.js';
 import { money, PIP_ZOOM } from './common.js';
 import { AVATAR_TONE, initialOf } from '../avatar.js';
 import { paint } from '../art/paint.js';
-import '../art/g-ui.js'; // the marks drawn on the canvas (a dot, a lock, a pause, a warning, an audit): js/art/g-ui.js
+import '../art/g-ui.js'; // the marks drawn on the canvas (a dot, a lock, a pause, a warning, an audit, the gavel): js/art/g-ui.js
+import '../art/g-goods.js'; // a good's drawing on its crate icon and price tag: good-<id>, js/art/g-goods.js
 
 const TAG_SHIFT = [[0, 0], [0, -19], [0, 19], [-34, 0], [34, 0], [-34, -19], [34, -19], [-34, 19], [34, 19], [0, -38], [0, 38], [-34, -38], [34, -38], [-34, 38], [34, 38], [-68, 0], [68, 0], [-68, -19], [68, -19], [-68, 19], [68, 19]], TAG_PULL = 3, TAG_SHORT = 0.03; // where a name tag may stand off its district (x, y in px) to clear another tag (a tag is 18px high), and what a px of that costs against the area it would cover
 const MARK_W = 14;                                             // the room a tag's mark (the dot, the lock) takes before its name, in px: the glyph and a gap
@@ -134,18 +135,18 @@ export const overlayMethods = {
     g.fillStyle = color; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(text, x0 + gs + gap + tw / 2, y + 0.5); g.textBaseline = 'alphabetic';
   },
 
-  icon(g, x, y, s, icon, sel) {
-    const sp = this.labels.icon(icon, sel, qs(s)); if (sp) { this.labels.blit(g, sp, x, y); return; }
-    const r = 12 * s; g.beginPath(); g.arc(x, y, r, 0, 7); g.fillStyle = sel ? '#ffd36e' : 'rgba(16,20,28,.9)'; g.fill(); g.strokeStyle = sel ? '#ffffff' : '#5b6b85'; g.lineWidth = 1.5; g.stroke();
-    g.font = `${Math.round(14 * s)}px system-ui, sans-serif`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillStyle = '#fff'; g.fillText(icon, x, y + 1); g.textBaseline = 'alphabetic';
+  icon(g, x, y, s, glyph, sel) {
+    const sp = this.labels.icon(glyph, sel, qs(s)); if (sp) { this.labels.blit(g, sp, x, y); return; }
+    const r = 12 * s, gs = Math.round(16 * s); g.beginPath(); g.arc(x, y, r, 0, 7); g.fillStyle = 'rgba(16,20,28,.9)'; g.fill(); g.strokeStyle = sel ? '#ffd36e' : '#5b6b85'; g.lineWidth = sel ? 3 : 1.5; g.stroke();
+    paint(g, glyph, x - gs / 2, y - gs / 2, gs);
   },
 
-  tag(g, x, y, s, icon, text, color, hov) {
-    const sp = this.labels.tag(icon, text, color, hov, qs(s)); if (sp) { this.labels.blit(g, sp, x, y); return; }
-    g.font = `800 ${Math.round(11 * s)}px ui-monospace, Menlo, monospace`; const w = g.measureText(text).width + 30 * s, h = 20 * s;
+  tag(g, x, y, s, glyph, text, color, hov) {
+    const sp = this.labels.tag(glyph, text, color, hov, qs(s)); if (sp) { this.labels.blit(g, sp, x, y); return; }
+    g.font = `800 ${Math.round(11 * s)}px ui-monospace, Menlo, monospace`; const w = g.measureText(text).width + 30 * s, h = 20 * s, gs = Math.round(14 * s);
     roundRect(g, x - w / 2, y - h / 2, w, h, 6 * s); g.fillStyle = 'rgba(16,20,28,.92)'; g.fill(); g.strokeStyle = hov ? '#ffffff' : color; g.lineWidth = 1.5; g.stroke();
-    g.font = `${Math.round(13 * s)}px system-ui, sans-serif`; g.textAlign = 'left'; g.textBaseline = 'middle'; g.fillStyle = '#fff'; g.fillText(icon, x - w / 2 + 5 * s, y + 1);
-    g.font = `800 ${Math.round(11 * s)}px ui-monospace, Menlo, monospace`; g.fillStyle = color; g.fillText(text, x - w / 2 + 22 * s, y + 1); g.textBaseline = 'alphabetic';
+    paint(g, glyph, x - w / 2 + 4 * s, y - gs / 2 + 0.5, gs, color);
+    g.font = `800 ${Math.round(11 * s)}px ui-monospace, Menlo, monospace`; g.fillStyle = color; g.textAlign = 'left'; g.textBaseline = 'middle'; g.fillText(text, x - w / 2 + 22 * s, y + 1); g.textBaseline = 'alphabetic';
   },
 
   leadBubble(g, x, y, s, B, l, hov) {
