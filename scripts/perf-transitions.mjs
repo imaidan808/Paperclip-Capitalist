@@ -12,11 +12,11 @@ import { spawn } from 'node:child_process';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { open } from './cdp.mjs';
-import { findChrome, chromeReady } from './chrome.mjs';
+import { findChrome, chromeReady, QUIET_ARGS } from './chrome.mjs';
 
 const o = { base: 'http://localhost:8791/Paperclip-Capitalist', w: 1024, h: 768, dsf: 2, cpu: 1, port: 9740, json: false, ...JSON.parse(process.argv[2] || '{}') };
 const dir = mkdtempSync(tmpdir() + '/pl-trn-');
-const proc = spawn(findChrome(), ['--headless=new', '--hide-scrollbars', '--no-first-run', '--mute-audio', `--remote-debugging-port=${o.port}`, `--user-data-dir=${dir}`, 'about:blank'], { stdio: ['ignore', 'ignore', 'pipe'] });
+const proc = spawn(findChrome(), ['--headless=new', '--hide-scrollbars', '--no-first-run', '--mute-audio', ...QUIET_ARGS, `--remote-debugging-port=${o.port}`, `--user-data-dir=${dir}`, 'about:blank'], { stdio: ['ignore', 'ignore', 'pipe'] });
 
 // In the page: a run, and the ground complete.
 const toWorld = async () => {
