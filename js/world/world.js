@@ -576,7 +576,7 @@ export class World {
     const farOnly = this.env.farMix <= 0.001, liteSmall = this.lite && cam.z < 0.6;
     for (const id of LAYOUT.ids) {
       const D = DIST[id], here = seeBox(D.bb); if (here) vz.add(id);
-      for (const p of here ? D.props : D.free) { if (p.sm && (farOnly || (liteSmall && !p.own))) continue; if (p.bb[2] > view.x0 && p.bb[0] < view.x1 && p.bb[3] > view.y0 && p.bb[1] < view.y1) this.push(p.key, 's', p); }
+      for (const p of here ? D.props : D.free) { if (p.sm && (farOnly || (liteSmall && !p.own))) continue; if (p.bb[2] > view.x0 && p.bb[0] < view.x1 && p.bb[3] > view.y0 && p.bb[1] < view.y1) this.push(p.key, p.t === 'gate' ? 'g' : 's', p); } // (a gate is in the list like any prop, but is drawn again after the clouds: it stands at the open end of a road, which the guarded district's cloud may cover)
     }
     for (const e of this.ents.values()) {
       if (e.type === 'truck') { const [gx, gy] = this.truckPos(e), x = sx(gx, gy), y = sy(gx, gy, zAt(gx, gy)); if (x > view.x0 && x < view.x1 && y > view.y0 && y < view.y1 + 60) this.push(gx + gy + 0.8, 'e', e); }
@@ -586,11 +586,12 @@ export class World {
     }
     if (this.onView(this.player.x, this.player.y, 80)) this.push(this.player.x + this.player.y + 0.5, 'p', null);
     if (!this.reduced()) for (const c of this.cars()) if (this.onView(c.gx, c.gy, 40)) this.push(c.key, 'c', c);
-    const items = this.items; items.length = this.itemN; items.sort(BY_KEY);
+    const items = this.items, gates = this.gateList || (this.gateList = []); items.length = this.itemN; items.sort(BY_KEY); gates.length = 0;
     for (let n = 0; n < items.length; n++) {
       const it = items[n];
       try {
         if (it.k === 's') runLayer('static', this, ctx, view, it.a);
+        else if (it.k === 'g') gates.push(it.a);
         else if (it.k === 'e') this.drawEnt(ctx, it.a);
         else if (it.k === 'p') runLayer('player', this, ctx, view);
         else runLayer('car', this, ctx, view, it.a);
@@ -598,6 +599,7 @@ export class World {
     }
     if (!map && this.cam.z < 0.4) for (const id of vz) { const D = DIST[id], open = this.unlocked?.has(id) ?? true; this.hits.push({ kind: 'zone', id, eid: 'tag:' + id, zone: id, label: open ? `Travel to ${D.name}` : `${D.name} (locked: opens at ${money(D.gate)} net worth)`, locked: !open, quick: true, gate: D.gate, circle: [sx(D.cx, D.cy), sy(D.cx, D.cy, D.z) - 70, 44 / this.cam.z] }); }
     try { runLayer('clouds', this, ctx, view, vz); } catch (err) { ctx.restore?.(); this.fault(err, 'fog'); }
+    for (let n = 0; n < gates.length; n++) { try { runLayer('static', this, ctx, view, gates[n]); } catch (err) { ctx.restore?.(); ctx.globalAlpha = 1; this.fault(err, 'gate'); } } // the gates last: a barrier at the open end of a road is never hidden under the cloud of the district it keeps shut
     if (this.hover) { const k = this.hover.kind + ':' + this.hover.id, fresh = this.hits.find((h) => h.kind + ':' + h.id === k); if (fresh) this.hover = fresh; this.drawHover(ctx); }
     // screen-space passes, back to front: the grade (tint, light pools, atmosphere), the map's routes, weather, floating dust, the labels, then particles
     this.toScreen(ctx);

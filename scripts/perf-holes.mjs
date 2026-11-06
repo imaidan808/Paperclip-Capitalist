@@ -16,14 +16,14 @@ import { spawn } from 'node:child_process';
 import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { open } from './cdp.mjs';
-import { findChrome, chromeReady } from './chrome.mjs';
+import { findChrome, chromeReady, QUIET_ARGS } from './chrome.mjs';
 
 // `skip` leaves phases out (['in', 'open']); `dump` is a list of ms after the second notch at which the ground cache is written out as rectangles (dump-out-0700.json).
 // `patch` (a string of JavaScript run in the page before Begin, with `m` = { chunks, cache } the world's modules) is for experiments: switch a rule off and see what the pictures do.
 const o = { patch: '', patchFile: '', base: 'http://localhost:8791/Paperclip-Capitalist', w: 1024, h: 768, dsf: 2, cpu: 4, idle: 6000, port: 9741, load: [600, 1300, 2200], zoom: [200, 700, 1600], dump: [], skip: [], json: false, ...JSON.parse(process.argv[2] || '{}') };
 const dir = mkdtempSync(tmpdir() + '/pl-holes-');
 const out = o.out || mkdtempSync(tmpdir() + '/holes-'); mkdirSync(out, { recursive: true });
-const proc = spawn(findChrome(), ['--headless=new', '--hide-scrollbars', '--no-first-run', '--mute-audio', `--remote-debugging-port=${o.port}`, `--user-data-dir=${dir}`, 'about:blank'], { stdio: ['ignore', 'ignore', 'pipe'] });
+const proc = spawn(findChrome(), ['--headless=new', '--hide-scrollbars', '--no-first-run', '--mute-audio', ...QUIET_ARGS, `--remote-debugging-port=${o.port}`, `--user-data-dir=${dir}`, 'about:blank'], { stdio: ['ignore', 'ignore', 'pipe'] });
 let chromeErr = '', chromeExit = null; proc.stderr.on('data', (d) => { chromeErr = (chromeErr + d).slice(-2500); }); proc.once('exit', (c, sig) => { chromeExit = c ?? sig; });
 const pad = (n) => String(n).padStart(4, '0');
 
