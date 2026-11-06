@@ -59,6 +59,8 @@ const STRICT = process.env.PC_STRICT_DOCS === '1', ALLOW = 24;
 test('F2: the sizes docs/ARCHITECTURE.md quotes are the shipped tree\'s, not the launch pass\'s', () => {
   const md = read('docs/ARCHITECTURE.md'), m = measured(), kb = (n) => n / 1024, slack = STRICT ? 0.01 : 0.10;
   const close = (said, real, what) => assert.ok(Math.abs(said - real) / real <= slack, `${what}: the document says ${said} KB and the staged tree measures ${real.toFixed(1)} KB (within ${slack * 100}%; \`node scripts/arch-figures.mjs --write\` refreshes the document)`);
+  // each figure is said once: `node scripts/arch-figures.mjs --write` refreshes the first copy of a line it finds, so a second copy (a merge of two branches that both edited the table leaves two) goes stale beside it, and the document then says two things
+  for (const [re, what] of [[/^\| Requests \|/gm, 'the Requests row'], [/^\| Transferred \|/gm, 'the Transferred row'], [/^\| Before the first screen \|/gm, 'the first screen\'s row'], [/\*\*The first screen, and the rest\.\*\*/g, 'the paragraph on the first screen and the rest']]) assert.equal((md.match(re) || []).length, 1, `${what} is in the document once`);
   const t = /\| Transferred \| about ([\d,]+) KB gzipped \(([\d,]+) KB of JavaScript and ([\d,]+) KB of CSS before gzip/.exec(md);
   assert.ok(t, 'the Transferred row says its three figures');
   close(num(t[1]), kb(m.total), 'gzipped'); close(num(t[2]), kb(m.js[0]), 'JavaScript'); close(num(t[3]), kb(m.css[0]), 'CSS');
