@@ -14,7 +14,8 @@
 .mkt-banner .cx-more > :not(summary) { margin-inline: .75rem; } /* a paragraph inside the fold keeps the fold's inset (the rule above has the same weight as the fold's and comes after it) */
 .mkt-bhead { display: flex; align-items: center; gap: .65rem; }
 .mkt-bhead > div { display: grid; }
-.mkt-bic { font-size: 2.2rem; line-height: 1; }
+.mkt-bic { display: flex; flex: none; line-height: 1; }
+.mkt-z .gl { display: block; } .mkt-z[aria-pressed="true"] .gl-c { box-sizing: content-box; padding: .1rem; background: var(--bg); border-radius: .3rem; } /* a pressed (gold) button: the drawing on a dark tile */
 .mkt-bname { font-size: 1.05rem; }
 .mkt-rule { font-size: .9rem; }
 .mkt-banner ul { margin-block: .3rem; padding-left: 1.1rem; font-size: .85rem; }

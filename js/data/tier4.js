@@ -12,7 +12,7 @@
 
 export const zones = {
   13: {
-    id: 13, name: 'Corporate Valley', short: 'Corp. Valley', icon: '🏢',
+    id: 13, name: 'Corporate Valley', short: 'Corp. Valley',
     teaches: 'enterprise-sales', theme: 'corporate', tier: 4,
     gate: 250000, scale: 90000, tax: 0.126, friction: 0.148, pool: 2500000, speed: 4.6, store: 30,
     leadEvery: 3, lotEvery: 4, urgent: 0.076, auto: true, plots: 4,
@@ -21,7 +21,7 @@ export const zones = {
     bonus: { creditLimitMult: 1.5 },
   },
   14: {
-    id: 14, name: 'Financial District', short: 'Finance', icon: '💹',
+    id: 14, name: 'Financial District', short: 'Finance',
     teaches: 'leverage-risk', theme: 'finance', tier: 4,
     gate: 500000, scale: 180000, tax: 0.1355, friction: 0.152, pool: 5000000, speed: 4.9, store: 32,
     leadEvery: 3, lotEvery: 4, urgent: 0.071, auto: true, plots: 4,
@@ -32,7 +32,7 @@ export const zones = {
     bonus: { spreadMult: 0.8 },
   },
   15: {
-    id: 15, name: 'Real Estate Row', short: 'Real Estate', icon: '🏘️',
+    id: 15, name: 'Real Estate Row', short: 'Real Estate',
     teaches: 'asset-cash-flow', theme: 'realty', tier: 4,
     gate: 1000000, scale: 400000, tax: 0.145, friction: 0.156, pool: 10000000, speed: 5.2, store: 34,
     // Foreclosure sales are the appraisal dispute in game form: a quarter of lots are auctions. Fewer lots refresh (5) and
@@ -43,7 +43,7 @@ export const zones = {
     bonus: { rentMult: 1.25 },
   },
   16: {
-    id: 16, name: 'Global Exchange', short: 'Exchange', icon: '🌐',
+    id: 16, name: 'Global Exchange', short: 'Exchange',
     teaches: 'arbitrage-at-scale', theme: 'exchange', tier: 4,
     gate: 2500000, scale: 1000000, tax: 0.1545, friction: 0.16, pool: 25000000, speed: 5.5, store: 36,
     // Gray-market luxury is arbitrage by another name (parallel imports), so gray is on and counterfeits are common: a tenth of

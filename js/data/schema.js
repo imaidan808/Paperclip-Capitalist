@@ -37,7 +37,7 @@ export function validateData(d, { partial = false } = {}) {
     const z = zones[id], w = `zone ${id}`;
     if (!int(id) || id < 1 || id > ZONE_COUNT) { add(`${w}: id out of range`); continue; }
     if (z.id !== id) add(`${w}: id field must equal its key`);
-    for (const k of ['name', 'short', 'icon', 'teaches']) if (typeof z[k] !== 'string' || !z[k].trim()) add(`${w}: ${k} must be a non-empty string`);
+    for (const k of ['name', 'short', 'teaches']) if (typeof z[k] !== 'string' || !z[k].trim()) add(`${w}: ${k} must be a non-empty string`);
     if (z.theme !== THEMES[id - 1]) add(`${w}: theme must be "${THEMES[id - 1]}"`);
     if (z.tier !== tierOf(id)) add(`${w}: tier must be ${tierOf(id)}`);
     if (!num(z.gate) || z.gate < 0 || (id === 1 ? z.gate !== 0 : z.gate <= 0)) add(`${w}: gate must be 0 for zone 1 and > 0 after`);

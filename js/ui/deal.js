@@ -7,7 +7,7 @@
 //     plays the sounds. openDeal(ctx, spec) is the one function the shell calls.
 import { esc, keepInView } from './common.js';
 import { avatarHTML } from '../avatar.js';
-import { gl } from './glyphs.js';
+import { gl, zoneGl } from './glyphs.js';
 import { kv } from '../session.js';
 import { fmtMoney as money, fmtPct } from '../market.js';
 import { startRun, modelOf, tForPos, STAGE_LABEL } from '../deal.js';
@@ -277,7 +277,7 @@ export function sheetHTML(m) {
   const lock = m.assistLocked ? ' disabled' : '';
   return `<div class="deal" data-anchor="deal-room" data-kind="${m.kind}" data-stage="${m.stage}"${style}>
     <header class="deal-top"><h2 id="deal-title" tabindex="-1" autofocus>${esc(titleOf(m))}</h2>
-      ${z && z.name ? `<span class="deal-zone"><span aria-hidden="true">${z.icon || ''}</span> ${esc(z.short || z.name)}</span>` : ''}
+      ${z && z.name ? `<span class="deal-zone"><span aria-hidden="true">${zoneGl(z.id, 'gl-sm')}</span> ${esc(z.short || z.name)}</span>` : ''}
       <label class="deal-assist"><input type="checkbox" data-change-deal="assist" data-fid="assist" ${m.assist ? 'checked' : ''}${lock}> <span>Assist</span></label>
       ${soundHTML(m)}${dialSwitchHTML(m)}<button class="btn ghost sm" data-close data-snd data-fid="leave">${m.stage === 'result' ? 'Close' : 'Leave'}</button></header>
     ${m.stage === 'result' ? '' : stepperHTML(m)}

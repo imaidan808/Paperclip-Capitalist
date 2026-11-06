@@ -571,12 +571,10 @@ test('the flagship goods can be bought at their district\'s gate and have a buye
   }
 });
 
-test('no two goods on one market share an icon, no two districts share one, and the names that sit side by side differ', () => {
+test('no two goods on one market share an icon, no two districts share a glyph (tests/ui-glyphs.test.mjs), and the names that sit side by side differ', () => {
   const icons = Object.entries(ASSETS).map(([id, a]) => [a.icon, id]);
   const dup = {}; for (const [i, id] of icons) (dup[i] ||= []).push(id);
   assert.deepEqual(Object.entries(dup).filter(([, ids]) => ids.length > 1), [], 'every asset has its own icon');
-  const zi = {}; for (const z of Object.values(ZONES)) (zi[z.icon] ||= []).push(z.name);
-  assert.deepEqual(Object.entries(zi).filter(([, n]) => n.length > 1), [], 'every district has its own icon');
   assert.equal(ZONES[4].short, 'Pawn', 'the short name is a shortening of the name');
   assert.ok(ZONES[4].name.startsWith(ZONES[4].short));
   for (const z of Object.values(ZONES)) assert.ok(z.name.replace(/^The /, '').startsWith(z.short) || z.name.includes(z.short.split(' ')[0]) || z.short.length <= z.name.length, z.name);

@@ -9,6 +9,7 @@ import { ASSETS, ZONES } from '../../config.js';
 import { FAKE_VALUE } from '../../market.js';
 import { esc } from '../common.js';
 import { benchQuote } from '../../deal.js';
+import { zoneGl } from '../glyphs.js';
 
 const UP = '▲', DOWN = '▼';
 
@@ -54,7 +55,7 @@ function stripHTML(ctx, z) {
   const held = heldIn(g, z), cap = g.storeCap(z), full = held >= cap;
   const inv = g.invValue(), nw = g.netWorth(), share = nw > 0.005 ? Math.max(0, Math.min(1, inv / nw)) : 0;
   return `<section class="stk-strip" aria-label="Storage and value">
-    <div class="row stk-strip-top"><b><span aria-hidden="true">${Z.icon}</span> ${ctx.esc(Z.short)}</b>
+    <div class="row stk-strip-top"><b><span aria-hidden="true">${zoneGl(z, 'gl-sm')}</span> ${ctx.esc(Z.short)}</b>
       <span class="grow"></span><span class="stk-storetext">Storage ${held} of ${cap}${full ? ' <span class="badge red">Full</span>' : ''}</span></div>
     ${bar(full ? 'red' : 'gold', held, cap, `Storage used in ${ctx.esc(Z.short)}`, pctOf(held, cap).toFixed(0))}
     ${s.assets.length ? `<p class="small stk-worth">Stock worth <b class="mono">${m(inv)}</b>${nw > 0.005 ? `, <b>${Math.round(share * 100)}%</b> of net worth` : ''}. ${plural(s.assets.length, 'crate')}.</p>` : ''}
@@ -206,7 +207,7 @@ export default {
     const groups = order.map((dz) => {
       const list = by.get(dz).sort((a, b) => g.val(b) - g.val(a)), Z = ZONES[dz], allOn = list.every((a) => U.sel.has(a.id));
       return `<section class="sect stk-group" data-district="${dz}" style="--za:${e(Z.palette?.[1] || '#5cd6ff')}">
-        <div class="stk-ghead"><h3><span aria-hidden="true">${Z.icon}</span> ${e(Z.name)}${dz === z ? ' <span class="chip info">You are here</span>' : ''}</h3>
+        <div class="stk-ghead"><h3><span aria-hidden="true">${zoneGl(dz, 'gl-sm')}</span> ${e(Z.name)}${dz === z ? ' <span class="chip info">You are here</span>' : ''}</h3>
           <div class="row stk-gtools"><span class="tiny">${plural(list.length, 'crate')}, storage ${heldIn(g, dz)}/${g.storeCap(dz)}</span><button class="btn sm ghost" data-act="stock-pickzone" data-z="${dz}" data-fid="st-z-${dz}">${allOn ? 'Untick all' : 'Tick all'}<span class="sr"> in ${e(Z.short)}</span></button></div></div>
         <ul class="stk-list" aria-label="Crates in ${e(Z.short)}">${list.map((a) => crateHTML(ctx, a, U.sel.has(a.id))).join('')}</ul></section>`;
     }).join('');

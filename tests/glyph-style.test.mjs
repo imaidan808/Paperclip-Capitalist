@@ -4,6 +4,7 @@
 //   tones .......... only the palette; a mark is one tone (currentColor), a picture at most four; every tone is 3:1 or better on every dark surface of css/styles.css (the tile, the callouts, the high-contrast theme) and on black;
 //                    there is no ink tone: a dark part is a hole (an even-odd path) or the slate `k`; a dark step is 1.3:1 or more from its main tone
 //   what is shown .. measured on a raster: the coverage, the centre, what each shape leaves uncovered, and how much is narrower than a pixel at 16 px; a detail that lies on a body differs from it by 1.15:1 (not by hue alone)
+//   told apart ..... no two pictures look alike: on the dark tile, in their own tones, any two are 25 or more apart (the mean largest colour-channel difference, 0 to 255); no two are the same drawing
 //   the renderers .. canvas: fills only, whole alpha, balanced; SVG: fills only, decorative or named; data URI: the same drawing
 //   the stylesheets  the marks CSS draws as masks (--gl-* in css/styles.css) are the glyphs' own data URIs; a mask is painted in the system's text colour in forced-colors mode; no two marks share a silhouette
 //   the weight ..... the core is under 1.2 KB gzipped; the sets and the painter are lazy (tests/page-budget.test.mjs, LATER) and a set imports nothing but the core
@@ -17,7 +18,7 @@ import { gzipSync } from 'node:zlib';
 import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { recCtx } from './helpers/recctx.mjs';
-import { dataProblems, toneProblems, sizeProblems, shownProblems, detailProblems, isMark } from './helpers/glyph-rules.mjs';
+import { dataProblems, toneProblems, sizeProblems, shownProblems, detailProblems, isMark, lookalikes, lookOf, lookDistance } from './helpers/glyph-rules.mjs';
 import { rasterise } from './helpers/glyph-raster.mjs';
 import { block as marksBlock, CSS_MARKS, BEGIN, END } from '../scripts/glyph-css.mjs';
 
@@ -49,7 +50,7 @@ const everyGlyph = (rule, what) => { const bad = []; for (const id of ALL) for (
 // ================================================================================================ the sets
 test('the sets load and register without a clash: each js/art/g-*.js exports its table as GLYPHS, no id is drawn twice, an id is a word of letters, digits and hyphens, and every glyph has a drawing', () => {
   assert.deepEqual(loadErrors, [], 'a set that would not load (a clash of ids names the id):\n' + loadErrors.join('\n'));
-  for (const n of ['ui', 'codex', 'deal']) assert.ok(SETS.some((s) => s.name === n), `js/art/g-${n}.js is a set of this part`);
+  for (const n of ['ui', 'codex', 'deal', 'places']) assert.ok(SETS.some((s) => s.name === n), `js/art/g-${n}.js is a set of this part`);
   for (const s of SETS) {
     assert.ok(s.exports.GLYPHS && typeof s.exports.GLYPHS === 'object', `${s.file} exports GLYPHS`);
     assert.deepEqual(s.ids, Object.keys(s.exports.GLYPHS), `${s.file} registers its own table, all of it`);
@@ -77,6 +78,16 @@ test('no two glyphs are the same drawing, in the same tones or in others (an exe
     full.set(f, id); geo.set(g, id);
   }
   assert.deepEqual(bad, []);
+});
+
+/** The nearest pair of the kit is 27 apart (the secret's keyhole disc and the gear of the utility angle: two grey discs with a dark centre), the median pair about 80, and the two near copies the verifier of part 3 found in the first drawings
+ *  were 23 apart (the district of Metro Hub and the enterprise client: a tall blue tower beside a short grey block) and 24 (the Business-School Grad and the Student manager: the same mortarboard); a floor of 25 catches that and not a family. */
+const LOOKALIKE_MIN = 25, LOOKALIKE_OK = []; // LOOKALIKE_OK: pairs ('a|b') that look alike on purpose, one line each with the reason (none: every picture of the kit has a look of its own)
+test('no two pictures look alike: on the dark tile, in their own tones, any two are 25 or more apart (the mean, over a raster of 2 samples a unit, of the largest colour-channel difference, 0 to 255), so a screen that shows two of them near each other (the HUD\'s Background beside a manager, a district beside a client) does not show one picture twice', () => {
+  const pics = Object.fromEntries(ALL.filter((id) => !/^ex-/.test(id)).map((id) => [id, shapesOf(id)]));
+  assert.ok(Object.keys(pics).filter((id) => !isMark(pics[id])).length > 70, 'the pictures of the kit are measured (not the marks: they are one tone, and no two share a silhouette, below)');
+  const near = lookalikes(pics, LOOKALIKE_MIN, base.panel2, LOOKALIKE_OK);
+  assert.deepEqual(near.map((p) => `${p.a} and ${p.b} are ${p.distance.toFixed(1)} apart`), [], 'draw one of each pair differently: another silhouette and another main tone, not another shade (a pair that looks alike on purpose is declared in LOOKALIKE_OK, with its reason)');
 });
 
 test('the palette: hex tones, all different, each 3:1 or better on every dark surface of the stylesheet (the tile, the four callouts, in both themes) and on black; a dark step is 1.3:1 or more from its main tone', () => {
@@ -240,6 +251,13 @@ test('the rules catch what they are for: an unknown kind, an open or relative pa
   found(detailProblems([['r', 's', 4, 2, 16, 20, 3], ['c', 'sk', 12, 10, 4], ['r', 'b', 6, 15, 12, 5, 1]]), /shape 1 \(c sk\) lies on shape 0 \(s\) at 1\.0\d:1/, 'a head that is the card\'s luminance');
   assert.deepEqual(detailProblems([['r', 's', 4, 2, 16, 20, 3], ['c', 'k', 12, 10, 4], ['r', 'W', 6, 15, 12, 5, 1]]), [], 'a detail a step darker or lighter than its body is fine');
   assert.deepEqual(detailProblems([['c', 'cc', 10, 10, 8], ['c', 'cc', 10, 10, 4]]), [], 'a mark is one tone and exempt');
+  // two pictures that look alike: the same hat with its tassel a unit lower, or in a shade darker, is no other picture; a briefcase beside the hat is
+  const hat = shapesOf('mgr-student'), moved = hat.map((s) => (s[0] === 'c' ? ['c', s[1], s[2], s[3] + 1, s[4]] : s)), shade = hat.map((s) => (s[1] === 's' ? [s[0], 'sd', ...s.slice(2)] : s));
+  assert.equal(lookDistance(lookOf(hat), lookOf(hat)), 0, 'a picture is no distance from itself');
+  assert.ok(lookDistance(lookOf(hat), lookOf(moved)) < 8 && lookDistance(lookOf(hat), lookOf(shade)) < LOOKALIKE_MIN, 'a copy with a part moved a unit, or with a shade of its tone changed, is no other picture');
+  assert.deepEqual(lookalikes({ hat, moved, shade, case: shapesOf('mgr-broker') }, LOOKALIKE_MIN).map((p) => `${p.a} ${p.b}`).sort(), ['hat moved', 'hat shade', 'moved shade'], 'the copies are found and the briefcase is not');
+  assert.deepEqual(lookalikes({ hat, moved }, LOOKALIKE_MIN, '#1d2634', ['moved|hat']), [], 'a pair a screen declares is let through, in either order');
+  assert.deepEqual(lookalikes({ a: [['c', 'cc', 12, 12, 8]], b: [['c', 'cc', 12, 12, 8]] }, LOOKALIKE_MIN), [], 'and a mark is left to its own rule');
   const good = [['r', 'n', 2.5, 8.4, 19, 12.6, 2], ['r', 'nd', 2.5, 15.4, 19, 5.6, 2], ['r', 'nd', 1.5, 4.6, 21, 5.4, 1.8], ['r', 'W', 9, 11.8, 6, 4, 1]];
   assert.deepEqual([...dataProblems(good), ...toneProblems(good), ...sizeProblems(good), ...shownProblems(good)], [], 'and a good drawing has nothing against it');
 });

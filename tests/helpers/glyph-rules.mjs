@@ -1,6 +1,6 @@
 // The style rules of the glyph kit as plain functions of a drawing (a list of shapes, js/art/glyph.js): each returns the list of what is wrong with it, empty when the drawing is within the rules.
 // tests/glyph-style.test.mjs runs them on every registered glyph (and on drawings made to break them); scripts/glyph-draw.mjs runs them on what a drawing script writes, so an artist hears at once.
-// The palette's contrast against the dark surfaces is the test's: it reads the stylesheet.
+// The palette's contrast against the dark surfaces is the test's: it reads the stylesheet. One rule is about pairs, not about a drawing: lookalikes() (no two pictures look alike).
 import { GRID, PAL } from '../../js/art/glyph.js';
 import { polys, rasterise, thinShare } from './glyph-raster.mjs';
 
@@ -103,3 +103,26 @@ export function detailProblems(shapes) {
 }
 /** Everything the rules have against a drawing. */
 export const problemsOf = (shapes) => [...dataProblems(shapes), ...toneProblems(shapes), ...sizeProblems(shapes), ...shownProblems(shapes), ...detailProblems(shapes)];
+
+/**
+ * The look of a picture on a tile, to tell two pictures apart: the drawing rasterised on the tile in its own tones (2 samples a unit, as the marks' silhouettes are), 24 x 24 units, three bytes a sample.
+ */
+export function lookOf(shapes, tile = '#1d2634') {
+  const hex = (h) => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)], t = hex(tile), r = rasterise(shapes, 2), px = new Uint8Array(r.owner.length * 3);
+  for (let i = 0; i < r.owner.length; i++) { const c = r.owner[i] >= 0 ? hex(PAL[shapes[r.owner[i]][1]]) : t; px[i * 3] = c[0]; px[i * 3 + 1] = c[1]; px[i * 3 + 2] = c[2]; }
+  return px;
+}
+/** How far apart two looks are: the mean, over the samples, of the largest difference of a colour channel (0 for the same picture, 255 for black against white). The median pair of the kit is about 80 apart. */
+export function lookDistance(a, b) { let sum = 0; for (let i = 0; i < a.length; i += 3) sum += Math.max(Math.abs(a[i] - b[i]), Math.abs(a[i + 1] - b[i + 1]), Math.abs(a[i + 2] - b[i + 2])); return sum / (a.length / 3); }
+/**
+ * Pictures that look alike: every pair of the table { id: shapes } that is closer than `min` (a mark, one tone in the text colour, has its own rule: tests/glyph-style.test.mjs holds that no two share a silhouette). Returns [{ a, b, distance }],
+ * nearest first. `pairs` lists the pairs ('a|b') a screen declares to share a look on purpose.
+ */
+export function lookalikes(table, min, tile = '#1d2634', pairs = []) {
+  const ids = Object.keys(table).filter((id) => !isMark(table[id])), look = Object.fromEntries(ids.map((id) => [id, lookOf(table[id], tile)])), out = [];
+  for (let i = 0; i < ids.length; i++) for (let j = i + 1; j < ids.length; j++) {
+    if (pairs.includes(`${ids[i]}|${ids[j]}`) || pairs.includes(`${ids[j]}|${ids[i]}`)) continue;
+    const distance = lookDistance(look[ids[i]], look[ids[j]]); if (distance < min) out.push({ a: ids[i], b: ids[j], distance });
+  }
+  return out.sort((x, y) => x.distance - y.distance);
+}

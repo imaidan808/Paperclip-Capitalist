@@ -10,6 +10,11 @@ import { $, $$, esc, setHTML, delegate, announce, fitStuck, settingsDialog } fro
 import { audio } from '../audio/index.js';
 
 export const MAX_PICKS = 2;
+
+// The Backgrounds' drawings are a lazy module (the first screen holds no glyph set): the discs start empty and are filled in once js/ui/glyphs.js has loaded; without it the Draft still works.
+let drawn = null;
+const bgGl = (id, cls) => (drawn ? drawn.bgGl(id, cls) : '');
+export const loadGlyphs = () => (drawn ? Promise.resolve(drawn) : import('./glyphs.js').then((m) => (drawn = m), () => null));
 const own = (o, k) => typeof k === 'string' && Object.prototype.hasOwnProperty.call(o, k);
 const cleanIds = (ids) => [...new Set((Array.isArray(ids) ? ids : []).filter((id) => own(PERKS, id)))].slice(0, MAX_PICKS);
 const finite = (x) => (Number.isFinite(x) ? x : 0);
@@ -157,7 +162,7 @@ export function cardHTML(id, st) {
   const p = PERKS[id], on = st.picks.includes(id);
   return `<label class="dr-card" for="dr-in-${id}" data-id="${id}" data-on="${on ? 1 : 0}">
     <input type="checkbox" class="dr-in" id="dr-in-${id}" name="perk" value="${id}" data-change="pick" data-fid="pk-${id}" aria-labelledby="dr-nm-${id}" aria-describedby="dr-ds-${id}"${on ? ' checked' : ''}>
-    <span class="dr-top"><span class="dr-ic" aria-hidden="true">${p.icon}</span><b class="dr-nm" id="dr-nm-${id}">${esc(p.name)}</b><span class="dr-box" aria-hidden="true"></span></span>
+    <span class="dr-top"><span class="dr-ic" data-bg="${id}" aria-hidden="true">${bgGl(id)}</span><b class="dr-nm" id="dr-nm-${id}">${esc(p.name)}</b><span class="dr-box" aria-hidden="true"></span></span>
     <span class="dr-body" id="dr-ds-${id}"><em class="dr-basis">${esc(p.basis)}</em>${lineHTML('+', p.strength, p.gain)}${lineHTML('-', p.cost, p.loss)}</span>
     <span class="dr-tip" aria-hidden="true"><span><b>+</b> ${esc(p.strength)}</span><span><b>-</b> ${esc(p.cost)}</span></span>
   </label>`;
@@ -168,7 +173,7 @@ export function trayHTML(st) {
     const id = st.picks[i];
     if (!id) return `<li class="dr-slot dr-empty"><span class="dr-slotn" aria-hidden="true">${i + 1}</span><span class="dr-slotb"><b>Open slot</b></span></li>`;
     const p = PERKS[id];
-    return `<li class="dr-slot dr-full${st.added === id ? ' popin' : ''}"><span class="dr-ic" aria-hidden="true">${p.icon}</span><span class="dr-slotb"><b>${esc(p.name)}</b>${lineHTML('+', p.strength)}${lineHTML('-', p.cost)}</span><button type="button" class="btn ghost sm" data-act="drop" data-id="${id}" data-fid="drop-${id}" aria-label="Remove ${esc(p.name)} from your build">Remove</button></li>`;
+    return `<li class="dr-slot dr-full${st.added === id ? ' popin' : ''}"><span class="dr-ic" data-bg="${id}" aria-hidden="true">${bgGl(id)}</span><span class="dr-slotb"><b>${esc(p.name)}</b>${lineHTML('+', p.strength)}${lineHTML('-', p.cost)}</span><button type="button" class="btn ghost sm" data-act="drop" data-id="${id}" data-fid="drop-${id}" aria-label="Remove ${esc(p.name)} from your build">Remove</button></li>`;
   }).join('');
   const sum = summaryOf(st.picks), done = st.picks.length === MAX_PICKS;
   return `<h2 id="dr-tray-h">Your build</h2>
@@ -189,7 +194,7 @@ export function specHTML(st) {
 
 export function actionsHTML(st) {
   const left = MAX_PICKS - st.picks.length, ok = left === 0;
-  const chip = (id) => `<span aria-hidden="true">${PERKS[id].icon}</span> ${esc(PERKS[id].name)}`;
+  const chip = (id) => `<span aria-hidden="true">${bgGl(id, 'gl-sm')}</span> ${esc(PERKS[id].name)}`;
   const text = ok ? `Ready: ${st.picks.map(chip).join(' + ')}.`
     : `${st.picks.length ? chip(st.picks[0]) + ' chosen. ' : ''}Pick ${plural(left, 'more Background')} to begin.`;
   return `<span class="small ${ok ? 'green' : 'mute'} dr-need" id="dr-need">${text}</span>
@@ -262,6 +267,12 @@ export function mountDraft(root, S, { room = null, handle, onBegin, onBack } = {
   // the page scrolls here and the actions bar sticks to its foot: Tab must scroll a card to just above the bar, whatever height the bar has now (common.js, fitStuck)
   const page = root.ownerDocument?.documentElement, fit = () => fitStuck(page);
   fit(); globalThis.addEventListener?.('resize', fit);
+  // the drawings arrive: fill each empty disc and redraw the bar's chip, rebuild nothing else (a half-typed alias is never touched)
+  loadGlyphs().then((m) => {
+    if (!m || !form.isConnected) return; // (the module did not load, or the player has left the Draft: #app stays, the form does not)
+    for (const el of $$('.dr-ic[data-bg]', root)) if (!el.firstChild) el.innerHTML = bgGl(el.dataset.bg);
+    setHTML(bar, actionsHTML(st)); fit();
+  });
   function send(action, say = true) {
     st = draftReduce(st, action);
     paint();

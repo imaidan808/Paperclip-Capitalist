@@ -11,7 +11,7 @@ import { QUEST_BY_ID } from '../../meta/progress.js';
 import { MONEY_SUMS } from '../../meta/quests.js';
 import { goToDistrict, keepScroll, rememberScroll } from './travel.js';
 import { fold, flip } from './stock.js';
-import { gl, tile as glyphTile, badgeGlyph, dailyGlyph } from '../glyphs.js';
+import { gl, tile as glyphTile, badgeGlyph, dailyGlyph, zoneGl } from '../glyphs.js';
 
 const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
 const pctN = (x) => Math.round(x * 100);
@@ -118,7 +118,7 @@ function heroHTML(ctx) {
 // ------------------------------------------------------------------ quests
 function questCard(ctx, v, kind, full = true) {
   const d = v.def, Z = ZONES[d.zone], open = ctx.g().s.zones.includes(d.zone);
-  const where = `${Z?.icon || ''} ${esc(Z?.name || '')}`;
+  const where = `${zoneGl(d.zone, 'gl-sm')} ${esc(Z?.name || '')}`;
   if (kind === 'active') {
     const here = ctx.U.zone === d.zone, shut = !open && Z ? `Open ${Z.name} first: it needs ${money(Z.gate)} net worth (${money(Math.max(0, Z.gate - ctx.g().netWorth()))} to go).` : '';
     return `<article class="qs-q active"><header><div><h4>${esc(d.title)}</h4><small>${where}</small></div></header>
@@ -134,7 +134,7 @@ function questCard(ctx, v, kind, full = true) {
 }
 function distHead(id, extra = '') {
   const Z = ZONES[id];
-  return `<h4 class="qs-dist"><span aria-hidden="true">${Z?.icon || ''}</span> ${esc(Z?.name || 'District')}${extra ? ` <small>${esc(extra)}</small>` : ''}</h4>`;
+  return `<h4 class="qs-dist"><span aria-hidden="true">${zoneGl(id, 'gl-sm')}</span> ${esc(Z?.name || 'District')}${extra ? ` <small>${esc(extra)}</small>` : ''}</h4>`;
 }
 function questsHTML(ctx) {
   const pr = ctx.progress, s = ctx.g().s, all = pr.quests(), reach = Math.max(...s.zones) + 1;

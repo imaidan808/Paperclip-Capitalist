@@ -8,6 +8,7 @@ import { BACKGROUND_IDS } from '../js/meta/ids.js';
 import { ASSETS, BUYERS, ZONES, LOANS, AUDIT, EVENTS, ECON, SKILL_MAX } from '../js/config.js';
 import { repairCostFor } from '../js/market.js';
 import { makeGame, run } from './bot.mjs';
+import { bgGlyph } from '../js/ui/glyphs.js';
 
 const near = (a, b, eps = 0.01) => assert.ok(Math.abs(a - b) <= eps, `${a} vs ${b}`);
 const rel = (a, b, eps = 1e-9) => assert.ok(Math.abs(a - b) <= eps * Math.max(1, Math.abs(a), Math.abs(b)), `${a} vs ${b}`);
@@ -58,7 +59,8 @@ test('twelve Backgrounds, each with a basis, a strength, a cost and mods; the id
   assert.deepEqual([...PERK_IDS].sort(), [...BACKGROUND_IDS].sort());
   for (const [id, p] of Object.entries(PERKS)) {
     assert.equal(p.id, id);
-    for (const k of ['name', 'icon', 'basis', 'strength', 'cost']) assert.ok(typeof p[k] === 'string' && p[k].trim(), `${id}.${k}`);
+    for (const k of ['name', 'basis', 'strength', 'cost']) assert.ok(typeof p[k] === 'string' && p[k].trim(), `${id}.${k}`);
+    assert.ok(bgGlyph(id), `${id} has a drawn glyph (js/art/g-places.js: the data carries no icon)`);
     assert.ok(p.mods && Object.keys(p.mods).length >= 2, id + ' has mods');
     for (const k of Object.keys(p.mods)) assert.ok([...MULT_KEYS, ...MAX_KEYS, ...ADD_KEYS, ...BOOL_KEYS, ...OBJ_KEYS].includes(k), `${id}.${k} is classified for aggregation`);
   }
