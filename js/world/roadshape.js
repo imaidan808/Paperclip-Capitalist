@@ -146,3 +146,311 @@ export function apronPieces(frame, A = APRON) {
   };
   return { bands, walks: { left: side(-1), right: side(1) } };
 }
+
+
+// ---------------------------------------------------------------- terminations: where a street that no road leaves comes to an end (the world pass WP12; the kinds are the plan's T1 to T13, docs/ART_DIRECTION.md section 4.7)
+/**
+ * A block's street runs to its plateau's edge at each of its four ports, and of the island's 64 ports 29 had nothing beyond them (the survey of 2026-11-04). A termination is what stands there instead: a bulb or a roundabout to turn on, a
+ * yard against a loading dock, a gate into a compound, a farm gate, a quay, a railed belvedere, a sealed tunnel mouth, a path head or a barrier that says ROAD CLOSED. This module is the pure half: the frame of a port, the rule that picks a kind
+ * for a port (`chooseTerm`) and the shape of each kind (`shapeOf`: ground pieces, props, the turn spot a car would use, the room it needs). layout.js derives the island's own ends from it at build time and registers them (LAYOUT.terms,
+ * LAYOUT.turnSpots); groundart.js paints the pieces; nothing here draws, reads the layout or spends a random number. Lengths are tiles.
+ */
+/** The way out of a block at each of its ports (the grid's axes). */
+export const OUTWARD = Object.freeze({ W: Object.freeze([-1, 0]), E: Object.freeze([1, 0]), N: Object.freeze([0, -1]), S: Object.freeze([0, 1]) });
+/** The frame of a port: origin at the port (the middle of the block's side), u out of the block along the street's axis, v to the right of the way out (the lane side: the same side offsetPoly lays a lane on). */
+export function portFrame(side, x, y) { const [ux, uy] = OUTWARD[side]; return { x, y, ux, uy, vx: -uy, vy: ux }; }
+/** The grid point at (u, v) of a frame. */
+export const framePoint = (f, u, v) => [f.x + f.ux * u + f.vx * v, f.y + f.uy * u + f.vy * v];
+/** The axis-aligned grid rectangle that covers u0..u1 by v0..v1 of a frame (a frame's axes are the grid's): { x, y, w, d }. */
+export function frameRect(f, u0, u1, v0, v1) { const a = framePoint(f, u0, v0), b = framePoint(f, u1, v1); return { x: Math.min(a[0], b[0]), y: Math.min(a[1], b[1]), w: Math.abs(b[0] - a[0]), d: Math.abs(b[1] - a[1]) }; }
+
+/** The block's street kept beyond its edge: asphalt 2.0 wide (the block's own), a flat kerb of a fifth, the art 0.1 under the edge so the stage's lip never shows across it (the aprons do the same), a flare of 0.5 tile before a disc. */
+export const TERM = Object.freeze({ hw: 1.0, kerb: 0.2, back: 0.1, flare: 0.5 });
+/** The judges' limit: a quay only where the ground stands 8 px or less above the water; above that the end is a railed belvedere (or closed). */
+export const QUAY_DROP = 8;
+/** Water this many tiles beyond a port, or less, decides its end; a flat run under MIN_FLAT is a barrier; a quay needs QUAY_ROOM tiles of flat ground, a belvedere DECK_ROOM. */
+export const WATER_END = 5, MIN_FLAT = 1.5, QUAY_ROOM = 2, DECK_ROOM = 2.6;
+/**
+ * The lanes of an end (the verifier's D2: the ground pieces were kept on level land by the rectangle of room each shape asked for, not by what they paint: a belvedere's gravel hung over the rock face under its deck, a fringe lay over the sea at four ends).
+ * `lanes` is how far out the street's axis each lane of the port's frame, `n` of them a quarter tile apart from v = `v0`, stays on land within `lim` px of the block's height: the u of the first sample that does not (`cap` when none does), found to a twentieth of a tile;
+ * layout.js measures them on the ground. A shape given them (`o.lanes`) keeps every piece of its ground on them: the gravel stops GRAVEL_KEEP short of the first sample that is not ground, a ring or a kerb HARD_KEEP, and the slab of a quay, its
+ * cobbles and the deck of a belvedere DECK_KEEP (a third of a tile).
+ */
+export const LANE = Object.freeze({ v0: -4.5, step: 0.25, n: 37, lim: 12, cap: 10 });
+export const GRAVEL_KEEP = 0.15, HARD_KEEP = 0.1, DECK_KEEP = 0.35;
+/** The first of the lanes between v0 and v1 (the lanes either side included: the nearest ones outside the range) to run out: the u at which the ground stops being land and level somewhere across that width; Infinity when there are no lanes. */
+export function laneReach(lanes, v0, v1) {
+  if (!lanes) return Infinity;
+  const a = Math.max(0, Math.floor((v0 - LANE.v0) / LANE.step + 1e-9)), b = Math.min(lanes.length - 1, Math.ceil((v1 - LANE.v0) / LANE.step - 1e-9)); let m = LANE.cap;
+  for (let k = a; k <= b; k++) m = Math.min(m, lanes[k]);
+  return m;
+}
+export const TERM_KINDS = Object.freeze(['bulb', 'roundabout', 'hammer', 'yard', 'plaza', 'gate', 'farm', 'barrier', 'quay', 'belvedere', 'portal', 'head']);
+/** What a piece of ground is: groundart.js says the colour of each (the district's own tones, the palette's wood and lawn), tests read the roles. `rail` is a polyline, `post` a point, the rest are polygons. */
+export const PIECE_ROLES = Object.freeze(['fringe', 'apron', 'walk', 'curb', 'asph', 'dash', 'lawn', 'plaza', 'slab', 'band', 'bay', 'dirt', 'rut', 'deck', 'deck2', 'rail', 'post', 'sand', 'sandedge', 'rock']);
+/** The kinds of static prop a termination may stand: the island's own (lamps, benches, signs, bollards, fences, planters, trees, hay, crates, barrels, a fountain, a statue, flags, a kiosk, topiary, the lookout's bench and telescope) and the new flat ones. */
+export const PROP_KINDS = Object.freeze(['lamp', 'bench', 'polesign', 'bollard', 'fence', 'planter', 'tree', 'topiary', 'hay', 'crates', 'barrel', 'fountain', 'statue', 'flag', 'kiosk', 'pillar', 'lookout', 'busstop', 'roadend', 'farmgate', 'trough', 'trailboard', 'portal', 'loaddock', 'dish']);
+/**
+ * What a kind of prop paints beyond the box of its footprint (its shadow, a boom, the board of a sign, a booth), in pixels: the margin the box it is culled by is made wider with (layout.js mkEndProps: `ext`). The verifier's D7: the cull box was the footprint and 16 px, and
+ * the barrier of 4.W paints 34 px beyond it, a sign board 26, the open gates of 6.S and 10.S 79 (a booth two tiles to the side): at the edge of the screen they vanished while part of them was still in view. Measured on the drawings, a few pixels over (tests/world-roadterm.test.mjs
+ * RT12 holds every prop of an end to its box, so a drawing that grows says so).
+ */
+export const PROP_REACH = Object.freeze({ roadend: 38, lamp: 14, crates: 10, polesign: 28, dish: 6, loaddock: 8 });
+export const propReach = (kind, o = {}) => (kind === 'roadend' && o.open ? 84 : PROP_REACH[kind] || 0);
+/** A district's dressing, by theme: what stands round the end of its street (bus loop, service turn, farmyard, garden, compound). */
+export const DRESS_OF = Object.freeze({ market: 'bus', campus: 'bus', pawn: 'bus', metro: 'bus', creative: 'bus', realty: 'bus', exchange: 'bus', corporate: 'bus', finance: 'bus', estate: 'garden', scrap: 'yard', auto: 'auto', harbor: 'yard', industrial: 'yard', tech: 'tech', farm: 'farm' });
+/** The kinds a theme prefers at the end of its street, in order, by the street: the first that fits is built (a bulb when none does, a barrier when not even that). */
+const PREFER = Object.freeze({
+  scrap: ['yard', 'hammer'], market: [], campus: ['roundabout'], pawn: [], metro: ['roundabout'], creative: { cross: ['yard'] }, estate: { avenue: ['roundabout'], cross: ['gate'] }, auto: ['hammer'], harbor: ['yard', 'hammer'], industrial: ['yard', 'hammer'],
+  tech: ['gate'], farm: { avenue: ['farm'], cross: [] }, corporate: { cross: ['plaza'] }, finance: { cross: ['plaza', 'gate'] }, realty: [], exchange: { cross: ['plaza'] },
+});
+const prefer = (theme, street) => { const p = PREFER[theme] || []; return Array.isArray(p) ? p : p[street] || []; };
+
+/**
+ * The kind of end a port gets. `i` is what the ground and the district say: { side, theme, street ('avenue' or 'cross'), flat (tiles of level ground beyond the port), water (the tile at which the sea begins, or null), drop (px the ground
+ * stands above that water), hill (a wall of rock within 4 tiles), path (a footpath leaves here), authored (island.js TERMS: a record { kind, ... } chosen by hand) }; `fits(kind, opt)` says whether the shape of a kind has the room it needs on this ground.
+ * First match wins: the authored end; a path head; water within WATER_END tiles (a quay when the drop to it is QUAY_DROP px or less, a railed belvedere above that, a barrier when there is no room for either); a hill wall; no flat run; then the
+ * theme's own kinds, then a bulb, then a barrier. Answers { kind, opt, why }.
+ */
+export function chooseTerm(i, fits = () => true) {
+  if (i.authored) return { kind: i.authored.kind, opt: i.authored, why: 'chosen by hand (island.js TERMS)' };
+  if (i.path) return { kind: 'head', opt: {}, why: 'a footpath leaves here: the street ends in a path head, the path starts beyond its bollards' };
+  if (i.water !== null && i.water !== undefined && i.water <= WATER_END) {
+    if (i.drop !== null && i.drop <= QUAY_DROP && i.flat >= QUAY_ROOM) return { kind: 'quay', opt: { water: i.water }, why: `water ${i.water} tiles beyond and the ground only ${Math.round(i.drop)} px above it: a quay` };
+    if (i.drop > QUAY_DROP && i.flat >= DECK_ROOM) return { kind: 'belvedere', opt: { water: i.water }, why: `water ${i.water} tiles beyond but ${Math.round(i.drop)} px below: a railed belvedere, not a quay (a quay is ${QUAY_DROP} px or less above the water)` };
+    return { kind: 'barrier', opt: {}, why: `water ${i.water} tiles beyond and no room for a quay or a deck: closed` };
+  }
+  if (i.hill) return { kind: 'barrier', opt: {}, why: 'a wall of rock within 4 tiles and no tunnel made for it: closed' };
+  if (i.flat < MIN_FLAT) return { kind: 'barrier', opt: {}, why: `only ${i.flat} tiles of level ground: closed` };
+  for (const kind of [...prefer(i.theme, i.street), 'bulb']) { const opt = {}; if (fits(kind, opt)) return { kind, opt, why: kind === 'bulb' ? 'the default end of a street: a turning bulb' : `${/^[aeiou]/.test(i.theme) ? 'an' : 'a'} ${i.theme} district ends its ${i.street} in a ${kind}` }; }
+  return { kind: 'barrier', opt: {}, why: 'not even a turning bulb fits: closed' };
+}
+
+// ---- the shapes. Points are [u, v] of the port's frame; every polygon is simple.
+const B0 = -TERM.back, HWK = TERM.hw + TERM.kerb, TAU = Math.PI * 2;
+const rect = (u0, u1, v0, v1) => [[u0, v0], [u1, v0], [u1, v1], [u0, v1]];
+const circ = (cu, cv, r, n = 28) => Array.from({ length: n }, (_, i) => [cu + Math.cos((i / n) * TAU) * r, cv + Math.sin((i / n) * TAU) * r]);
+/** A rectangle with rounded corners of radius r (a quarter circle of `seg` steps at each corner). */
+function rrect(u0, u1, v0, v1, r, seg = 4) {
+  r = Math.min(r, (u1 - u0) / 2, (v1 - v0) / 2); const out = [];
+  for (const [cu, cv, a0] of [[u1 - r, v0 + r, -Math.PI / 2], [u1 - r, v1 - r, 0], [u0 + r, v1 - r, Math.PI / 2], [u0 + r, v0 + r, Math.PI]]) for (let k = 0; k <= seg; k++) { const a = a0 + (k / seg) * (Math.PI / 2); out.push([cu + Math.cos(a) * r, cv + Math.sin(a) * r]); }
+  return out;
+}
+/** The street of half width `hw` from the block's edge to a disc of radius R about (c, 0): straight to `us`, then a flare that runs tangent to the disc (a trumpet mouth), the disc's centre in the outline so it joins the disc whole. */
+function neck(c, R, hw, us = TERM.flare, u0 = B0) {
+  const dx = us - c, d = Math.hypot(dx, hw), a = Math.atan2(hw, dx) - Math.acos(Math.min(1, R / d)), tu = c + R * Math.cos(a), tv = R * Math.sin(a);
+  return [[u0, -hw], [us, -hw], [tu, -tv], [c, 0], [tu, tv], [us, hw], [u0, hw]];
+}
+/** A stadium: the street from u0 to u1 of half width hw, ending in a half disc (the end of a closed street is a cap, never a cut). */
+function capped(u0, u1, hw, n = 12) { const out = [[u0, -hw]]; for (let k = 0; k <= n; k++) { const a = -Math.PI / 2 + (k / n) * Math.PI; out.push([u1 + Math.cos(a) * hw, Math.sin(a) * hw]); } out.push([u0, hw]); return out; }
+/** The sidewalk of the block tapering to nothing where the street goes on: a wedge along the kerb on each side (the aprons' do the same over their length). */
+const walks = (len = 1.6) => [-1, 1].map((s) => ({ role: 'walk', pts: [[B0, s * HWK], [len, s * HWK], [B0, s * (HWK + 0.8)]] }));
+/** Keep the part of a polygon at u >= u0 (Sutherland-Hodgman against one line): a gravel apron never lies over the block it blends into. */
+function clipU(pts, u0 = 0) {
+  const out = [];
+  for (let i = 0; i < pts.length; i++) {
+    const a = pts[i], b = pts[(i + 1) % pts.length], ia = a[0] >= u0, ib = b[0] >= u0;
+    if (ia) out.push(a);
+    if (ia !== ib) { const t = (u0 - a[0]) / (b[0] - a[0]); out.push([u0, a[1] + (b[1] - a[1]) * t]); }
+  }
+  return out;
+}
+/** Keep the part of a polygon at u <= u1: the same, from the other side (the gravel of an end stops where the ground does). */
+function clipUMax(pts, u1) {
+  const out = [];
+  for (let i = 0; i < pts.length; i++) {
+    const a = pts[i], b = pts[(i + 1) % pts.length], ia = a[0] <= u1, ib = b[0] <= u1;
+    if (ia) out.push(a);
+    if (ia !== ib) { const t = (u1 - a[0]) / (b[0] - a[0]); out.push([u1, a[1] + (b[1] - a[1]) * t]); }
+  }
+  return out;
+}
+const areaOf = (pts) => { let a = 0; for (let i = 0; i < pts.length; i++) { const p = pts[i], q = pts[(i + 1) % pts.length]; a += p[0] * q[1] - q[0] * p[1]; } return Math.abs(a) / 2; };
+/**
+ * The gravel of an end (its fringe and its apron) kept on the ground: cut at GRAVEL_KEEP short of the first sample, across the width of the widest of them, that is water or more than LANE.lim px off the block's height. One cut for both, so the apron never
+ * stands out beyond the fringe; what the cut leaves too small to see is dropped.
+ */
+function fitGravel(pieces, lanes) {
+  const gravel = pieces.filter((q) => q.role === 'apron' || q.role === 'fringe'); if (!gravel.length) return pieces;
+  const U = Math.min(...gravel.map((q) => { const vs = q.pts.map((p) => p[1]); return laneReach(lanes, Math.min(...vs), Math.max(...vs)) - GRAVEL_KEEP; }));
+  return pieces.flatMap((q) => { if (q.role !== 'apron' && q.role !== 'fringe') return [q]; if (Math.max(...q.pts.map((p) => p[0])) <= U) return [q]; const pts = clipUMax(q.pts, U); return pts.length >= 3 && areaOf(pts) > 0.05 ? [{ ...q, pts }] : []; });
+}
+const P = (role, pts) => ({ role, pts: role === 'apron' || role === 'fringe' ? clipU(pts) : pts });
+/** The gravel an end blends into the ground round it with, in two steps (a fringe half a tile wider, a shade nearer the ground, round the apron proper): a disc, or a rectangle. */
+const gravelDisc = (c, r, n = 32) => [P('fringe', circ(c, 0, r + 0.5, n)), P('apron', circ(c, 0, r, n))];
+const gravelRect = (u0, u1, v0, v1) => [P('fringe', rrect(u0 - 0.5, u1 + 0.5, v0 - 0.5, v1 + 0.5, 0.7)), P('apron', rrect(u0, u1, v0, v1, 0.5))];
+/** A prop of the termination: kind, the middle of its footprint (u, v), its size along u (a) and across it (b), height h, and the kind's own fields in `o`. */
+const prop = (t, u, v, a, b, h, o = {}) => ({ t, u, v, a, b, h, o });
+const lamp = (u, v) => prop('lamp', u, v, 0.2, 0.2, 32);
+const bollard = (u, v, col = '#ffd84d') => prop('bollard', u, v, 0.3, 0.3, 8, { col });
+/** Two parking bays (a slab with lines 0.1 wide between them) off one side of a disc: where a building stands near the end, somewhere to leave a car. */
+const bays = (c, sg, r) => [P('slab', rect(c - 1.1, c + 1.1, sg * (r - 0.1), sg * (r + 2.2))), ...[-1.1, 0, 1.1].map((du) => P('bay', rect(c + du - 0.05, c + du + 0.05, sg * (r - 0.1), sg * (r + 2.2))))];
+
+/** The dressing of a turning end by theme (`dress`): a bus loop (a shelter, a bench, a BUS sign at the shelter), a service turn, a farmyard, a garden court. (c: the middle of the disc, R: its outer radius, kerb included; `bays`: the -v side keeps its place for parking.) */
+function dressing(dress, c, R, bayed) {
+  const out = [], side = R + 0.9, far = -side - (bayed ? 1.6 : 0);
+  if (dress === 'bus') out.push(prop('busstop', c - 0.5, side + 0.2, 1.8, 0.9, 26), prop('bench', c + 1.2, side + 0.1, 1.0, 0.4, 8), prop('polesign', c + 2.3, side - 0.1, 0.4, 0.4, 44, { col: '#3a8fe0', text: 'BUS' }), lamp(c + 0.2, far), prop('planter', c - 1.9, bayed ? far : -side + 0.1, 0.8, 0.8, 10));
+  else if (dress === 'garden') out.push(prop('topiary', c, 0, 0.5, 0.5, 30), prop('bench', c + 1.2, side + 0.1, 1.0, 0.4, 8), prop('bench', c - 1.4, far - 0.1, 1.0, 0.4, 8), lamp(c + 0.2, far), lamp(0.9, HWK + 0.7));
+  else if (dress === 'farm') out.push(prop('trough', c + 0.4, side + 0.1, 1.6, 0.6, 8), prop('hay', c - 1.6, side + 0.2, 0.9, 0.9, 14), prop('hay', c + 1.7, far, 0.9, 0.9, 14), prop('hay', c + 2.7, side - 0.2, 0.9, 0.9, 14), lamp(c - 0.6, far), prop('barrel', c - 2.6, side - 0.2, 0.7, 0.7, 22, { color: '#b0493a' }));
+  else if (dress === 'tech') out.push(bollard(0.9, HWK + 0.6, '#3ad4e6'), bollard(0.9, -HWK - 0.6, '#3ad4e6'), lamp(c + 0.2, far), prop('bench', c + 1.4, side + 0.1, 1.0, 0.4, 8));
+  else out.push(bollard(0.9, HWK + 0.6), bollard(0.9, -HWK - 0.6), prop('crates', c - 0.4, side + 0.3, 1.2, 1.2, 26, { n: 2 }), prop('barrel', c + 1.4, far, 0.7, 0.7, 22, { color: '#4a7f55' }), lamp(c + 0.2, side - 0.1)); // yard, auto
+  return out;
+}
+
+/** How far from the block's edge a ring of outer radius Ro (kerb included) stands: 0.3 tile (the street flares into it), less where the ground runs out, so that its far kerb stays HARD_KEEP short of the first sample that is not ground (0 at least: against the edge). */
+const fitGap = (o, Ro) => { const want = o.gap ?? 0.3; return o.lanes ? Math.max(0, Math.min(want, laneReach(o.lanes, -Ro, Ro) - HARD_KEEP - 2 * Ro)) : want; };
+
+/**
+ * T5 for a street that leaves its block to the south or the east (the verifier's D5): the doors of a loading dock are painted on the faces the camera sees, the south and the east ones, so the apron it serves has to lie on that side of it: a dock across the END of such a street
+ * showed its blind back to the street and three bays that pointed at a wall with no door (8.S and 12.S). The dock stands BESIDE the apron instead, along it on the side that is west of a street to the south and north of a street to the east, its doors on the face towards the slab, and the
+ * bays run square to it, from the middle of the apron to the doors; the street ends in the last of them (the door of the registry is the last one, within half a tile of the end of the slab). A street to the west or the north keeps the dock at its end: it arrives on the visible face already.
+ */
+function yardBeside(o) {
+  const sg = o.side === 'S' ? 1 : -1, u0 = 1.2, u1 = 5.4, hv = 2.2, room = 1.8; // sg: the side of the street (v) the dock stands on
+  const pieces = [...gravelRect(0, u1 + 0.4, sg > 0 ? -(hv + 0.4) : -(hv + 0.4 + room), sg > 0 ? hv + 0.4 + room : hv + 0.4), ...walks(), P('curb', rect(B0, u0, -HWK, HWK)), P('curb', rrect(u0 - 0.2, u1 + 0.2, -hv - 0.2, hv + 0.2, 0.6)), P('asph', rect(B0, u0 + 0.2, -TERM.hw, TERM.hw)), P('slab', rrect(u0, u1, -hv, hv, 0.5))];
+  for (const u of [1.8, 3.0, 4.2, 5.3]) pieces.push(P('bay', rect(u - 0.05, u + 0.05, sg > 0 ? -0.4 : -(hv - 0.1), sg > 0 ? hv - 0.1 : 0.4))); // (three bays, 1.2 wide, from the street's middle to the dock's wall)
+  const props = [bollard(0.7, HWK + 0.6), bollard(0.7, -HWK - 0.6), lamp(u0 + 0.4, -sg * (hv + 0.5)), prop('loaddock', 3.5, sg * (hv + 0.95), 3.6, 1.5, 24, { acc: '#ffd02e' }), prop('crates', 2.4, -sg * (hv + 0.6), 1.2, 1.2, 26, { n: 2 }), prop('barrel', 3.6, -sg * (hv + 0.5), 0.7, 0.7, 22, { color: '#b0493a' })];
+  return { pieces, props, door: { u: u1 - 0.4, v: sg * hv }, turn: { u: (u0 + u1) / 2, v: 0, r: 1.8, open: true }, foot: [{ u0: B0, u1: u1 + 0.6, v0: sg > 0 ? -(hv + 1.2) : -(hv + 0.4 + room + 0.1), v1: sg > 0 ? hv + 0.4 + room + 0.1 : hv + 1.2 }] };
+}
+
+const SHAPE = {
+  /** T2: a turning bulb (a disc of asphalt radius 2.2, a kerb of a fifth, an island for a bus loop) a few tenths of a tile beyond the edge, the street flaring into it. A farmyard's is a disc of beaten earth, a bulb near a building has two parking bays. */
+  bulb(o) {
+    const R = 2.2, Ro = R + TERM.kerb, gap = fitGap(o, Ro), c = gap + Ro, dress = DRESS_OF[o.theme] || 'bus', island = dress === 'bus' || dress === 'garden', earth = dress === 'farm', bayed = !!o.bays;
+    const pieces = [...gravelDisc(c, Ro + 0.4), ...gravelRect(0, c, -(HWK + 0.4), HWK + 0.4), ...walks()];
+    if (earth) pieces.push(P('curb', rect(B0, 1.0, -HWK, HWK)), P('asph', rect(B0, 1.0, -TERM.hw, TERM.hw)), P('dirt', neck(c, Ro, HWK, 0.9)), P('dirt', circ(c, 0, Ro, 32)));
+    else pieces.push(P('curb', neck(c, Ro, HWK)), P('curb', circ(c, 0, Ro, 32)), P('asph', neck(c, R, TERM.hw)), P('asph', circ(c, 0, R, 32)));
+    if (island) pieces.push(P('curb', circ(c, 0, 0.9, 20)), P('lawn', circ(c, 0, 0.7, 20)));
+    if (bayed) pieces.push(...bays(c, -1, Ro));
+    const props = dressing(dress, c, Ro, bayed); if (dress === 'bus') props.push(prop('tree', c, 0, 0.5, 0.5, 36, { s: 0.8 }));
+    return { pieces, props, turn: { u: c, v: 0, r: R, open: true, ring: island }, foot: [{ u0: B0, u1: c + Ro, v0: -Ro - (bayed ? 2.5 : 1.2), v1: Ro + 1.6 }] };
+  },
+  /** T1: a roundabout: a ring of asphalt 1.3 to 3.1 round a lawn island of 1.1 (a kerb of a fifth), the street meeting it in a flare, a fountain on the island and a kiosk, benches and lamps round it. */
+  roundabout(o) {
+    const R = 3.1, Ro = R + TERM.kerb, gap = fitGap(o, Ro), c = gap + Ro, kn = 1.1;
+    const pieces = [...gravelDisc(c, Ro + 0.4, 36), ...gravelRect(0, c, -(HWK + 0.4), HWK + 0.4), ...walks(), P('curb', neck(c, Ro, HWK)), P('curb', circ(c, 0, Ro, 36)), P('asph', neck(c, R, TERM.hw)), P('asph', circ(c, 0, R, 36)), P('curb', circ(c, 0, kn + 0.2, 24)), P('lawn', circ(c, 0, kn, 24))];
+    const props = [prop('fountain', c, 0, 1.8, 1.8, 8), prop('kiosk', c + 1.0, Ro + 1.0, 1.1, 1.1, 22, { col: '#5fa8e8', sign: 'CAFE' }), prop('bench', c - 1.8, Ro + 0.6, 1.0, 0.4, 8), prop('bench', c + 0.4, -Ro - 0.6, 1.0, 0.4, 8), lamp(c - 2.6, -Ro - 0.3), lamp(0.9, HWK + 0.6), lamp(c + 2.9, Ro + 0.2), prop('tree', c + 1.4, -Ro - 0.9, 0.5, 0.5, 38, { s: 0.9 })];
+    return { pieces, props, turn: { u: c, v: 0, r: 2.2, open: true, ring: true }, foot: [{ u0: B0, u1: c + Ro, v0: -Ro - 1.6, v1: Ro + 2.2 }] };
+  },
+  /** T5: a yard: the hammerhead as an apron against a loading dock, three bays painted on it. */
+  yard(o) { return SHAPE.hammer({ ...o, dock: true }); },
+  /** A hammerhead: the street ends in a bar across it that a lorry backs into to turn (industrial, harbor, auto); T5 when `dock` is set: the bar is an apron of concrete against a loading dock whose door is the end of the road. */
+  hammer(o) {
+    if (o.dock && (o.side === 'S' || o.side === 'E')) return yardBeside(o);
+    const dock = !!o.dock, dress = DRESS_OF[o.theme] || 'yard', auto = dress === 'auto' && !dock, u1 = dock ? 4.6 : 3.2, hv = dock ? 2.6 : 2.8, u0 = dock ? 1.2 : 1.0, bar = auto ? 'asph' : 'slab';
+    const pieces = [...gravelRect(0, u1 + 0.4, -(hv + 0.4), hv + 0.4), ...walks(), P('curb', rect(B0, u0, -HWK, HWK)), P('curb', rrect(u0 - 0.2, u1 + 0.2, -hv - 0.2, hv + 0.2, 0.6)), P('asph', rect(B0, u0 + 0.2, -TERM.hw, TERM.hw)), P(bar, rrect(u0, u1, -hv, hv, 0.5))];
+    const props = [bollard(0.7, HWK + 0.6), bollard(0.7, -HWK - 0.6), lamp(u0 + 0.4, hv + 0.5)];
+    if (dock) { for (const v of [-1.95, -0.65, 0.65, 1.95]) pieces.push(P('bay', rect(u0 + 0.9, u1 - 0.1, v - 0.05, v + 0.05))); props.push(prop('loaddock', u1 + 0.8, 0, 1.5, 4.8, 24, { acc: '#ffd02e' }), prop('crates', 2.4, -hv - 0.6, 1.2, 1.2, 26, { n: 2 }), prop('barrel', 3.4, hv + 0.5, 0.7, 0.7, 22, { color: '#b0493a' })); }
+    else if (auto) { for (const s of [-1, 1]) { pieces.push(P('slab', rect(u0 - 0.2, u0 + 2.0, s * (hv + 0.1), s * (hv + 2.1)))); for (const k of [0, 1, 2]) pieces.push(P('bay', rect(u0 - 0.2 + k * 1.1 - 0.05, u0 - 0.2 + k * 1.1 + 0.05, s > 0 ? hv + 0.1 : -hv - 2.1, s > 0 ? hv + 2.1 : -hv - 0.1))); } props.push(prop('polesign', u1 + 0.5, 0, 0.4, 0.4, 50, { col: '#ff5a47', text: 'AUTO' })); }
+    else props.push(prop('crates', 2.0, hv + 0.8, 1.2, 1.2, 26, { n: 2 }), prop('barrel', 3.0, -hv - 0.6, 0.7, 0.7, 22, { color: '#4a7f55' }), prop('barrel', 3.8, -hv - 0.6, 0.7, 0.7, 22, { color: '#b0493a' }), prop('polesign', u1 + 0.5, 0, 0.4, 0.4, 50, { col: o.theme === 'harbor' ? '#2f7bd9' : '#e8962a', text: { harbor: 'DOCKS', industrial: 'PLANT', scrap: 'YARD' }[o.theme] || 'YARD' })); // (a service turn says where it is: a sign at its tip)
+    const ext = auto ? hv + 2.4 : hv + 1.2;
+    return { pieces, props, door: dock ? { u: u1, v: 0 } : null, turn: { u: (u0 + u1) / 2, v: 0, r: 1.8, open: true }, foot: [{ u0: B0, u1: dock ? u1 + 1.6 : u1 + 0.2, v0: -ext, v1: ext }] };
+  },
+  /** T4: a gate into a compound: the street goes on as a private drive through a gatehouse (an open boom, a booth) with a fence either side, and ends in a small yard of its own inside; a technology district's holds a dish, an estate's two topiaries. */
+  gate(o) {
+    const tech = o.theme === 'tech', u1 = 5.2, h = 1.6, fen = tech ? '#d9e6f2' : '#e9e2d0';
+    const pieces = [...gravelRect(0, u1, -h - 0.2, h + 0.2), ...walks(1.2), P('curb', rect(B0, 2.2, -HWK, HWK)), P('curb', rrect(1.8, u1 + 0.2, -h - 0.2, h + 0.2, 1.0)), P('asph', rect(B0, 2.2, -TERM.hw, TERM.hw)), P('asph', rrect(2.0, u1, -h, h, 0.9))];
+    const props = [prop('roadend', 1.0, 0, 0.3, 0.3, 34, { open: 1, plate: tech ? 'STAFF ONLY' : 'PRIVATE' }), prop('fence', 1.0, 3.0, 0.1, 2.0, 18, { along: 'v', col: fen }), prop('fence', 1.0, -3.0, 0.1, 2.0, 18, { along: 'v', col: fen }), lamp(1.7, HWK + 0.6), lamp(u1 - 0.7, -h - 0.7)];
+    if (tech) props.push(prop('dish', u1 - 1.2, h + 1.0, 1.2, 1.2, 36, { acc: '#22d9ee', col: '#c9d6e4' })); else props.push(prop('topiary', u1 - 0.8, h + 0.7, 0.5, 0.5, 30), prop('topiary', u1 - 0.8, -h - 0.7, 0.5, 0.5, 30));
+    return { pieces, props, turn: { u: 3.6, v: 0, r: 1.5, open: true }, foot: [{ u0: B0, u1: u1 + 0.4, v0: -h - 1.2, v1: h + 1.2 }, { u0: 0.6, u1: 1.4, v0: -4.2, v1: 4.2 }] };
+  },
+  /** T4 (a farm's): the tarmac gives way to a farm track that ends at a field gate, a trough and hay beside it. */
+  farm() {
+    const pieces = [...gravelRect(0, 4.6, -1.9, 1.9), ...walks(1.2), P('curb', rect(B0, 1.0, -HWK, HWK)), P('asph', rect(B0, 1.0, -TERM.hw, TERM.hw)), P('dirt', rect(0.9, 4.2, -0.9, 0.9)), P('rut', rect(1.0, 4.1, -0.5, -0.32)), P('rut', rect(1.0, 4.1, 0.32, 0.5))];
+    const props = [prop('farmgate', 4.2, 0, 0.3, 2.6, 22), prop('trough', 3.0, 1.9, 1.6, 0.6, 8), prop('hay', 2.0, -1.9, 0.9, 0.9, 14), prop('hay', 3.0, -2.0, 0.9, 0.9, 14), prop('fence', 4.3, 2.6, 0.1, 2.6, 18, { along: 'v', col: '#8a6a45' }), prop('fence', 4.3, -2.6, 0.1, 2.6, 18, { along: 'v', col: '#8a6a45' }), lamp(0.9, HWK + 0.6)];
+    return { pieces, props, turn: { u: 2.6, v: 0, r: 1.0, open: true }, foot: [{ u0: B0, u1: 4.6, v0: -3.4, v1: 3.4 }] };
+  },
+  /** T3: a closed street: it runs a little way past the edge, ends in a round cap (a kerb of a fifth all round, never a cut) and a striped boom across it says ROAD CLOSED, with cones, a lamp and a run of pickets beyond. */
+  barrier() {
+    const pieces = [...gravelDisc(1.4, 1.9), ...gravelRect(0, 1.4, -1.9, 1.9), ...walks(1.2), P('curb', capped(B0, 1.4, HWK)), P('asph', capped(B0, 1.4, TERM.hw))];
+    const props = [prop('roadend', 0.7, 0, 0.3, 0.3, 34, { plate: 'ROAD CLOSED' }), prop('fence', 3.0, 0, 0.1, 5.0, 18, { along: 'v', col: '#e9e2d0' }), lamp(0.8, HWK + 0.6), lamp(0.8, -HWK - 0.6)];
+    return { pieces, props, turn: { u: 0.5, v: 0, r: 0, open: false }, foot: [{ u0: B0, u1: 3.4, v0: -3.0, v1: 3.0 }] };
+  },
+  /** T7: a quay (or, with `ramp`, a slipway): the street goes on as a slab 3.0 wide to 0.4 tile short of the water, a band of cobbles at its edge, bollards along both sides. */
+  quay(o) {
+    const hs = 1.5, wet = o.lanes ? laneReach(o.lanes, -hs - 0.15, hs + 0.15) : o.water ?? 4.8, L = o.ramp ? Math.max(2.6, wet - (o.lanes ? 0.2 : 0.15)) : Math.min(4.0, Math.max(2.6, wet - (o.lanes ? DECK_KEEP : 0.4))), slabOf = (g) => [[B0, -HWK - g], [0.3, -HWK - g], [0.9, -hs - g], [L + g, -hs - g], [L + g, hs + g], [0.9, hs + g], [0.3, HWK + g], [B0, HWK + g]];
+    const pieces = [...gravelRect(0, L + 0.2, -hs - 0.3, hs + 0.3), ...walks(1.2), P('curb', slabOf(0.15)), P('slab', slabOf(0)), P('band', rect(L - 0.3, L, -hs, hs))];
+    if (o.ramp) for (let k = 1; k <= 4; k++) pieces.push(P('bay', rect(1.0 + (k * (L - 1.5)) / 5 - 0.05, 1.0 + (k * (L - 1.5)) / 5 + 0.05, -hs + 0.2, hs - 0.2)));
+    const props = [bollard(1.2, -hs - 0.1), bollard(1.2, hs + 0.1), bollard(L - 0.7, -hs - 0.1), bollard(L - 0.7, hs + 0.1), lamp(0.8, HWK + 1.0), prop('crates', 2.2, -hs - 0.9, 1.2, 1.2, 26, { n: 2 })];
+    return { pieces, props, turn: { u: Math.max(1.4, L - 1.4), v: 0, r: 1.3, open: true }, foot: [{ u0: B0, u1: L + 0.4, v0: -hs - 1.6, v1: hs + 1.6 }] };
+  },
+  /** T11: a railed belvedere at the end of a street that stands above the sea: the street goes on as a short deck of planks with a rail on three sides, a bench and a telescope on it, flags and planters at the corners. */
+  belvedere(o) {
+    const u0 = 0.8, h = 1.8, u1 = Math.max(2.6, Math.min(3.6, o.lanes ? laneReach(o.lanes, -h - 0.15, h + 0.15) - DECK_KEEP : (o.water ?? 4.6) - 0.9)), pieces = [...gravelRect(0, u1 + 0.1, -h - 0.2, h + 0.2), ...walks(1.2), P('curb', rect(B0, u0, -HWK, HWK)), P('asph', rect(B0, u0, -TERM.hw, TERM.hw)), P('curb', rect(u0 - 0.1, u1 + 0.15, -h - 0.15, h + 0.15)), P('deck', rect(u0, u1, -h, h))];
+    for (let k = 1; k < 8; k += 2) pieces.push(P('deck2', rect(u0, u1, -h + k * 0.45, -h + (k + 1) * 0.45))); // (planks run along the street, in two tones)
+    const rail = [P('rail', [[u0 + 0.2, -h + 0.06], [u1 - 0.06, -h + 0.06], [u1 - 0.06, h - 0.06], [u0 + 0.2, h - 0.06]])];
+    for (const [pu, pv] of [[u0 + 0.2, -h + 0.06], [u0 + 0.2, h - 0.06], [u1 - 0.06, -h + 0.06], [u1 - 0.06, h - 0.06], [(u0 + u1) / 2, -h + 0.06], [(u0 + u1) / 2, h - 0.06], [u1 - 0.06, 0]]) rail.push(P('post', [[pu, pv]]));
+    const props = [prop('lookout', u1 - 0.9, -h + 0.9, 0.8, 0.8, 14), prop('planter', u0 + 0.5, -h - 0.7, 0.8, 0.8, 10), prop('planter', u0 + 0.5, h + 0.7, 0.8, 0.8, 10), lamp(u0 + 0.4, h + 1.4), prop('flag', u1 - 0.3, -h - 0.4, 0.2, 0.2, 44, { col: '#ff7fb8' })];
+    return { pieces: [...pieces, ...rail], props, turn: { u: 2.2, v: 0, r: 1.2, open: true }, foot: [{ u0: B0, u1: u1 + 0.4, v0: -h - 1.2, v1: h + 1.2 }] };
+  },
+  /** T8, sealed: the street ends 1.8 tiles out against a face of rock with an arch boarded across it, a CLOSED sign and two cones. */
+  portal() {
+    const pieces = [...gravelRect(0, 2.9, -2.4, 2.4), ...walks(1.2), P('curb', rect(B0, 1.9, -HWK, HWK)), P('asph', rect(B0, 1.9, -TERM.hw, TERM.hw))];
+    const props = [prop('portal', 2.35, 0, 0.9, 3.4, 52), lamp(0.9, HWK + 0.6), bollard(0.9, -HWK - 0.5, '#ff9a3a')];
+    return { pieces, props, turn: { u: 1.0, v: 0, r: 0, open: false }, foot: [{ u0: B0, u1: 3.0, v0: -2.8, v1: 2.8 }] };
+  },
+  /** T10: a path head: the street ends in a round cap and the path begins at two bollards one tile apart, over a strip of dropped kerb 0.6 deep, a trailhead board and a bench beside it. */
+  head() {
+    const u1 = 0.6, pieces = [...gravelDisc(u1, 1.5, 24), ...walks(1.2), P('curb', capped(B0, u1, HWK)), P('asph', capped(B0, u1, TERM.hw)), P('sandedge', rect(u1 + 0.4, u1 + 1.1, -0.62, 0.62)), P('sand', rect(u1 + 0.5, u1 + 1.1, -0.5, 0.5))];
+    const props = [bollard(u1 + 0.2, -0.5, '#ffd84d'), bollard(u1 + 0.2, 0.5, '#ffd84d'), prop('trailboard', u1 + 0.3, 1.9, 0.4, 1.3, 30), prop('bench', u1 + 0.2, -1.9, 0.4, 1.0, 8)];
+    return { pieces, props, turn: { u: 0.4, v: 0, r: 0, open: false }, foot: [{ u0: B0, u1: u1 + 1.4, v0: -2.6, v1: 2.6 }] };
+  },
+  /** T6: a plaza: a paved square with its corners cut, a one-way drive round an island (a fountain), bollards round the edge, the street entering it. */
+  plaza() {
+    const c = 3.7, pieces = [P('fringe', rrect(-0.5, 7.9, -4.2, 4.2, 1.4, 2)), P('plaza', rrect(0, 7.4, -3.7, 3.7, 1.2, 2)), ...walks(), P('curb', rect(B0, 1.3, -HWK, HWK)), P('asph', rect(B0, 1.3, -TERM.hw, TERM.hw)), P('curb', rrect(c - 2.8, c + 2.8, -2.8, 2.8, 1.1)), P('asph', rrect(c - 2.6, c + 2.6, -2.6, 2.6, 1.0)), P('curb', rrect(c - 1.2, c + 1.2, -1.2, 1.2, 0.5)), P('lawn', rrect(c - 1.0, c + 1.0, -1.0, 1.0, 0.4))];
+    const props = [prop('fountain', c, 0, 1.8, 1.8, 8)]; for (const [u, v] of [[0.7, -3.1], [0.7, 3.1], [3.7, -3.4], [3.7, 3.4], [6.8, -3.1], [6.8, 3.1], [6.9, 0]]) props.push(bollard(u, v, '#fffaf0')); props.push(prop('flag', 6.4, -2.2, 0.2, 0.2, 44, { col: '#3f8fe0' }), prop('flag', 6.4, 2.2, 0.2, 0.2, 44, { col: '#3f8fe0' }), lamp(1.2, 3.0), lamp(1.2, -3.0));
+    return { pieces, props, turn: { u: c, v: 0, r: 2.2, open: true, ring: true }, foot: [{ u0: B0, u1: 7.6, v0: -3.9, v1: 3.9 }] };
+  },
+};
+/**
+ * The shape of a termination of `kind` in the frame of its port: { kind, pieces: [{ role, pts }] (ground, painted in order), props: [{ t, u, v, a, b, h, o }] (the dressing), turn: { u, v, r, open, ring } (the spot a car turns round on:
+ * `open` false for a closed end, where the last drivable point is all there is), foot: [{ u0, u1, v0, v1 }] (the room it needs, rectangles of the frame), door ({ u, v }: the door of a loading dock, at the end of the road) }.
+ * `o`: { theme, side, water, ramp, gap, dock, bays }.
+ */
+export function shapeOf(kind, o = {}) {
+  const make = SHAPE[kind]; if (!make) throw new RangeError('no termination of kind ' + kind);
+  const s = make(kind === 'hammer' && o.dock === undefined ? { ...o, dock: false } : o);
+  if (o.lanes) s.pieces = fitGravel(s.pieces, o.lanes); // (the gravel stops where the ground does)
+  const ur = o.rail && o.flat !== undefined ? railAt(kind, s, o.flat, true) : null;
+  if (ur !== null) { // the plateau falls away just beyond the end: a rail across it, with a post at each end and in the middle (a street that turns round on a cliff top is railed)
+    const h = 1.8; s.pieces = [...s.pieces, P('rail', [[ur, -h], [ur, h]]), ...[[ur, -h], [ur, 0], [ur, h]].map((q) => P('post', [q]))]; s.foot = [...s.foot, { u0: ur - 0.1, u1: ur + 0.1, v0: -h - 0.1, v1: h + 0.1 }];
+  }
+  return { kind, door: null, ...s };
+}
+/**
+ * Where a rail belongs across the far side of an end of this kind (the u of it), or null: the ground falls away within 1.6 tiles of where the end's room stops and there is a quarter tile of level ground left beyond the end to stand it on. A belvedere, a quay, a portal, a path
+ * head, a yard (the dock closes it) and a barrier (its pickets) have their own.
+ */
+export function railAt(kind, shape, flat, fall) {
+  if (!fall || ['belvedere', 'quay', 'portal', 'head', 'yard', 'barrier'].includes(kind)) return null;
+  const far = Math.max(...shape.foot.map((r) => r.u1)), ur = far + 0.25; return flat - far < 1.6 && ur <= flat - 0.2 ? ur : null;
+}
+export const wantsRail = (kind, shape, flat, fall) => railAt(kind, shape, flat, fall) !== null;
+
+/**
+ * A path head beside a road (island.js HEADS): the frame has its origin on the road's middle line, u towards the path along its first stretch, v to the right. The footpath's own sand runs from the road's middle line to its head, 2.0 out (groundart.js headConnectors);
+ * this adds the dropped kerb (a strip of paving 0.6 deep and 1.0 wide laid over the road's kerb, in a darker sand edge) and at the head two bollards one tile apart across the path, a trailhead board and a bench beside it.
+ */
+export function headShape() {
+  const pieces = [P('sandedge', rect(0.74, 1.46, -0.62, 0.62)), P('sand', rect(0.8, 1.4, -0.5, 0.5))];
+  const props = [bollard(1.75, -0.5), bollard(1.75, 0.5), prop('trailboard', 1.9, 1.7, 0.4, 1.3, 30), prop('bench', 1.9, -1.6, 0.4, 1.0, 8)];
+  return { kind: 'sidehead', pieces, props, turn: null, foot: [{ u0: 0.7, u1: 3.7, v0: -2.2, v1: 2.4 }], door: null };
+}
+
+/**
+ * The deck of a lookout (T11): a square of 2 by 2 tiles about the end of its footpath, planks in two tones that run the way the path comes in, a rail on the three sides it does not come in by with a post at every corner and every middle. `inSide` is the side of the
+ * deck the path arrives at ('W', 'E', 'N' or 'S'); `zAt(x, y)` gives the ground's height. Pieces in the grid, points [x, y, z]: { rect: [x, y, w, d], pieces: [{ role, pts }] } (roles deck, deck2, rail, post).
+ * The verifier's D2: the footpath ends at the lip of the plateau, and a deck centred on its end had its edge ON the water's tile line (and, at the cliffs, a corner over the drop): `room(x0, y0, x1, y1)` says whether a square of the ground, with DECK_KEEP round it, is
+ * ground; the deck slides to the nearest place (a tenth of a tile at a time, 0.4 at most in each direction, so the bench and telescope of the lookout, a tile square about the end of the path, still stand on it) where it is. With no `room` it stays centred; where
+ * nothing within reach is ground it stays too. `slide` answers how far it moved: [dx, dy].
+ */
+export function deckOf(cx, cy, inSide, zAt, room = null) {
+  let sx = 0, sy = 0;
+  if (room) { let best = Infinity; for (let i = -4; i <= 4; i++) for (let j = -4; j <= 4; j++) { const d = i * i + j * j; if (d < best && room(cx + i / 10 - 1, cy + j / 10 - 1, cx + i / 10 + 1, cy + j / 10 + 1)) { best = d; sx = i / 10; sy = j / 10; } } if (best === Infinity) { sx = 0; sy = 0; } }
+  const z = (x, y) => [x, y, zAt(x, y) + 0.4], x0 = cx + sx - 1, x1 = cx + sx + 1, y0 = cy + sy - 1, y1 = cy + sy + 1, alongX = inSide === 'W' || inSide === 'E', pieces = [{ role: 'deck', pts: [z(x0, y0), z(x1, y0), z(x1, y1), z(x0, y1)] }];
+  for (let k = 1; k < 4; k += 2) pieces.push({ role: 'deck2', pts: alongX ? [z(x0, y0 + k * 0.5), z(x1, y0 + k * 0.5), z(x1, y0 + (k + 1) * 0.5), z(x0, y0 + (k + 1) * 0.5)] : [z(x0 + k * 0.5, y0), z(x0 + (k + 1) * 0.5, y0), z(x0 + (k + 1) * 0.5, y1), z(x0 + k * 0.5, y1)] });
+  const e = 0.07, a = x0 + e, b = x1 - e, c = y0 + e, d = y1 - e, rail = { W: [[x0 + 0.2, c], [b, c], [b, d], [x0 + 0.2, d]], E: [[x1 - 0.2, c], [a, c], [a, d], [x1 - 0.2, d]], N: [[a, y0 + 0.2], [a, d], [b, d], [b, y0 + 0.2]], S: [[a, y1 - 0.2], [a, c], [b, c], [b, y1 - 0.2]] }[inSide];
+  pieces.push({ role: 'rail', pts: rail.map(([x, y]) => z(x, y)) });
+  for (let i = 0; i < rail.length; i++) { pieces.push({ role: 'post', pts: [z(...rail[i])] }); if (i + 1 < rail.length) pieces.push({ role: 'post', pts: [z((rail[i][0] + rail[i + 1][0]) / 2, (rail[i][1] + rail[i + 1][1]) / 2)] }); }
+  return { rect: [x0, y0, 2, 2], pieces, slide: [sx, sy] };
+}

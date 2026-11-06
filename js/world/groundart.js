@@ -4,7 +4,7 @@
 // from their arguments and the world's state, never from the camera, and every mark is a filled shape (nothing is stroked thinner than 1.5 world pixels).
 import { registerLayer } from './stack.js';
 import { LAYOUT, DIST, EDGES, zAt, roadZ, isRoad, BW, BD, GW, GH } from './layout.js';
-import { ROAD, PAVE, SAND, WOOD, LIGHT, SEA, TOY, GRASS, BLOOM, ROCK, ROCKHI, groundSet } from './palette.js';
+import { ROAD, PAVE, SAND, WOOD, LIGHT, SEA, TOY, GRASS, BLOOM, ROCK, ROCKHI, SOIL, groundSet } from './palette.js';
 import { mix, clamp } from './iso.js';
 import { smooth as smoothstep, vnoise, LATTICE, hz } from './noise.js';
 import { bakeBase } from './rasterbase.js';
@@ -84,17 +84,26 @@ function openMeadow(T, i, j, VW, coast, rise) {
   const za = T.z[kv], zb = T.z[kv + 1], zc = T.z[kv + VW], zd = T.z[kv + VW + 1]; return Math.max(za, zb, zc, zd) - Math.min(za, zb, zc, zd) <= rise;
 }
 /**
+ * The plant of the meadow tile (i, j), or null: { gx, gy, what (3 a tree, 1 a bush, 2 a rock), hh (a hash that says how it looks) }. `T` is the terrain field of the scene (sceneOf(...).terr). A plant stands in open meadow (never on a block, a slope or within two and a
+ * half tiles of the coast) and not on a road, in a district's footprint or, since the verifier's D4, in the room of an end of a street (`ends` false: as it was): the plants are painted after the ground of the blocks, so a pine on the ring of a roundabout, on the apron of a
+ * bulb or behind the pole of a sign (it looked like the pole's own tree) stood over the end's asphalt and gravel.
+ */
+export function plantOf(T, i, j, ends = true) {
+  const { land, core } = LAYOUT, k = j * GW + i; if (!land[k] || core[k] || !openMeadow(T, i, j, LAYOUT.VW, -2.6, 4.5)) return null;
+  const grove = smoothstep(0.46, 0.74, vnoise(i * 0.075 + 5, j * 0.075 + 2)), what = dressingOf(i, j, grove); if (!what) return null;
+  const gx = i + 0.2 + hz(i, j, 11) * 0.6, gy = j + 0.2 + hz(i, j, 12) * 0.6; if (LAYOUT.footAt(gx, gy) || isRoad(gx, gy) || (ends && LAYOUT.endAt(gx, gy))) return null;
+  return { gx, gy, what, hh: hz(i, j, 13) };
+}
+/**
  * The meadows' bushes, rocks and trees, painted AFTER the districts' blocks (the `blocks` layer calls this at its end): a tree standing in front of a block is in front of its rim and its shadow, which a tree baked
  * under the block's layer was not (its crown was cut by the cream rim). Back to front, from the mid zoom, in grove and meadow, never on a road, a footprint's scenery or a slope or within two and a half tiles of the coast.
  */
 export function drawPlants(ctx, view, env, w, a) {
   const ch = a && a.chunk, lod = env.lod ? env.lod.detail : null; if (!ch || !lod || lod[1] < 0.03) return;
-  const T = ch.scene.terr, { land, core } = LAYOUT, VW = LAYOUT.VW, [i0, i1, j0, j1] = gridRange(view, 90, 1, [GW, GH]), mid = lod[1];
+  const T = ch.scene.terr, [i0, i1, j0, j1] = gridRange(view, 90, 1, [GW, GH]), mid = lod[1];
   for (let s = i0 + j0; s <= i1 + j1; s++) for (let j = Math.max(j0, s - i1); j <= Math.min(j1, s - i0); j++) {
-    const i = s - j, k = j * GW + i; if (!land[k] || core[k] || !openMeadow(T, i, j, VW, -2.6, 4.5)) continue;
-    const grove = smoothstep(0.46, 0.74, vnoise(i * 0.075 + 5, j * 0.075 + 2)), what = dressingOf(i, j, grove); if (!what) continue;
-    const gx = i + 0.2 + hz(i, j, 11) * 0.6, gy = j + 0.2 + hz(i, j, 12) * 0.6; if (LAYOUT.footAt(gx, gy) || isRoad(gx, gy)) continue;
-    const z = zOn(gx, gy), x = px(gx, gy), y = py(gx, gy, z), hh = hz(i, j, 13);
+    const i = s - j, pl = plantOf(T, i, j); if (!pl) continue;
+    const { gx, gy, what, hh } = pl, z = zOn(gx, gy), x = px(gx, gy), y = py(gx, gy, z);
     ctx.globalAlpha = mid;
     if (what === 3) plantTree(ctx, x, y, z > 26 || hh < 0.22 ? 'pine' : 'round', 0.78 + hh * 0.5, (hh * 997) | 0);
     else if (what === 1) bush(ctx, x, y, 7 + hh * 5, BUSH_GREENS[(hh * 31 | 0) % 4], hh > 0.7 ? BLOOM[['pink', 'butter', 'white', 'lilac'][(hh * 13 | 0) % 4]] : null);
@@ -145,6 +154,7 @@ function drawBlocks(ctx, view, env, w, a) {
     paintFringe(ctx, view, D, z, detail, tonesOf(D, S, k), (gx, gy) => land[(gy | 0) * GW + (gx | 0)] === 1, free);
   }
   drawAprons(ctx, view, env, w, a);
+  drawTerms(ctx, view, env, w, a);
   drawPlants(ctx, view, env, w, a);
 }
 registerLayer('blocks', drawBlocks, 'inherit', () => 1);
@@ -292,6 +302,54 @@ function drawAprons(ctx, view, env, w, a) {
 }
 
 /**
+ * The ground of a termination's pieces in a district's tones: the block's own street goes on (its asphalt, its kerb, its sidewalk), the palette's wood, lawn, cobble, soil and rock, the veil of a locked district. A role is what a piece of ground IS (roadshape.js
+ * PIECE_ROLES); `T` is the district's tones (groundmat.js tonesOf) and may be null for the roles that need none (the decks of the lookouts).
+ */
+export function pieceTone(role, T, k) {
+  switch (role) {
+    case 'apron': return mix(T.ground, T.walk, 0.42);                                 // the gravel a termination blends into the ground round it with, and a fringe of it a shade nearer the ground
+    case 'fringe': return mix(T.ground, T.walk, 0.2);
+    case 'walk': return T.walk; case 'curb': return T.kerbTop; case 'asph': return T.asph; case 'dash': return T.dash;
+    case 'lawn': return V(GRASS.lawn, k); case 'plaza': return V(PAVE.plaza, k);
+    case 'slab': return mix(T.asph, T.walk, 0.5);                                     // concrete: the district's own asphalt and sidewalk half and half, cool where the district is cool (the tones carry the veil already)
+    case 'band': return V(mix(PAVE.cobble, '#a98a66', 0.45), k); case 'bay': return V('#fffaf0', k);
+    case 'dirt': return V(mix(SAND.mid, T.walk, 0.45), k); case 'rut': return V(mix(SAND.shade, T.walk, 0.3), k);
+    case 'deck': return V(WOOD.mid, k); case 'deck2': return V(WOOD.light, k); case 'rail': case 'post': return V(PAVE.cream, k);
+    case 'sand': return V(PAVE.plaza, k); case 'sandedge': return V(PAVE.cobble, k); // (the dropped kerb of a path head is a slab of paving, a shade off the path's own sand)
+    case 'rock': return V(mix(ROCK.mid, ROCKHI.mid, 0.3), k);
+    default: return '#ff00ff';
+  }
+}
+/** A rail along a polyline of [x, y, z]: a 3 world pixel bar 6.5 pixels above the ground, as the bridges' rails are. */
+function railAlong(ctx, pts) {
+  ctx.beginPath();
+  for (let i = 0; i + 1 < pts.length; i++) { const [ax, ay, az] = pts[i], [bx, by, bz] = pts[i + 1], A = [px(ax, ay), py(ax, ay, az + 6.5)], B = [px(bx, by), py(bx, by, bz + 6.5)]; ctx.moveTo(A[0], A[1] - 1.5); ctx.lineTo(B[0], B[1] - 1.5); ctx.lineTo(B[0], B[1] + 1.5); ctx.lineTo(A[0], A[1] + 1.5); ctx.closePath(); }
+  ctx.fill();
+}
+/** A post of a rail: a 4 world pixel upright with a ball cap, standing at [x, y, z]. */
+function postAt(ctx, [x, y, z]) { const X = px(x, y), Y = py(x, y, z); ctx.fillRect(X - 2, Y - 7, 4, 7.6); ctx.beginPath(); ctx.arc(X, Y - 8.4, 2.4, 0, 6.2832); ctx.fill(); }
+/** Paint a list of pieces ({ role, pts: [x, y, z] }) in order; the rails and posts and the fine marks (bay lines, ruts) wait for the zoom that shows them. */
+export function paintPieces(ctx, pieces, T, k, zoom) {
+  for (const q of pieces) {
+    if (q.role === 'rail' || q.role === 'post') { if (zoom < 0.3) continue; ctx.fillStyle = pieceTone(q.role, T, k); if (q.role === 'rail') railAlong(ctx, q.pts); else postAt(ctx, q.pts[0]); continue; }
+    if ((q.role === 'bay' || q.role === 'rut') && zoom < 0.4) continue;
+    ctx.fillStyle = pieceTone(q.role, T, k); poly(ctx, q.pts);
+  }
+}
+const seenBox = (view, b) => b[2] > view.x0 && b[0] < view.x1 && b[3] > view.y0 && b[1] < view.y1;
+/**
+ * The terminations: the ground at the end of every street that no road leaves (layout.js LAYOUT.terms): the sidewalk's wedge, the gravel apron that blends the end into the ground round it, the kerb and the asphalt of the end, its island, slab, deck or bays,
+ * its rails. Painted over the stage (the blocks layer calls this after the aprons: the end covers the stage's lip where the street leaves), culled by its own box, and base art: nothing here waits for a close zoom, so it is there at the zoom the governor's lite tier draws at.
+ */
+function drawTerms(ctx, view, env, w, a) {
+  const zoom = a.zoom;
+  for (const t of LAYOUT.terms) {
+    if (!seenBox(view, t.bb)) continue;
+    const D = DIST[t.district], k = lockedOf(w, D.id) ? 1 : 0; paintPieces(ctx, t.pieces, tonesOf(D, setOf(D), k), k, zoom);
+  }
+}
+
+/**
  * The pads' ground treatment (the farm's stripes, a yard's pavers, the harbor's bands, the campus lawn): each is a rectangle over the whole of a pad quadrant, and a road crosses a pad, so it is painted FIRST, under the roads, and never
  * reaches one (S16: the stripes of 11 lay over the asphalt of the road to 12, and the harbor's band over the road to 9). The blocks layer skips them.
  */
@@ -339,6 +397,7 @@ function drawRoads(ctx, view, env, w, a) {
   ctx.fillStyle = FP.edge; for (const c of joins) strip(ctx, c.d, -c.hw, c.hw, 0);
   for (const v of paths) { ctx.fillStyle = v.T.surface; for (const [r0, r1] of v.runs) { strip(ctx, v.d, -v.hw + v.T.kb, v.hw - v.T.kb, 0.1, r0, r1); bends(v.d, r0, r1, v.hw - v.T.kb, 0.1); } }
   ctx.fillStyle = FP.surface; for (const c of joins) strip(ctx, c.d, -c.hw + FP.kb, c.hw - FP.kb, 0.1);
+  for (const dk of LAYOUT.decks) if (seenBox(view, dk.bb)) paintPieces(ctx, dk.pieces, null, lockedOf(w, dk.district) ? 1 : 0, zoom); // the lookouts' decks (T11): ground art, so a path ends on a deck in every tier
   // 2. the kerb of every road: one strip each, and the patch of every junction (a locked road's own kerb is paler)
   for (const v of roads) { ctx.fillStyle = v.T.edge; for (const [r0, r1] of v.runs) { strip(ctx, v.d, -v.hw, v.hw, 0, r0, r1); bends(v.d, r0, r1, v.hw, 0); } }
   for (const J of forks) { ctx.fillStyle = roadTones(openOf(w, J)).edge; patch(ctx, J, 0, 0); }
@@ -353,6 +412,7 @@ function drawRoads(ctx, view, env, w, a) {
     if (!v.open) continue; ctx.fillStyle = v.T.dash;
     for (const [s, s1] of dashSpans(v.e)) { if (v.gap && s > v.gap[0] - 1 && s < v.gap[1] + 1) continue; dash(ctx, v.d, s, s1); }
   }
+  for (const h of LAYOUT.heads) if (seenBox(view, h.bb)) paintPieces(ctx, h.pieces, null, lockedOf(w, h.district) ? 1 : 0, zoom); // the dropped kerb of a path head (T10): the strip of paving laid over the road's kerb where the path leaves it, after the road's own marks
   for (const v of roads) for (const b of v.e.br) drawBridge(ctx, b, v.brokenBridge, a.far, zoom);
   // 5. the ferry: a line of buoys, red and cream: each a rounded cone with a white band, a lamp on its top, a foam ring where it meets the water and a soft shadow on the sea, so it reads as a thing and not as a speck
   for (const { e, d, open } of vis) if (e.ferry) { for (let s = 3, n = 0; s < e.len - 3; s += 1.5, n++) { const p = at(d, s); buoy(ctx, px(p[0], p[1]), py(p[0], p[1], 0), n % 2 ? PAVE.cream : TOY.red, open ? 1 : 0.7); } ctx.globalAlpha = 1; }
