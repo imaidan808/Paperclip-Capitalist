@@ -49,78 +49,78 @@ export const zones = {
 export const assets = {
   // ---- Industrial Park (9)
   cncCenter: {
-    name: 'Refurbished CNC Machining Center', icon: '🗜️', base: 13000, sc: 6, dep: 2, repair: 3600, fakeRisk: 0.15,
+    name: 'Refurbished CNC Machining Center', base: 13000, sc: 6, dep: 2, repair: 3600, fakeRisk: 0.15,
     dem: { 8: 2, 9: 9, 10: 2, 11: 2, 13: 3 }, tags: ['industrial', 'tool'],
   },
   steelCoil: {
-    name: 'Cold-Rolled Steel Coil Lot (12 t)', icon: '⛓️', base: 10500, sc: 5, dep: 1, fakeRisk: 0.3,
+    name: 'Cold-Rolled Steel Coil Lot (12 t)', base: 10500, sc: 5, dep: 1, fakeRisk: 0.3,
     dem: { 8: 3, 9: 8, 11: 2, 13: 3 }, tags: ['industrial', 'bulk'],
   },
   infusionPumps: {
-    name: 'Refurbished Infusion Pump Lot (20 units)', icon: '💉', base: 8500, sc: 7, dep: 2, repair: 2200, fakeRisk: 0.7,
+    name: 'Refurbished Infusion Pump Lot (20 units)', base: 8500, sc: 7, dep: 2, repair: 2200, fakeRisk: 0.7,
     dem: { 9: 7, 11: 2, 13: 3 }, tags: ['medical', 'electronics'],
   },
   dieselGenset: {
-    name: 'Standby Diesel Generator (200 kW)', icon: '🔋', base: 9500, sc: 6, dep: 2, repair: 2600, fakeRisk: 0.2,
+    name: 'Standby Diesel Generator (200 kW)', base: 9500, sc: 6, dep: 2, repair: 2600, fakeRisk: 0.2,
     dem: { 8: 3, 9: 8, 10: 3, 11: 6, 13: 2 }, tags: ['energy', 'infra'],
   },
   fleet: {
-    name: 'Delivery Fleet (6 vans)', icon: '🚚', base: 32000, sc: 6, dep: 3, repair: 7000, fakeRisk: 0.05,
+    name: 'Delivery Fleet (6 vans)', base: 32000, sc: 6, dep: 3, repair: 7000, fakeRisk: 0.05,
     dem: { 8: 3, 9: 7, 11: 8, 12: 3, 13: 3 }, tags: ['vehicle', 'b2b', 'tool'],
   },
   // ---- Tech Corridor (10): digital goods wear out fast
   saas: {
-    name: 'SaaS Subscription Book', icon: '💾', base: 22000, sc: 7, dep: 7, fakeRisk: 0.5,
+    name: 'SaaS Subscription Book', base: 22000, sc: 7, dep: 7, fakeRisk: 0.5,
     dem: { 9: 3, 10: 9, 12: 3, 13: 3 }, tags: ['digital', 'b2b'],
   },
   mobileApp: {
-    name: 'Breakout Mobile App (50k users)', icon: '📱', base: 15000, sc: 8, dep: 10, fakeRisk: 0.8,
+    name: 'Breakout Mobile App (50k users)', base: 15000, sc: 8, dep: 10, fakeRisk: 0.8,
     dem: { 10: 9, 12: 3, 13: 2 }, tags: ['digital', 'trend'],
   },
   gpuServer: {
-    name: 'GPU Training Server (8 cards)', icon: '🖥️', base: 27000, sc: 7, dep: 9, repair: 6000, fakeRisk: 1,
+    name: 'GPU Training Server (8 cards)', base: 27000, sc: 7, dep: 9, repair: 6000, fakeRisk: 1,
     dem: { 9: 3, 10: 9, 12: 3, 13: 3 }, tags: ['electronics', 'digital', 'infra'],
   },
   startupAssets: {
-    name: 'Wound-Down Startup Asset Bundle', icon: '🧩', base: 19000, sc: 9, dep: 8, fakeRisk: 0.1,
+    name: 'Wound-Down Startup Asset Bundle', base: 19000, sc: 9, dep: 8, fakeRisk: 0.1,
     dem: { 10: 8, 12: 3, 13: 3 }, tags: ['digital', 'ip'],
   },
   gameCatalog: {
-    name: 'Casual Game Back-Catalog (6 titles)', icon: '🕹️', base: 36000, sc: 8, dep: 1, yield: 0.006, fakeRisk: 0.3,
+    name: 'Casual Game Back-Catalog (6 titles)', base: 36000, sc: 8, dep: 1, yield: 0.006, fakeRisk: 0.3,
     dem: { 10: 6, 12: 8, 13: 2 }, tags: ['ip', 'digital', 'finance'],
   },
   // ---- Farmland Co-op (11): stock spoils
   produceReefer: {
-    name: 'Reefer Load: Fresh Produce', icon: '🍅', base: 24000, sc: 4, dep: 2, perish: 6,
+    name: 'Reefer Load: Fresh Produce', base: 24000, sc: 4, dep: 2, perish: 6,
     dem: { 8: 3, 11: 9, 12: 3 }, tags: ['food', 'farm'],
   },
   cheeseWheels: {
-    name: 'Cave-Aged Cheese Wheels (400 kg)', icon: '🧀', base: 20000, sc: 7, dep: 1, perish: 28,
+    name: 'Cave-Aged Cheese Wheels (400 kg)', base: 20000, sc: 7, dep: 1, perish: 28,
     dem: { 8: 2, 11: 8, 12: 3 }, tags: ['food', 'consumer'],
   },
   winterWheat: {
-    name: 'Winter Wheat (100 t)', icon: '🍞', base: 36000, sc: 3, dep: 1, perish: 50,
+    name: 'Winter Wheat (100 t)', base: 36000, sc: 3, dep: 1, perish: 50,
     dem: { 8: 3, 11: 9, 13: 2 }, tags: ['farm', 'bulk'],
   },
   rowCropTractor: {
-    name: 'Used Row-Crop Tractor (200 hp)', icon: '🚜', base: 52000, sc: 5, dep: 2, repair: 13000,
+    name: 'Used Row-Crop Tractor (200 hp)', base: 52000, sc: 5, dep: 2, repair: 13000,
     dem: { 8: 2, 9: 3, 11: 8 }, tags: ['farm', 'vehicle'],
   },
   // ---- Creative Quarter (12): rights that pay while you hold them
   filmCatalog: {
-    name: 'Indie Film Catalog (40 titles)', icon: '🎞️', base: 115000, sc: 8, dep: 1, yield: 0.0045, fakeRisk: 0.3,
+    name: 'Indie Film Catalog (40 titles)', base: 115000, sc: 8, dep: 1, yield: 0.0045, fakeRisk: 0.3,
     dem: { 10: 3, 12: 8, 13: 3 }, tags: ['media', 'ip'],
   },
   musicRights: {
-    name: 'Back-Catalog Music Rights (1990s)', icon: '🎼', base: 78000, sc: 9, dep: 1, yield: 0.004, fakeRisk: 0.45,
+    name: 'Back-Catalog Music Rights (1990s)', base: 78000, sc: 9, dep: 1, yield: 0.004, fakeRisk: 0.45,
     dem: { 10: 2, 12: 8, 13: 3 }, tags: ['ip', 'retro'],
   },
   stockLibrary: {
-    name: 'Stock Photo and Footage Library', icon: '📷', base: 34000, sc: 6, dep: 1, yield: 0.006, fakeRisk: 0.2,
+    name: 'Stock Photo and Footage Library', base: 34000, sc: 6, dep: 1, yield: 0.006, fakeRisk: 0.2,
     dem: { 10: 3, 12: 9, 13: 2 }, tags: ['media', 'digital'],
   },
   podcastNetwork: {
-    name: 'Podcast Network (12 shows)', icon: '🎙️', base: 62000, sc: 7, dep: 2, yield: 0.006, fakeRisk: 0.4,
+    name: 'Podcast Network (12 shows)', base: 62000, sc: 7, dep: 2, yield: 0.006, fakeRisk: 0.4,
     dem: { 10: 3, 12: 8, 13: 3 }, tags: ['media', 'trend'],
   },
 };

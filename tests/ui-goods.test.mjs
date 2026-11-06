@@ -25,12 +25,12 @@ const decorative = (html) => [...html.matchAll(/<svg\b([^>]*)>/g)].filter((m) =>
 const IDS = Object.keys(ASSETS), GOODS = idsOf().filter((id) => id.startsWith('good-'));
 
 // ---------------------------------------------------------------------------------------------------- the data
-test('the 72 goods have one drawing each, named by what the data names them (good-<id>), in the order of the four tier files, and nothing is drawn that the data does not have', () => {
+test('the 72 goods have one drawing each, named by what the data names them (good-<id>), in the order of the four tier files, and nothing is drawn that the data does not have; the data carries no icon', () => {
   assert.equal(IDS.length, 72);
   assert.deepEqual(GOODS, IDS.map((id) => 'good-' + id), 'one good-<id> for each good, a tier at a time, as the tier files list them: a new good is a line in the block of its tier');
   assert.deepEqual(IDS, tiers.flatMap((t) => Object.keys(t.assets)), 'the data merges the tiers in order');
   assert.equal(new Set(IDS.map((id) => G.goodGlyph(id))).size, 72);
-  for (const id of IDS) { assert.equal(G.goodGlyph(id), 'good-' + id); assert.ok(!isMark(shapesOf('good-' + id)), `${id} is a picture, not a mark`); }
+  for (const id of IDS) { assert.ok(!('icon' in ASSETS[id]), `${ASSETS[id].name}: the data carries no icon, its drawing is found by its id`); assert.equal(G.goodGlyph(id), 'good-' + id); assert.ok(!isMark(shapesOf('good-' + id)), `${id} is a picture, not a mark`); }
   assert.ok(G.goodGlyph('constructor') === '' && G.goodGlyph('__proto__') === '' && G.goodGlyph(undefined) === '' && G.goodGlyph('nope') === '' && G.goodGlyph(99) === '', 'a good nobody drew is no glyph, and a name from a save or a classmate is never a way into the registry');
   assert.equal(G.goodGl('nope'), '', 'and the markup of one is empty (the screens then print no tile)'); assert.equal(G.goodGl('radio', 'gl-sm'), G.gl('good-radio', 'gl-sm'));
   assert.equal(tiers.map((t) => Object.keys(t.assets).length).join(), '18,18,18,18');

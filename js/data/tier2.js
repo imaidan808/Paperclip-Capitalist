@@ -51,81 +51,81 @@ export const zones = {
 export const assets = {
   // ------------------------------------------------------------------ Metro Hub (scale 400)
   sneakers: {
-    name: 'Limited-Release Sneaker Lot', icon: '👟', base: 380, sc: 6, dep: 7, tags: ['trend', 'fashion', 'consumer'],
+    name: 'Limited-Release Sneaker Lot', base: 380, sc: 6, dep: 7, tags: ['trend', 'fashion', 'consumer'],
     dem: { 5: 9, 3: 3 }, fakeRisk: 0.8,
   },
   gadgets: {
-    name: 'Viral Gadget Pallet', icon: '🔮', base: 760, sc: 6, dep: 8, tags: ['trend', 'electronics'],
+    name: 'Viral Gadget Pallet', base: 760, sc: 6, dep: 8, tags: ['trend', 'electronics'],
     dem: { 5: 9, 4: 3 }, repair: 130,
   },
   textbooks: {
-    name: 'Pallet: Exam-Prep Textbooks', icon: '📓', base: 540, sc: 4, dep: 3, tags: ['paper', 'training', 'tool'],
+    name: 'Pallet: Exam-Prep Textbooks', base: 540, sc: 4, dep: 3, tags: ['paper', 'training', 'tool'],
     dem: { 5: 8, 3: 3 },
   },
   laptops: {
-    name: 'Off-Lease Laptop Pallet', icon: '⌨️', base: 1150, sc: 5, dep: 6, tags: ['electronics', 'office', 'b2b'],
+    name: 'Off-Lease Laptop Pallet', base: 1150, sc: 5, dep: 6, tags: ['electronics', 'office', 'b2b'],
     dem: { 5: 7, 4: 3 }, repair: 230,
   },
   webStore: {
-    name: 'Turnkey Online Store', icon: '🏪', base: 1050, sc: 5, dep: 4, tags: ['digital', 'consumer'],
+    name: 'Turnkey Online Store', base: 1050, sc: 5, dep: 4, tags: ['digital', 'consumer'],
     dem: { 5: 7, 10: 3 }, fakeRisk: 0.3,
   },
 
   // ------------------------------------------------------------------ Estate Sales (scale 900)
   antiqueFurniture: {
-    name: 'Estate Lot: Antique Furniture', icon: '🛋️', base: 1350, sc: 8, dep: 1, tags: ['home', 'collectible'],
+    name: 'Estate Lot: Antique Furniture', base: 1350, sc: 8, dep: 1, tags: ['home', 'collectible'],
     dem: { 6: 9, 12: 3 }, repair: 380, fakeRisk: 0.4,
   },
   estateBox: {
-    name: 'Sealed Estate Box Lot', icon: '🧳', base: 620, sc: 7, dep: 1, tags: ['collectible', 'retro'],
+    name: 'Sealed Estate Box Lot', base: 620, sc: 7, dep: 1, tags: ['collectible', 'retro'],
     dem: { 6: 10, 4: 3 }, fakeRisk: 0.2,
   },
   vinylRecords: {
-    name: 'Estate Vinyl Collection', icon: '💿', base: 700, sc: 8, dep: 1, tags: ['collectible', 'media', 'prestige'], // a collection with a provenance, not a crate of records
+    name: 'Estate Vinyl Collection', base: 700, sc: 8, dep: 1, tags: ['collectible', 'media', 'prestige'], // a collection with a provenance, not a crate of records
     dem: { 6: 8, 4: 3 }, fakeRisk: 0.3,
   },
   watches: {
-    name: 'Estate Watch Drawer Lot', icon: '⏱️', base: 2000, sc: 9, dep: 1, tags: ['luxury', 'collectible'],
+    name: 'Estate Watch Drawer Lot', base: 2000, sc: 9, dep: 1, tags: ['luxury', 'collectible'],
     dem: { 6: 8, 4: 3 }, repair: 520, fakeRisk: 0.6,
   },
   toolChest: {
-    name: 'Master Machinist\'s Tool Chest', icon: '⚒️', base: 900, sc: 6, dep: 1, tags: ['tool', 'collectible'],
+    name: 'Master Machinist\'s Tool Chest', base: 900, sc: 6, dep: 1, tags: ['tool', 'collectible'],
     dem: { 6: 6, 7: 8, 9: 2 }, repair: 140, fakeRisk: 0.1,
   },
 
   // ------------------------------------------------------------------ Auto Row (scale 2500)
   sedan: {
-    name: 'Used Commuter Sedan', icon: '🚗', base: 3000, sc: 4, dep: 4, tags: ['vehicle', 'consumer'],
+    name: 'Used Commuter Sedan', base: 3000, sc: 4, dep: 4, tags: ['vehicle', 'consumer'],
     dem: { 7: 8, 9: 3 }, repair: 720,
   },
   classicCar: {
-    name: 'Barn-Find Classic Roadster', icon: '🏎️', base: 5400, sc: 9, dep: 1, tags: ['collectible', 'retro', 'prestige'],
+    name: 'Barn-Find Classic Roadster', base: 5400, sc: 9, dep: 1, tags: ['collectible', 'retro', 'prestige'],
     dem: { 7: 7, 13: 3 }, repair: 2000, fakeRisk: 0.4,
   },
   van: {
-    name: 'Ex-Fleet Cargo Van', icon: '🚐', base: 4400, sc: 5, dep: 3, tags: ['vehicle', 'b2b'],
+    name: 'Ex-Fleet Cargo Van', base: 4400, sc: 5, dep: 3, tags: ['vehicle', 'b2b'],
     dem: { 7: 8, 8: 6, 9: 3 }, repair: 1050,
   },
   domain: {
-    name: 'Premium Keyword Domain', icon: '🔗', base: 3500, sc: 8, dep: 1, tags: ['digital', 'b2b', 'trend'],
+    name: 'Premium Keyword Domain', base: 3500, sc: 8, dep: 1, tags: ['digital', 'b2b', 'trend'],
     dem: { 7: 8, 10: 3 }, fakeRisk: 0.2,
   },
 
   // ------------------------------------------------------------------ Harbor Docks (scale 5000)
   electronics: {
-    name: 'Container Lot: Consumer Electronics', icon: '🔌', base: 3800, sc: 6, dep: 5, tags: ['electronics', 'consumer', 'b2b'],
+    name: 'Container Lot: Consumer Electronics', base: 3800, sc: 6, dep: 5, tags: ['electronics', 'consumer', 'b2b'],
     dem: { 8: 9, 10: 3 }, repair: 600, fakeRisk: 0.5,
   },
   marineEngine: {
-    name: 'Outboard Engines, Crate of Four', icon: '🚤', base: 6400, sc: 6, dep: 3, tags: ['marine', 'vehicle'],
+    name: 'Outboard Engines, Crate of Four', base: 6400, sc: 6, dep: 3, tags: ['marine', 'vehicle'],
     dem: { 8: 8, 9: 3 }, repair: 2000,
   },
   steelPlate: {
-    name: 'Shipyard Steel Plate Bundle', icon: '⚓', base: 4200, sc: 3, dep: 1, tags: ['bulk', 'marine', 'industrial'],
+    name: 'Shipyard Steel Plate Bundle', base: 4200, sc: 3, dep: 1, tags: ['bulk', 'marine', 'industrial'],
     dem: { 8: 9, 9: 3 }, fakeRisk: 0.1,
   },
   apparel: {
-    name: 'Container Lot: Imported Apparel', icon: '👕', base: 3600, sc: 4, dep: 8, tags: ['fashion', 'bulk', 'consumer'],
+    name: 'Container Lot: Imported Apparel', base: 3600, sc: 4, dep: 8, tags: ['fashion', 'bulk', 'consumer'],
     dem: { 8: 9, 12: 3 }, fakeRisk: 0.5,
   },
 };
