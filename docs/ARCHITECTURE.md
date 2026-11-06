@@ -149,7 +149,7 @@ node scripts/preload.mjs [--json]
 | | |
 |---|---|
 | Requests | 169: the page, 12 stylesheets, 156 modules; none fails, none goes to another host |
-| Transferred | about 1,087 KB gzipped (2,929 KB of JavaScript and 183 KB of CSS before gzip) |
+| Transferred | about 1,087 KB gzipped (2,928 KB of JavaScript and 183 KB of CSS before gzip) |
 | Before the first screen | 42 requests, 302 KB gzipped: the page, 12 stylesheets and the 29 modules of the static graph |
 | No source map | none is built, none is staged, and no file names one |
 
