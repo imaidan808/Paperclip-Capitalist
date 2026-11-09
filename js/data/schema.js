@@ -71,7 +71,8 @@ export function validateData(d, { partial = false } = {}) {
   for (const [id, a] of Object.entries(assets)) {
     const w = `asset ${id}`;
     if (!ID.test(id)) add(`${w}: id must be camelCase or snake_case ascii`);
-    for (const k of ['name', 'icon']) if (typeof a[k] !== 'string' || !a[k].trim()) add(`${w}: ${k} must be a non-empty string`);
+    if (typeof a.name !== 'string' || !a.name.trim()) add(`${w}: name must be a non-empty string`);
+    if ('icon' in a) add(`${w}: a good carries no icon: its drawing is good-<id> in js/art/g-goods.js (docs/ART_DIRECTION.md 3.6)`);
     if (!num(a.base) || a.base <= 0) add(`${w}: base must be > 0`);
     if (!int(a.sc) || a.sc < 1 || a.sc > 10) add(`${w}: sc (scarcity) must be an integer 1..10`);
     if (!int(a.dep) || a.dep < 1 || a.dep > 10) add(`${w}: dep (depreciation) must be an integer 1..10`);

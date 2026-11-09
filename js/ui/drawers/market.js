@@ -10,7 +10,7 @@ import { fitOf, fitMult, fitLabel, FAKE_VALUE } from '../../market.js';
 import { dur, nameOf, knownFake, focusZone, heldIn, beliefLine, fold, flip } from './stock.js';
 import { lessonTitle, lessonGist, rulePhrases, rewardPhrases, grayBreak } from './districttext.js';
 import { avatarHTML } from '../../avatar.js';
-import { gl, zoneGl } from '../glyphs.js';
+import { gl, zoneGl, goodGl } from '../glyphs.js';
 
 const UP = '▲', DOWN = '▼';
 const TABS = ['buyers', 'lots', 'radar', 'exchange'];
@@ -87,7 +87,7 @@ function buyersHTML(ctx, z) {
   const cache = new Map(), cmOf = (cls, seg) => { const k = cls + '|' + seg; if (!cache.has(k)) cache.set(k, g.cmFor(z, cls, seg)); return cache.get(k); };
   const use = here.length > 1 ? `<div class="mkt-use" role="group" aria-label="Which crate to sell"><span class="small mute">Selling with</span>
       <button class="btn sm ghost" data-act="market-use" data-id="" data-fid="mk-use-best" aria-pressed="${!picks.length}">Best of mine</button>
-      ${here.slice(0, 12).map((a) => `<button class="btn sm ghost" data-act="market-use" data-id="${a.id}" data-fid="mk-use-${a.id}" aria-pressed="${U.sel.has(a.id)}"><span aria-hidden="true">${ASSETS[a.cls].icon}</span> ${e(nameOf(a.cls, a.cond))} <span class="mono">${m(g.val(a))}</span></button>`).join('')}</div>` : '';
+      ${here.slice(0, 12).map((a) => `<button class="btn sm ghost" data-act="market-use" data-id="${a.id}" data-fid="mk-use-${a.id}" aria-pressed="${U.sel.has(a.id)}"><span aria-hidden="true">${goodGl(a.cls, 'gl-sm')}</span> ${e(nameOf(a.cls, a.cond))} <span class="mono">${m(g.val(a))}</span></button>`).join('')}</div>` : '';
   const scamNote = g.P.scamRate ? `<p class="callout warn small"><b>Scam magnet.</b> About ${Math.round(g.P.scamRate * 100)}% of buyers are frauds. Verify a buyer before you sell.</p>` : '';
   const card = (l) => {
     const B = BUYERS[l.seg], fraud = !!l.verified && !!l.scam;
@@ -152,7 +152,7 @@ function lotsHTML(ctx, z) {
     const warn = l.warn ? '<p class="callout bad small"><b>Counterfeit warning.</b> Your street sense flags this one as a fake.</p>' : '';
     const short = s.cash < l.price, reason = !full && short ? `You need ${m(l.price - s.cash)} more.` : ''; // a full yard is said once, above the list
     return `<li class="mkt-lot${auction ? ' is-auction' : ''}">
-      <span class="mkt-ic" aria-hidden="true">${def.icon}</span>
+      <span class="mkt-ic" aria-hidden="true">${goodGl(l.cls)}</span>
       <div class="mkt-body">
         <div class="mkt-head"><b>${e(def.name)}</b> ${broken ? '<span class="badge red">Broken</span>' : '<span class="badge cyan">Working</span>'} ${auction ? '<span class="badge">Auction</span>' : ''}</div>
         <p class="mkt-price"><span class="mono gold">${m(l.price)}</span> <span class="small mute">${auction ? 'guide price' : 'asking price'}</span></p>
@@ -178,7 +178,7 @@ function radarHTML(ctx, z) {
   return `<p class="small">Best gaps first: goods buyers want that few classmates sell to them.</p>
     <ul class="mkt-list">${rows.map((r) => {
     const held = s.assets.some((a) => a.cls === r.cls && a.zone === z);
-    return `<li class="mkt-rrow"><span class="mkt-ic" aria-hidden="true">${ASSETS[r.cls].icon}</span><div class="mkt-body">
+    return `<li class="mkt-rrow"><span class="mkt-ic" aria-hidden="true">${goodGl(r.cls)}</span><div class="mkt-body">
         <p class="mkt-rname"><b>${e(ASSETS[r.cls].name)}</b> to <b>${e(BUYERS[r.seg].name)}</b></p>
         <div class="row mkt-chips"><span class="chip ${fitTone(r.fit)}">${fitLabel(r.fit)}</span>${cmChip(r)}${held ? '<span class="chip good">You hold one</span>' : ''}</div>
         <p class="tiny mute">${e(satWords(r.S, r.vT))} (about ${r.vN.toFixed(0)} of ${r.vT.toFixed(0)} recent sales, ${pc(r.S)})</p></div></li>`;
@@ -208,7 +208,7 @@ export function matrixHTML(ctx) {
   if (!x.partner) return '';
   const o = offerShape(ctx, x), chk = g.checkOffer(o);
   const myP = o.want.assets.reduce((a, w) => a + g.projected(w), 0), theirP = o.give.assets.reduce((a, w) => a + g.projected(w, x.partner.skills), 0);
-  const side = (arr, cash) => `${arr.map((a) => `${ASSETS[a.cls].icon} ${e(nameOf(a.cls, a.cond))}`).join('<br>') || '<span class="mute">no crates</span>'}${cash ? `<br>${m(cash)} cash` : ''}`;
+  const side = (arr, cash) => `${arr.map((a) => `<span aria-hidden="true">${goodGl(a.cls, 'gl-sm')}</span> ${e(nameOf(a.cls, a.cond))}`).join('<br>') || '<span class="mute">no crates</span>'}${cash ? `<br>${m(cash)} cash` : ''}`;
   return `<table class="tbl mkt-matrix"><caption class="sr">Your proposed swap</caption><thead><tr><th scope="col">Part of the deal</th><th scope="col">You give</th><th scope="col">${e(x.partner.handle)} gives</th></tr></thead><tbody>
     <tr><th scope="row">Crates and cash</th><td>${side(o.give.assets, o.give.cash)}${o.give.royalty ? `<br>${m(o.give.royalty.perDay)} a day for ${o.give.royalty.days} days<br><span class="small mute">Counted at no more than a tenth of your net worth. What you cannot pay stays owed.</span>` : ''}</td><td>${side(o.want.assets, o.want.cash)}</td></tr>
     <tr><th scope="row">Fair value</th><td class="mono">${m(chk.va)}</td><td class="mono">${m(chk.vb)}</td></tr>
@@ -238,7 +238,7 @@ function exchangeHTML(ctx) {
     </div>
     <p class="small gap">You give: ${give.length ? give.map((a) => `<b>${e(nameOf(a.cls, a.cond))}</b>`).join(', ') : '<span class="mute">no crates yet.</span>'} <button class="btn sm ghost" data-act="market-gostock" data-fid="mx-gostock">Pick crates in Stock</button></p>
     <p class="small mute">Choose what you want from ${e(x.partner.handle)}.</p>
-    <div class="mkt-want" role="group" aria-label="Crates ${e(x.partner.handle)} holds">${(x.partner.inventory || []).map((a) => `<button class="btn ghost mkt-wcrate" data-act="market-want" data-id="${e(a.id)}" data-fid="mx-w-${e(a.id)}" aria-pressed="${x.want.has(a.id)}"><span aria-hidden="true">${ASSETS[a.cls].icon}</span> ${e(nameOf(a.cls, a.cond))}<span class="mono small"> ${m(a.fmv)}</span><span class="tiny mute"> ${e(ZONES[a.zone]?.short || '')}</span></button>`).join('') || '<p class="mute small">They have nothing listed.</p>'}</div>
+    <div class="mkt-want" role="group" aria-label="Crates ${e(x.partner.handle)} holds">${(x.partner.inventory || []).map((a) => `<button class="btn ghost mkt-wcrate" data-act="market-want" data-id="${e(a.id)}" data-fid="mx-w-${e(a.id)}" aria-pressed="${x.want.has(a.id)}"><span aria-hidden="true">${goodGl(a.cls, 'gl-sm')}</span> ${e(nameOf(a.cls, a.cond))}<span class="mono small"> ${m(a.fmv)}</span><span class="tiny mute"> ${e(ZONES[a.zone]?.short || '')}</span></button>`).join('') || '<p class="mute small">They have nothing listed.</p>'}</div>
     <div class="gap" data-matrix>${matrixHTML(ctx)}</div>
     <div class="row gap"><button class="btn" data-act="market-send" data-fid="mx-send">Send proposal</button><span class="small mute">Your side waits in escrow until they answer.</span></div>`
     : '<p class="mute">Nobody is online to trade with yet. Classmates appear when they join your room.</p>';

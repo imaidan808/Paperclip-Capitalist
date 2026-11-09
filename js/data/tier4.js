@@ -58,86 +58,86 @@ export const zones = {
 export const assets = {
   // ------------------------------------------------------------------ 13 Corporate Valley (scale $90k)
   franchise: {
-    name: 'Master Franchise License (Regional Territory)', icon: '🏷️',
+    name: 'Master Franchise License (Regional Territory)',
     base: 120000, sc: 8, dep: 1, dem: { 13: 9, 16: 3 }, tags: ['b2b', 'franchise'], yield: 0.0035,
   },
   erpBook: {
-    name: 'ERP License and Maintenance Book', icon: '🗂️',
+    name: 'ERP License and Maintenance Book',
     base: 85000, sc: 7, dep: 1, dem: { 13: 9, 14: 3 }, tags: ['digital', 'b2b', 'industrial'], yield: 0.0055,
   },
   hospitalPurchasing: {
-    name: 'Hospital Group Purchasing Contract', icon: '📋',
+    name: 'Hospital Group Purchasing Contract',
     base: 70000, sc: 6, dep: 1, dem: { 13: 8, 9: 3 }, tags: ['b2b', 'medical'],
   },
   carveOut: {
     // M&A in one lot: a division the parent wants gone. A broken one is a distressed unit; repair is the turnaround.
-    name: 'Corporate Carve-Out: Packaging Division', icon: '📤',
+    name: 'Corporate Carve-Out: Packaging Division',
     base: 260000, sc: 5, dep: 2, dem: { 13: 8, 14: 3 }, tags: ['industrial', 'b2b'], repair: 52000,
   },
 
   // ------------------------------------------------------------------ 14 Financial District (scale $180k)
   invoicePool: {
     // Bought under par, paid at par when the invoices clear: the profit is the discount, so no daily yield. Forgery is the risk.
-    name: 'Invoice Pool (Factored Receivables)', icon: '🧾',
+    name: 'Invoice Pool (Factored Receivables)',
     base: 150000, sc: 5, dep: 2, dem: { 14: 9, 13: 5 }, tags: ['finance', 'b2b'], fakeRisk: 1,
   },
   loanBook: {
-    name: 'Consumer Installment Loan Book', icon: '💳',
+    name: 'Consumer Installment Loan Book',
     base: 240000, sc: 6, dep: 1, dem: { 14: 9, 5: 3 }, tags: ['finance', 'consumer'], yield: 0.004, fakeRisk: 0.5,
   },
   muniBonds: {
-    name: 'Municipal Infrastructure Bond Lot', icon: '📜',
+    name: 'Municipal Infrastructure Bond Lot',
     base: 350000, sc: 4, dep: 1, dem: { 14: 9, 16: 5 }, tags: ['finance', 'infra'], yield: 0.0035, fakeRisk: 0.05,
   },
   royaltyNote: {
-    name: 'Streaming Royalty Note', icon: '📀',
+    name: 'Streaming Royalty Note',
     base: 130000, sc: 7, dep: 1, dem: { 14: 7, 12: 3 }, tags: ['finance', 'ip', 'media'], yield: 0.004, fakeRisk: 0.4,
   },
   insuranceBook: {
-    name: 'Homeowners Insurance Book (Renewal Rights)', icon: '🛡️',
+    name: 'Homeowners Insurance Book (Renewal Rights)',
     base: 420000, sc: 6, dep: 1, dem: { 14: 8, 15: 3 }, tags: ['finance', 'home'], yield: 0.0035, fakeRisk: 0.1,
   },
 
   // ------------------------------------------------------------------ 15 Real Estate Row (scale $400k)
   logisticsWarehouse: {
-    name: 'Logistics Warehouse (180,000 sq ft)', icon: '📦',
+    name: 'Logistics Warehouse (180,000 sq ft)',
     base: 320000, sc: 6, dep: 1, dem: { 15: 9, 13: 3 }, tags: ['realty', 'industrial'], yield: 0.0036, repair: 70000,
   },
   apartmentBlock: {
-    name: 'Apartment Block (24 Units)', icon: '🏠',
+    name: 'Apartment Block (24 Units)',
     base: 450000, sc: 7, dep: 1, dem: { 15: 9, 14: 3 }, tags: ['realty', 'home'], yield: 0.004, repair: 112000,
   },
   officeFloors: {
-    name: 'Downtown Office Floors (Three Leased)', icon: '🏬',
+    name: 'Downtown Office Floors (Three Leased)',
     base: 800000, sc: 7, dep: 1, dem: { 15: 8, 14: 3 }, tags: ['realty', 'b2b', 'prestige'], yield: 0.0035, repair: 160000,
   },
   datacenter: {
-    name: 'Server Rack Colocation Hall', icon: '🗄️',
+    name: 'Server Rack Colocation Hall',
     base: 520000, sc: 7, dep: 1, dem: { 15: 9, 13: 3 }, tags: ['digital', 'b2b', 'infra'], yield: 0.0055, repair: 95000,
   },
   cellTowers: {
-    name: 'Cell-Tower Ground-Lease Portfolio (46 Sites)', icon: '📡',
+    name: 'Cell-Tower Ground-Lease Portfolio (46 Sites)',
     base: 260000, sc: 7, dep: 1, dem: { 15: 8, 16: 3 }, tags: ['infra', 'realty'], yield: 0.0036, repair: 45000,
   },
 
   // ------------------------------------------------------------------ 16 Global Exchange (scale $1M)
   diamondParcel: {
     // Synthetics are the risk; a chipped stone needs recutting.
-    name: 'Certified Polished Diamond Parcel', icon: '💎',
+    name: 'Certified Polished Diamond Parcel',
     base: 800000, sc: 9, dep: 1, dem: { 16: 10, 15: 3 }, tags: ['gem', 'luxury'], fakeRisk: 1, repair: 160000,
   },
   watchVault: {
     // The hype market: limited steel sports watches move on trend as much as on craft, so Creators and Veterans feel it differently.
-    name: 'Swiss Watch Collection (12 Pieces)', icon: '💼',
+    name: 'Swiss Watch Collection (12 Pieces)',
     base: 380000, sc: 8, dep: 1, dem: { 16: 9, 15: 3 }, tags: ['luxury', 'collectible', 'trend'], fakeRisk: 0.9, repair: 57000,
   },
   postwarCanvas: {
-    name: 'Post-War Canvas (Provenance on File)', icon: '🖼️',
+    name: 'Post-War Canvas (Provenance on File)',
     base: 1800000, sc: 9, dep: 1, dem: { 16: 9, 13: 2 }, tags: ['luxury', 'collectible'], fakeRisk: 1, repair: 450000,
   },
   copperCargo: {
     // Warehouse-receipt fraud is a real copper story, so the receipts get a fakeRisk.
-    name: 'Copper Cathode Cargo (100 Metric Tons)', icon: '🛳️',
+    name: 'Copper Cathode Cargo (100 Metric Tons)',
     base: 780000, sc: 5, dep: 1, dem: { 16: 8, 13: 3 }, tags: ['industrial', 'bulk', 'energy'], fakeRisk: 0.5,
   },
 };

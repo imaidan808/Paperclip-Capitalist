@@ -50,7 +50,7 @@ const everyGlyph = (rule, what) => { const bad = []; for (const id of ALL) for (
 // ================================================================================================ the sets
 test('the sets load and register without a clash: each js/art/g-*.js exports its table as GLYPHS, no id is drawn twice, an id is a word of letters, digits and hyphens, and every glyph has a drawing', () => {
   assert.deepEqual(loadErrors, [], 'a set that would not load (a clash of ids names the id):\n' + loadErrors.join('\n'));
-  for (const n of ['ui', 'codex', 'deal', 'places']) assert.ok(SETS.some((s) => s.name === n), `js/art/g-${n}.js is a set of this part`);
+  for (const n of ['ui', 'codex', 'deal', 'places', 'goods']) assert.ok(SETS.some((s) => s.name === n), `js/art/g-${n}.js is a set of this part`);
   for (const s of SETS) {
     assert.ok(s.exports.GLYPHS && typeof s.exports.GLYPHS === 'object', `${s.file} exports GLYPHS`);
     assert.deepEqual(s.ids, Object.keys(s.exports.GLYPHS), `${s.file} registers its own table, all of it`);
@@ -70,9 +70,9 @@ test('tones: only the palette; a mark is one tone (currentColor, so it takes the
 test('bounded: a picture has at most 10 shapes and a mark 6; nothing as small as a speck; a picture fills at least 14 units of the grid and a mark 8; no shape is as big as a tile (a plate behind the picture is the pale-sticker look the author did not choose)', () => everyGlyph(sizeProblems, 'size and parts'));
 test('what is shown, measured on a raster: a glyph covers a sensible part of the grid, sits near its centre, leaves every one of its shapes visible, and is not made of lines thinner than a pixel at 16 px', () => everyGlyph(shownProblems, 'what a glyph shows'));
 
-test('no two glyphs are the same drawing, in the same tones or in others (an exemplar, ex-*, may be copied under its real id: the exemplars go when their part lands)', () => {
+test('no two glyphs are the same drawing, in the same tones or in others', () => {
   const full = new Map(), geo = new Map(), bad = [];
-  for (const id of ALL.filter((x) => !/^ex-/.test(x))) {
+  for (const id of ALL) {
     const f = JSON.stringify(shapesOf(id)), g = JSON.stringify(shapesOf(id).map((s) => [s[0], ...s.slice(2)]));
     if (full.has(f)) bad.push(`${id} is the drawing of ${full.get(f)}`); else if (geo.has(g)) bad.push(`${id} has the shapes of ${geo.get(g)} in other tones: one drawing, one id (a colour for a state is the text colour of a mark)`);
     full.set(f, id); geo.set(g, id);
@@ -84,8 +84,8 @@ test('no two glyphs are the same drawing, in the same tones or in others (an exe
  *  were 23 apart (the district of Metro Hub and the enterprise client: a tall blue tower beside a short grey block) and 24 (the Business-School Grad and the Student manager: the same mortarboard); a floor of 25 catches that and not a family. */
 const LOOKALIKE_MIN = 25, LOOKALIKE_OK = []; // LOOKALIKE_OK: pairs ('a|b') that look alike on purpose, one line each with the reason (none: every picture of the kit has a look of its own)
 test('no two pictures look alike: on the dark tile, in their own tones, any two are 25 or more apart (the mean, over a raster of 2 samples a unit, of the largest colour-channel difference, 0 to 255), so a screen that shows two of them near each other (the HUD\'s Background beside a manager, a district beside a client) does not show one picture twice', () => {
-  const pics = Object.fromEntries(ALL.filter((id) => !/^ex-/.test(id)).map((id) => [id, shapesOf(id)]));
-  assert.ok(Object.keys(pics).filter((id) => !isMark(pics[id])).length > 70, 'the pictures of the kit are measured (not the marks: they are one tone, and no two share a silhouette, below)');
+  const pics = Object.fromEntries(ALL.map((id) => [id, shapesOf(id)]));
+  assert.ok(Object.keys(pics).filter((id) => !isMark(pics[id])).length > 140, 'the pictures of the kit are measured, the 72 goods among them (not the marks: they are one tone, and no two share a silhouette, below)');
   const near = lookalikes(pics, LOOKALIKE_MIN, base.panel2, LOOKALIKE_OK);
   assert.deepEqual(near.map((p) => `${p.a} and ${p.b} are ${p.distance.toFixed(1)} apart`), [], 'draw one of each pair differently: another silhouette and another main tone, not another shade (a pair that looks alike on purpose is declared in LOOKALIKE_OK, with its reason)');
 });

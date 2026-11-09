@@ -88,7 +88,7 @@ function drawLotV2(ctx, view, env, w, e) {
   if (lod > 0.02 && !broken) { const kind = peekerOf(ASSETS[l.cls] && ASSETS[l.cls].tags[0]); if (kind) { ctx.globalAlpha = lod; peeker(ctx, kind, x + 1, y0 - 22 - lift, c0); ctx.globalAlpha = 1; } }
   ctx.restore();
   w.hits.push({ eid: e.id, kind: 'lot', id: e.id.slice(4), zone: e.zone, label: `${ASSETS[l.cls].name}${l.cond === 'broken' ? ' (broken)' : ''}${auction ? ' at auction' : ' for sale'}`, polys: [[[x - 18, y - 26], [x + 18, y - 26], [x + 18, y + 4], [x - 18, y + 4]]], lot: l });
-  if (w.cam.z > 0.5) w.overlay.push({ k: 'tag', n: 6, wx: x, wy: y - 32, draw: (g, px, py, s) => w.tag(g, px, py, s, auction ? '🔨' : ASSETS[l.cls].icon, money(l.price), auction ? '#ffd36e' : '#46e38e', hov) });
+  if (w.cam.z > 0.5) w.overlay.push({ k: 'tag', n: 6, wx: x, wy: y - 32, draw: (g, px, py, s) => w.tag(g, px, py, s, auction ? 'mark-gavel' : 'good-' + l.cls, money(l.price), auction ? '#ffd36e' : '#46e38e', hov) });
 }
 registerLayer('lot', drawLotV2, 'inherit');
 
@@ -108,6 +108,6 @@ function drawAssetV2(ctx, view, env, w, e) {
   if (lod > 0.02 && !broken) { const kind = peekerOf(ASSETS[a.cls] && ASSETS[a.cls].tags[0]); if (kind) { ctx.globalAlpha = lod; peeker(ctx, kind, x + 1, y0 - 19 - bob, c0); ctx.globalAlpha = 1; } }
   ctx.restore();
   w.hits.push({ eid: e.id, kind: 'asset', id: a.id, zone: e.zone, label: `${ASSETS[a.cls].name}${a.cond === 'broken' ? ' (broken)' : ''}, in your stock`, polys: [[[x - 16, y - 32 - bob], [x + 16, y - 32 - bob], [x + 16, y + 4], [x - 16, y + 4]]], asset: a });
-  if (w.cam.z > 0.6 || sel || hov) w.overlay.push({ k: 'icon', n: 0, wx: x, wy: y - 36 - bob, draw: (g, px, py, s) => w.icon(g, px, py, s, ASSETS[a.cls].icon, sel) });
+  if (w.cam.z > 0.6 || sel || hov) w.overlay.push({ k: 'icon', n: 0, wx: x, wy: y - 36 - bob, draw: (g, px, py, s) => w.icon(g, px, py, s, 'good-' + a.cls, sel) });
 }
 registerLayer('asset', drawAssetV2, 'inherit');

@@ -213,7 +213,7 @@ function planSell(g, spec) {
   if (GAMES.haggle) stages.push(capped ? { key: 'close', auto: 'Their budget is nearly spent at the fair price: nothing to haggle over.' } : { key: 'close' });
   return {
     ok: true, kind: 'sell', seed, zone: lead.zone, zoneFace: zoneFace(lead.zone), stages, blocker, fair, raw, capped, budget: lead.budget, alt: alt || null,
-    asset: { id: a.id, cls: a.cls, name: aName(a), icon: ASSETS[a.cls].icon, cond: a.cond, unchecked: !!(a.truth && !a.known) }, // unchecked: bought from a lot and never sold, so its real condition is not in the figures on the screen: the buyer checks it at the sale and the price follows it
+    asset: { id: a.id, cls: a.cls, name: aName(a), cond: a.cond, unchecked: !!(a.truth && !a.known) }, // unchecked: bought from a lot and never sold, so its real condition is not in the figures on the screen: the buyer checks it at the sale and the price follows it
     lead: { id: lead.id, seg: lead.seg, budget: lead.budget, need: lead.need || null, verified: !!lead.verified, ...(lead.verified ? { scam: !!lead.scam } : {}), exp: lead.exp },
     cast: { name: B.name, hello: B.hello, style: B.style, role: 'buyer' }, // an urgent need is marked on its chip in the Pitch stage, not said twice
     buyer: { id: lead.seg, name: B.name, style: B.style, patience: B.patience, bias: B.bias },
@@ -237,7 +237,7 @@ function planBuy(g, spec) {
   if (auction) stages.push({ key: 'bid' }); else if (GAMES.haggle) stages.push({ key: 'close' });
   return {
     ok: true, kind: 'buy', seed, zone: spec.zone, zoneFace: zoneFace(spec.zone), stages, blocker, fair: lot.price, auction, lowest, alt: alt && alt <= lot.price * 1.3 ? alt : null,
-    lot: { id: lot.id, cls: lot.cls, name, icon: def.icon, cond: lot.cond, price: lot.price, mode: auction ? 'auction' : 'fixed' },
+    lot: { id: lot.id, cls: lot.cls, name, cond: lot.cond, price: lot.price, mode: auction ? 'auction' : 'fixed' },
     cast: { name: seller.name, hello: seller.hello, style: seller.style, role: 'seller' }, seller,
   };
 }
@@ -264,7 +264,7 @@ function planRepair(g, spec) {
     ok: true, kind: 'repair', seed, zone: a.zone, zoneFace: zoneFace(a.zone), stages: [{ key: 'fix' }], fair: q.cost,
     // A bench that opens on less than the most the bill can run to can end in a repair the player was never able to pay for, after the stage was played.
     blocker: b.blocker,
-    asset: { id: a.id, cls: a.cls, name: aName(a), icon: ASSETS[a.cls].icon, cond: a.cond },
+    asset: { id: a.id, cls: a.cls, name: aName(a), cond: a.cond },
     quote: { cost: b.cost, most: b.most, before: b.before, after: b.after, quality: b.quality },
     cast: { name: 'The repair bench', hello: 'Three steps: strip, fit, tune. Steady hands cost less and return more.', style: 'steady', role: 'bench' },
   };

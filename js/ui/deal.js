@@ -7,7 +7,7 @@
 //     plays the sounds. openDeal(ctx, spec) is the one function the shell calls.
 import { esc, keepInView } from './common.js';
 import { avatarHTML } from '../avatar.js';
-import { gl, zoneGl } from './glyphs.js';
+import { gl, zoneGl, goodGl } from './glyphs.js';
 import { kv } from '../session.js';
 import { fmtMoney as money, fmtPct } from '../market.js';
 import { startRun, modelOf, tForPos, STAGE_LABEL } from '../deal.js';
@@ -86,13 +86,15 @@ function footHTML(m) {
   if (m.first && m.steps.length > 1 && m.canQuick) bits.push('<button class="btn ghost" data-deal="quick-all" data-snd data-anchor="deal-quick" data-fid="qa">Quick deal</button>');
   return bits.length ? `<footer class="deal-foot">${bits.join('')}</footer>` : '';
 }
+/** The lot card's tile: the good's drawing, or nothing when nobody drew it (the card is then its words alone). */
+const goodTile = (cls) => { const g = goodGl(cls); return g ? `<span class="ic" aria-hidden="true">${g}</span>` : ''; };
 const panel = (m, key, title, body) => `<section class="deal-stage" data-anchor="deal-stage-${key}" aria-labelledby="ds-title"><h3 id="ds-title" tabindex="-1" data-stage-head>${esc(title)}</h3>${m.blocker ? `<div class="callout warn" role="alert">${esc(m.blocker)}</div>` : ''}${body}</section>`;
 const quickNote = (m) => (m.quickRes ? `<div class="callout ${m.quickRes.ok ? '' : 'warn'}"><b>Quick.</b> ${esc(m.quickRes.text)}</div>` : '');
 
 // ------------------------------------------------------------------ Read (Inspect)
 export function readHTML(m) {
   const v = m.view, p = m.plan.lot;
-  const lot = `<div class="lotcard"><span class="ic" aria-hidden="true">${p.icon}</span><div><b>${esc(p.name)}</b><div class="small mute">${p.cond === 'broken' ? 'Sold as broken' : 'Sold as working'}</div></div></div>`; // (the price is the scoreboard's)
+  const lot = `<div class="lotcard">${goodTile(p.cls)}<div><b>${esc(p.name)}</b><div class="small mute">${p.cond === 'broken' ? 'Sold as broken' : 'Sold as working'}</div></div></div>`; // (the price is the scoreboard's)
   if (!v) return panel(m, 'read', 'Read the lot', `${lot}${m.stageDone ? quickNote(m) : ''}`);
   const probes = v.probes.map((x) => {
     const [nm, why] = PROBE[x.id];
@@ -121,7 +123,7 @@ export function readHTML(m) {
 // ------------------------------------------------------------------ Pitch
 export function pitchHTML(m) {
   const v = m.view, p = m.plan;
-  const head = `<div class="lotcard"><span class="ic" aria-hidden="true">${p.asset.icon}</span><div><b>${esc(p.asset.name)}</b><div class="small mute">${esc(p.quote.fitLabel)} (${pc(p.quote.fit)})${!v && p.need ? `, ${esc(p.need)} needed now` : ''}</div></div></div>`; // (a refused room draws no chips, so the need is said here)
+  const head = `<div class="lotcard">${goodTile(p.asset.cls)}<div><b>${esc(p.asset.name)}</b><div class="small mute">${esc(p.quote.fitLabel)} (${pc(p.quote.fit)})${!v && p.need ? `, ${esc(p.need)} needed now` : ''}</div></div></div>`; // (a refused room draws no chips, so the need is said here)
   const fraud = !!(p.verified && p.scam), pm = fraud ? { ...m, blocker: '' } : m; // a confirmed fraud is said once, by its own callout, and not again by the stage's blocker
   const verify = p.canVerify && !p.verified ? `<div class="callout warn"><b>Scam magnet.</b> Some buyers are frauds. <button class="btn sm" data-deal="verify" data-snd data-fid="vf" title="The check costs 1% of their budget.">Verify this buyer (${money(p.verifyCost)})</button></div>` : p.verified ? `<div class="callout ${p.scam ? 'bad' : 'good'}"${p.scam ? ' role="alert"' : ''}>${p.scam ? 'Fraud confirmed. Skip this buyer.' : 'Verified: this buyer is genuine.'}</div>` : '';
   if (!v) return panel(pm, 'pitch', 'Pitch', `${head}${verify}${m.stageDone ? quickNote(m) : ''}`);
@@ -205,7 +207,7 @@ export function bidHTML(m) {
 // ------------------------------------------------------------------ Fix (Repair)
 export function fixHTML(m) {
   const v = m.view, q = m.plan.quote;
-  const info = `<div class="lotcard"><span class="ic" aria-hidden="true">${m.plan.asset.icon}</span><div><b>${esc(m.plan.asset.name)}</b><div class="small mute">Worth ${money(q.before)} now. The bill can reach ${money(q.most)}.</div></div></div>`;
+  const info = `<div class="lotcard">${goodTile(m.plan.asset.cls)}<div><b>${esc(m.plan.asset.name)}</b><div class="small mute">Worth ${money(q.before)} now. The bill can reach ${money(q.most)}.</div></div></div>`;
   if (!v) return panel(m, 'fix', 'Fix', `${info}${m.stageDone ? quickNote(m) : ''}`);
   const z = v.zone, steps = ['Strip and clean', 'Fit and tighten', 'Final tune'].map((nm, i) => {
     const r = v.results[i], st = r ? (r.careful ? 'careful' : r.acc >= 0.65 ? 'good' : r.acc > 0 ? 'ok' : 'miss') : i === v.step ? 'now' : 'todo';

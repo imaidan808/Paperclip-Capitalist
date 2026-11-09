@@ -28,6 +28,7 @@
 .mkt-use { display: flex; flex-wrap: wrap; align-items: center; gap: .3rem; }
 .mkt-use .btn { text-transform: none; letter-spacing: 0; }
 .mkt-use .btn[aria-pressed="true"] { background: var(--gold); border-color: var(--gold); color: var(--on-gold); }
+.mkt-use .btn[aria-pressed="true"] .gl-c { box-sizing: content-box; padding: .1rem; background: var(--bg); border-radius: .3rem; } /* a pressed (gold) button: the good's drawing on a dark tile */
 
 /* a buyer, as a character */
 .mkt-lead { display: grid; gap: .45rem; padding: .7rem .8rem; background: var(--panel2); border: 1px solid var(--line); min-width: 0; }
@@ -49,7 +50,7 @@
 /* a lot, as a booth */
 .mkt-lot, .mkt-rrow { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: .2rem .7rem; padding: .7rem .8rem; background: var(--panel2); border: 1px solid var(--line); min-width: 0; }
 .mkt-lot.is-auction { border-left: 6px solid var(--violet); }
-.mkt-ic { font-size: 2rem; line-height: 1; }
+.mkt-ic { line-height: 1; } .mkt-ic .gl { width: 2.25rem; height: 2.25rem; }
 .mkt-body { min-width: 0; display: grid; gap: .35rem; }
 .mkt-body p { margin: 0; }
 .mkt-head { display: flex; flex-wrap: wrap; align-items: center; gap: .3rem .5rem; }

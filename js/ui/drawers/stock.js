@@ -9,7 +9,7 @@ import { ASSETS, ZONES } from '../../config.js';
 import { FAKE_VALUE } from '../../market.js';
 import { esc } from '../common.js';
 import { benchQuote } from '../../deal.js';
-import { zoneGl } from '../glyphs.js';
+import { zoneGl, goodGl } from '../glyphs.js';
 
 const UP = '▲', DOWN = '▼';
 
@@ -100,7 +100,7 @@ function crateHTML(ctx, a, sel) {
     } else fix = '<p class="stk-fix small mute">This cannot be repaired. Scrap and spares buyers take it.</p>';
   }
   return `<li class="stk-crate ${fake ? 'is-fake' : broken ? 'is-broken' : 'is-ok'}${sel ? ' is-sel' : ''}">
-    <span class="stk-ic" aria-hidden="true">${def.icon}</span>
+    <span class="stk-ic" aria-hidden="true">${goodGl(a.cls)}</span>
     <div class="stk-body">
       <div class="stk-head"><label class="stk-name"><input type="checkbox" data-change="stock-pick" data-id="${a.id}" data-fid="st-${a.id}"${sel ? ' checked' : ''}> <span>${e(def.name)}<span class="sr">, worth ${m(val)}</span></span></label> ${badge}</div>
       <dl class="stk-vals"><dt>Worth now</dt><dd class="mono">${m(val)}</dd>${a.from === 'start' ? '<dt>Where from</dt><dd>Your starting crate</dd>' : `<dt>${a.from === 'barter' || a.from === 'p2p' ? 'Worth when you got it' : 'You paid'}</dt><dd class="mono">${m(paid)}</dd><dt>Result</dt><dd class="mono">${result}</dd>`}${held == null ? '' : `<dt>Held</dt><dd>${held < 1 ? 'just got it' : dur(held)}</dd>`}</dl>

@@ -131,7 +131,7 @@ test('labels are sprites at the device pixel density, cached by their content, a
   assert.notStrictEqual(L.chip('Opens at $600k', '#ffd36e', 1), a); L.setDpr(1); assert.notStrictEqual(L.chip('Opens at $500k', '#ffd36e', 1), a, 'a change of density draws them again');
   assert.equal(qs(1.0625), 1.125); assert.equal(qs(0.93), 0.875); assert.equal(qs(1.0001), 1, 'a zoom is rounded to eighths so sprites are not made afresh at every frame of a zoom');
   assert.notEqual(readable('#0a0f14'), '#0a0f14', 'a near-black district colour is lifted'); assert.equal(readable('#ffd36e'), '#ffd36e', 'a light one is left alone'); assert.equal(readable('rgba(1,2,3,.5)'), 'rgba(1,2,3,.5)');
-  const tag = L.tag('📦', '$12', '#46e38e', false, 1), bub = L.bubble('W', '#d9785f', '$40', true, false, 1), bub2 = L.bubble('W', '#78bd93', '$40', true, false, 1);
+  const tag = L.tag('good-paperclip', '$12', '#46e38e', false, 1), bub = L.bubble('W', '#d9785f', '$40', true, false, 1), bub2 = L.bubble('W', '#78bd93', '$40', true, false, 1);
   assert.ok(tag.w > 40 && tag.h > 20, 'a tag has the size of its text'); assert.equal(bub.ay, 22, 'a bubble is anchored where its tail begins, on its lower edge'); assert.ok(bub.ax > 10 && bub.ax < bub.w / 2 + 1); assert.notStrictEqual(bub2, bub, 'a buyer of another style is another bubble: the disc is part of the sprite'); assert.strictEqual(L.bubble('W', '#d9785f', '$40', true, false, 1), bub, 'and the same buyer is the same sprite');
   delete globalThis.OffscreenCanvas;
   const L2 = new Labels(); L2.setDpr(1); assert.equal(L2.chip('x', '#fff', 1), null, 'without OffscreenCanvas a label is not a sprite: the world draws it directly');

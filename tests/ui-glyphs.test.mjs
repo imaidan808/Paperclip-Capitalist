@@ -19,7 +19,7 @@ const { idsOf } = await import('../js/art/glyph.js');
 const { has } = G;
 const { CODEX } = await import('../js/meta/codex.js');
 const { ACHIEVEMENTS, DAILIES, QUESTS } = await import('../js/meta/quests.js');
-const { PIPE, CLIENTS, LOANS, ZONES, ZONE_IDS, PERKS, PERK_IDS } = await import('../js/config.js');
+const { PIPE, CLIENTS, LOANS, ZONES, ZONE_IDS, PERKS, PERK_IDS, ASSETS } = await import('../js/config.js');
 const { DRAWERS } = await import('../js/ui/drawers/index.js');
 const { CATEGORIES } = await import('../js/ui/drawers/codex.js');
 const { CSS_MARKS } = await import('../scripts/glyph-css.mjs');
@@ -50,6 +50,7 @@ test('every Codex category, badge, bounty, probe, angle, manager, client, loan a
   for (const d of DRAWERS) need('dock-' + d.id, `drawer ${d.id}`);
   for (const id of ZONE_IDS) need(G.zoneGlyph(id), `district ${id} (${ZONES[id].name})`);
   for (const id of PERK_IDS) need(G.bgGlyph(id), `Background ${id}`);
+  for (const id of Object.keys(ASSETS)) need(G.goodGlyph(id), `good ${id} (${ASSETS[id].name})`);
   assert.deepEqual(bad, []);
   assert.ok(G.badgeGlyph('a-no-such', false) === '' && G.dailyGlyph('d-no-such') === '' && G.categoryGlyph('Nope') === '', 'an id nobody drew is no glyph (the screens then print no tile)');
   assert.equal(G.badgeGlyph('a-pioneer', true), 'ach-secret', 'a badge still secret is drawn as the secret, so it spoils nothing');
@@ -84,14 +85,14 @@ test('the dock: the seven tabs are drawn in the dock and in the drawer\'s header
 test('every glyph id a screen writes is registered, and every glyph of the interface sets is used by a screen, a stylesheet or a table', () => {
   const all = new Set(ids()), literals = new Map(), prefixes = new Set();
   for (const [f, src] of SOURCES) {
-    for (const line of src.split('\n').filter((l) => /\b(?:gl|tile|svg|paint)\(|\bmk = |\bconst mark = |\bG = \{/.test(l))) for (const m of line.matchAll(/'((?:dock|mark|ctl|status|ach|probe|angle|mgr|client|loan|rarity|cat|zone|bg)-[a-z0-9-]+)'/g)) { if (!literals.has(m[1])) literals.set(m[1], f); }
+    for (const line of src.split('\n').filter((l) => /\b(?:gl|tile|svg|paint)\(|\.tag\(|\bmk = |\bconst mark = |\bG = \{/.test(l))) for (const m of line.matchAll(/'((?:dock|mark|ctl|status|ach|probe|angle|mgr|client|loan|rarity|cat|zone|bg|good)-[A-Za-z0-9-]+)'/g)) { if (!literals.has(m[1])) literals.set(m[1], f); }
     for (const m of src.matchAll(/\b(?:gl|tile|svg)\(\s*'([a-z]+-)'\s*\+/g)) prefixes.add(m[1]);
   }
   const bad = [...literals].filter(([id]) => !all.has(id)).map(([id, f]) => `${f}: ${id} is not a glyph`);
   assert.deepEqual(bad, []);
   assert.deepEqual([...prefixes].sort(), ['angle-', 'client-', 'dock-', 'loan-', 'mgr-', 'probe-', 'rarity-'], 'the ids built from a data id: their data is checked above');
   const byTable = new Set([...Object.values(G.CATEGORY), ...Object.values(G.BADGE), ...Object.values(G.DAILY), ...Object.values(G.QUEST_EVENT), 'ach-secret']);
-  const byPrefix = (id) => /^(dock|probe|angle|mgr|client|loan|rarity|zone|bg)-/.test(id); // (a district and a Background are found by their data: the test above holds that every one is drawn and none is not)
+  const byPrefix = (id) => /^(dock|probe|angle|mgr|client|loan|rarity|zone|bg|good)-/.test(id); // (a district, a Background and a good are found by their data: the test above holds that every one is drawn and tests/ui-goods.test.mjs that none is drawn that the data lacks)
   const unused = [...all].filter((id) => /^(dock|mark|ctl|status|ach|probe|angle|mgr|client|loan|rarity|cat)-/.test(id) && !literals.has(id) && !byTable.has(id) && !byPrefix(id) && !CSS_MARKS.map((n) => 'mark-' + n).includes(id));
   assert.deepEqual(unused, [], 'drawn and never shown: delete it, or show it');
 });

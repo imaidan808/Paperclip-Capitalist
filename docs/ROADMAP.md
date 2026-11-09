@@ -42,7 +42,7 @@ The author's complaint of 2026-11-04: "The emojis are a big complaint throughout
 
 - **Part 2, the glyph kit, the dock and the marks that are the only cue (46), done.** The kit (`js/art/`, docs/ART_DIRECTION.md 3.6), the dock and seven drawer tabs, the controls and marks (tick, cross, caret, play, pause, menu, help, camera, lock, dot, warning, audit, the Deal Room's verdicts) in JS, CSS masks and the world's canvas, and the pictures part 1 took away, back as a drawing for each family: the Codex's seven categories, the twelve badge families and the secret, the daily bounties, the three rarities, the Deal Room's probes and angles, the three managers, three clients and four loans. Quests wait for the districts' drawings (part 3): a quest card has no picture yet.
 - **Part 3, the 16 districts and the 12 Backgrounds (28).**
-- **Part 4, the 72 goods and the gavel on an auction tag (74).** The catalog's new goods (item 9) need drawings too.
+- **Part 4, the 72 goods and the gavel on an auction tag (74), done.** One drawing for each good (`js/art/g-goods.js`, a block for each tier, `good-<id>`), on every screen that showed an emoji (Stock, Market, Crew, Travel, the Deal Room) and in the world (a crate's icon, a lot's price tag, the gavel as a drawn mark); the data carries no `icon` and the emoji guard is strict (zero). The catalog's new goods (item 9) need drawings too: a line in the block of the good's tier, and `tests/ui-goods.test.mjs` says which good has none (the pallet strip, the gold of tier 4 and the slate wheels are the set's grammar, `docs/ART_DIRECTION.md` 3.6).
 
 ### 4. UI polish and modernization for every menu (moved up from the deferred list)
 
