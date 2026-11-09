@@ -186,13 +186,61 @@ export function heatHTML(S, U, students, dist) {
     ${fold(U, 'buyers', 'Buyer key', `<p class="tiny mute">${buyers.map((b, i) => avatarHTML(BUYERS[b].name, BUYERS[b].style, 'sm', mk[i]) + ' ' + esc(BUYERS[b].name)).join(' &middot; ')}</p>`)}`;
 }
 
-/** Where the class is: students by the highest district they have opened, as a column chart with a text equivalent. */
-export function distributionHTML(dist, here) {
+/** Where the class is: students by the highest district they have opened (or, with another `label`, by the district they are in now), as a column chart with a text equivalent. */
+export function distributionHTML(dist, here, label = 'Students by highest district reached') {
   const max = Math.max(1, ...dist.slice(1));
-  return `<ol class="in-dist" aria-label="Students by highest district reached">${ZONE_IDS.map((z) => `<li data-n="${dist[z]}" data-here="${z === here ? 1 : 0}" aria-label="District ${z}, ${esc(ZONES[z].name)}: ${dist[z]} student${dist[z] === 1 ? '' : 's'}" title="${z}. ${esc(ZONES[z].name)}: ${dist[z]}"><span class="n" aria-hidden="true">${dist[z] || ''}</span><i class="bx" aria-hidden="true" style="height:${(dist[z] / max * 100).toFixed(0)}%"></i><span class="z" aria-hidden="true">${z}</span></li>`).join('')}</ol>`;
+  return `<ol class="in-dist" aria-label="${esc(label)}">${ZONE_IDS.map((z) => `<li data-n="${dist[z]}" data-here="${z === here ? 1 : 0}" aria-label="District ${z}, ${esc(ZONES[z].name)}: ${dist[z]} student${dist[z] === 1 ? '' : 's'}" title="${z}. ${esc(ZONES[z].name)}: ${dist[z]}"><span class="n" aria-hidden="true">${dist[z] || ''}</span><i class="bx" aria-hidden="true" style="height:${(dist[z] / max * 100).toFixed(0)}%"></i><span class="z" aria-hidden="true">${z}</span></li>`).join('')}</ol>`;
 }
 
-/** Every panel of the dashboard as a string: { head, c1, c2, grade }. `U` is the dashboard's own UI state ({ zone, bg, ev, when, replace }). */
+// ---------------------------------------------------------------- right now: who is where, and what just happened
+/** Does this room carry presence (docs/ARCHITECTURE.md, "Presence")? The relay promised to (`room.can`) and the table has loaded. A relay of before it, a room between tabs and a room taken back a moment ago say no. */
+const liveOf = (S) => !!S.presence && S.room?.kind === 'relay' && typeof S.room.can === 'function' && S.room.can('here');
+/** How long ago something happened, in words. */
+export function ageText(ms) {
+  if (!(ms >= 5000)) return 'just now';
+  const s = Math.floor(ms / 1000);
+  if (s < 60) return `${s} s ago`;
+  const m = Math.floor(s / 60);
+  return m < 60 ? `${m} min ago` : `${Math.floor(m / 60)} h ago`;
+}
+const liveSummary = (k) => {
+  if (!k.here) return 'No student is here yet.';
+  const parts = [[k.play, 'playing'], [k.academy, 'in the Academy'], [k.away, 'away'], [k.other, 'online']].filter(([n]) => n).map(([n, w]) => `${n} ${w}`);
+  return `${k.here} student${k.here === 1 ? '' : 's'} here: ${parts.join(', ')}.`;
+};
+/**
+ * The panel that says what is happening now: how many students are here and what they are doing, which districts they are in this minute, and the last dozen things that happened (a join, a leave, a district opened, a swap, a
+ * shock felt, a milestone). It is written from the session's presence table alone (no gradebook), so it can be patched on its own when a message arrives. A room that cannot carry presence says it updates every 4 seconds, which is
+ * how often a student's browser sends its numbers, and shows nothing it does not have. Pure; every word of a student's is escaped.
+ */
+export function liveHTML(S) {
+  const live = liveOf(S);
+  const chip = live
+    ? '<span class="chip good" title="Where students are, and what they just did, reach this page as it happens.">Live</span>'
+    : '<span class="chip warn" title="This room does not carry live updates, so each student\'s numbers arrive every 4 seconds. Where students are, and what they just did, need a relay that carries them (docs/HOSTING.md).">Updates every 4 s</span>';
+  const head = `<div class="row"><h2 id="in-live-h" class="grow">Right now</h2>${chip}</div>`;
+  if (!live) return `<section class="panel in-live" aria-labelledby="in-live-h">${head}</section>`; // (the reason is on hover and in the kit: the dashboard is read before it is explained)
+  const P = S.presence, k = P.counts(), now = P.now();
+  const rows = P.feed.slice(0, 12).map((r) => `<li><span class="tiny mute mono">${ageText(now - r.at)}</span> <b>${esc(r.handle || r.pid)}</b> ${esc(r.text)}${Number.isFinite(r.hour) ? ` <span class="tiny mute">Day ${dayOf(r.hour)}</span>` : ''}</li>`).join('');
+  return `<section class="panel in-live" aria-labelledby="in-live-h">${head}
+    <div class="live-grid">
+      <div class="in-now"><p class="small" style="margin-top:0">${esc(liveSummary(k))}</p>
+        <h3 class="gap">Where they are now</h3>${distributionHTML(k.zones, k.here ? busiest(k.zones) : 0, 'Students by the district they are in now')}</div>
+      <div><h3 style="margin-top:0">Just now</h3><ol class="in-feed" role="log" aria-live="off" aria-label="What students just did">${rows || '<li class="mute">Nothing yet.</li>'}</ol></div>
+    </div></section>`;
+}
+
+/** The roster's "Now" cell: the district a student is in this minute (its short name), or the Academy, or away; a dash for one the presence table has not heard from. It is not a grade and is not in the CSV. */
+function nowCell(P, r) {
+  const m = P && P.members.get(r.pid);
+  if (!m || !m.online) return '<td class="mute">-</td>';
+  if (m.s === 'play' && m.z >= 1 && m.z <= ZONE_COUNT) return `<td title="${esc(ZONES[m.z].name)}">${esc(ZONES[m.z].short)}</td>`;
+  if (m.s === 'academy') return '<td>Academy</td>';
+  if (m.s === 'away') return '<td>away</td>';
+  return '<td class="mute">-</td>';
+}
+
+/** Every panel of the dashboard as a string: { head, keep, live, c1, c2, grade }. `U` is the dashboard's own UI state ({ zone, bg, ev, when, replace }). */
 export function instructorParts(S, U) {
   const hour = S.clock.now(), day = Math.min(TOTAL_DAYS, Math.floor(hour / 24) + 1);
   const students = S.students(), real = students.filter((s) => !s.synth), onlineN = real.filter((s) => s.online).length; // (a student whose tab closed is away, kept in the roster with their last snapshot, and is not online)
@@ -211,6 +259,7 @@ export function instructorParts(S, U) {
   const ls = LINK_SOUNDS.find((x) => x.id === U.linkSound) || LINK_SOUNDS[0];
   const link = `${typeof location !== 'undefined' ? location.origin + location.pathname : ''}?room=${room.code}${room.relay ? '&relay=' + encodeURIComponent(room.relay) : ''}${ls.query}`; // `sound=quiet` or `sound=off`: students who open it start in Classroom sound, or muted, while they are in the room (docs/AUDIO.md 7.1); never over a sound setting a student has chosen
   const dist = distribution(students), drafted = draftCounts(students), here = U.zone && ZONES[U.zone] ? U.zone : busiest(dist);
+  const isLive = liveOf(S); // the roster gets a "Now" column only in a room that can say where students are
 
   const head = `<div class="grow"><h1 tabindex="-1" style="margin:0;font-size:1.3rem">Instructor dashboard</h1><span class="small mute">Room <b class="mono gold" style="font-size:1.2rem">${esc(room.code)}</b> &middot; ${S.room?.kind === 'relay' ? 'relay server (' + esc(S.room.state) + ')' : '<span title="Students join from other tabs of this browser with Copy student link.">this browser only</span> (other devices need a relay)'} &middot; <b>${onlineN}</b> student${onlineN === 1 ? '' : 's'} online${real.length > onlineN ? ' (' + (real.length - onlineN) + ' away)' : ''}${S.demo ? ' + ' + S.demo + ' demo' : ''}</span></div>
       <fieldset class="in-linksound" style="display:grid;gap:.15rem;max-width:15rem;margin:0;padding:0;border:0;min-width:0"><legend style="color:var(--ink);padding:0;font-size:.82rem">Sound in the student link</legend>
@@ -264,8 +313,8 @@ export function instructorParts(S, U) {
   const shown = gb.filter((r) => bg === 'all' || perksOf(r).includes(bg));
   const ungraded = shown.find((r) => r.adapt == null);
   const grade = `<div class="row"><h2 class="grow">Roster and gradebook</h2><label class="sr" for="pf">Background</label><select id="pf" data-change="bgf" data-fid="pf"><option value="all">All Backgrounds</option>${PERK_IDS.map((id) => `<option value="${id}" ${bg === id ? 'selected' : ''}>${esc(PERKS[id].name)}</option>`).join('')}</select><button class="btn sm" data-act="gradecsv" data-fid="in-csv">Export gradebook CSV</button></div>
-      <div class="scroll" style="max-height:26rem"><table class="tbl"><caption class="sr">Roster with automated grade components</caption><thead><tr><th scope="col">Founder</th><th scope="col">Backgrounds</th><th scope="col">District</th><th scope="col">Net worth</th><th scope="col">EEI</th><th scope="col">Economic (30)</th><th scope="col">Adaptability (20)</th><th scope="col">Peer market (10)</th><th scope="col">Auto subtotal / 60</th><th scope="col">Status</th></tr></thead><tbody>
-      ${shown.map((r) => `<tr><td>${esc(r.handle)} <span class="tiny mute">${esc(r.pid)}</span>${r.rewind && !r.rewind.ok ? ` <span class="chip warn" title="Their run could not go all the way back: it has no checkpoint that old">rewind stopped at day ${Math.floor(r.rewind.hour / 24) + 1} (asked for day ${Math.floor(r.rewind.wanted / 24) + 1})</span>` : ''}</td><td>${bgIcons(r)}</td><td class="mono" title="${esc(ZONES[topZone(r)].name)}">${topZone(r)}</td><td class="mono">${money(r.nw)}</td><td class="mono">${r.eei >= 100 ? r.eei.toFixed(0) : r.eei.toFixed(2)}</td><td class="mono">${(r.econ * 0.3).toFixed(1)}</td><td class="mono">${adaptCell(r)}</td><td class="mono">${(r.engage * 0.1).toFixed(1)}</td><td class="mono"><b>${r.auto.toFixed(1)}</b></td><td>${r.synth ? '<span class="chip">demo</span>' : r.online ? '<span class="chip good">online</span>' : '<span class="chip warn">away</span>'}${r.flags?.insolvent ? ' <span class="chip bad">insolvent</span>' : ''}${r.flagged ? ` <span class="chip bad">${r.flagged} flagged</span>` : ''}</td></tr>`).join('') || '<tr><td colspan="10" class="mute">Waiting for students. Share the room code, or add demo students with the slider above.</td></tr>'}</tbody></table></div>
+      <div class="scroll" style="max-height:26rem"><table class="tbl"><caption class="sr">Roster with automated grade components</caption><thead><tr><th scope="col">Founder</th><th scope="col">Backgrounds</th><th scope="col">District</th>${isLive ? '<th scope="col">Now</th>' : ''}<th scope="col">Net worth</th><th scope="col">EEI</th><th scope="col">Economic (30)</th><th scope="col">Adaptability (20)</th><th scope="col">Peer market (10)</th><th scope="col">Auto subtotal / 60</th><th scope="col">Status</th></tr></thead><tbody>
+      ${shown.map((r) => `<tr><td>${esc(r.handle)} <span class="tiny mute">${esc(r.pid)}</span>${r.rewind && !r.rewind.ok ? ` <span class="chip warn" title="Their run could not go all the way back: it has no checkpoint that old">rewind stopped at day ${Math.floor(r.rewind.hour / 24) + 1} (asked for day ${Math.floor(r.rewind.wanted / 24) + 1})</span>` : ''}</td><td>${bgIcons(r)}</td><td class="mono" title="${esc(ZONES[topZone(r)].name)}">${topZone(r)}</td>${isLive ? nowCell(S.presence, r) : ''}<td class="mono">${money(r.nw)}</td><td class="mono">${r.eei >= 100 ? r.eei.toFixed(0) : r.eei.toFixed(2)}</td><td class="mono">${(r.econ * 0.3).toFixed(1)}</td><td class="mono">${adaptCell(r)}</td><td class="mono">${(r.engage * 0.1).toFixed(1)}</td><td class="mono"><b>${r.auto.toFixed(1)}</b></td><td>${r.synth ? '<span class="chip">demo</span>' : r.online ? '<span class="chip good">online</span>' : '<span class="chip warn">away</span>'}${r.flags?.insolvent ? ' <span class="chip bad">insolvent</span>' : ''}${r.flagged ? ` <span class="chip bad">${r.flagged} flagged</span>` : ''}</td></tr>`).join('') || `<tr><td colspan="${isLive ? 11 : 10}" class="mute">Waiting for students. Share the room code, or add demo students with the slider above.</td></tr>`}</tbody></table></div>
       ${ungraded ? `<p class="tiny mute">* No shock graded yet: counted as a neutral ${Math.round(adaptUsed(ungraded) / 0.2)} of 100, which is ${Math.round(adaptUsed(ungraded))} of the 20 points.</p>` : ''}
       ${fold(U, 'points', 'How the automated points are worked out', `<ul class="small mute">
         <li>Each component is scored from 0 to 100, then weighted to the points in its column heading.</li>
@@ -274,7 +323,7 @@ export function instructorParts(S, U) {
         <li><b>Peer market (10):</b> 25 for each completed swap with a classmate, less 10 for each flagged attempt.</li>
         <li>The 40 points for reflection are yours to grade with the rubric in the <a href="${KIT_URL}" target="_blank" rel="noopener noreferrer">faculty kit</a> (docs/FACULTY_KIT.md in the repository).</li>
         <li>Grade passback (LTI 1.3) is not built: export the CSV and import it into your LMS gradebook.</li></ul>`)}`;
-  return { head, keep: recoveryHTML(S), c1, c2, grade };
+  return { head, keep: recoveryHTML(S), live: liveHTML(S), c1, c2, grade };
 }
 
 /** A cell that a spreadsheet will read as text, never as a formula (aliases are typed by students). */
@@ -287,13 +336,16 @@ export function gradebookCSV(S) {
 
 export function mountInstructor(root, S, hooks) {
   const U = { zone: null, bg: 'all', ev: 'fed', when: '0', replace: true, linkSound: 'normal', open: {}, sent: loadSent(S) };
-  root.innerHTML = `<header class="panel row" id="ih"></header><div class="gap" id="ikeep"></div><div class="gap main"><div class="col" id="icol1"></div><div class="col" id="icol2"></div></div><section class="panel gap" id="igrade"></section>`;
-  const el = { head: $('#ih'), keep: $('#ikeep'), c1: $('#icol1'), c2: $('#icol2'), grade: $('#igrade') };
+  root.innerHTML = `<header class="panel row" id="ih"></header><div class="gap" id="ikeep"></div><div class="gap" id="ilive"></div><div class="gap main"><div class="col" id="icol1"></div><div class="col" id="icol2"></div></div><section class="panel gap" id="igrade"></section>`;
+  const el = { head: $('#ih'), keep: $('#ikeep'), live: $('#ilive'), c1: $('#icol1'), c2: $('#icol2'), grade: $('#igrade') };
 
   function render() {
     const p = instructorParts(S, U);
-    setHTML(el.head, p.head); setHTML(el.keep, p.keep); setHTML(el.c1, p.c1); setHTML(el.c2, p.c2); setHTML(el.grade, p.grade);
+    setHTML(el.head, p.head); setHTML(el.keep, p.keep); setHTML(el.live, p.live); setHTML(el.c1, p.c1); setHTML(el.c2, p.c2); setHTML(el.grade, p.grade);
   }
+  // A message from the room (a join, a district, a swap) patches the "Right now" panel alone, once for a burst (a whole class pressing Begin sends a hundred): the rest of the dashboard waits for its own tick.
+  let liveTimer = 0;
+  const renderLive = () => { liveTimer = 0; setHTML(el.live, liveHTML(S)); };
   // a fold the instructor opened stays open when its panel is drawn again (`toggle` does not bubble, so it is heard on the way down)
   const onToggle = (e) => { const k = e.target?.dataset?.fold; if (k) U.open[k] = !!e.target.open; };
   root.addEventListener('toggle', onToggle, true);
@@ -335,7 +387,11 @@ export function mountInstructor(root, S, hooks) {
   delegate(root, acts);
   dlg.el._acts = acts;
   let last = 0;
-  const off = S.on((t) => { if (t === 'tick') { if (performance.now() - last < 900) return; last = performance.now(); } render(); });
+  const off = S.on((t) => {
+    if (t === 'presence') { if (!liveTimer) liveTimer = setTimeout(renderLive, 60); return; }
+    if (t === 'tick') { if (performance.now() - last < 900) return; last = performance.now(); }
+    render();
+  });
   render();
-  return { destroy() { off(); root.removeEventListener('toggle', onToggle, true); } };
+  return { destroy() { off(); if (liveTimer) clearTimeout(liveTimer); liveTimer = 0; root.removeEventListener('toggle', onToggle, true); } };
 }
