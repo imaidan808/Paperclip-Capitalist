@@ -1,6 +1,6 @@
 # Paperclip Capitalist: what is not built yet
 
-Updated 2026-11-06. The tasks that have no code yet, in the order I would take them, with the author's priorities of 2026-11-04 first. Items marked **(new)** were added by the author on 2026-11-04; their descriptions are first ideas, not designs. Where a survey or a design already exists it is named. "Needs" lines say what a task waits on.
+Updated 2026-11-09. The tasks that have no code yet, in the order I would take them, with the author's priorities of 2026-11-04 first. Items marked **(new)** were added by the author on 2026-11-04 or later (the latest five, of 2026-11-06, are 10b, 10c, 14b, 14c and 22); their descriptions are first ideas, not designs. Where a survey or a design already exists it is named. "Needs" lines say what a task waits on.
 
 ## Where things stand
 
@@ -114,6 +114,18 @@ The author: "Milestone numbers for players to hit for incentive."
 
 Today the only milestones are three feature gates (`MIL` in `js/config.js`: $1,000 opens managers, clients and the Bank; $25,000 the first audit; $250,000 the late features). Idea: a visible ladder of net-worth targets ($1k, $10k, $100k, $1M, $10M), perhaps with levels and districts opened as side rungs, shown as "next target" on the Goal card and in the Quests drawer. Reaching a rung pays a small reward (cash or XP, later a cosmetic from the wardrobe), a toast and a line in the Debrief timeline; the instructor sees a class milestone board. Rewards stay small so the economy does not move, and the test asserts they go through the ledger. **Needs:** reward sizes and which rungs.
 
+### 10b. Quest rewards beyond XP (new)
+
+The author: "give quests rewards aside from just xp."
+
+Today a finished quest pays XP and, for a few of the 32, one skill point (`js/meta/quests.js`); the achievements pay XP too, and a few epic ones add a skill point. Idea: a reward type chosen to teach what the quest teaches: a small cash grant, a crate of the district's goods (delivered to Stock, not paid as cash), a reputation point, a storage slot or plot, a discount token (a fee or tax holiday for a day), a peek at the next district's lot pool, an Academy hint, and later a cosmetic from the wardrobe (item 15). Rules: rewards stay small and go through the ledger so the balance runs stay honest (the bot-diff harness is re-run), they are deterministic so ranked runs replay, the instructor can switch cash and goods rewards off, and each reward type gets a drawing on the card (the glyph kit). The rungs of the milestone ladder (item 10) and the NPC quests (item 17) pay rewards too, so the reward types are designed once for all three. **Needs:** which reward types and sizes, and whether the instructor can turn some of them off.
+
+### 10c. A paperclip on the ground: no soft lock (new)
+
+The author: "find a paperclip on the ground if you have less than x amount of money so you don't get soft locked."
+
+Idea: when a player is truly stuck (cash below a threshold, nothing to sell, nothing affordable at the cheapest lot, no pipeline paying) they find a rusty paperclip, the first good of the barter ladder (`js/data/tier1.js`, worth a few cents), so a run can always climb again; it also teaches that the ladder starts from nothing. Rules: only when truly stuck, with a cooldown (once a game day), seeded so ranked runs replay, every find on the ledger and in the Debrief timeline with a "lifelines used" count (so it cannot be farmed and a board can mark it), an instructor switch, and a toast with a glint in the Scrap Yard. First check what the engine does today at $0 with no crates: is there a real soft lock? Write a stuck-player scenario for the bot in the balance harness before building anything. **Needs:** the threshold, the cooldown, and whether finds count against ranked scores.
+
 ### 11. Offers: sell or trade to people (new)
 
 The author: "offer trade or sell to other people, instead of it being a guessing game; the object of the game is that you should be able to trade your way up alongside buying and selling things."
@@ -137,6 +149,18 @@ Surveyed. A 40-event catalog (22 on today's levers), a timeline the instructor p
 ### 14. Teams
 
 Surveyed (parts 4 and 5 of the plan above). Team value is the members' net worth plus a business-value premium (6x, or 10x if listed with a clean audit, times the 14-day average daily profit). Instructor panel (create, assign, auto-balance), a HUD chip, a team debrief (value bridge, capital structure, shock response, overlap, timeline) and CSV export. **Needs from the author:** value basis (total or per member), team size and auto-balance.
+
+### 14b. Semester integration: a time allowance and windows, set by the instructor (new)
+
+The author: "time allowance + specificity with instructor control for real semester integration."
+
+Idea: the instructor sets when and how much a class can play, in terms of a real semester: windows (open from one date to another, or on given days and hours), a time allowance (minutes or sessions per student per week, or a total), a pace (game hours per real minute and a speed cap), a deadline with a final Debrief, and the "specificity": overrides per section, team and student (an accommodation such as extra time for one student). The student sees an allowance meter and a countdown; the dashboard shows who has used how much and who has not started. It must not break saves, the relay's rooms or ranked replays (time is a recorded input of the room), it must work when students play at different times, and it must work on a phone. It touches `js/ui/instructor.js`, the relay's room settings (`server/relay.mjs`), the session clock and speed, the Academy, the Debrief and `docs/FACULTY_KIT.md`. **Needs:** the author's picture of a real semester (weeks, assignments, due dates), whether a link to a school's learning platform is wanted (LTI is listed as not implemented in `docs/COMPLIANCE.md`), and what "specificity" should cover. Read item 22's comparison before the detailed design.
+
+### 14c. Instructor emergency fund (new)
+
+The author: "instructor emergency fund."
+
+Idea: a class-level fund the instructor controls: grant emergency capital to a student or a team that is stuck or hit by a shock (a bailout), with a note the student sees, recorded on the ledger and in the Debrief as "assisted", so bailouts and moral hazard can be taught and a board can mark or normalize assisted runs. The pool is the instructor's to size (a pool for the semester) and can be off. A grant reaches the room as an event, the way the instructor's scheduled shocks do today (`js/ui/instructor.js`), so replays and peers agree. It pairs with the paperclip lifeline (item 10c) and with the Bank. **Needs:** the default pool, whether students may ask for a grant, and whether a grant affects ranking. Read item 22's comparison before the detailed design.
 
 ---
 
@@ -188,6 +212,16 @@ The menu downloads a save but cannot load one. Read as: import the file "Downloa
 
 ---
 
+## 8. Research and positioning
+
+### 22. Compare with a competing simulation and pull ideas (new)
+
+The author: "research / compare to (https://www.marketplace-simulation.com/compare-our-business-simulations/business-fundamentals-bikes/) and pull any ideas (creation or improvement or alteration oriented, could take the sim in a different direction if better) that may improve, or otherwise greatly benefit our sim and position it as far more desireable than this one"
+
+Plan: a small survey, one reader for each page of that product and one synthesizer: what the product is, how a session or a semester is structured, its instructor controls and course integration, grading and analytics, team play, content, its price and licensing model, and how it positions itself. Then compare it with ours (relay rooms, the instructor dashboard, the Academy, the Deal Room, the Debrief, the gradebook CSV, the Codex, quests) and write a ranked list of ideas (create, improve or alter, including directions that would change the sim if that is better) with cost and fit, plus a positioning note: what we say about ourselves, with the game sold to universities and not advertised as free for everyone. Rules: summarize in our own words, quote nothing long, copy no content or design, and make no claim about them that their pages do not support. A plain fetch of the page returned HTTP 403 on 2026-11-06 (bot protection): do not work around it by scraping; read it in a browser the way a person does, or ask the author to paste it. Output: a short ranked report and roadmap items for the best ideas. It comes before the detailed design of 14b and 14c, and it may refine 10b, 10c, 14b and 14c. **Needs:** a way to read the page (a browser session, or a paste from the author).
+
+---
+
 ## Deferred (the author's list for after the above)
 
 - **Skill-based deal minigames,** harder as the deal grows, with more polish and better reward feedback. The play tester found the Deal Room "too monotonous" and without a way to "do exceptionally better than average": before designing, measure how much a strong player beats Quick by, stage by stage and by deal size, so the new games have a number to beat (the Close price is held between 0.6x and 1.4x of fair value today).
@@ -213,5 +247,6 @@ The menu downloads a save but cannot load one. Read as: import the file "Downloa
 - Rare traders (item 12) need the catalog's rarity (item 9), the offers dialog (item 11) and connected roads (item 1).
 - The story (item 16) comes before the NPCs (item 17) and the island (item 18); the island fits endless mode (item 13).
 - The lottery (item 19) and the NPC rewards (item 17) must be seeded, not rolled at the click, so ranked runs can be replayed.
+- The instructor features (14b, 14c), the lifeline (10c) and the quest rewards (10b) all go through the room's recorded events and the ledger: design them together, and seed or log every grant so ranked runs and peers replay. The comparison (item 22) comes before the detailed design of 14b and 14c and may refine all four.
 - The profile tab (item 7b) needs a dock drawing and a phone layout for an eighth tab, changes the click target of the top-left card that the Academy anchors and a test pins, and rides on the peer snapshot; the look and the achievements on it come with item 15 and the icons.
 - First-screen budget: the icon kit adds 2 to 3 KB, the items catalog about 6.5 KB; everything else should load lazily.
