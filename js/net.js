@@ -32,6 +32,7 @@ class LocalTransport {
   constructor(code) {
     this.kind = 'local';
     this.state = 'open';
+    this.caps = new Set(); // nothing is promised here: there is no relay to say what it takes (presence, "here" and "act", is the relay's)
     this.bc = new BroadcastChannel('paperclip-capitalist-' + code);
     this.bc.onmessage = (e) => this.onmsg?.(e.data);
   }
@@ -46,7 +47,10 @@ class RelayTransport {
     // `key` is the secret that stays in this browser beside the pid: the relay binds the pid to it the first time it sees the pid in a room and refuses anyone else who connects as that pid (server/relay.mjs)
     this.url = url + (url.includes('?') ? '&' : '?') + 'room=' + encodeURIComponent(code) + '&pid=' + encodeURIComponent(pid) + '&key=' + encodeURIComponent(key || '') + '&role=' + (role === 'instructor' ? 'instructor' : 'student')
       // an instructor's room-owner token (server/relay.mjs): what lets the same instructor take the seat back from another device. Never sent for a student.
-      + (role === 'instructor' && owner ? '&owner=' + encodeURIComponent(owner) : '');
+      + (role === 'instructor' && owner ? '&owner=' + encodeURIComponent(owner) : '')
+      // the version of the protocol this client speaks: 2 is presence (server/relay.mjs). A relay of before that ignores it, and so never welcomes the client, which then says nothing the relay would not know.
+      + '&v=2';
+    this.caps = new Set(); // what the relay has promised to take from this client, from its welcome; empty until it comes, and again whenever the connection drops
     this.queue = [];
     this.tries = 0;
     this.closed = false;
@@ -56,8 +60,9 @@ class RelayTransport {
     if (this.closed) return;
     try { this.ws = new WebSocket(this.url); } catch { this.state = 'error'; this.onstate?.(this.state); return; }
     this.ws.onopen = () => { this.state = 'open'; this.tries = 0; this.onstate?.(this.state); for (const m of this.queue.splice(0)) this.ws.send(m); };
-    this.ws.onmessage = (e) => { if (typeof e.data !== 'string' || e.data.length > MAX_FRAME) return; try { this.onmsg?.(JSON.parse(e.data)); } catch { /* ignore malformed */ } };
+    this.ws.onmessage = (e) => { if (typeof e.data !== 'string' || e.data.length > MAX_FRAME) return; try { const m = JSON.parse(e.data); if (!this._welcome(m)) this.onmsg?.(m); } catch { /* ignore malformed */ } };
     this.ws.onclose = (e) => {
+      this._promise([]); // whatever was promised was promised to that connection
       if (this.closed) return;
       // 1008 is the relay refusing this very connection (a room code it will not take, or a Founder ID that another connection bound first in this room): the same address is refused again, so it is not asked again
       if (e && e.code === 1008) { this.state = 'refused'; this.reason = e.reason || ''; this.onstate?.(this.state); return; }
@@ -65,6 +70,17 @@ class RelayTransport {
       setTimeout(() => this.open(), Math.min(15000, 800 * 2 ** this.tries++));
     };
     this.ws.onerror = () => { try { this.ws.close(); } catch { /* already closed */ } };
+  }
+  /** The relay's welcome (a frame that is the relay's own, so it has no sender): the message types it takes from this client. It is the transport's: no handler hears it. True when the frame was one. */
+  _welcome(m) {
+    if (!m || typeof m !== 'object' || m.t !== 'welcome' || m.from !== undefined) return false;
+    this._promise(Array.isArray(m.caps) ? m.caps : []);
+    return true;
+  }
+  _promise(list) {
+    const caps = new Set(list.filter((c) => typeof c === 'string' && /^[a-z]{1,12}$/.test(c)).slice(0, 8));
+    if (caps.size === this.caps.size && [...caps].every((c) => this.caps.has(c))) return;
+    this.caps = caps; this.oncaps?.(caps);
   }
   send(m) {
     if (this.state === 'refused') return; // nobody is listening
@@ -84,10 +100,18 @@ export class Room {
     this.transport = o.relay ? new RelayTransport(o.relay, o.code, o.pid, o.role, o.key, o.owner) : new LocalTransport(o.code);
     this.transport.onmsg = (m) => { if (m && typeof m === 'object' && m.from !== this.pid) for (const h of this.handlers) { try { h(m); } catch { /* one handler's fault is not the others' */ } } };
     this.transport.onstate = (s) => this.onstate?.(s);
+    this.transport.oncaps = (c) => this.oncaps?.(c);
   }
   get kind() { return this.transport.kind; }
   get state() { return this.transport.state; }
+  /** The message types the relay has promised to take from this room's connection (a Set of words; empty over a browser's own tabs, on a relay of before presence, and while the connection is down). */
+  get caps() { return this.transport.caps; }
+  can(type) { return this.transport.caps.has(type); }
   on(fn) { this.handlers.add(fn); return () => this.handlers.delete(fn); }
-  send(msg) { this.transport.send({ ...msg, from: this.pid, role: this.role, handle: this.handle, ts: Date.now() }); }
+  /** Presence (`here`, `act`) is sent only where the relay promised to take it: elsewhere it is not an error, it is nothing. Everything else is sent as it always was. */
+  send(msg) {
+    if ((msg.t === 'here' || msg.t === 'act') && !this.can(msg.t)) return;
+    this.transport.send({ ...msg, from: this.pid, role: this.role, handle: this.handle, ts: Date.now() });
+  }
   close() { try { this.send({ t: 'bye' }); } catch { /* noop */ } this.transport.close(); }
 }
