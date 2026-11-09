@@ -93,6 +93,7 @@ export function mountGame(root, S, hooks) {
 
   function render() {
     if (dead || !g()) return;
+    S.setHere(U.zone, 'play'); // where this student is, for the room: said only when it changes (js/session.js)
     if (U.drawer && !visibleIds().has(U.drawer)) U.drawer = null;
     const changed = [setHTML(el.hud, hudHTML(ctx), HOLD), setHTML(el.tracker, trackerHTML(ctx), HOLD), setHTML(el.ticker, tickerHTML(ctx), HOLD), setHTML(el.dock, dockHTML(), HOLD)].some(Boolean);
     let redrawn = changed; // did any part of the page get new markup (and so new bar elements)?
@@ -306,6 +307,7 @@ export function mountGame(root, S, hooks) {
       progress.onEvent(evt);
       cues?.event(evt);
       ctx.emit(evt);
+      S.reportEvent(evt); // the few events that are news for the instructor (a district opened, a shock, a milestone...) go to its feed; the session decides which
       if (evt.type === 'level') { sfx.level(); burst({ power: 1.2 }); } // the words are the engine's own note (Level N: a skill point, or the XP a mastered founder gets instead), which the news feed already toasts
     };
   }

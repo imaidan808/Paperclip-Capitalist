@@ -179,6 +179,7 @@ const screens = {
   // The Academy mounts its own sandbox; done or skipped, it is not shown again by itself.
   academy() {
     let live = true;
+    S.setHere(0, 'academy'); // the room is told this student is in a lesson, not in the world (js/session.js)
     const only = pending?.only; // a single lesson to replay (from the Codex), else the whole course
     const finish = () => {
       if (!live) return;
@@ -254,7 +255,7 @@ setInterval(() => {
   kv.tab.touch(); // (a tab that is a founder of its own keeps its claim on the slot fresh, so a copy of the tab is told from a refresh of it: js/identity.js)
   if (S.mode === 'instructor' && S.roomInfo && Date.now() % 5000 < 260) kv.set('instr', { code: S.roomInfo.code, relay: S.roomInfo.relay, clock: S.clock.toJSON(), difficulty: S.difficulty, ghosts: S.ghosts, algo: S.algo });
 }, 250);
-document.addEventListener('visibilitychange', () => { if (!document.hidden) S.tick(); else S.save(true); });
+document.addEventListener('visibilitychange', () => { S.setAway(document.hidden); if (!document.hidden) S.tick(); else S.save(true); }); // (a hidden tab tells the room it is away)
 addEventListener('pagehide', () => { S.save(true); kv.tab.release(); });
 
 /** Run `f` now if the page has loaded, else once it has: what the first screen does not need (the build stamp, the rest of the game) is asked for after the load event, so the first screen's fetches are the static graph and nothing more (tests/page-budget.test.mjs B4). */
