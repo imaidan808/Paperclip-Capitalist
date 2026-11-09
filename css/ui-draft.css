@@ -138,6 +138,12 @@ body:has(.dr-actions) #toasts { bottom: calc(max(.5rem, env(safe-area-inset-bott
 .in-chips { display: flex; flex-wrap: wrap; gap: .35rem; margin: .4rem 0 0; padding: 0; list-style: none; }
 .in-chips li { display: inline-flex; gap: .3rem; align-items: center; border: 1px solid var(--line); border-radius: 99px; padding: .08rem .55rem; font-size: .76rem; background: var(--panel2); }
 @media (max-width: 640px) { .in-dist { height: 7rem; gap: 2px; } .in-dist .z { font-size: .58rem; } }
+/* the "Right now" panel: the districts students are in this minute beside what just happened (twelve rows at most, so nothing in it scrolls) */
+.in-live .live-grid { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: .25rem 1.5rem; }
+.in-live .in-now .in-dist { height: 6.5rem; }
+.in-feed { list-style: none; margin: 0; padding: 0; display: grid; gap: .3rem; font-size: .88rem; }
+.in-feed li { display: flex; flex-wrap: wrap; gap: .1rem .4rem; align-items: baseline; overflow-wrap: anywhere; }
+@media (max-width: 760px) { .in-live .live-grid { grid-template-columns: minmax(0, 1fr); } }
 
 /* print: the headline tiles go back to paper (the global print rule already makes the text black) */
 @media print { .sc-stat, .sc-hero, .sc-build .card { background: transparent; box-shadow: none; } }

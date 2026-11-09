@@ -28,7 +28,7 @@ What a player does: drafts two of twelve Backgrounds (each has a real-world basi
 
 - The game asks for an alias, not a name. The only identifiers are a random Founder ID and the alias the student chooses.
 - Nothing is sent anywhere unless a student joins a classroom room. Rooms between tabs of one browser use the browser's BroadcastChannel and never leave the browser (each student's tab is its own founder; another browser or computer needs the relay).
-- A room on many devices uses an optional relay server that the instructor runs (a WebSocket forwarder, `server/relay.mjs` in the repository). It then sees the room code, the Founder ID, a random secret that proves the ID is the same browser, the alias and the game numbers in each message. It keeps the latest snapshot per student in memory only, writes nothing to disk and never logs what a message holds.
+- A room on many devices uses an optional relay server that the instructor runs (a WebSocket forwarder, `server/relay.mjs` in the repository). It then sees the room code, the Founder ID, a random secret that proves the ID is the same browser, the alias and the game numbers in each message. It keeps the latest snapshot per student in memory only, writes nothing to disk and never logs what a message holds. It also sees which district a student is in and whether they are playing, in the Academy or away (kept in memory while the student is connected), and a short line sent to the instructor alone when something happens (a district opened, a swap, a shock, a milestone, insolvency, an exit; kept by nobody).
 - The instructor's gradebook export is a CSV of Founder IDs and aliases that the instructor downloads. No student data is held by this site.
 
 ## Source and documentation

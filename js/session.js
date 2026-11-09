@@ -43,6 +43,7 @@ export const CLOCK_WAIT_MS = 6000;
 const MAX_PEERS = 450;                 // founders with a snapshot: a relay room holds 400 (server/relay.mjs) plus the instructor and some slack
 const MAX_GHOSTS = 100;                // names that said hello and sent nothing else: a flood of them must never crowd out a student who has data
 const MAX_FLAGS = 500;
+const MAX_PRES_Q = 300;                // presence frames that wait for the lazy module (js/presence.js) to load
 const MAX_INCOMING = 24, MAX_INCOMING_PER = 6;
 const ONLINE_MS = 20000;               // heard from in this long: online
 const COHORT_MS = 2000;                // the market's view of the class is rebuilt at most this often, however many snapshots arrive
@@ -122,6 +123,10 @@ export class Session {
     this.rewindReport = new Map();   // instructor: pid -> how far that student's rewind went
     this.injected = new Map();       // shock id -> the hour it begins: the shocks this room's instructor sent. With the scheduled ones and the algorithmic ones the seed rolls, the room's own record of what happened to it
     this.lastError = null;           // the last message that threw (the room carries on)
+    // Presence (docs/ARCHITECTURE.md): the room's table and feed of who is where, in js/presence.js, which is loaded when a room with a relay is joined (not part of the first screen). Never part of the game.
+    this.presence = null; this._presQ = [];                      // the table (null until it has loaded, in a solo run and in a room between tabs), and what arrived while it loaded
+    this._here = { z: 0, s: '' }; this._away = false;           // where this student is and what they are doing; a hidden tab is away
+    this._hereSent = null; this._hereAt = 0; this._hereTimer = 0; this._actTimes = [];
     this.ckDays = new Set(); this.ckSkip = new Set(); this.cohortDirty = false; this.rosterDirty = false;
     this.timers = { snap: 0, clock: 0 };
     this.t = { snap: 0, save: 0, clock: 0, refresh: 0, cohort: 0, roster: 0 };
@@ -239,6 +244,8 @@ export class Session {
     // The relay hands the seat to whoever brings it, whatever Founder ID they have.
     const token = role === 'instructor' ? this._ownerFor(code, owner) : undefined;
     this.room = new Room({ code, pid: this.pid, key: this.key, handle: h, role, relay: relay || undefined, owner: token });
+    this.room.oncaps = () => { this._sendHere(true); this.emit('presence'); }; // what the relay promises comes with each connection, so a student says where they are again after every reconnect
+    if (relay) this._loadPresence();
     this.roomInfo = { code, relay, role };
     this.mode = role === 'instructor' ? 'instructor' : 'student';
     this.worldSeed = code;
@@ -268,6 +275,7 @@ export class Session {
   _closeRoom() {
     if (this.room) this.room.close();
     this.room = null; this.roomInfo = null; this.peers.clear(); this.cohort.setPeers([]);
+    this.presence = null; this._presQ = []; this._hereSent = null; this._actTimes = []; if (this._hereTimer) clearTimeout(this._hereTimer); this._hereTimer = 0; // (where this student is stays: a new room is told afresh)
     for (const k of Object.keys(this.timers)) { if (this.timers[k]) clearTimeout(this.timers[k]); this.timers[k] = 0; }
     this.incoming = []; this.accepting.clear(); this.delivering.clear(); this.settled.clear(); this.flags = []; this.rewindReport.clear(); this.injected.clear(); this.cohortDirty = false;
   }
@@ -336,12 +344,15 @@ export class Session {
     const g = this.game;
     switch (m.t) {
       case 'hello': {
+        this._pres(m, from);
         this._admit(from, false);
         if (!this._peer(from, m)) return;
         if (this.mode === 'instructor') this._clockSoon(); else if (g) this._snapSoon();
         break;
       }
+      case 'here': case 'act': this._pres(m, from); break; // where a member is, and what a student just did: the instructor's table and feed, never the game
       case 'bye': {
+        this._pres(m, from);
         const p = this.peers.get(from);
         if (p && !p.snap) this.peers.delete(from); else if (p) { p.seen = 0; this.rosterDirty = true; } // a student who left is away, and keeps their last snapshot for the gradebook
         this._flushCohort();
@@ -401,6 +412,59 @@ export class Session {
       default: break;
     }
   }
+  // ---- presence (js/presence.js; docs/ARCHITECTURE.md, "Presence"): who is where, and what just happened. Cosmetic: nothing here reads or writes the game.
+  /** The module is loaded when a room with a relay is joined, by every role (a student needs it to word what it reports). It is a promise for a moment: what arrives meanwhile waits in a queue with a bound. */
+  _loadPresence() {
+    const room = this.room;
+    import('./presence.js').then((m) => {
+      if (this.room !== room) return; // the room was left, or another joined, while it loaded
+      this.presence = new m.Presence({ now: () => Date.now() });
+      for (const [q, from] of this._presQ.splice(0)) this._pres(q, from);
+      this.emit('presence');
+    }, () => { this._presQ.length = 0; }); // offline, or the page is going: the dashboard goes on with its snapshots
+  }
+  /** What the room says of itself: only the instructor keeps the table (nothing shows it to a student yet), and only over a relay (a room between tabs has no presence). */
+  _pres(m, from) {
+    if (this.mode !== 'instructor' || this.room?.kind !== 'relay') return;
+    if (!this.presence) { if (this._presQ.length < MAX_PRES_Q) this._presQ.push([m, from]); return; }
+    if (this.presence.apply(m, from)) this.emit('presence');
+  }
+  /** Where this student is (a district; 0 when not in the world) and what they are doing (one word: `play`, `academy`), for the room. Said when it changes, at most once a second (the last place stands), and again after every reconnect;
+   *  not said to a relay that has not promised to take it. The instructor says nothing: it is not a figure in the world. */
+  setHere(z, s) {
+    z = Number.isInteger(z) && z >= 0 && z <= 99 ? z : 0;
+    s = typeof s === 'string' && /^[a-z]{1,12}$/.test(s) ? s : 'play';
+    if (this._here.z === z && this._here.s === s) return;
+    this._here = { z, s };
+    this._sendHere(false);
+  }
+  /** A hidden tab is away, and says so; it says where it is again when it is back. */
+  setAway(away) { away = !!away; if (this._away === away) return; this._away = away; this._sendHere(false); }
+  _sendHere(force) {
+    const room = this.room, h = this._here;
+    if (!room || this.mode !== 'student' || !h.s || !room.can?.('here')) return; // (a stand-in room with no `can` promises nothing)
+    const want = { z: h.z, s: this._away ? 'away' : h.s }, sent = this._hereSent;
+    if (!force && sent && sent.z === want.z && sent.s === want.s) return;
+    const wait = 1000 - (Date.now() - this._hereAt);
+    if (!force && wait > 0) { if (!this._hereTimer) this._hereTimer = setTimeout(() => { this._hereTimer = 0; this._sendHere(false); }, wait); return; }
+    this._hereAt = Date.now(); this._hereSent = want;
+    room.send({ t: 'here', z: want.z, s: want.s });
+  }
+  /** The engine's events, as the shell sees them: the few that are news for the instructor (a district opened, a shock, a milestone, insolvency, an exit; js/presence.js `actOf`) go to it as an `act`, and the rest are nothing. */
+  reportEvent(evt) {
+    const a = this.presence && this.mode === 'student' ? this.presence.actOf(evt, this.hourNow()) : null;
+    if (a) this._sendAct(a);
+  }
+  _sendAct(a) {
+    const room = this.room;
+    if (!room || this.mode !== 'student' || !room.can?.('act')) return;
+    const now = Date.now(), t = this._actTimes;
+    while (t.length && now - t[0] > 5000) t.shift();
+    if (t.length >= 8) return; // a flood is held to eight in five seconds (the relay holds it to ten, and then to two a second)
+    t.push(now);
+    room.send({ t: 'act', ...a });
+  }
+
   /** Room for a classmate in the table, before the record is made. Two kinds are counted apart: a founder with a snapshot (at most MAX_PEERS: only one silent for ten minutes is replaced) and a name that has only said hello
    *  (at most MAX_GHOSTS: the stalest goes, so a flood of hellos, from a script that opens a connection, greets and leaves, can never fill the table and keep a real student out of the gradebook). */
   _admit(from, withSnap) {
@@ -867,6 +931,7 @@ export class Session {
       this.sent.delete(id);
       this.settled.set(id, from); if (this.settled.size > MAX_SETTLED) this.settled.delete(this.settled.keys().next().value);
       this._tell(from, 'ack', { offerId: id });
+      this._sendAct({ k: 'swap', d: name, h: Math.floor(this.hourNow()) }); // the proposer's side takes the delivery, so one row for one swap on the instructor's feed
     } else { delete e.lockedBy; delete e.lockedAt; delete e.lockLapsed; delete e.recalling; } // a reply that is not that swap changes nothing: the offer is open again, and the hold is let go
     const short = assets.length < want.assets.length || cash < want.cash - 0.005;
     g.note(r.ok ? (short ? 'warn' : 'good') : 'bad', r.ok ? (short ? `${name} delivered less than the swap said. What arrived was added.` : `${name} accepted. Swap completed.`) : r.msg, r.ok && !short ? { kind: 'swap' } : undefined);
