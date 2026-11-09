@@ -12,6 +12,10 @@
 //    to use a pid in a room binds the pid to a hash of its key (nothing else is kept of it, and it is never logged), and a later connection for that pid with another key, or none, is refused. That is
 //    what stops a classmate from taking the instructor's seat, or a classmate's name and snapshot, by connecting with the pid they have read off the wire;
 //  - a message with a `to` goes to that founder alone, not to the whole room;
+//  - presence is version 2, and opt-in (`&v=2` on the connection): a client that asks is welcomed with what the relay can do, and may say where it is (`here`) and, if it is a student, what it just did (`act`). Both are
+//    rebuilt here from a whitelist, never passed on as sent, and rate limited a socket. A `here` goes to the room's other version 2 members, the last one of each connected member is kept (small, bounded, forgotten when the socket
+//    closes) and replayed to a version 2 joiner with its age, and one that says what the last said is not sent again. An `act` goes to the instructor's seat alone, and is kept for nobody. A client that did not ask for
+//    version 2 is sent none of it and cannot send it, so a class of old clients and new ones works, and so does a new client on a relay of before this change (it is never welcomed, so it never says anything);
 //  - snapshots are kept only for sockets still connected, are size-capped, and are replayed with their age; rooms, clients, bytes are all bounded;
 //  - a full room, or a full relay, gives its place to a newcomer by dropping what has said nothing for IDLE_MS (never the instructor's seat), so sockets that only sit there cannot keep a class out.
 //
@@ -22,10 +26,33 @@ import { createHash, timingSafeEqual } from 'node:crypto';
 import { realpathSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
-const TYPES = new Set(['hello', 'bye', 'snap', 'clock', 'inject', 'rewind', 'rewound', 'offer', 'accept', 'confirm', 'abort', 'reject', 'deliver', 'ack', 'decline', 'withdraw', 'recall', 'holding', 'free', 'royalty', 'flag']);
+const TYPES = new Set(['hello', 'bye', 'snap', 'clock', 'inject', 'rewind', 'rewound', 'offer', 'accept', 'confirm', 'abort', 'reject', 'deliver', 'ack', 'decline', 'withdraw', 'recall', 'holding', 'free', 'royalty', 'flag', 'here', 'act']);
 const INSTRUCTOR_ONLY = new Set(['clock', 'inject', 'rewind']);
+const PRESENCE = new Set(['here', 'act']);
 const PID = /^[A-Za-z0-9_.-]{1,24}$/;
 const KEY = /^[A-Za-z0-9_-]{16,64}$/;
+/** What a version 2 client is told when it connects. `caps` are the message types this relay takes from it (a client sends no presence the relay has not promised). */
+const WELCOME = JSON.stringify({ t: 'welcome', v: 2, caps: ['here', 'act'] });
+const STATE = /^[a-z]{1,12}$/;      // what a member is doing, as one word (`here.s`): the relay checks the shape, the clients know the words, so a new word needs no new relay
+const KIND = /^[a-z0-9_-]{1,16}$/;  // what a student just did, as one word (`act.k`)
+// Control, zero-width and direction-changing characters: no part of an alias or a note (the joiner, U+200D, stays: it makes an emoji one emoji). Written as code points, not as escapes, so that nothing that handles this file
+// can turn them into the invisible characters themselves (a pattern holding a line separator is not a pattern).
+const UNSEEN = new RegExp('[' + [[0, 0x1f], [0x7f, 0x9f], [0x61c], [0x200b], [0x200e, 0x200f], [0x2028, 0x2029], [0x202a, 0x202e], [0x2060], [0x2066, 0x2069], [0xfeff]].map(([a, b]) => String.fromCodePoint(a) + (b ? '-' + String.fromCodePoint(b) : '')).join('') + ']', 'g');
+/** Text a person or a client wrote, as the relay passes it on: no unseen characters, trimmed, at most `n` characters (counted as characters, so an emoji is never cut in half). Anything that is not text is no text. */
+const plain = (x, n) => (typeof x === 'string' ? Array.from(x.replace(UNSEEN, '').trim()).slice(0, n).join('').trimEnd() : '');
+const finite = (x, lo, hi) => typeof x === 'number' && Number.isFinite(x) && x >= lo && x <= hi;
+/** A `here` as the relay will pass it on, or null: a whole district number (0 is none: not in the world), a state word and the alias. Nothing else of what was sent is kept. */
+const hereOf = (m) => (Number.isInteger(m.z) && m.z >= 0 && m.z <= 99 && typeof m.s === 'string' && STATE.test(m.s) ? { t: 'here', z: m.z, s: m.s, handle: plain(m.handle, 24) } : null);
+/** An `act` as the relay will pass it on, or null: a kind word, and optionally a value (a loss is negative), the game hour it happened at and a short note. A value or an hour that is given and is not a sensible number makes it null. */
+function actOf(m) {
+  if (typeof m.k !== 'string' || !KIND.test(m.k)) return null;
+  const o = { t: 'act', k: m.k };
+  if (m.v != null) { if (!finite(m.v, -1e12, 1e12)) return null; o.v = m.v; }
+  if (m.h != null) { if (!finite(m.h, 0, 3000)) return null; o.h = m.h; }
+  const d = plain(m.d, 48); if (d) o.d = d;
+  o.handle = plain(m.handle, 24);
+  return o;
+}
 
 /** How deeply a frame nests its brackets, counted without parsing it (a real message nests a handful of levels; a frame that nests thousands is an attack on the code that walks it). Stops counting at `limit`. */
 const nesting = (text, limit) => {
@@ -52,6 +79,9 @@ export function limitsOf(source = process.env) {
     MAX_SNAP: env('MAX_SNAP', 16 * 1024),      // a snapshot: a real one is about 3 KB
     MAX_SNAP_BYTES: env('MAX_SNAP_BYTES', 64 * 1024 * 1024), // all remembered snapshots on this relay
     RATE: env('RATE', 20), BURST: env('BURST', 60), // messages a second a socket may send, and how many at once
+    PRES_RATE: env('PRES_RATE', 2), PRES_BURST: env('PRES_BURST', 10), // presence frames (`here`, `act`) a second a socket may send, and how many at once: a district changes now and then, a position is not sent
+    MAX_PRES: env('MAX_PRES', 512),            // a presence frame: a real one is about 100 bytes
+    MAX_HERE_BYTES: env('MAX_HERE_BYTES', 8 * 1024 * 1024), // all remembered `here` frames on this relay (a member's is about 100 bytes: this is the bound, not the use)
     SEAT_GRACE_MS: env('SEAT_GRACE_MS', 0),    // 0: never. How long the instructor's seat is held against a DIFFERENT pid once its holder is gone (the owner takes it back whatever this says)
     GHOST_MS: env('GHOST_MS', 30 * 1000),      // a pid that connected, never sent a snapshot and has been gone this long may be forgotten to make room for a new one
     EMPTY_MS: env('EMPTY_MS', 10 * 60 * 1000), // an empty room is forgotten after this long
@@ -61,9 +91,9 @@ export function limitsOf(source = process.env) {
 
 export function createRelay({ env = process.env, now = Date.now, log = (...a) => console.error(...a) } = {}) {
   const L = limitsOf(env);
-  const { MAX_ROOM, MAX_ROOMS, MAX_MSG, MAX_SNAP, MAX_SNAP_BYTES, RATE, BURST, SEAT_GRACE_MS, GHOST_MS, EMPTY_MS, IDLE_MS } = L;
-  const rooms = new Map(); // code -> { clients:Set, snaps:Map<pid,{ws,text,at}>, clock:{text,at}|null, seat:{pid,ws,left}|null, owner:pid|null, ownerProof:hash|null, gone:Timer|null, emptyAt:ms, keys:Map<pid,{proof,snapped,left}> }
-  let snapBytes = 0, listening = false, pinger = null;
+  const { MAX_ROOM, MAX_ROOMS, MAX_MSG, MAX_SNAP, MAX_SNAP_BYTES, RATE, BURST, PRES_RATE, PRES_BURST, MAX_PRES, MAX_HERE_BYTES, SEAT_GRACE_MS, GHOST_MS, EMPTY_MS, IDLE_MS } = L;
+  const rooms = new Map(); // code -> { clients:Set, snaps:Map<pid,{ws,text,at}>, here:Map<pid,{ws,text,at,sig}>, clock:{text,at}|null, seat:{pid,ws,left}|null, owner:pid|null, ownerProof:hash|null, gone:Timer|null, emptyAt:ms, keys:Map<pid,{proof,snapped,left}> }
+  let snapBytes = 0, hereBytes = 0, listening = false, pinger = null;
 
   const http = createServer((req, res) => {
     if (req.url === '/health') { res.writeHead(200, { 'content-type': 'text/plain' }); res.end('ok'); return; }
@@ -72,7 +102,10 @@ export function createRelay({ env = process.env, now = Date.now, log = (...a) =>
   });
   const wss = new WebSocketServer({ server: http, maxPayload: MAX_MSG });
 
-  const forget = (room, ws) => { const e = room.snaps.get(ws.pid); if (e && e.ws === ws) { room.snaps.delete(ws.pid); snapBytes -= e.text.length; } };
+  const forget = (room, ws) => {
+    const e = room.snaps.get(ws.pid); if (e && e.ws === ws) { room.snaps.delete(ws.pid); snapBytes -= e.text.length; }
+    const h = room.here.get(ws.pid); if (h && h.ws === ws) { room.here.delete(ws.pid); hereBytes -= h.text.length; } // (where a member was is not told to a joiner once the member is gone)
+  };
   const send = (c, text) => {
     if (c.readyState !== 1) return;
     if (c.bufferedAmount > 8 * 1024 * 1024) { c.terminate(); return; } // a client that does not read is cut off, not buffered for ever
@@ -119,6 +152,33 @@ export function createRelay({ env = process.env, now = Date.now, log = (...a) =>
     if (ws.tokens < 1) { if (++ws.strikes > 300) ws.terminate(); return false; }
     ws.tokens--; return true;
   };
+  /** The bucket of presence frames: PRES_RATE a second, PRES_BURST at once, apart from the one above (a student's swaps and snapshots must not use up where they are, nor the other way round). Over it a frame is dropped, never queued. */
+  const presAllow = (ws, at) => {
+    ws.ptokens = Math.min(PRES_BURST, ws.ptokens + (at - ws.prefilled) / 1000 * PRES_RATE); ws.prefilled = at;
+    if (ws.ptokens < 1) return false;
+    ws.ptokens--; return true;
+  };
+  /**
+   * A presence frame (version 2) from `ws`, as the relay handles it. Both kinds are rebuilt from a whitelist (`hereOf`, `actOf`): the frame that goes on is the relay's own, with `from` and `role` from the connection.
+   *  here  where a member is and what it is doing. Goes to every other version 2 member, unless it says what the member's last said (then nothing is sent). The last one of each member is kept for a joiner, while the
+   *        socket lives and while the relay's bytes for it hold out (past them it is still passed on, but the member's older one is dropped too, so a joiner is never told where a member was a while ago).
+   *  act   what a student just did. Goes to the instructor's seat alone, never to a classmate, and is kept for nobody: it is news for whoever is at the dashboard when it happens.
+   */
+  const presence = (room, ws, m, size, t, instructor) => {
+    if (ws.v < 2 || size > MAX_PRES || (m.t === 'act' && instructor)) return; // (an instructor reports nothing to the class)
+    const o = m.t === 'here' ? hereOf(m) : actOf(m);
+    if (!o || !presAllow(ws, t)) return;
+    ws.lastAt = t; // a frame the relay passes on is a connection in use
+    o.from = ws.pid; o.role = instructor ? 'instructor' : 'student';
+    const out = JSON.stringify(o);
+    if (o.t === 'act') { for (const c of room.clients) if (c !== ws && c.v >= 2 && isInstructor(room, c)) send(c, out); return; }
+    const sig = o.z + '|' + o.s + '|' + o.handle, old = room.here.get(ws.pid);
+    if (old && old.ws === ws && old.sig === sig) { old.at = t; return; } // the same again: the member is still here, and nobody needs telling
+    const delta = out.length - (old ? old.text.length : 0);
+    if (hereBytes + delta <= MAX_HERE_BYTES) { room.here.set(ws.pid, { ws, text: out, at: t, sig }); hereBytes += delta; }
+    else if (old) { room.here.delete(ws.pid); hereBytes -= old.text.length; }
+    for (const c of room.clients) if (c !== ws && c.v >= 2) send(c, out);
+  };
 
   wss.on('connection', (ws, req) => {
     ws.on('error', () => { try { ws.terminate(); } catch { /* gone */ } }); // an oversize or malformed frame is the sender's fault, never the relay's
@@ -144,7 +204,7 @@ export function createRelay({ env = process.env, now = Date.now, log = (...a) =>
         if (old[1].gone) clearTimeout(old[1].gone);
         rooms.delete(old[0]);
       }
-      rooms.set(code, (room = { clients: new Set(), snaps: new Map(), clock: null, seat: null, owner: null, ownerProof: null, gone: null, emptyAt: 0, keys: new Map() }));
+      rooms.set(code, (room = { clients: new Set(), snaps: new Map(), here: new Map(), clock: null, seat: null, owner: null, ownerProof: null, gone: null, emptyAt: 0, keys: new Map() }));
     }
     if (room.clients.size >= MAX_ROOM && !idlest(room, now())) { ws.close(1013, 'room full'); return; }
     // who this is: the pid is the name, the key is the proof (see the head of the file). Refused before anything else is done for the connection: it is not told about the room, and it joins nothing.
@@ -157,7 +217,9 @@ export function createRelay({ env = process.env, now = Date.now, log = (...a) =>
     } else bound.left = 0;
     if (room.gone) { clearTimeout(room.gone); room.gone = null; }
     const t0 = now();
-    ws.pid = pid; ws.alive = true; ws.tokens = BURST; ws.refilled = t0; ws.strikes = 0; ws.lastAt = t0;
+    ws.pid = pid; ws.alive = true; ws.tokens = BURST; ws.refilled = t0; ws.strikes = 0; ws.lastAt = t0; ws.ptokens = PRES_BURST; ws.prefilled = t0;
+    const asked = Number.parseInt(u.searchParams.get('v') ?? '', 10);
+    ws.v = Number.isInteger(asked) && asked >= 1 && asked <= 9 ? asked : 1; // the version of the protocol this client speaks: 2 is presence; a client that says nothing is 1, and hears nothing of it
     ws.wantsSeat = u.searchParams.get('role') === 'instructor';
     if (ws.wantsSeat) {
       const token = u.searchParams.get('owner') || '';
@@ -168,8 +230,10 @@ export function createRelay({ env = process.env, now = Date.now, log = (...a) =>
       if (idle) { room.clients.delete(idle); idle.terminate(); }
     }
     room.clients.add(ws);
+    if (ws.v >= 2) send(ws, WELCOME); // first, so a client knows what it may say before it hears what the room is doing
     if (room.clock) send(ws, room.clock.text.slice(0, -1) + ',"age":' + (t0 - room.clock.at) + '}');
     for (const e of room.snaps.values()) send(ws, e.text.slice(0, -1) + ',"age":' + (t0 - e.at) + '}');
+    if (ws.v >= 2) for (const e of room.here.values()) send(ws, e.text.slice(0, -1) + ',"age":' + (t0 - e.at) + '}');
 
     ws.on('pong', () => { ws.alive = true; });
     ws.on('message', (data, isBinary) => {
@@ -183,6 +247,7 @@ export function createRelay({ env = process.env, now = Date.now, log = (...a) =>
         try { m = JSON.parse(text); } catch { return; }
         if (!m || typeof m !== 'object' || Array.isArray(m) || typeof m.t !== 'string' || !TYPES.has(m.t)) return;
         if (INSTRUCTOR_ONLY.has(m.t) && !instructor) return;
+        if (PRESENCE.has(m.t)) { presence(room, ws, m, text.length, t, instructor); return; } // (its own rules: rebuilt, rate limited, routed)
         if (m.t === 'snap' && (instructor || text.length > MAX_SNAP || typeof m.snap !== 'object' || m.snap === null)) return;
         if (m.t === 'bye') forget(room, ws);
         ws.lastAt = t; // a frame the relay keeps or forwards is a connection in use (one it drops is not)
@@ -223,18 +288,21 @@ export function createRelay({ env = process.env, now = Date.now, log = (...a) =>
 
   return {
     http, wss, rooms, limits: L,
-    /** Starts listening (PORT=0 picks a free port). Resolves with the port; rejects if the port cannot be had. After that a fault is logged and the classes go on. */
-    listen(port = L.PORT) {
+    /** What the relay holds now, for a test or an operator: rooms, connections, and the bytes of remembered snapshots and presence (the bounds are MAX_SNAP_BYTES and MAX_HERE_BYTES). */
+    stats() { let clients = 0; for (const r of rooms.values()) clients += r.clients.size; return { rooms: rooms.size, clients, snapBytes, hereBytes }; },
+    /** Starts listening (PORT=0 picks a free port; `host` is every interface unless one is given: a test gives 127.0.0.1). Resolves with the port; rejects if the port cannot be had. After that a fault is logged and the classes go on. */
+    listen(port = L.PORT, host) {
       return new Promise((resolve, reject) => {
         const fatal = (what) => (e) => { if (!listening) reject(Object.assign(e, { what })); else log(`relay: ${what} error:`, e.message); };
         http.on('error', fatal('http'));
         wss.on('error', fatal('socket server'));
-        http.listen(port, () => {
+        const up = () => {
           listening = true;
           pinger = setInterval(() => { for (const ws of wss.clients) { if (!ws.alive) { ws.terminate(); continue; } ws.alive = false; try { ws.ping(); } catch { /* gone */ } } }, 20000);
           pinger.unref?.();
           resolve(http.address().port);
-        });
+        };
+        if (host) http.listen(port, host, up); else http.listen(port, up);
       });
     },
     /** A planned stop (a restart, a deploy): every client is told the relay is going away (close code 1001, which a browser's reconnect treats as a pause, not a fault), given `grace` ms to say goodbye, and then it is closed. */
@@ -251,7 +319,7 @@ export function createRelay({ env = process.env, now = Date.now, log = (...a) =>
       return new Promise((resolve) => {
         if (pinger) clearInterval(pinger);
         for (const room of rooms.values()) if (room.gone) clearTimeout(room.gone);
-        rooms.clear(); snapBytes = 0;
+        rooms.clear(); snapBytes = 0; hereBytes = 0;
         for (const ws of wss.clients) { try { ws.terminate(); } catch { /* gone */ } }
         wss.close(() => { if (http.listening) http.close(() => resolve()); else resolve(); });
       });
