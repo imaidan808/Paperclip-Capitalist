@@ -14,7 +14,7 @@
 //  - a message with a `to` goes to that founder alone, not to the whole room;
 //  - presence is version 2, and opt-in (`&v=2` on the connection): a client that asks is welcomed with what the relay can do, and may say where it is (`here`) and, if it is a student, what it just did (`act`). Both are
 //    rebuilt here from a whitelist, never passed on as sent, and rate limited a socket. A `here` goes to the room's other version 2 members, the last one of each connected member is kept (small, bounded, forgotten when the socket
-//    closes) and replayed to a version 2 joiner with its age, and one that says what the last said is not sent again. The alias a `here` or an `act` carries is the one the member gave in its hello, whatever the frame says. The
+//    closes) and replayed to a version 2 joiner with its age, and one that says what the last said is not sent again. The alias a `here` or an `act` carries is the one the member gave in its hello, whatever the frame says (kept with the member's identity, so a reconnect does not lose it). The
 //    instructor's switch (`presence` in its clock: full, online, off) is kept with the room: a student is told of the others in full, without their districts, or not at all, and the instructor's seat in full under all three.
 //    An `act` goes to the instructor's seat alone, and is kept for nobody. A client that did not ask for
 //    version 2 is sent none of it and cannot send it, so a class of old clients and new ones works, and so does a new client on a relay of before this change (it is never welcomed, so it never says anything);
@@ -37,15 +37,15 @@ const KEY = /^[A-Za-z0-9_-]{16,64}$/;
 const WELCOME = JSON.stringify({ t: 'welcome', v: 2, caps: ['here', 'act'] });
 const STATE = /^[a-z]{1,12}$/;      // what a member is doing, as one word (`here.s`): the relay checks the shape, the clients know the words, so a new word needs no new relay
 const KIND = /^[a-z0-9_-]{1,16}$/;  // what a student just did, as one word (`act.k`)
-// Control, zero-width, direction-changing and blank-rendering characters (the fillers, the blank braille cell, the soft hyphen, the invisible operators, the tag characters): no part of an alias or a note. This is the client's list
+// Control, zero-width, direction-changing and blank-rendering characters (the fillers, the blank braille cell, the soft hyphen, the invisible operators, the tag characters, half of a surrogate pair that has lost the other half): no part of an alias or a note. This is the client's list
 // (js/presence.js, UNSEEN), kept equal to it by tests/presence-relay.test.mjs (P13): the relay is deployed on its own and cannot import the client. The joiners and the variation selectors stay, since an emoji sequence needs them;
 // an alias of nothing else is none (below). Written as code points, not as escapes, so that nothing that handles this file can turn them into the invisible characters themselves (a pattern holding a line separator is not a pattern).
-const UNSEEN = new RegExp('[' + [[0, 0x1f], [0x7f, 0x9f], [0xad], [0x34f], [0x61c], [0x115f, 0x1160], [0x17b4, 0x17b5], [0x180b, 0x180e], [0x200b], [0x200e, 0x200f], [0x2028, 0x2029], [0x202a, 0x202e], [0x2060, 0x2064], [0x2066, 0x2069], [0x2800], [0x3164], [0xfeff], [0xffa0], [0xe0000, 0xe007f]].map(([a, b]) => String.fromCodePoint(a) + (b ? '-' + String.fromCodePoint(b) : '')).join('') + ']', 'gu');
+const UNSEEN = new RegExp('[' + [[0, 0x1f], [0x7f, 0x9f], [0xad], [0x34f], [0x61c], [0x115f, 0x1160], [0x17b4, 0x17b5], [0x180b, 0x180e], [0x200b], [0x200e, 0x200f], [0x2028, 0x2029], [0x202a, 0x202e], [0x2060, 0x2064], [0x2066, 0x2069], [0x2800], [0x3164], [0xfeff], [0xffa0], [0xd800, 0xdfff], [0xe0000, 0xe007f]].map(([a, b]) => String.fromCodePoint(a) + (b ? '-' + String.fromCodePoint(b) : '')).join('') + ']', 'gu');
 const JOINERS = new RegExp('^[' + String.fromCodePoint(0x200c) + String.fromCodePoint(0x200d) + String.fromCodePoint(0xfe00) + '-' + String.fromCodePoint(0xfe0f) + ']*$', 'u');
 /** Text a person or a client wrote, as the relay passes it on: no unseen characters, trimmed, at most `n` characters (counted as characters, so an emoji is never cut in half). What has nothing left to see is none, and anything that is not text is no text. */
 export const plain = (x, n) => {
   if (typeof x !== 'string') return '';
-  const t = x.replace(UNSEEN, '').trim();
+  const t = (x.length > 4 * n ? x.slice(0, 4 * n) : x).replace(UNSEEN, '').trim(); // (a hello may be 32 KB: no more than four times the length of the name is looked at)
   return JOINERS.test(t) ? '' : Array.from(t).slice(0, n).join('').trimEnd();
 };
 const finite = (x, lo, hi) => typeof x === 'number' && Number.isFinite(x) && x >= lo && x <= hi;
@@ -247,11 +247,11 @@ export function createRelay({ env = process.env, now = Date.now, log = (...a) =>
     if (bound !== undefined && bound.proof !== proof) { ws.close(1008, 'identity does not match'); return; }
     if (bound === undefined) {
       if (room.keys.size >= MAX_ROOM * 2 && !pruneKeys(room, now())) { ws.close(1013, 'room full'); return; }
-      room.keys.set(pid, { proof, snapped: false, left: 0 });
+      room.keys.set(pid, { proof, snapped: false, left: 0, name: '' });
     } else bound.left = 0;
     if (room.gone) { clearTimeout(room.gone); room.gone = null; }
     const t0 = now();
-    ws.pid = pid; ws.alive = true; ws.tokens = BURST; ws.refilled = t0; ws.strikes = 0; ws.lastAt = t0; ws.ptokens = PRES_BURST; ws.prefilled = t0;
+    ws.pid = pid; ws.alive = true; ws.tokens = BURST; ws.refilled = t0; ws.strikes = 0; ws.lastAt = t0; ws.ptokens = PRES_BURST; ws.prefilled = t0; ws.name = (bound && bound.name) || ''; // (the alias this Founder ID gave in its hello, whichever socket it was on)
     const asked = Number.parseInt(u.searchParams.get('v') ?? '', 10);
     ws.v = Number.isInteger(asked) && asked >= 1 && asked <= 9 ? asked : 1; // the version of the protocol this client speaks: 2 is presence; a client that says nothing is 1, and hears nothing of it
     ws.wantsSeat = u.searchParams.get('role') === 'instructor';
@@ -281,7 +281,7 @@ export function createRelay({ env = process.env, now = Date.now, log = (...a) =>
         try { m = JSON.parse(text); } catch { return; }
         if (!m || typeof m !== 'object' || Array.isArray(m) || typeof m.t !== 'string' || !TYPES.has(m.t)) return;
         if (INSTRUCTOR_ONLY.has(m.t) && !instructor) return;
-        if (m.t === 'hello' && typeof m.handle === 'string') ws.name = plain(m.handle, 24); // the one alias the room knows this member by (a `here` or an `act` carries it, whatever the frame says); a hello that names none leaves it as it was
+        if (m.t === 'hello' && typeof m.handle === 'string') { ws.name = plain(m.handle, 24); const k = room.keys.get(ws.pid); if (k) k.name = ws.name; } // the one alias the room knows this member by (a `here` or an `act` carries it, whatever the frame says); a hello that names none leaves it as it was
         if (PRESENCE.has(m.t)) { presence(room, ws, m, text.length, t, instructor); return; } // (its own rules: rebuilt, rate limited, routed)
         if (m.t === 'snap' && (instructor || text.length > MAX_SNAP || typeof m.snap !== 'object' || m.snap === null)) return;
         if (m.t === 'bye') forget(room, ws);

@@ -10,6 +10,7 @@
 //   P9  what the relay remembers of presence is bounded (MAX_HERE_BYTES) and given back when a member leaves
 //   P10 hostile shapes are dropped without ending the connection or the service
 //   P12 the alias on a `here` or an `act` is the one the member gave in its hello, whatever the frame says
+//   P12b the alias belongs to the member and not to the socket: after a reconnect, with no new hello, a `here` and an `act` still carry it
 //   P13 the relay's strip of unseen characters is the client's (every code point, both ways)
 //   P14 the instructor's switch (`presence` in its clock) is kept: under online a student is told of the others without their districts, under off not at all, the instructor always in full; a change replays; only the seat sets it
 //   P11 the client: `Room` asks for version 2, keeps the welcome to itself and says what the relay can do (`caps`, `can`), sends no presence where it was not promised, and forgets the promise when the connection drops
@@ -273,6 +274,29 @@ test('P12: the alias on a here or an act is the one the member gave in its hello
   } finally { await relay.close(); }
 });
 
+test('P12b: the alias belongs to the member and not to the socket: after a reconnect, with no new hello, a here and an act still carry it, and a joiner is replayed with it', { skip: SKIP, timeout: 30000 }, async () => {
+  const relay = await startRelay();
+  try {
+    const t = dial(relay, 'PRES12B', 'PC-T', { role: 'instructor' }), a = dial(relay, 'PRES12B', 'PC-A', { handle: 'Ada' }), b = dial(relay, 'PRES12B', 'PC-B');
+    await Promise.all([t, a, b].map((x) => x.ready)); await welcomed(t, a, b);
+    a.send({ t: 'here', z: 4, s: 'play' });
+    await settle(a, b);
+    assert.equal(b.of('here').at(-1).handle, 'Ada');
+    close(a);                                                                       // a wifi blink: the member is its Founder ID and its key, not the socket
+    await until(() => b.of('bye').some((m) => m.from === 'PC-A'), 'the goodbye');
+    const a2 = dial(relay, 'PRES12B', 'PC-A');                                      // back with the same ID and key, and no hello: the client says it once, when it joins the room
+    await a2.ready; await welcomed(a2);
+    a2.send({ t: 'here', z: 4, s: 'play' }); a2.send({ t: 'act', k: 'swap' });
+    await settle(a2, b, t);
+    assert.equal(b.of('here').at(-1).handle, 'Ada', 'the alias the member gave is still theirs');
+    assert.equal(t.of('act').at(-1).handle, 'Ada', 'on an act too');
+    const late = dial(relay, 'PRES12B', 'PC-L'); await late.ready; await welcomed(late);
+    await until(() => late.of('here').some((m) => m.from === 'PC-A'), 'the replay');
+    assert.equal(late.of('here').find((m) => m.from === 'PC-A').handle, 'Ada', 'a joiner is replayed with it');
+    close(t, a2, b, late);
+  } finally { await relay.close(); }
+});
+
 test('P13: the relay strips the unseen characters the client does: every code point, both ways', { skip: SKIP, timeout: 60000 }, async () => {
   const { plain } = await import('../server/relay.mjs'), { cleanHere } = await import('../js/presence.js');
   const client = (x) => cleanHere({ z: 0, s: 'x', handle: x }).handle;
@@ -286,6 +310,10 @@ test('P13: the relay strips the unseen characters the client does: every code po
   for (const x of [String.fromCodePoint(0x200d), String.fromCodePoint(0xfe0f) + String.fromCodePoint(0x200c), String.fromCodePoint(0x2800, 0x3164, 0xffa0), '  ', '\u{E0041}\u{E0042}', 'Ada' + String.fromCodePoint(0x34f), '\u{1F468}\u200D\u{1F469}']) assert.equal(plain(x, 24), client(x), JSON.stringify(x));
   assert.equal(plain('\u{1F468}\u200D\u{1F469}', 24), '\u{1F468}\u200D\u{1F469}', 'an emoji sequence keeps its joiner');
   assert.equal(plain(String.fromCodePoint(0x200d), 24), '', 'a joiner alone is no alias');
+  const HI = String.fromCodePoint(0xd83d), LO = String.fromCodePoint(0xde00);                                  // the halves of a pair: written as code points
+  assert.equal(plain('a' + HI + 'b', 24), 'ab', 'half of a pair is no character'); assert.equal(plain('a' + LO, 24), 'a'); assert.equal(plain(HI, 24), '');
+  assert.equal(plain(String.fromCodePoint(0x1f600) + 'x', 24), String.fromCodePoint(0x1f600) + 'x', 'a whole pair is a character and stays');
+  assert.equal(plain('Ada' + String.fromCodePoint(0x200b).repeat(5000), 24), 'Ada', 'a long text is cut before it is looked at, and the name in front of it stands');
 });
 
 test('P14: the instructor\'s switch is kept by the relay: under online a student is told of the others without their districts, under off not at all, the instructor always in full; a change replays; only the seat sets it', { skip: SKIP, timeout: 30000 }, async () => {
