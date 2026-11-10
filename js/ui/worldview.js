@@ -166,6 +166,7 @@ export function createWorldView(ctx) {
     update() {
       if (!world || !host) return;
       world.sync();
+      world.setPeers(S.figures?.() ?? []); // the classmates who are playing in a district (a session with no room has none); the world fetches their layer when the first one is given
       if (U.zone !== lastZone) { lastZone = U.zone; world.focusZone(U.zone, true); }
       list();
       sound?.poll(); // the player may have set out for another district: the footsteps listen for as long as the walk lasts

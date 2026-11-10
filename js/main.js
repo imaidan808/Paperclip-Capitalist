@@ -231,9 +231,9 @@ function startInstructor(code, relay, fresh, saved, owner) {
   if (solo) kv.set('save', solo);
   S.mode = 'instructor';
   if (fresh) S.clock = new Clock({ hour: 0, paused: true, speed: 1 });
-  else if (saved) { S.clock = new Clock(saved.clock); Object.assign(S.difficulty, saved.difficulty || {}); S.ghosts = saved.ghosts ?? 36; S.algo = saved.algo ?? true; }
+  else if (saved) { S.clock = new Clock(saved.clock); Object.assign(S.difficulty, saved.difficulty || {}); S.ghosts = saved.ghosts ?? 36; S.algo = saved.algo ?? true; S.presenceMode = ['full', 'online', 'off'].includes(saved.presence) ? saved.presence : 'full'; }
   S.joinRoom({ code, relay, role: 'instructor', handle: 'Instructor', owner, recover: !!owner && !saved });
-  kv.set('instr', { code, relay, clock: S.clock.toJSON(), difficulty: S.difficulty, ghosts: S.ghosts, algo: S.algo });
+  kv.set('instr', { code, relay, clock: S.clock.toJSON(), difficulty: S.difficulty, ghosts: S.ghosts, algo: S.algo, presence: S.presenceMode });
   go('instructor');
   if (fresh) keepRecoveryCode(code);
 }
@@ -254,8 +254,10 @@ function keepRecoveryCode(code) {
 setInterval(() => {
   S.tick();
   kv.tab.touch(); // (a tab that is a founder of its own keeps its claim on the slot fresh, so a copy of the tab is told from a refresh of it: js/identity.js)
-  if (S.mode === 'instructor' && S.roomInfo && Date.now() % 5000 < 260) kv.set('instr', { code: S.roomInfo.code, relay: S.roomInfo.relay, clock: S.clock.toJSON(), difficulty: S.difficulty, ghosts: S.ghosts, algo: S.algo });
+  if (S.mode === 'instructor' && S.roomInfo && Date.now() % 5000 < 260) kv.set('instr', { code: S.roomInfo.code, relay: S.roomInfo.relay, clock: S.clock.toJSON(), difficulty: S.difficulty, ghosts: S.ghosts, algo: S.algo, presence: S.presenceMode });
 }, 250);
+// the instructor's switch is written down as soon as it is changed: the heartbeat above writes the record only every five seconds, and a reload inside them would bring back the old word (and a quiz's `off` would silently turn into `full`)
+S.on((t) => { if (t === 'switch' && S.mode === 'instructor' && S.roomInfo) kv.set('instr', { code: S.roomInfo.code, relay: S.roomInfo.relay, clock: S.clock.toJSON(), difficulty: S.difficulty, ghosts: S.ghosts, algo: S.algo, presence: S.presenceMode }); });
 document.addEventListener('visibilitychange', () => { S.setAway(document.hidden); if (!document.hidden) S.tick(); else S.save(true); }); // (a hidden tab tells the room it is away)
 addEventListener('pagehide', () => { S.save(true); kv.tab.release(); });
 

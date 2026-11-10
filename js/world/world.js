@@ -20,6 +20,7 @@ import { veilAt, VEIL_MAX_MS, VEIL_FADE_MS } from './veil.js';
 import { clearSprites, setSpriteBudget, trimSprites } from './sprites.js';
 import { FAR_ZOOM, FOG_DIM, money, leaveEnd } from './common.js';
 import { runLayer } from './stack.js';
+import { cleanName } from '../names.js';
 import { releaseShadows } from './shadow.js';
 import { lodOf, farMix } from './lod.js';
 import { lookOf, CARS } from './ents-actors.js';
@@ -77,6 +78,7 @@ export class World {
     this.lod = lodOf(0.9); this.gnd = { zoom: 1, far: false, mode: 0, see: null };                // the zoom's level-of-detail record (lod.js) and the ground pass's record for its layers (stack.js), both reused every frame
     this.decals = new Map();                                                                      // per district: its animated decals (water, pulses) drawn live over the cached ground
     this.player = { x: 0, y: 0, path: [], zone: 1, moving: false, dir: 1, speed: 16, placed: false };
+    this.peerList = []; this.peerLayer = null; this.peerLoad = null;                              // the classmates the screen gave (setPeers), the module that draws them and the import that fetches it (js/world/peers.js, loaded when the first one is given)
     this.zpip = new Uint8Array(3 * (Math.max(...LAYOUT.ids) + 1));                                // per district: pipelines running, paused, starved (for the whole-island pips)
     this.env = { t: 0, night: 0, wind: 1, dim: 0, tier: 0, farMix: 1, surge: false, crunch: false, tariff: false, far: false, lite: false, locked: false, zoff: 0, lights: this.lights };
     this.reveal = {}; this.far = false;
@@ -385,6 +387,19 @@ export class World {
     this.syncPlayer();
     this.dirty = true;
   }
+  /**
+   * The other students who are playing in a district, as the session's `figures()` lists them ({ pid, name, z }). The world keeps a bounded copy (`cleanPeers`) and draws each as a flat figure with a name tag
+   * (js/world/peers.js, fetched with import() when the first one is given, so a world with no classmates never loads it). The same list again is no work.
+   */
+  setPeers(list) {
+    const next = cleanPeers(list);
+    if (samePeers(this.peerList, next) && (this.peerLayer || this.peerLoad || !next.length)) return;
+    this.peerList = next;
+    if (this.peerLayer) { this.peerLayer.set(this, next); this.dirty = true; return; }
+    if (!next.length || this.peerLoad) return;
+    this.peerLoad = import('./peers.js').then((m) => { this.peerLayer = m; try { m.set(this, this.peerList); } catch (err) { this.fault(err, 'peers'); } this.dirty = true; },
+      () => { const t = setTimeout(() => { this.peerLoad = null; }, 5000); t?.unref?.(); }); // a connection that blinked: the next list asks again, not before five seconds have passed
+  }
   /** A district just opened: its fog lifts and its lights come on (instantly under reduced motion). */
   startReveal(z) { if (!this.reduced()) { this.reveal[z] = { t0: this.t, dur: REVEAL_MS }; this.revealBurst(z); } this.api.reveal?.(z); this.dirty = true; }
   /** The opening of a district, as light: two rings open out along its ground and sparks rise from it. Under reduced motion there is no reveal, so none of this runs. */
@@ -585,6 +600,7 @@ export class World {
       else { const [gx, gy] = this.posOf(e); if (this.onView(gx, gy, 80)) this.push(gx + gy + 0.5, 'e', e); }
     }
     if (this.onView(this.player.x, this.player.y, 80)) this.push(this.player.x + this.player.y + 0.5, 'p', null);
+    if (this.peerLayer) this.peerLayer.queue(this, view, vz);       // the classmates (peers.js) join the depth-sorted list, and nothing at all is done while there are none
     if (!this.reduced()) for (const c of this.cars()) if (this.onView(c.gx, c.gy, 40)) this.push(c.key, 'c', c);
     const items = this.items, gates = this.gateList || (this.gateList = []); items.length = this.itemN; items.sort(BY_KEY); gates.length = 0;
     for (let n = 0; n < items.length; n++) {
@@ -594,6 +610,7 @@ export class World {
         else if (it.k === 'g') gates.push(it.a);
         else if (it.k === 'e') this.drawEnt(ctx, it.a);
         else if (it.k === 'p') runLayer('player', this, ctx, view);
+        else if (it.k === 'q') runLayer('peers', this, ctx, view, it.a);
         else runLayer('car', this, ctx, view, it.a);
       } catch (err) { ctx.restore?.(); ctx.globalAlpha = 1; this.fault(err, it.k + ':' + (it.a?.t || it.a?.type || it.a?.i)); }
     }
@@ -704,6 +721,33 @@ Object.assign(World.prototype, seaMethods, groundMethods, coastMethods, terrainM
 
 const footBox = (gx, gy, w, d, z, h) => [(gx - gy - d) * HW - 6, (gx + gy) * HH - z - h - 6, (gx + w - gy) * HW + 6, (gx + w + gy + d) * HH - z + 4];
 const blockPoly = (D) => [P(D.ox, D.oy, D.z), P(D.ox + BW, D.oy, D.z), P(D.ox + BW, D.oy + BD, D.z), P(D.ox, D.oy + BD, D.z)];
+
+// ---------------------------------------------------------------- the classmates the screen gives (setPeers)
+const PEERS_MAX = 400, PEER_NAME = 24, PEER_PID = 48;
+/** An alias as a name tag may carry it: the cleaner every name goes through (js/names.js: nothing invisible or reordering in it, the blank fillers too), trimmed, at most 24 characters, and the cut falls between characters, never inside one. */
+function peerName(s) {
+  const t = cleanName(s, PEER_NAME); let out = '';
+  for (const ch of t) { if (out.length + ch.length > PEER_NAME) break; out += ch; } // (a tag is as wide as its text: no more than 24 units of it, as it always was, whatever the alias allows)
+  return out.trimEnd();
+}
+/**
+ * The list the screen gives, as the world keeps it: a fresh list of at most PEERS_MAX records { pid, name, z } and nothing else of what came in, each field checked again (pid a string of 1 to 48 characters, name a
+ * string, z one of the island's districts), the first of a pid kept, everything else dropped. No more than twice the cap is looked at, whatever the list holds; what is not a list is an empty one.
+ */
+function cleanPeers(list) {
+  const out = [], seen = new Set();
+  if (!Array.isArray(list)) return out;
+  for (let i = 0, n = Math.min(list.length, PEERS_MAX * 2); i < n && out.length < PEERS_MAX; i++) {
+    try {
+      const e = list[i]; if (e === null || typeof e !== 'object') continue;
+      const pid = e.pid, name = e.name, z = e.z;
+      if (typeof pid !== 'string' || !pid || pid.length > PEER_PID || typeof name !== 'string' || !Number.isInteger(z) || !Object.hasOwn(SPOTS, z) || seen.has(pid)) continue;
+      seen.add(pid); out.push({ pid, name: peerName(name), z });
+    } catch { /* a record that throws is not a classmate */ }
+  }
+  return out;
+}
+const samePeers = (a, b) => a.length === b.length && a.every((p, i) => p.pid === b[i].pid && p.name === b[i].name && p.z === b[i].z);
 
 function inPoly(poly, x, y) {
   let c = false;

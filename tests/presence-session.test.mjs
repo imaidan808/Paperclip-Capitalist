@@ -50,10 +50,11 @@ test('S1: a student\'s district and what they are doing reach the instructor\'s 
     a.setHere(5, 'away');
     await until(() => t.presence.counts().away === 1, 'the away state');
     assert.equal(t.presence.counts().zones[5], 0, 'a student who is away stands in no district');
-    assert.equal(b.presence.members.size, 0, 'a student\'s session ignores what the room says of where the others are');
-    assert.equal(a.presence.members.size, 0);
+    await until(() => b.presence.members.get('ADA')?.s === 'away', 'Bo to hear of it');
+    assert.equal(b.presence.members.get('ADA').z, 5, 'a student keeps the table of where the others are: it is what shows classmates in the roster and the world');
+    assert.equal(a.presence.members.get('BO')?.s, 'academy');
     t.setHere(3, 'play'); await sleep(150);
-    assert.equal(a.presence.members.size, 0, 'the instructor says nothing of where it is (it is not a figure in the world)');
+    assert.equal(a.presence.list().some((m) => m.pid === 'TEACH'), false, 'the instructor says nothing of where it is (it is not a figure in the world)');
   } finally { await done(relay); }
 });
 
@@ -163,7 +164,7 @@ test('S6: presence is not the game: two thousand hostile presence frames change 
     }
     assert.equal(JSON.stringify(a.game.s), before, 'the run is byte for byte what it was');
     assert.equal(a.peers.size, peers, 'a here or an act makes no classmate'); assert.equal(a.cohort.peers.size, cohort);
-    assert.equal(a.presence.members.size, 0, 'and a student keeps no table of them');
+    assert.ok(a.presence.members.size <= 4, 'a student keeps only the ids that passed, and the table is bounded');
     assert.equal({}.polluted, undefined);
     // the same on the instructor's side: whatever the table holds, it is bounded and holds only what passed
     const t = teacher(relay, 'PS06');

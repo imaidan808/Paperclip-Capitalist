@@ -24,7 +24,7 @@ const kb = (n) => n / 1024;
 export const BUDGET = {
   firstRequests: 45,   // the page, the 12 stylesheets and the static modules
   firstKB: 320,        // all of it gzipped: the page, the sheets, the modules; 300 until 2026-11-03: raised to 320 at the author's word, for the items catalog, the event plan and the wardrobe's hooks (docs/ARCHITECTURE.md, "The first screen, and the rest")
-  totalRequests: 170,  // everything the site ever fetches; 165 until 2026-11-04: the glyph kit is six lazy modules (js/art/: the core, the painter, three sets; js/ui/glyphs.js, the screens' lookup), part 3 added its set (js/art/g-places.js: 168) and part 4 the goods' (js/art/g-goods.js: 169), so the limit stays (docs/ARCHITECTURE.md, "The first screen, and the rest")
+  totalRequests: 180,  // everything the site ever fetches; 170 until 2026-11-10: raised to 180 (the author's standing permission allows up to 250) for multiplayer part 3, which adds two lazy modules, the student roster (js/ui/roster.js) and the classmates in the world (js/world/peers.js: docs/ARCHITECTURE.md, "The first screen, and the rest"); 165 until 2026-11-04: the glyph kit is six lazy modules (js/art/: the core, the painter, three sets; js/ui/glyphs.js, the screens' lookup), part 3 added its set (js/art/g-places.js: 168) and part 4 the goods' (js/art/g-goods.js: 169), so the limit stays (docs/ARCHITECTURE.md, "The first screen, and the rest")
   totalKB: 1111,       // 1000 until 2026-11-03: raised to 1111 at the author's word for the packages after the ground's worker (docs/ARCHITECTURE.md, "The first screen, and the rest")
 };
 

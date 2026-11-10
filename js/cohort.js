@@ -303,8 +303,11 @@ export function cleanClock(m) {
   if (m.difficulty !== undefined) c.difficulty = cleanDifficulty(m.difficulty);
   if (typeof m.ghosts === 'number' && !Number.isNaN(m.ghosts)) c.ghosts = Math.round(num(m.ghosts, 0, 200));
   if (typeof m.algo === 'boolean') c.algo = m.algo;
+  if (typeof m.presence === 'string' && PRESENCE_MODES.includes(m.presence)) c.presence = m.presence; // what students see of each other (docs/ARCHITECTURE.md, "Presence"); a clock without it means everything
   return c;
 }
+/** What students see of each other, as the instructor sets it: everything (who is here and where, and the classmates in the world), who is here and nothing more, or nothing. */
+export const PRESENCE_MODES = ['full', 'online', 'off'];
 
 /** An instructor-injected shock: a known kind, a string id, a finite start. Returns null for anything else. */
 export function cleanInject(m, now) {

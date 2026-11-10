@@ -45,6 +45,9 @@ export const actorMethods = {
     this.overlay.push({ k: 'chip', lo: 1, n: 3, wx: x, wy: y - 48, draw: (g, px, py, s) => this.chip(g, px, py, 'You', '#ffd36e', s) });
   },
 
+  /** A classmate (peers.js) has no legacy drawer: the picture the world had before classmates drew none, so with the layer's flag on legacy there are none. */
+  drawPeer() {},
+
   /** Where a freight truck is now: it leaves its depot door, drives the avenue's right-hand lane and arrives at the other district's door. */
   truckPos(e) {
     const f = e.f, to = f.to, from = e.from;
