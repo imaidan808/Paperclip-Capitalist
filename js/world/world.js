@@ -20,6 +20,7 @@ import { veilAt, VEIL_MAX_MS, VEIL_FADE_MS } from './veil.js';
 import { clearSprites, setSpriteBudget, trimSprites } from './sprites.js';
 import { FAR_ZOOM, FOG_DIM, money, leaveEnd } from './common.js';
 import { runLayer } from './stack.js';
+import { cleanName } from '../names.js';
 import { releaseShadows } from './shadow.js';
 import { lodOf, farMix } from './lod.js';
 import { lookOf, CARS } from './ents-actors.js';
@@ -723,11 +724,10 @@ const blockPoly = (D) => [P(D.ox, D.oy, D.z), P(D.ox + BW, D.oy, D.z), P(D.ox + 
 
 // ---------------------------------------------------------------- the classmates the screen gives (setPeers)
 const PEERS_MAX = 400, PEER_NAME = 24, PEER_PID = 48;
-const UNSEEN = /[\p{Cc}\p{Cf}\p{Cs}\p{Zl}\p{Zp}]/gu; // controls, format marks (the bidi ones among them), lone surrogates, line and paragraph separators
-/** An alias as a name tag may carry it: nothing invisible or reordering in it, trimmed, at most 24 characters, and the cut falls between characters, never inside one. */
+/** An alias as a name tag may carry it: the cleaner every name goes through (js/names.js: nothing invisible or reordering in it, the blank fillers too), trimmed, at most 24 characters, and the cut falls between characters, never inside one. */
 function peerName(s) {
-  s = s.slice(0, 4 * PEER_NAME).replace(UNSEEN, '').trim(); let out = '';
-  for (const ch of s) { if (out.length + ch.length > PEER_NAME) break; out += ch; }
+  const t = cleanName(s, PEER_NAME); let out = '';
+  for (const ch of t) { if (out.length + ch.length > PEER_NAME) break; out += ch; } // (a tag is as wide as its text: no more than 24 units of it, as it always was, whatever the alias allows)
   return out.trimEnd();
 }
 /**

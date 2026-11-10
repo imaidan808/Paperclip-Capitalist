@@ -71,7 +71,7 @@ test('A2 setPeers keeps a fresh copy of what is valid: pid a string, name a stri
 test('A3 setPeers: a name is text of at most 24 characters with no control characters, bidi marks or lone surrogates; a blank one stays a figure without a tag', async () => {
   const { w } = await newWorld();
   const C1 = String.fromCharCode(0x85, 0x9f), RLO = String.fromCodePoint(0x202e), LS = String.fromCodePoint(0x2028), ZWSP = String.fromCodePoint(0x200b), BOMB = String.fromCodePoint(0xfeff), GRIN = String.fromCodePoint(0x1f600);
-  const names = ['Ada\x00Lo\x1fve\x7f', 'Ad' + C1 + 'a', 'Ada' + RLO + 'live', 'two' + LS + 'lines', 'a' + ZWSP + 'b' + BOMB + 'c', '  Ada Lovelace  ', GRIN.repeat(20), 'x'.repeat(5e6), 'a'.repeat(30) + GRIN, '\x00\x01\x02', '   ', '<img src=x onerror=alert(1)>', '"><script>alert(1)</script>'];
+  const names = ['Ada\x00Lo\x1fve\x7f', 'Ad' + C1 + 'a', 'Ada' + RLO + 'live', 'two' + LS + 'lines', 'a' + ZWSP + 'b' + BOMB + 'c', '  Ada Lovelace  ', GRIN.repeat(20), 'x'.repeat(5e6), 'a'.repeat(30) + GRIN, '\x00\x01\x02', '   ', '<img src=x onerror=alert(1)>', '"><script>alert(1)</script>', String.fromCodePoint(0x3164), String.fromCodePoint(0x2800, 0x2800), 'x' + String.fromCodePoint(0xd83d) + 'y'];
   w.setPeers(names.map((n, i) => ok('P' + i, n, 2)));
   const got = w.peerList.map((p) => p.name);
   assert.deepEqual(got.slice(0, 6), ['AdaLove', 'Ada', 'Adalive', 'twolines', 'abc', 'Ada Lovelace']);
@@ -79,6 +79,7 @@ test('A3 setPeers: a name is text of at most 24 characters with no control chara
   assert.equal(got[7], 'x'.repeat(24)); assert.equal(got[8], 'a'.repeat(24));
   assert.deepEqual(got.slice(9, 11), ['', ''], 'a name of nothing is an empty name');
   assert.equal(got[11], '<img src=x onerror=alert(1)>'.slice(0, 24), 'markup is text: it is kept as the letters it is made of (and drawn as canvas text, C)');
+  assert.deepEqual(got.slice(13), ['', '', 'xy'], 'the blank fillers are no name (a blank chip is a tag that says nothing), and half of a pair is cut out');
   for (const n of got) { assert.ok(n.length <= 24, n); assert.doesNotThrow(() => encodeURIComponent(n), 'no lone surrogate'); assert.ok(!/[\x00-\x1f\x7f]/.test(n)); }
   assert.equal(w.peerList.length, names.length, 'a blank name does not cost the figure');
 });
@@ -343,6 +344,20 @@ test('C6b the tags never sit on one another: a crowd of long names shows the fig
     if (zoom === 0.7 || zoom === 1) assert.ok(T.length > 0 && T.length < figs.length, `zoom ${zoom}: ${T.length} tags for ${figs.length} figures: wide names in a crowd do not all fit`);
   }
   assert.ok(shownAt[1.4] >= shownAt[1] && shownAt[2.4] > shownAt[1] && shownAt[2.4] >= 0.75 * 21, `zooming in brings the tags (${JSON.stringify(shownAt)})`);
+});
+
+test('C6d a tag is as wide as its text: a wide character (CJK, full-width, emoji) takes the room of two letters in the layout, a Latin one of one', async () => {
+  const { cells } = await import('../js/world/peers.js');
+  const cp = (...c) => String.fromCodePoint(...c);
+  assert.equal(cells('Ada'), 3); assert.equal(cells(''), 0);
+  assert.equal(cells(cp(0x5c71, 0x7530, 0x592a, 0x90ce)), 8, 'four wide characters');
+  assert.equal(cells('Ada' + cp(0xff21)), 5, 'a full-width letter is wide'); assert.equal(cells(cp(0xac00, 0xd55c)), 4, 'Hangul syllables');
+  assert.equal(cells(cp(0x1f600) + 'x'), 3, 'an emoji is wide (it was two units, and is two cells)');
+  const names = ['Ada', cp(0x5c71, 0x7530, 0x592a, 0x90ce), 'Bo'];
+  const w = await stage(names.map((n, i) => ok(ids(3)[i], n, 3)), { z: 3, zoom: 1.4 }); frame(w, 1000); frame(w, 1600);
+  const wide = [...w.peerState.recs.values()].filter((r) => r.ov);
+  assert.ok(wide.length === 3, 'all three tags fit at this zoom');
+  for (const r of wide) assert.equal(r.ov.n, cells(r.name), 'the overlay is told the same width the layout used: ' + r.name);
 });
 
 test('C6c a tag fades in with the zoom like every added detail (half in at 0.7, whole from 0.8), and with its figure when it comes and goes', async () => {

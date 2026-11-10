@@ -15,6 +15,7 @@
 //   rewound                a student telling the instructor how far its rewind could go
 import { Game } from './engine.js';
 import { Cohort, makeSynth, synthSnapshot, synthFlags, median, cleanSnap, cleanClock, cleanInject, cleanOffer, cleanAsset, cleanDifficulty, cleanId, DEFAULT_DIFFICULTY, PRESENCE_MODES, num, text, nwCeiling } from './cohort.js';
+import { cleanName } from './names.js';
 import { Room, cleanCode, cleanRelay } from './net.js';
 import { openTab, makeKv } from './identity.js';
 import { SEC_PER_HOUR, TOTAL_HOURS, TOTAL_DAYS, EEI_FLOOR_DEFAULT, ASSETS, ZONES, SWAPS, EVENTS } from './config.js';
@@ -246,9 +247,14 @@ export class Session {
     // The relay hands the seat to whoever brings it, whatever Founder ID they have.
     const token = role === 'instructor' ? this._ownerFor(code, owner) : undefined;
     this.room = new Room({ code, pid: this.pid, key: this.key, handle: h, role, relay: relay || undefined, owner: token });
+    let welcomed = false; // (the first welcome of a connection comes with the hello the join has just sent; a later one comes after a reconnect)
     this.room.oncaps = (caps) => { // what the relay promises comes with each connection, so a student says where they are again after every reconnect; presence is cosmetic and never gets to break the connection it rides on
       try {
-        if (this.mode === 'instructor' && caps && caps.size && this.presence) this.presence.resync(); // a goodbye that fell in a gap of this page's own connection was never heard: the relay's replay brings back those still here
+        if (caps && caps.size) { // the relay's welcome (an empty set is the connection dropping)
+          if (this.presence) this.presence.resync(); // a goodbye that fell in a gap of this page's own connection was never heard, by a student's table as by the instructor's: the relay's replay brings back those still here
+          if (welcomed) this.room.send({ t: 'hello' }); // and the relay is told who this is again: one that has restarted knows nobody, and one that has not keeps an alias only as long as it keeps the Founder ID
+          welcomed = true;
+        }
         this._sendHere(true); this.emit('presence');
       } catch { /* a listener of the page threw: the connection carries on */ }
     };
@@ -444,9 +450,10 @@ export class Session {
       if (this.presence.apply(m, from)) this.emit('presence');
     } catch { /* a listener of the page threw */ }
   }
-  /** What to call a classmate: the alias their snapshot or their hello gave, else the placeholder every player starts with. Never what a `here` says: the relay takes that from the sender's frame, so a page could put another's name in it. */
+  /** What to call a classmate: the alias their snapshot or their hello gave, cleaned as every name is (js/names.js: nothing invisible, nothing that reorders the text, at most 24 characters), else the placeholder every player starts with.
+   *  Never what a `here` says: a relay of before the switch takes that from the sender's frame, so a page could put another's name in it. */
   nameOf(pid) {
-    const p = this.peers.get(pid), n = text(p?.snap?.handle) || text(p?.handle);
+    const p = this.peers.get(pid), n = cleanName(p?.snap?.handle) || cleanName(p?.handle);
     return n || (typeof pid === 'string' && pid.length > 3 ? 'Founder-' + pid.slice(3) : String(pid));
   }
   /** The classmates a student may see, by the instructor's switch: with everything shown, who is online, where and doing what; with `online`, who is online and no district; with `off`, nobody. Not oneself, not the instructor. */
@@ -463,7 +470,7 @@ export class Session {
   /** The instructor's switch: what students see of each other. It goes out with the clock, and students keep sending where they are in every mode (the instructor's panel needs it). */
   setPresenceMode(mode) {
     if (this.mode !== 'instructor' || !PRESENCE_MODES.includes(mode)) return;
-    this.presenceMode = mode; this._sendClock(); this.emit('change');
+    this.presenceMode = mode; this._sendClock(); this.emit('switch', mode); this.emit('change');
   }
   /** Where this student is (a district; 0 when not in the world) and what they are doing (one word: `play`, `academy`), for the room. Said when it changes, at most once a second (the last place stands), and again after every reconnect;
    *  not said to a relay that has not promised to take it. The instructor says nothing: it is not a figure in the world. */
@@ -539,8 +546,10 @@ export class Session {
     if (fromInstructor && c.difficulty) Object.assign(this.difficulty, c.difficulty);
     if (fromInstructor && c.ghosts != null) { this.ghosts = c.ghosts; this.cohort.ghosts = c.ghosts; this.cohort.refresh(); }
     if (fromInstructor && c.algo != null) { this.algo = c.algo; if (this.game) this.game.env.algo = c.algo; }
-    if (fromInstructor) { const was = this.presenceMode; this.presenceMode = c.presence || 'full'; if (was !== this.presenceMode) this.emit('presence'); } // a clock that does not carry the switch means everything is shown
+    const was = this.presenceMode;
+    if (fromInstructor) this.presenceMode = c.presence || 'full'; // a clock that does not carry the switch means everything is shown
     if (first) this._rebase();
+    if (was !== this.presenceMode) { try { this.emit('presence'); } catch { /* a listener of the page threw: the clock was adopted */ } }
   }
   /** A run that has not been played, started before the class clock was heard, starts again at the class's hour (everyone starts identical, whenever they sit down). Not played means nothing bought, sold, swapped,
    *  signed or borrowed and no skill point spent. Time that passed on its own (the clock came late and the game ran by itself meanwhile) and lessons played on the title screen (their XP, skill points and Codex pages

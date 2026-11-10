@@ -124,6 +124,10 @@ export const live = (w) => !!(w.peerState && (w.peerState.recs.size || w.peerSta
 // ---------------------------------------------------------------- the frame
 const HEAD = 46, GAP = 3, DROP = 22, TAG_SCALE = 0.85, TAG = SKY.mid, MORE = METAL.steelLight; // the top of the hair, the air between it and the tag, how far under the home spot the count stands, the tag's size against the world's labels, the colors (a cool one, and a quieter)
 const RECT = new Float64Array(4 * (PEER_CAP + 2));
+// A tag is as wide as its text, and the layout's estimate is 6.7 px a letter: right for Latin, about half what a wide character takes (the CJK scripts, the full-width forms, emoji), which would put a neighbor's tag on top of it.
+const WIDE = [[0x1100, 0x115f], [0x2e80, 0x303e], [0x3041, 0x33ff], [0x3400, 0x4dbf], [0x4e00, 0x9fff], [0xa000, 0xa4cf], [0xac00, 0xd7a3], [0xf900, 0xfaff], [0xfe30, 0xfe6f], [0xff00, 0xff60], [0xffe0, 0xffe6], [0x1f300, 0x1faff], [0x20000, 0x3fffd]];
+/** How many letters wide a text is: a wide character counts for two. */
+export const cells = (s) => { let n = 0; for (const ch of s) { const c = ch.codePointAt(0); n += WIDE.some(([a, b]) => c >= a && c <= b) ? 2 : 1; } return n; };
 const isOpen = (w, z) => !w.unlocked || w.unlocked.has(z);
 /** The scale of a tag from the world's label scale `s` (0.75 to 1.25 with the zoom): a little smaller than the other labels, and never under 0.75, which is 8 px of text. */
 const tagScale = (s) => Math.max(0.75, s * TAG_SCALE);
@@ -148,7 +152,7 @@ function lay(w, S, Z, zoom, s, zq) {
   if (Z.more > 0) { Z.text = `+${Z.more} more`; const o = countEntry(w, S, Z); o.n = Z.text.length; o.wx = Z.hx; o.wy = Z.hy + DROP / zoom; fits(Z.hx * zoom, Z.hy * zoom + DROP, (o.n * 6.7 + 14) * sq / 2); }
   for (const r of Z.list) {
     if (!r.name) { r.tag = false; continue; }
-    const len = r.name.length;
+    const len = cells(r.name);
     r.tag = fits(r.x * zoom, r.y * zoom - HEAD * zoom - GAP - h / 2, (len * 6.7 + 14) * sq / 2);
     if (r.tag) { const o = tagEntry(w, S, r); o.n = len; o.wx = r.x; o.wy = r.y - HEAD - (GAP + h / 2) / zoom; }
   }

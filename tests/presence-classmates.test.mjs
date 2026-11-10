@@ -5,6 +5,12 @@
 //   K4  students go on sending where they are in every mode (the instructor's panel needs it): the switch governs what a student SEES
 //   K5  only a student who is playing in a district is a figure, and only when everything is shown
 //   K6  the instructor's dashboard has the control, only where there is something to switch
+//   K2b a name is the alias the hello gave, whatever a here says, with no relay in between (so it holds against a relay that already rewrites the alias)
+//   K7  a student whose connection blinked does not keep a classmate who left meanwhile: no row in the roster, no figure in the world
+//   K8  and sees those who are still there again, and the relay is told who they are again (once, not at the first welcome)
+//   K9  only the instructor's clock sets the switch, with no relay in between
+//   K10 the control is not part of the live panel (a repaint never writes over a panel that holds the focused select)
+//   K11 the instructor's session says when the switch changes, so that the page can write it down at once
 // The relay tests need `npm install` in server/ (skipped without it). Run: node --test tests/presence-classmates.test.mjs
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -13,7 +19,8 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Session, Clock } from '../js/session.js';
 import { cleanClock } from '../js/cohort.js';
-import { instructorParts } from '../js/ui/instructor.js';
+import { instructorParts, liveHTML, presenceHTML } from '../js/ui/instructor.js';
+import { Presence } from '../js/presence.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const SKIP = !existsSync(join(ROOT, 'server/node_modules/ws')) && 'run npm install in server/';
@@ -106,16 +113,114 @@ test('K5: only a student who is playing in a district is a figure, and only when
   } finally { await done(relay); }
 });
 
-test('K6: the instructor\'s dashboard has the control, only where there is something to switch, and it says what each word does', () => {
-  const quiet = new Session(); quiet.mode = 'instructor'; quiet.roomInfo = { code: 'OLD', relay: '', role: 'instructor' }; quiet.room = { kind: 'local', state: 'open' };
-  assert.doesNotMatch(instructorParts(quiet, {}).live, /data-change="presence"/, 'a room that cannot carry presence has nothing to switch');
+/** A dashboard of a live room: a relay that carries presence and a table of who is where (a stand-in, for the markup). */
+function liveDashboard() {
   const S = new Session(); S.pid = 'TEACH'; S.mode = 'instructor'; S.roomInfo = { code: 'LIVE', relay: 'wss://r.example.edu', role: 'instructor' };
   S.room = { kind: 'relay', state: 'open', can: () => true, send() {}, close() {}, on() {} };
   S.presence = new (class { now() { return 0; } counts() { return { here: 0, play: 0, academy: 0, away: 0, debrief: 0, other: 0, zones: Array(17).fill(0) }; } })();
   S.presence.feed = [];
-  const html = instructorParts(S, {}).live;
+  return S;
+}
+
+test('K6: the instructor\'s dashboard has the control, only where there is something to switch, in a panel of its own, and it says what each word does', () => {
+  const quiet = new Session(); quiet.mode = 'instructor'; quiet.roomInfo = { code: 'OLD', relay: '', role: 'instructor' }; quiet.room = { kind: 'local', state: 'open' };
+  assert.equal(instructorParts(quiet, {}).pm, '', 'a room that cannot carry presence has nothing to switch');
+  assert.doesNotMatch(instructorParts(quiet, {}).live, /data-change="presence"/);
+  const S = liveDashboard();
+  const html = instructorParts(S, {}).pm;
   assert.match(html, /<select id="pm" data-change="presence"/);
   assert.deepEqual([...html.matchAll(/<option value="(\w+)"( selected)?>/g)].map((m) => [m[1], !!m[2]]), [['full', true], ['online', false], ['off', false]]);
   assert.match(html, /<label for="pm"[^>]*>Students see<\/label>/);
-  S.presenceMode = 'off'; assert.match(instructorParts(S, {}).live, /<option value="off" selected>/);
+  assert.match(html, /<option value="off">No list, no figures<\/option>/, 'it does not promise more than it does: the Market\'s Exchange and the Debrief standings still list classmates');
+  assert.doesNotMatch(html, /Nothing of each other/);
+  assert.match(html, /aria-describedby="pm-why"[\s\S]*<span class="sr" id="pm-why">What each student sees of the others/, 'the explanation is there for a reader and not only on hover');
+  S.presenceMode = 'off'; assert.match(instructorParts(S, {}).pm, /<option value="off" selected>/);
+});
+
+test('K10: the control is not part of the live panel: a repaint never writes over a panel that holds the focused select, so in it the control would have frozen "Right now" after the instructor had used it', () => {
+  const S = liveDashboard();
+  assert.doesNotMatch(liveHTML(S), /<select|<input|<textarea/i, 'nothing in the live panel can take the focus away from its own repaint');
+  assert.match(presenceHTML(S), /<select id="pm"/);
+  assert.equal(presenceHTML(new Session()), '', 'and no panel at all where there is nothing to switch');
+});
+
+// ---- no relay in between: the frames a hostile page could send are put to the client directly
+const bare = (pid = 'ADA') => { const a = new Session(); a.pid = pid; a.mode = 'student'; a.presence = new Presence({ now: () => 0 }); a.room = { kind: 'relay', can: () => true }; return a; };
+
+test('K2b: a name is the alias the hello gave, whatever a here says, with no relay in between (a relay that rewrites the alias would hide a client that did not)', () => {
+  const a = bare();
+  a._onMsg({ t: 'hello', from: 'PC-BO01', role: 'student', handle: 'Bo' });
+  a._onMsg({ t: 'here', from: 'PC-BO01', role: 'student', z: 3, s: 'play', handle: 'Mallory' });
+  assert.deepEqual(a.classmates().map((c) => [c.name, c.z, c.s]), [['Bo', 3, 'play']]);
+  a._onMsg({ t: 'here', from: 'PC-BO01', role: 'student', z: 4, s: 'play', handle: 'Mallory II' });
+  assert.equal(a.classmates()[0].name, 'Bo', 'the name stays the one the hello gave');
+  a._onMsg({ t: 'here', from: 'PC-CY02', role: 'student', z: 2, s: 'play', handle: 'Eve' });
+  assert.equal(a.nameOf('PC-CY02'), 'Founder-CY02', 'a member that never said hello is the placeholder, not the name its here carries');
+});
+
+test('K9: only the instructor\'s clock sets the switch, and a student sees what it says: a student\'s clock does not, nor another page that claims the seat while the real instructor is heard', () => {
+  const a = bare();
+  a._onMsg({ t: 'hello', from: 'PC-BO01', role: 'student', handle: 'Bo' });
+  a._onMsg({ t: 'here', from: 'PC-BO01', role: 'student', z: 3, s: 'play' });
+  const clock = (from, role, presence) => a._onMsg({ t: 'clock', hour: 5, speed: 1, paused: false, presence, from, role });
+  assert.equal(a.presenceMode, 'full');
+  clock('TEACH', 'instructor', 'online');
+  assert.equal(a.presenceMode, 'online', 'the instructor\'s clock is believed');
+  assert.deepEqual(a.classmates().map((c) => [c.name, c.z]), [['Bo', 0]], 'who is here and not where');
+  assert.deepEqual(a.figures(), []);
+  clock('PC-BO01', 'student', 'off'); assert.equal(a.presenceMode, 'online', 'a student\'s clock does not set it');
+  clock('PC-MAL3', 'instructor', 'off'); assert.equal(a.presenceMode, 'online', 'another page that says it is the instructor, while the real one is heard, does not either');
+  clock('TEACH', 'instructor', 'off');
+  assert.equal(a.presenceMode, 'off'); assert.deepEqual(a.classmates(), []);
+  clock('TEACH', 'instructor', 'full');
+  assert.deepEqual(a.classmates().map((c) => [c.name, c.z]), [['Bo', 3]]); assert.equal(a.figures().length, 1);
+});
+
+// ---- a connection that blinks (a student's wifi, a relay that restarts): the socket drops and the transport brings it back by itself
+async function blink(s) {
+  const tr = s.room.transport, ws = tr.ws;
+  tr.closed = false; ws.close();
+  await until(() => s.room.caps.size === 0, `${s.pid} to notice the drop`);
+}
+const welcomedAgain = (s) => until(() => s.room.can('here') && s.room.state === 'open', `${s.pid} to be welcomed again`, 15000);
+
+test('K7: a student whose connection blinked does not keep a classmate who left meanwhile: no row in the roster, no figure in the world', { skip: SKIP, timeout: 60000 }, async () => {
+  const relay = await startRelay();
+  try {
+    const t = teacher(relay, 'PK07'), a = student(relay, 'PK07', 'ADA', 'Ada'), b = student(relay, 'PK07', 'BO', 'Bo');
+    await ready(t, a, b);
+    b.setHere(3, 'play');
+    await until(() => a.figures().length === 1, 'Ada to see Bo');
+    await blink(a);
+    b.leaveRoom();                                                                 // Bo's goodbye reaches nobody on Ada's side
+    await until(() => t.presence.members.get('BO')?.online === false, 'the instructor to hear Bo leave');
+    await welcomedAgain(a);
+    await until(() => a.classmates().length === 0, 'the roster to let go of Bo');  // before the fix Bo stayed online, in district 3, for the rest of the session
+    assert.deepEqual(a.figures(), []);
+  } finally { await done(relay); }
+});
+
+test('K8: a student whose connection blinked sees the classmates who are still there again, and the relay is told who they are again (once, not at the first welcome)', { skip: SKIP, timeout: 60000 }, async () => {
+  const relay = await startRelay();
+  try {
+    const t = teacher(relay, 'PK08'), a = student(relay, 'PK08', 'ADA', 'Ada'), b = student(relay, 'PK08', 'BO', 'Bo');
+    await ready(t, a, b);
+    b.setHere(3, 'play');
+    await until(() => a.figures().length === 1, 'Ada to see Bo');
+    const sent = [], send = a.room.send.bind(a.room); a.room.send = (m) => { sent.push(m.t); return send(m); };
+    await blink(a);
+    await welcomedAgain(a);
+    await until(() => a.classmates().some((c) => c.pid === 'BO' && c.z === 3 && c.s === 'play'), 'Bo to come back with the relay\'s replay');
+    assert.equal(sent.filter((x) => x === 'hello').length, 1, 'one hello after the reconnect: a relay that has restarted knows nobody');
+    assert.equal(a.figures().length, 1);
+  } finally { await done(relay); }
+});
+
+test('K11: the instructor\'s session says when the switch changes (so the page can write it down at once, and a reload inside five seconds does not bring the old word back), and says nothing for a word that is not one of the three', () => {
+  const t = new Session(); t.pid = 'TEACH'; t.mode = 'instructor'; t.room = { kind: 'local', state: 'open', send() {}, close() {}, on() {} };
+  const heard = []; t.on((type, x) => { if (type === 'switch') heard.push(x); });
+  t.setPresenceMode('off'); t.setPresenceMode('bogus'); t.setPresenceMode('full');
+  assert.deepEqual(heard, ['off', 'full']);
+  const stu = new Session(); stu.mode = 'student'; const none = []; stu.on((type) => { if (type === 'switch') none.push(1); }); stu.setPresenceMode('off');
+  assert.deepEqual(none, [], 'a student has no switch to set');
 });

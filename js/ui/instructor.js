@@ -230,7 +230,19 @@ export function liveHTML(S) {
         <h3 class="gap">Where they are now</h3>${distributionHTML(k.zones, k.here ? busiest(k.zones) : 0, 'Students by the district they are in now')}</div>
       <div><h3 style="margin-top:0">Just now</h3><div role="log" aria-live="off" aria-label="What students just did"><ol class="in-feed">${rows || '<li class="mute">Nothing yet.</li>'}</ol></div></div>
     </div>
-    <div class="row gap"><label for="pm" class="small" title="What each student sees of the others. You always see everyone here, whatever you choose.">Students see</label><select id="pm" data-change="presence" data-fid="pm">${[['full', 'Where everyone is'], ['online', 'Who is here'], ['off', 'Nothing of each other']].map(([v, l]) => `<option value="${v}"${(S.presenceMode || 'full') === v ? ' selected' : ''}>${l}</option>`).join('')}</select></div></section>`;
+  </section>`;
+}
+
+/**
+ * The instructor's switch for what students see of each other, in a panel of its own under "Right now" (only where there is something to switch: a room with a relay that carries presence). It is not part of the live
+ * panel because a repaint never writes over a panel that holds the focused select (js/ui/common.js `setHTML`, so as not to take the keyboard from a typing user): after the instructor had used it, the focus stayed on it and
+ * the live panel stopped moving. The words of the hover are there for a reader too (a title is seen by a mouse and nothing else).
+ */
+export function presenceHTML(S) {
+  if (!liveOf(S)) return '';
+  const why = 'What each student sees of the others. You always see everyone here, whatever you choose, and students keep sending where they are.';
+  const opts = [['full', 'Where everyone is'], ['online', 'Who is here'], ['off', 'No list, no figures']].map(([v, l]) => `<option value="${v}"${(S.presenceMode || 'full') === v ? ' selected' : ''}>${l}</option>`).join('');
+  return `<section class="panel gap in-pm"><div class="row"><label for="pm" class="small" title="${esc(why)}">Students see</label><select id="pm" data-change="presence" data-fid="pm" aria-describedby="pm-why">${opts}</select><span class="sr" id="pm-why">${esc(why)}</span></div></section>`;
 }
 
 /** The roster's "Now" cell: the district a student is in this minute (its short name), or the Academy, or away; a dash for one the presence table has not heard from. It is not a grade and is not in the CSV. */
@@ -327,7 +339,7 @@ export function instructorParts(S, U) {
         <li><b>Peer market (10):</b> 25 for each completed swap with a classmate, less 10 for each flagged attempt.</li>
         <li>The 40 points for reflection are yours to grade with the rubric in the <a href="${KIT_URL}" target="_blank" rel="noopener noreferrer">faculty kit</a> (docs/FACULTY_KIT.md in the repository).</li>
         <li>Grade passback (LTI 1.3) is not built: export the CSV and import it into your LMS gradebook.</li></ul>`)}`;
-  return { head, keep: recoveryHTML(S), live: liveHTML(S), c1, c2, grade };
+  return { head, keep: recoveryHTML(S), live: liveHTML(S), pm: presenceHTML(S), c1, c2, grade };
 }
 
 /** A cell that a spreadsheet will read as text, never as a formula (aliases are typed by students). */
@@ -340,16 +352,16 @@ export function gradebookCSV(S) {
 
 export function mountInstructor(root, S, hooks) {
   const U = { zone: null, bg: 'all', ev: 'fed', when: '0', replace: true, linkSound: 'normal', open: {}, sent: loadSent(S) };
-  root.innerHTML = `<header class="panel row" id="ih"></header><div class="gap" id="ikeep"></div><div class="gap" id="ilive"></div><div class="gap main"><div class="col" id="icol1"></div><div class="col" id="icol2"></div></div><section class="panel gap" id="igrade"></section>`;
-  const el = { head: $('#ih'), keep: $('#ikeep'), live: $('#ilive'), c1: $('#icol1'), c2: $('#icol2'), grade: $('#igrade') };
+  root.innerHTML = `<header class="panel row" id="ih"></header><div class="gap" id="ikeep"></div><div class="gap" id="ilive"></div><div id="ipm"></div><div class="gap main"><div class="col" id="icol1"></div><div class="col" id="icol2"></div></div><section class="panel gap" id="igrade"></section>`;
+  const el = { head: $('#ih'), keep: $('#ikeep'), live: $('#ilive'), pm: $('#ipm'), c1: $('#icol1'), c2: $('#icol2'), grade: $('#igrade') };
 
   function render() {
     const p = instructorParts(S, U);
-    setHTML(el.head, p.head); setHTML(el.keep, p.keep); setHTML(el.live, p.live); setHTML(el.c1, p.c1); setHTML(el.c2, p.c2); setHTML(el.grade, p.grade);
+    setHTML(el.head, p.head); setHTML(el.keep, p.keep); setHTML(el.live, p.live); setHTML(el.pm, p.pm); setHTML(el.c1, p.c1); setHTML(el.c2, p.c2); setHTML(el.grade, p.grade);
   }
   // A message from the room (a join, a district, a swap) patches the "Right now" panel alone, once for a burst (a whole class pressing Begin sends a hundred): the rest of the dashboard waits for its own tick.
   let liveTimer = 0;
-  const renderLive = () => { liveTimer = 0; setHTML(el.live, liveHTML(S)); };
+  const renderLive = () => { liveTimer = 0; setHTML(el.live, liveHTML(S)); setHTML(el.pm, presenceHTML(S)); };
   // a fold the instructor opened stays open when its panel is drawn again (`toggle` does not bubble, so it is heard on the way down)
   const onToggle = (e) => { const k = e.target?.dataset?.fold; if (k) U.open[k] = !!e.target.open; };
   root.addEventListener('toggle', onToggle, true);
