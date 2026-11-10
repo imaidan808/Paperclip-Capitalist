@@ -66,6 +66,9 @@ test('two students see each other: the Room chip opens the roster from the keybo
     await until(ada, `pc.S.rosterOn() && pc.S.classmates().some((c) => c.s === 'play' && c.z === 1)`, 'Ada to see Bo playing in district 1', 40000);
     await until(bo, `pc.S.rosterOn() && pc.S.classmates().some((c) => c.s === 'play' && c.z === 1)`, 'Bo to see Ada playing in district 1', 40000);
     assert.deepEqual(await ada.eval(`pc.S.classmates().map(c => [c.name, c.z, c.s])`), [['Bo', 1, 'play']]);
+    // the world was given Bo (and not Ada herself) and holds a figure for them in district 1 (a record is made when the list arrives; the drawing itself is the unit tests' and the measurement's)
+    await until(ada, `!!pc.world.peerState && [...pc.world.peerState.recs.values()].some((r) => r.name === 'Bo' && r.z === 1 && r.want === 1)`, 'Bo to stand in Ada\'s world', 20000);
+    assert.deepEqual(await ada.eval(`[...pc.world.peerState.recs.values()].map((r) => r.name)`), ['Bo'], 'one figure, the classmate: not oneself');
 
     // ---- 2. the chip on the real HUD is a button; Enter opens the roster; the cursor is on its heading; Tab stays in; Escape closes it and the cursor is back on the chip
     await front(ada);
@@ -122,6 +125,8 @@ test('two students see each other: the Room chip opens the roster from the keybo
     await until(ada, `pc.S.presenceMode === 'online'`, 'Ada to hear online');
     assert.deepEqual(await ada.eval(`pc.S.classmates().map(c => [c.name, c.z])`), [['Bo', 0]], 'no district');
     assert.equal(await ada.eval(`pc.S.figures().length`), 0, 'no figure');
+    await front(ada);
+    await until(ada, `!pc.world.peerState || pc.world.peerState.recs.size === 0`, 'the figure to leave the world when only who is here is shown', 20000);
     await openByKeyboard(ada);
     assert.match(await dialog(ada), /Bo\s+Here/);
     assert.match(await dialog(ada), /shows who is here, not where/);
@@ -132,8 +137,10 @@ test('two students see each other: the Room chip opens the roster from the keybo
     await until(ada, `!document.querySelector('[data-act="roster"]')`, 'the chip to stop being a button', 20000);
     assert.equal(await ada.eval(`document.querySelector('.ctl .chip').textContent.trim()`), `Room ${code}`, 'the chip is still there, as the note it was');
     assert.equal(await ada.eval(`pc.S.classmates().length + pc.S.figures().length`), 0);
+    await until(ada, `!pc.world.peerState || pc.world.peerState.recs.size === 0`, 'no figure in the world when it is off', 20000);
     teacher.setPresenceMode('full');
     await until(ada, `!!document.querySelector('button.chip[data-act="roster"]') && pc.S.classmates().length === 1 && pc.S.classmates()[0].z === 2`, 'everything to come back', 20000);
+    await until(ada, `[...pc.world.peerState.recs.values()].some((r) => r.name === 'Bo' && r.z === 2 && r.want === 1)`, 'Bo\'s figure to come back, in ' + ZONES[2].name, 20000);
 
     // ---- 6. Bo closes the tab; Ada's roster says nobody is here
     await closePage(bo); tabs.splice(tabs.indexOf(bo), 1);
