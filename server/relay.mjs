@@ -14,7 +14,9 @@
 //  - a message with a `to` goes to that founder alone, not to the whole room;
 //  - presence is version 2, and opt-in (`&v=2` on the connection): a client that asks is welcomed with what the relay can do, and may say where it is (`here`) and, if it is a student, what it just did (`act`). Both are
 //    rebuilt here from a whitelist, never passed on as sent, and rate limited a socket. A `here` goes to the room's other version 2 members, the last one of each connected member is kept (small, bounded, forgotten when the socket
-//    closes) and replayed to a version 2 joiner with its age, and one that says what the last said is not sent again. An `act` goes to the instructor's seat alone, and is kept for nobody. A client that did not ask for
+//    closes) and replayed to a version 2 joiner with its age, and one that says what the last said is not sent again. The alias a `here` or an `act` carries is the one the member gave in its hello, whatever the frame says. The
+//    instructor's switch (`presence` in its clock: full, online, off) is kept with the room: a student is told of the others in full, without their districts, or not at all, and the instructor's seat in full under all three.
+//    An `act` goes to the instructor's seat alone, and is kept for nobody. A client that did not ask for
 //    version 2 is sent none of it and cannot send it, so a class of old clients and new ones works, and so does a new client on a relay of before this change (it is never welcomed, so it never says anything);
 //  - snapshots are kept only for sockets still connected, are size-capped, and are replayed with their age; rooms, clients, bytes are all bounded;
 //  - a full room, or a full relay, gives its place to a newcomer by dropping what has said nothing for IDLE_MS (never the instructor's seat), so sockets that only sit there cannot keep a class out.
@@ -35,22 +37,29 @@ const KEY = /^[A-Za-z0-9_-]{16,64}$/;
 const WELCOME = JSON.stringify({ t: 'welcome', v: 2, caps: ['here', 'act'] });
 const STATE = /^[a-z]{1,12}$/;      // what a member is doing, as one word (`here.s`): the relay checks the shape, the clients know the words, so a new word needs no new relay
 const KIND = /^[a-z0-9_-]{1,16}$/;  // what a student just did, as one word (`act.k`)
-// Control, zero-width and direction-changing characters: no part of an alias or a note (the joiner, U+200D, stays: it makes an emoji one emoji). Written as code points, not as escapes, so that nothing that handles this file
-// can turn them into the invisible characters themselves (a pattern holding a line separator is not a pattern).
-const UNSEEN = new RegExp('[' + [[0, 0x1f], [0x7f, 0x9f], [0x61c], [0x200b], [0x200e, 0x200f], [0x2028, 0x2029], [0x202a, 0x202e], [0x2060], [0x2066, 0x2069], [0xfeff]].map(([a, b]) => String.fromCodePoint(a) + (b ? '-' + String.fromCodePoint(b) : '')).join('') + ']', 'g');
-/** Text a person or a client wrote, as the relay passes it on: no unseen characters, trimmed, at most `n` characters (counted as characters, so an emoji is never cut in half). Anything that is not text is no text. */
-const plain = (x, n) => (typeof x === 'string' ? Array.from(x.replace(UNSEEN, '').trim()).slice(0, n).join('').trimEnd() : '');
+// Control, zero-width, direction-changing and blank-rendering characters (the fillers, the blank braille cell, the soft hyphen, the invisible operators, the tag characters): no part of an alias or a note. This is the client's list
+// (js/presence.js, UNSEEN), kept equal to it by tests/presence-relay.test.mjs (P13): the relay is deployed on its own and cannot import the client. The joiners and the variation selectors stay, since an emoji sequence needs them;
+// an alias of nothing else is none (below). Written as code points, not as escapes, so that nothing that handles this file can turn them into the invisible characters themselves (a pattern holding a line separator is not a pattern).
+const UNSEEN = new RegExp('[' + [[0, 0x1f], [0x7f, 0x9f], [0xad], [0x34f], [0x61c], [0x115f, 0x1160], [0x17b4, 0x17b5], [0x180b, 0x180e], [0x200b], [0x200e, 0x200f], [0x2028, 0x2029], [0x202a, 0x202e], [0x2060, 0x2064], [0x2066, 0x2069], [0x2800], [0x3164], [0xfeff], [0xffa0], [0xe0000, 0xe007f]].map(([a, b]) => String.fromCodePoint(a) + (b ? '-' + String.fromCodePoint(b) : '')).join('') + ']', 'gu');
+const JOINERS = new RegExp('^[' + String.fromCodePoint(0x200c) + String.fromCodePoint(0x200d) + String.fromCodePoint(0xfe00) + '-' + String.fromCodePoint(0xfe0f) + ']*$', 'u');
+/** Text a person or a client wrote, as the relay passes it on: no unseen characters, trimmed, at most `n` characters (counted as characters, so an emoji is never cut in half). What has nothing left to see is none, and anything that is not text is no text. */
+export const plain = (x, n) => {
+  if (typeof x !== 'string') return '';
+  const t = x.replace(UNSEEN, '').trim();
+  return JOINERS.test(t) ? '' : Array.from(t).slice(0, n).join('').trimEnd();
+};
 const finite = (x, lo, hi) => typeof x === 'number' && Number.isFinite(x) && x >= lo && x <= hi;
-/** A `here` as the relay will pass it on, or null: a whole district number (0 is none: not in the world), a state word and the alias. Nothing else of what was sent is kept. */
-const hereOf = (m) => (Number.isInteger(m.z) && m.z >= 0 && m.z <= 99 && typeof m.s === 'string' && STATE.test(m.s) ? { t: 'here', z: m.z, s: m.s, handle: plain(m.handle, 24) } : null);
+/** A `here` as the relay will pass it on, or null: a whole district number (0 is none: not in the world), a state word and the alias. The alias is `name`, the one the member gave in its hello, never a word of this frame
+ *  (one alias for one member, whatever its frames say). Nothing else of what was sent is kept. */
+const hereOf = (m, name) => (Number.isInteger(m.z) && m.z >= 0 && m.z <= 99 && typeof m.s === 'string' && STATE.test(m.s) ? { t: 'here', z: m.z, s: m.s, handle: name } : null);
 /** An `act` as the relay will pass it on, or null: a kind word, and optionally a value (a loss is negative), the game hour it happened at and a short note. A value or an hour that is given and is not a sensible number makes it null. */
-function actOf(m) {
+function actOf(m, name) {
   if (typeof m.k !== 'string' || !KIND.test(m.k)) return null;
   const o = { t: 'act', k: m.k };
   if (m.v != null) { if (!finite(m.v, -1e12, 1e12)) return null; o.v = m.v; }
   if (m.h != null) { if (!finite(m.h, 0, 3000)) return null; o.h = m.h; }
   const d = plain(m.d, 48); if (d) o.d = d;
-  o.handle = plain(m.handle, 24);
+  o.handle = name;
   return o;
 }
 
@@ -164,9 +173,28 @@ export function createRelay({ env = process.env, now = Date.now, log = (...a) =>
    *        socket lives and while the relay's bytes for it hold out (past them it is still passed on, but the member's older one is dropped too, so a joiner is never told where a member was a while ago).
    *  act   what a student just did. Goes to the instructor's seat alone, never to a classmate, and is kept for nobody: it is news for whoever is at the dashboard when it happens.
    */
+  /** `here` as a student is allowed to hear it under the room's switch: all of it, or (online) without the district, or (off) not at all. The text is the relay's own, whose first fields are always in this order. */
+  const softly = (text) => text.replace(/^(\{"t":"here","z":)\d+/, (_, a) => a + '0');
+  const shownTo = (room, ws, text) => (isInstructor(room, ws) || room.mode === 'full' ? text : room.mode === 'online' ? softly(text) : null);
+  /** What a member who has just joined, or is allowed to hear more than it did, is told of where the others are: the last `here` of each, with its age, as far as the room's switch allows it. */
+  const replayHere = (room, ws, t0) => {
+    for (const e of room.here.values()) {
+      if (e.ws === ws) continue;
+      const out = shownTo(room, ws, e.text.slice(0, -1) + ',"age":' + (t0 - e.at) + '}');
+      if (out) send(ws, out);
+    }
+  };
+  /** The instructor's switch (`presence` in its clock): `online` or `off`, else everything. Students are told of each other only as far as it allows, so a page that is not shown a classmate's place was not sent it. A change that lets
+   *  them hear more is followed by what the room already knows. (A relay that has just started knows no switch until the instructor's page says its clock again, which it does on every change and when it reconnects.) */
+  const setMode = (room, word, t) => {
+    const mode = word === 'online' || word === 'off' ? word : 'full';
+    if (mode === room.mode) return;
+    room.mode = mode;
+    if (mode !== 'off') for (const c of room.clients) if (c.v >= 2 && !isInstructor(room, c)) replayHere(room, c, t);
+  };
   const presence = (room, ws, m, size, t, instructor) => {
     if (ws.v < 2 || size > MAX_PRES || (m.t === 'act' && instructor)) return; // (an instructor reports nothing to the class)
-    const o = m.t === 'here' ? hereOf(m) : actOf(m);
+    const o = m.t === 'here' ? hereOf(m, ws.name || '') : actOf(m, ws.name || '');
     if (!o || !presAllow(ws, t)) return;
     ws.lastAt = t; // a frame the relay passes on is a connection in use
     o.from = ws.pid; o.role = instructor ? 'instructor' : 'student';
@@ -174,10 +202,16 @@ export function createRelay({ env = process.env, now = Date.now, log = (...a) =>
     if (o.t === 'act') { for (const c of room.clients) if (c !== ws && c.v >= 2 && isInstructor(room, c)) send(c, out); return; }
     const sig = o.z + '|' + o.s + '|' + o.handle, old = room.here.get(ws.pid);
     if (old && old.ws === ws && old.sig === sig) { old.at = t; return; } // the same again: the member is still here, and nobody needs telling
+    const softSame = old && old.ws === ws && old.soft === o.s + '|' + o.handle; // (under `online` a change of district alone is no news to a student)
     const delta = out.length - (old ? old.text.length : 0);
-    if (hereBytes + delta <= MAX_HERE_BYTES) { room.here.set(ws.pid, { ws, text: out, at: t, sig }); hereBytes += delta; }
+    if (hereBytes + delta <= MAX_HERE_BYTES) { room.here.set(ws.pid, { ws, text: out, at: t, sig, soft: o.s + '|' + o.handle }); hereBytes += delta; }
     else if (old) { room.here.delete(ws.pid); hereBytes -= old.text.length; }
-    for (const c of room.clients) if (c !== ws && c.v >= 2) send(c, out);
+    for (const c of room.clients) {
+      if (c === ws || c.v < 2) continue;
+      if (softSame && room.mode === 'online' && !isInstructor(room, c)) continue;
+      const text = shownTo(room, c, out);
+      if (text) send(c, text);
+    }
   };
 
   wss.on('connection', (ws, req) => {
@@ -204,7 +238,7 @@ export function createRelay({ env = process.env, now = Date.now, log = (...a) =>
         if (old[1].gone) clearTimeout(old[1].gone);
         rooms.delete(old[0]);
       }
-      rooms.set(code, (room = { clients: new Set(), snaps: new Map(), here: new Map(), clock: null, seat: null, owner: null, ownerProof: null, gone: null, emptyAt: 0, keys: new Map() }));
+      rooms.set(code, (room = { clients: new Set(), snaps: new Map(), here: new Map(), mode: 'full', clock: null, seat: null, owner: null, ownerProof: null, gone: null, emptyAt: 0, keys: new Map() }));
     }
     if (room.clients.size >= MAX_ROOM && !idlest(room, now())) { ws.close(1013, 'room full'); return; }
     // who this is: the pid is the name, the key is the proof (see the head of the file). Refused before anything else is done for the connection: it is not told about the room, and it joins nothing.
@@ -233,7 +267,7 @@ export function createRelay({ env = process.env, now = Date.now, log = (...a) =>
     if (ws.v >= 2) send(ws, WELCOME); // first, so a client knows what it may say before it hears what the room is doing
     if (room.clock) send(ws, room.clock.text.slice(0, -1) + ',"age":' + (t0 - room.clock.at) + '}');
     for (const e of room.snaps.values()) send(ws, e.text.slice(0, -1) + ',"age":' + (t0 - e.at) + '}');
-    if (ws.v >= 2) for (const e of room.here.values()) send(ws, e.text.slice(0, -1) + ',"age":' + (t0 - e.at) + '}');
+    if (ws.v >= 2) replayHere(room, ws, t0);
 
     ws.on('pong', () => { ws.alive = true; });
     ws.on('message', (data, isBinary) => {
@@ -247,6 +281,7 @@ export function createRelay({ env = process.env, now = Date.now, log = (...a) =>
         try { m = JSON.parse(text); } catch { return; }
         if (!m || typeof m !== 'object' || Array.isArray(m) || typeof m.t !== 'string' || !TYPES.has(m.t)) return;
         if (INSTRUCTOR_ONLY.has(m.t) && !instructor) return;
+        if (m.t === 'hello' && typeof m.handle === 'string') ws.name = plain(m.handle, 24); // the one alias the room knows this member by (a `here` or an `act` carries it, whatever the frame says); a hello that names none leaves it as it was
         if (PRESENCE.has(m.t)) { presence(room, ws, m, text.length, t, instructor); return; } // (its own rules: rebuilt, rate limited, routed)
         if (m.t === 'snap' && (instructor || text.length > MAX_SNAP || typeof m.snap !== 'object' || m.snap === null)) return;
         if (m.t === 'bye') forget(room, ws);
@@ -260,7 +295,7 @@ export function createRelay({ env = process.env, now = Date.now, log = (...a) =>
           if (snapBytes + delta > MAX_SNAP_BYTES) return;
           snapBytes += delta; room.snaps.set(ws.pid, { ws, text: out, at: t });
           const k = room.keys.get(ws.pid); if (k) k.snapped = true;
-        } else if (m.t === 'clock') room.clock = { text: out, at: t };
+        } else if (m.t === 'clock') { room.clock = { text: out, at: t }; setMode(room, m.presence, t); }
         if (typeof m.to === 'string') { for (const c of room.clients) if (c !== ws && c.pid === m.to) send(c, out); } // addressed to one founder
         else for (const c of room.clients) if (c !== ws) send(c, out);
       } catch (e) {

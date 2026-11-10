@@ -177,11 +177,15 @@ test('S7: what arrives before the module has loaded waits for it, in a queue wit
   const relay = await startRelay();
   try {
     const t = new Session(); t.pid = 'TEACH'; live.push(t);
+    let release; const gate = new Promise((r) => { release = r; }), real = t._importPresence.bind(t);
+    t._importPresence = () => gate.then(() => real()); // the module is held back until the relay's welcome has come (the welcome of a real connection comes before the replay it sends: a table that is made after it has nothing to resync)
     t.joinRoom({ code: 'PS07', relay: relay.url, role: 'instructor', handle: 'Prof' });
     assert.equal(t.presence, null, 'the module is a promise, not yet a table');
     t._onMsg({ t: 'here', z: 4, s: 'play', handle: 'Zed', from: 'ZED', role: 'student' });
     for (let i = 0; i < 1000; i++) t._onMsg({ t: 'here', z: 1, s: 'play', handle: 'P' + i, from: 'P' + i, role: 'student' });
     assert.ok(t._presQ.length >= 450 && t._presQ.length <= 600, `${t._presQ.length} waiting: room for a replay of a room of 400 and some more, and no more than that`);
+    await until(() => t.room.can('here'), 'the welcome');
+    release();
     await until(() => t.presence, 'the module');
     assert.equal(t.presence.members.get('ZED')?.z, 4, 'the first frame was kept, in order');
     assert.ok(t.presence.members.size >= 450 && t.presence.members.size <= 600 && t._presQ.length === 0, 'and the queue is empty once it has been applied');
