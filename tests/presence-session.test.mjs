@@ -181,10 +181,10 @@ test('S7: what arrives before the module has loaded waits for it, in a queue wit
     assert.equal(t.presence, null, 'the module is a promise, not yet a table');
     t._onMsg({ t: 'here', z: 4, s: 'play', handle: 'Zed', from: 'ZED', role: 'student' });
     for (let i = 0; i < 1000; i++) t._onMsg({ t: 'here', z: 1, s: 'play', handle: 'P' + i, from: 'P' + i, role: 'student' });
-    assert.ok(t._presQ.length <= 300, `${t._presQ.length} waiting`);
+    assert.ok(t._presQ.length >= 450 && t._presQ.length <= 600, `${t._presQ.length} waiting: room for a replay of a room of 400 and some more, and no more than that`);
     await until(() => t.presence, 'the module');
     assert.equal(t.presence.members.get('ZED')?.z, 4, 'the first frame was kept, in order');
-    assert.ok(t.presence.members.size <= 300 && t._presQ.length === 0, 'and the queue is empty once it has been applied');
+    assert.ok(t.presence.members.size >= 450 && t.presence.members.size <= 600 && t._presQ.length === 0, 'and the queue is empty once it has been applied');
   } finally { await done(relay); }
 });
 
@@ -216,12 +216,74 @@ test('S9: a student whose connection drops is "left" and, when it is back, "back
   } finally { await done(relay); }
 });
 
-test('S11: a room object with no `can` (a stand-in, as other tests build) is promised nothing and nothing throws: a swap still ends with its note', () => {
+test('S11: a room object with no `can` (a stand-in, as other tests build) is promised nothing and nothing throws', () => {
   const S = new Session(); S.pid = 'ADA'; S.mode = 'student';
   const sent = []; S.room = { kind: 'relay', state: 'open', send: (m) => sent.push(m), close() {}, on() {} };
   S.startGame({ perks: ['trades', 'pro'], specialty: 'ops', handle: 'Ada' });
   assert.doesNotThrow(() => { S.setHere(5, 'play'); S.setAway(true); S.setAway(false); S._sendAct({ k: 'swap', d: 'Bo' }); S.reportEvent({ type: 'zone', id: 5 }); });
   assert.deepEqual(sent.filter((m) => m.t === 'here' || m.t === 'act'), [], 'nothing was promised, so nothing was said');
+});
+
+test('S12: an instructor whose connection drops and returns does not go on counting a student who left while it was away', { skip: SKIP, timeout: 40000 }, async () => {
+  const relay = await startRelay();
+  try {
+    const t = teacher(relay, 'PS12'), a = student(relay, 'PS12', 'ADA', 'Ada'), b = student(relay, 'PS12', 'BO', 'Bo');
+    await ready(t, a, b);
+    a.setHere(5, 'play'); b.setHere(2, 'play');
+    await until(() => t.presence.members.get('ADA')?.z === 5 && t.presence.members.get('BO')?.z === 2, 'both students to be placed');
+    t.room.transport.ws.close();                                   // the instructor's connection drops
+    await until(() => !t.room.can('here'), 'the promise to be forgotten');
+    a.leaveRoom();                                                 // Ada leaves while it is away: the goodbye is lost to it
+    await until(() => t.room.can('here') && t.room.state === 'open', 'the instructor to be back', 12000);
+    await until(() => t.presence.members.get('BO')?.online === true, 'Bo to be replayed');
+    await sleep(300);
+    assert.equal(t.presence.members.get('ADA').online, false, 'Ada is gone');
+    assert.deepEqual([t.presence.counts().here, t.presence.counts().zones[5], t.presence.counts().zones[2]], [1, 0, 1]);
+    assert.match(instructorParts(t, {}).live, /1 student here: 1 playing/);
+  } finally { await done(relay); }
+});
+
+test('S13: a lazy import that fails is tried again, and the table arrives', { skip: SKIP, timeout: 30000 }, async () => {
+  const relay = await startRelay();
+  try {
+    const t = new Session(); t.pid = 'TEACH'; live.push(t);
+    let tries = 0; const real = t._importPresence.bind(t);
+    t._importPresence = () => (++tries === 1 ? Promise.reject(new Error('offline')) : real());
+    t.joinRoom({ code: 'PS13', relay: relay.url, role: 'instructor', handle: 'Prof' });
+    await until(() => t.presence, 'the table, after a second try', 8000);
+    assert.ok(tries >= 2, `${tries} tries`);
+    const s = new Session(); s.pid = 'STU'; live.push(s); let never = 0;
+    s._importPresence = () => { never++; return Promise.reject(new Error('still offline')); };
+    s.joinRoom({ code: 'PS13', relay: relay.url, role: 'student', handle: 'Stu' });
+    await sleep(4500);
+    assert.ok(never >= 2 && never <= 4, `it gives up after a few tries, ${never}`);
+    assert.equal(s.presence, null);
+  } finally { await done(relay); }
+});
+
+test('S14: the Debrief says so, a tab that loads hidden is away, and Start over forgets where the student was', () => {
+  const S = new Session(); S.setHere(5, 'play');
+  assert.deepEqual(S._here, { z: 5, s: 'play' });
+  S.reset();
+  assert.deepEqual(S._here, { z: 0, s: '' }, 'a new run, or another room, is not told the old place');
+  globalThis.document = { hidden: true };
+  try { assert.equal(new Session()._away, true, 'a tab that is opened in the background has not said it is away yet: it is'); } finally { delete globalThis.document; }
+  assert.equal(new Session()._away, false);
+  const main = readFileSync(join(ROOT, 'js/main.js'), 'utf8');
+  assert.match(main, /debrief\(\) \{[^}]*S\.setHere\(0, 'debrief'\)/s, 'the Debrief screen says so');
+});
+
+test('S15: a listener that throws on a presence event cannot cancel the transport\'s reconnect', { skip: SKIP, timeout: 40000 }, async () => {
+  const relay = await startRelay();
+  try {
+    const a = student(relay, 'PS15', 'ADA', 'Ada');
+    await until(() => a.room.can('here') && a.presence, 'the welcome');
+    a.on((type) => { if (type === 'presence') throw new Error('a listener broke'); });
+    a.room.transport.ws.close();
+    await until(() => !a.room.can('here'), 'the promise to be forgotten');
+    await until(() => a.room.state === 'open' && a.room.can('here'), 'the reconnect and a new welcome', 12000);
+    assert.equal(relay.rooms.get('PS15').clients.size, 1, 'the relay has her again');
+  } finally { await done(relay); }
 });
 
 test('S10: the shell tells the session what the engine did, and what is told is the engine\'s own event; the screens say where the student is', () => {

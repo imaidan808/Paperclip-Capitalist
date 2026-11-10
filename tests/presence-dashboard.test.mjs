@@ -56,10 +56,10 @@ test('D1: a live room shows the count by state, the districts students are in no
   assert.match(html, /aria-label="Students by the district they are in now"/);
   assert.ok(cols[4].includes('data-n="2"') && cols[4].includes(`aria-label="District 5, ${ZONES[5].name}: 2 students"`), 'Ada and Bo are in district 5; Di is away and stands in none');
   assert.ok(cols[0].includes('data-n="1"') && cols[0].includes('1 student"'), 'one student is singular');
-  assert.match(html, /<ol class="in-feed"[^>]*role="log"[^>]*aria-live="off"[^>]*aria-label="What students just did"/);
+  assert.match(html, /<div role="log" aria-live="off" aria-label="What students just did"><ol class="in-feed">/, 'a log that is a region of its own, with a list inside it');
   const feed = items(html, 'in-feed');
-  assert.match(feed[0], /Bo<\/b> swapped with Ada/); assert.match(feed[0], /20 s ago/);
-  assert.match(feed[1], new RegExp(`Ada</b> opened ${ZONES[5].name}`)); assert.match(feed[1], /Day 5/, 'the game day it happened on (hour 96 is the start of day 5)');
+  assert.match(feed[0], /Bo<\/b> <span class="tiny mute">B<\/span> swapped with Ada/, 'the alias and, beside it, the Founder ID: two students called Sam are told apart'); assert.match(feed[0], /20 s ago/);
+  assert.match(feed[1], new RegExp(`Ada</b> <span class="tiny mute">A</span> opened ${ZONES[5].name}`)); assert.match(feed[1], /Day 5/, 'the game day it happened on (hour 96 is the start of day 5)');
   assert.ok(feed.length === 7 && /joined the room/.test(feed[6]), 'five students joined, two things happened: seven rows');
   for (let i = 0; i < 40; i++) S.presence.apply(act('E', { k: 'milestone', v: 1 }, 'Ed'), 'E');
   assert.equal(items(I.liveHTML(S, {}), 'in-feed').length, 12, 'the last dozen');
@@ -86,8 +86,11 @@ test('D3: a room that cannot carry presence says it updates every 4 seconds and 
     assert.match(html, /<span class="chip warn"[^>]*>Updates every 4 s<\/span>/, name);
     assert.doesNotMatch(html, />Live</, name);
     assert.doesNotMatch(html, /in-feed|in-dist/, name + ': no feed and no chart it has no data for');
-    assert.match(html, /relay/i, name + ': it says what is needed');
+    assert.match(html, /relay|load/i, name + ': it says what is needed');
+    assert.match(html, /<span class="sr">[^<]*(relay|load)[^<]*<\/span>/i, name + ': and a reader who has no hover is told too');
   }
+  assert.match(I.liveHTML(dash({ table: false }).S), /did not load[^"<]*tries again/i, 'a table that failed to load is said to be loading, not blamed on the relay');
+  assert.doesNotMatch(I.liveHTML(dash({ can: false }).S), /did not load/, 'and an older relay is said to be one');
   const S = new Session(); S.mode = 'instructor'; S.roomInfo = { code: 'OLD', relay: '', role: 'instructor' }; S.room = { kind: 'local', state: 'open' }; // a room object with no `can` at all (what earlier tests build)
   assert.doesNotThrow(() => I.liveHTML(S, {}));
   assert.match(I.liveHTML(S, {}), /Updates every 4 s/);
@@ -128,6 +131,14 @@ test('D6: the roster has a "Now" column: the district a student is in, or Academ
   const g2 = I.instructorParts(empty, {}).grade;
   assert.match(g2, new RegExp(`<td colspan="${[...g2.matchAll(/<th scope="col">/g)].length}" class="mute">Waiting for students`), 'the empty row spans every column');
   assert.equal(I.gradebookCSV(S).split('\n')[0], ['founder_id', 'alias', 'background_1', 'background_2', 'district_reached', 'level', 'net_worth', 'eei', 'economic_percentile', 'economic_points_of_30', 'adaptability_points_of_20', 'peer_market_points_of_10', 'auto_subtotal_of_60', 'reflection_points_of_40', 'p2p_swaps', 'flagged_trades', 'virtual_days_played', 'adaptability_graded'].map((h) => `"${h}"`).join(','), 'the export is as it was: where a student is now is not a grade');
+});
+
+test('D8: a student reading the Debrief is counted and shown as that', () => {
+  const { S } = dash();
+  fill(S, [['A', 3, 'debrief', 'Ada'], ['B', 3, 'play', 'Bo']]);
+  assert.match(I.liveHTML(S, {}), /2 students here: 1 playing, 1 in the Debrief/);
+  S.peers.set('A', { pid: 'A', handle: 'Ada', role: 'student', clean: true, seen: Date.now(), snap: C.cleanSnap({ handle: 'Ada', hour: 96, flags: {}, nw: 500 }, 'A') });
+  assert.match(I.instructorParts(S, {}).grade, /<td>Debrief<\/td>/);
 });
 
 test('D7: a presence event patches the panel alone, once for a burst; a tick repaints everything as it did; nothing is patched after the page is gone', async () => {

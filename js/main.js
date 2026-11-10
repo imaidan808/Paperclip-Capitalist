@@ -209,6 +209,7 @@ const screens = {
 
   debrief() {
     if (!S.game) return go('title');
+    S.setHere(0, 'debrief'); // the room is told this student is reading, not trading (js/session.js)
     const m = mods.debrief.mountDebrief(root, S, { onBack: () => go('game') });
     cleanup = () => m.destroy();
   },
