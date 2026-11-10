@@ -41,8 +41,11 @@ export function hudHTML(ctx) {
     ? `<button class="ibtn" data-anchor="hud-clock" data-act="pause" aria-pressed="${S.clock.paused}" aria-label="${S.clock.paused ? 'Resume the clock' : 'Pause the clock'}">${gl(S.clock.paused ? 'ctl-play' : 'ctl-pause')}</button>
        <label class="sr" for="spd">Game speed</label><select id="spd" data-change="speed" data-fid="spd">${[0.25, 1, 4, 16, 64].map((v) => `<option value="${v}" ${S.clock.speed === v ? 'selected' : ''}>${v}x</option>`).join('')}</select>`
     : `<span class="chip info">Class clock ${S.clock.paused ? 'paused' : S.clock.speed + 'x'}</span>`;
-  const refused = S.room?.state === 'refused';
-  const room = S.roomInfo ? `<span class="chip ${S.room?.state === 'open' ? 'good' : 'warn'}"${refused ? ' title="The relay refused this device: its Founder ID is in use in this room by another connection."' : ''}>Room ${esc(S.roomInfo.code)}${refused ? ' (not joined)' : ''}</span>` : '';
+  const refused = S.room?.state === 'refused', tone = S.room?.state === 'open' ? 'good' : 'warn';
+  // Where there is a roster to open (a student in a relay room that took part in presence, not switched off) the chip is the button that opens it; everywhere else it is the note it always was.
+  const room = !S.roomInfo ? '' : !refused && S.rosterOn?.() === true
+    ? `<button class="chip ${tone}" data-act="roster" data-fid="room" aria-haspopup="dialog" aria-label="Room ${esc(S.roomInfo.code)}, who is here">Room ${esc(S.roomInfo.code)}</button>`
+    : `<span class="chip ${tone}"${refused ? ' title="The relay refused this device: its Founder ID is in use in this room by another connection."' : ''}>Room ${esc(S.roomInfo.code)}${refused ? ' (not joined)' : ''}</span>`;
   return `${playerCard(ctx)}
     <div class="res" role="group" aria-label="Your numbers">
       <button class="rs${fl('cash', s.cash)}" data-anchor="hud-cash" data-act="breakdown" data-k="cash" data-fid="r-cash"><small>Cash</small><b class="mono gold">${money(s.cash)}</b></button>

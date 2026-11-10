@@ -256,6 +256,7 @@ export function mountGame(root, S, hooks) {
     speed(b) { S.setSpeed(+b.value); },
     help() { dlg.open(`<button class="btn ghost sm x" data-close>Close</button><h2 tabindex="-1" autofocus>How to play</h2><ol class="small"><li>Click a <b>buyer</b> to sell, or a <b>booth</b> to buy. Play each deal (Read, Pitch, Close) or press <b>Quick</b>.</li><li>The <b>Goal</b> card says what to do next. The <b>Codex</b> says why it works.</li><li>Net worth opens districts. Each has a rule of its own.</li><li>Press <b>1</b> to <b>7</b> to open the panels, <b>Esc</b> to close them, <b>M</b> to mute.</li><li><b>Tab</b> moves, <b>Enter</b> or <b>Space</b> presses.</li></ol>`, { label: 'Help' }); },
     settings() { settingsDialog(() => render()); },
+    roster() { import('./roster.js').then((m) => { if (!dead) m.openRoster(ctx); }, () => toast('The list of classmates could not load. Check the connection and try again.', 'bad')); }, // the Room chip (a student in a relay room): the list is a file of its own, fetched the first time
     menu,
     breakdown(b) { breakdown(b.dataset.k); },
     'confirm-go'() { const fn = U.confirm; U.confirm = null; dlg.close(); fn?.(); render(); },

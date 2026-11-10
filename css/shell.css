@@ -104,6 +104,11 @@ body:has(.stage) { background-image: none; overflow: hidden; overscroll-behavior
 
 .ctl { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--sp-2); align-items: center; min-width: 0; }
 .ctl select { min-height: var(--target); padding: .1rem var(--sp-2); border-radius: var(--r-2); box-shadow: var(--elev-1); }
+/* The Room chip as a button (a student in a relay room: it opens the roster, js/ui/roster.js) and the roster's table. */
+button.chip { appearance: none; min-height: var(--target); padding: 0 var(--sp-3); background: var(--plate); font: inherit; font-size: .74rem; cursor: pointer; }
+@media (hover: hover) { button.chip:hover { border-color: var(--gold); } }
+.ro-tbl th[scope="row"] { color: var(--ink); font-size: .85rem; font-weight: 600; text-transform: none; overflow-wrap: anywhere; }
+.ro-tbl tr.ro-away th, .ro-tbl tr.ro-away td { color: var(--mute); }
 .ibtn { appearance: none; display: inline-grid; place-items: center; min-width: var(--target); height: var(--target); padding: 0 var(--sp-2); background: var(--plate); border: var(--bw) solid var(--line); border-radius: var(--r-2); box-shadow: var(--elev-1); color: var(--ink); font: inherit; font-weight: 700; line-height: 1; cursor: pointer; }
 .ibtn[aria-pressed="true"] { border-color: var(--gold); color: var(--gold); }
 .ibtn .gl { width: 1rem; height: 1rem; } /* a control's drawing (js/art/g-ui.js, ctl-*): 16 px at the default text size, in the button's text colour */
@@ -238,4 +243,4 @@ body:has(.stage[data-toasts="tight"]) #toasts .toast:nth-last-child(n+2) { displ
 
 @media (prefers-reduced-motion: reduce) { .drawer, .drawer.dragging { animation: none; transition: none; } }
 :root[data-motion="reduce"] .drawer { animation: none; transition: none; }
-@media (forced-colors: active) { .stage::before, .stage::after { display: none; } .ring { forced-color-adjust: none; } .ibtn { background-color: Canvas; } } /* the HUD and camera buttons drew their gradient and the browser's text backplate; a drawing needs a fill of the system's own under it */
+@media (forced-colors: active) { .stage::before, .stage::after { display: none; } .ring { forced-color-adjust: none; } .ibtn, button.chip { background-color: Canvas; } } /* the HUD and camera buttons drew their gradient and the browser's text backplate; a drawing needs a fill of the system's own under it */

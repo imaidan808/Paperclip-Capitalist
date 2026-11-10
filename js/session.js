@@ -458,6 +458,8 @@ export class Session {
   }
   /** The classmates drawn in the world: those who are playing in a district, when everything is shown. */
   figures() { return this.presenceMode === 'full' ? this.classmates().filter((c) => c.s === 'play' && c.z >= 1) : []; }
+  /** Whether a student has a roster to open: in a relay room that took part in presence (the relay promised the channel, the module has loaded) and the instructor has not switched it off. */
+  rosterOn() { return this.mode === 'student' && !!this.presence && this.presenceMode !== 'off' && this.room?.kind === 'relay' && this.room.can?.('here') === true; }
   /** The instructor's switch: what students see of each other. It goes out with the clock, and students keep sending where they are in every mode (the instructor's panel needs it). */
   setPresenceMode(mode) {
     if (this.mode !== 'instructor' || !PRESENCE_MODES.includes(mode)) return;
