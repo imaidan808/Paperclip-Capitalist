@@ -156,7 +156,7 @@ test('D7: a presence event patches the panel alone, once for a burst; a tick rep
   assert.equal(students, fullBefore, 'no full repaint: the gradebook was not worked out again');
   assert.equal(built - builtBefore, 1, 'fifty events, the panel worked out once');
   assert.equal(sets - setsBefore, 1, 'fifty events, one patch');
-  assert.match(html, /Ada<\/b> reached milestone 1/);
+  assert.match(html, /Ada<\/b> <span class="tiny mute">A<\/span> reached milestone 1/); // (the Founder ID stands beside the alias: two students can call themselves the same)
   c.t += 1000; S.emit('change');
   assert.ok(students > fullBefore, 'any other event repaints the whole dashboard, as it did (a tick is held to one in 0.9 s, as before)');
   dashboard.destroy();
