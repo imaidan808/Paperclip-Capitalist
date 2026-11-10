@@ -14,7 +14,7 @@
 //   royalty                one daily payment on a stream both sides really hold, never more in total than was agreed
 //   rewound                a student telling the instructor how far its rewind could go
 import { Game } from './engine.js';
-import { Cohort, makeSynth, synthSnapshot, synthFlags, median, cleanSnap, cleanClock, cleanInject, cleanOffer, cleanAsset, cleanDifficulty, cleanId, DEFAULT_DIFFICULTY, num, text, nwCeiling } from './cohort.js';
+import { Cohort, makeSynth, synthSnapshot, synthFlags, median, cleanSnap, cleanClock, cleanInject, cleanOffer, cleanAsset, cleanDifficulty, cleanId, DEFAULT_DIFFICULTY, PRESENCE_MODES, num, text, nwCeiling } from './cohort.js';
 import { Room, cleanCode, cleanRelay } from './net.js';
 import { openTab, makeKv } from './identity.js';
 import { SEC_PER_HOUR, TOTAL_HOURS, TOTAL_DAYS, EEI_FLOOR_DEFAULT, ASSETS, ZONES, SWAPS, EVENTS } from './config.js';
@@ -127,6 +127,7 @@ export class Session {
     this.presence = null; this._presQ = [];                      // the table (null until it has loaded, in a solo run and in a room between tabs), and what arrived while it loaded
     this._here = { z: 0, s: '' }; this._away = typeof document !== 'undefined' && document.hidden === true; // where this student is and what they are doing; a hidden tab is away (one opened in the background is, from the start)
     this._presDead = false;                                      // the module could not be loaded, after a few tries: what arrives is not kept for it
+    this.presenceMode = 'full';                                  // what students see of each other, set by the instructor (the clock carries it): full | online | off
     this._hereSent = null; this._hereAt = 0; this._hereTimer = 0; this._actTimes = [];
     this.ckDays = new Set(); this.ckSkip = new Set(); this.cohortDirty = false; this.rosterDirty = false;
     this.timers = { snap: 0, clock: 0 };
@@ -288,7 +289,7 @@ export class Session {
   /** What a classroom tunes belongs to the classroom: leaving it, or starting a new one, puts every dial back. */
   _resetRoomSettings() {
     Object.assign(this.difficulty, DEFAULT_DIFFICULTY());
-    this.ghosts = 36; this.algo = true; this.cohort.ghosts = 36; this.cohort.refresh();
+    this.ghosts = 36; this.algo = true; this.cohort.ghosts = 36; this.cohort.refresh(); this.presenceMode = 'full';
     if (this.game) this.game.env.algo = true;
   }
   leaveRoom() {
@@ -434,13 +435,33 @@ export class Session {
       t.unref?.();
     });
   }
-  /** What the room says of itself: only the instructor keeps the table (nothing shows it to a student yet), and only over a relay (a room between tabs has no presence). It is cosmetic: whatever it does, it never gets to break the room's own handling of a message. */
+  /** What the room says of itself: the instructor keeps the table for the dashboard, and a student for the roster and the classmates in the world (what a student SEES of it is the instructor's switch: `classmates`, `figures`). Only over a relay (a room between tabs has no presence).
+   *  It is cosmetic: whatever it does, it never gets to break the room's own handling of a message. */
   _pres(m, from) {
     try {
-      if (this.mode !== 'instructor' || this.room?.kind !== 'relay') return;
+      if (this.room?.kind !== 'relay') return;
       if (!this.presence) { if (!this._presDead && this._presQ.length < MAX_PRES_Q) this._presQ.push([m, from]); return; }
       if (this.presence.apply(m, from)) this.emit('presence');
     } catch { /* a listener of the page threw */ }
+  }
+  /** What to call a classmate: the alias their snapshot or their hello gave, else the placeholder every player starts with. Never what a `here` says: the relay takes that from the sender's frame, so a page could put another's name in it. */
+  nameOf(pid) {
+    const p = this.peers.get(pid), n = text(p?.snap?.handle) || text(p?.handle);
+    return n || (typeof pid === 'string' && pid.length > 3 ? 'Founder-' + pid.slice(3) : String(pid));
+  }
+  /** The classmates a student may see, by the instructor's switch: with everything shown, who is online, where and doing what; with `online`, who is online and no district; with `off`, nobody. Not oneself, not the instructor. */
+  classmates() {
+    if (this.mode !== 'student' || !this.presence || this.presenceMode === 'off') return [];
+    const full = this.presenceMode === 'full', out = [];
+    for (const m of this.presence.list()) if (m.online && m.pid !== this.pid) out.push({ pid: m.pid, name: this.nameOf(m.pid), z: full ? m.z : 0, s: m.s });
+    return out.sort((a, b) => a.name.localeCompare(b.name) || (a.pid < b.pid ? -1 : 1));
+  }
+  /** The classmates drawn in the world: those who are playing in a district, when everything is shown. */
+  figures() { return this.presenceMode === 'full' ? this.classmates().filter((c) => c.s === 'play' && c.z >= 1) : []; }
+  /** The instructor's switch: what students see of each other. It goes out with the clock, and students keep sending where they are in every mode (the instructor's panel needs it). */
+  setPresenceMode(mode) {
+    if (this.mode !== 'instructor' || !PRESENCE_MODES.includes(mode)) return;
+    this.presenceMode = mode; this._sendClock(); this.emit('change');
   }
   /** Where this student is (a district; 0 when not in the world) and what they are doing (one word: `play`, `academy`), for the room. Said when it changes, at most once a second (the last place stands), and again after every reconnect;
    *  not said to a relay that has not promised to take it. The instructor says nothing: it is not a figure in the world. */
@@ -516,6 +537,7 @@ export class Session {
     if (fromInstructor && c.difficulty) Object.assign(this.difficulty, c.difficulty);
     if (fromInstructor && c.ghosts != null) { this.ghosts = c.ghosts; this.cohort.ghosts = c.ghosts; this.cohort.refresh(); }
     if (fromInstructor && c.algo != null) { this.algo = c.algo; if (this.game) this.game.env.algo = c.algo; }
+    if (fromInstructor) { const was = this.presenceMode; this.presenceMode = c.presence || 'full'; if (was !== this.presenceMode) this.emit('presence'); } // a clock that does not carry the switch means everything is shown
     if (first) this._rebase();
   }
   /** A run that has not been played, started before the class clock was heard, starts again at the class's hour (everyone starts identical, whenever they sit down). Not played means nothing bought, sold, swapped,
@@ -568,7 +590,7 @@ export class Session {
   _sendClock() {
     if (this.mode !== 'instructor' || !this.room || this.recovering) return; // a recovered room has not heard the class's hour yet: the clock it would send is a made-up one
     this.t.clock = Date.now();
-    this.room.send({ t: 'clock', hour: this.clock.now(), speed: this.clock.speed, paused: this.clock.paused, difficulty: cleanDifficulty(this.difficulty), ghosts: this.ghosts, algo: this.algo });
+    this.room.send({ t: 'clock', hour: this.clock.now(), speed: this.clock.speed, paused: this.clock.paused, difficulty: cleanDifficulty(this.difficulty), ghosts: this.ghosts, algo: this.algo, presence: this.presenceMode });
   }
   _tell(to, t, extra = {}) { this.room?.send({ t, to, ...extra }); }
   _announce() { if (this.room && this.game) this._sendSnap(true); }

@@ -229,7 +229,8 @@ export function liveHTML(S) {
       <div class="in-now"><p class="small" style="margin-top:0">${esc(liveSummary(k))}</p>
         <h3 class="gap">Where they are now</h3>${distributionHTML(k.zones, k.here ? busiest(k.zones) : 0, 'Students by the district they are in now')}</div>
       <div><h3 style="margin-top:0">Just now</h3><div role="log" aria-live="off" aria-label="What students just did"><ol class="in-feed">${rows || '<li class="mute">Nothing yet.</li>'}</ol></div></div>
-    </div></section>`;
+    </div>
+    <div class="row gap"><label for="pm" class="small" title="What each student sees of the others. You always see everyone here, whatever you choose.">Students see</label><select id="pm" data-change="presence" data-fid="pm">${[['full', 'Where everyone is'], ['online', 'Who is here'], ['off', 'Nothing of each other']].map(([v, l]) => `<option value="${v}"${(S.presenceMode || 'full') === v ? ' selected' : ''}>${l}</option>`).join('')}</select></div></section>`;
 }
 
 /** The roster's "Now" cell: the district a student is in this minute (its short name), or the Academy, or away; a dash for one the presence table has not heard from. It is not a grade and is not in the CSV. */
@@ -381,6 +382,7 @@ export function mountInstructor(root, S, hooks) {
     dm(b) { S.setDemo(+b.value); $('#dmv').textContent = b.value; },
     floor(b) { const v = Math.max(0.01, +b.value || 1000); S.setDifficulty({ eeiFloor: v }); },
     algo(b) { S.setAlgo(b.checked); },
+    presence(b) { S.setPresenceMode(b.value); }, // what students see of each other: the clock carries it to them
     bgf(b) { U.bg = b.value; render(); },
     gradecsv() {
       const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([gradebookCSV(S)], { type: 'text/csv' })); a.download = `gradebook-${S.roomInfo.code}.csv`; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
