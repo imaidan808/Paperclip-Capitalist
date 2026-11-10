@@ -19,7 +19,7 @@ test('the table: every layer has a unique id, an owner T1 to T5, a space and a s
   assert.equal(new Set(ids).size, ids.length);
   for (const L of LAYERS) {
     assert.match(L.owner, /^T[1-5]$/, L.id); assert.ok(['screen', 'world', 'inherit'].includes(L.space), L.id); assert.ok(['sea', 'ground', 'things', 'air', 'screen'].includes(L.stage), L.id); assert.equal(typeof L.legacy, 'function');
-    assert.equal(FLAGS[L.id], V2_AT_START.has(L.id) ? 'v2' : 'legacy', `${L.id} must start as ${V2_AT_START.has(L.id) ? 'v2' : 'legacy'}`); assert.equal(slotFor(L.id).impl, L.bridge ? 'legacy' : 'v2', `${L.id}: a layer with its own V2 drawer runs it; a bridged static layer is drawn per kind`); assert.equal(layerInfo(L.id), L);
+    assert.equal(FLAGS[L.id], V2_AT_START.has(L.id) ? 'v2' : 'legacy', `${L.id} must start as ${V2_AT_START.has(L.id) ? 'v2' : 'legacy'}`); assert.equal(slotFor(L.id).impl, L.bridge || L.lazy ? 'legacy' : 'v2', `${L.id}: a layer with its own V2 drawer runs it; a bridged static layer is drawn per kind; a lazy layer (peers) runs the legacy drawer until its module loads (tests/world-peers.test.mjs)`); assert.equal(layerInfo(L.id), L);
   }
   assert.deepEqual([...IMPLS], ['legacy', 'v2']);
 });

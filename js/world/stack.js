@@ -26,6 +26,7 @@
  * space     the space of the LEGACY drawer (a V2 drawer says its own when it registers: it must equal `v2space` when the row has one, which is how a layer that changes space says so)
  * v2space   optional: the space the V2 drawer must register in (registerLayer refuses another)
  * bridge    optional: the track that owns the shared frame the legacy drawer is called through (the static layers: statics.js, T5); the layer's own track owns what it draws
+ * lazy      optional: the layer's V2 drawer is registered by a module that is loaded when it is first needed (peers.js, the first classmate), so until then the slot is the legacy drawer
  * stage     where it sits in the frame: 'sea', 'ground' (inside the ground cache when the camera is still), 'things' (the depth-sorted list), 'air' (over the things, in the world) or 'screen'
  * legacy    adapter from the layer signature to the method the World has always had
  */
@@ -47,6 +48,7 @@ export const LAYERS = [
   { id: 'truck', owner: 'T4', space: 'inherit', stage: 'things', legacy: (ctx, view, env, w, e) => w.drawTruck(ctx, e) },
   { id: 'car', owner: 'T4', space: 'inherit', stage: 'things', legacy: (ctx, view, env, w, c) => w.drawCar(ctx, c) },
   { id: 'player', owner: 'T4', space: 'inherit', stage: 'things', legacy: (ctx, view, env, w) => w.drawPlayer(ctx) },
+  { id: 'peers', owner: 'T4', space: 'inherit', stage: 'things', lazy: true, legacy: (ctx, view, env, w, q) => w.drawPeer(ctx, q) }, // the classmates (peers.js): the legacy picture has none; the module is loaded when the first one is given
   { id: 'clouds', owner: 'T2', space: 'world', stage: 'air', legacy: (ctx, view, env, w, vz) => w.drawFog(ctx, vz) },
   { id: 'grade', owner: 'T2', space: 'screen', stage: 'screen', legacy: (ctx, view, env, w) => w.drawGrade(ctx) },
   { id: 'weather', owner: 'T2', space: 'screen', stage: 'screen', legacy: (ctx, view, env, w) => w.drawWeather(ctx) },

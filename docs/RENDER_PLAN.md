@@ -38,6 +38,7 @@ The frame is drawn in this order. A layer's SPACE says what transform the engine
                              (both through one frame, statics.js, which stays T5's)
                plot, pipe   building plots and pipelines                       T3
                lead, lot, asset, truck, car, player   people, crates, traffic T4
+               peers        the other students in the class, with name tags      T4   (peers.js, fetched when the first is seen)
              every item stamps its own contact and cast shadow (shadow.js)
  clouds      cloud banks over locked districts, their ground shadows       baked chunks, live while opening   T2   (legacy: a dark pool and blurred banks)
  (hover)     the highlight under the pointer                               engine     T5
@@ -50,7 +51,7 @@ The frame is drawn in this order. A layer's SPACE says what transform the engine
  (map)       map cards, region names; the minimap                          engine     T5
 ```
 
-Layers in parentheses are the engine's, not flagged. The twenty-one flagged layers are the rows of the machine-checked block. `space` is the LEGACY drawer's: a V2 drawer says its own when it registers, and where it differs the row says so in `v2space` (the sea: legacy `screen`, V2 `world`; `registerLayer` refuses another space). A row with `bridge` is drawn through a shared frame that track owns (the two static layers, through `statics.js`): its owner registers per-kind drawers with `registerProp`, never a whole layer.
+Layers in parentheses are the engine's, not flagged. The twenty-two flagged layers are the rows of the machine-checked block. `space` is the LEGACY drawer's: a V2 drawer says its own when it registers, and where it differs the row says so in `v2space` (the sea: legacy `screen`, V2 `world`; `registerLayer` refuses another space). A row with `bridge` is drawn through a shared frame that track owns (the two static layers, through `statics.js`): its owner registers per-kind drawers with `registerProp`, never a whole layer.
 
 <!-- render-layers -->
 ```json
@@ -71,6 +72,7 @@ Layers in parentheses are the engine's, not flagged. The twenty-one flagged laye
   { "id": "truck", "owner": "T4", "space": "inherit", "stage": "things" },
   { "id": "car", "owner": "T4", "space": "inherit", "stage": "things" },
   { "id": "player", "owner": "T4", "space": "inherit", "stage": "things" },
+  { "id": "peers", "owner": "T4", "space": "inherit", "stage": "things" },
   { "id": "clouds", "owner": "T2", "space": "world", "stage": "air" },
   { "id": "grade", "owner": "T2", "space": "screen", "stage": "screen" },
   { "id": "weather", "owner": "T2", "space": "screen", "stage": "screen" },
@@ -346,6 +348,7 @@ Why the splits fall where they do. `kits.js` is T3's because it names the buildi
     "nature.js",
     "characters.js",
     "figure.js",
+    "peers.js",
     "stock.js",
     "street.js",
     "yard.js",
