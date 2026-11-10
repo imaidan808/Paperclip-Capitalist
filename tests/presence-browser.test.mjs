@@ -58,7 +58,7 @@ test('over a real relay the dashboard says Live and follows a student through th
     await begin(ada, { room: code, alias: 'Ada' });
     await until(ada, `!!document.querySelector('[data-act="ac-leave"]')`, 'the Academy', 60000);
     await until(inst, `pc.S.presence.counts().academy === 1`, 'the dashboard to put Ada in the Academy', 30000);
-    await until(inst, `/1 student here: 1 in the Academy/.test(document.querySelector('#ilive').innerText) && /Ada\\s+joined the room/.test(document.querySelector('#ilive').innerText)`, 'the panel to say so, and that Ada joined');
+    await until(inst, `/1 student here: 1 in the Academy/.test(document.querySelector('#ilive').innerText) && /Ada\\s+\\S+\\s+joined the room/.test(document.querySelector('#ilive').innerText)`, 'the panel to say so, and that Ada joined');
     await until(inst, `${nowOf('Ada')} === 'Academy'`, 'the roster to say Academy in its Now column', 30000);
 
     // ---- 3. she leaves the Academy: the world, district 1
@@ -70,7 +70,7 @@ test('over a real relay the dashboard says Live and follows a student through th
     // ---- 4. what the engine does reaches the feed: a purse big enough opens the next districts, and each is an event
     await ada.eval(`pc.S.game.s.cash = 20000; pc.S.game._unlock(); pc.S.save(true)`);
     await until(inst, `pc.S.presence.feed.some(r => r.kind === 'zone')`, 'a district row in the feed', 30000);
-    await until(inst, `/Ada\\s+opened /.test(document.querySelector('#ilive').innerText)`, 'the feed on the page');
+    await until(inst, `/Ada\\s+\\S+\\s+opened /.test(document.querySelector('#ilive').innerText)`, 'the feed on the page');
     const opened = await inst.eval(`pc.S.presence.feed.filter(r => r.kind === 'zone').map(r => r.text)`);
     assert.ok(opened.length >= 1 && opened.every((t) => /^opened [A-Z]/.test(t)), JSON.stringify(opened));
 
@@ -93,7 +93,7 @@ test('over a real relay the dashboard says Live and follows a student through th
     // ---- 7. she closes the tab: the dashboard says she left
     await closePage(ada); tabs.splice(tabs.indexOf(ada), 1);
     await until(inst, `pc.S.presence.counts().here === 0 && pc.S.presence.feed[0].kind === 'left'`, 'the dashboard to say Ada left', 30000);
-    await until(inst, `/Ada\\s+left/.test(document.querySelector('#ilive').innerText) && /No student is here yet/.test(document.querySelector('#ilive').innerText)`, 'the panel to say it');
+    await until(inst, `/Ada\\s+\\S+\\s+left/.test(document.querySelector('#ilive').innerText) && /No student is here yet/.test(document.querySelector('#ilive').innerText)`, 'the panel to say it');
     assert.match(await roster(inst), /Ada/, 'her row stays in the roster as away, with her last numbers');
   } finally { for (const p of tabs) await closePage(p); await sleep(200); }
 });
