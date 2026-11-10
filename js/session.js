@@ -43,7 +43,7 @@ export const CLOCK_WAIT_MS = 6000;
 const MAX_PEERS = 450;                 // founders with a snapshot: a relay room holds 400 (server/relay.mjs) plus the instructor and some slack
 const MAX_GHOSTS = 100;                // names that said hello and sent nothing else: a flood of them must never crowd out a student who has data
 const MAX_FLAGS = 500;
-const MAX_PRES_Q = 300;                // presence frames that wait for the lazy module (js/presence.js) to load
+const MAX_PRES_Q = 600;                // presence frames that wait for the lazy module (js/presence.js) to load: the replay of a room of 400 (the relay replays one here a member) and some more
 const MAX_INCOMING = 24, MAX_INCOMING_PER = 6;
 const ONLINE_MS = 20000;               // heard from in this long: online
 const COHORT_MS = 2000;                // the market's view of the class is rebuilt at most this often, however many snapshots arrive
@@ -125,7 +125,8 @@ export class Session {
     this.lastError = null;           // the last message that threw (the room carries on)
     // Presence (docs/ARCHITECTURE.md): the room's table and feed of who is where, in js/presence.js, which is loaded when a room with a relay is joined (not part of the first screen). Never part of the game.
     this.presence = null; this._presQ = [];                      // the table (null until it has loaded, in a solo run and in a room between tabs), and what arrived while it loaded
-    this._here = { z: 0, s: '' }; this._away = false;           // where this student is and what they are doing; a hidden tab is away
+    this._here = { z: 0, s: '' }; this._away = typeof document !== 'undefined' && document.hidden === true; // where this student is and what they are doing; a hidden tab is away (one opened in the background is, from the start)
+    this._presDead = false;                                      // the module could not be loaded, after a few tries: what arrives is not kept for it
     this._hereSent = null; this._hereAt = 0; this._hereTimer = 0; this._actTimes = [];
     this.ckDays = new Set(); this.ckSkip = new Set(); this.cohortDirty = false; this.rosterDirty = false;
     this.timers = { snap: 0, clock: 0 };
@@ -228,7 +229,7 @@ export class Session {
     this.kv.set('save', { v: 1, mode: this.mode, worldSeed: this.worldSeed, difficulty: this.mode === 'student' ? this.difficulty : undefined, clock: this.clock.toJSON(), room: this.roomInfo, state: this.game.s, delivering, savedAt: now });
   }
   reset() {
-    this.kv.del('save'); this._clearCkpt(); this.leaveRoom(); this.game = null; this.mode = 'solo'; this.clock = new Clock({ speed: 1 });
+    this.kv.del('save'); this._clearCkpt(); this.leaveRoom(); this.game = null; this.mode = 'solo'; this.clock = new Clock({ speed: 1 }); this._here = { z: 0, s: '' }; // (a new run, or another room, is not told where the last one stood)
     this.peers.clear(); this.incoming = []; this.sent.clear(); this.accepting.clear(); this.delivering.clear(); this.settled.clear(); this.flags = []; this.rewindReport.clear(); this.injected.clear(); this.cohort.setPeers([]);
   }
 
@@ -244,7 +245,12 @@ export class Session {
     // The relay hands the seat to whoever brings it, whatever Founder ID they have.
     const token = role === 'instructor' ? this._ownerFor(code, owner) : undefined;
     this.room = new Room({ code, pid: this.pid, key: this.key, handle: h, role, relay: relay || undefined, owner: token });
-    this.room.oncaps = () => { this._sendHere(true); this.emit('presence'); }; // what the relay promises comes with each connection, so a student says where they are again after every reconnect
+    this.room.oncaps = (caps) => { // what the relay promises comes with each connection, so a student says where they are again after every reconnect; presence is cosmetic and never gets to break the connection it rides on
+      try {
+        if (this.mode === 'instructor' && caps && caps.size && this.presence) this.presence.resync(); // a goodbye that fell in a gap of this page's own connection was never heard: the relay's replay brings back those still here
+        this._sendHere(true); this.emit('presence');
+      } catch { /* a listener of the page threw: the connection carries on */ }
+    };
     if (relay) this._loadPresence();
     this.roomInfo = { code, relay, role };
     this.mode = role === 'instructor' ? 'instructor' : 'student';
@@ -275,7 +281,7 @@ export class Session {
   _closeRoom() {
     if (this.room) this.room.close();
     this.room = null; this.roomInfo = null; this.peers.clear(); this.cohort.setPeers([]);
-    this.presence = null; this._presQ = []; this._hereSent = null; this._actTimes = []; if (this._hereTimer) clearTimeout(this._hereTimer); this._hereTimer = 0; // (where this student is stays: a new room is told afresh)
+    this.presence = null; this._presQ = []; this._presDead = false; this._hereSent = null; this._actTimes = []; if (this._hereTimer) clearTimeout(this._hereTimer); this._hereTimer = 0; // (where this student is stays: a new room is told afresh)
     for (const k of Object.keys(this.timers)) { if (this.timers[k]) clearTimeout(this.timers[k]); this.timers[k] = 0; }
     this.incoming = []; this.accepting.clear(); this.delivering.clear(); this.settled.clear(); this.flags = []; this.rewindReport.clear(); this.injected.clear(); this.cohortDirty = false;
   }
@@ -414,20 +420,27 @@ export class Session {
   }
   // ---- presence (js/presence.js; docs/ARCHITECTURE.md, "Presence"): who is where, and what just happened. Cosmetic: nothing here reads or writes the game.
   /** The module is loaded when a room with a relay is joined, by every role (a student needs it to word what it reports). It is a promise for a moment: what arrives meanwhile waits in a queue with a bound. */
-  _loadPresence() {
+  _importPresence() { return import('./presence.js'); }
+  _loadPresence(attempt = 1) {
     const room = this.room;
-    import('./presence.js').then((m) => {
+    this._importPresence().then((m) => {
       if (this.room !== room) return; // the room was left, or another joined, while it loaded
       this.presence = new m.Presence({ now: () => Date.now() });
       for (const [q, from] of this._presQ.splice(0)) this._pres(q, from);
       this.emit('presence');
-    }, () => { this._presQ.length = 0; }); // offline, or the page is going: the dashboard goes on with its snapshots
+    }, () => { // a connection that blinked: tried again, three times in all, and then the dashboard goes on with its snapshots (what arrives is no longer kept for a module that is not coming)
+      if (attempt >= 3) { this._presQ.length = 0; this._presDead = true; return; }
+      const t = setTimeout(() => { if (this.room === room && !this.presence) this._loadPresence(attempt + 1); }, 500 * attempt);
+      t.unref?.();
+    });
   }
-  /** What the room says of itself: only the instructor keeps the table (nothing shows it to a student yet), and only over a relay (a room between tabs has no presence). */
+  /** What the room says of itself: only the instructor keeps the table (nothing shows it to a student yet), and only over a relay (a room between tabs has no presence). It is cosmetic: whatever it does, it never gets to break the room's own handling of a message. */
   _pres(m, from) {
-    if (this.mode !== 'instructor' || this.room?.kind !== 'relay') return;
-    if (!this.presence) { if (this._presQ.length < MAX_PRES_Q) this._presQ.push([m, from]); return; }
-    if (this.presence.apply(m, from)) this.emit('presence');
+    try {
+      if (this.mode !== 'instructor' || this.room?.kind !== 'relay') return;
+      if (!this.presence) { if (!this._presDead && this._presQ.length < MAX_PRES_Q) this._presQ.push([m, from]); return; }
+      if (this.presence.apply(m, from)) this.emit('presence');
+    } catch { /* a listener of the page threw */ }
   }
   /** Where this student is (a district; 0 when not in the world) and what they are doing (one word: `play`, `academy`), for the room. Said when it changes, at most once a second (the last place stands), and again after every reconnect;
    *  not said to a relay that has not promised to take it. The instructor says nothing: it is not a figure in the world. */
@@ -462,7 +475,7 @@ export class Session {
     while (t.length && now - t[0] > 5000) t.shift();
     if (t.length >= 8) return; // a flood is held to eight in five seconds (the relay holds it to ten, and then to two a second)
     t.push(now);
-    room.send({ t: 'act', ...a });
+    try { room.send({ t: 'act', ...a }); } catch { /* a line for the instructor is never worth a swap or a day */ }
   }
 
   /** Room for a classmate in the table, before the record is made. Two kinds are counted apart: a founder with a snapshot (at most MAX_PEERS: only one silent for ten minutes is replaced) and a name that has only said hello
@@ -931,11 +944,11 @@ export class Session {
       this.sent.delete(id);
       this.settled.set(id, from); if (this.settled.size > MAX_SETTLED) this.settled.delete(this.settled.keys().next().value);
       this._tell(from, 'ack', { offerId: id });
-      this._sendAct({ k: 'swap', d: name, h: Math.floor(this.hourNow()) }); // the proposer's side takes the delivery, so one row for one swap on the instructor's feed
     } else { delete e.lockedBy; delete e.lockedAt; delete e.lockLapsed; delete e.recalling; } // a reply that is not that swap changes nothing: the offer is open again, and the hold is let go
     const short = assets.length < want.assets.length || cash < want.cash - 0.005;
     g.note(r.ok ? (short ? 'warn' : 'good') : 'bad', r.ok ? (short ? `${name} delivered less than the swap said. What arrived was added.` : `${name} accepted. Swap completed.`) : r.msg, r.ok && !short ? { kind: 'swap' } : undefined);
     this.emit('change');
+    if (r.ok) this._sendAct({ k: 'swap', d: name, h: Math.floor(this.hourNow()) }); // the proposer's side takes the delivery, so one row for one swap on the instructor's feed; after the note and the event, which it can never hold back
   }
   _onAbort(m, from) {
     const g = this.game, id = cleanId(m.offerId), e = id && g?.s.escrow.find((x) => x.offerId === id);

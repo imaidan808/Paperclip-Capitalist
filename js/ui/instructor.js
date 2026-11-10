@@ -205,7 +205,7 @@ export function ageText(ms) {
 }
 const liveSummary = (k) => {
   if (!k.here) return 'No student is here yet.';
-  const parts = [[k.play, 'playing'], [k.academy, 'in the Academy'], [k.away, 'away'], [k.other, 'online']].filter(([n]) => n).map(([n, w]) => `${n} ${w}`);
+  const parts = [[k.play, 'playing'], [k.academy, 'in the Academy'], [k.debrief, 'in the Debrief'], [k.away, 'away'], [k.other, 'online']].filter(([n]) => n).map(([n, w]) => `${n} ${w}`);
   return `${k.here} student${k.here === 1 ? '' : 's'} here: ${parts.join(', ')}.`;
 };
 /**
@@ -215,18 +215,20 @@ const liveSummary = (k) => {
  */
 export function liveHTML(S) {
   const live = liveOf(S);
+  const loading = !live && S.room?.kind === 'relay' && typeof S.room.can === 'function' && S.room.can('here') && !S.presence; // the relay carries it and the table has not arrived: said to be loading, not blamed on the relay
+  const why = loading ? 'The live panel did not load yet, and this page tries again. Until then each student\'s numbers arrive every 4 seconds.' : 'This room does not carry live updates, so each student\'s numbers arrive every 4 seconds. Where students are, and what they just did, need a relay that carries them (docs/HOSTING.md).';
   const chip = live
     ? '<span class="chip good" title="Where students are, and what they just did, reach this page as it happens.">Live</span>'
-    : '<span class="chip warn" title="This room does not carry live updates, so each student\'s numbers arrive every 4 seconds. Where students are, and what they just did, need a relay that carries them (docs/HOSTING.md).">Updates every 4 s</span>';
+    : `<span class="chip warn" title="${esc(why)}">Updates every 4 s</span><span class="sr">${esc(why)}</span>`; // (a hover is seen by a mouse and nothing else: the words are there for a reader too)
   const head = `<div class="row"><h2 id="in-live-h" class="grow">Right now</h2>${chip}</div>`;
   if (!live) return `<section class="panel in-live" aria-labelledby="in-live-h">${head}</section>`; // (the reason is on hover and in the kit: the dashboard is read before it is explained)
   const P = S.presence, k = P.counts(), now = P.now();
-  const rows = P.feed.slice(0, 12).map((r) => `<li><span class="tiny mute mono">${ageText(now - r.at)}</span> <b>${esc(r.handle || r.pid)}</b> ${esc(r.text)}${Number.isFinite(r.hour) ? ` <span class="tiny mute">Day ${dayOf(r.hour)}</span>` : ''}</li>`).join('');
+  const rows = P.feed.slice(0, 12).map((r) => `<li><span class="tiny mute mono">${ageText(now - r.at)}</span> <b>${esc(r.handle || r.pid)}</b> <span class="tiny mute">${esc(r.pid)}</span> ${esc(r.text)}${Number.isFinite(r.hour) ? ` <span class="tiny mute">Day ${dayOf(r.hour)}</span>` : ''}</li>`).join('');
   return `<section class="panel in-live" aria-labelledby="in-live-h">${head}
     <div class="live-grid">
       <div class="in-now"><p class="small" style="margin-top:0">${esc(liveSummary(k))}</p>
         <h3 class="gap">Where they are now</h3>${distributionHTML(k.zones, k.here ? busiest(k.zones) : 0, 'Students by the district they are in now')}</div>
-      <div><h3 style="margin-top:0">Just now</h3><ol class="in-feed" role="log" aria-live="off" aria-label="What students just did">${rows || '<li class="mute">Nothing yet.</li>'}</ol></div>
+      <div><h3 style="margin-top:0">Just now</h3><div role="log" aria-live="off" aria-label="What students just did"><ol class="in-feed">${rows || '<li class="mute">Nothing yet.</li>'}</ol></div></div>
     </div></section>`;
 }
 
@@ -236,6 +238,7 @@ function nowCell(P, r) {
   if (!m || !m.online) return '<td class="mute">-</td>';
   if (m.s === 'play' && m.z >= 1 && m.z <= ZONE_COUNT) return `<td title="${esc(ZONES[m.z].name)}">${esc(ZONES[m.z].short)}</td>`;
   if (m.s === 'academy') return '<td>Academy</td>';
+  if (m.s === 'debrief') return '<td>Debrief</td>';
   if (m.s === 'away') return '<td>away</td>';
   return '<td class="mute">-</td>';
 }

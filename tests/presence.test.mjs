@@ -154,12 +154,56 @@ test('U8: an engine event becomes the line a student reports: a district opened,
   for (const evt of [{ type: 'zone', id: 16 }, { type: 'shock', kind: 'tiktok' }, { type: 'milestone', n: 3 }, { type: 'insolvent' }, { type: 'exit', kind: 'trade' }]) assert.ok(cleanAct(actOf(evt, 2000)), JSON.stringify(evt));
 });
 
+test('U10: resync marks every member offline without a row, keeps who they are, and what the relay replays afterwards brings back those still here', () => {
+  const { p } = mk();
+  for (const [pid, z] of [['A', 5], ['B', 2]]) { p.apply(hello(pid), pid); p.apply(here(pid, z, 'play'), pid); }
+  const rows = p.feed.length;
+  assert.ok(p.resync());
+  assert.equal(p.feed.length, rows, 'no row: nobody was seen to leave');
+  assert.deepEqual([p.members.get('A').online, p.members.get('A').handle, p.members.get('A').role], [false, 'A', 'student']);
+  assert.equal(p.counts().here, 0);
+  assert.equal(p.resync(), false, 'nothing left to mark');
+  p.apply(here('B', 2, 'play', { age: 400 }), 'B');
+  assert.deepEqual([p.counts().here, p.counts().zones[2], p.counts().zones[5]], [1, 1, 0], 'B was replayed, A was not: A has gone');
+  assert.equal(p.feed.length, rows, 'and a replay makes no row');
+});
+
+test('U11: an act does not rename a member and its row carries the member\'s own alias; a here may set the alias; a member with none takes the first they are given', () => {
+  const { p } = mk();
+  p.apply(hello('MAL', { handle: 'Mallory' }), 'MAL');
+  p.apply(act('MAL', { k: 'insolvent' }, { handle: 'Alice' }), 'MAL');
+  assert.equal(p.members.get('MAL').handle, 'Mallory');
+  assert.deepEqual([p.feed[0].handle, p.feed[0].pid], ['Mallory', 'MAL'], 'the row says who really did it');
+  p.apply(here('MAL', 1, 'play', { handle: 'Mal' }), 'MAL');
+  assert.equal(p.members.get('MAL').handle, 'Mal', 'the alias a student really chose arrives with their here');
+  p.apply(act('NEW', { k: 'exit' }, { handle: 'Newcomer' }), 'NEW');
+  assert.equal(p.members.get('NEW').handle, 'Newcomer');
+});
+
+test('U12: an alias with nothing to see is none, the blank parts of a real alias go, and a joined emoji stays', () => {
+  const cp = (...a) => a.map((x) => String.fromCodePoint(x)).join('');
+  for (const blank of [cp(0x3164), cp(0x2800), cp(0x115f), cp(0x1160), cp(0xffa0), cp(0xad), cp(0x34f), cp(0x2062), cp(0x180e), cp(0xe0041, 0xe0042), cp(0x200c), cp(0x200d), cp(0xfe0f), cp(0x3164, 0x200d, 0x2800)]) {
+    assert.equal(cleanHere({ z: 1, s: 'play', handle: blank + blank }).handle, '', 'blank: ' + [...blank].map((c) => c.codePointAt(0).toString(16)).join(' '));
+  }
+  assert.equal(cleanHere({ z: 1, s: 'play', handle: cp(0x3164) + 'Ada' + cp(0x2800) }).handle, 'Ada');
+  const family = cp(0x1f469, 0x200d, 0x1f467);
+  assert.equal(cleanHere({ z: 1, s: 'play', handle: family }).handle, family);
+  assert.equal(cleanAct({ k: 'swap', d: cp(0x3164) }).d, undefined, 'a note of nothing is no note');
+});
+
+test('U13: a student reading the Debrief is counted as that, in no district', () => {
+  const { p } = mk();
+  p.apply(hello('A'), 'A'); p.apply(here('A', 3, 'debrief'), 'A');
+  const k = p.counts();
+  assert.deepEqual([k.here, k.debrief, k.play, k.other, k.zones[3]], [1, 1, 0, 0, 0]);
+});
+
 test('U9: presence is not the game: the engine, the market, the cohort, the deal room, the skill games and the meta layer do not import it, and it imports only the config', () => {
   const read = (f) => readFileSync(new URL('../' + f, import.meta.url), 'utf8');
   const files = ['js/engine.js', 'js/market.js', 'js/cohort.js', 'js/deal.js', 'js/rng.js', 'js/config.js', ...['js/play', 'js/meta', 'js/data'].flatMap((d) => readdirSync(new URL('../' + d, import.meta.url)).filter((f) => f.endsWith('.js')).map((f) => d + '/' + f))];
   for (const f of files) assert.ok(!/from\s+['"][^'"]*presence(\.js)?['"]|import\(\s*['"][^'"]*presence(\.js)?['"]\s*\)/.test(read(f)), `${f} does not import presence`);
   const src = read('js/presence.js'), code = src.replace(/\/\/[^\n]*|\/\*[\s\S]*?\*\//g, '');
-  assert.deepEqual([...src.matchAll(/^import .* from '([^']+)'/gm)].map((m) => m[1]), ['./config.js'], 'it imports the config and nothing else: no engine, no cohort, no session, no DOM');
+  assert.deepEqual([...src.matchAll(/^import[\s\S]*?from\s+'([^']+)'/gm)].map((m) => m[1]), ['./config.js'], 'it imports the config and nothing else: no engine, no cohort, no session, no DOM (a list over several lines counts too)');
   assert.ok(!/\bimport\s*\(/.test(code), 'and loads nothing later');
-  assert.ok(!/\b(document|window|localStorage|sessionStorage|WebSocket|fetch|Math\.random|Date\.now)\b/.test(code), 'no DOM, storage, network or clock of its own (the clock is handed in)');
+  assert.ok(!/\b(document|window|localStorage|sessionStorage|WebSocket|fetch|Math\.random|Date|performance)\b/.test(code), 'no DOM, storage, network or clock of its own (the clock is handed in)');
 });

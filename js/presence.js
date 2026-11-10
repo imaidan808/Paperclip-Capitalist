@@ -9,10 +9,16 @@ import { ZONES, ZONE_COUNT, EVENTS, ALGO_EVENTS } from './config.js';
 const MAX_MEMBERS = 450;   // a relay room holds 400 connections (server/relay.mjs) and the instructor's: a table is never longer than a room
 const MAX_FEED = 100;      // the feed keeps the last of what happened
 const STATE = /^[a-z]{1,12}$/, KIND = /^[a-z0-9_-]{1,16}$/, ID = /^[\w.@:-]{1,48}$/;
-// Control, zero-width and direction-changing characters: no part of an alias or a note. Written as code points, not as escapes, so that nothing that handles this file can turn them into the characters themselves.
-const UNSEEN = new RegExp('[' + [[0, 0x1f], [0x7f, 0x9f], [0x61c], [0x200b], [0x200e, 0x200f], [0x2028, 0x2029], [0x202a, 0x202e], [0x2060], [0x2066, 0x2069], [0xfeff]].map(([a, b]) => String.fromCodePoint(a) + (b ? '-' + String.fromCodePoint(b) : '')).join('') + ']', 'g');
-/** Text as a person typed it, made safe to show: no unseen characters, trimmed, at most `n` characters (counted as characters, so an emoji is never cut in half). Anything that is not text is no text. */
-const plain = (x, n) => (typeof x === 'string' ? Array.from(x.replace(UNSEEN, '').trim()).slice(0, n).join('').trimEnd() : '');
+// Control, zero-width, direction-changing and blank-rendering characters (the fillers, the blank braille cell, the soft hyphen, the invisible operators, the tag characters): no part of an alias or a note. Written as code points, not as
+// escapes, so that nothing that handles this file can turn them into the characters themselves. (The joiners and the variation selectors stay: an emoji sequence needs them; an alias of nothing else is none, below.)
+const UNSEEN = new RegExp('[' + [[0, 0x1f], [0x7f, 0x9f], [0xad], [0x34f], [0x61c], [0x115f, 0x1160], [0x17b4, 0x17b5], [0x180b, 0x180e], [0x200b], [0x200e, 0x200f], [0x2028, 0x2029], [0x202a, 0x202e], [0x2060, 0x2064], [0x2066, 0x2069], [0x2800], [0x3164], [0xfeff], [0xffa0], [0xe0000, 0xe007f]].map(([a, b]) => String.fromCodePoint(a) + (b ? '-' + String.fromCodePoint(b) : '')).join('') + ']', 'gu');
+const JOINERS = new RegExp('^[' + String.fromCodePoint(0x200c) + String.fromCodePoint(0x200d) + String.fromCodePoint(0xfe00) + '-' + String.fromCodePoint(0xfe0f) + ']*$', 'u');
+/** Text as a person typed it, made safe to show: no unseen characters, trimmed, at most `n` characters (counted as characters, so an emoji is never cut in half). What has nothing left to see is none, and anything that is not text is no text. */
+const plain = (x, n) => {
+  if (typeof x !== 'string') return '';
+  const t = x.replace(UNSEEN, '').trim();
+  return JOINERS.test(t) ? '' : Array.from(t).slice(0, n).join('').trimEnd();
+};
 const finite = (x, lo, hi) => typeof x === 'number' && Number.isFinite(x) && x >= lo && x <= hi;
 const isObj = (x) => x !== null && typeof x === 'object' && !Array.isArray(x);
 
@@ -97,7 +103,7 @@ export class Presence {
     const wasOnline = !!had && had.online;
     let changed = !had;
     const handle = (c ? c.handle : plain(m.handle, 24)) || '';
-    if (handle && handle !== mem.handle) { mem.handle = handle; changed = true; }
+    if (handle && handle !== mem.handle && (m.t !== 'act' || !mem.handle)) { mem.handle = handle; changed = true; } // (an act never renames: a student is who their hello and their here say, and the Founder ID tells two of the same alias apart)
     if (mem.role !== role) { mem.role = role; changed = true; }
     if (!wasOnline) { mem.online = true; changed = true; if (!had) mem.since = seen; }
     if (seen > mem.seen) mem.seen = seen;
@@ -122,7 +128,7 @@ export class Presence {
     return mem;
   }
   _row(kind, mem, text, a) {
-    const row = { id: ++this.seq, at: this.now(), pid: mem.pid, handle: (a && a.handle) || mem.handle, kind, text };
+    const row = { id: ++this.seq, at: this.now(), pid: mem.pid, handle: mem.handle || (a && a.handle) || '', kind, text };
     if (a && a.v !== undefined) row.v = a.v;
     if (a && a.h !== undefined) row.hour = a.h;
     this.feed.unshift(row);
@@ -130,13 +136,20 @@ export class Presence {
     return row;
   }
 
+  /** A goodbye that fell in a gap of this page's own connection was never heard, so what the table says of who is online cannot be believed across one: every member is marked offline (no row: nobody was seen to leave) and the
+   *  relay's replay of those still connected brings them back. Says whether anyone was marked. */
+  resync() {
+    const now = this.now(); let changed = false;
+    for (const m of this.members.values()) if (m.online) { m.online = false; m.left = now; m.z = 0; m.s = ''; changed = true; }
+    return changed;
+  }
   /** Students online, by what they are doing and by district (only a student who is playing stands in one). Index 0 of `zones` is unused: districts are 1 to ZONE_COUNT. */
   counts() {
-    const k = { here: 0, play: 0, academy: 0, away: 0, other: 0, zones: Array(ZONE_COUNT + 1).fill(0) };
+    const k = { here: 0, play: 0, academy: 0, away: 0, debrief: 0, other: 0, zones: Array(ZONE_COUNT + 1).fill(0) };
     for (const m of this.members.values()) {
       if (m.role !== 'student' || !m.online) continue;
       k.here++;
-      if (m.s === 'play') { k.play++; if (m.z >= 1 && m.z <= ZONE_COUNT) k.zones[m.z]++; } else if (m.s === 'academy') k.academy++; else if (m.s === 'away') k.away++; else k.other++;
+      if (m.s === 'play') { k.play++; if (m.z >= 1 && m.z <= ZONE_COUNT) k.zones[m.z]++; } else if (m.s === 'academy') k.academy++; else if (m.s === 'away') k.away++; else if (m.s === 'debrief') k.debrief++; else k.other++;
     }
     return k;
   }
