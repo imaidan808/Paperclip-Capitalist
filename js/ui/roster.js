@@ -59,6 +59,8 @@ export function openRoster({ S, dlg = shared }) {
     if (html !== shown) { box.innerHTML = html; shown = html; }
   };
   stopLast = stop;
-  dlg.open(rosterHTML(S), { label: 'Who is here', onClose: stop });
+  // When the student closes it, the cursor goes back to the Room chip that opened it: the dialog does that itself with the element it was opened from, and the HUD is drawn again often enough that this element may be a copy by then.
+  const closed = () => { stop(); if (!dlg.el.open) { try { globalThis.document?.querySelector('[data-act="roster"]')?.focus({ preventScroll: true }); } catch { /* no page to focus in */ } } };
+  dlg.open(rosterHTML(S), { label: 'Who is here', onClose: closed });
   off = S.on((type) => { if (!done && !timer && type === 'presence') timer = setTimeout(draw, Math.max(0, EVERY - (Date.now() - last))); });
 }

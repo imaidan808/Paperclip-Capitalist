@@ -185,7 +185,10 @@ test('R6: the dialog is named, kept up to date calmly while it is open, and lets
   openRoster({ S, dlg });                                       // asked again while it is still listening: the first lets go, the second is the only one
   assert.equal(dlg.opened.length, 2);
   assert.equal(S.listeners.size, 1, 'one listener, not two');
-  dlg.close();
+  const chip = { focused: 0, focus() { this.focused++; } };
+  globalThis.document = { querySelector: (q) => (q === '[data-act="roster"]' ? chip : null) };   // the page the chip is in
+  try { dlg.close(); } finally { delete globalThis.document; }
+  assert.equal(chip.focused, 1, 'closed by the student: the cursor goes back to the chip, whichever copy of it the HUD has drawn by now');
   assert.equal(S.listeners.size, 0, 'closed: nothing is listening, nothing is held');
   const after = dlg.body.innerHTML;
   S.classmates().push({ pid: 'P9', name: 'Late', z: 0, s: 'play' }); S.emit('presence'); await sleep(1300);   // a late event after the close does not touch a dialog that is not there
@@ -200,6 +203,9 @@ test('R6b: when another dialog has taken the place of the roster, it lets go at 
   dlg.other = true;                                              // the dialog is open and holds something else (the roster's own onClose was replaced by that dialog's)
   S.classmates().push({ pid: 'P2', name: 'Bo', z: 0, s: 'away' });
   S.emit('presence');
-  await until(() => S.listeners.size === 0, 'the roster to let go', 3000);
+  const chip = { focused: 0, focus() { this.focused++; } };
+  globalThis.document = { querySelector: () => chip };
+  try { await until(() => S.listeners.size === 0, 'the roster to let go', 3000); } finally { delete globalThis.document; }
   assert.ok(!/Bo/.test(dlg.body.innerHTML), 'and it wrote nothing into the other dialog');
+  assert.equal(chip.focused, 0, 'and took the cursor from no one: letting go is not a close');
 });
