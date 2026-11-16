@@ -3,7 +3,7 @@
 // (skipped where there is no Chrome, as every Chrome-driven check of this repository is: PC_NO_BROWSER=1 skips it too).
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync, existsSync, readdirSync, statSync, mkdtempSync, mkdirSync, writeFileSync, rmSync, cpSync } from 'node:fs';
+import { readFileSync, existsSync, readdirSync, statSync, lstatSync, mkdtempSync, mkdirSync, writeFileSync, rmSync, cpSync } from 'node:fs';
 import { request } from 'node:http';
 import { createServer as netServer } from 'node:net';
 import { spawnSync } from 'node:child_process';
@@ -24,7 +24,8 @@ const exists = (p) => existsSync(join(ROOT, p));
 const temps = [];
 const tmp = (label = 'pc-site-') => { const d = mkdtempSync(join(tmpdir(), label)); temps.push(d); return d; };
 after(() => { for (const d of temps) rmSync(d, { recursive: true, force: true }); });
-const walkDir = (dir, base = dir) => readdirSync(dir).flatMap((f) => { const p = join(dir, f); return statSync(p).isDirectory() ? walkDir(p, base) : [p.slice(base.length + 1).split(sep).join('/')]; });
+// lstat, not stat: a symlink is listed as a file and never followed, so a dangling one (a git worktree under .claude/worktrees whose node_modules link points at a folder that is gone) cannot throw ENOTDIR and fail a test that is about the site.
+const walkDir = (dir, base = dir) => readdirSync(dir).flatMap((f) => { const p = join(dir, f); return lstatSync(p).isDirectory() ? walkDir(p, base) : [p.slice(base.length + 1).split(sep).join('/')]; });
 const TODAY = new Date().toISOString().slice(0, 10);
 
 // ====================================================================================================================================

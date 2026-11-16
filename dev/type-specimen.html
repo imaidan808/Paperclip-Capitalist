@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="en" data-contrast="normal" data-size="m">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Type specimen for the UI pass</title>
+<!-- Item 4 of docs/ROADMAP.md, the first output of the UI survey: the same real components (the game's own classes, from ../css/styles.css) set in three type routes side by side, for the
+     author's taste check before anything is wired. Nothing here ships: dev/ is never staged (scripts/stage.mjs), and no font file is loaded or downloaded, so it costs the site nothing.
+     Open it with `npm start` and http://localhost:8080/dev/type-specimen.html, or straight from the folder. -->
+<link rel="stylesheet" href="../css/styles.css">
+<style>
+  body { padding: var(--sp-4) var(--sp-4) var(--sp-6); }
+  .wrap { max-width: 96rem; margin-inline: auto; }
+  .lede { max-width: 62ch; color: var(--mute); }
+  .controls { display: flex; flex-wrap: wrap; gap: var(--sp-3) var(--sp-5); align-items: center; margin: var(--sp-4) 0; padding: var(--sp-3) var(--sp-4); background: var(--panel); border: 1px solid var(--line); }
+  .controls fieldset { border: 0; margin: 0; padding: 0; display: flex; gap: var(--sp-3); align-items: center; } .controls legend { float: left; margin-right: var(--sp-3); color: var(--mute); font-size: var(--t-sm); }
+  .controls label { display: inline-flex; gap: .35rem; align-items: center; font-size: var(--t-md); }
+  .routes { display: grid; grid-template-columns: repeat(auto-fit, minmax(23rem, 1fr)); gap: var(--sp-4); align-items: start; }
+  .route-head { margin: 0 0 var(--sp-2); } .route-head h2 { font-size: var(--t-md); text-transform: none; letter-spacing: 0; margin: 0; color: var(--gold); font-family: system-ui, sans-serif; }
+  .route-head p { margin: .2rem 0 0; font-size: var(--t-sm); color: var(--mute); font-family: system-ui, sans-serif; font-weight: 400; }
+  .route { display: grid; gap: var(--sp-3); } .route .panel > h2 { margin-bottom: var(--sp-2); }
+  .tabs { display: flex; gap: .2rem; border-bottom: var(--bw) solid var(--line); margin-bottom: var(--sp-3); }
+  .tbl th.right { text-align: right; } /* the sheet's .tbl th (left) outranks .right, so the number columns' headings sat left of their figures */
+  .figs { display: grid; grid-template-columns: repeat(auto-fit, minmax(7rem, 1fr)); gap: var(--sp-2); }
+  .fig b { display: block; font-size: var(--t-xl); line-height: 1.1; } .fig span { font-size: var(--t-sm); color: var(--mute); }
+  .notes { margin-top: var(--sp-6); display: grid; gap: var(--sp-4); max-width: 78ch; } .notes h2 { text-transform: none; letter-spacing: 0; font-family: system-ui, sans-serif; font-size: var(--t-lg); }
+  .notes li { margin: .3rem 0; } .notes code { font-family: ui-monospace, Menlo, monospace; font-size: .92em; }
+
+  /* ---- Route A: one clean sans, set in sentence case; the system's own sans at zero bytes. The game's twist stays in the shapes, the plates and the color. ---- */
+  .route-a { --face: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; font-family: var(--face); }
+  .route-a :is(.mono, .num, h1, h2, h3, .btn, .tab, .chip, .badge, .rtitle, .banner, .kv dd) { font-family: var(--face); }
+  .route-a :is(.num, .kv dd, .tbl td, .fig b, .rtitle, .chip, .badge, .btn) { font-variant-numeric: tabular-nums; }
+  .route-a h1 { font-weight: 700; letter-spacing: -.015em; font-size: 2rem; }
+  .route-a h2 { text-transform: none; letter-spacing: 0; font-weight: 650; font-size: 1.15rem; }
+  .route-a h3 { font-weight: 650; letter-spacing: 0; }
+  .route-a .btn, .route-a .tab { text-transform: none; letter-spacing: .005em; font-weight: 650; font-size: .92rem; }
+  .route-a .tab { font-size: .9rem; }
+  .route-a .badge { text-transform: none; letter-spacing: .01em; font-size: .75rem; }
+  .route-a .tbl th { text-transform: none; font-size: .78rem; letter-spacing: 0; }
+  .route-a .rtitle { font-weight: 700; }
+
+  /* ---- Route B: the same sans for the interface, and one restrained serif for the headings and the big result lines (the system's own: New York on Apple devices, Georgia elsewhere). ---- */
+  .route-b { --face: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; --head: ui-serif, "Iowan Old Style", "Palatino Linotype", Georgia, serif; font-family: var(--face); }
+  .route-b :is(.mono, .num, .btn, .tab, .chip, .badge, .kv dd) { font-family: var(--face); }
+  .route-b :is(h1, h2, h3, .rtitle, .banner, .fig b) { font-family: var(--head); }
+  .route-b :is(.num, .kv dd, .tbl td, .fig b, .rtitle, .chip, .badge, .btn) { font-variant-numeric: tabular-nums lining-nums; }
+  .route-b h1 { font-weight: 600; letter-spacing: -.01em; font-size: 2.1rem; }
+  .route-b h2 { text-transform: none; letter-spacing: .005em; font-weight: 600; font-size: 1.2rem; }
+  .route-b h3 { font-weight: 600; letter-spacing: 0; }
+  .route-b .btn, .route-b .tab { text-transform: none; letter-spacing: .005em; font-weight: 650; font-size: .92rem; }
+  .route-b .badge { text-transform: none; letter-spacing: .01em; font-size: .75rem; }
+  .route-b .tbl th { text-transform: none; font-size: .78rem; letter-spacing: 0; }
+  .route-b .rtitle { font-weight: 600; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1 style="font-family: system-ui, sans-serif; font-size: 1.5rem">Type specimen for the UI pass</h1>
+  <p class="lede">Roadmap item 4. The author's direction (2026-11-09): modern, clean-cut and professional, "not arcade or entertainment game styled", with the game's twist kept. These are the game's own components, set three ways. Only the type changes: colors, plates, shadows and spacing are the shipped ones, so the difference you see is the face, the case and the weight.</p>
+
+  <form class="controls" aria-label="Check the routes under the game's own settings" onsubmit="return false">
+    <fieldset><legend>Text size</legend>
+      <label><input type="radio" name="size" value="s"> Small</label><label><input type="radio" name="size" value="m" checked> Medium</label><label><input type="radio" name="size" value="l"> Large</label><label><input type="radio" name="size" value="xl"> Extra large</label>
+    </fieldset>
+    <fieldset><legend>Contrast</legend>
+      <label><input type="radio" name="contrast" value="normal" checked> Normal</label><label><input type="radio" name="contrast" value="high"> High</label>
+    </fieldset>
+  </form>
+
+  <div class="routes" id="routes"></div>
+
+  <div class="notes">
+    <section>
+      <h2>What each route is</h2>
+      <ul>
+        <li><b>Today.</b> System sans for body text; headings, buttons, tabs, chips, badges and numbers in a monospace stack, with uppercase wide-spaced labels (<code>css/styles.css</code>, repeated in <code>ui-draft.css</code>, <code>ui-deal.css</code>, <code>ui-academy.css</code>). The roadmap names this as the likely source of the arcade or terminal feel.</li>
+        <li><b>A. One clean sans.</b> The system's UI sans for everything, sentence case instead of capitals, tabular figures kept so columns still align. Zero bytes, zero requests.</li>
+        <li><b>B. Sans, with a serif for headings.</b> Route A with the system serif on headings, the big figures and the result line, for a measured, editorial voice. Also zero bytes. The face differs by platform (New York on Apple devices, Georgia or Palatino elsewhere), so the look is close but not identical across a class's laptops.</li>
+        <li><b>C. A self-hosted font file (not shown).</b> Gives one look on every device, at a price: each file is a request and bytes. Nothing was downloaded or measured for this page. Candidates whose licenses allow bundling are the SIL Open Font License families (Inter, IBM Plex Sans, Source Sans 3 and Public Sans are all published under it; confirm the exact file's license before use). No outside font service, by the site's rule.</li>
+      </ul>
+    </section>
+    <section>
+      <h2>What wiring a route costs</h2>
+      <ul>
+        <li><b>Budget.</b> The first screen is 308 of 320 KB gzipped and the whole site 1,110.3 of 1,111 KB on 2026-11-16 (docs/ROADMAP.md). A or B change CSS only. C raises the whole-site limit, in its own pull request, with the number and the date written in docs/ARCHITECTURE.md.</li>
+        <li><b>Geometry.</b> New metrics move every layout test that pins geometry (<code>tests/</code>), and the wider letterforms of a proportional face wrap where a monospace one did not: check the dock's tabs on a 390 px phone and the Deal Room's Read screen first.</li>
+        <li><b>The canvas.</b> The world's own text sets its own monospace (<code>js/world/labels.js</code>, <code>overlay.js</code>, <code>mapmode.js</code>), and the glyph captions follow; a CSS-only route leaves those unchanged until they are moved with it.</li>
+        <li><b>Where the face is set.</b> Four sheets repeat the monospace stack (<code>styles.css</code>, <code>ui-draft.css</code>, <code>ui-deal.css</code>, <code>ui-academy.css</code>): a route becomes one <code>--face</code> and one <code>--head</code> token read by all four, instead of a stack written in each place.</li>
+      </ul>
+    </section>
+    <section>
+      <h2>Not in this page yet</h2>
+      <p>The roadmap also asks for a screen-by-screen look (home, role choose, a drawer, the Deal Room result, the instructor dashboard). This page covers the parts those screens are made of; the screens themselves wait for a route to be picked, so that only one is wired.</p>
+    </section>
+  </div>
+</div>
+
+<template id="sample">
+  <section class="panel" aria-label="Instructor dashboard sample">
+    <h2><span>Instructor dashboard</span><span class="chip good">Room KQ7F</span></h2>
+    <div class="tabs" role="tablist" aria-label="Dashboard sections">
+      <button class="tab" role="tab" aria-selected="true" type="button">Right now</button>
+      <button class="tab" role="tab" aria-selected="false" type="button">Roster</button>
+      <button class="tab" role="tab" aria-selected="false" type="button">Shocks<span class="dot" aria-hidden="true"></span></button>
+    </div>
+    <div class="figs">
+      <div class="fig"><b class="num">$9,310.25</b><span>Net worth</span></div>
+      <div class="fig"><b class="num">Day 37</b><span>of 90</span></div>
+      <div class="fig"><b class="num">4.2</b><span>Reputation</span></div>
+    </div>
+  </section>
+
+  <section class="panel" aria-label="Title screen sample">
+    <h1>One paperclip. Sixteen districts.</h1>
+    <p>Turn one paperclip and $0 into a business in 90 virtual days. Arbitrage, working capital and risk, played first and explained after.</p>
+    <div class="row gap">
+      <button class="btn big" type="button">Play solo</button>
+      <button class="btn ghost" type="button">Try the Academy</button>
+      <button class="btn danger sm" type="button">Leave room</button>
+    </div>
+  </section>
+
+  <section class="panel" aria-label="Stock sample">
+    <h2><span>Stock</span><span class="badge">Epic</span></h2>
+    <dl class="kv">
+      <dt>Cash</dt><dd>$1,284.50</dd>
+      <dt>Storage</dt><dd>14 of 20</dd>
+      <dt>Loans</dt><dd>$2,000.00</dd>
+      <div class="sep"></div>
+      <dt>Net worth</dt><dd>$9,310.25</dd>
+    </dl>
+    <table class="tbl gap">
+      <thead><tr><th>Good</th><th class="right">Cost</th><th class="right">Sells</th><th class="right">Margin</th></tr></thead>
+      <tbody>
+        <tr><td>Rusty paperclip</td><td class="right num">$0.04</td><td class="right num">$0.09</td><td class="right num green">+125.0%</td></tr>
+        <tr><td>Desk lamp</td><td class="right num">$12.00</td><td class="right num">$19.50</td><td class="right num green">+62.5%</td></tr>
+        <tr><td>Retro radio</td><td class="right num">$48.75</td><td class="right num">$120.00</td><td class="right num green">+146.2%</td></tr>
+        <tr><td>Folding table</td><td class="right num">$31.10</td><td class="right num">$28.40</td><td class="right num red">-8.7%</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="panel" aria-label="Deal Room result sample">
+    <h2><span>Deal Room</span><span class="chip info">Read</span></h2>
+    <div class="result good">
+      <div class="rtitle">Sold for $134.00</div>
+      <p class="mute">Fair value $118.00, so you came out $16.00 ahead.</p>
+    </div>
+    <div class="callout warn">The expert takes it to the bench: "tired, but serviceable". "I cannot say for certain." You spot problems: worn finish; loose fittings.</div>
+    <p class="small mute">Updates every 4 s. <span class="tiny">Small print at the smallest size the interface sets.</span></p>
+    <div class="row"><span class="chip good">Audit passed</span><span class="chip warn">Loan due in 3 days</span><span class="badge green">New</span><span class="badge cyan">Quest</span></div>
+  </section>
+</template>
+
+<script>
+  const ROUTES = [
+    ['route-today', 'Today', 'Monospace headings, buttons, tabs and numbers; uppercase labels.'],
+    ['route-a', 'A. One clean sans', 'System UI sans throughout, sentence case, tabular figures.'],
+    ['route-b', 'B. Sans, serif headings', 'Route A, with the system serif on headings and the big figures.'],
+  ];
+  const host = document.getElementById('routes'), tpl = document.getElementById('sample');
+  for (const [cls, name, note] of ROUTES) {
+    const col = document.createElement('div');
+    col.innerHTML = `<div class="route-head"><h2>${name}</h2><p>${note}</p></div>`;
+    const body = document.createElement('div'); body.className = 'route ' + cls; body.append(tpl.content.cloneNode(true));
+    col.append(body); host.append(col);
+  }
+  // Tabs are looked at, not wired: a click moves the selected look so the active and idle states can both be judged.
+  document.addEventListener('click', (e) => { const t = e.target.closest('.tab'); if (!t) return; for (const s of t.parentElement.querySelectorAll('.tab')) s.setAttribute('aria-selected', String(s === t)); });
+  // The game's own settings, so a route is judged at every text size and in high contrast (css/styles.css reads data-size and data-contrast on <html>).
+  for (const name of ['size', 'contrast']) for (const r of document.querySelectorAll(`input[name="${name}"]`)) r.addEventListener('change', () => { document.documentElement.dataset[name] = r.value; });
+</script>
+</body>
+</html>

@@ -10,6 +10,16 @@ Written 2026-10-30. What runs where, how to put the missing piece on a free host
 
 "Free code-based session", as it stands: an instructor opens the page, presses **Create a room** (a four-letter code), and sends the link or the code; nobody makes an account.
 
+## If the address shows "Site not found"
+
+Seen on 2026-11-16: every address of the site, the page, `robots.txt` and the lower-case twin alike, answered GitHub's own "Site not found" page, while the last deploy of 2026-11-10 still showed success in Actions. The site was sound (`node scripts/stage.mjs` and the launch tests pass); the repository had no Pages site any more (`gh api repos/imaidan808/Paperclip-Capitalist --jq .has_pages` printed `false`, and `.../pages` was a 404). A successful deploy therefore does not mean the address is live. To bring it back:
+
+1. **Settings, Pages**, set the source to **GitHub Actions** (the same step as in the README's "Put it on GitHub Pages").
+2. **Actions, Deploy to GitHub Pages, Run workflow** on `main`, since the earlier deployment went with the site. It takes about 15 minutes, the test job being most of it.
+3. Open `https://imaidan808.github.io/Paperclip-Capitalist/` and then a path that is not a file (the 404 page should be the game's, not GitHub's). Pages can take a minute or two to answer after the first deploy.
+
+Check before anything else: `curl -s -o /dev/null -w '%{http_code}\n' https://imaidan808.github.io/Paperclip-Capitalist/` prints 200 when it is live. If Pages was switched off on purpose (the pages say the game is sold to universities, not offered free to everyone), leave it off and take the link out of the README, `index.html` and the other places `tests/site-address.test.mjs` lists, in one change.
+
 ## Put the relay on Render (free)
 
 Render runs a Node service from this repository with no changes, and gives it an https address with the WebSocket support the game needs. You need a Render account of your own (the repository cannot make one).
